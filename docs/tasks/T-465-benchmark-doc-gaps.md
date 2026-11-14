@@ -6,7 +6,7 @@
 - **Depends on:** T-412 (the benchmark and its six live runs), T-441 (holdback pull request 565, which answers 8 of the 18 rows)
 - **Paths this task may touch:** `site/ref/checks.txt`, `site/ref/intake.txt`, `site/ref/http-seller.txt`, `site/ref/http.txt`, `site/ref/http-buyer.txt`, this file; in crow-private `control/metrics/bench/2026-11-14-doc-gaps.md`. Never `site/try.mjs`, `site/buy.mjs`, `site/llms.txt`, `site/buy.txt`, `site/sell.txt`, `examples/`, `apps/`, the trust and status pages.
 - **Human gate:** no for the pull requests. The site's deploy is the coordinator's.
-- **Status:** in review
+- **Status:** done on merge
 - **Agent/session:** a side session of the coordinator, 2026-11-14, branch `t-465-benchmark-doc-gaps`
 - **Roadmap row:** T-252
 
@@ -24,7 +24,7 @@ Non-goals: the front door and the two role pages (pull request 565 rewrites `llm
 - [x] `site/try.mjs` and `site/buy.mjs` keep their SHA-256 values.
 - [x] Each new sentence is checked against the code (writes) or a plain GET of the live service (reads).
 - [x] One fresh subagent per gap group, given only the built pages, answers the question the benchmark agent guessed at, with the line it found it on.
-- [ ] One `reviewer` pass, its findings fixed.
+- [x] One `reviewer` pass, its findings fixed.
 
 ## Evidence
 
@@ -43,6 +43,8 @@ Non-goals: the front door and the two role pages (pull request 565 rewrites `llm
 - **The checkers** [measured, 2026-11-14]: 4 fresh Sonnet subagents, each told to read only the named built pages and to answer "not stated" rather than guess; groups D and E shared one agent, as two separate questions. 9 questions, 9 right, each with the new line quoted: A 2 of 2 (no `Idempotency-Key`, a repeat ID answers 200; the default 86,400 s window fits), B 3 of 3 (`unique_key` is one key over the pair; U+200B is `otherIgnorable`, and the five class names; `reference_row_match_min`'s rule, fields and upload), C 2 of 2 (`rubric` inside `terms`; the shape and `"template": "default"`), D 1 of 1 (the address alone), E 1 of 1 (try each item, keep the one that opens). C's checker noted that `ref/intake.txt`'s proposal example still shows no `rubric` line, so the answer rests on `ref/http-seller.txt`'s sentence. This shows the pages answer; it does not measure approvals, which stay 11 per deal until Rafa reruns the benchmark.
 - **Merges with pull request 565** [measured]: `git merge-tree` of this branch and `t-441-one-command-per-goal` writes a tree with no conflict.
 
+- **Review** (one `reviewer` pass, at `c98050f4`): PASS, 3 Low and 4 Info. It checked each new sentence against the code and plain GETs, and found no step, warning or limit lost. Fixed in the review commit: the rubric's other limits (1 to 12 criteria, the `id` pattern, 500 and 300 characters); the reference file's three cautions from `docs/api.md` (the adjudicators' store, the size cap, tag characters); "needs no `Idempotency-Key`" for "with no"; two wordings in `checks.txt`; "five" pages, not "four", in the crow-private note. Recorded, not built: nothing in `site/check.mjs` ties the copied code points and rubric limits to `hidden.ts` and the schema (Handoff). Noted: the plain-HTTP buyer's path has 128 tokens left under its 9,450 ceiling and stands above its 8,700 target, as it did before (9,261).
+
 ## Handoff
 
 **Done:** the findings note and the five gap groups' text. **Not done here:** a live benchmark rerun, which is Rafa's; the approvals number stays 11 per deal until then.
@@ -50,4 +52,5 @@ Non-goals: the front door and the two role pages (pull request 565 rewrites `llm
 **Follow-ups, not built:**
 - The test buyer's `CHECK_TYPES` (`apps/test-agents/src/buyer-rules.ts`) leaves out `iso8601_date_column` while its comment says every schema type: add it or fix the comment (the test agents' lane).
 - Benchmark s2 asks for "a rubric you write", while the test seller counters any rubric but its own; the run spent 1 question card on it (the benchmark's lane).
+- `site/check.mjs` does not compare the code points in `ref/checks.txt` with `packages/judgment/src/hidden.ts`, nor the rubric limits in `ref/http-seller.txt` with `spec/schemas/commitment.schema.json`; if either changes, the guide drifts without a failing check (`docs/writing.md`, "Numbers that drift"; the site lane).
 - Pull request 565 answers 8 of the 18 rows; until it merges, those rows stay open on the live guides.
