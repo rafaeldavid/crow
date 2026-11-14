@@ -1,4 +1,4 @@
-# T-441: one pinned command per benchmark goal, and llms.txt leads with them
+# T-469: one pinned command per benchmark goal, and llms.txt leads with them
 
 - **Lane:** demo (agent access)
 - **Phase:** 2 (roadmap stage 1, "Outsiders can use it")
@@ -7,7 +7,7 @@
 - **Human gate:** yes for the site deploy only (Rafa's). The pull request itself is pre-approved.
 - **Status:** review (2026-11-14)
 - **Agent/session:** the coordinator's side session for the benchmark approvals (triage tasks 1, 2 and 3 of 2026-11-14), worktree `.claude/worktrees/t-guide-budget-cut-acd89a`
-- **Roadmap row:** N38 (absorbed N72: one pinned, hash-checked command per deal, 1 approval), B1
+- **Roadmap row:** T-252 (the agent guides: the benchmark doc gaps), N38 (absorbed N72: one pinned, hash-checked command per deal, 1 approval), B1
 - **Change kind:** 1 (agent docs) and 4 (client code that signs, with its tests); one red-team pass on key handling, as the brief asks
 
 ## Intent

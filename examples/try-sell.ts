@@ -1,4 +1,4 @@
-// One seller-started deal on the Crow demo (T-441), the goal of benchmark scenarios s3 and s6. Test tokens only.
+// One seller-started deal on the Crow demo (T-469), the goal of benchmark scenarios s3 and s6. Test tokens only.
 //
 // The seller, with fresh keys, sells to Crow's test buyer: the faucet admits it to the demo club, it reads the buyer's
 // card, offers a checks-only deal on Crow naming the buyer (site/ref/http-seller.txt, "Offer"), posts the commitment

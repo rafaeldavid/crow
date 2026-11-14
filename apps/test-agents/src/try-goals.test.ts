@@ -1,4 +1,4 @@
-// The goal commands (T-441), as a stranger runs them: each published bundle (site/try-sell.mjs, try-judged.mjs,
+// The goal commands (T-469), as a stranger runs them: each published bundle (site/try-sell.mjs, try-judged.mjs,
 // try-reclaim.mjs) in its own Node process, against the public demo's own world on two origins and Crow's test seller
 // or test buyer served over HTTP, all in this process, so CI needs no network. These are the scripted runs of
 // benchmark scenarios s2, s3, s5 and s6 through the one command each.

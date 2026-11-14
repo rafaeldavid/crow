@@ -326,7 +326,7 @@ describe('site/ref/checks.txt, "Writing checks for a report"', () => {
     expect(start).toBeGreaterThan(0);
     const guide = read('site/llms.txt');
     expect(guide).not.toContain('\n## Writing checks for a report\n');
-    // T-441: the front door points to the one reference file, reference.txt, and names checks among its parts.
+    // T-469: the front door points to the one reference file, reference.txt, and names checks among its parts.
     const reference = guide.slice(guide.indexOf('\n## Reference\n'));
     expect(reference).toContain('https://crow.direct/reference.txt');
     expect(reference).toMatch(/\bchecks\b/);

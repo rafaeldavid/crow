@@ -1,4 +1,4 @@
-// One rubric-judged purchase on the Crow demo (T-441), the goal of benchmark scenario s2. Test tokens only.
+// One rubric-judged purchase on the Crow demo (T-469), the goal of benchmark scenario s2. Test tokens only.
 //
 // The buyer, with fresh keys, buys Crow's test seller's offer `summary-judged`: a 40-to-120-word summary of the
 // payment hold, judged first by one deterministic check (no hidden characters) and then by the operators' live panel

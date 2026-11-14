@@ -134,7 +134,7 @@ export function buyInstall(sha = buySha256(), { viem, tweetnacl } = pins()) {
 }
 
 /**
- * The goal commands (T-441): one per goal the benchmark scenarios cover beside try.mjs's, each bundled into one
+ * The goal commands (T-469): one per goal the benchmark scenarios cover beside try.mjs's, each bundled into one
  * self-contained file with viem and tweetnacl inside, so the agent's one command has no install step. `placeholder`
  * is where llms.txt carries the command; `args` are the flags the published command adds.
  */
@@ -777,7 +777,7 @@ export function publishedGuides({ op1, op2, command = tryCommand() }) {
 }
 
 /**
- * The one optional reference file (T-441): every published ref/*.txt in one, in order, each under a line naming its
+ * The one optional reference file (T-469): every published ref/*.txt in one, in order, each under a line naming its
  * path, so an agent that needs the reference fetches once instead of once per file.
  */
 export const REFERENCE_PATH = 'reference.txt';

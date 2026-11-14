@@ -19,7 +19,7 @@
 //    the one command (pinned versions, its sha256) heads "Try it" in a filled llms.txt, which asks for no fetch
 //    before it. The Try line's copied prompt carries the same command and names llms.txt; the visible page does not
 //    show the command (One-Click Escrow, D51). The clipboard fallback keeps the command's spaces (pre-wrap). The goal
-//    commands (T-441): each site/try-<goal>.mjs is the current, self-contained bundle of its source, and "Try it"
+//    commands (T-469): each site/try-<goal>.mjs is the current, self-contained bundle of its source, and "Try it"
 //    carries its one command with the current sha256.
 // 8. Crow's test seller (D47): the one command buys from it, and ref/intake.txt states its catalog, limits and windows
 //    as apps/test-agents/src/catalog.ts runs them.
@@ -28,7 +28,7 @@
 // 10. The role pages (T-359, T-393): site/buy.txt and site/sell.txt each open with a numbered first hour whose every
 //    step says what it looks like when it worked, link the front door, and keep local addresses to sell.txt's first hour.
 // 11. The guides together (T-393): the front door points to the one reference file, reference.txt, which holds every
-//    file in site/ref/ (T-441), and names each part; every reference a
+//    file in site/ref/ (T-469), and names each part; every reference a
 //    guide names exists and so does every section it cites by name, every crow.direct link resolves, no sentence is in two guides, every call a guide names is a
 //    route in docs/api.md, every file under examples/, fixtures/ or spec/ and every pnpm script a guide names exists,
 //    and the deployment's addresses are in llms.txt alone (scripts/record-copies.mjs rewrites them there). A publish build writes every guide.
@@ -235,7 +235,7 @@ expect(!visible.includes('mkdir -p crow-try') && !visible.includes(trySha256()),
 expect(/\.copied \{[^}]*white-space: pre-wrap;/.test(HOME_CSS), "the .copied fallback must use white-space: pre-wrap, or a hand copy breaks the command's hash check");
 expect(!/before you ask|fetch https:\/\/crow\.direct\/try\.mjs/.test(tryIt), '"Try it" asks the agent to fetch try.mjs before the command: each fetch is one more approval');
 expect(tryIt.includes('runs it only if its SHA-256 matches the one in the command') && tryIt.includes('`examples/try.ts`, `agent.ts` and `verify.ts` in https://github.com/rafaeldavid/holdback'), '"Try it" lost a trust anchor: the SHA-256 pin or the source on GitHub');
-// The goal commands (T-441): each site/<name>.mjs is the current, self-contained bundle of its source (no import but
+// The goal commands (T-469): each site/<name>.mjs is the current, self-contained bundle of its source (no import but
 // Node's own modules, so no install step), and "Try it" carries its one command, with the file's current sha256, in
 // its own sh block, after try.mjs's. try.mjs and buy.mjs stay pinned by their own hashes (groups 7 and 13).
 for (const [name, g] of Object.entries(GOALS)) {
@@ -303,7 +303,7 @@ expect(roles.includes(BUY_URL) && roles.includes(SELL_URL), `llms.txt has a "Rea
 const published = new Set(['index.html', '404.html', 'home.css', 'home.js', 'try.mjs', 'buy.mjs', ...Object.keys(GOALS).map((n) => `${n}.mjs`), REFERENCE_PATH, 'version.json', ...ASSETS]);
 const scripts = JSON.parse(read('../package.json')).scripts;
 const refs = referenceFiles();
-// T-441: the front door's "Reference" points to the one reference file and names every part it holds, by the ref
+// T-469: the front door's "Reference" points to the one reference file and names every part it holds, by the ref
 // file's name; it links no single ref/ file, so an agent fetches once, not once per file.
 const referenceSection = sectionOf(md, 'Reference');
 const unnamed = refs.filter((r) => !new RegExp(`\\b${r.slice(4, -4)}\\b`).test(referenceSection));

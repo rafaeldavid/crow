@@ -80,9 +80,9 @@ export async function localGuide(operators: string[]): Promise<{ guide: string; 
   const listing: string = '../../site/guides.mjs';
   const guides = (await import(listing)) as { guideFiles(): string[]; guideSource(path: string): string };
   const pages: Record<string, string> = Object.fromEntries(guides.guideFiles().filter((p) => p !== 'llms.txt').map((p) => [p, site.guidePage(guides.guideSource(p), p)]));
-  pages[site.REFERENCE_PATH] = site.referenceText(new Map(Object.entries(pages))); // the one reference file (T-441)
+  pages[site.REFERENCE_PATH] = site.referenceText(new Map(Object.entries(pages))); // the one reference file (T-469)
   let guide = site.strip(readFileSync(new URL('../../site/llms.txt', import.meta.url), 'utf8')).replace('{{OP1}}', operators[0]!).replace('{{OP2}}', operators[1] ?? operators[0]!).replace('{{TRY_COMMAND}}', () => site.tryCommand());
-  for (const [placeholder, line] of Object.entries(site.goalCommands())) guide = guide.replace(placeholder, () => line); // the goal commands (T-441)
+  for (const [placeholder, line] of Object.entries(site.goalCommands())) guide = guide.replace(placeholder, () => line); // the goal commands (T-469)
   if (/\{\{[A-Z0-9_]+\}\}/.test(guide)) throw new Error('site/llms.txt has a placeholder the published build does not fill');
   const sell = site.sellerPage(readFileSync(new URL('../../site/sell.txt', import.meta.url), 'utf8'));
   const home = readFileSync(new URL('../../site/index.html', import.meta.url), 'utf8');

@@ -1,4 +1,4 @@
-// What the three goal commands share (T-441): try-sell.ts, try-judged.ts and try-reclaim.ts, each bundled by
+// What the three goal commands share (T-469): try-sell.ts, try-judged.ts and try-reclaim.ts, each bundled by
 // site/build.mjs into one self-contained file with viem and tweetnacl inside, so an agent runs one pinned command
 // with no install step. try.ts stays as it is, pinned by its own hash; this module repeats the few helpers it needs.
 //

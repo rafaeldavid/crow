@@ -1,4 +1,4 @@
-// One missed deadline and the buyer's reclaim on the Crow demo (T-441), the goal of benchmark scenario s5. Test
+// One missed deadline and the buyer's reclaim on the Crow demo (T-469), the goal of benchmark scenario s5. Test
 // tokens only.
 //
 // The buyer, with fresh keys, buys Crow's test seller's offer `customers-3-silent`: the dataset's terms with the work
