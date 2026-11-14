@@ -58,23 +58,6 @@ describe('the quote takes one deal ID and nothing else', () => {
   });
 });
 
-/** A stand-in in front of one operator that forwards every request and logs its method and path. */
-async function logged(upstream: string, log: string[]): Promise<{ url: string; close(): Promise<void> }> {
-  const server: Server = createServer(async (req, res) => {
-    log.push(`${req.method} ${req.url}`);
-    const chunks: Buffer[] = [];
-    for await (const c of req) chunks.push(c as Buffer);
-    // Only the operator's API and its discovery document are forwarded, each under a fixed path prefix.
-    const path = req.url ?? '/';
-    const target = path.startsWith('/v1/') ? `${upstream}/v1/${path.slice(4)}` : path === '/.well-known/holdback.json' ? `${upstream}/.well-known/holdback.json` : null;
-    if (target === null) return void res.writeHead(404).end();
-    const r = await fetch(target, { method: req.method!, headers: { 'content-type': String(req.headers['content-type'] ?? 'application/json') }, ...(chunks.length ? { body: Buffer.concat(chunks) } : {}) });
-    res.writeHead(r.status, { 'content-type': r.headers.get('content-type') ?? 'application/json' }).end(Buffer.from(await r.arrayBuffer()));
-  });
-  await new Promise<void>((ok) => server.listen(0, '127.0.0.1', ok));
-  return { url: `http://127.0.0.1:${(server.address() as AddressInfo).port}`, close: () => new Promise((ok) => (server.closeAllConnections(), server.close(() => ok()))) };
-}
-
 describe('Crow sells the record of a public deal, through the adapter and its signer', () => {
   let demo: TwoOrigins, record: RecordSeller, c: Cast, s: Running, other: string;
   const proxies: Array<{ close(): Promise<void> }> = [], adapters: RunningAdapter[] = [], requests: string[] = [];
@@ -90,9 +73,11 @@ describe('Crow sells the record of a public deal, through the adapter and its si
     const someone = await makeKeys(tmp(), { operators: demo.urls, log: () => {} });
     other = (await someone.quote(seller.quoteUrl, 'rows')).commitmentId;
     await seller.close();
-    // The record seller, reading the operators through two logging stand-ins.
-    for (const u of demo.urls) proxies.push(await logged(u, requests));
-    const reads = (proxies as J[]).map((p) => p.url);
+    // The record seller reads the same world through two more origins whose handler logs each request's method and
+    // path before the world answers it. No request is forwarded: the world itself answers.
+    const reading = await serveTwoOrigins({ fetch: (req: Request, ctx: J) => (requests.push(`${req.method} ${new URL(req.url).pathname}`), world.fetch(req, ctx)), work: async () => {} });
+    proxies.push(reading);
+    const reads = reading.urls;
     record = await startRecordSeller({ operators: reads, fetch: guardedFetch(reads) });
     const dir = tmp();
     writeFileSync(join(dir, 'template.json'), JSON.stringify(recordTemplate()));
