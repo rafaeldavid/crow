@@ -132,7 +132,7 @@ export type Running = { url: string; dir: string; rulesPath: string; statePath: 
  * flag ("run") and state in a temporary folder of its own. The test process never holds the signer's keys after this
  * call returns, except where a test says it plays the signer's administrator.
  */
-export async function startSigner(c: Cast, rules: J, mandate: J, o: { dir?: string; flag?: string; sellingMandate?: J } = {}): Promise<Running> {
+export async function startSigner(c: Cast, rules: J, mandate: J, o: { dir?: string; flag?: string; sellingMandate?: J; withSellingKey?: boolean } = {}): Promise<Running> {
   const dir = o.dir ?? mkdtempSync(join(tmpdir(), 'crow-signer-'));
   const rulesPath = join(dir, 'rules.json'), statePath = join(dir, 'state'), flagPath = join(dir, 'flag'), revocationsPath = join(dir, 'revocations');
   if (!o.dir) {
@@ -144,7 +144,7 @@ export async function startSigner(c: Cast, rules: J, mandate: J, o: { dir?: stri
   }
   if (!o.dir) spawnSync(process.execPath, [here('./signer.ts'), 'init', '--state', statePath], { env: { PATH: process.env['PATH'] ?? '' } });
   const args = [here('./signer.ts'), 'serve', '--rules', rulesPath, '--state', statePath, '--flag', flagPath, '--listen', '127.0.0.1:0'];
-  const proc = spawn(process.execPath, args, { env: { PATH: process.env['PATH'] ?? '', CROW_SIGNER_FLOAT_KEY: c.keys.float, CROW_SIGNER_BUYING_KEY: c.keys.buying, ...(rules.selling ? { CROW_SIGNER_SELLING_KEY: c.keys.selling } : {}) }, stdio: ['ignore', 'pipe', 'pipe'] });
+  const proc = spawn(process.execPath, args, { env: { PATH: process.env['PATH'] ?? '', CROW_SIGNER_FLOAT_KEY: c.keys.float, CROW_SIGNER_BUYING_KEY: c.keys.buying, ...(rules.selling || o.withSellingKey ? { CROW_SIGNER_SELLING_KEY: c.keys.selling } : {}) }, stdio: ['ignore', 'pipe', 'pipe'] });
   let err = '';
   proc.stderr!.on('data', (d) => (err += String(d)));
   const url = await new Promise<string>((ok, fail) => {

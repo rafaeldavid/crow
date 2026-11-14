@@ -12,8 +12,10 @@ import { config as shipped, startSellerAdapter, type RunningAdapter } from './se
 import { startStubSellerApi, type StubSellerApi } from './seller-adapter-stub.ts';
 import { cast, cleanup, mandateFor, sellingMandateFor, sellingRulesFor, startSigner, type Cast, type Running } from './signer-test-kit.ts';
 import { serveTwoOrigins, type TwoOrigins } from './two-origins.ts';
-import { generatePrivateKey } from 'viem/accounts';
-import { jcsHash } from './verify.ts';
+import { generatePrivateKey, privateKeyToAccount } from 'viem/accounts';
+import { createServer } from 'node:http';
+import type { AddressInfo } from 'node:net';
+import { jcsHash, SIMCHAIN_DOMAIN, typedOf } from './verify.ts';
 
 type J = any; // eslint-disable-line @typescript-eslint/no-explicit-any
 const SCOPE = { commit: 'a'.repeat(40), files: ['contracts/Vault.sol'], lines: 300 };
@@ -26,6 +28,7 @@ const tmp = () => {
 
 let demo: TwoOrigins, discovery: J, stub: StubSellerApi, c: Cast, s: Running;
 const adapters: RunningAdapter[] = [];
+const deals = async (party: string) => (((await (await fetch(`${demo.urls[0]}/v1/commitments?party=${party}`)).json()) as J).items?.length ?? 0) as number;
 const balance = async (a: string) => BigInt(((await (await fetch(`${demo.urls[1]}/v1/balances/${a}`)).json()) as J).amount ?? '0');
 const adapterConfig = (o: J = {}) => ({ ...shipped, port: 0, sellerApi: stub.api, journal: join(tmp(), 'journal.json'), pollMs: 50, log: () => {}, ...o });
 
@@ -88,11 +91,67 @@ describe('the seller adapter through the signer', () => {
   it('a quote the signer refuses makes no offer: the adapter answers 502 and signs nothing itself', async () => {
     const adapter = await startSellerAdapter(adapterConfig({ payoutAddress: `0x${'77'.repeat(20)}` }), { CROW_SIGNER_URL: s.url, HOLDBACK_OPERATORS: demo.urls.join(',') });
     adapters.push(adapter);
+    const before = await deals(c.sellingAddress);
     const buyer = await makeKeys(tmp(), { operators: demo.urls, log: () => {} });
     const res = await fetch(`${adapter.url}/quote`, { method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify({ buyer: buyer.address, buyerEncryptionPublicKey: buyer.encryptionPublicKey, scope: SCOPE }) });
     expect(res.status).toBe(502);
-    expect(((await (await fetch(`${demo.urls[0]}/v1/commitments?party=${c.sellingAddress}`)).json()) as J).items?.length ?? 0).toBe(1); // only the first test's deal
+    expect(await deals(c.sellingAddress)).toBe(before);
   });
+
+  it('a signature that is not the selling key\'s, from a signer that lies, is never sent: no offer is made', async () => {
+    const liar = privateKeyToAccount(generatePrivateKey());
+    const fake = createServer(async (req, res) => {
+      const chunks: Buffer[] = [];
+      for await (const x of req) chunks.push(x as Buffer);
+      const send = (b: unknown) => res.writeHead(200, { 'content-type': 'application/json' }).end(JSON.stringify(b));
+      if (req.url === '/v1/status') return send({ sellingAddress: c.sellingAddress });
+      const body = JSON.parse(Buffer.concat(chunks).toString()) as J;
+      send({ signature: await liar.signTypedData(typedOf('CommitmentTerms', body.terms, SIMCHAIN_DOMAIN)) });
+    });
+    await new Promise<void>((ok) => fake.listen(0, '127.0.0.1', ok));
+    try {
+      const adapter = await startSellerAdapter(adapterConfig({ payoutAddress: c.treasury }), { CROW_SIGNER_URL: `http://127.0.0.1:${(fake.address() as AddressInfo).port}`, HOLDBACK_OPERATORS: demo.urls.join(',') });
+      adapters.push(adapter);
+      const before = await deals(c.sellingAddress);
+      const buyer = await makeKeys(tmp(), { operators: demo.urls, log: () => {} });
+      const res = await fetch(`${adapter.url}/quote`, { method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify({ buyer: buyer.address, buyerEncryptionPublicKey: buyer.encryptionPublicKey, scope: SCOPE }) });
+      expect(res.status).toBe(502);
+      expect(await deals(c.sellingAddress)).toBe(before);
+    } finally {
+      fake.closeAllConnections();
+      await new Promise<void>((ok) => fake.close(() => ok()));
+    }
+  });
+
+  it('a delivery whose send fails after the signer signed it is sent again, the same body, and the deal releases', async () => {
+    // A stand-in in front of the first operator answers the first delivery send 503; everything else passes through.
+    let failed = 0;
+    const proxy = createServer(async (req, res) => {
+      const chunks: Buffer[] = [];
+      for await (const x of req) chunks.push(x as Buffer);
+      if (req.method === 'POST' && /^\/v1\/commitments\/0x[0-9a-f]{64}\/deliver/.test(req.url ?? '') && failed === 0) return void (failed++, res.writeHead(503, { 'content-type': 'application/json' }).end('{"type":"unavailable"}'));
+      const r = await fetch(`${demo.urls[0]}${req.url}`, { method: req.method!, headers: { 'content-type': String(req.headers['content-type'] ?? 'application/json'), ...(req.headers['idempotency-key'] ? { 'idempotency-key': String(req.headers['idempotency-key']) } : {}) }, ...(chunks.length ? { body: Buffer.concat(chunks) } : {}) });
+      res.writeHead(r.status, { 'content-type': r.headers.get('content-type') ?? 'application/json' }).end(Buffer.from(await r.arrayBuffer()));
+    });
+    await new Promise<void>((ok) => proxy.listen(0, '127.0.0.1', ok));
+    try {
+      const operators = [`http://127.0.0.1:${(proxy.address() as AddressInfo).port}`, demo.urls[1]!];
+      const adapter = await startSellerAdapter(adapterConfig({ payoutAddress: c.treasury }), { CROW_SIGNER_URL: s.url, HOLDBACK_OPERATORS: operators.join(',') });
+      adapters.push(adapter);
+      const buyer = await makeKeys(tmp(), { operators: demo.urls, log: () => {} });
+      const q = await buyer.quote(`${adapter.url}/quote`, SCOPE);
+      const offer = await buyer.readOffer(q.commitmentId);
+      await buyer.checkOffer(q.commitmentId, offer);
+      await buyer.testFunds(offer.fees.total.amount);
+      await buyer.agreeAndFund(q.commitmentId);
+      const done = await buyer.openDelivery(q.commitmentId, { onReport: () => {} });
+      expect(done.outcome).toBe('Released');
+      expect(failed).toBe(1);
+    } finally {
+      proxy.closeAllConnections();
+      await new Promise<void>((ok) => proxy.close(() => ok()));
+    }
+  }, 90_000);
 
   it('refuses to start with HOLDBACK_KEY beside a signer, or with per-deal keys', async () => {
     await expect(startSellerAdapter(adapterConfig(), { CROW_SIGNER_URL: s.url, HOLDBACK_KEY: generatePrivateKey(), HOLDBACK_OPERATORS: demo.urls.join(',') })).rejects.toThrow(/with a signer the adapter holds no key: unset HOLDBACK_KEY/);

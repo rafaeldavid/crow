@@ -21,7 +21,8 @@
 // adjudicators default to the ones the operators' discovery document names. Your signing key comes from the
 // environment. The adapter signs your offer and your delivery with it; it never holds a buyer's key, and the
 // operators only relay. With CROW_SIGNER_URL set (T-443), the adapter holds no key at all: a separate signer
-// (examples/signer.ts) holds the selling key, and signs each offer and delivery only inside its own rules. HOLDBACK_KEY
+// (examples/signer.ts), meant to run on a machine the adapter cannot reach, holds the selling key and signs each offer
+// and delivery only inside its own rules. HOLDBACK_KEY
 // must then be unset.
 // You need a mandate in the club to offer: on the test service the adapter takes one from the
 // faucet and renews it before it runs out; elsewhere your club's principal gives you one, and the adapter stops
@@ -95,7 +96,7 @@ export function loadConfig(file: string): SellerAdapterConfig {
 export async function remoteSigner(url: string): Promise<RemoteSigner> {
   const base = url.replace(/\/+$/, '');
   const ask = async (path: string, body?: unknown) => {
-    const res = await fetch(`${base}${path}`, { method: body === undefined ? 'GET' : 'POST', ...(body === undefined ? {} : { headers: { 'content-type': 'application/json' }, body: JSON.stringify(body) }), signal: AbortSignal.timeout(30_000) });
+    const res = await fetch(`${base}${path}`, { method: body === undefined ? 'GET' : 'POST', ...(body === undefined ? {} : { headers: { 'content-type': 'application/json' }, body: JSON.stringify(body) }), signal: AbortSignal.timeout(60_000) });
     return { status: res.status, body: (await res.json().catch(() => null)) as { [k: string]: unknown } | null };
   };
   const status = await ask('/v1/status');

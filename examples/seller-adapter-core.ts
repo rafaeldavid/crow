@@ -377,6 +377,11 @@ export interface Deal {
   times?: Partial<Record<Stage | 'jobDone', string>>;
   /** The job's last status value read by a status field, such as `queued` or `running` (T-417). */
   jobStatus?: string;
+  /**
+   * With a remote signer (T-443): the delivery it signed, as sent, so a send that failed after the signature sends the
+   * same body again. The signer signs one delivery per deal, so a fresh one would be refused.
+   */
+  signedDelivery?: { path: string; body: J };
 }
 export interface Journal {
   deals: Record<string, Deal>;
@@ -790,8 +795,8 @@ export async function pinnedSeller(operators: string[], key: string | undefined)
 }
 
 /**
- * A signer that holds the selling key apart from this adapter (T-443): Crow's own (examples/signer.ts), on a machine
- * the adapter cannot reach. It signs an offer only inside its own rules and one delivery per funded deal. The adapter
+ * A signer that holds the selling key apart from this adapter (T-443): Crow's own (examples/signer.ts), meant to run on
+ * a machine the adapter cannot reach. It signs an offer only inside its own rules and one delivery per funded deal. The adapter
  * then holds no key: every offer and every delivery is signed there, and nothing is signed here.
  */
 export interface RemoteSigner {
@@ -997,6 +1002,11 @@ export async function createSellerAdapter(c: SellerAdapterConfig, env: Readonly<
   }
   const log = (line: string) => (c.log ?? console.log)(`${new Date().toISOString()} ${line}`);
   const journal: Journal = (await io.loadJournal()) ?? { deals: {}, quotes: {} };
+  // A remote signer signs only the deals it offered: an open deal another key offered would never be delivered.
+  if (remote) {
+    const foreign = Object.values(journal.deals).filter((d) => OPEN_STAGES.includes(d.stage) && String(d.terms?.seller).toLowerCase() !== remote.address.toLowerCase());
+    if (foreign.length) throw new Error(`the journal holds ${foreign.length} open deals another key offered (${foreign[0]!.id} first): finish them with that key before the signer signs`);
+  }
   /** Saves the journal whole, through the shell: it keeps the old copy or the new one, never half of one. */
   const save = () => io.saveJournal(journal);
   // ---- Events (T-417): one JSON line each, for the seller's product metrics; never content, keys or identities ----
@@ -1055,8 +1065,13 @@ export async function createSellerAdapter(c: SellerAdapterConfig, env: Readonly<
     if (!by || !isAddressEqual(by, remote!.address as Hex)) throw new Error('the signer answered a signature that is not its selling key\'s over these terms');
     return { id, terms, state: await seller.call('POST', '/v1/commitments', { ...terms, id, signatures: { seller: signature } }) };
   }
-  /** A delivery the remote signer signs (T-443): prepared and checked as Agent.deliver prepares it, signed there, then sent. */
-  async function remoteDeliver(terms: J, bytes: Uint8Array): Promise<J> {
+  /**
+   * A delivery the remote signer signs (T-443): prepared and checked as Agent.deliver prepares it, signed there, kept in
+   * the journal, then sent. A deal whose delivery is already signed sends that same body again.
+   */
+  async function remoteDeliver(deal: Deal, bytes: Uint8Array): Promise<J> {
+    if (deal.signedDelivery) return seller.call('POST', deal.signedDelivery.path, deal.signedDelivery.body);
+    const terms = deal.terms;
     const { prepared, intent } = await seller.prepareDelivery(terms, bytes);
     const v = verifyPrepared(prepared, intent, remote!.address.toLowerCase(), seller.domain, await seller.settlementNow());
     for (const t of v.toSign) {
@@ -1066,6 +1081,8 @@ export async function createSellerAdapter(c: SellerAdapterConfig, env: Readonly<
       const keys = t.slot.split('.');
       keys.slice(0, -1).reduce((o: J, k: string) => o[k], v.body)[keys.at(-1)!] = signature;
     }
+    deal.signedDelivery = { path: v.path, body: v.body };
+    save(); // kept before it is sent: a send that fails sends this same body on the next pass
     return seller.call('POST', v.path, v.body);
   }
   let mandateUntil = 0; // when the latest mandate in the club ends, in settlement-layer time; 0: none known
@@ -1490,7 +1507,7 @@ export async function createSellerAdapter(c: SellerAdapterConfig, env: Readonly<
       // settlement layer first, so the adapter never delivers twice.
       const attempt = (deal.refusals ?? 0) + 1;
       record(deal, { stage: 'delivering', ready: false, note: `delivering ${pre.bytes} bytes, ${pre.plaintextSha256}` });
-      await (remote ? remoteDeliver(deal.terms, bytes) : signerOf(deal).deliver(deal.terms, bytes));
+      await (remote ? remoteDeliver(deal, bytes) : signerOf(deal).deliver(deal.terms, bytes));
       record(deal, { stage: 'delivered', note: `${pre.bytes} bytes, ${pre.plaintextSha256}` });
       if (deal.refusals) alert({ type: 'delivery.fixed', commitmentId: id, attempt, plaintextSha256: pre.plaintextSha256, bytes: pre.bytes }, `the fixed report passed the check run and is delivered, ${pre.bytes} bytes, ${pre.plaintextSha256}`);
     }

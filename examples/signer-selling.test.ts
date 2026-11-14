@@ -4,7 +4,8 @@
 // open, 20 a day) and a stand-in for its read endpoints, set as the signer's administrator would see the chain.
 // A12: offers outside Crow's template, past the counts, after the stop. A15: deliveries the signer must not sign.
 // Every attack has a control that is signed.
-import { readFileSync, writeFileSync } from 'node:fs';
+import { mkdirSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
+import { generatePrivateKey } from 'viem/accounts';
 import { join } from 'node:path';
 import { recoverTypedDataAddress, type Hex } from 'viem';
 import { afterAll, beforeAll, describe, expect, it } from 'vitest';
@@ -91,13 +92,13 @@ describe('A12: offers outside Crow\'s template (S2, S3, S4)', () => {
     refused(await s.post(offer(sale(c, { adjudication: { fee: { token: 'tUSD', amount: '2000000' } } }))), 'S4', /policy or fee/);
     refused(await s.post(offer(sale(c, { deliverable: { ...DELIVERABLE, description: 'something else' } }))), 'S4', /not one of Crow's products/);
     refused(await s.post(offer(sale(c, { acceptance: { ...ACCEPTANCE, deterministicChecks: ACCEPTANCE.deterministicChecks.slice(1) } }))), 'S4', /not one of Crow's products/);
-    refused(await s.post(offer(sale(c, { acceptance: { ...ACCEPTANCE, rubric: { criteria: [{ id: 'q', description: 'good', weight: 1 }], passThreshold: 1 } } }))), 'S4');
+    refused(await s.post(offer(sale(c, { acceptance: { ...ACCEPTANCE, rubric: { criteria: [{ id: 'q', description: 'good', weight: 1 }], passThreshold: 1 } } }))), 'S4', /not one of Crow's products/);
     const base = Math.floor(Date.now() / 1000) * 1000;
     refused(await s.post(offer(sale(c, { createdAt: base, timing: { offerExpiresAt: iso(base + 299_000) } }))), 'S4', /not Crow's 300 s/);
     refused(await s.post(offer(sale(c, { createdAt: base, timing: { judgeBy: iso(base + 3_661_000), fallbackBy: iso(base + 3_721_000) } }))), 'S4', /not Crow's 60 s/);
     refused(await s.post(offer(sale(c, { createdAt: base - 120_000 }))), 'S4', /from the signer's clock/);
-    refused(await s.post(offer(sale(c, { extra: { clubId: 'other-club' } }))), 'S4');
-    refused(await s.post(offer(sale(c, { timing: { maxSubmissions: 2 } }))), 'S4');
+    refused(await s.post(offer(sale(c, { extra: { clubId: 'other-club' } }))), 'S4', /in club other-club/);
+    refused(await s.post(offer(sale(c, { timing: { maxSubmissions: 2 } }))), 'S4', /maxSubmissions/);
     signed(await s.post(offer(sale(c))));
     await s.kill();
   });
@@ -144,8 +145,12 @@ describe('A15: deliveries the signer must not sign (S6)', () => {
     refused(await s.post(delivery(t, CSV, { attempt: 2 })), 'S6', /attempt 2/);
     refused(await s.post(delivery(t, CSV, { mime: 'application/json' })), 'S6', /declares application\/json/);
     refused(await s.post(delivery(t, CSV, { submittedAt: iso(Date.now() - 3_600_000) })), 'S6', /submittedAt/);
-    signed(await s.post(delivery(t)));
-    refused(await s.post(delivery(t)), 'S6', /delivered once, at/);
+    const first = delivery(t);
+    const one = signed(await s.post(first));
+    // The same delivery asked for again (a lost answer, a failed send) gets the same signature; any other is refused.
+    expect(signed(await s.post(first)).signature).toBe(one.signature);
+    refused(await s.post(delivery(t, CSV, { submittedAt: iso(Date.now() - 5000) })), 'S6', /delivered once, at/);
+    refused(await s.post(delivery(t, 'customer_id,email\n9,x@example.com\n8,y@example.com\n7,z@example.com\n')), 'S6', /delivered once, at/);
     const never = sale(c);
     reads.set(commitmentIdOf(never), 'Held');
     refused(await s.post(delivery(never)), 'S6', /never offered/);
@@ -181,5 +186,78 @@ describe('the product template', () => {
     expect(matchesTemplate(tpl, { d: `records of deal ${id} and more`, checks: [{ path: '$.commitmentId', equals: id }] })).toBe(false);
     expect(matchesTemplate(tpl, { d: `records of deal ${id}`, checks: [{ path: '$.commitmentId', equals: id, extra: 1 }] })).toBe(false);
     expect(matchesTemplate({ a: 1 }, { a: '1' })).toBe(false);
+  });
+});
+
+describe('the review and red team of PR 575: each finding, as an attack that now fails', () => {
+  it('a read that does not answer does not stop a funded deal\'s delivery; a read that says another state does', async () => {
+    const other = await stateServer();
+    try {
+      const { c, s } = await selling({ rules: (x) => sellingRulesFor(x, { reads: [reads.url, other.url, 'http://127.0.0.1:9'] }) });
+      const t = await funded(c, s);
+      signed(await s.post(delivery(t))); // Held, no state served, no answer
+      const u = await funded(c, s);
+      other.set(commitmentIdOf(u), 'AcceptedByAdjudicator');
+      refused(await s.post(delivery(u)), 'S6', /not funded and waiting for its delivery by the reads \(Held, AcceptedByAdjudicator, no answer\)/);
+      await s.kill();
+    } finally {
+      await other.close();
+    }
+  });
+
+  it('a delivery under the caller\'s own types, with an unlock or another scheme, is refused and leaves the one delivery unspent', async () => {
+    const { c, s } = await selling();
+    const t = await funded(c, s);
+    const d = delivery(t);
+    const memo = { ...d, file: { ...d.file, types: { ...d.file.types, Delivery: [...d.file.types.Delivery, { name: 'memo', type: 'string' }] }, message: { ...d.file.message, memo: 'x' } } };
+    refused(await s.post(memo), 'S6', /not the Delivery its own fields give under the pinned types/);
+    const keys = (f: J) => ({ ...d, file: { ...d.file, message: { ...d.file.message, encryptedKeys: d.file.message.encryptedKeys.map(f) } } });
+    refused(await s.post(keys((k: J) => ({ ...k, unlock: { kind: 'beacon-round', round: '999999999' } }))), 'S6', /another scheme or an unlock/);
+    refused(await s.post(keys((k: J) => ({ ...k, scheme: 'none' }))), 'S6', /another scheme or an unlock/);
+    signed(await s.post(d));
+    await s.kill();
+  });
+
+  it('a report of about 600 KB passes through the signer', async () => {
+    const { c, s } = await selling();
+    const t = await funded(c, s);
+    const long = `customer_id,email\n1,${'a'.repeat(200_000)}@example.com\n2,${'b'.repeat(200_000)}@example.com\n3,${'c'.repeat(200_000)}@example.com\n`;
+    signed(await s.post(delivery(t, long)));
+    await s.kill();
+  });
+
+  it('a ledger write that fails refuses the offer, and the same offer asked for again is refused too, not signed uncounted', async () => {
+    const { c, s } = await selling();
+    const t = sale(c);
+    mkdirSync(join(s.statePath, 'ledger.json.tmp'));
+    expect((await s.post(offer(t))).status).toBe(500);
+    expect((await s.post(offer(t))).status).toBe(500);
+    rmSync(join(s.statePath, 'ledger.json.tmp'), { recursive: true });
+    signed(await s.post(offer(t)));
+    expect(JSON.parse(readFileSync(join(s.statePath, 'ledger.json'), 'utf8')).sales.map((x: J) => x.commitmentId)).toEqual([commitmentIdOf(t)]);
+    await s.kill();
+  });
+
+  it('the status says when the selling half refuses offers: stopped, or its mandate ended', async () => {
+    const { c, s } = await selling();
+    expect((await s.get('/v1/status')).body.selling.state).toBe('running');
+    writeFileSync(s.flagPath, 'stop\n');
+    expect((await s.get('/v1/status')).body.selling.state).toMatch(/^stopped: offers refused, deliveries signed/);
+    writeFileSync(s.flagPath, 'run\n');
+    writeFileSync(join(s.dir, 'selling-mandate.json'), JSON.stringify(await sellingMandateFor(c, { days: 1, now: Date.now() - 86_400_000 - 1000 })));
+    expect((await s.get('/v1/status')).body.selling.state).toMatch(/^mandate expired/);
+    await s.kill();
+  });
+
+  it('the start refuses: no selling key for a selling half, a selling key with none, another selling key, one key for two jobs, a product with a rubric, a selling mandate that does not hold', async () => {
+    const c = cast();
+    const rules = sellingRulesFor(c, { reads: [reads.url] }), m = await mandateFor(c), sm = await sellingMandateFor(c);
+    const start = (cc: Cast, r: J, o: J = {}) => startSigner(cc, r, m, { sellingMandate: sm, ...o }).then((x) => (dirs.push(x.dir), x.kill(), 'started'), (e: Error) => e.message);
+    expect(await start({ ...c, keys: { ...c.keys, selling: generatePrivateKey() } }, rules)).toMatch(/is not the rules' sellingKey/);
+    expect(await start({ ...c, keys: { ...c.keys, selling: c.keys.float } }, { ...rules, selling: { ...rules.selling, sellingKey: c.float } })).toMatch(/the selling key is the float key or the buying key/);
+    expect(await start(c, { ...rules, selling: { ...rules.selling, products: [{ deliverable: DELIVERABLE, acceptance: { ...ACCEPTANCE, rubric: { criteria: [{ id: 'q', description: 'good', weight: 1 }], passThreshold: 1 } } }] } })).toMatch(/rubric criteria/);
+    expect(await start(c, rules, { sellingMandate: await mandateFor(c) })).toMatch(/the mandate is for 0x[0-9a-f]{40}, not the selling key|does not allow the seller role/);
+    expect(await start(c, rulesFor(c, { reads: [reads.url] }), { withSellingKey: true })).toMatch(/a selling key is set, and the rules have no selling half/);
+    expect(await start(c, rules)).toBe('started');
   });
 });
