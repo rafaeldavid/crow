@@ -90,15 +90,107 @@
     "products": [
       {
         "deliverable": {
-          "kind": "report",
-          "description": "The checked deal record of public deal {{deal}}",
+          "kind": "document",
+          "description": "The checked deal record of public deal {{deal}}: one JSON file in the form holdback-deal-record/1 that examples/deal-record.ts writes, read from every operator's public routes only. It holds the signed terms, each step, the delivery, the judgment and the settlement as each operator serves them, each check with how it was made, and every section where the operators disagree. It holds no key and no work.",
           "format": "application/json"
         },
         "acceptance": {
-          "deterministicChecks": [],
+          "deterministicChecks": [
+            {
+              "id": "record",
+              "type": "json_schema",
+              "required": true,
+              "schema": {
+                "type": "object",
+                "required": [
+                  "record",
+                  "commitmentId",
+                  "party",
+                  "writtenAt",
+                  "operators",
+                  "terms",
+                  "outcome",
+                  "steps",
+                  "delivery",
+                  "judgment",
+                  "settlement",
+                  "balances",
+                  "checks",
+                  "disagreements",
+                  "row"
+                ],
+                "properties": {
+                  "record": {
+                    "const": "holdback-deal-record/1"
+                  },
+                  "commitmentId": {
+                    "const": "{{deal}}"
+                  },
+                  "party": {
+                    "enum": [
+                      "buyer",
+                      "seller"
+                    ]
+                  },
+                  "writtenAt": {
+                    "type": "string",
+                    "pattern": "^[0-9]{4}-[0-9]{2}-[0-9]{2}T"
+                  },
+                  "operators": {
+                    "type": "array",
+                    "minItems": 2
+                  },
+                  "steps": {
+                    "type": "array"
+                  },
+                  "checks": {
+                    "type": "array",
+                    "minItems": 1,
+                    "items": {
+                      "type": "object",
+                      "required": [
+                        "check",
+                        "ok"
+                      ],
+                      "properties": {
+                        "check": {
+                          "type": "string",
+                          "minLength": 1
+                        },
+                        "ok": {
+                          "enum": [
+                            true,
+                            false,
+                            null
+                          ]
+                        }
+                      }
+                    }
+                  },
+                  "disagreements": {
+                    "type": "array"
+                  },
+                  "row": {
+                    "type": "object",
+                    "required": [
+                      "commitmentId"
+                    ]
+                  }
+                }
+              }
+            },
+            {
+              "id": "hidden",
+              "type": "hidden_characters_max",
+              "required": true,
+              "max": {
+                "total": 0
+              }
+            }
+          ],
           "rubric": {
-            "criteria": [],
-            "passThreshold": 0
+            "passThreshold": 0,
+            "criteria": []
           }
         }
       }

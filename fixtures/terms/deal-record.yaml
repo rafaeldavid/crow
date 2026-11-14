@@ -1,0 +1,64 @@
+# Terms for Crow's own product (T-444, roadmap row N131, build row 6): the checked deal record of one public deal,
+# as examples/deal-record.ts writes it from every operator's public routes. Crow's selling agent sells it through the
+# seller adapter (examples/record-seller.ts is the seller's API), and Crow's signer signs an offer only when its
+# deliverable and checks equal these, with the one deal the buyer names in place of {{deal}} (examples/signer.ts,
+# the rules' `selling.products`). Checks-only: the rubric is empty, so the checks below decide and no panel sits.
+# The price and the windows are constraints.md's version 1 (S3, S4): 5.00 tUSDC; offer open 300 s, fund within
+# 600 s, deliver within 3,600 s, judge 60 s, fallback 60 s.
+#
+# {{deal}} is the scope field the adapter fills: the public deal's ID, 0x and 64 lowercase hex characters. The record
+# is the deal's own evidence (D26): the signed terms, each step, the checks and the judgment, and the settlement,
+# with how each was checked and where the operators disagree. It holds no key and no work: public reads only.
+schemaVersion: "0.8"
+clubId: demo-club
+deliverable:
+  kind: document
+  description: "The checked deal record of public deal {{deal}}: one JSON file in the form holdback-deal-record/1 that examples/deal-record.ts writes, read from every operator's public routes only. It holds the signed terms, each step, the delivery, the judgment and the settlement as each operator serves them, each check with how it was made, and every section where the operators disagree. It holds no key and no work."
+  format: application/json
+acceptance:
+  deterministicChecks:
+    # The record's form, and the one deal the buyer named: no other deal's record passes.
+    - id: record
+      type: json_schema
+      required: true
+      schema:
+        type: object
+        required: [record, commitmentId, party, writtenAt, operators, terms, outcome, steps, delivery, judgment, settlement, balances, checks, disagreements, row]
+        properties:
+          record: { const: holdback-deal-record/1 }
+          commitmentId: { const: "{{deal}}" }
+          party: { enum: [buyer, seller] }
+          writtenAt: { type: string, pattern: "^[0-9]{4}-[0-9]{2}-[0-9]{2}T" }
+          operators: { type: array, minItems: 2 }
+          steps: { type: array }
+          checks:
+            type: array
+            minItems: 1
+            items:
+              type: object
+              required: [check, ok]
+              properties:
+                check: { type: string, minLength: 1 }
+                ok: { enum: [true, false, null] }
+          disagreements: { type: array }
+          row: { type: object, required: [commitmentId] }
+    - { id: hidden, type: hidden_characters_max, required: true, max: { total: 0 } }
+  rubric:
+    passThreshold: 0
+    criteria: []
+price: { token: tUSD, amount: "5000000" }
+adjudication:
+  policyId: demo-policy
+  fee: { token: tUSD, amount: "1000000" }
+timing:
+  offerExpiresInSec: 300
+  fundWithinSec: 600
+  deliverWithinSec: 3600
+  judgeWithinSec: 60
+  fallbackWithinSec: 60
+  appealWindowSec: 0
+  appealDecideSec: 60
+  maxSubmissions: 1
+settlement: { mode: guaranteed_on_decision, token: tUSD }
+remedy: { onReject: full_refund }
+disclosure: { level: public }
