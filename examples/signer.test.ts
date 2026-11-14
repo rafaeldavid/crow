@@ -201,7 +201,7 @@ describe('A13: reach the signer\'s flag, rules and ledger from the agent\'s side
       expect([404, 400], `${method} ${path}`).toContain(r.status);
     }
     refused(await s.post({ kind: 'payment', terms: termsFor(c), file: fundingFileFor(termsFor(c)), stop: false }), 'request');
-    const big = await fetch(`${s.url}/v1/sign`, { method: 'POST', body: 'x'.repeat(300 * 1024) }).catch(() => null);
+    const big = await fetch(`${s.url}/v1/sign`, { method: 'POST', body: 'x'.repeat(3 * 1024 * 1024) }).catch(() => null); // above MAX_BODY_BYTES, 2 MiB
     expect(big === null || big.status === 413).toBe(true);
     expect(JSON.parse(readFileSync(s.rulesPath, 'utf8')).buying.maxPerDeal).toBe('10000000');
     await s.kill();

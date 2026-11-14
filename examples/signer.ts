@@ -22,7 +22,7 @@ import type { AddressInfo } from 'node:net';
 import { dirname, join, resolve } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { privateKeyToAccount, signTypedData } from 'viem/accounts';
-import type { Hex } from 'viem';
+import { hashTypedData, type Hex } from 'viem';
 import { SEPOLIA } from './deployments.ts';
 import { isMain } from './entry.ts';
 import { buildDelegation, parseStrictJson, typedOf as mandateTyped, verifyDocument } from './mandate.ts';
@@ -33,7 +33,7 @@ type J = any; // eslint-disable-line @typescript-eslint/no-explicit-any
 /** The rules file's schema, beside this file. */
 export const RULES_SCHEMA = fileURLToPath(new URL('./signer-rules.schema.json', import.meta.url));
 /** The largest request body the signer reads, in bytes. */
-export const MAX_BODY_BYTES = 256 * 1024;
+export const MAX_BODY_BYTES = 2 * 1024 * 1024; // a delivery carries its work as base64: the adapter's 1 MiB cap is about 1.4 MiB here
 /** How long one read of a deal's state may take, in ms, before it counts as no answer. */
 export const READ_TIMEOUT_MS = 5000;
 /** The states in which a deal's money has left the hold for good, and those in which it never entered it. */
@@ -114,6 +114,8 @@ export function loadRules(path: string): { rules: Rules; sha256: string; bytes: 
   if (e) throw new Error(`the rules file ${path} does not pass examples/signer-rules.schema.json: ${e}`);
   const b = rules.buying;
   if (BigInt(b.maxOpenTotal) > BigInt(b.maxPerDay) * 2n) throw new Error('maxOpenTotal is above two days of maxPerDay: the file contradicts itself');
+  // The signer signs a delivery only when stage 1 accepts it: a product with a rubric could be sold and never delivered.
+  for (const p of rules.selling?.products ?? []) if (Array.isArray(p.acceptance?.rubric?.criteria) && p.acceptance.rubric.criteria.length > 0) throw new Error('a selling product has rubric criteria: the signer signs checks-only deliveries only, so such a sale could never be delivered');
   return { rules, sha256: createHash('sha256').update(bytes).digest('hex'), bytes };
 }
 
@@ -139,7 +141,7 @@ type Entry = { commitmentId: string; total: string; signedAt: string; day: strin
 /** SimChain's own expiry margin, in seconds: a hold there can still pay out until fallbackBy + appealDecideSec + this. */
 const SIMCHAIN_EXPIRY_MARGIN_SEC = 86_400;
 /** One offer the signer signed for the selling key (T-443), and its one delivery. */
-type Sale = { commitmentId: string; signedAt: string; day: string; buyer: string; price: string; fundBy: string; endsBy: string; endedAt?: string; ended?: string; delivered?: { at: string; digest: string } };
+type Sale = { commitmentId: string; signedAt: string; day: string; buyer: string; price: string; fundBy: string; endsBy: string; endedAt?: string; ended?: string; delivered?: { at: string; digest: string; signature: string } };
 type Ledger = { version: 1; entries: Entry[]; sales?: Sale[] };
 /** What a product's template writes for the one public deal a buyer names (T-443, T-444). */
 const DEAL_PLACEHOLDER = '{{deal}}'; // the seller adapter's own placeholder for the scope field `deal` (T-444)
@@ -407,8 +409,7 @@ export class Signer {
     if (!known) {
       const margin = this.#pin.chain?.expiryMarginSec ?? SIMCHAIN_EXPIRY_MARGIN_SEC;
       const entry: Entry = { commitmentId: id, total: total.toString(), signedAt: iso(now), day: iso(now).slice(0, 10), seller: lc(t.seller), payoutAddress: lc(t.sellerPayoutAddress), dealKey: lc(t.buyer), delegation, fundBy: t.timing.fundBy, endsBy: iso(Date.parse(t.timing.fallbackBy) + (t.timing.appealDecideSec + margin) * 1000) };
-      this.#ledger = { version: 1, entries: [...this.#ledger.entries, entry] };
-      writeDurably(join(this.#o.statePath, 'ledger.json'), `${JSON.stringify(this.#ledger, null, 2)}\n`); // the count is on disk before the signature leaves
+      this.#commit({ ...this.#ledger, entries: [...this.#ledger.entries, entry] }); // the count is on disk before the signature leaves
     }
     saw({ digest: checked.digest, replay: Boolean(known) });
     this.#writeStatus();
@@ -459,9 +460,9 @@ export class Signer {
     if (now >= at('offerExpiresAt')) no('S4', `the offer expired at ${t.timing.offerExpiresAt} by the signer's clock`);
     if (BigInt(t.price.amount) > BigInt(m.scope.maxPerCommitment.amount)) no('S3', `the price is above the selling mandate's ${m.scope.maxPerCommitment.amount} a deal`);
     // S5: the signer's own counts. An offer asked for again is counted once.
-    const sales = this.#ledger.sales ?? [];
-    const known = sales.find((x) => x.commitmentId === id);
+    const known = (this.#ledger.sales ?? []).find((x) => x.commitmentId === id);
     await this.#refresh(now);
+    const sales = this.#ledger.sales ?? []; // as the refresh left them
     if (!known) {
       const hour = sales.filter((x) => Date.parse(x.signedAt) > now - 3_600_000).length;
       if (hour + 1 > r.maxOffersPerHour) no('S5', `${hour} offers were signed in the last 3,600 s, and the rules allow ${r.maxOffersPerHour}`);
@@ -474,8 +475,7 @@ export class Signer {
     if (!known) {
       const margin = this.#pin.chain?.expiryMarginSec ?? SIMCHAIN_EXPIRY_MARGIN_SEC;
       const sale: Sale = { commitmentId: id, signedAt: iso(now), day: iso(now).slice(0, 10), buyer: lc(t.buyer), price: t.price.amount, fundBy: t.timing.fundBy, endsBy: iso(Date.parse(t.timing.fallbackBy) + (t.timing.appealDecideSec + margin) * 1000) };
-      this.#ledger = { ...this.#ledger, sales: [...sales, sale] };
-      writeDurably(join(this.#o.statePath, 'ledger.json'), `${JSON.stringify(this.#ledger, null, 2)}\n`);
+      this.#commit({ ...this.#ledger, sales: [...sales, sale] });
     }
     saw({ replay: Boolean(known) });
     this.#writeStatus();
@@ -496,12 +496,27 @@ export class Signer {
     saw({ kind: 'delivery', commitmentId: id });
     const sale = (this.#ledger.sales ?? []).find((x) => x.commitmentId === id);
     if (!sale) no('S6', `this signer never offered deal ${id}: it delivers only its own`);
-    if (sale!.delivered) no('S6', `deal ${id} was delivered once, at ${sale!.delivered.at}: one delivery per deal, ever`);
+    if (sale!.delivered) {
+      // One delivery per deal, ever: the same delivery asked for again gets the same signature, so an answer lost on the
+      // way, or a send that failed after it, does not cost the buyer its deal. Any other delivery is refused.
+      let again: string | null = null;
+      try {
+        strictTypedDataFile(req.file);
+        again = digestOfFile(req.file);
+      } catch {
+        // not the same file
+      }
+      if (again !== sale!.delivered.digest) no('S6', `deal ${id} was delivered once, at ${sale!.delivered.at}: one delivery per deal, ever`);
+      saw({ replay: true, digest: again });
+      return { commitmentId: id, signature: sale!.delivered.signature, digest: again, replay: true };
+    }
     if (!/^[A-Za-z0-9+/]*={0,2}$/.test(req.plaintext) || req.plaintext.length % 4 !== 0) no('request', 'plaintext is not base64');
     const bytes = new Uint8Array(Buffer.from(req.plaintext, 'base64'));
-    // Funded, by every read the rules name: a doubt refuses (the adapter tries again on its next pass).
+    // Funded: at least one read says Held and none says another state. A read that does not answer does not stop a funded
+    // deal's one delivery (an operator offline cannot stall it); a read that says otherwise refuses, and the adapter tries
+    // again on its next pass.
     const states = await Promise.all(this.#rules.reads.operators.map((op: string) => readState(op, id)));
-    if (!states.every((x) => x === 'Held')) no('S6', `deal ${id} is not funded and waiting for its delivery by every read (${states.map((x) => x ?? 'no answer').join(', ')})`);
+    if (!states.includes('Held') || states.some((x) => x !== null && x !== 'Held')) no('S6', `deal ${id} is not funded and waiting for its delivery by the reads (${states.map((x) => x ?? 'no answer').join(', ')})`);
     // The message: exactly one delivery of these terms, of these bytes, to the deal's four recipients.
     try {
       strictTypedDataFile(req.file);
@@ -522,16 +537,45 @@ export class Signer {
     if (jcs(got) !== jcs(want)) no('S6', 'the delivery is not sealed to the deal\'s three adjudicators and its buyer, in that order');
     const submitted = Number(msg.submittedAt) * 1000;
     if (!Number.isFinite(submitted) || Math.abs(submitted - now) > this.#rules.selling.clockSkewSec * 1000) no('S6', 'the delivery\'s submittedAt is not the signer\'s now');
+    if (!msg.encryptedKeys.every((k: J) => k.scheme === 'x25519-xsalsa20poly1305' && (k.unlock === undefined || (k.unlock?.kind === '' && String(k.unlock?.round) === '0')))) no('S6', 'a key in the delivery has another scheme or an unlock: Crow\'s deliveries seal each key to its recipient now');
+    // The file must be exactly the Delivery these fields give under the pinned types and domain: no type of the caller's.
+    let canonical: Hex;
+    try {
+      const c = msg.ciphertext;
+      canonical = hashTypedData(typedOf('Delivery', {
+        commitmentId: msg.commitmentId, attempt: Number(msg.attempt), ciphertext: { uri: c.uri, sha256: c.sha256, bytes: Number(c.bytes), cipher: c.cipher },
+        plaintextSha256: msg.plaintextSha256, plaintextMime: msg.plaintextMime, encryptedKeys: msg.encryptedKeys.map((k: J) => ({ recipient: k.recipient, scheme: k.scheme, ciphertext: k.ciphertext })),
+        submittedAt: iso(submitted),
+      }, this.#pin.domain));
+    } catch {
+      return no('S6', 'the delivery\'s fields do not encode as a Delivery');
+    }
+    if (digestOfFile(f) !== canonical) no('S6', 'the delivery file is not the Delivery its own fields give under the pinned types: a type or a field differs');
     // The deal's own checks, as the adjudicator's first stage runs them on these exact bytes.
     const pre = preflightDelivery({ plaintext: bytes, mime: t.deliverable.format, format: t.deliverable.format, acceptance: t.acceptance });
     if (pre.result !== 'accept') no('S6', `the work does not pass the deal's checks: stage 1 says ${pre.result}${pre.refused ? ` (${pre.refused.code})` : ''}${pre.deterministic.filter((o) => !o.passed).map((o) => `, ${o.checkId} fails`).join('')}`);
-    const digest = digestOfFile(f);
+    const digest = canonical;
     const signature = await this.#selling!.sign({ hash: digest });
-    sale!.delivered = { at: iso(now), digest };
-    writeDurably(join(this.#o.statePath, 'ledger.json'), `${JSON.stringify(this.#ledger, null, 2)}\n`); // before the signature leaves
+    this.#commit({ ...this.#ledger, sales: (this.#ledger.sales ?? []).map((x) => (x.commitmentId === id ? { ...x, delivered: { at: iso(now), digest, signature } } : x)) }); // before the signature leaves
     saw({ digest, bytes: bytes.length });
     this.#writeStatus();
     return { commitmentId: id, signature, digest };
+  }
+
+  /** The selling half's state for the status: stopped, its mandate ended or unreadable, or running. */
+  #sellingState(now: number): string {
+    try {
+      this.#flag();
+    } catch {
+      return 'stopped: offers refused, deliveries signed';
+    }
+    try {
+      const doc = parseStrictJson(readFileSync(resolve(dirname(this.#o.rulesPath), this.#rules.selling.mandatePath), 'utf8'), 'the selling mandate');
+      if (!(now < Date.parse(doc.scope?.expiresAt))) return 'mandate expired: offers refused, deliveries signed';
+    } catch {
+      return 'mandate unreadable: offers refused, deliveries signed';
+    }
+    return 'running';
   }
 
   #salesCounts(now: number) {
@@ -667,25 +711,33 @@ export class Signer {
     return id;
   }
 
-  /** Marks the ledger's open deals that have ended, from the signer's own reads; any doubt keeps a deal open. */
+  /** Marks the ledger's open deals that have ended, from the signer's own reads, all at once; any doubt keeps a deal open. */
   async #refresh(now: number): Promise<void> {
-    let changed = false;
-    for (const e of [...this.#ledger.entries, ...(this.#ledger.sales ?? [])].filter((x) => !x.ended)) {
-      if (now >= Date.parse(e.endsBy)) {
-        Object.assign(e, { ended: 'past its last deadline', endedAt: iso(now) });
-        changed = true;
-        continue;
-      }
-      const states = await Promise.all(this.#rules.reads.operators.map((op: string) => readState(op, e.commitmentId)));
-      if (states.some((s) => s === null)) continue;
-      if (states.every((s) => ENDED.includes(s!))) Object.assign(e, { ended: states[0], endedAt: iso(now) });
-      // Never funded: only once the reads have had time to see a funding sent just before fundBy (reads.lagSec), and
-      // the clocks may differ (clockSkewSec). Until then the deal stays open.
-      else if (now >= Date.parse(e.fundBy) + (this.#rules.reads.lagSec + this.#rules.buying.clockSkewSec) * 1000 && states.every((s) => UNFUNDED.includes(s!))) Object.assign(e, { ended: 'never funded', endedAt: iso(now) });
-      else continue;
-      changed = true;
-    }
-    if (changed) writeDurably(join(this.#o.statePath, 'ledger.json'), `${JSON.stringify(this.#ledger, null, 2)}\n`);
+    const sales = new Set((this.#ledger.sales ?? []).map((x) => x.commitmentId));
+    const open = [...this.#ledger.entries, ...(this.#ledger.sales ?? [])].filter((x) => !x.ended);
+    const ends = await Promise.all(
+      open.map(async (e): Promise<string | null> => {
+        if (now >= Date.parse(e.endsBy)) return 'past its last deadline';
+        const states = await Promise.all(this.#rules.reads.operators.map((op: string) => readState(op, e.commitmentId)));
+        if (states.some((s) => s === null)) return null;
+        if (states.every((s) => ENDED.includes(s!))) return states[0]!;
+        // Never funded: only once the reads have had time to see a funding sent just before fundBy (reads.lagSec), and
+        // the clocks may differ (clockSkewSec). Until then the deal stays open.
+        const skew = (sales.has(e.commitmentId) ? this.#rules.selling.clockSkewSec : this.#rules.buying.clockSkewSec) * 1000;
+        if (now >= Date.parse(e.fundBy) + this.#rules.reads.lagSec * 1000 + skew && states.every((s) => UNFUNDED.includes(s!))) return 'never funded';
+        return null;
+      }),
+    );
+    const ended = new Map(open.map((e, i) => [e.commitmentId, ends[i]] as const).filter(([, x]) => x !== null));
+    if (ended.size === 0) return;
+    const mark = <T extends { commitmentId: string }>(x: T): T => (ended.has(x.commitmentId) ? { ...x, ended: ended.get(x.commitmentId)!, endedAt: iso(now) } : x);
+    this.#commit({ ...this.#ledger, entries: this.#ledger.entries.map(mark), ...(this.#ledger.sales ? { sales: this.#ledger.sales.map(mark) } : {}) });
+  }
+
+  /** The ledger on disk first, then in memory: a write that fails changes neither, and the request is refused. */
+  #commit(next: Ledger): void {
+    writeDurably(join(this.#o.statePath, 'ledger.json'), `${JSON.stringify(next, null, 2)}\n`);
+    this.#ledger = next;
   }
 
   #counts(now: number) {
@@ -721,7 +773,7 @@ export class Signer {
       agent: 'buying', state, ...(stoppedSince ? { stoppedSince } : {}), ...mandate,
       constraintsVersion: this.#rules.constraintsVersion, rulesSha256: this.#rulesSha256,
       floatAddress: this.floatAddress, standingKey: r.standingKey,
-      ...(this.#selling ? { sellingAddress: this.#selling.address.toLowerCase(), selling: { ...this.#salesCounts(now), offersPerHourLimit: this.#rules.selling.maxOffersPerHour, openDealsLimit: this.#rules.selling.maxOpenDeals, dealsPerDayLimit: this.#rules.selling.maxDealsPerDay, price: this.#rules.selling.price, payoutAddress: this.#rules.selling.payoutAddress } } : {}),
+      ...(this.#selling ? { sellingAddress: this.#selling.address.toLowerCase(), selling: { state: this.#sellingState(now), ...this.#salesCounts(now), offersPerHourLimit: this.#rules.selling.maxOffersPerHour, openDealsLimit: this.#rules.selling.maxOpenDeals, dealsPerDayLimit: this.#rules.selling.maxDealsPerDay, price: this.#rules.selling.price, payoutAddress: this.#rules.selling.payoutAddress } } : {}),
       dayLimit: r.maxPerDay, dealLimit: r.maxPerDeal, openDealsLimit: r.maxOpenDeals, openTotalLimit: r.maxOpenTotal,
       ...this.#counts(now),
       ...(last ? { lastDeal: { commitmentId: last.commitmentId, signedAt: last.signedAt, ...(last.ended ? { ended: last.ended, endedAt: last.endedAt } : {}) } } : {}),
