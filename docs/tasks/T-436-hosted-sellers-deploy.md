@@ -5,7 +5,7 @@
 - **Depends on:** T-435 (the Worker)
 - **Paths this task may touch:** `apps/hosted-sellers/scripts/`, `apps/hosted-sellers/src/deploy-plan.ts` and its test, `apps/hosted-sellers/example/seller/`, one section in `docs/operations.md` ("Hosted sellers, the first deploy of one"), this file
 - **Human gate:** yes. The first deploy creates a Worker on Crow's Cloudflare account, and the secrets hold the company's API key. Both are Rafa's. This task deploys nothing and sets no secret.
-- **Status:** review
+- **Status:** done (pull request 557, merged 2026-11-14 as `896e53d8`; the first deploy and its secrets are Rafa's)
 - **Agent/session:** the T-407 session, on Rafa's word of 2026-11-14 ("Yes, start both")
 - **Roadmap row:** N134
 

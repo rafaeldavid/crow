@@ -5,7 +5,7 @@
 - **Depends on:** T-393 (the short guides), T-399 (Findings 2 and 4)
 - **Paths this task may touch:** `site/llms.txt`, `site/buy.txt`, `site/sell.txt`, `site/ref/*.txt`, `site/guides.mjs`, the guides' tests and checks (`tests/site-guides.test.ts`, `tests/audit-report-template.test.ts`, one block of `site/check.mjs`), `site/index.html` as the build writes it, this file. Widened by the coordinator on 2026-11-13 for Rafa's "no weird unicode characters": the strings a command prints, or an agent reads in a bundle, in `examples/` and the bundles' sources (the banner line in `site/build.mjs` included), the tests that assert on them, and `site/try.mjs` and `site/buy.mjs` as the build writes them. Off limits: the rest of `site/build.mjs`, `apps/site/`, the other HTML pages and their logo, `tools/duet/` (T-400's).
 - **Human gate:** no. Rafa asked for it (2026-11-13, about 10:00 UTC, relayed by the coordinator). Nothing deploys: the site deploy is Rafa's word.
-- **Status:** in review
+- **Status:** done (pull request 493, merged 2026-11-13 as `1516589f`)
 - **Agent/session:** T-393's session, kind 1
 
 ## Intent

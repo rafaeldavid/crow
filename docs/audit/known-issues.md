@@ -27,7 +27,7 @@ Source: [`docs/neutrality.md`](../neutrality.md), "Residual control points". The
 | R-9 | The deal's skeleton is public: addresses, token, price, deadlines, adjudicators and outcomes | residual 9 | not rated | accepted | Per-deal keys at the `private` and `judgment` levels; bodies travel as ciphertext |
 | R-10 | If no beacon round can be proven in a whole window, that adjudicator cannot decide | residual 10 | not rated | accepted; its fixture is planned | The case goes to the fallback or the default outcome |
 | R-11 | A funding transfer links the funding account to the commitment | residual 11 | not rated | accepted | The agent chooses how to fund, and the buyer's payment address may differ from its signing address (ADR-0033) |
-| R-12 | A principal has no recourse after its agent signs within its mandate | residual 12 | not rated | accepted | The mandate's scope caps |
+| R-12 | A principal has no recourse after its agent signs within its mandate | residual 12 | not rated | accepted | The payment address's balance and the principal's wallet; the cap per commitment binds only through the operators and a counterparty that checks, the daily cap only through each operator's own count (ADR-0038) |
 | R-13 | Five kinds of direct step leave the operators' view behind the chain, and the operators' own adjudicators then do not act on that deal | residual 13; `docs/operations.md`, T-228 | not rated | open; deferred to T-227, before mainnet | The deal ends by its timeouts, which the operators send at their own gas. Funds stay under the contract's terms. A signed step through the API answers `invalid_state` for such a deal |
 
 ## 2. Contract review findings

@@ -5,7 +5,7 @@
 - **Depends on:** T-439 (the signer), T-438 (the mandate tool)
 - **Paths this task may touch:** `examples/own-buyer.ts`, `examples/own-buyer.test.ts`, `examples/own-buyer-attacks.test.ts`, one section in `site/ref/buyer-signer.txt`, this file
 - **Human gate:** no (nothing deployed; the site deploy after merge follows the wave's rule)
-- **Status:** review
+- **Status:** done (pull request 558, merged 2026-11-14 as `e2b044aa`)
 - **Agent/session:** own-agents build session, started by the coordinator on 2026-11-14
 - **Roadmap row:** N131
 

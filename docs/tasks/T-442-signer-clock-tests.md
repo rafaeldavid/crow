@@ -5,7 +5,7 @@
 - **Depends on:** T-439 (the signer, PR 555)
 - **Paths this task may touch:** `examples/signer.test.ts`, this file. It also closes code scanning alert 32 (`js/unnecessary-use-of-cat`, `examples/signer.test.ts`), at the coordinator's request
 - **Human gate:** no
-- **Status:** review
+- **Status:** done (pull request 568, merged 2026-11-14 as `600bac6e`)
 - **Agent/session:** own-agents build session, on the coordinator's report of 2026-11-14 (`main` red on `test (1/4)`)
 - **Roadmap row:** N131
 

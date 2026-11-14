@@ -5,7 +5,7 @@
 - **Depends on:** T-438 (the mandate tool: the signer verifies its mandate and revocations with it); the own-agents design and its constraints, version 1, in crow-private (`company-ops/own-agents/design.md`, `constraints.md`; Rafa's decisions 1 to 6 of 2026-11-14)
 - **Paths this task may touch:** `examples/signer.ts`, `examples/signer-rules.schema.json`, `examples/signer-rules.v1.json`, `examples/signer*.test.ts` (with `signer-redteam.test.ts`, the red team's), `examples/signer-test-kit.ts`, `examples/signer-world-kit.ts`, one entry in `tests/ci-gated.test.ts`'s exemptions (for `signer-anvil.test.ts`), this file
 - **Human gate:** no. Nothing is deployed and no real key exists; Rafa makes the keys and the machines (design, "Actions only you can take")
-- **Status:** review
+- **Status:** done (pull request 555, merged 2026-11-14 as `70e7f6c5`)
 - **Agent/session:** own-agents build session, started by the coordinator on 2026-11-14 ("Yes, start both")
 - **Roadmap row:** N131
 
