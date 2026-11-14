@@ -8,12 +8,12 @@
 #
 # {{deal}} is the scope field the adapter fills: the public deal's ID, 0x and 64 lowercase hex characters. The record
 # is the deal's own evidence (D26): the signed terms, each step, the checks and the judgment, and the settlement,
-# with how each was checked and where the operators disagree. It holds no key and no work: public reads only.
+# with how each was checked and where the operators disagree. It holds no key: public reads only.
 schemaVersion: "0.8"
 clubId: demo-club
 deliverable:
   kind: document
-  description: "The checked deal record of public deal {{deal}}: one JSON file in the form holdback-deal-record/1 that examples/deal-record.ts writes, read from every operator's public routes only. It holds the signed terms, each step, the delivery, the judgment and the settlement as each operator serves them, each check with how it was made, and every section where the operators disagree. It holds no key and no work."
+  description: "The checked deal record of public deal {{deal}}: one JSON file in the form holdback-deal-record/1 that examples/deal-record.ts writes, read from every operator's public routes only. It holds the signed terms, each step, the delivery, the judgment and the settlement as each operator serves them, each check with how it was made, and every section where the operators disagree. It holds no key and no work but what the operators publish."
   format: application/json
 acceptance:
   deterministicChecks:
@@ -30,7 +30,14 @@ acceptance:
           party: { enum: [buyer, seller] }
           writtenAt: { type: string, pattern: "^[0-9]{4}-[0-9]{2}-[0-9]{2}T" }
           operators: { type: array, minItems: 2 }
+          terms: { type: [object, "null"] }
+          outcome: { type: [object, "null"] }
           steps: { type: array }
+          delivery: { type: [object, "null"] }
+          judgment: { type: [object, "null"] }
+          settlement: { type: [object, "null"] }
+          balances: { type: [object, "null"] }
+          # Each check has a name and a result, and one of them says the served terms hash to the deal's ID.
           checks:
             type: array
             minItems: 1
@@ -40,8 +47,20 @@ acceptance:
               properties:
                 check: { type: string, minLength: 1 }
                 ok: { enum: [true, false, null] }
+            not:
+              items:
+                not:
+                  type: object
+                  required: [check, ok]
+                  properties:
+                    check: { const: commitment ID }
+                    ok: { const: true }
           disagreements: { type: array }
-          row: { type: object, required: [commitmentId] }
+          row:
+            type: object
+            required: [commitmentId]
+            properties:
+              commitmentId: { const: "{{deal}}" }
     - { id: hidden, type: hidden_characters_max, required: true, max: { total: 0 } }
   rubric:
     passThreshold: 0

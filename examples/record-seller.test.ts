@@ -16,7 +16,7 @@ import { afterAll, beforeAll, describe, expect, it } from 'vitest';
 import { makeKeys } from './buyer-signer.ts';
 import { fill } from './seller-adapter-core.ts';
 import { config as shipped, startSellerAdapter, type RunningAdapter } from './seller-adapter.ts';
-import { quoteRefusal, recordAdapterConfig, recordTemplate, startRecordSeller, TERMS_FILE, type RecordSeller } from './record-seller.ts';
+import { guardedFetch, quoteRefusal, recordAdapterConfig, recordBytes, recordTemplate, startRecordSeller, TERMS_FILE, type RecordSeller } from './record-seller.ts';
 import { cast, cleanup, mandateFor, sellingMandateFor, sellingRulesFor, startSigner, V1, type Cast, type Running } from './signer-test-kit.ts';
 import { serveSeller } from './signer-world-kit.ts';
 import { serveTwoOrigins, type TwoOrigins } from './two-origins.ts';
@@ -88,7 +88,8 @@ describe('Crow sells the record of a public deal, through the adapter and its si
     await seller.close();
     // The record seller, reading the operators through two logging stand-ins.
     for (const u of demo.urls) proxies.push(await logged(u, requests));
-    record = await startRecordSeller({ operators: (proxies as J[]).map((p) => p.url) });
+    const reads = (proxies as J[]).map((p) => p.url);
+    record = await startRecordSeller({ operators: reads, fetch: guardedFetch(reads) });
     const dir = tmp();
     writeFileSync(join(dir, 'template.json'), JSON.stringify(recordTemplate()));
     config = (o: J = {}) => ({ ...shipped, ...recordAdapterConfig({ api: record.api, template: join(dir, 'template.json'), journal: join(tmp(), 'journal.json'), port: 0 }), pollMs: 50, log: () => {}, ...o });
@@ -132,19 +133,35 @@ describe('Crow sells the record of a public deal, through the adapter and its si
     const done = await buyer.openDelivery(q.commitmentId, { onReport: () => {} });
     expect(done.outcome).toBe('Released');
     const work = JSON.parse(typeof done.work === 'string' ? done.work : JSON.stringify(done.work));
-    expect(work).toMatchObject({ record: 'holdback-deal-record/1', commitmentId: other, party: 'buyer' });
+    expect(work).toMatchObject({ record: 'holdback-deal-record/1', commitmentId: other, party: 'seller', row: { commitmentId: other } });
+    expect(work.checks).toContainEqual(expect.objectContaining({ check: 'commitment ID', ok: true }));
     expect(await balance(c.treasury)).toBe(5_000_000n);
     // Public reads only: every request the record seller sent was a GET.
     expect(requests.length).toBeGreaterThan(0);
     expect(requests.filter((r) => !r.startsWith('GET '))).toEqual([]);
   }, 120_000);
 
-  it('the record of another deal fails the checks of an offer for this one', async () => {
+  it('the record of another deal, or one whose terms were not checked, fails the checks of an offer for this one', async () => {
     const t = loadTermsFile(TERMS_FILE);
-    const record = JSON.stringify({ record: 'holdback-deal-record/1', commitmentId: ID, party: 'buyer', writtenAt: '2026-11-14T20:00:00Z', operators: [{}, {}], terms: {}, outcome: {}, steps: [], delivery: {}, judgment: {}, settlement: {}, balances: {}, checks: [{ check: 'x', ok: true }], disagreements: [], row: { commitmentId: ID } });
-    const accept = (deal: string) => preflightDelivery({ plaintext: new TextEncoder().encode(record), mime: 'application/json', format: 'application/json', acceptance: fill(t.acceptance, { deal }) as J }).result;
-    expect(accept(ID)).toBe('accept');
-    expect(accept(other)).toBe('reject');
+    const of = (id: string, o: J = {}) => ({ record: 'holdback-deal-record/1', commitmentId: id, party: 'seller', writtenAt: '2026-11-14T20:00:00Z', operators: [{}, {}], terms: {}, outcome: {}, steps: [], delivery: null, judgment: null, settlement: null, balances: {}, checks: [{ check: 'all operators answered', ok: true }, { check: 'commitment ID', ok: true }], disagreements: [], row: { commitmentId: id }, ...o });
+    const accept = (r: J, deal: string, bytes = recordBytes(r)) => preflightDelivery({ plaintext: new Uint8Array(bytes), mime: 'application/json', format: 'application/json', acceptance: fill(t.acceptance, { deal }) as J }).result;
+    expect(accept(of(ID), ID)).toBe('accept');
+    expect(accept(of(ID), other)).toBe('reject');
+    expect(accept(of(other, { row: { commitmentId: ID } }), other)).toBe('reject');
+    expect(accept(of(ID, { checks: [{ check: 'commitment ID', ok: null }] }), ID)).toBe('reject');
+    expect(accept(of(ID, { checks: [{ check: 'all operators answered', ok: true }] }), ID)).toBe('reject');
+    expect(accept(of(ID, { terms: 'not checked' }), ID)).toBe('reject');
+  });
+
+  it('a record that quotes a hidden character from the deal still passes: the bytes write it as \\uXXXX', () => {
+    const t = loadTermsFile(TERMS_FILE);
+    const r = { record: 'holdback-deal-record/1', commitmentId: ID, party: 'seller', writtenAt: '2026-11-14T20:00:00Z', operators: [{}, {}], terms: { signed: { deliverable: { description: 'rows \u{FE0F}\u{200B} é' } } }, outcome: {}, steps: [], delivery: null, judgment: null, settlement: null, balances: {}, checks: [{ check: 'commitment ID', ok: true }], disagreements: [], row: { commitmentId: ID } };
+    const accept = (bytes: Uint8Array) => preflightDelivery({ plaintext: bytes, mime: 'application/json', format: 'application/json', acceptance: fill(t.acceptance, { deal: ID }) as J }).result;
+    const bytes = recordBytes(r);
+    expect([...bytes].every((b) => b < 0x80)).toBe(true);
+    expect(JSON.parse(bytes.toString('utf8'))).toEqual(r);
+    expect(accept(new Uint8Array(bytes))).toBe('accept');
+    expect(accept(new TextEncoder().encode(JSON.stringify(r)))).toBe('reject');
   });
 
   it('a quote for a deal that is not on the operators, or with anything but a deal ID, makes no offer', async () => {
@@ -155,5 +172,99 @@ describe('Crow sells the record of a public deal, through the adapter and its si
     const ask = (scope: J) => fetch(`${adapter.url}/quote`, { method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify({ buyer: buyer.address, buyerEncryptionPublicKey: buyer.encryptionPublicKey, scope }) });
     for (const scope of [{ deal: `0x${'00'.repeat(32)}` }, { deal: 'not an id' }, { deal: other, note: 'x' }]) expect((await ask(scope)).status).not.toBe(200);
     expect((await s.get('/v1/status')).body.selling.offersToday).toBe(before);
+  });
+});
+
+/** A stand-in operator: it serves a deal's terms at the given disclosure level, its token, and counts each request. */
+async function operator(level: string | null, seen: string[] = []): Promise<{ url: string; close(): Promise<void> }> {
+  const server: Server = createServer((req, res) => {
+    seen.push(`${req.method} ${req.url}`);
+    const json = (status: number, body: unknown) => res.writeHead(status, { 'content-type': 'application/json' }).end(JSON.stringify(body));
+    if (req.url === '/.well-known/holdback.json') return json(200, { demo: { token: { id: 'tUSD' } } });
+    if (req.url === `/v1/commitments/${ID}/terms`) return level === null ? json(404, { type: 'not_found' }) : json(200, { disclosure: { level } });
+    return json(404, { type: 'not_found' });
+  });
+  await new Promise<void>((ok) => server.listen(0, '127.0.0.1', ok));
+  return { url: `http://127.0.0.1:${(server.address() as AddressInfo).port}`, close: () => new Promise((ok) => (server.closeAllConnections(), server.close(() => ok()))) };
+}
+const down = 'http://127.0.0.1:9'; // nothing listens on the discard port
+
+describe('the record seller\'s own calls', () => {
+  const open: Array<{ close(): Promise<void> }> = [];
+  afterAll(async () => {
+    for (const x of open) await x.close();
+  });
+  const serve = async (operators: string[]) => {
+    const r = await startRecordSeller({ operators, fetch: guardedFetch(operators) });
+    open.push(r);
+    return r;
+  };
+  const quote = (r: RecordSeller) => fetch(r.api.quote, { method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify({ scope: { deal: ID } }) });
+
+  it('quotes a deal one operator says is public and none says otherwise; an operator offline neither confirms nor denies', async () => {
+    const [a, b] = [await operator('public'), await operator('public')];
+    open.push(a, b);
+    const r = await serve([down, a.url, b.url]);
+    const q = await quote(r);
+    expect(q.status).toBe(200);
+    expect(await q.json()).toMatchObject({ price: { token: 'tUSD', amount: '5000000' }, deliverWithinSec: 3600 });
+  });
+
+  it('refuses a deal one operator calls private, judgment-level or unknown, and one that no operator confirms', async () => {
+    for (const level of ['private', 'judgment', null]) {
+      const [a, b] = [await operator('public'), await operator(level)];
+      open.push(a, b);
+      expect((await quote(await serve([a.url, b.url]))).status).toBe(400);
+    }
+    expect((await quote(await serve([down, `${down}0`]))).status).toBe(400);
+  });
+
+  it('the same Idempotency-Key with another deal is a conflict; with the same deal it gives the same job', async () => {
+    const r = await serve([down, `${down}0`]);
+    const start = (deal: string, key: string) => fetch(r.api.start, { method: 'POST', headers: { 'content-type': 'application/json', 'idempotency-key': key }, body: JSON.stringify({ commitmentId: `0x${'cd'.repeat(32)}`, scope: { deal } }) });
+    const first = (await (await start(ID, 'k1')).json()) as J;
+    expect(((await (await start(ID, 'k1')).json()) as J).jobId).toBe(first.jobId);
+    expect((await start(`0x${'ef'.repeat(32)}`, 'k1')).status).toBe(409);
+    expect(first.jobId).toMatch(new RegExp(`^${ID}\\.[0-9a-f]{16}$`));
+  });
+
+  it('a job that failed, or that this process never held (a restart), runs again on the next poll', async () => {
+    const seen: string[] = [];
+    const a = await operator('public', seen);
+    open.push(a);
+    const r = await serve([a.url, down]);
+    const job = `${ID}.${'0'.repeat(16)}`;
+    // Not started here: the poll starts it.
+    expect((await fetch(r.api.result.replace('{jobId}', job))).status).toBe(202);
+    await new Promise((ok) => setTimeout(ok, 300));
+    const before = seen.length;
+    expect(before).toBeGreaterThan(0);
+    // The stand-in serves too little for a record, so the job fails; the next poll runs it again.
+    expect((await fetch(r.api.result.replace('{jobId}', job))).status).toBe(202);
+    await new Promise((ok) => setTimeout(ok, 300));
+    expect(seen.length).toBeGreaterThan(before);
+    expect((await fetch(r.api.result.replace('{jobId}', 'not-a-job'))).status).toBe(404);
+  });
+});
+
+describe('the guard every request of the record seller goes through', () => {
+  it('sends GET only, to the given origins only, follows no redirect and reads at most the cap', async () => {
+    const server: Server = createServer((req, res) => {
+      if (req.url === '/redirect') return res.writeHead(302, { location: 'http://example.invalid/' }).end();
+      if (req.url === '/big') return res.writeHead(200).end(Buffer.alloc(2048, 0x61));
+      return res.writeHead(200, { 'content-type': 'application/json' }).end('{"ok":true}');
+    });
+    await new Promise<void>((ok) => server.listen(0, '127.0.0.1', ok));
+    const url = `http://127.0.0.1:${(server.address() as AddressInfo).port}`;
+    try {
+      const g = guardedFetch([url], 1024);
+      expect(await (await g(`${url}/x`)).json()).toEqual({ ok: true });
+      await expect(g(`${url}/x`, { method: 'POST' })).rejects.toThrow(/GET requests only/);
+      await expect(g('http://127.0.0.1:1/x')).rejects.toThrow(/configured operators only/);
+      await expect(g(`${url}/redirect`)).rejects.toThrow(/redirect/);
+      await expect(g(`${url}/big`)).rejects.toThrow(/above 1024 bytes/);
+    } finally {
+      await new Promise((ok) => (server.closeAllConnections(), server.close(() => ok(undefined))));
+    }
   });
 });

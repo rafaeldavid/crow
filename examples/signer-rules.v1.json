@@ -91,7 +91,7 @@
       {
         "deliverable": {
           "kind": "document",
-          "description": "The checked deal record of public deal {{deal}}: one JSON file in the form holdback-deal-record/1 that examples/deal-record.ts writes, read from every operator's public routes only. It holds the signed terms, each step, the delivery, the judgment and the settlement as each operator serves them, each check with how it was made, and every section where the operators disagree. It holds no key and no work.",
+          "description": "The checked deal record of public deal {{deal}}: one JSON file in the form holdback-deal-record/1 that examples/deal-record.ts writes, read from every operator's public routes only. It holds the signed terms, each step, the delivery, the judgment and the settlement as each operator serves them, each check with how it was made, and every section where the operators disagree. It holds no key and no work but what the operators publish.",
           "format": "application/json"
         },
         "acceptance": {
@@ -140,8 +140,44 @@
                     "type": "array",
                     "minItems": 2
                   },
+                  "terms": {
+                    "type": [
+                      "object",
+                      "null"
+                    ]
+                  },
+                  "outcome": {
+                    "type": [
+                      "object",
+                      "null"
+                    ]
+                  },
                   "steps": {
                     "type": "array"
+                  },
+                  "delivery": {
+                    "type": [
+                      "object",
+                      "null"
+                    ]
+                  },
+                  "judgment": {
+                    "type": [
+                      "object",
+                      "null"
+                    ]
+                  },
+                  "settlement": {
+                    "type": [
+                      "object",
+                      "null"
+                    ]
+                  },
+                  "balances": {
+                    "type": [
+                      "object",
+                      "null"
+                    ]
                   },
                   "checks": {
                     "type": "array",
@@ -165,6 +201,25 @@
                           ]
                         }
                       }
+                    },
+                    "not": {
+                      "items": {
+                        "not": {
+                          "type": "object",
+                          "required": [
+                            "check",
+                            "ok"
+                          ],
+                          "properties": {
+                            "check": {
+                              "const": "commitment ID"
+                            },
+                            "ok": {
+                              "const": true
+                            }
+                          }
+                        }
+                      }
                     }
                   },
                   "disagreements": {
@@ -174,7 +229,12 @@
                     "type": "object",
                     "required": [
                       "commitmentId"
-                    ]
+                    ],
+                    "properties": {
+                      "commitmentId": {
+                        "const": "{{deal}}"
+                      }
+                    }
                   }
                 }
               }
