@@ -4,7 +4,7 @@
 - **Depends on:** T-405 (the ID check and Work across repos)
 - **Paths this task may touch:** `scripts/id-check.mjs`, `tests/id-check.test.ts`, `docs/team.md` (one rule under Change recipes), `docs/tasks/_template.md` (one line), and one header line in each task file from T-402 on (the backfill). Not `.github/`: the pull request template's change is a separate draft pull request, Rafa's word.
 - **Human gate:** no for this pull request. Making `id-check` a required check on `main` is a repository setting, Rafa's.
-- **Status:** review (2026-11-14)
+- **Status:** done (pull requests 559 and 560, merged 2026-11-14 as `8c465bb7` and `f1bbe557`)
 - **Agent/session:** the coordinator's side session for Work across repos (crow-private T-437), worktree `.worktrees/holdback-T-435`, branch `t-437-task-names-row`
 - **Roadmap row:** N108, T-065
 

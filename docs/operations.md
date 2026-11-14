@@ -102,11 +102,35 @@ If the seller is down or busy, `try.mjs` plays both sides and says so, so a site
 2. `curl -s https://crow.direct/agents/test-buyer/health` should read `"status": "operational"`, and `https://crow.direct/agents/test-buyer/agent.json` a `crow-buyer` card.
 3. `node apps/test-agents/scripts/sell-to-test-buyer.mjs` plays an outside seller with fresh keys and should end `released`; add `--outcome refund` to see a refund. Record the transactions in T-239's Evidence.
 
+**Hosted sellers, the first deploy of one** (T-436, ADR-0037; Rafa's go-ahead first, and the secrets are his). Each hosted seller is its own Worker, `crow-seller-<slug>`, on the routes `crow.direct/agents/<slug>` and `crow.direct/agents/<slug>/*`, with one Durable Object that holds its deals. Its configuration lives in a private folder, never in this repository: `hosted.json` (the slug and the card), `adapter.json` (the adapter configuration) and the files `adapter.json` names. `apps/hosted-sellers/example/seller/` shows the shape for a made-up seller. Run every command from a detached worktree of the public repository at `origin/main`, built with `pnpm install --frozen-lockfile && pnpm -r build`. `<folder>` is the seller's private folder, `<id>` the account the configuration pins (`sellerApi.workspace.id`, or `none`), and `<out>` a directory outside every repository, made with `mkdir -m 700`.
+
+1. `node apps/hosted-sellers/scripts/local-run.ts`: one whole deal in Cloudflare's local runtime against the job stub, with nothing leaving the machine. It should end `local-run: pass`.
+2. `node apps/hosted-sellers/scripts/deploy.ts --seller <folder> --workspace <id> --dry-run`: checks the folder and the account, prints the bundle's SHA-256, and bundles with Wrangler without uploading.
+3. `node apps/hosted-sellers/scripts/deploy.ts --seller <folder> --workspace <id> --first`: creates the Worker and its routes. It passes once `/health` answers for this bundle, degraded, since the Worker has no secrets yet. If it fails after the upload, the Worker stays up with no secrets and no deals: go on to step 4, or remove the Worker with Wrangler and start again.
+4. `read -rs 'API_KEY?API key: ' && printf %s "$API_KEY" | node apps/hosted-sellers/scripts/secrets.ts --seller <folder> --credentials-out <out>; unset API_KEY`: zsh asks "API key:" and shows nothing you type, and the key stays out of the history and the process list. It sets, in one `wrangler secret bulk`:
+   - `HOLDBACK_KEY`, a fresh signing key generated in memory and never shown (it prints the address);
+   - the company's API key, under the variable `sellerApi.auth.env` names, from what you typed;
+   - fresh values for `quoteAuth.env`, `redelivery.readyAuth.env` and `alerts.secretEnv`, each also written to `<out>/<slug>.*.credential` (mode 0600).
+   It refuses to replace a secret that is already set. `--replace` overrides, gives the seller a new address, and waits for a seller with no open deal. It also refuses when a credential file is already in `<out>`, before writing any.
+5. `node apps/hosted-sellers/scripts/deploy.ts --seller <folder> --workspace <id> --check-only`: passes when `/health` reads operational for this bundle and `/agent.json` serves the seller's card. Right after step 4 it can take up to 7 minutes, since an active object keeps its old code for up to 300 s. Then `curl -s https://crow.direct/agents/<slug>/health` shows the same SHA-256 that step 2 printed.
+6. Hand the buyer the page `https://crow.direct/agents/<slug>` and the quote credential from `<out>`, outside any shared channel. The ready credential is Rafa's: it opens `POST /deals/<id>/ready` and `/job` (`site/ref/seller-adapter.txt`). The alert secret, when the configuration names one, goes to whoever runs the alert callback. The seller's address is in the card, and its payout address in the configuration.
+7. Add the record line each deploy prints to "Deploy record" below.
+
+A later deploy is step 5's command without `--check-only`. It refuses while a deal is at `starting` (the deal guard), or when the live seller does not answer three reads. Then it uploads with deferred code updates, checks the seller for up to 7 minutes, and rolls back on a failed check. A hosted seller keeps its open deals across deploys: its object's name does not change. Before a contracts cutover, read each hosted seller's `/health` for open deals.
+
 **A world changes in place (D49).** The Sepolia world replays nothing on open, and each deal's book carries its own rulebook. So a rulebook change, an additive schema bump or a code deploy keeps the world names as they are, and deals open at the deploy continue. A new world is for a new rules contract or another chain only; record the switch in the deploy record (below). The SimChain world still replays its journal on open, so a rulebook change there needs a new `sim` name (2026-11-02: v0.8 refused v0.7's offers with `rulebook_unknown`). Check `schemaVersion` in `/v1/status` after a deploy, and run `npx wrangler@4 tail holdback-op1 --format json` if it is wrong.
 
 **When a world changes** (D49): Rafa approves the redeploy. Switch while no deal is open on the old world, or send its permissionless timeouts afterwards and record them. Record in the deploy record (below) the old world's name, rules address and deployment file, the new world's, and the Worker versions. Never delete a world's storage: a rollback of both Workers serves it again.
 
 Workers rules learned the hard way (T-029, T-233): generate no code, at startup or inside a request. Core's validators are compiled ahead of time (T-233): a compile inside a request fails with error 1101, and one at startup spends the 1 s startup CPU limit (code 10021). A failed Durable Object alarm must be re-armed. Deploy only from a branch that has merged main, or a deploy can drop the custom domains.
+
+## Security headers (T-451, T-462)
+
+**Each public Worker sets its security headers in one function, on every answer on its way out.** The site's is `secured()` in `apps/site/headers.js`: HSTS, nosniff, `X-Frame-Options: DENY`, a referrer policy and a permissions policy on every answer, and on HTML pages a content security policy and the cross-origin opener and resource policies. The policy allows scripts and styles from the site and the inline ones the build wrote: `site/csp.mjs` hashes them into `csp-hashes.json` at the build's root, the Worker reads that file once per instance, and `site/check.mjs` (group 18) fails a build whose pages carry inline code the policy would block. A page that adds an inline script needs no edit here: the next build hashes it. A page that calls a new outside origin, or loads a script or stylesheet from one, needs that origin added in `headers.js`. The operators' is `secured()` in `apps/demo-cloud/src/headers.ts`: HSTS, nosniff, no framing, no referrer and a same-origin resource policy, with CORS and `Cache-Control` left as the World writes them. Neither touches a body, so the pinned bundles keep their hashes. `docs/tasks/T-451-security-headers.md` has the headers as measured before and after.
+
+**The test agents and early access use the operators' set, imported and not copied (T-462).** crow-test-agents (`apps/test-agents/src/headers.ts`) and crow-early-access (`apps/early-access/worker.js`) pass every answer through a `secured()` that sets `API_HEADERS` from `apps/demo-cloud/src/headers.ts`, so a change to the operators' set reaches both. The test seller's and test buyer's HTML cards also get their own content security policy, which allows their one inline style (`CARD_STYLE`) by its hash and nothing else, and a same-origin opener policy. Each Worker's CORS, `Cache-Control`, statuses and bodies are unchanged: crow.direct's pages still post sign-ups to early access across origins. `docs/tasks/T-462-security-headers-other-workers.md` has the measurements.
+
+**Plain HTTP is redirected, never served.** The operators, the test agents and early access answer a plain-HTTP request with a 301 to the same path and query over HTTPS for a read (GET, HEAD) and a 308 for a write, which a client follows with the same method and body or not at all. The site answers every plain-HTTP request with a 301, straight to crow.direct for the old hostnames. Local runs (`localhost`, `127.0.0.1`, `[::1]`, `*.localhost`) stay on HTTP.
 
 ## Settlement: SimChain or Sepolia (D41, ADR-0028)
 
@@ -241,6 +265,33 @@ The maintainers keep the notes on agent sessions and permission prompts privatel
 ## Deploy record
 
 Each entry records one deploy as it ran: the date and time in UTC, the commit, each Worker's new version and its rollback target, and what was measured after it. The deploy scripts print the entry's first line (`pnpm demo-cloud:deploy`, `pnpm site:deploy`, `node apps/test-agents/scripts/deploy.mjs`). The values are true for their date: for what runs now, read "What is live" above and each node's discovery.
+
+### Deploys owed on 2026-11-14: the faucet allowance, the test seller and the site (operators 14:54 UTC, test seller and site 16:06 UTC)
+
+**Site deploy 2026-11-14 16:06 UTC, commit `8c465bb` on a detached HEAD: pass.** crow-site `a8ca3320-b0a9-42ce-a6a1-a2ce2fdfd1ee` (rollback target `2282f633-7bc9-4794-9a67-c61406685562`).
+
+**Test seller deploy 2026-11-14 16:06 UTC, commit `8c465bb`: pass.** crow-test-agents `d3dce65d-ab02-4b19-a8eb-7d1031c23d0a` (rollback target `0efca4f1-12ce-4249-bcaf-c3c716825ff8`).
+
+**Deploy 2026-11-14 14:54 UTC, commit `011ce6a` on a detached HEAD: pass.** holdback-op1 `ceb012e0-20d1-43fa-b872-e7291cdb5b52` (rollback target `0a1a18b4-72a7-491d-9a94-cbf2d683fc56`), holdback-op2 `ee98fcab-27e5-42ba-90f4-237be7776319` (rollback target `ee971afd-efb1-4648-b0aa-3f768fa009ee`). Smoke deal `0xf17e06270220ca429e0f42175e2ae758d7d38eb027bbdcd5eaabca14dd7638c0` Released in 44 s, against commit `011ce6a` (both nodes' discovery named it 286 s after /v1/status answered).
+
+A deploy session ran all three on Rafa's word ("Go ahead and deploy anything hanging", 2026-11-14), after Crow Control's "Deploys owed" signal. The operators waited for the benchmark batch (s2 to s6), whose last deal settled at 14:39:54 UTC.
+- The operators carry PR 534: the faucet grants 50 new addresses per client an hour, up from 10. No world, contract or schema changed. The deal guard checked 4 open deals and found that none would lose its judge.
+- The test seller carries the operator change and `apps/test-agents/scripts/play-offers.ts`.
+- The site carries PR 552 (T-433): `ref/limits.txt` changed, the only site file since `0250676`. The build uploaded `/version.json`, `/guide-budget.json` and `/ref/limits.txt`, with 72 files already uploaded.
+- CI's `ci` run passed on `011ce6a` for the operators and on `b9df8c8` for the test seller and the site. The commits from `b9df8c8` to `8c465bb` change only `docs/`, `scripts/id-check.mjs` and `tests/`, outside every Worker's paths, so the deploy went ahead at main's tip without a further CI wait.
+- Earlier tries stopped before any upload: the test seller's pre-flight refused `011ce6a` because `origin/main` had moved.
+
+Measured after the deploys, at 16:07 UTC:
+- `https://crow.direct/version.json` and `https://crow.direct/agents/test-seller/version.json` name `8c465bb`;
+- both nodes' discovery (`demo.build.commit`) names `011ce6a`;
+- `https://crow.direct/guide-budget.json` names `8c465bb` and puts the buyer's first-deal path at 4,544 of 5,000 tokens and the seller's at 4,156 (estimates);
+- the test seller and the test buyer read operational 2 s after the upload.
+
+**Earlier site deploys the same day.** Two deploys carried no record line here; their versions come from `npx wrangler@4 deployments list --name crow-site`:
+- 12:17 UTC, commit `a6b9472` (PR 529, T-421's Coming soon notice): crow-site `b0c3a3d3-448d-40dd-a112-38e0cce332de` (rollback target `68d33780-5033-4053-a46e-fe3fdfff1e83`).
+- 14:18 UTC, commit `0250676` (PR 548): crow-site `2282f633-7bc9-4794-9a67-c61406685562` (rollback target `3f6b27aa-be9e-472e-9771-aef718c855a8`).
+
+The deployment list also shows site versions at 13:14, 13:30, 13:46 and 14:06 UTC with no entry here; the sessions that ran them hold their record lines.
 
 ### The seller guide's fresh-key line (site deployed 2026-11-14, 14:14 UTC)
 
