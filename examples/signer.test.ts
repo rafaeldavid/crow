@@ -259,8 +259,8 @@ describe('A13: reach the signer\'s flag, rules and ledger from the agent\'s side
 
   it('the signer\'s keys reach it through its environment only, and it reads no other secret (A1, the signer\'s side)', () => {
     const src = readFileSync(here('./signer.ts'), 'utf8');
-    expect([...new Set(src.match(/process\.env\['[A-Z_]+'\]/g))].sort()).toEqual(["process.env['CROW_SIGNER_BUYING_KEY']", "process.env['CROW_SIGNER_FLOAT_KEY']"]);
-    expect(src).toContain("delete process.env['CROW_SIGNER_FLOAT_KEY']");
+    expect([...new Set(src.match(/process\.env\['[A-Z_]+'\]/g))].sort()).toEqual(["process.env['CROW_SIGNER_BUYING_KEY']", "process.env['CROW_SIGNER_FLOAT_KEY']", "process.env['CROW_SIGNER_SELLING_KEY']"]);
+    for (const k of ['FLOAT', 'BUYING', 'SELLING']) expect(src).toContain(`delete process.env['CROW_SIGNER_${k}_KEY']`);
   });
 });
 

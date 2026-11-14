@@ -33,12 +33,13 @@ export const ACCEPTANCE = { deterministicChecks: CHECKS, rubric: { criteria: [],
 /** The parties of one test: the principal (a hardware wallet in real use), the signer's two keys, the seller, the reviewers. */
 export function cast() {
   const key = () => generatePrivateKey();
-  const k = { principal: key(), float: key(), buying: key() };
+  const k = { principal: key(), float: key(), buying: key(), selling: key() };
   return {
     keys: k,
     principal: privateKeyToAccount(k.principal),
     float: privateKeyToAccount(k.float).address.toLowerCase(),
     standing: privateKeyToAccount(k.buying).address.toLowerCase(),
+    sellingAddress: privateKeyToAccount(k.selling).address.toLowerCase(), treasury: fresh(),
     seller: fresh(), payout: fresh(),
     reviewers: { adjudicator: fresh(), fallbackAdjudicator: fresh(), appealAdjudicator: fresh(), policyId: 'demo-policy', policyHash: `0x${'33'.repeat(32)}`, registryHash: `0x${'22'.repeat(32)}`, fee: '1000000' },
     rulebookHash: `0x${'11'.repeat(32)}`,
@@ -49,7 +50,7 @@ export type Cast = ReturnType<typeof cast>;
 /** The version 1 rules with this test's addresses filled in; the limits are the file's own. */
 export function rulesFor(c: Cast, o: { reads: string[]; chain?: J; sellers?: J[]; reviewers?: J; clubId?: string; rulebookHash?: string }): J {
   return {
-    ...V1, chain: o.chain ?? { network: 'simchain' }, floatAddress: c.float,
+    ...V1, selling: undefined, chain: o.chain ?? { network: 'simchain' }, floatAddress: c.float,
     buying: {
       ...V1.buying, principal: c.principal.address.toLowerCase(), standingKey: c.standing, mandatePath: 'mandate.json', clubId: o.clubId ?? V1.buying.clubId, rulebookHash: o.rulebookHash ?? c.rulebookHash,
       reviewers: o.reviewers ?? c.reviewers,
@@ -57,6 +58,29 @@ export function rulesFor(c: Cast, o: { reads: string[]; chain?: J; sellers?: J[]
     },
     reads: { ...V1.reads, operators: o.reads },
   };
+}
+
+/**
+ * The version 1 rules with a selling half (T-443): this test's selling key, payout address (Crow's treasury), reviewers
+ * and products; the price, the windows and the counts are the file's own.
+ */
+export function sellingRulesFor(c: Cast, o: { reads: string[]; products?: J[]; reviewers?: J; clubId?: string; rulebookHash?: string; chain?: J }): J {
+  const base = rulesFor(c, { reads: o.reads, ...(o.chain ? { chain: o.chain } : {}), ...(o.reviewers ? { reviewers: o.reviewers } : {}), ...(o.clubId ? { clubId: o.clubId } : {}), ...(o.rulebookHash ? { rulebookHash: o.rulebookHash } : {}) });
+  return {
+    ...base,
+    selling: {
+      ...V1.selling, principal: c.principal.address.toLowerCase(), sellingKey: c.sellingAddress, mandatePath: 'selling-mandate.json', payoutAddress: c.treasury,
+      clubId: o.clubId ?? V1.selling.clubId, rulebookHash: o.rulebookHash ?? c.rulebookHash, reviewers: o.reviewers ?? c.reviewers,
+      products: o.products ?? [{ deliverable: { ...DELIVERABLE, description: 'records of deal {{scope.commitmentId}}' }, acceptance: ACCEPTANCE }],
+    },
+  };
+}
+
+/** The principal's signed mandate for the selling key: the seller role, at most the price a deal (constraints.md, section 7). */
+export async function sellingMandateFor(c: Cast, o: { domain?: Domain; token?: string; days?: number; now?: number; maxPerDeal?: string } = {}): Promise<J> {
+  const domain = o.domain ?? SIMCHAIN_DOMAIN;
+  const doc = buildMandate({ principal: c.principal.address, agent: c.sellingAddress, clubId: V1.selling.clubId, role: 'seller', maxPerDeal: o.maxPerDeal ?? V1.selling.price, maxPerDay: '100000000', token: o.token ?? 'tUSD', ...(o.days ? { days: o.days } : {}), ...(o.now ? { now: o.now } : {}) });
+  return { ...doc, signature: await c.principal.signTypedData(fileOf('Mandate', doc, domain)) };
 }
 
 /** The principal's signed mandate for the standing key, as the hardware wallet would sign the tool's file. */
@@ -108,18 +132,19 @@ export type Running = { url: string; dir: string; rulesPath: string; statePath: 
  * flag ("run") and state in a temporary folder of its own. The test process never holds the signer's keys after this
  * call returns, except where a test says it plays the signer's administrator.
  */
-export async function startSigner(c: Cast, rules: J, mandate: J, o: { dir?: string; flag?: string } = {}): Promise<Running> {
+export async function startSigner(c: Cast, rules: J, mandate: J, o: { dir?: string; flag?: string; sellingMandate?: J } = {}): Promise<Running> {
   const dir = o.dir ?? mkdtempSync(join(tmpdir(), 'crow-signer-'));
   const rulesPath = join(dir, 'rules.json'), statePath = join(dir, 'state'), flagPath = join(dir, 'flag'), revocationsPath = join(dir, 'revocations');
   if (!o.dir) {
     writeFileSync(rulesPath, JSON.stringify(rules, null, 2));
     writeFileSync(join(dir, 'mandate.json'), JSON.stringify(mandate));
+    if (o.sellingMandate) writeFileSync(join(dir, 'selling-mandate.json'), JSON.stringify(o.sellingMandate));
     writeFileSync(flagPath, o.flag ?? 'run\n');
     mkdirSync(revocationsPath);
   }
   if (!o.dir) spawnSync(process.execPath, [here('./signer.ts'), 'init', '--state', statePath], { env: { PATH: process.env['PATH'] ?? '' } });
   const args = [here('./signer.ts'), 'serve', '--rules', rulesPath, '--state', statePath, '--flag', flagPath, '--listen', '127.0.0.1:0'];
-  const proc = spawn(process.execPath, args, { env: { PATH: process.env['PATH'] ?? '', CROW_SIGNER_FLOAT_KEY: c.keys.float, CROW_SIGNER_BUYING_KEY: c.keys.buying }, stdio: ['ignore', 'pipe', 'pipe'] });
+  const proc = spawn(process.execPath, args, { env: { PATH: process.env['PATH'] ?? '', CROW_SIGNER_FLOAT_KEY: c.keys.float, CROW_SIGNER_BUYING_KEY: c.keys.buying, ...(rules.selling ? { CROW_SIGNER_SELLING_KEY: c.keys.selling } : {}) }, stdio: ['ignore', 'pipe', 'pipe'] });
   let err = '';
   proc.stderr!.on('data', (d) => (err += String(d)));
   const url = await new Promise<string>((ok, fail) => {
