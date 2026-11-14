@@ -82,7 +82,7 @@ export async function rulesForWorld(w: World, c: Cast, store: () => string, chai
   const t = (await (await fetch(`${w.urls[0]}/v1/commitments/${q.commitmentId}/terms`)).json()) as J;
   const a = t.adjudication;
   return {
-    ...V1, chain, floatAddress: c.float,
+    ...V1, selling: undefined, chain, floatAddress: c.float,
     buying: {
       ...V1.buying, principal: c.principal.address.toLowerCase(), standingKey: c.standing, mandatePath: 'mandate.json', clubId: t.clubId, rulebookHash: t.rulebookHash,
       reviewers: { adjudicator: a.adjudicator, fallbackAdjudicator: a.fallbackAdjudicator, appealAdjudicator: a.appealAdjudicator, policyId: a.policyId, policyHash: a.policyHash, registryHash: a.registryHash, fee: a.fee.amount },

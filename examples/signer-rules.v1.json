@@ -53,6 +53,60 @@
       }
     ]
   },
+  "selling": {
+    "principal": "0x0000000000000000000000000000000000000000",
+    "sellingKey": "0x0000000000000000000000000000000000000000",
+    "mandatePath": "selling-mandate.json",
+    "payoutAddress": "0x0000000000000000000000000000000000000000",
+    "price": "5000000",
+    "clubId": "demo-club",
+    "rulebookHash": "0x0000000000000000000000000000000000000000000000000000000000000000",
+    "reviewers": {
+      "adjudicator": "0x0000000000000000000000000000000000000000",
+      "fallbackAdjudicator": "0x0000000000000000000000000000000000000000",
+      "appealAdjudicator": "0x0000000000000000000000000000000000000000",
+      "policyId": "demo-policy",
+      "policyHash": "0x0000000000000000000000000000000000000000000000000000000000000000",
+      "registryHash": "0x0000000000000000000000000000000000000000000000000000000000000000",
+      "fee": "0"
+    },
+    "terms": {
+      "schemaVersion": "0.8",
+      "settlementMode": "guaranteed_on_decision",
+      "onReject": "full_refund",
+      "disclosure": "public",
+      "maxSubmissions": 1,
+      "appealWindowSec": 0,
+      "appealDecideSec": 60
+    },
+    "windows": {
+      "offerExpiresInSec": 300,
+      "fundWithinSec": 600,
+      "deliverWithinSec": 3600,
+      "judgeWithinSec": 60,
+      "fallbackWithinSec": 60
+    },
+    "clockSkewSec": 60,
+    "products": [
+      {
+        "deliverable": {
+          "kind": "report",
+          "description": "The checked deal record of public deal {{deal}}",
+          "format": "application/json"
+        },
+        "acceptance": {
+          "deterministicChecks": [],
+          "rubric": {
+            "criteria": [],
+            "passThreshold": 0
+          }
+        }
+      }
+    ],
+    "maxOffersPerHour": 20,
+    "maxOpenDeals": 10,
+    "maxDealsPerDay": 20
+  },
   "reads": {
     "operators": [
       "https://api.crow.direct",

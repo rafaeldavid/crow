@@ -199,112 +199,13 @@
           "$ref": "#/$defs/hex32"
         },
         "reviewers": {
-          "description": "B7: the three adjudicators every deal must name, with the policy, the registry and the fee",
-          "type": "object",
-          "additionalProperties": false,
-          "required": [
-            "adjudicator",
-            "fallbackAdjudicator",
-            "appealAdjudicator",
-            "policyId",
-            "policyHash",
-            "registryHash",
-            "fee"
-          ],
-          "properties": {
-            "adjudicator": {
-              "$ref": "#/$defs/address"
-            },
-            "fallbackAdjudicator": {
-              "$ref": "#/$defs/address"
-            },
-            "appealAdjudicator": {
-              "$ref": "#/$defs/address"
-            },
-            "policyId": {
-              "type": "string",
-              "pattern": "^[ -~]{1,128}$"
-            },
-            "policyHash": {
-              "$ref": "#/$defs/hex32"
-            },
-            "registryHash": {
-              "$ref": "#/$defs/hex32"
-            },
-            "fee": {
-              "$ref": "#/$defs/amount"
-            }
-          }
+          "$ref": "#/$defs/reviewers"
         },
         "terms": {
-          "description": "B6: the fields every deal's terms must hold exactly",
-          "type": "object",
-          "additionalProperties": false,
-          "required": [
-            "schemaVersion",
-            "settlementMode",
-            "onReject",
-            "disclosure",
-            "maxSubmissions",
-            "appealWindowSec",
-            "appealDecideSec"
-          ],
-          "properties": {
-            "schemaVersion": {
-              "type": "string",
-              "pattern": "^[0-9]+\\.[0-9]+$"
-            },
-            "settlementMode": {
-              "const": "guaranteed_on_decision"
-            },
-            "onReject": {
-              "const": "full_refund"
-            },
-            "disclosure": {
-              "const": "public",
-              "description": "Public terms only: the signer reads every field it checks"
-            },
-            "maxSubmissions": {
-              "type": "integer",
-              "minimum": 1,
-              "maximum": 255
-            },
-            "appealWindowSec": {
-              "$ref": "#/$defs/seconds"
-            },
-            "appealDecideSec": {
-              "$ref": "#/$defs/seconds"
-            }
-          }
+          "$ref": "#/$defs/terms"
         },
         "windows": {
-          "description": "B8: the most each deadline may lie after the one before, in seconds: offerExpiresAt and fundBy and deliverBy after createdAt, judgeBy after deliverBy, fallbackBy after judgeBy",
-          "type": "object",
-          "additionalProperties": false,
-          "required": [
-            "offerExpiresInSec",
-            "fundWithinSec",
-            "deliverWithinSec",
-            "judgeWithinSec",
-            "fallbackWithinSec"
-          ],
-          "properties": {
-            "offerExpiresInSec": {
-              "$ref": "#/$defs/seconds"
-            },
-            "fundWithinSec": {
-              "$ref": "#/$defs/seconds"
-            },
-            "deliverWithinSec": {
-              "$ref": "#/$defs/seconds"
-            },
-            "judgeWithinSec": {
-              "$ref": "#/$defs/seconds"
-            },
-            "fallbackWithinSec": {
-              "$ref": "#/$defs/seconds"
-            }
-          }
+          "$ref": "#/$defs/windows"
         },
         "clockSkewSec": {
           "type": "integer",
@@ -376,6 +277,113 @@
           "description": "How long after a deal's fundBy, beyond clockSkewSec, the signer waits before it believes reads that say the deal was never funded: the time the read endpoints may lag the chain"
         }
       }
+    },
+    "selling": {
+      "description": "The selling half (T-443), optional: the signer holds the selling key (CROW_SIGNER_SELLING_KEY) and signs an offer only when it equals this template, and one delivery per funded deal it offered, after its own reads and the deal's checks",
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "principal",
+        "sellingKey",
+        "mandatePath",
+        "payoutAddress",
+        "price",
+        "clubId",
+        "rulebookHash",
+        "reviewers",
+        "terms",
+        "windows",
+        "clockSkewSec",
+        "products",
+        "maxOffersPerHour",
+        "maxOpenDeals",
+        "maxDealsPerDay"
+      ],
+      "properties": {
+        "principal": {
+          "$ref": "#/$defs/address",
+          "description": "The principal whose signed mandate the selling key needs"
+        },
+        "sellingKey": {
+          "$ref": "#/$defs/address",
+          "description": "The selling key's address (CROW_SIGNER_SELLING_KEY): every offer names it as the seller"
+        },
+        "mandatePath": {
+          "type": "string",
+          "pattern": "^[A-Za-z0-9._/-]{1,200}$",
+          "description": "The principal's signed mandate for the selling key, relative to this file"
+        },
+        "payoutAddress": {
+          "$ref": "#/$defs/address",
+          "description": "S2: the only payout address an offer may name: Crow's treasury"
+        },
+        "price": {
+          "$ref": "#/$defs/amount",
+          "description": "S3: the one price, in base units of the pinned token"
+        },
+        "clubId": {
+          "type": "string",
+          "pattern": "^[a-z0-9-]{3,64}$"
+        },
+        "rulebookHash": {
+          "$ref": "#/$defs/hex32"
+        },
+        "reviewers": {
+          "$ref": "#/$defs/reviewers"
+        },
+        "terms": {
+          "$ref": "#/$defs/terms"
+        },
+        "windows": {
+          "$ref": "#/$defs/windows",
+          "description": "S4: each window exactly, in seconds"
+        },
+        "clockSkewSec": {
+          "type": "integer",
+          "minimum": 0,
+          "maximum": 600
+        },
+        "products": {
+          "type": "array",
+          "minItems": 1,
+          "maxItems": 20,
+          "description": "S4: what Crow sells, each as the deliverable and the acceptance an offer must hold; the text {{deal}} stands for one public deal's ID, the same one everywhere it appears",
+          "items": {
+            "type": "object",
+            "additionalProperties": false,
+            "required": [
+              "deliverable",
+              "acceptance"
+            ],
+            "properties": {
+              "deliverable": {
+                "type": "object"
+              },
+              "acceptance": {
+                "type": "object"
+              }
+            }
+          }
+        },
+        "maxOffersPerHour": {
+          "type": "integer",
+          "minimum": 0,
+          "maximum": 100000,
+          "description": "S5: offers signed in any 3,600 s"
+        },
+        "maxOpenDeals": {
+          "type": "integer",
+          "minimum": 0,
+          "maximum": 100000,
+          "description": "S5: offers signed and not yet ended"
+        },
+        "maxDealsPerDay": {
+          "type": "integer",
+          "minimum": 0,
+          "maximum": 100000,
+          "description": "S5: offers signed in one UTC day"
+        }
+      }
     }
   },
   "$defs": {
@@ -397,6 +405,114 @@
       "type": "integer",
       "minimum": 0,
       "maximum": 31536000
+    },
+    "reviewers": {
+      "description": "B7: the three adjudicators every deal must name, with the policy, the registry and the fee",
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "adjudicator",
+        "fallbackAdjudicator",
+        "appealAdjudicator",
+        "policyId",
+        "policyHash",
+        "registryHash",
+        "fee"
+      ],
+      "properties": {
+        "adjudicator": {
+          "$ref": "#/$defs/address"
+        },
+        "fallbackAdjudicator": {
+          "$ref": "#/$defs/address"
+        },
+        "appealAdjudicator": {
+          "$ref": "#/$defs/address"
+        },
+        "policyId": {
+          "type": "string",
+          "pattern": "^[ -~]{1,128}$"
+        },
+        "policyHash": {
+          "$ref": "#/$defs/hex32"
+        },
+        "registryHash": {
+          "$ref": "#/$defs/hex32"
+        },
+        "fee": {
+          "$ref": "#/$defs/amount"
+        }
+      }
+    },
+    "terms": {
+      "description": "B6: the fields every deal's terms must hold exactly",
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "schemaVersion",
+        "settlementMode",
+        "onReject",
+        "disclosure",
+        "maxSubmissions",
+        "appealWindowSec",
+        "appealDecideSec"
+      ],
+      "properties": {
+        "schemaVersion": {
+          "type": "string",
+          "pattern": "^[0-9]+\\.[0-9]+$"
+        },
+        "settlementMode": {
+          "const": "guaranteed_on_decision"
+        },
+        "onReject": {
+          "const": "full_refund"
+        },
+        "disclosure": {
+          "const": "public",
+          "description": "Public terms only: the signer reads every field it checks"
+        },
+        "maxSubmissions": {
+          "type": "integer",
+          "minimum": 1,
+          "maximum": 255
+        },
+        "appealWindowSec": {
+          "$ref": "#/$defs/seconds"
+        },
+        "appealDecideSec": {
+          "$ref": "#/$defs/seconds"
+        }
+      }
+    },
+    "windows": {
+      "description": "B8: the most each deadline may lie after the one before, in seconds: offerExpiresAt and fundBy and deliverBy after createdAt, judgeBy after deliverBy, fallbackBy after judgeBy",
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "offerExpiresInSec",
+        "fundWithinSec",
+        "deliverWithinSec",
+        "judgeWithinSec",
+        "fallbackWithinSec"
+      ],
+      "properties": {
+        "offerExpiresInSec": {
+          "$ref": "#/$defs/seconds"
+        },
+        "fundWithinSec": {
+          "$ref": "#/$defs/seconds"
+        },
+        "deliverWithinSec": {
+          "$ref": "#/$defs/seconds"
+        },
+        "judgeWithinSec": {
+          "$ref": "#/$defs/seconds"
+        },
+        "fallbackWithinSec": {
+          "$ref": "#/$defs/seconds"
+        }
+      }
     }
   }
 }

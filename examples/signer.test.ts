@@ -201,7 +201,7 @@ describe('A13: reach the signer\'s flag, rules and ledger from the agent\'s side
       expect([404, 400], `${method} ${path}`).toContain(r.status);
     }
     refused(await s.post({ kind: 'payment', terms: termsFor(c), file: fundingFileFor(termsFor(c)), stop: false }), 'request');
-    const big = await fetch(`${s.url}/v1/sign`, { method: 'POST', body: 'x'.repeat(300 * 1024) }).catch(() => null);
+    const big = await fetch(`${s.url}/v1/sign`, { method: 'POST', body: 'x'.repeat(3 * 1024 * 1024) }).catch(() => null); // above MAX_BODY_BYTES, 2 MiB
     expect(big === null || big.status === 413).toBe(true);
     expect(JSON.parse(readFileSync(s.rulesPath, 'utf8')).buying.maxPerDeal).toBe('10000000');
     await s.kill();
@@ -259,8 +259,8 @@ describe('A13: reach the signer\'s flag, rules and ledger from the agent\'s side
 
   it('the signer\'s keys reach it through its environment only, and it reads no other secret (A1, the signer\'s side)', () => {
     const src = readFileSync(here('./signer.ts'), 'utf8');
-    expect([...new Set(src.match(/process\.env\['[A-Z_]+'\]/g))].sort()).toEqual(["process.env['CROW_SIGNER_BUYING_KEY']", "process.env['CROW_SIGNER_FLOAT_KEY']"]);
-    expect(src).toContain("delete process.env['CROW_SIGNER_FLOAT_KEY']");
+    expect([...new Set(src.match(/process\.env\['[A-Z_]+'\]/g))].sort()).toEqual(["process.env['CROW_SIGNER_BUYING_KEY']", "process.env['CROW_SIGNER_FLOAT_KEY']", "process.env['CROW_SIGNER_SELLING_KEY']"]);
+    for (const k of ['FLOAT', 'BUYING', 'SELLING']) expect(src).toContain(`delete process.env['CROW_SIGNER_${k}_KEY']`);
   });
 });
 

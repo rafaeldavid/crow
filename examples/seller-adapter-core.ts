@@ -6,13 +6,14 @@
 // It imports no Node module but node:crypto, which the Workers runtime provides with the nodejs_compat flag.
 // What the adapter does, and how a seller runs it, is in seller-adapter.ts.
 import { createHash, createHmac, randomBytes, randomUUID, timingSafeEqual } from 'node:crypto';
-import { concat, keccak256, stringToHex, type Hex } from 'viem';
+import { concat, isAddressEqual, keccak256, recoverTypedDataAddress, stringToHex, type Hex } from 'viem';
+import { generatePrivateKey, toAccount } from 'viem/accounts';
 import { preflightDelivery } from '@holdback/judgment';
 import { plain } from './plain.ts';
 import { Agent } from './agent.ts';
 import { convertReport, parseReportMapping, ReportNotConverted, type ReportMapping } from './report-converter.ts';
 import { FilesNotAdded, isRedirect, sellerApiClient, WrongWorkspace, type SellerApiConfig } from './seller-adapter-api.ts';
-import { freshNonce, isAddressText, jcs, knownPins, moneyAddressWarnings, operatorFeeOf } from './verify.ts';
+import { commitmentIdOf, freshNonce, isAddressText, jcs, knownPins, moneyAddressWarnings, operatorFeeOf, publicOfferTerms, typedDataFile, typedOf, verifyPrepared } from './verify.ts';
 
 type J = any; // eslint-disable-line @typescript-eslint/no-explicit-any
 
@@ -376,6 +377,11 @@ export interface Deal {
   times?: Partial<Record<Stage | 'jobDone', string>>;
   /** The job's last status value read by a status field, such as `queued` or `running` (T-417). */
   jobStatus?: string;
+  /**
+   * With a remote signer (T-443): the delivery it signed, as sent, so a send that failed after the signature sends the
+   * same body again. The signer signs one delivery per deal, so a fresh one would be refused.
+   */
+  signedDelivery?: { path: string; body: J };
 }
 export interface Journal {
   deals: Record<string, Deal>;
@@ -788,6 +794,18 @@ export async function pinnedSeller(operators: string[], key: string | undefined)
   return { seller: new Agent(operators, key as Hex, new Uint8Array(32), pin.domain, pin.chain), pin, discovered: { clubId: served.clubId, adjudicators: served.adjudicators, faucet: served.faucet } };
 }
 
+/**
+ * A signer that holds the selling key apart from this adapter (T-443): Crow's own (examples/signer.ts), meant to run on
+ * a machine the adapter cannot reach. It signs an offer only inside its own rules and one delivery per funded deal. The adapter
+ * then holds no key: every offer and every delivery is signed there, and nothing is signed here.
+ */
+export interface RemoteSigner {
+  /** The selling key's address, as the signer serves it. */
+  address: string;
+  /** One signature: an offer's terms, or one delivery's typed data with its plaintext as base64. Throws on a refusal. */
+  sign(request: { kind: 'offer'; terms: J } | { kind: 'delivery'; terms: J; file: J; plaintext: string }): Promise<Hex>;
+}
+
 /** What the shell gives the core (T-434): files, the journal and the event log, each the shell's own. */
 export interface AdapterIO {
   /** A file's text, by the path the configuration holds (`template`, `reportMapping`). Throws when there is none. */
@@ -806,7 +824,24 @@ export interface AdapterIO {
   appendEvent?(line: string): void;
   /** The journal's path as a seller would type it, for the manual-delivery note. Left out: the note names no manual path. */
   journalPath?: string;
+  /** A signer that holds the selling key (T-443). Left out, as the hosted Worker and the Node shell without CROW_SIGNER_URL leave it: HOLDBACK_KEY signs. */
+  signer?: RemoteSigner;
 }
+
+/** An account that signs nothing: with a remote signer, any signature this process tried to make itself would be a mistake. */
+const nothingSigned = (address: string) =>
+  toAccount({
+    address: address as Hex,
+    signMessage: async () => Promise.reject(new Error('this adapter signs nothing itself: its signer holds the key')),
+    signTransaction: async () => Promise.reject(new Error('this adapter signs nothing itself: its signer holds the key')),
+    signTypedData: async () => Promise.reject(new Error('this adapter signs nothing itself: its signer holds the key')),
+  });
+/** Bytes as base64, in pieces, with no Node Buffer: the Workers runtime runs this file too. */
+const base64 = (b: Uint8Array) => {
+  let out = '';
+  for (let i = 0; i < b.length; i += 0x8000) out += String.fromCharCode(...b.subarray(i, i + 0x8000));
+  return btoa(out);
+};
 
 /** A running core: the shell routes requests to `handle` and calls `wake` on its own schedule. */
 export interface SellerAdapterCore {
@@ -921,7 +956,16 @@ export async function createSellerAdapter(c: SellerAdapterConfig, env: Readonly<
   if (!isRecord(m) || (m.fromFaucet !== undefined && typeof m.fromFaucet !== 'boolean')) throw new Error('mandate.fromFaucet must be true or false');
   if (m.renewBeforeSec !== undefined && !wholeAtLeast(m.renewBeforeSec, 0)) throw new Error('mandate.renewBeforeSec must be a whole number of seconds, 0 or more');
   const operators = (env['HOLDBACK_OPERATORS'] ?? '').split(',').filter(Boolean);
-  const { seller, pin, discovered } = await pinnedSeller(operators, env['HOLDBACK_KEY']);
+  // A remote signer (T-443): the adapter holds no key. It reads with a throwaway key it never signs with, and its
+  // agent's account refuses to sign anything.
+  const remote = io.signer;
+  if (remote) {
+    if (!isAddressText(remote.address)) throw new Error('the signer serves no selling address');
+    if (env['HOLDBACK_KEY']) throw new Error('with a signer the adapter holds no key: unset HOLDBACK_KEY');
+    if (c.signingKey === 'per-deal') throw new Error('signingKey "per-deal" derives each deal key from HOLDBACK_KEY; with a signer, its selling key signs every deal: leave signingKey out');
+  }
+  const { seller, pin, discovered } = await pinnedSeller(operators, remote ? generatePrivateKey() : env['HOLDBACK_KEY']);
+  if (remote) Object.defineProperty(seller, 'account', { value: nothingSigned(remote.address.toLowerCase()), writable: false });
   const token = pin.token; // the one token this settlement layer holds
   if (c.payoutAddress !== undefined && !isAddressText(c.payoutAddress)) throw new Error('payoutAddress must be an address: 0x and 40 hex characters, with a valid checksum if in mixed case');
   const payout = (c.payoutAddress ?? seller.address).toLowerCase();
@@ -958,6 +1002,11 @@ export async function createSellerAdapter(c: SellerAdapterConfig, env: Readonly<
   }
   const log = (line: string) => (c.log ?? console.log)(`${new Date().toISOString()} ${line}`);
   const journal: Journal = (await io.loadJournal()) ?? { deals: {}, quotes: {} };
+  // A remote signer signs only the deals it offered: an open deal another key offered would never be delivered.
+  if (remote) {
+    const foreign = Object.values(journal.deals).filter((d) => OPEN_STAGES.includes(d.stage) && String(d.terms?.seller).toLowerCase() !== remote.address.toLowerCase());
+    if (foreign.length) throw new Error(`the journal holds ${foreign.length} open deals another key offered (${foreign[0]!.id} first): finish them with that key before the signer signs`);
+  }
   /** Saves the journal whole, through the shell: it keeps the old copy or the new one, never half of one. */
   const save = () => io.saveJournal(journal);
   // ---- Events (T-417): one JSON line each, for the seller's product metrics; never content, keys or identities ----
@@ -1002,6 +1051,40 @@ export async function createSellerAdapter(c: SellerAdapterConfig, env: Readonly<
     if (!a) signers.set(deal.id, (a = String(deal.terms.seller).toLowerCase() === seller.address ? seller : signerFor(sellerKey, operators, pin, deal.terms)));
     return a;
   };
+  /**
+   * An offer the remote signer signs (T-443): the public terms built here as Agent.offerDirect builds them, from every
+   * operator's primary, club and settlement-layer time, then the signer's signature, checked, then POST /v1/commitments.
+   */
+  async function remoteOffer(given: J): Promise<{ id: Hex; terms: J; state: J }> {
+    const registration = await seller.registration(given.adjudicators.primary);
+    const createdAt = new Date(Math.floor((await seller.settlementNow()) / 1000) * 1000).toISOString().replace('.000Z', 'Z');
+    const terms = publicOfferTerms(given, registration, await seller.rulebookHash(given.clubId), createdAt, freshNonce().toLowerCase() as Hex);
+    const id = commitmentIdOf(terms);
+    const signature = await remote!.sign({ kind: 'offer', terms });
+    const by = await recoverTypedDataAddress({ ...typedOf('CommitmentTerms', terms, pin.domain), signature }).catch(() => null);
+    if (!by || !isAddressEqual(by, remote!.address as Hex)) throw new Error('the signer answered a signature that is not its selling key\'s over these terms');
+    return { id, terms, state: await seller.call('POST', '/v1/commitments', { ...terms, id, signatures: { seller: signature } }) };
+  }
+  /**
+   * A delivery the remote signer signs (T-443): prepared and checked as Agent.deliver prepares it, signed there, kept in
+   * the journal, then sent. A deal whose delivery is already signed sends that same body again.
+   */
+  async function remoteDeliver(deal: Deal, bytes: Uint8Array): Promise<J> {
+    if (deal.signedDelivery) return seller.call('POST', deal.signedDelivery.path, deal.signedDelivery.body);
+    const terms = deal.terms;
+    const { prepared, intent } = await seller.prepareDelivery(terms, bytes);
+    const v = verifyPrepared(prepared, intent, remote!.address.toLowerCase(), seller.domain, await seller.settlementNow());
+    for (const t of v.toSign) {
+      const signature = await remote!.sign({ kind: 'delivery', terms, file: typedDataFile(t.typed), plaintext: base64(bytes) });
+      const by = await recoverTypedDataAddress({ ...t.typed, signature }).catch(() => null);
+      if (!by || !isAddressEqual(by, remote!.address as Hex)) throw new Error('the signer answered a signature that is not its selling key\'s over this delivery');
+      const keys = t.slot.split('.');
+      keys.slice(0, -1).reduce((o: J, k: string) => o[k], v.body)[keys.at(-1)!] = signature;
+    }
+    deal.signedDelivery = { path: v.path, body: v.body };
+    save(); // kept before it is sent: a send that fails sends this same body on the next pass
+    return seller.call('POST', v.path, v.body);
+  }
   let mandateUntil = 0; // when the latest mandate in the club ends, in settlement-layer time; 0: none known
   /** The end of the seller's latest mandate in the club that covers selling, as every operator lists it; 0 for none. */
   async function mandateEnd(address: string = seller.address): Promise<number> {
@@ -1192,7 +1275,7 @@ export async function createSellerAdapter(c: SellerAdapterConfig, env: Readonly<
     }
     let offer;
     try {
-      offer = await signer.offer({
+      const given = {
         ...(nonce === undefined ? {} : { nonce }),
         template: panel ? 'default' : 'checks-only',
         clubId,
@@ -1208,7 +1291,8 @@ export async function createSellerAdapter(c: SellerAdapterConfig, env: Readonly<
         checks: built.checks,
         ...(panel ? { rubric: built.rubric } : {}),
         timing: built.timing,
-      });
+      };
+      offer = remote ? await remoteOffer(given) : await signer.offer(given);
     } catch (e) {
       log(`Offer failed: ${plain((e as Error).message)}.`);
       throw new Refused(502, 'offer_failed', 'the seller could not make this offer');
@@ -1423,7 +1507,7 @@ export async function createSellerAdapter(c: SellerAdapterConfig, env: Readonly<
       // settlement layer first, so the adapter never delivers twice.
       const attempt = (deal.refusals ?? 0) + 1;
       record(deal, { stage: 'delivering', ready: false, note: `delivering ${pre.bytes} bytes, ${pre.plaintextSha256}` });
-      await signerOf(deal).deliver(deal.terms, bytes);
+      await (remote ? remoteDeliver(deal, bytes) : signerOf(deal).deliver(deal.terms, bytes));
       record(deal, { stage: 'delivered', note: `${pre.bytes} bytes, ${pre.plaintextSha256}` });
       if (deal.refusals) alert({ type: 'delivery.fixed', commitmentId: id, attempt, plaintextSha256: pre.plaintextSha256, bytes: pre.bytes }, `the fixed report passed the check run and is delivered, ${pre.bytes} bytes, ${pre.plaintextSha256}`);
     }
