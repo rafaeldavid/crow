@@ -20,7 +20,10 @@
 // `sellerApi` is required: every other field defaults to `DEFAULTS` in seller-adapter-core.ts, and the club and the three
 // adjudicators default to the ones the operators' discovery document names. Your signing key comes from the
 // environment. The adapter signs your offer and your delivery with it; it never holds a buyer's key, and the
-// operators only relay. You need a mandate in the club to offer: on the test service the adapter takes one from the
+// operators only relay. With CROW_SIGNER_URL set (T-443), the adapter holds no key at all: a separate signer
+// (examples/signer.ts) holds the selling key, and signs each offer and delivery only inside its own rules. HOLDBACK_KEY
+// must then be unset.
+// You need a mandate in the club to offer: on the test service the adapter takes one from the
 // faucet and renews it before it runs out; elsewhere your club's principal gives you one, and the adapter stops
 // at start, saying why, when you hold none.
 //
@@ -57,7 +60,7 @@ import type { AddressInfo } from 'node:net';
 import { dirname, resolve } from 'node:path';
 import { fileURLToPath, pathToFileURL } from 'node:url';
 import { plain } from '@holdback/testkit';
-import { configFrom, createSellerAdapter, DEFAULTS, type Journal, type RunningAdapter, type SellerAdapterConfig } from './seller-adapter-core.ts';
+import { configFrom, createSellerAdapter, DEFAULTS, type Journal, type RemoteSigner, type RunningAdapter, type SellerAdapterConfig } from './seller-adapter-core.ts';
 import { help, helpAsked } from './help.ts';
 
 export * from './seller-adapter-core.ts';
@@ -83,6 +86,30 @@ export function loadConfig(file: string): SellerAdapterConfig {
     throw new Error(`${file} is not JSON`);
   }
   return configFrom(f, file, { beside: (p) => resolve(dirname(file), p), readText: (p) => readFileSync(p, 'utf8'), shippedTemplate: config.template });
+}
+
+/**
+ * Crow's signer at `url` (T-443): its selling address from GET /v1/status, and each signature from POST /v1/sign. A
+ * refusal throws, naming the signer's rule; the adapter then signs nothing for that quote or that delivery.
+ */
+export async function remoteSigner(url: string): Promise<RemoteSigner> {
+  const base = url.replace(/\/+$/, '');
+  const ask = async (path: string, body?: unknown) => {
+    const res = await fetch(`${base}${path}`, { method: body === undefined ? 'GET' : 'POST', ...(body === undefined ? {} : { headers: { 'content-type': 'application/json' }, body: JSON.stringify(body) }), signal: AbortSignal.timeout(30_000) });
+    return { status: res.status, body: (await res.json().catch(() => null)) as { [k: string]: unknown } | null };
+  };
+  const status = await ask('/v1/status');
+  const address = String(status.body?.['sellingAddress'] ?? '');
+  if (status.status !== 200 || !/^0x[0-9a-f]{40}$/.test(address)) throw new Error(`the signer at ${plain(base)} serves no selling address (status ${status.status})`);
+  return {
+    address,
+    sign: async (request) => {
+      const r = await ask('/v1/sign', request);
+      const sig = r.body?.['signature'];
+      if (r.status !== 200 || typeof sig !== 'string') throw new Error(`the signer refused the ${request.kind} (${plain(String(r.body?.['rule'] ?? r.status))}): ${plain(String(r.body?.['detail'] ?? '')).slice(0, 300)}`);
+      return sig as `0x${string}`;
+    },
+  };
 }
 
 /** The longest request body the server reads: one byte over the core's own limit, so the core can refuse it. */
@@ -132,7 +159,9 @@ async function asRequest(req: IncomingMessage): Promise<{ request: Request; cut:
  * from the configuration.
  */
 export async function startSellerAdapter(c: SellerAdapterConfig, env: Readonly<Record<string, string | undefined>> = process.env): Promise<RunningAdapter> {
+  const signer = env['CROW_SIGNER_URL'] ? await remoteSigner(env['CROW_SIGNER_URL']) : undefined;
   const core = await createSellerAdapter(c, env, {
+    ...(signer ? { signer } : {}),
     readText: (p) => readFileSync(p, 'utf8'),
     shippedTemplate: config.template,
     loadJournal: () => (existsSync(c.journal) ? (JSON.parse(readFileSync(c.journal, 'utf8')) as Journal) : undefined),
