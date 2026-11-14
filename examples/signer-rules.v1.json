@@ -91,7 +91,7 @@
       {
         "deliverable": {
           "kind": "report",
-          "description": "The checked deal record of public deal {{scope.commitmentId}}",
+          "description": "The checked deal record of public deal {{deal}}",
           "format": "application/json"
         },
         "acceptance": {

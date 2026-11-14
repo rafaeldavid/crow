@@ -347,7 +347,7 @@
           "type": "array",
           "minItems": 1,
           "maxItems": 20,
-          "description": "S4: what Crow sells, each as the deliverable and the acceptance an offer must hold; the text {{scope.commitmentId}} stands for one public deal's ID, the same one everywhere it appears",
+          "description": "S4: what Crow sells, each as the deliverable and the acceptance an offer must hold; the text {{deal}} stands for one public deal's ID, the same one everywhere it appears",
           "items": {
             "type": "object",
             "additionalProperties": false,

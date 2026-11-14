@@ -142,7 +142,7 @@ const SIMCHAIN_EXPIRY_MARGIN_SEC = 86_400;
 type Sale = { commitmentId: string; signedAt: string; day: string; buyer: string; price: string; fundBy: string; endsBy: string; endedAt?: string; ended?: string; delivered?: { at: string; digest: string } };
 type Ledger = { version: 1; entries: Entry[]; sales?: Sale[] };
 /** What a product's template writes for the one public deal a buyer names (T-443, T-444). */
-const DEAL_PLACEHOLDER = '{{scope.commitmentId}}';
+const DEAL_PLACEHOLDER = '{{deal}}'; // the seller adapter's own placeholder for the scope field `deal` (T-444)
 const escapeRe = (x: string) => x.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
 /**
  * Whether `actual` equals `template` exactly, the placeholder standing for one deal ID (0x and 64 lowercase hex

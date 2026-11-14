@@ -174,7 +174,7 @@ describe('A15: deliveries the signer must not sign (S6)', () => {
 describe('the product template', () => {
   it('the deal ID stands in one place for one ID, the same everywhere it appears; everything else must be equal', () => {
     const id = `0x${'ab'.repeat(32)}`, other = `0x${'cd'.repeat(32)}`;
-    const tpl = { d: 'records of deal {{scope.commitmentId}}', checks: [{ path: '$.commitmentId', equals: '{{scope.commitmentId}}' }] };
+    const tpl = { d: 'records of deal {{deal}}', checks: [{ path: '$.commitmentId', equals: '{{deal}}' }] };
     expect(matchesTemplate(tpl, { d: `records of deal ${id}`, checks: [{ path: '$.commitmentId', equals: id }] })).toBe(true);
     expect(matchesTemplate(tpl, { d: `records of deal ${id}`, checks: [{ path: '$.commitmentId', equals: other }] })).toBe(false);
     expect(matchesTemplate(tpl, { d: `records of deal ${id.toUpperCase()}`, checks: [{ path: '$.commitmentId', equals: id }] })).toBe(false);

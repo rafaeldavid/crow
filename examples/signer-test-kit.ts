@@ -71,7 +71,7 @@ export function sellingRulesFor(c: Cast, o: { reads: string[]; products?: J[]; r
     selling: {
       ...V1.selling, principal: c.principal.address.toLowerCase(), sellingKey: c.sellingAddress, mandatePath: 'selling-mandate.json', payoutAddress: c.treasury,
       clubId: o.clubId ?? V1.selling.clubId, rulebookHash: o.rulebookHash ?? c.rulebookHash, reviewers: o.reviewers ?? c.reviewers,
-      products: o.products ?? [{ deliverable: { ...DELIVERABLE, description: 'records of deal {{scope.commitmentId}}' }, acceptance: ACCEPTANCE }],
+      products: o.products ?? [{ deliverable: { ...DELIVERABLE, description: 'records of deal {{deal}}' }, acceptance: ACCEPTANCE }],
     },
   };
 }
