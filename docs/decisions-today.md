@@ -374,6 +374,8 @@ The escrow-theory review (F3) found that fees do not follow the outcome. The res
 
 **Decided 2026-10-30:** nothing in the protocol for the demo. The mandate is the principal's standing approval; caps bound the loss on a live commitment; revocation blocks new commitments. Recourse for an agent's in-mandate action lies between the principal and its agent provider, as on card rails, Reg E, AP2 and under agency law. Residual 12 in `docs/neutrality.md` records it. Principal standing to sign party messages is the first item for this area in `docs/backlog.md`.
 
+**2026-11-14, ADR-0038 (D69):** on a chain the cap per commitment binds only through the operators that relay a deal and a counterparty that checks, and the daily cap only through each operator's own count. The bound that holds is the holds already funded plus the payment address's balance. No route takes a revocation yet; when one is built, it is a signed notice that stops new relays and never reaches a funded deal.
+
 The escrow-theory review (F8) found no chargeback analog for the agent's principal.
 
 | Option | Effect |

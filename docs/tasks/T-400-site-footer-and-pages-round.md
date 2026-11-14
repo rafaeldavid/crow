@@ -5,7 +5,7 @@
 - **Depends on:** T-391 (the pages: PRs 480, 481, 485)
 - **Paths this task may touch:** `site/build.mjs`, `site/check.mjs`, `site/drawer.ts`, `site/footer.ts`, `site/og.html`, `site/og.png`, `site/home.css`, `site/home.js`, `site/index.html`, `site/404.html`, `site/demo/index.html`, `site/visualdemo/index.html`, `tools/duet/replay.ts`, `tools/duet/duet.test.ts`, `tools/duet/README.md`, `apps/site/worker.js`, `site/deploy.mjs`, `tests/forwarding.test.ts`, `tests/site-deploy.test.ts`, `site/try.mjs`, `site/buy.mjs` (rebuilt banners), this file
 - **Human gate:** no (the site deploy after the merge is Rafa's word)
-- **Status:** review
+- **Status:** done (pull request 492, merged 2026-11-13 as `2d36b763`)
 - **Agent/session:** the T-391 session (pages owner)
 
 ## Intent
