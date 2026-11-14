@@ -5,7 +5,7 @@
 - **Depends on:** T-422 (the operators' limits, pull request 524), T-423 (ADR-0038 step 1, pull request 520), T-451 and T-462 (the security headers, pull requests 564 and 571), pull request 534 (the faucet's limit per client)
 - **Paths this task may touch:** `docs/api.md`, `docs/neutrality.md`, `docs/judgment-and-defenses.md`, `docs/audit/known-issues.md`, `docs/decisions-today.md` (one dated line in D22), `docs/operations.md` (the security headers section), `docs/operator-threat-model.md` (the faucet's limit only), the Status lines of task files under `docs/tasks/`, this file
 - **Human gate:** no. Nothing is deployed.
-- **Status:** review
+- **Status:** done (pull request 574)
 - **Agent/session:** the T-468 side session, on the coordinator's brief of 2026-11-14
 - **Roadmap row:** N117, N19
 
