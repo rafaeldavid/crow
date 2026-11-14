@@ -64,7 +64,11 @@ async function logged(upstream: string, log: string[]): Promise<{ url: string; c
     log.push(`${req.method} ${req.url}`);
     const chunks: Buffer[] = [];
     for await (const c of req) chunks.push(c as Buffer);
-    const r = await fetch(`${upstream}${req.url}`, { method: req.method!, headers: { 'content-type': String(req.headers['content-type'] ?? 'application/json') }, ...(chunks.length ? { body: Buffer.concat(chunks) } : {}) });
+    // Only the operator's API and its discovery document are forwarded, each under a fixed path prefix.
+    const path = req.url ?? '/';
+    const target = path.startsWith('/v1/') ? `${upstream}/v1/${path.slice(4)}` : path === '/.well-known/holdback.json' ? `${upstream}/.well-known/holdback.json` : null;
+    if (target === null) return void res.writeHead(404).end();
+    const r = await fetch(target, { method: req.method!, headers: { 'content-type': String(req.headers['content-type'] ?? 'application/json') }, ...(chunks.length ? { body: Buffer.concat(chunks) } : {}) });
     res.writeHead(r.status, { 'content-type': r.headers.get('content-type') ?? 'application/json' }).end(Buffer.from(await r.arrayBuffer()));
   });
   await new Promise<void>((ok) => server.listen(0, '127.0.0.1', ok));
