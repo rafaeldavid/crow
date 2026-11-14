@@ -9,7 +9,7 @@ import { mkdtempSync, readdirSync, readFileSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { describe, expect, it } from 'vitest';
-import { FIRST_WITH_ROW, NO_TASK, ROW_LINE, checkPr, rowLine, taskIds } from '../scripts/id-check.mjs';
+import { FIRST_WITH_ROW, KNOWN_DUPLICATES, NO_TASK, RESERVE, ROW_LINE, checkPr, duplicateProblems, rowLine, runCheck, taskIds } from '../scripts/id-check.mjs';
 
 const head = (id: string, extra: string) => `# ${id}: a task\n\n- **Lane:** infra\n${extra}- **Status:** todo\n\n## Intent\n\nNames N88 here, which does not count.\n`;
 function dir(files: Record<string, string>): string {
@@ -111,4 +111,51 @@ describe('every task file from T-402 on carries the line (the backfill, T-437)',
       expect(rowLine(m![1]).ok, `${f}: ${m![1]}`).toBe(true);
     });
   }
+});
+
+describe('a task number has one task file (T-464)', () => {
+  const twin = dir({
+    'T-440-row.md': head('T-440', '- **Roadmap row:** N70\n'),
+    'T-450-first.md': head('T-450', '- **Roadmap row:** N70\n'),
+    'T-450-second.md': head('T-450', '- **Roadmap row:** N71\n'),
+    'T-427-buyer-path-headroom.md': head('T-427', '- **Roadmap row:** none (old)\n'),
+    'T-427-demo-refresh.md': head('T-427', '- **Roadmap row:** none (old)\n'),
+  });
+
+  it('fails a checkout with two task files for one number, names both, and says to reserve a number', () => {
+    const p = duplicateProblems(twin);
+    expect(p).toHaveLength(1);
+    expect(p[0]).toContain('T-450');
+    expect(p[0]).toContain('docs/tasks/T-450-first.md');
+    expect(p[0]).toContain('docs/tasks/T-450-second.md');
+    expect(p[0]).toContain(RESERVE);
+    expect(RESERVE).toContain('node roadmap/ids.mjs reserve');
+  });
+
+  it('fails the whole check even when the pull request names a sound task', () => {
+    const r = runCheck({ branch: 't-440-x' }, twin);
+    expect(r.ok).toBe(false);
+    expect(r.reason).toContain('T-450');
+    const clean = dir({ 'T-440-row.md': head('T-440', '- **Roadmap row:** N70\n') });
+    expect(runCheck({ branch: 't-440-x' }, clean).ok).toBe(true);
+  });
+
+  it('excepts the T-427 pair already on main by file name, and only that pair', () => {
+    expect(KNOWN_DUPLICATES).toEqual({ 'T-427': ['T-427-buyer-path-headroom.md', 'T-427-demo-refresh.md'] });
+    const third = dir({
+      'T-427-buyer-path-headroom.md': '# T-427\n',
+      'T-427-demo-refresh.md': '# T-427\n',
+      'T-427-a-third.md': '# T-427\n',
+    });
+    expect(duplicateProblems(third)[0]).toContain('T-427-a-third.md');
+  });
+
+  it('counts task files only (.md), in either case, and ignores other files', () => {
+    expect(duplicateProblems(dir({ 'T-460-a.md': '# T-460\n', 't-460-lower.md': '# T-460\n' }))[0]).toContain('t-460-lower.md');
+    expect(duplicateProblems(dir({ 'T-461-a.md': '# T-461\n', 'T-461-notes.txt': 'x', 'T-4610-x.md': 'x', '_template.md': 'x' }))).toEqual([]);
+  });
+
+  it('passes this repository\'s docs/tasks/', () => {
+    expect(duplicateProblems()).toEqual([]);
+  });
 });

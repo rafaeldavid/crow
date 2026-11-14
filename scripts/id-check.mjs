@@ -12,6 +12,10 @@
 // which reads both repositories, reports an ID that no row answers to. It reads the checkout and the PR event,
 // nothing else, and names no private ID: the private repository runs its own check against its own registry, and
 // both say the first message in the same words (NO_TASK).
+//   3. A task number has one task file (T-464). The check fails when two files in docs/tasks/ share a number, whatever
+//      the pull request names, since a second file is how a collision lands; the T-427 pair already on main is excepted
+//      by file name (KNOWN_DUPLICATES). Numbers are reserved in the private repository, which this check cannot read:
+//      the message says how (RESERVE).
 //   node scripts/id-check.mjs                       (in Actions: GITHUB_EVENT_PATH)
 //   node scripts/id-check.mjs --title <t> --branch <b> --body <text>
 import { existsSync, readFileSync, readdirSync } from 'node:fs';
@@ -58,6 +62,29 @@ export function rowProblems(id, dir = TASKS) {
   });
 }
 
+// A number taken twice before the rule (T-464), kept by name until its owner renumbers one of them. Any other second
+// file, a third T-427 file included, fails.
+export const KNOWN_DUPLICATES = Object.freeze({ 'T-427': Object.freeze(['T-427-buyer-path-headroom.md', 'T-427-demo-refresh.md']) });
+export const RESERVE = 'a task number has one task file: reserve a new number from a crow-private checkout with node roadmap/ids.mjs reserve "<short title>" --repo holdback, then rename the newer file to it';
+
+// The numbers with more than one task file in dir: [string], one problem each, naming the files.
+export function duplicateProblems(dir = TASKS) {
+  if (!existsSync(dir)) return [];
+  const by = new Map();
+  for (const f of readdirSync(dir).filter((x) => /^T-\d{3}(?:-.*)?\.md$/i.test(x)).sort()) {
+    const id = f.slice(0, 5).toUpperCase();
+    by.set(id, [...(by.get(id) ?? []), f]);
+  }
+  const out = [];
+  for (const [id, files] of by) {
+    if (files.length < 2) continue;
+    const known = KNOWN_DUPLICATES[id];
+    if (known && files.length === known.length && files.every((f) => known.includes(f))) continue;
+    out.push(`${id} has ${files.length} task files (${files.map((f) => `docs/tasks/${f}`).join(', ')}): ${RESERVE}`);
+  }
+  return out;
+}
+
 // { ok, ids, reason }
 // The body without its closed HTML comments: the pull request template's guidance ("write no ticket …", "T-xxx") is
 // not the author's answer, and GitHub keeps the comments in the body. An unclosed "<!--" (often code in backticks)
@@ -74,6 +101,14 @@ export function checkPr({ title = '', branch = '', body: raw = '' } = {}, ids = 
   return { ok: false, ids: [], reason: NO_TASK };
 }
 
+// The whole check, as the workflow runs it: one number one file, then the pull request's links.
+export function runCheck(pr, dir = TASKS) {
+  const dups = duplicateProblems(dir);
+  const r = checkPr(pr, taskIds(dir), dir);
+  if (!dups.length) return r;
+  return { ok: false, ids: r.ids, reason: [...dups, ...(r.ok ? [] : [r.reason])].join('; ') };
+}
+
 if (process.argv[1] && resolve(process.argv[1]) === fileURLToPath(import.meta.url)) {
   const argv = process.argv.slice(2);
   const opt = (n) => { const i = argv.indexOf(n); return i >= 0 ? argv[i + 1] : undefined; };
@@ -82,7 +117,7 @@ if (process.argv[1] && resolve(process.argv[1]) === fileURLToPath(import.meta.ur
     const ev = JSON.parse(readFileSync(process.env.GITHUB_EVENT_PATH, 'utf8')).pull_request ?? {};
     pr = { title: ev.title ?? '', branch: ev.head?.ref ?? '', body: ev.body ?? '' };
   }
-  const r = checkPr(pr);
+  const r = runCheck(pr);
   console.log(`ID check: ${r.ok ? 'pass' : 'fail'}: ${r.reason}`);
   if (!r.ok) process.exit(1);
 }
