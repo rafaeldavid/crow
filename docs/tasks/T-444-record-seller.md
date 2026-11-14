@@ -5,7 +5,7 @@
 - **Depends on:** T-443 (the signer's selling half and the adapter's signer hook); `examples/deal-record.ts` (T-333)
 - **Paths this task may touch:** `examples/record-seller.ts`, `examples/record-seller.test.ts`, `fixtures/terms/deal-record.yaml`, the `selling.products` of `examples/signer-rules.v1.json`, this file
 - **Human gate:** no (nothing deployed; no real key)
-- **Status:** review
+- **Status:** done
 - **Agent/session:** own-agents build session, on the coordinator's word of 2026-11-14
 - **Roadmap row:** N131
 

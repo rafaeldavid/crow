@@ -5,7 +5,7 @@
 - **Depends on:** T-439 (the signer's buying half), T-438 (the mandate tool); the seller adapter's split into a core and its shells (T-434 of the hosted-sellers lane, PRs 553, 556, 557)
 - **Paths this task may touch:** `examples/signer.ts`, `examples/signer-rules.schema.json`, `examples/signer-rules.v1.json`, `examples/signer-test-kit.ts`, `examples/signer-world-kit.ts` (one line: buying rules leave the selling half out), `examples/signer.test.ts` (the environment test names the selling key), `examples/signer-selling*.test.ts`, `examples/seller-adapter-core.ts` (one optional hook), `examples/seller-adapter.ts` (the Node shell's `CROW_SIGNER_URL`), one paragraph in `site/ref/seller-adapter.txt`, this file
 - **Human gate:** no (nothing deployed; no real key)
-- **Status:** review
+- **Status:** done
 - **Agent/session:** own-agents build session, on the coordinator's word of 2026-11-14 (Rafa: "any other items we can kick off in parallel?")
 - **Roadmap row:** N131
 
