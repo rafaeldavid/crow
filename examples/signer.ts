@@ -5,7 +5,8 @@
 //   node examples/signer.ts init --state <dir>      makes the state folder and an empty ledger, once; serve refuses without them
 //   node examples/signer.ts serve --rules <file> --state <dir> --flag <file> [--listen <host:port>]
 //       serves POST /v1/sign and GET /v1/status, default on 127.0.0.1:8547. Keys from the environment only:
-//       CROW_SIGNER_FLOAT_KEY (the payment address's key) and CROW_SIGNER_BUYING_KEY (the buying agent's standing key).
+//       CROW_SIGNER_FLOAT_KEY (the payment address's key) and CROW_SIGNER_BUYING_KEY (the buying agent's standing key);
+//       with the rules' `selling` half (T-443), CROW_SIGNER_SELLING_KEY (the selling key): offers and deliveries, see #signOffer and #signDelivery.
 //   node examples/signer.ts check-rules <file>     validates a rules file against examples/signer-rules.schema.json and prints its SHA-256
 //   node examples/signer.ts stop --flag <file>     writes the stop; node examples/signer.ts run --flag <file> clears it
 // It refuses every request unless the flag file reads exactly "run"; a missing or unreadable flag is a stop.
@@ -14,6 +15,7 @@
 // ledger is <state>/ledger.json and the public status <state>/status.json. One signer serves a state folder at a time
 // (<state>/lock). The principal's revocations go in the folder the rules name. Exit status 0, 2 on a wrong call, 3 on a refusal.
 import { createHash } from 'node:crypto';
+import { preflightDelivery } from '@holdback/judgment';
 import { appendFileSync, closeSync, existsSync, fsyncSync, mkdirSync, openSync, readdirSync, readFileSync, renameSync, rmSync, statSync, writeFileSync, writeSync } from 'node:fs';
 import { createServer, type IncomingMessage, type Server } from 'node:http';
 import type { AddressInfo } from 'node:net';
@@ -24,7 +26,7 @@ import type { Hex } from 'viem';
 import { SEPOLIA } from './deployments.ts';
 import { isMain } from './entry.ts';
 import { buildDelegation, parseStrictJson, typedOf as mandateTyped, verifyDocument } from './mandate.ts';
-import { checkPaymentFile, commitmentIdOf, jcsHash, pinOf, Refusal, SIMCHAIN_DOMAIN, type Pin } from './verify.ts';
+import { checkPaymentFile, commitmentIdOf, digestOfFile, jcs, jcsHash, pinOf, Refusal, SIMCHAIN_DOMAIN, strictTypedDataFile, typedOf, type Pin } from './verify.ts';
 
 type J = any; // eslint-disable-line @typescript-eslint/no-explicit-any
 
@@ -136,7 +138,36 @@ export function pinOfRules(r: Rules): Pin {
 type Entry = { commitmentId: string; total: string; signedAt: string; day: string; seller: string; payoutAddress: string; dealKey: string; delegation: J; fundBy: string; endsBy: string; endedAt?: string; ended?: string };
 /** SimChain's own expiry margin, in seconds: a hold there can still pay out until fallbackBy + appealDecideSec + this. */
 const SIMCHAIN_EXPIRY_MARGIN_SEC = 86_400;
-type Ledger = { version: 1; entries: Entry[] };
+/** One offer the signer signed for the selling key (T-443), and its one delivery. */
+type Sale = { commitmentId: string; signedAt: string; day: string; buyer: string; price: string; fundBy: string; endsBy: string; endedAt?: string; ended?: string; delivered?: { at: string; digest: string } };
+type Ledger = { version: 1; entries: Entry[]; sales?: Sale[] };
+/** What a product's template writes for the one public deal a buyer names (T-443, T-444). */
+const DEAL_PLACEHOLDER = '{{scope.commitmentId}}';
+const escapeRe = (x: string) => x.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+/**
+ * Whether `actual` equals `template` exactly, the placeholder standing for one deal ID (0x and 64 lowercase hex
+ * characters), the same everywhere. `bound` collects that ID.
+ */
+export function matchesTemplate(template: J, actual: J, bound: { id?: string } = {}): boolean {
+  if (typeof template === 'string') {
+    if (!template.includes(DEAL_PLACEHOLDER)) return template === actual;
+    if (typeof actual !== 'string') return false;
+    const m = new RegExp(`^${template.split(DEAL_PLACEHOLDER).map(escapeRe).join('(0x[0-9a-f]{64})')}$`).exec(actual);
+    if (!m) return false;
+    for (const g of m.slice(1)) {
+      if (bound.id === undefined) bound.id = g;
+      else if (bound.id !== g) return false;
+    }
+    return true;
+  }
+  if (Array.isArray(template)) return Array.isArray(actual) && actual.length === template.length && template.every((x, i) => matchesTemplate(x, actual[i], bound));
+  if (template && typeof template === 'object') {
+    if (!actual || typeof actual !== 'object' || Array.isArray(actual)) return false;
+    const a = Object.keys(template).sort(), b = Object.keys(actual).sort();
+    return jcs(a) === jcs(b) && a.every((k) => matchesTemplate(template[k], actual[k], bound));
+  }
+  return template === actual;
+}
 
 const iso = (ms: number) => new Date(ms).toISOString().replace(/\.\d{3}Z$/, 'Z');
 const lc = (v: J) => String(v).toLowerCase();
@@ -163,7 +194,7 @@ export type OpenOptions = {
   statePath: string;
   flagPath: string;
   /** The two keys, from the environment of the signer's own process. */
-  keys: { float: string; buying: string };
+  keys: { float: string; buying: string; selling?: string | undefined };
   /** The signer's clock in ms; the command line always uses the machine's. */
   now?: () => number;
 };
@@ -176,6 +207,7 @@ export class Signer {
   readonly #pin: Pin;
   readonly #float: ReturnType<typeof privateKeyToAccount>;
   readonly #buyingKey: Hex;
+  readonly #selling: ReturnType<typeof privateKeyToAccount> | undefined;
   readonly #now: () => number;
   #ledger: Ledger;
   #queue: Promise<unknown> = Promise.resolve();
@@ -189,6 +221,7 @@ export class Signer {
     this.#pin = pinOfRules(loaded.rules);
     this.#float = privateKeyToAccount(o.keys.float as Hex);
     this.#buyingKey = o.keys.buying as Hex;
+    this.#selling = o.keys.selling ? privateKeyToAccount(o.keys.selling as Hex) : undefined;
     this.#now = o.now ?? Date.now;
     this.#ledger = ledger;
   }
@@ -196,11 +229,18 @@ export class Signer {
   /** Opens the signer: the rules, the keys against them, the ledger. Throws (and so never serves) on any doubt. */
   static async open(o: OpenOptions): Promise<Signer> {
     const loaded = loadRules(o.rulesPath);
-    for (const [name, k] of Object.entries(o.keys)) if (!/^0x[0-9a-fA-F]{64}$/.test(k)) throw new Error(`the ${name} key is not 32 bytes of hex: set it in the signer's environment`);
+    if (loaded.rules.selling && !o.keys.selling) throw new Error('the rules have a selling half, and no selling key is set: set CROW_SIGNER_SELLING_KEY in the signer\'s environment');
+    if (!loaded.rules.selling && o.keys.selling) throw new Error('a selling key is set, and the rules have no selling half: unset CROW_SIGNER_SELLING_KEY, or add `selling` to the rules');
+    for (const [name, k] of Object.entries(o.keys)) if (k !== undefined && !/^0x[0-9a-fA-F]{64}$/.test(k)) throw new Error(`the ${name} key is not 32 bytes of hex: set it in the signer's environment`);
     const float = privateKeyToAccount(o.keys.float as Hex).address.toLowerCase(), buying = privateKeyToAccount(o.keys.buying as Hex).address.toLowerCase();
     if (float !== loaded.rules.floatAddress) throw new Error(`the float key's address ${float} is not the rules' floatAddress ${loaded.rules.floatAddress}`);
     if (buying !== loaded.rules.buying.standingKey) throw new Error(`the buying key's address ${buying} is not the rules' standingKey ${loaded.rules.buying.standingKey}`);
     if (float === buying) throw new Error('the float key and the buying key are one key: keep them apart');
+    if (o.keys.selling) {
+      const selling = privateKeyToAccount(o.keys.selling as Hex).address.toLowerCase();
+      if (selling !== loaded.rules.selling.sellingKey) throw new Error(`the selling key's address ${selling} is not the rules' sellingKey ${loaded.rules.selling.sellingKey}`);
+      if (selling === float || selling === buying) throw new Error('the selling key is the float key or the buying key: keep the three apart');
+    }
     const path = join(o.statePath, 'ledger.json');
     // A missing ledger is a doubt, not a first start: `init` makes it once, and a mistyped --state finds none.
     if (!existsSync(path)) throw new Error(`there is no ledger at ${path}: refusing to start (run init once for a new state folder; a ledger that went missing would reset the day and the open holds)`);
@@ -232,6 +272,7 @@ export class Signer {
     });
     const s = new Signer(o, loaded, ledger);
     await s.#mandate(s.#now()); // a mandate that does not verify stops the start too
+    if (loaded.rules.selling) await s.#mandate(s.#now(), 'selling');
     s.#writeStatus();
     return s;
   }
@@ -274,14 +315,23 @@ export class Signer {
 
   /** The checks, in order; the first that fails refuses the request, naming its rule. */
   async #sign(text: string, now: number, saw: (x: J) => void): Promise<J> {
-    this.#running();
     let req: J;
     try {
       req = JSON.parse(text);
     } catch {
+      this.#running();
       return no('request', 'the request is not JSON');
     }
-    if (!req || typeof req !== 'object' || Array.isArray(req)) no('request', 'the request is not a JSON object');
+    if (!req || typeof req !== 'object' || Array.isArray(req)) {
+      this.#running();
+      no('request', 'the request is not a JSON object');
+    }
+    // The selling half (T-443): a delivery is signed whether the signer is stopped or not, so no stop stalls a funded deal.
+    if (req.kind === 'offer' || req.kind === 'delivery') {
+      if (!this.#selling || !this.#rules.selling) no('B14', `this signer has no selling half: it signs no ${req.kind}`);
+      return req.kind === 'offer' ? this.#signOffer(req, now, saw) : this.#signDelivery(req, now, saw);
+    }
+    this.#running();
     if (req.kind !== 'payment') no('B14', `this signer signs a deal's funding only (kind "payment"), not ${JSON.stringify(req.kind)}: no other transfer, no operator fee, no message of another kind`);
     const extra = Object.keys(req).filter((k) => !['kind', 'terms', 'file'].includes(k));
     if (extra.length || !req.terms || !req.file) no('request', `a payment request holds exactly kind, terms and file${extra.length ? `, not ${extra.join(', ')}` : ''}`);
@@ -365,8 +415,137 @@ export class Signer {
     return { commitmentId: id, funding, digest: checked.digest, summary: checked.summary, delegation, ledger: this.#counts(now) };
   }
 
+  /**
+   * The selling half (T-443): an offer Crow's selling agent asks the signer to sign, checked against the rules'
+   * `selling` template field by field (S2 to S5, X2, the mandate) and counted before the signature leaves.
+   */
+  async #signOffer(req: J, now: number, saw: (x: J) => void): Promise<J> {
+    // X2: no new offer after the stop; X4: the rules as started.
+    try {
+      this.#flag();
+    } catch (e) {
+      if (e instanceof Refused) no('X2', `${e.message}: no new offer is signed`);
+      throw e;
+    }
+    this.#rulesUnchanged();
+    const extra = Object.keys(req).filter((k) => !['kind', 'terms'].includes(k));
+    if (extra.length || !req.terms) no('request', `an offer request holds exactly kind and terms${extra.length ? `, not ${extra.join(', ')}` : ''}`);
+    const t = req.terms, r = this.#rules.selling;
+    const id = this.#termsShape(t);
+    saw({ kind: 'offer', commitmentId: id, buyer: lc(t.buyer), price: t.price?.amount });
+    const m = await this.#mandate(now, 'selling');
+    if (lc(t.seller) !== r.sellingKey) no('S4', `the offer names the seller ${lc(t.seller)}, not Crow's selling key ${r.sellingKey}`);
+    if (lc(t.sellerPayoutAddress) !== r.payoutAddress) no('S2', `the offer pays ${lc(t.sellerPayoutAddress)}, not Crow's payout address ${r.payoutAddress}`);
+    for (const [name, v] of [['price.token', t.price.token], ['settlement.token', t.settlement.token], ['adjudication.fee.token', t.adjudication.fee.token]] as const) if (!sameToken(v, this.#pin.token.id)) no('B12', `${name} is ${printable(JSON.stringify(v))}, and the pinned token is ${this.#pin.token.id}`);
+    if (t.price.amount !== r.price) no('S3', `the offer's price is ${printable(String(t.price.amount))} base units, not Crow's ${r.price}`);
+    const a = t.adjudication, rv = r.reviewers;
+    for (const k of ['adjudicator', 'fallbackAdjudicator', 'appealAdjudicator', 'policyHash', 'registryHash'] as const) if (lc(a[k]) !== rv[k]) no('S4', `adjudication.${k} is ${lc(a[k])}, not the pinned ${rv[k]}`);
+    if (a.policyId !== rv.policyId || a.fee.amount !== rv.fee) no('S4', 'the adjudication policy or fee is not the pinned one');
+    if (t.clubId !== r.clubId || lc(t.rulebookHash) !== r.rulebookHash) no('S4', `the offer is in club ${printable(String(t.clubId))} with another rulebook than the pinned ${r.clubId}`);
+    const tm = r.terms;
+    const same: Array<[string, J, J]> = [['schemaVersion', t.schemaVersion, tm.schemaVersion], ['settlement.mode', t.settlement.mode, tm.settlementMode], ['remedy.onReject', t.remedy.onReject, tm.onReject], ['disclosure.level', t.disclosure.level, tm.disclosure], ['timing.maxSubmissions', t.timing.maxSubmissions, tm.maxSubmissions], ['timing.appealWindowSec', t.timing.appealWindowSec, tm.appealWindowSec], ['timing.appealDecideSec', t.timing.appealDecideSec, tm.appealDecideSec]];
+    for (const [name, got, want] of same) if (got !== want) no('S4', `${name} is ${printable(JSON.stringify(got))}, not ${JSON.stringify(want)}`);
+    // S4: the product: one of Crow's, the deal it names the same in the deliverable and the checks.
+    const product = r.products.find((p: J) => {
+      const bound: { id?: string } = {};
+      return matchesTemplate(p.deliverable, t.deliverable, bound) && matchesTemplate(p.acceptance, t.acceptance, bound);
+    });
+    if (!product) no('S4', 'the deliverable and the checks are not one of Crow\'s products: a field, a check or the text differs from the template');
+    // S4: each window exactly, and the dates against the signer's own clock.
+    const w = r.windows, at = (k: string) => ms(t.timing[k], `timing.${k}`), created = ms(t.createdAt, 'createdAt');
+    const steps: Array<[string, number, number, number]> = [['offerExpiresAt', at('offerExpiresAt'), created, w.offerExpiresInSec], ['fundBy', at('fundBy'), created, w.fundWithinSec], ['deliverBy', at('deliverBy'), created, w.deliverWithinSec], ['judgeBy', at('judgeBy'), at('deliverBy'), w.judgeWithinSec], ['fallbackBy', at('fallbackBy'), at('judgeBy'), w.fallbackWithinSec]];
+    for (const [name, v, from, want] of steps) if (v - from !== want * 1000) no('S4', `timing.${name} is ${(v - from) / 1000} s after the one before, not Crow's ${want} s`);
+    if (Math.abs(created - now) > r.clockSkewSec * 1000) no('S4', `createdAt ${t.createdAt} is ${Math.round((created - now) / 1000)} s from the signer's clock, more than ${r.clockSkewSec} s`);
+    if (now >= at('offerExpiresAt')) no('S4', `the offer expired at ${t.timing.offerExpiresAt} by the signer's clock`);
+    if (BigInt(t.price.amount) > BigInt(m.scope.maxPerCommitment.amount)) no('S3', `the price is above the selling mandate's ${m.scope.maxPerCommitment.amount} a deal`);
+    // S5: the signer's own counts. An offer asked for again is counted once.
+    const sales = this.#ledger.sales ?? [];
+    const known = sales.find((x) => x.commitmentId === id);
+    await this.#refresh(now);
+    if (!known) {
+      const hour = sales.filter((x) => Date.parse(x.signedAt) > now - 3_600_000).length;
+      if (hour + 1 > r.maxOffersPerHour) no('S5', `${hour} offers were signed in the last 3,600 s, and the rules allow ${r.maxOffersPerHour}`);
+      const open = sales.filter((x) => !x.ended).length;
+      if (open + 1 > r.maxOpenDeals) no('S5', `${open} sales are open, and the rules allow ${r.maxOpenDeals} at once`);
+      const day = iso(now).slice(0, 10), today = sales.filter((x) => x.day === day).length;
+      if (today + 1 > r.maxDealsPerDay) no('S5', `${today} offers were signed today (UTC ${day}), and the rules allow ${r.maxDealsPerDay}`);
+    }
+    const signature = await this.#selling!.signTypedData(typedOf('CommitmentTerms', t, this.#pin.domain));
+    if (!known) {
+      const margin = this.#pin.chain?.expiryMarginSec ?? SIMCHAIN_EXPIRY_MARGIN_SEC;
+      const sale: Sale = { commitmentId: id, signedAt: iso(now), day: iso(now).slice(0, 10), buyer: lc(t.buyer), price: t.price.amount, fundBy: t.timing.fundBy, endsBy: iso(Date.parse(t.timing.fallbackBy) + (t.timing.appealDecideSec + margin) * 1000) };
+      this.#ledger = { ...this.#ledger, sales: [...sales, sale] };
+      writeDurably(join(this.#o.statePath, 'ledger.json'), `${JSON.stringify(this.#ledger, null, 2)}\n`);
+    }
+    saw({ replay: Boolean(known) });
+    this.#writeStatus();
+    return { commitmentId: id, signature, sales: this.#salesCounts(now) };
+  }
+
+  /**
+   * S6: one delivery per funded deal, ever, stopped or not: only for a deal this signer offered, only when every read
+   * endpoint says it is funded and not yet delivered, sealed to the deal's four recipients, and only for work that passes
+   * the deal's own checks (the adjudicator's stage 1). The stop and the mandate do not apply: they act at the offer.
+   */
+  async #signDelivery(req: J, now: number, saw: (x: J) => void): Promise<J> {
+    this.#rulesUnchanged();
+    const extra = Object.keys(req).filter((k) => !['kind', 'terms', 'file', 'plaintext'].includes(k));
+    if (extra.length || !req.terms || !req.file || typeof req.plaintext !== 'string') no('request', `a delivery request holds exactly kind, terms, file and plaintext${extra.length ? `, not ${extra.join(', ')}` : ''}`);
+    const t = req.terms;
+    const id = this.#termsShape(t);
+    saw({ kind: 'delivery', commitmentId: id });
+    const sale = (this.#ledger.sales ?? []).find((x) => x.commitmentId === id);
+    if (!sale) no('S6', `this signer never offered deal ${id}: it delivers only its own`);
+    if (sale!.delivered) no('S6', `deal ${id} was delivered once, at ${sale!.delivered.at}: one delivery per deal, ever`);
+    if (!/^[A-Za-z0-9+/]*={0,2}$/.test(req.plaintext) || req.plaintext.length % 4 !== 0) no('request', 'plaintext is not base64');
+    const bytes = new Uint8Array(Buffer.from(req.plaintext, 'base64'));
+    // Funded, by every read the rules name: a doubt refuses (the adapter tries again on its next pass).
+    const states = await Promise.all(this.#rules.reads.operators.map((op: string) => readState(op, id)));
+    if (!states.every((x) => x === 'Held')) no('S6', `deal ${id} is not funded and waiting for its delivery by every read (${states.map((x) => x ?? 'no answer').join(', ')})`);
+    // The message: exactly one delivery of these terms, of these bytes, to the deal's four recipients.
+    try {
+      strictTypedDataFile(req.file);
+    } catch (e) {
+      return no('S6', `the delivery file is not one EIP-712 message: ${(e as Error).message}`);
+    }
+    const f = req.file, msg = f.message ?? {};
+    const lower = (d: J) => jcs({ ...d, verifyingContract: String(d?.verifyingContract).toLowerCase() });
+    if (f.primaryType !== 'Delivery') no('S6', `the file signs a ${printable(String(f.primaryType))}, not a Delivery`);
+    if (lower(f.domain) !== lower(this.#pin.domain)) no('B12', 'the delivery is for another domain than the pinned one');
+    if (lc(msg.commitmentId) !== id) no('S6', `the delivery is for deal ${printable(String(msg.commitmentId))}, not ${id}`);
+    if (String(msg.attempt) !== '1') no('S6', `the delivery is attempt ${printable(String(msg.attempt))}; Crow's deals take one`);
+    const sha = `sha256:${createHash('sha256').update(bytes).digest('hex')}`;
+    if (msg.plaintextSha256 !== sha) no('S6', `the delivery names plaintextSha256 ${printable(String(msg.plaintextSha256))}, and the work hashes to ${sha}`);
+    if (msg.plaintextMime !== t.deliverable.format) no('S6', `the delivery declares ${printable(String(msg.plaintextMime))}, and the terms agree ${t.deliverable.format}`);
+    const want = [t.adjudication.adjudicator, t.adjudication.fallbackAdjudicator, t.adjudication.appealAdjudicator, t.buyer].map(lc);
+    const got = Array.isArray(msg.encryptedKeys) ? msg.encryptedKeys.map((k: J) => lc(k?.recipient)) : [];
+    if (jcs(got) !== jcs(want)) no('S6', 'the delivery is not sealed to the deal\'s three adjudicators and its buyer, in that order');
+    const submitted = Number(msg.submittedAt) * 1000;
+    if (!Number.isFinite(submitted) || Math.abs(submitted - now) > this.#rules.selling.clockSkewSec * 1000) no('S6', 'the delivery\'s submittedAt is not the signer\'s now');
+    // The deal's own checks, as the adjudicator's first stage runs them on these exact bytes.
+    const pre = preflightDelivery({ plaintext: bytes, mime: t.deliverable.format, format: t.deliverable.format, acceptance: t.acceptance });
+    if (pre.result !== 'accept') no('S6', `the work does not pass the deal's checks: stage 1 says ${pre.result}${pre.refused ? ` (${pre.refused.code})` : ''}${pre.deterministic.filter((o) => !o.passed).map((o) => `, ${o.checkId} fails`).join('')}`);
+    const digest = digestOfFile(f);
+    const signature = await this.#selling!.sign({ hash: digest });
+    sale!.delivered = { at: iso(now), digest };
+    writeDurably(join(this.#o.statePath, 'ledger.json'), `${JSON.stringify(this.#ledger, null, 2)}\n`); // before the signature leaves
+    saw({ digest, bytes: bytes.length });
+    this.#writeStatus();
+    return { commitmentId: id, signature, digest };
+  }
+
+  #salesCounts(now: number) {
+    const sales = this.#ledger.sales ?? [], day = iso(now).slice(0, 10);
+    return { offersLastHour: sales.filter((x) => Date.parse(x.signedAt) > now - 3_600_000).length, salesOpen: sales.filter((x) => !x.ended).length, offersToday: sales.filter((x) => x.day === day).length, delivered: sales.filter((x) => x.delivered).length };
+  }
+
   /** X1 and X4: the stop flag reads exactly "run", and the rules file is the one the signer started with. */
   #running(): void {
+    this.#flag();
+    this.#rulesUnchanged();
+  }
+  /** X1: the stop flag reads exactly "run". */
+  #flag(): void {
     let flag: string;
     try {
       flag = readFileSync(this.#o.flagPath, 'utf8');
@@ -374,6 +553,9 @@ export class Signer {
       return no('X1', `the stop flag ${this.#o.flagPath} cannot be read: the signer is stopped`);
     }
     if (flag !== 'run' && flag !== 'run\n') no('X1', 'the signer is stopped: its flag does not read exactly "run"');
+  }
+  /** X4: the rules file is the one the signer started with. */
+  #rulesUnchanged(): void {
     let now: Buffer;
     try {
       now = readFileSync(this.#o.rulesPath);
@@ -383,9 +565,10 @@ export class Signer {
     if (!now.equals(this.#rulesBytes)) no('X4', 'the rules file changed since the signer started: it refuses until its administrator restarts it');
   }
 
-  /** The principal's mandate for the standing key: signed, live, for this club and role, and not revoked. */
-  async #mandate(now: number): Promise<J> {
-    const r = this.#rules.buying;
+  /** The principal's mandate for the standing key (or the selling key): signed, live, for this club and role, and not revoked. */
+  async #mandate(now: number, side: 'buying' | 'selling' = 'buying'): Promise<J> {
+    const r = side === 'buying' ? this.#rules.buying : { ...this.#rules.selling, standingKey: this.#rules.selling.sellingKey, revocationsPath: this.#rules.buying.revocationsPath };
+    const role = side === 'buying' ? 'buyer' : 'seller';
     let doc: J;
     try {
       doc = parseStrictJson(readFileSync(resolve(dirname(this.#o.rulesPath), r.mandatePath), 'utf8'), r.mandatePath);
@@ -399,8 +582,8 @@ export class Signer {
       return no('mandate', `the mandate does not hold: ${(e as Error).message}`);
     }
     const m = v.document;
-    if (lc(m.agent) !== r.standingKey) no('mandate', `the mandate is for ${m.agent}, not the standing key ${r.standingKey}`);
-    if (m.clubId !== r.clubId || !m.scope.roles.includes('buyer')) no('mandate', 'the mandate does not allow the buyer role in the pinned club');
+    if (lc(m.agent) !== r.standingKey) no('mandate', `the mandate is for ${m.agent}, not the ${side === 'buying' ? 'standing' : 'selling'} key ${r.standingKey}`);
+    if (m.clubId !== r.clubId || !m.scope.roles.includes(role)) no('mandate', `the mandate does not allow the ${role} role in the pinned club`);
     if (lc(m.scope.maxPerCommitment.token) !== lc(this.#pin.token.id)) no('mandate', 'the mandate caps another token');
     const folder = revocationsFolder(this.#o.rulesPath, this.#rules);
     let names: string[];
@@ -487,7 +670,7 @@ export class Signer {
   /** Marks the ledger's open deals that have ended, from the signer's own reads; any doubt keeps a deal open. */
   async #refresh(now: number): Promise<void> {
     let changed = false;
-    for (const e of this.#ledger.entries.filter((x) => !x.ended)) {
+    for (const e of [...this.#ledger.entries, ...(this.#ledger.sales ?? [])].filter((x) => !x.ended)) {
       if (now >= Date.parse(e.endsBy)) {
         Object.assign(e, { ended: 'past its last deadline', endedAt: iso(now) });
         changed = true;
@@ -538,6 +721,7 @@ export class Signer {
       agent: 'buying', state, ...(stoppedSince ? { stoppedSince } : {}), ...mandate,
       constraintsVersion: this.#rules.constraintsVersion, rulesSha256: this.#rulesSha256,
       floatAddress: this.floatAddress, standingKey: r.standingKey,
+      ...(this.#selling ? { sellingAddress: this.#selling.address.toLowerCase(), selling: { ...this.#salesCounts(now), offersPerHourLimit: this.#rules.selling.maxOffersPerHour, openDealsLimit: this.#rules.selling.maxOpenDeals, dealsPerDayLimit: this.#rules.selling.maxDealsPerDay, price: this.#rules.selling.price, payoutAddress: this.#rules.selling.payoutAddress } } : {}),
       dayLimit: r.maxPerDay, dealLimit: r.maxPerDeal, openDealsLimit: r.maxOpenDeals, openTotalLimit: r.maxOpenTotal,
       ...this.#counts(now),
       ...(last ? { lastDeal: { commitmentId: last.commitmentId, signedAt: last.signedAt, ...(last.ended ? { ended: last.ended, endedAt: last.endedAt } : {}) } } : {}),
@@ -614,7 +798,7 @@ node examples/signer.ts serve --rules <file> --state <dir> --flag <file> [--list
 node examples/signer.ts check-rules <file>
 node examples/signer.ts stop --flag <file>
 node examples/signer.ts run --flag <file>
-Keys come from CROW_SIGNER_FLOAT_KEY and CROW_SIGNER_BUYING_KEY in the signer's own environment.`;
+Keys come from CROW_SIGNER_FLOAT_KEY, CROW_SIGNER_BUYING_KEY and, with a selling half, CROW_SIGNER_SELLING_KEY in the signer's own environment.`;
 
 async function main(argv: string[]): Promise<number> {
   const args = [...argv];
@@ -633,7 +817,7 @@ async function main(argv: string[]): Promise<number> {
     mkdirSync(statePath, { recursive: true, mode: 0o700 });
     const ledger = join(statePath, 'ledger.json');
     if (existsSync(ledger)) throw new Refused('init', `${ledger} exists: init makes a new ledger once, and never over an old one`);
-    writeDurably(ledger, `${JSON.stringify({ version: 1, entries: [] }, null, 2)}\n`);
+    writeDurably(ledger, `${JSON.stringify({ version: 1, entries: [], sales: [] }, null, 2)}\n`);
     console.error(`A new, empty ledger at ${ledger}.`);
     return 0;
   }
@@ -643,9 +827,10 @@ async function main(argv: string[]): Promise<number> {
     return 0;
   }
   if (command === 'serve' && rulesPath && statePath && flagPath && args.length === 1) {
-    const keys = { float: process.env['CROW_SIGNER_FLOAT_KEY'] ?? '', buying: process.env['CROW_SIGNER_BUYING_KEY'] ?? '' };
+    const keys = { float: process.env['CROW_SIGNER_FLOAT_KEY'] ?? '', buying: process.env['CROW_SIGNER_BUYING_KEY'] ?? '', selling: process.env['CROW_SIGNER_SELLING_KEY'] || undefined };
     delete process.env['CROW_SIGNER_FLOAT_KEY'];
     delete process.env['CROW_SIGNER_BUYING_KEY'];
+    delete process.env['CROW_SIGNER_SELLING_KEY'];
     const signer = await Signer.open({ rulesPath, statePath, flagPath, keys });
     const m = /^(.+):([0-9]{1,5})$/.exec(listen ?? '127.0.0.1:8547');
     if (!m) throw new Error('--listen takes <host:port>');
