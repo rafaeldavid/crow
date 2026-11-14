@@ -150,6 +150,11 @@ describe('a task number has one task file (T-464)', () => {
     expect(duplicateProblems(third)[0]).toContain('T-427-a-third.md');
   });
 
+  it('counts task files only (.md), in either case, and ignores other files', () => {
+    expect(duplicateProblems(dir({ 'T-460-a.md': '# T-460\n', 't-460-lower.md': '# T-460\n' }))[0]).toContain('t-460-lower.md');
+    expect(duplicateProblems(dir({ 'T-461-a.md': '# T-461\n', 'T-461-notes.txt': 'x', 'T-4610-x.md': 'x', '_template.md': 'x' }))).toEqual([]);
+  });
+
   it('passes this repository\'s docs/tasks/', () => {
     expect(duplicateProblems()).toEqual([]);
   });

@@ -71,8 +71,8 @@ export const RESERVE = 'a task number has one task file: reserve a new number fr
 export function duplicateProblems(dir = TASKS) {
   if (!existsSync(dir)) return [];
   const by = new Map();
-  for (const f of readdirSync(dir).filter((x) => /^T-\d{3}(?:[-.]|$)/.test(x)).sort()) {
-    const id = f.slice(0, 5);
+  for (const f of readdirSync(dir).filter((x) => /^T-\d{3}(?:-.*)?\.md$/i.test(x)).sort()) {
+    const id = f.slice(0, 5).toUpperCase();
     by.set(id, [...(by.get(id) ?? []), f]);
   }
   const out = [];
