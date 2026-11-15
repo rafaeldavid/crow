@@ -3,7 +3,7 @@
 import { describe, expect, it } from 'vitest';
 import { readFileSync } from 'node:fs';
 // @ts-expect-error plain JavaScript module with no declarations
-import { apiRoutes, citedSections, countTokens, duplicateSentences, estimateTokens, FIRST_DEAL_BUDGET, guideFiles, hasSection, HTTP_BUYER_BUDGET, measureHttpBuyer, measurePaths, namedCalls, namedReferences, nonAscii, routeKnown } from '../site/guides.mjs';
+import { apiRoutes, citedSections, countTokens, duplicateSentences, estimateTokens, FIRST_DEAL_BUDGET, guideFiles, hasSection, HTTP_BUYER_BUDGET, measureHttpBuyer, measurePaths, namedCalls, namedReferences, nonAscii, routeKnown, SETUP_MAX_BYTES } from '../site/guides.mjs';
 // @ts-expect-error plain JavaScript module with no declarations
 import { publishedGuides } from '../site/build.mjs';
 
@@ -102,6 +102,19 @@ describe('the checks on the guides', () => {
     const { guidePage } = await import('../site/build.mjs');
     expect(guidePage('Run:\n{{BUY_INSTALL}}\n', 'buy.txt', () => 'mkdir -p crow-buy')).toBe('Run:\nmkdir -p crow-buy\n');
     expect(() => guidePage('Run {{BUY_INSTALL}}', 'sell.txt')).toThrow('sell.txt has a {{placeholder}}');
+  });
+
+  it("lists setup.txt as a guide outside both first-deal budgets, fills its one command and holds it to 8,000 bytes (T-472)", async () => {
+    // @ts-expect-error plain JavaScript module with no declarations
+    const { guidePage, setupCommand, publishedGuides } = await import('../site/build.mjs');
+    expect(guideFiles()).toContain('setup.txt');
+    expect(Object.values(FIRST_DEAL_BUDGET.paths).flat()).not.toContain('setup.txt');
+    expect(SETUP_MAX_BYTES).toBe(8000);
+    expect(guidePage('Run:\n{{SETUP_COMMAND}}\n', 'setup.txt')).toBe(`Run:\n${setupCommand()}\n`);
+    expect(() => guidePage('Run {{SETUP_COMMAND}}', 'sell.txt')).toThrow('sell.txt has a {{placeholder}}');
+    const published = publishedGuides({ op1: 'https://a.example', op2: 'https://b.example' }).get('setup.txt') as string;
+    expect(Buffer.byteLength(published)).toBeLessThanOrEqual(SETUP_MAX_BYTES);
+    expect(published.split('\n')).toContain(setupCommand());
   });
 
   it("runs each of buy.mjs's subcommands, and only that one, with no network", async () => {
