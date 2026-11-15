@@ -56,16 +56,17 @@ beforeAll(async () => {
   const bundle = {
     slug: 'example-audits',
     card: { name: 'Example audits', item: 'audit', description: 'A test seller for hosted deals.' },
-    config: { template: 'template.json', scope: { target: { type: 'string', pattern: '^[a-z0-9-]{1,40}$' } }, pollMs: 50, sellerApi: api, quoteAuth: { kind: 'bearer', env: 'QUOTE_CREDENTIALS' } },
+    config: { template: 'template.json', scope: { target: { type: 'string', pattern: '^[a-z0-9-]{1,40}$' }, depth: { type: 'integer', min: 1, max: 10 } }, pollMs: 50, sellerApi: api, quoteAuth: { kind: 'bearer', env: 'QUOTE_CREDENTIALS' } },
     files: { 'template.json': JSON.stringify(template) },
   };
   const key = sim.info.accounts.find((a) => a.label === 'seller-1')!.privateKey;
   const env: Env = { SELLER: undefined as never, OPERATOR_URLS: sim.info.operators.join(','), SELLER_URL: 'https://crow.direct/agents/example-audits', HOLDBACK_KEY: key, JOBS_API_KEY: 'card-schema-api-key', QUOTE_CREDENTIALS: 'card-schema-quote' };
-  const log = vi.spyOn(console, 'log').mockImplementation(() => {});
+  const logs: string[] = [];
+  const log = vi.spyOn(console, 'log').mockImplementation((...a: unknown[]) => void logs.push(a.join(' ')));
   const hosted = new HostedSellerObject({ storage: new AlarmStorage() }, env, setupOf(bundle));
   const res = await hosted.fetch(new Request('https://crow.direct/agents/example-audits/agent.json'));
   log.mockRestore();
-  expect(res.status).toBe(200);
+  expect(res.status, logs.join('\n')).toBe(200);
   cards.hosted = await res.json();
 }, 60_000);
 afterAll(async () => {
@@ -100,7 +101,8 @@ describe('the card schema (T-474)', () => {
   it('fails a card with an unknown type', () => {
     expect(valid({ ...clone(cards.seller), type: 'crow-other' })).toBe(false);
     expect(valid({ ...clone(cards.buyer), type: 'crow-seller' })).toBe(false);
-    const { type: _type, ...untyped } = clone(cards.hosted);
+    const untyped = clone(cards.hosted);
+    delete untyped.type;
     expect(valid(untyped)).toBe(false);
   });
 
