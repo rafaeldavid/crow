@@ -1,23 +1,32 @@
-// The list of who uses Crow (T-486, D75): POST /listing on crow-early-access. A party's own setup command sends one
+// The list of who uses Crow (T-486, D76): POST /listing on crow-early-access. A party's own setup command sends one
 // request with one field, its website. This route stores one entry for each website in the sign-up store, under its
-// own prefix: the website and the time it first arrived. No role, no IP address, no header, no cookie.
+// own prefix: the website and the UTC date it first arrived. No role, no IP address, no header, no cookie, and no
+// time of day: an exact time would let Crow line a listing up with the first offer of the folder that sent it.
+//
+// A website is a site's own address, an origin: https, a public name of lower-case letters, digits, dots and hyphens,
+// and nothing after it. So one site is one entry, and nothing but a host name is ever stored: no path, no query, no
+// text a stranger chose for whoever reads the list later.
 //
 // What an entry means: Crow keeps the website as a potential partner. Crow may later read the site to see whether it
 // publishes a Crow card (scripts/listing-check.mjs, run by a person, never by this route). The entry proves nothing
 // about who sent it: anyone can send any website. No operator, test agent, contract or deal reads the list.
 //
-// The list is private. This route writes and never reads back: no GET serves an entry, and the answer to a POST is the
-// same whether the website was new or already there, so a caller cannot ask whether a site is on the list. The route
-// fetches nothing.
+// The list is private. No route serves an entry. A POST gets the same answer whether the website was new or already
+// there, after the same store operations: one read and one write, the write of a repeat putting the stored value back
+// with its first date. So neither the answer nor its time says whether a site is on the list. The route fetches nothing.
+//
+// It takes no Idempotency-Key and needs none (decided by Rafa, 2026-11-15, D76): the hard rule names the protocol's
+// API, which the operators serve; this route is on the sign-up Worker and is idempotent by its own key, the website.
 //
 // What the route refuses, before it stores anything: a browser's request (one with an Origin header; the command sends
-// none), a body that is not JSON of exactly the one field within LIMITS.bodyBytes, and a website that is not an https
-// address of a public name with no user name, password, query, fragment or port. The command applies the same website
-// rule before it sends (examples/setup-list.ts; tests/early-access-listing.test.ts holds the two together).
+// none), a body that is not JSON of exactly the one field within LIMITS.bodyBytes, and a website that fails the rule
+// above. The command applies the same website rule before it sends (examples/setup-list.ts;
+// tests/early-access-listing.test.ts holds the two together), and so does the check script on its input.
 //
 // Limits, counted in memory as the operators' report limits are, so a restart resets them: LIMITS.perClientPerHour
-// for each client (an IPv4 address or an IPv6 /64) and LIMITS.perDay a UTC day in all. The client's address is a
-// counter's key for the hour and is never stored. One website is one entry: a repeat writes nothing.
+// for each client (an IPv4 address or an IPv6 /64) and LIMITS.perDay a UTC day. They are a brake, not a cap: each copy
+// of the Worker counts by itself, and one caller with many addresses can spend a copy's day for everyone. The client's
+// address is a counter's key for the hour and is never stored.
 
 export const LISTING_PATH = '/listing';
 /** The prefix of an entry's key in the sign-up store: `listing:<website>`. */
@@ -25,30 +34,35 @@ export const LISTING_PREFIX = 'listing:';
 export const LIMITS = Object.freeze({ bodyBytes: 1024, websiteChars: 200, perClientPerHour: 10, perDay: 500 });
 /** Names that are never a public website: this machine, a local network, a private zone. */
 const LOCAL_ENDINGS = ['.localhost', '.local', '.internal', '.home.arpa'];
+/** One label of a host name: lower-case letters, digits and hyphens, with no hyphen at either end. */
+const LABEL = /^[a-z0-9]([a-z0-9-]{0,61}[a-z0-9])?$/;
 const HOUR_MS = 3_600_000;
 const DAY_MS = 86_400_000;
 
 const json = (status, body, headers = {}) => new Response(JSON.stringify(body), { status, headers: { 'content-type': 'application/json', 'cache-control': 'no-store', ...headers } });
 
 /**
- * The website as the URL parser writes it, `{ website }`, or why it is refused, `{ error }`: an https address of a
- * public name, with no user name, password, query, fragment or port, of at most LIMITS.websiteChars characters.
+ * The website as the URL parser writes it, `{ website }`, or why it is refused, `{ error }`. A website is a site's own
+ * address, an origin: https, a public name of lower-case letters, digits, dots and hyphens (an internationalised name
+ * in its xn-- form), and nothing else: no path, query, fragment, user name, password or port; at most
+ * LIMITS.websiteChars characters.
  */
 export function websiteOf(text) {
-  if (typeof text !== 'string' || text === '') return { error: 'website is an https address, such as https://your-site.example' };
+  if (typeof text !== 'string' || text === '') return { error: "website is a site's https address, such as https://your-site.example" };
   let u;
   try {
     u = new URL(text);
   } catch {
-    return { error: 'website is not an address: give an https address, such as https://your-site.example' };
+    return { error: "website is not an address: give a site's https address, such as https://your-site.example" };
   }
   if (u.protocol !== 'https:') return { error: 'website must start with https://' };
   if (u.username !== '' || u.password !== '') return { error: 'website must carry no user name or password' };
-  if (u.href.includes('?') || u.href.includes('#')) return { error: "website must carry no query and no fragment: a site's address needs neither" };
   if (u.port !== '') return { error: 'website must carry no port' };
-  const host = u.hostname.toLowerCase();
+  if (u.pathname !== '/' || u.href.includes('?') || u.href.includes('#')) return { error: "website is the site's own address and nothing after it: no path, no query and no fragment" };
+  const host = u.hostname;
   if (host.startsWith('[') || /^\d+(\.\d+){3}$/.test(host)) return { error: 'website must name a site, not an IP address' };
-  if (!host.includes('.') || host.endsWith('.') || host === 'localhost' || LOCAL_ENDINGS.some((end) => host.endsWith(end))) return { error: 'website must be a public name, such as your-site.example' };
+  if (!host.includes('.') || !host.split('.').every((label) => LABEL.test(label))) return { error: 'website must be a public name of letters, digits, dots and hyphens, such as your-site.example' };
+  if (host === 'localhost' || LOCAL_ENDINGS.some((end) => host.endsWith(end))) return { error: 'website must be a public name, such as your-site.example' };
   if (u.href.length > LIMITS.websiteChars) return { error: `website must be at most ${LIMITS.websiteChars} characters` };
   return { website: u.href };
 }
@@ -140,8 +154,10 @@ export async function listing(request, env, deps = {}) {
   const turn = (deps.limiter ?? LIMITER).take(clientKey(request.headers.get('cf-connecting-ip')), now);
   if (!turn.ok) return json(429, { error: 'too many listings from this client, or for today; nothing was stored, and no deal depends on the list', retryAfterSec: turn.retryAfterSec }, { 'retry-after': String(turn.retryAfterSec) });
 
-  // One website is one entry, written once. The answer is the same for a new website and a known one.
+  // One website is one entry. A first request reads and writes; so does a repeat, which puts the stored value back
+  // with its first date. The answer and the store operations are the same for a new website and a known one.
   const key = `${LISTING_PREFIX}${w.website}`;
-  if ((await env.EMAILS.get(key)) === null) await env.EMAILS.put(key, JSON.stringify({ website: w.website, receivedAt: new Date(now).toISOString() }));
+  const stored = await env.EMAILS.get(key);
+  await env.EMAILS.put(key, stored ?? JSON.stringify({ website: w.website, receivedOn: new Date(now).toISOString().slice(0, 10) }));
   return json(200, { ok: true, website: w.website });
 }
