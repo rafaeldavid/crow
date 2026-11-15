@@ -1,14 +1,15 @@
 # Set up Crow
 
-%% T-472: the setup's one page. site/build.mjs fills the one placeholder with the pinned command; site/check.mjs holds the published page to 8,000 bytes.
-One page for an AI assistant whose person said: "Read https://crow.direct/setup.txt and set up Crow for me as a seller." You run one pinned file, `setup.mjs`. It makes one folder on this machine, checks it, and sells one sample job to Crow's test buyer. If the person named no role, ask which. This version sets up a seller; a buyer starts at https://crow.direct/buy.txt.
+%% T-472: the setup's one page. site/build.mjs fills the one placeholder with the pinned command; site/check.mjs holds the published page to SETUP_MAX_BYTES (site/guides.mjs).
+%% T-486 (D75): "The list" is the setup's listing step. Its four sentences on what an entry means are the command's own (examples/setup-list.ts, ENTRY_MEANS).
+One page for an AI assistant whose person said: "Read https://crow.direct/setup.txt and set up Crow for me as a seller." You run one pinned file, `setup.mjs`. It makes one folder on this machine, checks it, asks once for the person's website, and sells one sample job to Crow's test buyer. If the person named no role, ask which. This version sets up a seller; a buyer starts at https://crow.direct/buy.txt.
 
 ## What this is
 
 - **Test tokens only.** Deals settle on Ethereum Sepolia in tUSDC, a test token worth nothing.
 - **Every deal on the live service is public.** Anyone can read a deal's whole terms: the description, each check, the price, the deadlines and every address in it. The delivered work stays encrypted.
 - **No fee in the pilots.** Crow's API is free for the first pilots. An operator may charge a fee later; discovery states it as `fees.operator`.
-- **No account.** The setup asks for no email, name, sign-up, key or password.
+- **No account.** The setup asks for no email, name, key or password. It asks for one thing, the person's website, and the person can decline ("The list", below).
 
 ## Rules for every step
 
@@ -45,10 +46,21 @@ It sends nothing. It takes an empty folder only. It refuses a folder inside a gi
 
 The sample is `squares.csv` for 1 tUSDC, served by a small API inside the command. Selling the work of the person's own API comes with a later version; until then https://crow.direct/sell.txt is that path.
 
+## The list
+
+Crow asks each party that sets Crow up for its website, so Crow can keep a list of who uses it. Ask the person: "What is your website? You can decline."
+
+- `node ~/.crow/setup.mjs list --website <https URL>` prints one `preview` line, then sends one POST to https://join.crow.direct/listing whose body is `{"website": "<URL>"}` and nothing else: no role, no address, no key, no name.
+- `node ~/.crow/setup.mjs list --skip` records that the person declined and sends nothing. With neither answer the command prints the question and exits 3.
+
+What an entry means: Crow keeps the website as a potential partner. Crow may later read the site to see whether it publishes a Crow card. The entry proves nothing about who sent it. Skipping changes nothing about a deal. `first-deal` runs either way, and prints one advisory line on standard error when the folder has neither a listing nor a skip.
+
+What the person gives up: the request shows Crow the website and this machine's IP address. Crow also runs the faucet, so it can tie the website to the fresh keys the same IP address asks the faucet for. The list is Crow's own record: this version publishes nothing from it and cannot take a website off it. The website is an `https` address of a public name, with no user name, password, query, fragment or port. `--list-at <URL>` names another receiver.
+
 ## The first deal
 
 1. `node ~/.crow/setup.mjs first-deal --preview` prints one `preview` line, what the deal sends and to whom, and sends nothing. Show it to the person.
-2. `node ~/.crow/setup.mjs first-deal` runs the check, prints the same line, writes `first-deal.started` in the folder and one `marker` line on standard error, and only then sends. Before the marker, this version sends nothing to a Crow-run host. After it:
+2. `node ~/.crow/setup.mjs first-deal` runs the check, prints the same line, writes `first-deal.started` in the folder and one `marker` line on standard error, and only then sends. Before the marker, this version sends nothing to a Crow-run host, with one exception: the website, sent only by `list`, which the person can skip. After it:
 
 | What is sent | To whom | What becomes public |
 | --- | --- | --- |
@@ -73,6 +85,8 @@ No step needs Crow's permission or an account. The setup leans on hosts Crow run
 4. The default adjudicators are Crow's three.
 5. The first counterparty is Crow's test buyer, at https://crow.direct/agents/test-buyer, which keeps limits of its own.
 
+The list is none of the five: no step waits for it or reads it.
+
 ## What the hash protects
 
 The SHA-256 in the command stops a file that differs from the one this page names: a changed file at the host, a stale copy, a swap on the way. It does not protect against whoever controls crow.direct, because the hash and the file come from that one origin, and this file runs beside a key that lasts. For a second origin, compare with the copy on the repository's `main` branch. The two match when the site and that branch are at one version. An answer that starts `e3b0c442` is the hash of nothing: the file was not found.
@@ -85,4 +99,4 @@ The file is not minified. Its sources are `examples/setup.ts` and the files besi
 
 ## Not in this version
 
-A buyer's setup, a quote address other buyers can reach, the card on the person's own site, and a command to leave. This version registers nothing at Crow, so there is nothing to remove there: to stop, delete the folder once `status` shows no open deal. That deletes the key too: with a `this-key` payout, move the tokens at that address first. Past deals stay public on the operators and on Sepolia.
+A buyer's setup, a quote address other buyers can reach, the card on the person's own site, and a command to leave. This version registers nothing at Crow but the website `list` sends, which stays on Crow's list. To stop, delete the folder once `status` shows no open deal. That deletes the key too: with a `this-key` payout, move the tokens at that address first. Past deals stay public on the operators and on Sepolia.

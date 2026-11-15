@@ -50,8 +50,11 @@ export function guideFiles() {
   return ['llms.txt', 'buy.txt', 'sell.txt', 'setup.txt', ...referenceFiles()];
 }
 
-/** The most bytes the published setup.txt may have (T-472): about 2,000 tokens, estimated as bytes divided by four. */
-export const SETUP_MAX_BYTES = 8000;
+/**
+ * The most bytes the published setup.txt may have: about 2,500 tokens, estimated as bytes divided by four. T-472 set
+ * 8,000; T-486 raised it for the listing step's section. The page stays one fetch.
+ */
+export const SETUP_MAX_BYTES = 10_000;
 
 /** A guide's source text, editor notes and all. */
 export const guideSource = (path) => readFileSync(here(`./${path}`), 'utf8');

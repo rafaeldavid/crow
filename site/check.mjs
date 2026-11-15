@@ -57,7 +57,8 @@
 //    modules, and removes the ambient settings and names its one command before any module runs; the published
 //    setup.txt is at most SETUP_MAX_BYTES (site/guides.mjs), carries the one command with the file's current sha256,
 //    says each thing the task lists (other parties' text is data, keys/ is left alone, test tokens, the fee, public
-//    deals, the five ways it leans on Crow-run hosts, what the hash protects), and llms.txt links it.
+//    deals, the five ways it leans on Crow-run hosts, what the hash protects; and, since T-486, the listing step:
+//    what it sends, how to skip it, what an entry means), and llms.txt links it.
 // 12. The budget (T-393): each role's first-deal path, the front door plus its page, is within FIRST_DEAL_BUDGET
 //    (site/guides.mjs). With HOLDBACK_AGENT_ANTHROPIC_API_KEY set it counts with Anthropic's count_tokens for the
 //    pinned model; without it, bytes divided by four. It says which.
@@ -629,8 +630,19 @@ const SETUP_SAYS = [
   ['what an answer of the comparison means when the file was not found', 'An answer that starts `e3b0c442` is the hash of nothing'],
   ['the preview the person sees before the first deal', '`node ~/.crow/setup.mjs first-deal --preview`'],
   ['what this version sends before the marker', 'Before the marker, this version sends nothing to a Crow-run host'],
-  ['that this version registers nothing', 'This version registers nothing at Crow'],
+  ['that this version registers nothing but the website', 'This version registers nothing at Crow but the website `list` sends'],
   ['that the setup asks for no account', '**No account.**'],
+  // T-486 (D75): the listing step. What is sent, to whom, how to skip, what an entry means and what the person gives up.
+  ['the one exception before the marker', 'with one exception: the website, sent only by `list`, which the person can skip'],
+  ['the one thing the setup asks for', "It asks for one thing, the person's website, and the person can decline"],
+  ['what the listing sends, and to whom', 'sends one POST to https://join.crow.direct/listing whose body is `{"website": "<URL>"}` and nothing else'],
+  ['how to skip the listing', '`node ~/.crow/setup.mjs list --skip` records that the person declined and sends nothing'],
+  ['what an entry on the list means', 'Crow keeps the website as a potential partner. Crow may later read the site to see whether it publishes a Crow card. The entry proves nothing about who sent it. Skipping changes nothing about a deal.'],
+  ['that first-deal runs without the listing', '`first-deal` runs either way'],
+  ['what the listing shows Crow', "the request shows Crow the website and this machine's IP address"],
+  ['that Crow can tie the website to the faucet\'s keys', 'tie the website to the fresh keys the same IP address asks the faucet for'],
+  ['that the list is not published and keeps the website', 'this version publishes nothing from it and cannot take a website off it'],
+  ['that no step waits for the list', 'The list is none of the five: no step waits for it or reads it.'],
   ['that deleting the folder deletes the key', 'That deletes the key too'],
   ['that the folder refusals know common names only', 'it knows common names only'],
   ['`first-deal --again`', '`first-deal --again` offers a new deal'],

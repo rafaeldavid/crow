@@ -104,12 +104,12 @@ describe('the checks on the guides', () => {
     expect(() => guidePage('Run {{BUY_INSTALL}}', 'sell.txt')).toThrow('sell.txt has a {{placeholder}}');
   });
 
-  it("lists setup.txt as a guide outside both first-deal budgets, fills its one command and holds it to 8,000 bytes (T-472)", async () => {
+  it("lists setup.txt as a guide outside both first-deal budgets, fills its one command and holds it to 10,000 bytes (T-472, T-486)", async () => {
     // @ts-expect-error plain JavaScript module with no declarations
     const { guidePage, setupCommand, publishedGuides } = await import('../site/build.mjs');
     expect(guideFiles()).toContain('setup.txt');
     expect(Object.values(FIRST_DEAL_BUDGET.paths).flat()).not.toContain('setup.txt');
-    expect(SETUP_MAX_BYTES).toBe(8000);
+    expect(SETUP_MAX_BYTES).toBe(10_000);
     expect(guidePage('Run:\n{{SETUP_COMMAND}}\n', 'setup.txt')).toBe(`Run:\n${setupCommand()}\n`);
     expect(() => guidePage('Run {{SETUP_COMMAND}}', 'sell.txt')).toThrow('sell.txt has a {{placeholder}}');
     const published = publishedGuides({ op1: 'https://a.example', op2: 'https://b.example' }).get('setup.txt') as string;

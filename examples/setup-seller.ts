@@ -86,7 +86,14 @@ export interface State {
   firstDeal?: FirstDeal;
   /** First deals that ended without a release and were set aside by `first-deal --again`. None is ever continued. */
   ended?: FirstDeal[];
+  /** The listing step (T-486): what `list` sent, to whom, when and the answer's status; or that the person declined. No deal reads it. */
+  listing?: Listing;
+  /** The last `list` that the receiver refused or did not answer. It counts as neither a listing nor a skip. */
+  listingFailed?: { website: string; to: string; at: string; status: number | null; detail: string };
 }
+
+/** The listing step's record: a website sent to the list, or a skip. */
+export type Listing = { website: string; to: string; at: string; status: number } | { skipped: true; at: string };
 
 export function readState(folder: string): State | undefined {
   let text: string;
@@ -357,6 +364,7 @@ export async function seller(c: Call): Promise<number> {
         keys: `${FILES.key} holds the signing key, mode 0600, on this machine only. Never read, print or copy it.`,
         ...(payout.thisKey ? { payoutNote: `Every deal names this folder's standing address ${address} as its payout address in its public terms, which links this folder's deals to one another. Its key is on this machine, in ${FILES.key}.` } : { payoutNote: `Every deal names ${payout.address} as its payout address in its public terms, which links this folder's deals to one another.` }),
         sent: 'nothing',
+        next: "Next, the listing step: list --website <https URL> sends your website to Crow's list of who uses it, and list --skip declines. No deal depends on it. Then first-deal.",
       });
       return 0;
     });
