@@ -1397,3 +1397,22 @@ Today a seller with its own API reads 13 files of 98,462 bytes and runs 22 comma
 - **When it moves into the protocol.** When a second implementation reads the card, by a decision record and a version bump.
 - **Declined:** a directory or registry of cards kept by Crow (D35: rails, not a record-keeper); a seller that is a static page only, which would need Crow to carry messages between parties.
 - **Litmus tests.** Neutrality: a card needs nobody's permission and lives on the party's own domain. The hold and defended judgment: not affected.
+
+## D75. A seller goes live first as a Worker on its own Cloudflare account; a host with Node is the second way (T-488)
+
+**Status:** adopted, 2026-11-15.
+
+**Adopted 2026-11-15 by T-488,** after a research pass and one review. Rafa may overrule it. Nothing is built or deployed. The record: `docs/research/2026-11-15-first-go-live-path.md`.
+
+**Rafa's question, 2026-11-15:** should the first go-live path be the Cloudflare Worker deployer, since it is more agent-friendly than asking a vendor to run a VM?
+
+- **Yes.** After its first local deal, a seller goes live first by one deploy of the seller Worker on its own Cloudflare account (T-478). A Node service on a host it runs (T-477) stays as the second way, for a party without Cloudflare or that wants a host off it.
+- **Why.** The person does three things by hand: makes and verifies the account, approves Wrangler's login in a browser, and names the account. The assistant drives the rest with flags, secrets on standard input and machine-readable output. A host needs root, DNS, a certificate and a service manager (documented and inferred).
+- **The plan.** SQLite-backed Durable Objects and their alarms run on Workers Free, which needs no card; at the setup's poll of 3 s, a seller with an open deal uses about 29% of the free plan's daily requests and rows written (documented, inferred). Free allows 10 ms of CPU per request, and a cold signature took about 30 ms in Node here (measured proxy). T-478's measured run on a free account decides whether the guide names Workers Free or Workers Paid, USD 5 a month with a card.
+- **The address.** `workers.dev` by default, so no domain needs to move to Cloudflare; a route on the party's own zone when the party asks. The card stays on a page of the party's own domain and names the Worker's quote address, so the party's origin still binds the offer to the party (D74), through the other-origin flag of the live check.
+- **The key.** A Worker secret is shown to nobody after it is set. Whoever can deploy to that Worker can deploy code that reads it, as root on a host can read a key file. The guide says to log Wrangler out after the deploy, or to log in with `--use-keyring`, when an assistant shares the machine.
+- **New paths, so it starts now.** `apps/hosted-sellers/src/worker.ts` refuses any address that is not `https://crow.direct`, so the party's Worker is a new app with its own Durable Object class. It imports the adapter's core and the hosted seller's storage and bundle helpers and changes none of them. The pilot's freeze (D72, D73) holds: no task changes `apps/hosted-sellers`, `examples/seller-adapter-core.ts`, `examples/seller-adapter-api.ts` or `packages/` before the pilot's sellers are deployed. After that deploy, one task folds the two classes into one.
+- **The Worker ships prebuilt,** pinned by SHA-256 beside `setup.mjs`, since `setup.mjs` installs nothing. Wrangler comes from npm at a pinned version.
+- **The order.** T-483, T-475, T-476, then T-478, then T-477. T-478 builds first the parts of T-477 that need no host: the card's local check, `check --published`, the rule that a quote address is never open by default, and the card files. T-477 then adds the service unit, the proxy file and the root commands. T-478 no longer waits for the pilot's deploy and no longer depends on T-477; T-477 depends on T-478. T-481 is unchanged.
+- **This amends D73** where it says the Worker comes "after the pilot" and that T-478 is the one task that changes `apps/hosted-sellers`.
+- **Litmus tests.** Neutrality: neither way needs Crow's account or permission; the Worker adds Cloudflare as the party's chosen provider. Crow's own operators run on Cloudflare too, so one outage there stops both; a funded deal then ends by its terms at its deadline. The hold and defended judgment: unchanged.
