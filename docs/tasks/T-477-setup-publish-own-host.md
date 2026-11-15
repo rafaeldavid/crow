@@ -2,11 +2,11 @@
 
 - **Lane:** demo (agent access: the guides in `site/` and the reference tools in `examples/`)
 - **Phase:** 2
-- **Depends on:** T-483 (a seller's own API), T-474 (the card's schema). Runs after T-476, because each changes the setup bundle.
+- **Depends on:** T-478 (the card's local check, `check --published`, the quote-credential rule and the card files, which it builds first), T-483 (a seller's own API), T-474 (the card's schema). Runs after T-478, because each changes the setup bundle (D75).
 - **Paths this task may touch:** `examples/setup-publish.ts` (new), `examples/setup-publish*.test.ts` (new), `examples/setup-check.ts` (the card's check and the check of a live address), `examples/setup-leave.ts` (stopping what `publish` wrote), one entry in `examples/setup.ts`'s command table, the "Publish" section of `site/setup.txt`, `site/setup.mjs` (generated), this file. It reads `examples/seller-adapter.service`, `examples/seller-adapter.Caddyfile` and `examples/seller-adapter-service.md` as templates and may correct the Node version the last one names. It imports the seller adapter and changes none of it.
 - **Human gate:** yes: the site deploy is Rafa's, and the one measured run on a real host needs a host and a hostname, which are Rafa's to provide. The merge has no gate.
-- **Status:** todo
-- **Agent/session:** not started; starts after T-476 merges
+- **Status:** todo. The second way a seller goes live, after the Worker on its own Cloudflare account (D75).
+- **Agent/session:** not started; starts after T-478 merges
 - **Roadmap row:** N160
 - **Change kind:** 4 is the nearest recipe, with 1. Local checks: `pnpm exec vitest run examples/setup`, `node site/build.mjs && node site/check.mjs`.
 - **Review:** one `red-teamer` pass (a seller open to the internet: who can spend its work; a check that fetches addresses a stranger names) and one `reviewer` pass.
@@ -66,4 +66,7 @@ Choices made inside this task.
 
 ## Handoff
 
-Not started. Starts after T-476 merges, because each changes the bundle `site/setup.mjs` and its pinned hash.
+Not started. Starts after T-478 merges, because each changes the bundle `site/setup.mjs` and its pinned hash (D75; `docs/research/2026-11-15-first-go-live-path.md`).
+
+- **T-478 builds the parts of this task that need no host,** and this task reuses them: the card's local check (the fourth criterion), `check --published` and its tests against a hand-built seller (the fifth, sixth and seventh), the rule that the quote address is never open by default (the second), and the card files. Check each of those criteria against T-478's merged code and mark it there; build only what is missing.
+- **What stays here:** `publish --host` with the service unit, the proxy file with the card's paths, the printed root commands, the configuration the service starts from, `leave` after a service a person installed, the deal record's card fields if T-478 did not add them, the "Publish" section's host part, and the measured run on a real host.

@@ -1,53 +1,58 @@
 # T-478: The seller Worker on the party's own Cloudflare account
 
-- **Lane:** demo (the hosted seller adapter, `apps/hosted-sellers/`)
+- **Lane:** demo (a new app for the party's own seller Worker, beside the hosted seller adapter in `apps/hosted-sellers/`, which it imports and does not change)
 - **Phase:** 2
-- **Depends on:** **the pilot's hosted sellers being deployed** (D72); T-477 (the card files and the check of a live address).
-- **Paths this task may touch:** `apps/hosted-sellers/` (its deploy and secrets scripts, and a README), `examples/setup-publish.ts` (a `--cloudflare` mode), `examples/setup-leave.ts` (removing the Worker), the "Publish" section of `site/setup.txt`, `site/setup.mjs` (generated), `docs/operations.md` (the hosted seller's runbook), this file.
-- **Human gate:** yes. A deploy to any Cloudflare account waits for the account's owner; the test deploy on Crow's own account is Rafa's.
-- **Status:** todo, **waiting for the pilot's deploy**. It is the only task of this plan that changes `apps/hosted-sellers`, and any change there before the pilot's sellers are deployed forces another rehearsal.
+- **Depends on:** T-483 (a seller's own API over HTTPS, which the Worker calls), T-474 (the card's schema). Runs after T-476, because each changes the setup bundle. It no longer waits for the pilot's deploy and no longer depends on T-477 (D75).
+- **Paths this task may touch:** a new app for the party's own seller Worker (for example `apps/own-seller/`: its entry, its Durable Object class, its configuration writer, its tests and a README), the new app's `package.json` and `tsconfig.json`, its reference in the root `tsconfig.json`, `pnpm-lock.yaml`, `site/build.mjs` and `site/check.mjs` (to build and pin the prebuilt Worker beside `setup.mjs`), `examples/setup-publish.ts` (new: the card files and a `--cloudflare` mode), `examples/setup-publish*.test.ts` (new), `examples/setup-check.ts` (the card's local check and `check --published`), `examples/setup-leave.ts` (removing the Worker), one entry in `examples/setup.ts`'s command table, the "Publish" section of `site/setup.txt`, `site/setup.mjs` and the pinned Worker file beside it (generated), this file. It imports `examples/seller-adapter-core.ts` and `apps/hosted-sellers/src/` (`journalStore`, `checkBundle`, `bundleSha256`, `TEST_CHAINS`) and changes none of them: `apps/hosted-sellers`, `examples/seller-adapter-core.ts`, `examples/seller-adapter-api.ts` and `packages/` stay frozen until the pilot's sellers are deployed (D72, D73).
+- **Human gate:** yes. A deploy to any Cloudflare account waits for the account's owner; the measured run needs a Cloudflare account that is not Crow's production account, free plan first, which is Rafa's to provide.
+- **Status:** todo. The first way a seller goes live (D75); it starts after T-476 merges.
 - **Agent/session:** not started
 - **Roadmap row:** N160
-- **Change kind:** 4, with 8 for the test deploy. Local checks: `apps/hosted-sellers`' tests, `pnpm exec vitest run examples/setup`.
-- **Review:** one `red-teamer` pass (keys and secrets on a cloud account, the account choice) and one `reviewer` pass.
-- **Token budget:** 300,000 tokens, a target.
+- **Change kind:** 4, with 8 for the test deploy. Local checks: the new app's tests, `apps/hosted-sellers`' tests (unchanged, to show the pilot's code still passes), `pnpm exec vitest run examples/setup`, `node site/build.mjs && node site/check.mjs`.
+- **Review:** one `red-teamer` pass (keys and secrets on a cloud account, the account choice, the new object's address input, and the attacks it takes over from T-477: a check that fetches addresses a stranger names, and a published seller open to the internet) and one `reviewer` pass.
+- **Token budget:** 400,000 tokens, a target: 300,000 for the Worker and 100,000 for the parts it takes over from T-477 (D75).
 
 ## Intent
 
 Restate this in your own words before writing code.
 
-Rafa's bar is that setting Crow up is as simple as deploying a page on one's own site. For a seller that wants outside buyers, the nearest thing is one deploy on the party's own Cloudflare account: the Worker Crow already runs for a design partner (ADR-0037), deployed by the party, on the party's own subdomain, with the party's own secrets.
+Rafa's bar is that setting Crow up is as simple as deploying a page on one's own site. For a seller that wants outside buyers, the nearest thing is one deploy on the party's own Cloudflare account: a Worker built on the same core as the one Crow runs for a design partner (ADR-0037), deployed by the party, at an address the party chose, with the party's own secrets. It is the first way a seller goes live; a host with Node (T-477) is the second (D75).
 
-Today that Worker deploys only on Crow's account, on routes under crow.direct, and Crow's script makes and holds the seller's signing key (baseline). This task makes the same Worker deployable by its owner:
+Today the hosted seller's Worker deploys only on Crow's account, on routes under crow.direct, refuses any other address (`apps/hosted-sellers/src/worker.ts:161`), and Crow's script makes and holds the seller's signing key (baseline). The pilot's freeze keeps that Worker unchanged, so this task writes a second shell in new paths around the same core:
 
-- `node setup.mjs publish --cloudflare` asks which account and which domain, and infers neither. It writes the deploy configuration for a route on the party's own subdomain.
+- **First, what needs no host:** the card files, the card's local check, `check --published`, and the rule that a quote address is never open by default. T-477 reuses them.
+- `node setup.mjs publish --cloudflare` asks which account, and whether the Worker lives at a `workers.dev` name or on a subdomain of a zone the party has on Cloudflare, and infers neither. It writes the deploy configuration for that address.
 - The Worker gets a signing key of its own, not the folder's: made in memory on the party's machine and piped to the account's secret store on standard input. It is never printed, never an argument, never written to a file. The party's API key is typed by the person at the cloud tool's own prompt.
-- The person runs the login and the deploy. The command then runs the check of the live card and quote address (T-477).
+- The person runs the login and the deploy. The command then runs the check of the live card and quote address.
 - `leave` removes the Worker and says what Cloudflare keeps.
 
-Non-goals: Crow's account or Crow's domain in any step; a second runtime; a change to what the Worker does in a deal.
+Non-goals: Crow's account or Crow's domain in any step; a second runtime; a change to what the Worker does in a deal; any change to `apps/hosted-sellers`, `examples/seller-adapter-core.ts`, `examples/seller-adapter-api.ts` or `packages/` (D72, D73).
 
 ## Context
 
+- The decision and its record: D75; `docs/research/2026-11-15-first-go-live-path.md`.
 - The design: `docs/research/2026-11-15-setup-design.md`, "Where the signing part runs".
+- The criteria this task takes over: `docs/tasks/T-477-setup-publish-own-host.md`, criteria 2 and 4 to 7; `docs/tasks/T-474-card-schema.md`, the size cap on a fetched card.
 - The pattern: `docs/research/2026-11-15-blygger-study.md`, patterns 3, 4 and 5: the account is always asked, the secret is piped and never held, each step checks before it creates, and the deploy is a separate step.
 - The Worker: ADR-0037; `apps/hosted-sellers/`; the runbook in `docs/operations.md`.
 - Cloudflare tooling in this repository: `CLAUDE.md`, "Cloudflare tooling".
 
 ## Acceptance criteria
 
-- [ ] From the folder T-472 made, `publish --cloudflare` prepares a deploy for an account and a subdomain the person named. With either missing it prints the question and exits 3. It refuses to run with an API token in the environment that would choose the account silently.
+- [ ] **The card and its checks, first.** T-477's second, fourth, fifth, sixth and seventh criteria hold here, with their tests: the quote address is never open by default (a quote credential or `--open`, and the most quotes a day over all callers); the card's local check; `check --published` safe to point anywhere (HTTPS only, no redirect, the other-origin flag, no loopback, private or link-local address, a fixed reason per check, never the fetched text); its tests against a seller built by hand; no quote sent. The check caps the size of a whole card it fetches (T-474).
+- [ ] From the folder T-472 made, `publish --cloudflare` prepares a deploy for an account the person named and an address the person chose: a `workers.dev` name, or a subdomain of a zone the party has on Cloudflare. With either answer missing it prints the question and exits 3. It drops the Node-only fields (`port`, `journal`, `events`) before the bundle's check. It checks that the account has a `workers.dev` subdomain before a first deploy there, and asks the person to set one if not. It refuses to run with an API token in the environment that would choose the account silently.
 - [ ] The prepared deploy names no Crow account, zone or route. A test fails if a route, a zone or an account in the configuration it writes is Crow's; the operators' own addresses are the one place Crow's domain may appear.
 - [ ] **The cloud tool is pinned.** The command runs one exact version of the deploy tool, since that tool carries the key on its way to the secret store.
 - [ ] **What Cloudflare tells the operators is measured.** One test deal from the deployed Worker, with the operators' request log read by Rafa or a stand-in operator in the test: whether the Worker's outgoing requests carry a header that names its zone. The design and `setup.txt` then state what was found; until then they say it is inferred.
 - [ ] **The guide states who can reach the key:** nobody is shown it after it is set; whoever holds the account's login can replace it or deploy code that reads it. It tells the person to log the cloud tool out after the deploy when an assistant shares the machine, and says that the limits are otherwise the assistant's to pass.
+- [ ] **Test tokens only.** The new Durable Object class refuses to start on any chain outside `TEST_CHAINS`, as the hosted seller does; a test starts it against another chain and sees the refusal.
 - [ ] The signing key reaches the account's secret store by standard input only. A test reads every printed line, every argument of every child process and every file outside `keys/`, and fails if the key's value is in one.
 - [ ] Each step checks before it creates, and a rerun after a failure continues with no second Worker and no second key.
-- [ ] After the deploy, the check of T-477 passes against the party's subdomain, and one deal with Crow's test buyer ends `Released` from the deployed Worker.
-- [ ] The pilot's hosted sellers are unchanged: the hosted bundle's SHA-256 for the pilot's seller folders is the same before and after, measured as T-443 measured it.
+- [ ] After the deploy, `check --published` passes against the party's card and the Worker's address, and one deal with Crow's test buyer ends `Released` from the deployed Worker.
+- [ ] The pilot's hosted sellers are unchanged: the diff touches no frozen path (a test or a CI step reads it), the hosted bundle's SHA-256 for the pilot's seller folders is the same before and after, measured as T-443 measured it, and so is the SHA-256 of the hosted Worker's dry-run upload, since the bundle's hash covers its configuration only.
 - [ ] `leave` removes the Worker and its secrets from the party's account, after the export, and refuses while a deal is open.
-- [ ] One measured run by hand on an account that is not Crow's production account: the commands, the person's steps (the login, the two answers, the deploy) and the minutes, in Evidence.
-- [ ] The red-team pass covers: a deploy to the wrong account; a secret in a log, a file or an argument; a card that names another party's quote address; the party's domain reaching the operators beside each deal key; a login left behind.
+- [ ] One measured run by hand on an account that is not Crow's production account: the commands, the person's steps (the account and its email, the login, the two answers, the API key typed at the prompt, the deploy) and the plan used, free first and the minutes, in Evidence.
+- [ ] The red-team pass covers: a deploy to the wrong account; a secret in a log, a file or an argument; a card that names another party's quote address; the party's domain reaching the operators beside each deal key; a login left behind; jobs started at a published seller with no credential; its faucet grants used up from one address; `check --published` turned on a private address or made to print fetched text; an oversized card.
 
 ## Out of scope
 
@@ -67,4 +72,11 @@ Choices made inside this task.
 
 ## Handoff
 
-Not started, and not to start until the coordinator says the pilot's hosted sellers are deployed. Then read `apps/hosted-sellers/scripts/deploy.ts` and `secrets.ts` first: the smallest change may be a second shell around the same Worker, with the routes and the account as inputs.
+Not started; starts after T-476 merges. Read `docs/research/2026-11-15-first-go-live-path.md` and D75 first.
+
+- **Build first what T-477 planned and needs no host,** so T-477 can reuse it: the card's local check against the card's schema, `check --published` with every rule in T-477's fifth, sixth and seventh criteria (HTTPS only, no redirect, no private address, the other-origin flag, a fixed reason per check, no fetched text, no quote sent), the rule that a quote address is never open by default (a quote credential or `--open`, and the most quotes a day over all callers), and the card files. Those criteria of T-477 become this task's; T-477 keeps the host's files.
+- **The Worker is a second shell in new paths.** Today's Worker cannot serve another domain: `apps/hosted-sellers/src/worker.ts:161` refuses any address that is not `https://crow.direct`, `:204` writes that Crow runs the seller, and `deploy-plan.ts` fixes the zone and the routes. Write a new Durable Object class with the base address as an input, keeping the hosted seller's refusal of any chain outside `TEST_CHAINS`; import the core and the hosted seller's helpers; change no frozen path. The setup's configuration carries `port`, which `checkBundle` refuses (`bundle.ts:70`), so the configuration writer drops the Node-only fields first. The pilot's bundle SHA-256 then stays the same by construction, and the criterion that measures it still runs.
+- **Ship the Worker prebuilt,** pinned by SHA-256 beside `setup.mjs`, with the seller's configuration uploaded beside it as a data module. Run one pinned Wrangler version from npm.
+- **`workers.dev` by default,** a route on the party's own zone when the party asks. On `workers.dev`, TLS at the quote address proves only a Cloudflare account; the "Publish" section says the binding to the party comes from its card on its own domain, for a buyer that starts there. Check that the account has a `workers.dev` subdomain before the first deploy: Wrangler's own prompt for one cannot run without a terminal.
+- **Measure on a free account first:** a cold quote and one full deal. The free plan allows 10 ms of CPU per request, and a cold signature took about 30 ms in Node (the research record). Evidence names the plan the guide states. Also measure the `CF-Worker` header on `workers.dev`.
+- **After the pilot's deploy,** a later task may fold this Worker's class and the hosted seller's into one class with the address as a parameter.
