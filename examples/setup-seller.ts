@@ -88,8 +88,8 @@ export interface State {
   ended?: FirstDeal[];
   /** The listing step (T-486): what `list` sent, to whom, when and the answer's status; or that the person declined. No deal reads it. */
   listing?: Listing;
-  /** The last `list` that the receiver refused or did not answer. It counts as neither a listing nor a skip. */
-  listingFailed?: { website: string; to: string; at: string; status: number | null; detail: string };
+  /** The last `list` that the receiver refused or did not answer, with a reason from a fixed list and no word of the answer. It counts as neither a listing nor a skip. */
+  listingFailed?: { website: string; to: string; at: string; status: number | null; reason: string };
 }
 
 /** The listing step's record: a website sent to the list, or a skip. */
@@ -202,6 +202,15 @@ export function placeProblems(folder: string, card: string): Array<{ flag: strin
   return out;
 }
 
+/** Another live run holds the folder's lock; `pid` is its process number, or NaN when the lock does not name one. */
+export class LockHeld extends Error {
+  readonly pid: number;
+  constructor(message: string, pid: number) {
+    super(message);
+    this.pid = pid;
+  }
+}
+
 /**
  * Runs `body` as the one run working in `folder`: crow.lock names this process. A run that finds the lock of a live
  * process waits up to `waitMs` (0: not at all) and then says so; the lock of a process that is gone is taken over.
@@ -230,7 +239,7 @@ export async function locked<T>(folder: string, waitMs: number, body: () => T | 
       }
     }
     if (gone) rmSync(lock, { force: true });
-    else if (Date.now() >= end) throw new Error(`another run of this command${Number.isSafeInteger(pid) ? ` (process ${pid})` : ''} is working in ${folder}: wait for it to end. If none is, delete ${FILES.lock}`);
+    else if (Date.now() >= end) throw new LockHeld(`another run of this command${Number.isSafeInteger(pid) ? ` (process ${pid})` : ''} is working in ${folder}: wait for it to end. If none is, delete ${FILES.lock}`, pid);
   }
   try {
     return await body();

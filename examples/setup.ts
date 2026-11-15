@@ -15,10 +15,11 @@
 //                               that ended without a release; it never continues the ended one.
 //   node setup.mjs status       the folder's state: the role, the steps done, the addresses, the open deals. No secret.
 //   node setup.mjs list --website <https URL>
-//                               the listing step (T-486, D75): sends the website, and nothing else, to
+//                               the listing step (T-486, D76): sends the website, and nothing else, to
 //                               Crow's list of who uses it (setup-list.ts). `list --skip` records that the person
 //                               declined and sends nothing. No deal depends on it: first-deal prints one advisory line
-//                               when the folder has neither, and goes on. It opens no file under keys/.
+//                               when the folder has neither, and goes on. It opens no file under keys/, takes the
+//                               folder's lock before it sends, and prints no word of the receiver's answer.
 //
 // Every setting is a flag: --folder <path> (default ~/.crow/<name>), --name <name> (default seller), --operators
 // <url>,<url> (default Crow's two), --buyer <url> (default Crow's test buyer), --list-at <url> (default Crow's list)
@@ -50,7 +51,7 @@ import { fromParty, same, sleep, TEST_BUYER } from './goal-kit.ts';
 import { plain as plainLine } from './plain.ts';
 import { dealKeyOf, holdingKeyOf, loadConfig, startSellerAdapter, type RunningAdapter } from './seller-adapter.ts';
 import { runChecks } from './setup-check.ts';
-import { list, listingAdvice, LISTING_URL } from './setup-list.ts';
+import { list, listingAdvice, listingOf, LISTING_URL } from './setup-list.ts';
 import { SAMPLE, SAMPLE_PRICE_UNITS, startSampleApi, type SampleApi } from './setup-sample-api.ts';
 import { addressOf, FILES, formsOf, holdingAddressOf, locked, readKey, readState, realPath, seller, writeState, writeWhole, type Call, type FirstDeal, type J, type State } from './setup-seller.ts';
 import { commitmentIdOf, jcs, knownPins } from './verify.ts';
@@ -130,7 +131,13 @@ const isHttp = (u: string): boolean => {
 /** Whether `u` names this machine: localhost, a name under it, or a loopback or unspecified address. */
 const isLocal = (u: string): boolean => {
   const host = new URL(u).hostname.toLowerCase().replace(/^\[|\]$/g, '').replace(/\.$/, '');
-  return host === 'localhost' || host.endsWith('.localhost') || /^127\./.test(host) || host === '::1' || host === '0.0.0.0' || host === '::' || /^::ffff:127\./.test(host);
+  if (host === 'localhost' || host.endsWith('.localhost') || /^127\./.test(host) || host === '::1' || host === '0.0.0.0' || host === '::' || /^::ffff:127\./.test(host)) return true;
+  // An IPv4 address written inside an IPv6 one, as the URL parser writes it, in hex: ::ffff:7f00:1 and ::7f00:1 are
+  // 127.0.0.1, and ::ffff:0:0 is 0.0.0.0.
+  const inside = /^::(?:ffff:)?([0-9a-f]{1,4}):([0-9a-f]{1,4})$/.exec(host);
+  if (!inside) return false;
+  const high = parseInt(inside[1]!, 16), low = parseInt(inside[2]!, 16);
+  return high >> 8 === 127 || (high === 0 && low === 0);
 };
 /** Why `u` is not a host the live service's commands may call, or '' when it is: https, and not this machine. */
 const notLiveHost = (u: string): string => (new URL(u).protocol !== 'https:' ? 'is not https' : isLocal(u) ? 'is this machine' : '');
@@ -164,12 +171,17 @@ function status(c: Call): number {
     // no journal yet: no deal has started
   }
   const deal = (d: FirstDeal | undefined) => (d === undefined ? null : Object.fromEntries(Object.entries(d).filter(([k]) => k !== 'journalBefore').map(([k, v]) => [k, plain(v, 300)])));
-  c.say({ step: 'status', folder: c.folder, exists: true, role: plain(state.role, 20), sells: plain(state.sells, 20), name: plain(state.name, 40), steps: Object.keys(state.steps).map((s) => plain(s, 40)), address: state.address === undefined ? null : plain(state.address, 42), payout: state.payout ? { address: plain(state.payout.address, 42), thisKey: state.payout.thisKey === true } : null, card: state.card === undefined ? null : plain(state.card, 300), firstDeal: deal(state.firstDeal), ended: (state.ended ?? []).map(deal), openDeals: open, listing: shown(state.listing), ...(state.listingFailed ? { listingFailed: shown(state.listingFailed) } : {}) });
+  c.say({ step: 'status', folder: c.folder, exists: true, role: plain(state.role, 20), sells: plain(state.sells, 20), name: plain(state.name, 40), steps: Object.keys(state.steps).map((s) => plain(s, 40)), address: state.address === undefined ? null : plain(state.address, 42), payout: state.payout ? { address: plain(state.payout.address, 42), thisKey: state.payout.thisKey === true } : null, card: state.card === undefined ? null : plain(state.card, 300), firstDeal: deal(state.firstDeal), ended: (state.ended ?? []).map(deal), openDeals: open, listing: shown(listingOf(state)), ...(failedListingOf(state) ? { listingFailed: shown(failedListingOf(state)) } : {}) });
   return 0;
 }
-/** A record from the state file as plain values of bounded length; null when there is none. */
+/** A record from the state file as plain values of bounded length; null when there is none. A value that is no text, number or truth value is left out. */
 const shown = (record: object | undefined): Record<string, unknown> | null =>
-  record === undefined ? null : Object.fromEntries(Object.entries(record).map(([k, v]) => [k, typeof v === 'boolean' || typeof v === 'number' || v === null ? v : plain(v, 300)]));
+  record === undefined ? null : Object.fromEntries(Object.entries(record).filter(([, v]) => ['string', 'number', 'boolean'].includes(typeof v) || v === null).map(([k, v]) => [plain(k, 40), typeof v === 'string' ? plain(v, 300) : v]));
+/** The folder's record of a failed listing when it is one; anything else in its place is read as absent. */
+const failedListingOf = (state: { listingFailed?: unknown }): object | undefined => {
+  const f = state.listingFailed as { website?: unknown } | null | undefined;
+  return f !== null && typeof f === 'object' && !Array.isArray(f) && typeof f.website === 'string' ? f : undefined;
+};
 
 /** `list`: its flags, checked before anything is sent; the step itself is setup-list.ts. */
 async function listStep(c: Call): Promise<number> {
@@ -178,6 +190,8 @@ async function listStep(c: Call): Promise<number> {
   if (skip && website !== undefined) throw new WrongCall('give --website or --skip, not both. Nothing was sent');
   const given = c.flags.get('--list-at');
   if (given !== undefined && !isHttp(given)) throw new WrongCall('--list-at takes the address that receives the listing, such as ' + LISTING_URL);
+  // A user name or a password in the address would be saved in crow.json and printed. The message does not repeat it.
+  if (given !== undefined && (new URL(given).username !== '' || new URL(given).password !== '')) throw new WrongCall('--list-at must carry no user name and no password. Nothing was sent');
   if (skip || website === undefined) return list(c, { skip });
   const to = given ?? (c.testWorld ? undefined : LISTING_URL);
   if (to === undefined) throw new WrongCall("--test-world needs --list-at: the test world's own receiver of the listing. Nothing was sent");
@@ -349,7 +363,7 @@ async function runFirstDeal(c: Call, state: State, buyerUrl: string, again: bool
 
   const key = readKey(c.folder);
   const payout = state.payout!;
-  // The listing step is Crow's ask and never a gate (T-486, D75): with neither a listing nor a skip, one advisory line.
+  // The listing step is Crow's ask and never a gate (T-486, D76): with neither a listing nor a skip, one advisory line.
   const advice = listingAdvice(state);
   if (advice !== undefined) c.note({ step: 'list', advisory: true, detail: advice });
   // 2. What the command is about to send, and to whom, before it sends anything.

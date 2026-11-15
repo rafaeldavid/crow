@@ -59003,6 +59003,14 @@ function placeProblems(folder, card) {
 	});
 	return out;
 }
+/** Another live run holds the folder's lock; `pid` is its process number, or NaN when the lock does not name one. */
+var LockHeld = class extends Error {
+	pid;
+	constructor(message, pid) {
+		super(message);
+		this.pid = pid;
+	}
+};
 /**
 * Runs `body` as the one run working in `folder`: crow.lock names this process. A run that finds the lock of a live
 * process waits up to `waitMs` (0: not at all) and then says so; the lock of a process that is gone is taken over.
@@ -59032,7 +59040,7 @@ async function locked(folder, waitMs, body) {
 			gone = e.code === "ESRCH";
 		}
 		if (gone) rmSync(lock, { force: true });
-		else if (Date.now() >= end) throw new Error(`another run of this command${Number.isSafeInteger(pid) ? ` (process ${pid})` : ""} is working in ${folder}: wait for it to end. If none is, delete ${FILES.lock}`);
+		else if (Date.now() >= end) throw new LockHeld(`another run of this command${Number.isSafeInteger(pid) ? ` (process ${pid})` : ""} is working in ${folder}: wait for it to end. If none is, delete ${FILES.lock}`, pid);
 	}
 	try {
 		return await body();
@@ -59477,6 +59485,8 @@ async function runChecks(folder) {
 /** Where the listing goes unless --list-at names another receiver: Crow's sign-up Worker (apps/early-access/listing.js). */
 const LISTING_URL = "https://join.crow.direct/listing";
 const WEBSITE_CHARS = 200;
+/** The most bytes of the receiver's answer the command reads. */
+const ANSWER_BYTES = 4096;
 /** Names that are never a public website: this machine, a local network, a private zone. */
 const LOCAL_ENDINGS = [
 	".localhost",
@@ -59484,43 +59494,85 @@ const LOCAL_ENDINGS = [
 	".internal",
 	".home.arpa"
 ];
+/** One label of a host name: lower-case letters, digits and hyphens, with no hyphen at either end. */
+const LABEL = /^[a-z0-9]([a-z0-9-]{0,61}[a-z0-9])?$/;
 const plain$1 = (s, max = 300) => plain$4(String(s ?? "")).slice(0, max);
 const QUESTION = "What is your website? Crow asks each party that sets Crow up to send its website, so Crow can keep a list of who uses it. Give an https address (--website https://your-site.example), or decline (--skip). No deal depends on the answer.";
 const NO_GATE = "No deal depends on the list: first-deal runs as before.";
 /** What an entry on the list means, in the words the preview and setup.txt share. */
 const ENTRY_MEANS = "Crow keeps the website as a potential partner. Crow may later read the site to see whether it publishes a Crow card. The entry proves nothing about who sent it. Skipping changes nothing about a deal.";
+/** Why a listing was not taken: the only words a failure's line and record carry. Each is chosen by the answer's status, never read from the answer. */
+const REASONS = Object.freeze({
+	refused: "the receiver refused the request",
+	noRoute: "the receiver has no listing route at that address, so the list may not be deployed there yet",
+	busy: "the receiver has taken too many requests for now, which may be another caller's doing",
+	failed: "the receiver failed",
+	redirect: "the receiver answered with a redirect, which this command does not follow",
+	noAnswer: "the receiver did not answer",
+	slow: "the receiver did not answer in time",
+	notTaken: "the receiver answered 200 with a body this command does not take",
+	other: "the receiver gave an answer this command does not know"
+});
+const reasonFor = (status) => status === 200 ? REASONS.notTaken : status >= 300 && status < 400 ? REASONS.redirect : status === 404 || status === 405 ? REASONS.noRoute : status === 429 ? REASONS.busy : status >= 400 && status < 500 ? REASONS.refused : status >= 500 && status < 600 ? REASONS.failed : REASONS.other;
 /**
-* The website as the URL parser writes it, `{ website }`, or why it is refused, `{ error }`: an https address of a
-* public name, with no user name, password, query, fragment or port, of at most 200 characters. The receiver applies
-* the same rule (apps/early-access/listing.js); tests/early-access-listing.test.ts holds the two together.
+* The website as the URL parser writes it, `{ website }`, or why it is refused, `{ error }`. A website is a site's own
+* address, an origin: https, a public name of lower-case letters, digits, dots and hyphens (an internationalised name
+* in its xn-- form), and nothing else: no path, query, fragment, user name, password or port. So one site is one
+* website, and nothing but a host name can ride in it. The receiver applies the same rule
+* (apps/early-access/listing.js); tests/early-access-listing.test.ts holds the two together.
 */
 function websiteOf(text) {
-	if (typeof text !== "string" || text === "") return { error: "--website takes an https address, such as https://your-site.example" };
+	if (typeof text !== "string" || text === "") return { error: "--website takes a site's https address, such as https://your-site.example" };
 	let u;
 	try {
 		u = new URL(text);
 	} catch {
-		return { error: "--website is not an address: give an https address, such as https://your-site.example" };
+		return { error: "--website is not an address: give a site's https address, such as https://your-site.example" };
 	}
 	if (u.protocol !== "https:") return { error: "--website must start with https://" };
 	if (u.username !== "" || u.password !== "") return { error: "--website must carry no user name or password: it would be sent with it" };
-	if (u.href.includes("?") || u.href.includes("#")) return { error: "--website must carry no query and no fragment: a site's address needs neither, and a query can hold a credential" };
 	if (u.port !== "") return { error: "--website must carry no port" };
-	const host = u.hostname.toLowerCase();
+	if (u.pathname !== "/" || u.href.includes("?") || u.href.includes("#")) return { error: "--website is the site's own address and nothing after it: no path, no query and no fragment, such as https://your-site.example" };
+	const host = u.hostname;
 	if (host.startsWith("[") || /^\d+(\.\d+){3}$/.test(host)) return { error: "--website must name a site, not an IP address" };
-	if (!host.includes(".") || host.endsWith(".") || host === "localhost" || LOCAL_ENDINGS.some((end) => host.endsWith(end))) return { error: "--website must be a public name, such as your-site.example" };
+	if (!host.includes(".") || !host.split(".").every((label) => LABEL.test(label))) return { error: "--website must be a public name of letters, digits, dots and hyphens, such as your-site.example" };
+	if (host === "localhost" || LOCAL_ENDINGS.some((end) => host.endsWith(end))) return { error: "--website must be a public name, such as your-site.example" };
 	if (u.href.length > WEBSITE_CHARS) return { error: `--website must be at most ${WEBSITE_CHARS} characters` };
 	return { website: u.href };
 }
+/** The folder's listing record when it is one: a website that was sent, or a skip. Anything else in its place is read as absent. */
+function listingOf(state) {
+	const l = state.listing;
+	if (l === null || typeof l !== "object" || Array.isArray(l)) return void 0;
+	return l.skipped === true || typeof l.website === "string" ? l : void 0;
+}
 /** The one advisory line first-deal prints when the folder has neither a listing nor a skip; undefined when it has one. */
 function listingAdvice(state) {
-	if (state.listing !== void 0) return void 0;
-	return "Crow asks each party to send its website to Crow's list of who uses it: run list --website <https URL> with this file, or list --skip to decline. This deal does not depend on it and goes on.";
+	if (listingOf(state) !== void 0) return void 0;
+	return "Crow asks each party to send its website to Crow's list of who uses it: after this deal ends, run list --website <https URL> with this file, or list --skip to decline. This deal does not depend on it and goes on.";
+}
+/** At most `max` bytes of a response's body as text, or null when it holds more. The rest is not read. */
+async function readCapped(r, max) {
+	if (!r.body) return "";
+	const reader = r.body.getReader();
+	const chunks = [];
+	let size = 0;
+	for (;;) {
+		const { done, value } = await reader.read();
+		if (done) break;
+		size += value.byteLength;
+		if (size > max) {
+			await reader.cancel().catch(() => void 0);
+			return null;
+		}
+		chunks.push(value);
+	}
+	return Buffer.concat(chunks).toString("utf8");
 }
 /**
 * Runs the listing step. `o.to` is the receiver's address, already checked by the caller; it is undefined only when
-* nothing will be sent. Returns the exit status: 0 sent and taken, or the skip recorded; 1 refused or not answered;
-* 3 the answer is missing.
+* nothing will be sent. Returns the exit status: 0 sent and taken, or the skip recorded; 1 refused, not answered, or
+* the folder is held by another run; 3 the answer is missing.
 */
 async function list(c, o) {
 	if (!readState(c.folder)) {
@@ -59531,25 +59583,7 @@ async function list(c, o) {
 		});
 		return 1;
 	}
-	if (o.skip) {
-		await locked(c.folder, 3e4, () => {
-			const state = readState(c.folder);
-			state.listing = {
-				skipped: true,
-				at: (/* @__PURE__ */ new Date()).toISOString()
-			};
-			writeState(c.folder, state);
-		});
-		c.say({
-			step: "list",
-			ok: true,
-			skipped: true,
-			sent: "nothing",
-			detail: `Recorded: this folder sends no website to the list. ${NO_GATE} To list later, run list --website <https URL>.`
-		});
-		return 0;
-	}
-	if (o.website === void 0) {
+	if (!o.skip && o.website === void 0) {
 		c.say({
 			step: "list",
 			ok: false,
@@ -59563,8 +59597,8 @@ async function list(c, o) {
 		});
 		return 3;
 	}
-	const w = websiteOf(o.website);
-	if ("error" in w) {
+	const w = o.skip ? void 0 : websiteOf(o.website);
+	if (w !== void 0 && "error" in w) {
 		c.say({
 			step: "list",
 			ok: false,
@@ -59572,80 +59606,143 @@ async function list(c, o) {
 		});
 		return 1;
 	}
-	const to = o.to;
-	const body = { website: w.website };
-	c.say({
-		step: "preview",
-		sends: [{
-			to,
-			what: "one POST with this body and nothing else: no role, no address, no key, no name.",
-			body
-		}],
-		receiverSees: "The website and this machine's IP address. Whoever runs the receiver and the faucet, as Crow does, can tie the website to the fresh keys the same IP address asks the faucet for.",
-		means: ENTRY_MEANS,
-		kept: "The list is Crow's own record. This version publishes nothing from it and has no command that takes a website off it."
-	});
-	let status = null;
-	let answer = null;
-	let failure = "";
+	let asked = false, sent = false, said = false, code = 1;
+	const last = (line, status) => {
+		said = true;
+		code = status;
+		c.say(line);
+		return status;
+	};
 	try {
-		const r = await fetch(to, {
-			method: "POST",
-			headers: { "content-type": "application/json" },
-			body: JSON.stringify(body),
-			redirect: "manual",
-			signal: AbortSignal.timeout(15e3)
-		});
-		status = r.status;
-		answer = await r.json().catch(() => null);
-	} catch (e) {
-		const cause = e.cause?.code;
-		failure = `the receiver did not answer (${plain$1(e.message, 120)}${cause ? `, ${plain$1(cause, 40)}` : ""})`;
-	}
-	const at = (/* @__PURE__ */ new Date()).toISOString();
-	if (status !== 200 || answer?.ok !== true) {
-		const detail = failure || `the receiver answered ${status}${status !== null && status >= 300 && status < 400 ? ", a redirect, which this command does not follow" : ""}${answer?.error ? `: ${plain$1(answer.error, 200)}` : ""}`;
-		await locked(c.folder, 3e4, () => {
+		return await locked(c.folder, 0, async () => {
 			const state = readState(c.folder);
-			state.listingFailed = {
-				website: w.website,
+			const before = listingOf(state);
+			if (o.skip) {
+				if (before !== void 0 && "website" in before) return last({
+					step: "list",
+					ok: true,
+					skipped: false,
+					sent: "nothing",
+					website: plain$1(before.website, 200),
+					detail: `This folder already sent ${plain$1(before.website, 200)} to the list, and this version cannot take a website off the list. The record stays. Nothing was sent now. ${NO_GATE}`
+				}, 0);
+				state.listing = {
+					skipped: true,
+					at: (/* @__PURE__ */ new Date()).toISOString()
+				};
+				writeState(c.folder, state);
+				return last({
+					step: "list",
+					ok: true,
+					skipped: true,
+					sent: "nothing",
+					detail: `Recorded: this folder sends no website to the list. ${NO_GATE} To list later, run list --website <https URL>.`
+				}, 0);
+			}
+			const website = w.website;
+			const to = o.to;
+			const body = { website };
+			c.say({
+				step: "preview",
+				sends: [{
+					to,
+					what: "one POST with this body and nothing else: no role, no address, no key, no name.",
+					body
+				}],
+				receiverSees: "The website and this machine's IP address. Whoever runs the receiver and the faucet, as Crow does, can tie the website to the fresh keys the same IP address asks the faucet for. It could also tie the website to this folder's deals by the time of its first offer, and through the public payout address to every deal of the folder.",
+				means: ENTRY_MEANS,
+				kept: "The list is Crow's own record. This version publishes nothing from it and has no command that takes a website off it."
+			});
+			let status = null;
+			let reason = "";
+			asked = true;
+			try {
+				const r = await fetch(to, {
+					method: "POST",
+					headers: { "content-type": "application/json" },
+					body: JSON.stringify(body),
+					redirect: "manual",
+					signal: AbortSignal.timeout(c.testWorld ? 2e3 : 15e3)
+				});
+				status = r.status;
+				let ok = false;
+				if (status === 200) {
+					const text = await readCapped(r, ANSWER_BYTES);
+					try {
+						ok = text !== null && JSON.parse(text)?.ok === true;
+					} catch {
+						ok = false;
+					}
+				} else await r.body?.cancel().catch(() => void 0);
+				if (!ok) reason = reasonFor(status);
+			} catch (e) {
+				reason = e?.name === "TimeoutError" ? REASONS.slow : REASONS.noAnswer;
+			}
+			const at = (/* @__PURE__ */ new Date()).toISOString();
+			if (reason !== "") {
+				state.listingFailed = {
+					website,
+					to,
+					at,
+					status,
+					reason
+				};
+				writeState(c.folder, state);
+				return last({
+					step: "list",
+					ok: false,
+					website,
+					to,
+					status,
+					reason,
+					detail: `Nothing was listed: ${reason}. ${NO_GATE} Run the same command again later, or list --skip.`
+				}, 1);
+			}
+			sent = true;
+			state.listing = {
+				website,
 				to,
 				at,
-				status,
-				detail: plain$1(detail, 300)
+				status: 200
 			};
+			delete state.listingFailed;
 			writeState(c.folder, state);
+			return last({
+				step: "list",
+				ok: true,
+				website,
+				to,
+				means: ENTRY_MEANS,
+				detail: NO_GATE
+			}, 0);
 		});
-		c.say({
+	} catch (e) {
+		if (e instanceof LockHeld) return last({
 			step: "list",
 			ok: false,
+			detail: `Nothing was sent: another run of this command (process ${Number.isSafeInteger(e.pid) ? e.pid : "unknown"}) is working in this folder, as first-deal does for a whole deal. Run list again when it has ended. ${NO_GATE}`
+		}, 1);
+		if (said) return code;
+		const why = plain$1(e?.message, 200);
+		if (sent) return last({
+			step: "list",
+			ok: false,
+			sent: true,
 			website: w.website,
-			to,
-			status,
-			detail: `Nothing was listed: ${plain$1(detail, 300)}. ${NO_GATE} Run the same command again later, or list --skip.`
-		});
-		return 1;
+			to: o.to,
+			detail: `The website was sent and the receiver took it, and this folder's crow.json could not be written (${why}), so the folder holds no record of it. Do not send it again: the list has it. ${NO_GATE}`
+		}, 1);
+		if (asked) return last({
+			step: "list",
+			ok: false,
+			detail: `Nothing was listed, and this folder's crow.json could not be written (${why}). ${NO_GATE}`
+		}, 1);
+		return last({
+			step: "list",
+			ok: false,
+			detail: `Nothing was sent: this folder could not be taken or written (${why}). ${NO_GATE}`
+		}, 1);
 	}
-	await locked(c.folder, 3e4, () => {
-		const state = readState(c.folder);
-		state.listing = {
-			website: w.website,
-			to,
-			at,
-			status: 200
-		};
-		delete state.listingFailed;
-		writeState(c.folder, state);
-	});
-	c.say({
-		step: "list",
-		ok: true,
-		website: w.website,
-		to,
-		means: ENTRY_MEANS,
-		detail: NO_GATE
-	});
-	return 0;
 }
 
 // examples/setup.ts
@@ -59766,7 +59863,11 @@ const isHttp = (u) => {
 /** Whether `u` names this machine: localhost, a name under it, or a loopback or unspecified address. */
 const isLocal = (u) => {
 	const host = new URL(u).hostname.toLowerCase().replace(/^\[|\]$/g, "").replace(/\.$/, "");
-	return host === "localhost" || host.endsWith(".localhost") || /^127\./.test(host) || host === "::1" || host === "0.0.0.0" || host === "::" || /^::ffff:127\./.test(host);
+	if (host === "localhost" || host.endsWith(".localhost") || /^127\./.test(host) || host === "::1" || host === "0.0.0.0" || host === "::" || /^::ffff:127\./.test(host)) return true;
+	const inside = /^::(?:ffff:)?([0-9a-f]{1,4}):([0-9a-f]{1,4})$/.exec(host);
+	if (!inside) return false;
+	const high = parseInt(inside[1], 16), low = parseInt(inside[2], 16);
+	return high >> 8 === 127 || high === 0 && low === 0;
 };
 /** Why `u` is not a host the live service's commands may call, or '' when it is: https, and not this machine. */
 const notLiveHost = (u) => new URL(u).protocol !== "https:" ? "is not https" : isLocal(u) ? "is this machine" : "";
@@ -59821,13 +59922,22 @@ function status(c) {
 		firstDeal: deal(state.firstDeal),
 		ended: (state.ended ?? []).map(deal),
 		openDeals: open,
-		listing: shown(state.listing),
-		...state.listingFailed ? { listingFailed: shown(state.listingFailed) } : {}
+		listing: shown(listingOf(state)),
+		...failedListingOf(state) ? { listingFailed: shown(failedListingOf(state)) } : {}
 	});
 	return 0;
 }
-/** A record from the state file as plain values of bounded length; null when there is none. */
-const shown = (record) => record === void 0 ? null : Object.fromEntries(Object.entries(record).map(([k, v]) => [k, typeof v === "boolean" || typeof v === "number" || v === null ? v : plain(v, 300)]));
+/** A record from the state file as plain values of bounded length; null when there is none. A value that is no text, number or truth value is left out. */
+const shown = (record) => record === void 0 ? null : Object.fromEntries(Object.entries(record).filter(([, v]) => [
+	"string",
+	"number",
+	"boolean"
+].includes(typeof v) || v === null).map(([k, v]) => [plain(k, 40), typeof v === "string" ? plain(v, 300) : v]));
+/** The folder's record of a failed listing when it is one; anything else in its place is read as absent. */
+const failedListingOf = (state) => {
+	const f = state.listingFailed;
+	return f !== null && typeof f === "object" && !Array.isArray(f) && typeof f.website === "string" ? f : void 0;
+};
 /** `list`: its flags, checked before anything is sent; the step itself is setup-list.ts. */
 async function listStep(c) {
 	const skip = c.flags.has("--skip");
@@ -59835,6 +59945,7 @@ async function listStep(c) {
 	if (skip && website !== void 0) throw new WrongCall("give --website or --skip, not both. Nothing was sent");
 	const given = c.flags.get("--list-at");
 	if (given !== void 0 && !isHttp(given)) throw new WrongCall("--list-at takes the address that receives the listing, such as " + LISTING_URL);
+	if (given !== void 0 && (new URL(given).username !== "" || new URL(given).password !== "")) throw new WrongCall("--list-at must carry no user name and no password. Nothing was sent");
 	if (skip || website === void 0) return list(c, { skip });
 	const to = given ?? (c.testWorld ? void 0 : "https://join.crow.direct/listing");
 	if (to === void 0) throw new WrongCall("--test-world needs --list-at: the test world's own receiver of the listing. Nothing was sent");
