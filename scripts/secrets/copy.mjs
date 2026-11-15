@@ -57,10 +57,12 @@ const known = new Set(entries.map((e) => e.name));
 // A wrapped value can parse as a "name"; only names shaped like a variable are printed, the rest are counted.
 const extra = Object.keys(local).filter((n) => !known.has(n) && isName(n)).sort();
 const odd = Object.keys(local).filter((n) => !isName(n)).length;
-const toCopy = entries.filter((e) => e.ref && local[e.name]);
+// Only the Crow vault's keys are copied: a key in another vault (T-485, the development host's) never came from the file.
+const toCopy = entries.filter((e) => e.ref && e.ref.vault === VAULT && local[e.name]);
 const status = new Map();
 for (const e of entries) {
   if (e.plain) status.set(e.name, 'plain configuration in the references file, not copied');
+  else if (e.ref.vault !== VAULT) status.set(e.name, `in the vault ${e.ref.vault}, which Rafa fills by hand; not copied`);
   else if (!local[e.name]) status.set(e.name, 'missing in the file');
   else status.set(e.name, 'not reached: the copy stopped before it');
 }

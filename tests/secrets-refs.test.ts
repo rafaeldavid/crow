@@ -5,7 +5,7 @@ import { readdirSync, readFileSync } from 'node:fs';
 import { join } from 'node:path';
 import { describe, expect, it } from 'vitest';
 // @ts-expect-error: a plain .mjs module with no type declarations
-import { lengthClass, loadRefs, parseRefs, PLAIN, redact } from '../scripts/secrets/refs.mjs';
+import { lengthClass, loadRefs, parseRefs, PLAIN, redact, VAULTS } from '../scripts/secrets/refs.mjs';
 
 const ROOT = join(import.meta.dirname, '..');
 const DIR = join(ROOT, 'config', 'secrets');
@@ -23,11 +23,20 @@ describe('config/secrets', () => {
     expect(entries.length).toBeGreaterThan(0);
   });
 
-  it('names each item once, in the crow vault, field credential', () => {
+  it('names each item once, in the crow vault, field credential, except the development host in its own vault', () => {
     const { entries } = loadRefs([DIR]);
-    const items = entries.filter((e: { ref?: unknown }) => e.ref).map((e: { ref: { vault: string; item: string; field: string } }) => e.ref);
-    expect(new Set(items.map((r: { item: string }) => r.item)).size).toBe(items.length);
-    for (const r of items) expect([r.vault, r.field]).toEqual(['crow', 'credential']);
+    const refs = entries.filter((e: { ref?: unknown }) => e.ref) as { file: string; ref: { vault: string; item: string; field: string } }[];
+    expect(new Set(refs.map((e) => `${e.ref.vault}/${e.ref.item}`)).size).toBe(refs.length);
+    for (const e of refs) expect([e.ref.vault, e.ref.field]).toEqual([e.file.endsWith('/dev-host.refs') ? 'crow-agents' : 'crow', 'credential']);
+  });
+
+  it('keeps the development host to its one vault, and every other file out of it (T-485)', () => {
+    expect(VAULTS).toEqual({ 'dev-host.refs': 'crow-agents' });
+    expect(parseRefs('A_KEY=op://crow/a/credential', 'config/secrets/dev-host.refs').errors.length).toBe(1);
+    expect(parseRefs('A_KEY=op://crow-agents/a/credential', 'config/secrets/judges.refs').errors.length).toBe(1);
+    expect(parseRefs('A_KEY=op://crow-agents/a/credential', 'config/secrets/dev-host.refs').errors).toEqual([]);
+    const names = loadRefs([join(DIR, 'dev-host.refs')]).entries.map((e: { name: string }) => e.name);
+    expect(names).toEqual(['CROW_AGENTS_GITHUB_TOKEN', 'DIGITALOCEAN_ACCESS_TOKEN', 'HOLDBACK_PARTY_ANTHROPIC_API_KEY']);
   });
 
   it('carries the live judges, the agents and the e2e seed', () => {
