@@ -214,7 +214,7 @@ Measured on 2026-11-15 in the worktree, at the branch's tip, unless a line says 
 
 Choices made inside this task. Escalate anything that changes architecture, a contract or a defense to an ADR.
 
-**Rafa's change during the build (2026-11-15).** "we can remove that -- only need the website and this registry should be recorded in maybe a worker / or the private repo, since then we can just check if they have public crow protocol connection (e.g. broadcast in some way)". So the request carries the website alone, the route fetches nothing and stores no mark, and the check is a script a person runs later. Phase A's role field, its `verified` mark and its card fetch inside the route were built first and removed before any commit; no commit of this branch holds them. D75 records the same.
+**Rafa's change during the build (2026-11-15).** "we can remove that -- only need the website and this registry should be recorded in maybe a worker / or the private repo, since then we can just check if they have public crow protocol connection (e.g. broadcast in some way)". So the request carries the website alone, the route fetches nothing and stores no mark, and the check is a script a person runs later. Phase A's role field, its `verified` mark and its card fetch inside the route were built first and removed before any commit, so no commit of this branch holds that code. The branch's first two commits hold Phase A's draft of this file and of D75, which describe it; the last commit replaces both. D75 records the change.
 
 **Choices that stand from Phase A, accepted by the coordinator.**
 

@@ -10,8 +10,9 @@
 // not copied: the Worker answers JSON only, and the sign-up form it serves is a drawer on crow.direct's own pages,
 // under the site's policy. CORS stays as below: crow.direct's pages post here across origins, and a resource policy
 // does not apply to a CORS request. Plain HTTP gets a 301 for a read and a 308 for a write, to HTTPS.
-// T-486 (D75): POST /listing takes a website and a role from a party's own setup command, for Crow's list of who uses
-// it, and stores them in the same namespace under the prefix listing: (listing.js). No deal reads that list.
+// T-486 (D75): POST /listing takes a website, and nothing else, from a party's own setup command, for Crow's list of
+// who uses it, and stores it in the same namespace under the prefix listing: (listing.js). The list is private: no
+// route here serves an entry, and no deal reads it.
 import { buildInfo, buildResponse, isBuildRead } from '../site/build-info.js';
 import { secured } from '../demo-cloud/src/headers.ts';
 import { LISTING_PATH, listing } from './listing.js';
