@@ -10,8 +10,11 @@
 // not copied: the Worker answers JSON only, and the sign-up form it serves is a drawer on crow.direct's own pages,
 // under the site's policy. CORS stays as below: crow.direct's pages post here across origins, and a resource policy
 // does not apply to a CORS request. Plain HTTP gets a 301 for a read and a 308 for a write, to HTTPS.
+// T-486 (D75): POST /listing takes a website and a role from a party's own setup command, for Crow's list of who uses
+// it, and stores them in the same namespace under the prefix listing: (listing.js). No deal reads that list.
 import { buildInfo, buildResponse, isBuildRead } from '../site/build-info.js';
 import { secured } from '../demo-cloud/src/headers.ts';
+import { LISTING_PATH, listing } from './listing.js';
 
 const ALLOWED = ['https://crow.direct', 'https://www.crow.direct', 'https://escrow.stream', 'https://www.escrow.stream', 'https://npc.here.now', 'https://mighty-canvas-c3tc.here.now'];
 const CANONICAL = 'https://join.crow.direct';
@@ -51,6 +54,7 @@ async function route(request, env) {
     return Response.redirect(`${CANONICAL}${url.pathname}${url.search}`, request.method === 'GET' || request.method === 'HEAD' ? 301 : 308);
   }
   if (isBuildRead(request, '/version.json')) return buildResponse(buildInfo({ worker: 'crow-early-access', commit: env.BUILD_COMMIT, metadata: env.CF_VERSION_METADATA }), request.method);
+  if (url.pathname === LISTING_PATH) return listing(request, env);
   if (url.pathname !== '/early-access' || request.method !== 'POST') return json(404, { error: 'not found' }, origin);
   if (!ALLOWED.includes(origin)) return json(403, { error: 'sign up from the ’crow site' }, origin);
   let body;
