@@ -15,9 +15,13 @@ import { join } from 'node:path';
 import { parseTermsYaml } from '@holdback/testkit';
 import { checkDelivery } from './check-delivery.ts';
 import { plain as plainLine } from './plain.ts';
-import { fill, holdingKeyOf, loadConfig, type SellerAdapterConfig } from './seller-adapter.ts';
-import { SAMPLE, SAMPLE_PRICE_UNITS, startSampleApi } from './setup-sample-api.ts';
+import type { Hex } from 'viem';
+import { dealKeyOf, fill, holdingKeyOf, loadConfig, type SellerAdapterConfig } from './seller-adapter.ts';
+import { SAMPLE, SAMPLE_PRICE_UNITS, sampleAddresses, startSampleApi } from './setup-sample-api.ts';
 import { FILES, formsOf, modeProblem, readKey, readState, type J } from './setup-seller.ts';
+
+/** The largest file the secrets check reads: 16 MiB. A key file is 67 bytes; a larger file is named, not read. */
+const MAX_SCANNED_BYTES = 16 * 1024 * 1024;
 
 export interface CheckResult {
   check: string;
@@ -77,19 +81,31 @@ function withoutAField(result: Uint8Array, format: string): { bytes: Uint8Array;
   return null;
 }
 
-/** Every file under `dir`, by its full path, leaving the folder `skip` out wherever it is reached. */
-function filesUnder(dir: string, skip: string): string[] {
-  const out: string[] = [];
+/** Every file under `dir`, by its full path, leaving the folder `skip` out wherever it is reached. A link is listed, never followed. */
+function filesUnder(dir: string, skip: string): { files: string[]; links: string[] } {
+  const files: string[] = [], links: string[] = [];
   const walk = (at: string) => {
     for (const entry of readdirSync(at, { withFileTypes: true })) {
       const path = join(at, entry.name);
       if (path === skip) continue;
-      if (entry.isDirectory()) walk(path);
-      else if (entry.isFile()) out.push(path);
+      if (entry.isSymbolicLink()) links.push(path);
+      else if (entry.isDirectory()) walk(path);
+      else if (entry.isFile()) files.push(path);
     }
   };
   walk(dir);
-  return out;
+  return { files, links };
+}
+
+/** The key of each deal the folder's journal holds: each is derived from the signing key and the deal's own nonce. */
+function dealKeysOf(folder: string, key: Hex): Hex[] {
+  let deals: J[] = [];
+  try {
+    deals = Object.values((JSON.parse(readFileSync(join(folder, FILES.journal), 'utf8')) as J).deals ?? {});
+  } catch {
+    return []; // no journal yet: no deal, no deal key
+  }
+  return deals.map((d) => d?.terms?.nonce).filter((n): n is Hex => typeof n === 'string' && /^0x[0-9a-f]{64}$/.test(n)).map((n) => dealKeyOf(key, n));
 }
 
 /** Runs every check on the folder and returns the results in order. Writes only under the folder's sample/. */
@@ -117,9 +133,21 @@ export async function runChecks(folder: string): Promise<CheckResult[]> {
   await run('configuration', () => {
     const file = join(folder, FILES.configuration);
     const loaded = loadConfig(file);
-    if (typeof (JSON.parse(readFileSync(file, 'utf8')) as J).template !== 'string') throw new Error(`${FILES.configuration} names no template: this file carries none of its own, so name the folder's`);
+    const written = JSON.parse(readFileSync(file, 'utf8')) as J;
+    if (typeof written.template !== 'string') throw new Error(`${FILES.configuration} names no template: this file carries none of its own, so name the folder's`);
+    // The payout address the person gave is the one every offer will name: the adapter reads it from this file only.
+    const pays = typeof written.payoutAddress === 'string' ? written.payoutAddress.toLowerCase() : undefined;
+    if (!state?.payout || pays !== state.payout.address) throw new Error(`${FILES.configuration} pays ${plain(pays ?? 'the signing key, as it names no payoutAddress', 80)}, and the answer in ${FILES.state} is ${plain(state?.payout?.address ?? 'missing', 80)}: every offer would name the first. To change where you are paid, run the seller command with --payout`);
+    if (state.sells === 'sample') {
+      // A folder that sells the sample calls nothing but the sample API on the loopback address, at its one port.
+      const api = written.sellerApi as J;
+      const port = typeof api?.quote === 'string' && URL.canParse(api.quote) ? Number(new URL(api.quote).port) : 0;
+      const own = sampleAddresses(port);
+      if (!(port > 0) || Object.keys(api ?? {}).sort().join() !== 'quote,result,start' || api.quote !== own.quote || api.start !== own.start || api.result !== own.result) throw new Error(`${FILES.configuration} does not name the sample API at one port on the loopback address for all three calls, as the seller command wrote it: a job would start somewhere else`);
+      for (const field of ['alerts', 'quoteAuth', 'redelivery', 'reportMapping', 'mandate', 'clubId', 'adjudicators']) if (written[field] !== undefined) throw new Error(`${FILES.configuration} sets ${field}, which a folder that sells the sample does not use: remove it`);
+    }
     config = loaded;
-    return `the adapter's own loader takes ${FILES.configuration}`;
+    return `the adapter's own loader takes ${FILES.configuration}, which pays ${state.payout.address}`;
   });
 
   const scope = SAMPLE.firstScope;
@@ -165,15 +193,23 @@ export async function runChecks(folder: string): Promise<CheckResult[]> {
 
   await run('secrets', () => {
     const key = readKey(folder);
-    const forms = [...formsOf(key), ...formsOf(holdingKeyOf(key))];
+    // The signing key, the faucet holding key it derives, and the key of each deal in the journal.
+    const forms = [key, holdingKeyOf(key), ...dealKeysOf(folder, key)].flatMap(formsOf);
     // The folder and the card's folder, each file once; keys/ itself is left out wherever a walk reaches it.
-    const files = new Set([folder, ...(state?.card && existsSync(state.card) ? [state.card] : [])].flatMap((dir) => filesUnder(dir, join(folder, FILES.keys))));
+    const found = [folder, ...(state?.card && existsSync(state.card) ? [state.card] : [])].map((dir) => filesUnder(dir, join(folder, FILES.keys)));
+    const files = new Set(found.flatMap((f) => f.files)), links = [...new Set(found.flatMap((f) => f.links))];
+    const large: string[] = [];
     for (const path of files) {
-      if (statSync(path).size > 16 * 1024 * 1024) continue; // a key file is 67 bytes; a file this large is work, not a note
+      if (statSync(path).size > MAX_SCANNED_BYTES) {
+        large.push(path);
+        continue;
+      }
       const text = readFileSync(path, 'latin1');
       if (forms.some((f) => text.includes(f))) throw new Error(`${path} holds a key's value: a key belongs in ${FILES.keys}/ only. Remove it from that file`);
     }
-    return `no key's value in the ${files.size} files outside ${FILES.keys}/`;
+    return `no key's value in the ${files.size - large.length} files read outside ${FILES.keys}/`
+      + (large.length ? `; not read, as each is over ${MAX_SCANNED_BYTES} bytes: ${large.map((p) => plain(p, 200)).join(', ')}` : '')
+      + (links.length ? `; not followed, as each is a symbolic link: ${links.map((p) => plain(p, 200)).join(', ')}` : '');
   });
   return results;
 }

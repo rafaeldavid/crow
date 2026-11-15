@@ -75,7 +75,8 @@ export const sampleAddresses = (port: number) => ({ quote: `http://127.0.0.1:${p
  * port the system picks. A port another program holds stops the start, naming it.
  */
 export async function startSampleApi(token: string, port = 0): Promise<SampleApi> {
-  const jobs = new Map<string, { jobId: string; rows: number }>(); // by Idempotency-Key
+  // The API keeps nothing: a job's ID carries the one number its result is made from. So a run that stops between
+  // the job's start and the delivery loses nothing, and the next run's API answers for the same job.
   const rowsOf = (scope: J): number => {
     const rows = scope?.rows;
     if (!Number.isSafeInteger(rows) || rows < SAMPLE.scope.rows.min || rows > SAMPLE.scope.rows.max) throw new Error(`scope.rows must be a whole number from ${SAMPLE.scope.rows.min} to ${SAMPLE.scope.rows.max}`);
@@ -92,16 +93,11 @@ export async function startSampleApi(token: string, port = 0): Promise<SampleApi
       if (req.method === 'POST' && path === '/jobs') {
         const key = String(req.headers['idempotency-key'] ?? '');
         if (!key) return send(400, { detail: 'POST /jobs needs an Idempotency-Key' });
-        const rows = rowsOf((await json(req)).scope);
-        if (!jobs.has(key)) jobs.set(key, { jobId: `job-${jobs.size + 1}`, rows });
-        return send(200, { jobId: jobs.get(key)!.jobId });
+        return send(200, { jobId: `squares-${rowsOf((await json(req)).scope)}` });
       }
-      const result = /^\/jobs\/([^/]+)\/result$/.exec(path);
-      if (req.method === 'GET' && result) {
-        const job = [...jobs.values()].find((j) => j.jobId === result[1]);
-        if (!job) return send(404, { detail: 'no such job' });
-        return res.writeHead(200, { 'content-type': 'text/csv' }).end(sampleResult({ rows: job.rows }));
-      }
+      const result = /^\/jobs\/squares-([1-9][0-9]?)\/result$/.exec(path);
+      if (req.method === 'GET' && result) return res.writeHead(200, { 'content-type': 'text/csv' }).end(sampleResult({ rows: rowsOf({ rows: Number(result[1]) }) }));
+      if (req.method === 'GET' && /^\/jobs\/[^/]+\/result$/.test(path)) return send(404, { detail: 'no such job' });
       return send(404, { detail: 'not found' });
     })().catch((e: Error) => send(400, { detail: e.message }));
   });
