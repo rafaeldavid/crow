@@ -133,6 +133,40 @@ Crow hosting the seller (ADR-0037) stays a convenience for design partners. `set
 
 **Neutrality.** No step of the first three rows needs Crow's permission or Crow's account. Each needs what every deal on the live service already needs, and no more: a faucet mandate, an operator to relay the offer and the agreement, and adjudicators that accept the terms. The fourth row is outside the protocol: an agency relationship the party can end (ADR-0037, section 8).
 
+### Where the signer runs: Crow's own two machines, and the same answer for a party
+
+Rafa asked on 2026-11-15 what Crow's own two machines should run on (the agents' machine and the signer's machine of the own-agents design, T-439 and T-443), whether Cloudflare can do it, and for "something sustainable for development". Crow runs its own agents on the package a new party gets (Rafa, 2026-11-14), so one design answers both. Cloudflare's documentation was read on 2026-11-15; nothing was tested against a live account.
+
+**The signer's claim is that the agent cannot override it. That holds only where the agent has no way to change the signer or read its keys.** Two ways to get there:
+
+| | 1. Two small Linux VMs | 2. Cloudflare only |
+| --- | --- | --- |
+| What runs | The signer as built (`examples/signer.ts serve`: a Node server with a ledger on disk) on its own VM; the agent and the adapter on the other | The signer as its own Worker, with a Durable Object for the ledger and its keys as Worker secrets, no public address, called through a service binding from the adapter Worker |
+| What the claim rests on | A firewall rule so only the agents' VM reaches the signer's port, and no login from the agents' VM | The agent's API token carries a role on the adapter Worker only. Cloudflare's per-Worker roles and tokens scoped to named Workers exist since 2026-09-15 (measured, Cloudflare's Workers authorization page and changelog) |
+| Who can break it | Root on the signer's VM; whoever holds its SSH or console login; the VM's provider | The account's administrators; any token or member with the Editor role on the signer Worker, since Editor can deploy code that reads the keys (inferred); Cloudflare; **any agent session that can read an administrator's token** |
+| Still to prove | The boundary itself: the machines do not exist yet (T-439, "Still soft") | Four things the documentation leaves open: whether a token scoped to one Worker can bind to a Worker outside its scope; whether it can bind another Worker's Durable Object; whether the API ever returns a secret's value; whether the audit log records a secret overwrite (all inferred, none tested) |
+| What it cannot host | Nothing: the assistant has its shell on the agents' VM | An assistant needs a shell and files. Cloudflare's Containers and Sandbox give one, started from a Worker (measured, Cloudflare's Sandbox pages), at the price of a runner to build. Otherwise the assistant stays on a machine |
+| Cost to build | No code: provisioning, the firewall and a service unit (guessed: one session) | A port: the signer split into a core with no Node import and two shells, as ADR-0037 split the seller adapter. About 600 of the signer's 908 lines move to the core; a Worker shell of 250 to 350 lines; 300 to 500 lines of tests; every ledger and stop attack test run again on the Worker shell; one red-team pass (guessed: the size of the ADR-0037 build) |
+| What changes in the port | nothing | The rules file is bundled at deploy, so "the rules changed on disk" becomes "the rules change only by a deploy". The stop, the mandate's renewal and the revocations need a path only the administrator can use, because every public method of a bound Worker is callable by the agent (inferred). Preview addresses must be off as well as the `workers.dev` address (measured) |
+| Cost to run | Two small VMs, about USD 10 a month, plus patching (guessed) | Inside the Workers plan Crow already pays (guessed) |
+| A development copy | A second pair of VMs the agents may rebuild freely, with test keys, under credentials that cannot touch the real pair | A second pair of Workers **in a second account**. In one account, a token for the rehearsal adapter could bind to the real signer, and the roles apply only to Workers an administrator has already created (measured rule; inferred conclusion) |
+
+**Is a permission boundary inside one account as hard as a network and login boundary between two machines? It is the same rung, 3, and a weaker instance of it.**
+
+- Both are enforced by someone who is not the agent: an operating system and a network in one case, Cloudflare's permission system in the other. Neither is by construction or on chain.
+- Both fail the same way: an agent that holds the administrator's credential owns the signer. On a VM that credential is an SSH key. On Cloudflare it is an account token, and this repository's sessions read `CLOUDFLARE_API_TOKEN` from their environment today (`CLAUDE.md`, "Cloudflare tooling"). So the real signer cannot live in the account those sessions deploy from, unless every session gets a scoped token.
+- The Cloudflare boundary has more ways to be widened by mistake: one role too many on one token, with no error. And four of its properties are untested.
+- It has one real advantage: a Worker secret is never shown again after it is set (measured for the dashboard and Wrangler), and the audit log names who changed a Worker (measured in general; inferred for secrets).
+
+**Recommendation: one design, two shells, VMs first.**
+
+1. **The signer becomes a core with two shells,** like the seller adapter: a Node shell for a machine and a Worker shell for an account. Where it runs is the party's choice; the attack tests are the same for both.
+2. **Crow's own agents start on two small VMs,** as the signer is built today. It costs no code, it is what the own-agents tests assume, and its one open point, the boundary, is proved by attack tests run from the agents' VM. The proof run does not wait for a port.
+3. **The Worker shell follows, as the package's answer for a party** (T-481): a party that deploys a page on Cloudflare can then have limits its assistant cannot pass, with no machine to patch. It starts with a live test of the four open points on a scratch account with test keys. If any fails, the Worker shell stops there and the VMs stay.
+4. **The real pair and the rehearsal pair never share credentials.** VMs: separate teams or projects with separate tokens. Cloudflare: a second account for the rehearsal, and the real signer in an account whose administrator's token never enters an agent's environment.
+
+What is sustainable for development is the split, not the host: one core, tested once, that runs where each party already is.
+
 ## Keys, secrets and limits
 
 **Keys.**
@@ -234,6 +268,41 @@ The targets are guessed. They are reset from the first three live runs of each s
 
 **What the harness cannot measure:** a deploy on a party's own account (its network fence allows Crow's, npm's and Sepolia's hosts only), a person's own steps, and a secret typed into the chat. T-477 and T-478 are measured by hand, once each, with the steps counted.
 
+### An isolated machine for each simulated party
+
+Rafa, 2026-11-15: "I think we need a truly isolated environment to really simulated sellers / buyers." Today the benchmark runs the assistant in a sandbox on the maintainer's own Mac, so every simulated party shares one machine, one address and one user's files behind a fence. T-482 moves a run to a machine of its own.
+
+**What a simulated party's machine must be, for a run to mean something:**
+
+1. **Its own VM with its own kernel,** so one run cannot read another's files or keys.
+2. **Its own public address, stable for the run and different for each party.** The faucet limits grants by client address, the test agents limit requests by address, and an operator can group one client's fresh keys by address (`docs/privacy-baseline.md`).
+3. **Nothing of Crow's on it:** no repository, no credential, no document. A fresh assistant gets one sentence. Its user account can read only its own empty folder.
+4. **A clean slate for every run:** made from one small image with Node and the assistant's command-line tool, destroyed after.
+5. **Plain SSH with a key,** so the harness can start a session on it.
+6. **For a seller that publishes: a hostname of its own with HTTPS, not under crow.direct.**
+7. **Credentials that cannot touch anything else:** the token that makes and destroys these machines reaches no other machine of the account, and the model key on the machine is a spend-capped key used for nothing else.
+
+**The four services Rafa named, from each vendor's own pages on 2026-11-15** (measured there unless labelled; no machine was created):
+
+| Service | Own kernel | Own outbound address | Clean per run | Plain SSH | HTTPS hostname | Token scope |
+| --- | --- | --- | --- | --- | --- | --- |
+| DigitalOcean Droplets | Yes (inferred: the pages say virtual machines and name no hypervisor) | **Yes: a public IPv4 on each Droplet** | From a snapshot; creation time not documented | Yes | No: a domain of one's own and a certificate | By resource type and action, not by project; a separate team is the boundary (inferred) |
+| Fly.io Machines | Yes (Firecracker) | Only with a static outbound address bought per app and region, USD 0.005 an hour | Yes; starts in under a second | Certificates through its own tool; plain SSH unverified | Yes, one per app | Per app |
+| exe.dev | Yes (KVM) | **No: a VM gets no public address of its own;** outbound is shared (inferred) | Yes, about 2 s | Yes | Yes, one per VM | Per VM, with expiry |
+| boat | Yes | A public IPv6 that changes at each resume and fork; IPv4 not always its own | Yes, a fork in seconds | Yes | Yes, one per port; no custom domain | Per key, limited to machines the key made |
+
+**Recommendation: DigitalOcean Droplets, in a team of their own, one Droplet for each run.**
+
+- **It is the only one of the four whose pages promise each machine its own public IPv4,** which is the property that decides whether two simulated parties look like two parties to the faucet, the test agents and an operator.
+- It gives plain SSH and bills by the second, and Rafa has an account. A run of a few minutes costs well under USD 0.01 on the smallest Droplet (inferred from per-second billing with a minimum of USD 0.01).
+- **Its two gaps are known.** It gives no hostname: a seller's publish run needs a domain that is not crow.direct, pointed at the Droplet, with the proxy getting the certificate. And its tokens are not scoped to a project: the benchmark's Droplets live in a separate team, whose token is the only DigitalOcean credential the harness holds (that a token stops at its team is inferred, not read).
+- **Fly.io is the second choice,** when the hostname matters more than the address: every app has an HTTPS hostname, but each party needs its own app and a bought outbound address, and plain SSH is unverified.
+- **exe.dev fails the address test, and boat's addresses change within a run.** Both are fast and both give a hostname, so either would do for a run that only needs a clean machine; neither shows that two parties are apart.
+
+**First measurements to make, before any scenario moves:** the seconds from the create call to a working SSH session on a Droplet made from the image (not documented), and whether a token of the benchmark's team can list or change a Droplet of another team.
+
+The same boundary serves Crow's own agents: their rehearsal pair of VMs lives in that separate team, apart from the real pair ("Where the signer runs", above).
+
 ## Litmus tests
 
 - **Neutrality: unchanged, and stated.** The setup is a party's own tool and reaches the operators over the public API. No step needs Crow's permission or account. It adds no new dependency on Crow; the existing ones (the faucet mandate, the two operators, the default adjudicators) are named above and in `setup.txt`.
@@ -263,12 +332,15 @@ The targets are guessed. They are reset from the first three live runs of each s
 | T-477 | Publish a seller on the party's own host; the check for a live quote address and card | 4 and 1 | T-472, T-474 | reviewer | 150,000 tokens | After T-476 |
 | T-478 | The seller Worker on the party's own Cloudflare account | 4 and 8 | T-477 | red team and reviewer | 300,000 tokens | **Waits for the pilot's deploy** |
 | T-479 | Hard limits through the signer for an outside party | 4 | T-475 | red team and reviewer | 300,000 tokens | **Waits for the own-agents proof run** |
+| T-481 | The signer as a core with a Worker shell, on the party's own Cloudflare account | 4 and 8 | T-479, T-478 | red team and reviewer; a decision record | 300,000 tokens | **Waits for T-479 and T-478** |
+| T-482 | The benchmark on an isolated machine for each simulated party | 4 | T-473 | red team and reviewer | 200,000 tokens | After T-473; its real runs are Rafa's |
 
 - **The first slice is T-472:** the smallest thing that makes the one sentence work end to end for one case, a seller on its own machine.
 - **Three lanes run in parallel on separate paths:** the setup command (`examples/setup*.ts`, `site/setup.*`), the benchmark (`tools/one-click/`, `scripts/metrics/`, `tests/metrics/`) and the card's schema (`site/card.schema.json`, `tests/`).
 - **T-475, T-476 and T-477 run one at a time.** Each changes the bundle `site/setup.mjs` and its pinned hash, so two at once would conflict.
 - **T-478 waits for the pilot's deploy.** It is the only task that may change `apps/hosted-sellers`. No other task touches `apps/hosted-sellers`, `examples/seller-adapter-core.ts`, `examples/seller-adapter-api.ts` or `packages/`.
-- **T-479 waits for the own-agents lane.** It changes `examples/signer.ts`, which Crow's own agents (roadmap row N131) are about to prove in a live run.
+- **T-479 waits for the own-agents lane.** It changes `examples/signer.ts`, which Crow's own agents (roadmap row N131) are about to prove in a live run. T-481 follows it and T-478.
+- **T-482 follows T-473** on the benchmark's own paths and touches nothing of the setup command.
 - **`docs/plan.md` does not change.** It lists no task after the phase-one contract work; the coordinator updates it.
 
 ## Deferred, and why
@@ -294,4 +366,6 @@ Each has a default that applies if he says nothing.
 4. **Crow hosting in `setup.txt`.** Recommended: not offered there; it stays a convenience for design partners. Default: not offered.
 5. **The targets** in "The measure". Recommended: as written, reset after three live runs each. Default: as written.
 6. **The seller Worker on a party's own Cloudflare account (T-478).** Recommended: build it once the pilot's hosted sellers are deployed; it is what makes publishing as simple as one deploy. Default: it starts then.
-7. **Two gates that are Rafa's by rule:** the site deploy that publishes `setup.txt` and `setup.mjs` after T-472 merges, and the live benchmark runs for T-473.
+7. **Where Crow's own two machines run.** Recommended: two small Linux VMs now, as the signer is built, and the signer's Worker shell later as the package's answer for a party (T-481), after a live test of four open points. Default: VMs now; T-481 waits.
+8. **The benchmark's machines.** Recommended: DigitalOcean Droplets in a team of their own, one for each run (T-482). It needs that team, its token and a spend-capped model key from Rafa. Default: the benchmark stays on the sandbox until he provides them.
+9. **Two gates that are Rafa's by rule:** the site deploy that publishes `setup.txt` and `setup.mjs` after T-472 merges, and the live benchmark runs for T-473.

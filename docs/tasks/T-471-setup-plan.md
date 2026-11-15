@@ -3,7 +3,7 @@
 - **Lane:** research (a plan, a design and its task files; documents only)
 - **Phase:** 2
 - **Depends on:** nothing
-- **Paths this task may touch:** `docs/research/2026-11-15-setup-baseline.md`, `docs/research/2026-11-15-blygger-study.md`, `docs/research/2026-11-15-setup-design.md`, `docs/research/README.md`, `docs/decisions-today.md` (D73, D74), `docs/tasks/T-471-setup-plan.md` to `T-479-setup-signer-limits.md`
+- **Paths this task may touch:** `docs/research/2026-11-15-setup-baseline.md`, `docs/research/2026-11-15-blygger-study.md`, `docs/research/2026-11-15-setup-design.md`, `docs/research/README.md`, `docs/decisions-today.md` (D73, D74), `docs/tasks/T-471-setup-plan.md` to `T-479-setup-signer-limits.md`, `docs/tasks/T-481-signer-worker-shell.md`, `docs/tasks/T-482-bench-isolated-machines.md`
 - **Human gate:** no (documents only; nothing deployed, sent or run against the live service)
 - **Status:** review
 - **Agent/session:** the setup-plan session, started by the coordinator on 2026-11-15
@@ -33,7 +33,7 @@ Non-goals: any code; any change to `docs/plan.md`, the roadmap or the daily log,
 | `docs/research/2026-11-15-blygger-study.md` | Ten patterns of Blygger's start path, each copied, adapted or declined; the answer to "nobody is set up until they act" |
 | `docs/research/2026-11-15-setup-design.md` | The design, the privacy table, the measure and its targets, the build plan, what is deferred, and the choices for Rafa |
 | `docs/decisions-today.md`, D73 and D74 | The decisions the design makes |
-| `docs/tasks/T-472` to `T-479` | Eight build tasks |
+| `docs/tasks/T-472` to `T-479`, `T-481`, `T-482` | Ten build tasks |
 
 ## Acceptance criteria
 
@@ -70,6 +70,7 @@ To fill in after the two passes.
 - **Three records, not one.** The baseline and the study are measurements a later reader may want without the design; the design cites both.
 - **One quoted sentence from Blygger.** The study names each pattern by Blygger's own heading and points to its line, and quotes only the sentence on shared defaults.
 - **Rafa's question of 2026-11-15** (is Crow's API the equivalent of Blygger's Studio, with a charge only later and only for the API?) is answered in the design, "What is offered, and by whom", and left as his choice: the plan records his direction and does not turn a question into a decision.
+- **Two additions from the coordinator on 2026-11-15,** both from Rafa's questions of that day, are in the design: where Crow's own two machines run ("Where the signer runs", with T-481), and an isolated machine for each simulated party ("An isolated machine for each simulated party", with T-482). Each rests on one more research pass over the vendors' own pages; nothing was tested against a live account or machine.
 - **No task for "the mandate at the first quote".** The seller adapter's `"signingKey": "per-deal"` already takes each deal key's faucet grant with its quote, so the setup writes that setting and the adapter does not change.
 
 ## Handoff
