@@ -5,7 +5,7 @@
 - **Depends on:** T-471 (the design; D74). Pull request 578 (T-469) changes `site/build.mjs`, `site/check.mjs` and `site/ref/intake.txt`: start from `main` after it merges, or rebase on it.
 - **Paths this task may touch:** `site/card.schema.json` (new), `site/build.mjs` and `site/check.mjs` (publish the file; check it), one paragraph in `site/ref/intake.txt`, `tests/card-schema.test.ts` (new), this file. It reads `apps/test-agents/src/` and `apps/hosted-sellers/src/` to build their cards in the test, and changes neither. Nothing under `spec/schemas/`.
 - **Human gate:** yes, for one step only: the site deploy that publishes the schema is Rafa's. The merge has no gate.
-- **Status:** review
+- **Status:** done
 - **Agent/session:** a sub-session of the coordinator, 2026-11-15, branch `t-474-card-schema`; ran in parallel with T-472. Both add a few lines to `site/build.mjs` and `site/check.mjs`; whichever lands second rebases.
 - **Roadmap row:** N160
 - **Change kind:** 1 (an agent guide and a published file), with one test. Local checks: `node site/build.mjs && node site/check.mjs`, `pnpm exec vitest run tests/card-schema.test.ts`.
@@ -78,7 +78,7 @@ Choices made inside this task.
 
 ## Handoff
 
-Built; one reviewer pass done and its findings 1 to 8 fixed. No card Crow serves today needed a change to pass, so no code under `apps/` changed.
+Done: merged in pull request 581 (merge commit `e309dd23`, 2026-11-15 09:57 UTC) after every CI check passed, with the reviewer's findings 1 to 8 fixed. T-472's later merge (pull request 585) kept this task's lines in `site/build.mjs` and `site/check.mjs` (measured on `main`). No card Crow serves today needed a change to pass, so no code under `apps/` changed.
 
 - **A site deploy is owed** (Rafa's gate): it publishes `card.schema.json` at `https://crow.direct/card.schema.json` and the new paragraph of `ref/intake.txt` (and so `reference.txt`).
 - **Found, not fixed:** the example card that `ref/intake.txt` names, https://rafael.fyi/agents/, fails the schema: its one offer has no `id` and neither `terms` nor `pricing` (it has `what` and `around`), and it still points to the old domain, escrow.stream (measured, 2026-11-15). Either the page is brought to today's card or the guide stops naming it; the page is outside this repository.
