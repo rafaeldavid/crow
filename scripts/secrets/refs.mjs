@@ -21,8 +21,15 @@ export const PLAIN = Object.freeze({
   HOLDBACK_OPENAI_COMPATIBLE_BASE_URL: 'https://api.deepseek.com',
   HOLDBACK_AGENT_OPENAI_COMPATIBLE_BASE_URL: 'https://api.deepseek.com',
 });
-/** The one vault every reference names (the design in docs/tasks/T-480-keys-home.md). */
+/** The vault every reference names (the design in docs/tasks/T-480-keys-home.md), except in the files below. */
 export const VAULT = 'crow';
+/**
+ * The references files that name another vault, each exactly one (T-485). The development host's service account
+ * reads the vault Crow-Agents and nothing else, so its file may name only that vault, and no other file may name it.
+ */
+export const VAULTS = Object.freeze({ 'dev-host.refs': 'crow-agents' });
+/** The one vault a references file may name, by its file name. */
+export const vaultFor = (file) => (Object.hasOwn(VAULTS, basename(String(file))) ? VAULTS[basename(String(file))] : VAULT);
 /** Every item holds one key, in one field of this name (the API Credential category's own secret field). */
 export const FIELD = 'credential';
 
@@ -46,13 +53,14 @@ export function parseRefs(text, file) {
     const value = line.slice(eq + 1);
     const m = REF.exec(value);
     if (m) {
-      if (m[1] !== VAULT) return void errors.push(`${at}: ${name} names vault "${m[1]}", not "${VAULT}"`);
+      const vault = vaultFor(file);
+      if (m[1] !== vault) return void errors.push(`${at}: ${name} names vault "${m[1]}", not "${vault}"`);
       if (m[3] !== FIELD) return void errors.push(`${at}: ${name} names field "${m[3]}", not "${FIELD}"`);
       entries.push({ name, file, line: i + 1, ref: { vault: m[1], item: m[2], field: m[3] } });
     } else if (Object.hasOwn(PLAIN, name) && PLAIN[name] === value) {
       entries.push({ name, file, line: i + 1, plain: value });
     } else {
-      errors.push(`${at}: ${name} is neither an op://${VAULT}/<item>/<field> reference nor allowed plain configuration`);
+      errors.push(`${at}: ${name} is neither an op://${vaultFor(file)}/<item>/<field> reference nor allowed plain configuration`);
     }
   });
   return { entries, errors };

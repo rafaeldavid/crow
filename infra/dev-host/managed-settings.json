@@ -1,0 +1,40 @@
+{
+  "permissions": {
+    "deny": [
+      "Bash(sudo:*)",
+      "Bash(su:*)",
+      "Bash(op item create:*)",
+      "Bash(op item edit:*)",
+      "Bash(op item delete:*)",
+      "Bash(op vault:*)",
+      "Bash(op service-account:*)",
+      "Bash(op signin:*)",
+      "Bash(security find-generic-password:*)",
+      "Bash(security dump-keychain:*)",
+      "Bash(doctl:*)",
+      "Bash(wrangler:*)",
+      "Bash(npx wrangler:*)",
+      "Bash(npx -y wrangler:*)",
+      "Bash(pnpm demo-cloud:deploy:*)",
+      "Bash(pnpm site:deploy:*)",
+      "Bash(gh secret:*)",
+      "Bash(gh variable:*)",
+      "Bash(gh ruleset:*)",
+      "Bash(gh repo delete:*)",
+      "Bash(gh repo edit:*)",
+      "Bash(gh auth token:*)",
+      "Bash(git push --force:*)",
+      "Bash(git push -f:*)",
+      "Bash(forge script:*)",
+      "Bash(cast send:*)",
+      "Read(**/.env)",
+      "Read(**/.env.*)",
+      "Read(**/.dev.vars*)",
+      "Read(~/.config/crow/**)",
+      "Read(~/.ssh/crow-party)",
+      "Read(~/Library/Keychains/**)",
+      "Edit(//Library/Application Support/ClaudeCode/**)",
+      "Edit(//etc/claude-code/**)"
+    ]
+  }
+}

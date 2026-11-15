@@ -272,6 +272,21 @@ The maintainers keep the cost notes privately (`docs/private-materials.md`).
 
 The maintainers keep the notes on the console's headline metrics privately (`docs/private-materials.md`). The scripts that compute them are in `scripts/metrics/`.
 
+## Machines
+
+Development is moving off Rafa's own Mac to a development host that holds only Crow (decision record T-484, in the private repository; T-485 built the first files). Until the move's switch, sessions still run on his Mac as they do today.
+
+| Machine | Runs | Built from | Rebuild |
+| --- | --- | --- | --- |
+| **The development host** (a Mac mini) | Agent sessions, worktrees, builds and tests, as a Standard user under a Claude account that holds only Crow. It holds both repositories and reads one vault, `Crow-Agents`, through a 1Password service account | `infra/dev-host/`: the administrator's setup, the session user's setup, the managed settings. Keys: `config/secrets/dev-host.refs` | Erase, run the setup scripts from the reviewed commit, and hand over the Claude sign-in, the service account's token, and the memory branch after Rafa reads its diff. The private runbook has the steps |
+| **A simulated party's machine** (DigitalOcean, team `crow-parties`) | One simulated seller or buyer, for one run | `infra/party/`: `up.mjs` makes it from `cloud-init.yaml`, `down.mjs` destroys it, `sweep.mjs` removes what a killed run left | None: each run makes a new one |
+| **Rafa's own Mac** | His accounts, the contract keystore, the hosted sellers' deploys, and every deploy until the deploy workflow exists | His own setup | His own |
+
+- **The rule for every privileged file:** Rafa runs an administrator script, or a command that carries a secret, only at a commit whose pull request he approved. Each such file prints its commit and the SHA-256 of the files it runs, and waits for a typed `yes` (`infra/dev-host/README.md`).
+- **What the development host holds no credential for:** Cloudflare, Crow's own agents' machines, the keystore, the pilot's credentials and the cost collector. Deploys stay on Rafa's Mac until the deploy workflow exists (record, move step 10).
+- **The team test** comes before any machine reads the vault: `infra/party/team-test.mjs` measures whether the `crow-parties` token stops at its own team (`infra/party/README.md`).
+- **Crow's own machines** (the agents' machine and the signer's, team `crow-own`) come after the pilot and after the deploy workflow. Their files are not built yet.
+
 ## Gates (ask Rafa first)
 
 These wait for the maintainer's go-ahead:
