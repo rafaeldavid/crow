@@ -3,10 +3,10 @@
 // the task says so, and prints each scenario's evidence. Test tokens only: it refuses every chain but Sepolia (and
 // anvil, in its own tests). It prints addresses, never the secret or a key.
 //
-//   node --env-file-if-exists=.env examples/e2e-round.ts list
-//   node --env-file-if-exists=.env examples/e2e-round.ts run <scenario ...|all> [--t220] [--no-homepage] [--rerun-after <why>]
-//   node --env-file-if-exists=.env examples/e2e-round.ts finality <run folder>
-//   node --env-file-if-exists=.env examples/e2e-round.ts settle <commitmentId> [--to-buyer|--to-seller] [--dry-run]
+//   op run --env-file=config/secrets/e2e.refs -- node examples/e2e-round.ts list
+//   op run --env-file=config/secrets/e2e.refs -- node examples/e2e-round.ts run <scenario ...|all> [--t220] [--no-homepage] [--rerun-after <why>]
+//   op run --env-file=config/secrets/e2e.refs -- node examples/e2e-round.ts finality <run folder>
+//   op run --env-file=config/secrets/e2e.refs -- node examples/e2e-round.ts settle <commitmentId> [--to-buyer|--to-seller] [--dry-run]
 //
 // `run` writes one JSON record per scenario and summary.md to the checkout's reports/e2e-round-1/<UTC time>/ (E2E_OUT
 // names another folder): public data only, the input to the round's report in docs/reviews/. `finality`, about 20
@@ -49,12 +49,12 @@ const commit = (): string => {
 const operators = () => (process.env['HOLDBACK_OPERATORS'] ? process.env['HOLDBACK_OPERATORS'].split(',') : LIVE_OPERATORS).map((s) => s.trim().replace(/\/+$/, '')).filter(Boolean);
 const rpcUrl = () => process.env['SEPOLIA_RPC_URL'] || PUBLIC_RPC;
 const stamp = () => new Date().toISOString().replace(/\.\d+Z$/, 'Z').replace(/:/g, '');
-const USAGE = 'usage: node --env-file-if-exists=.env examples/e2e-round.ts <list | run <scenario ...|all> [--t220] [--no-homepage] [--rerun-after <why>] | finality <run folder> | settle <commitmentId> [--to-buyer|--to-seller] [--dry-run]>';
+const USAGE = 'usage: op run --env-file=config/secrets/e2e.refs -- node examples/e2e-round.ts <list | run <scenario ...|all> [--t220] [--no-homepage] [--rerun-after <why>] | finality <run folder> | settle <commitmentId> [--to-buyer|--to-seller] [--dry-run]>';
 
 /** The round's seed, from the environment; never printed. */
 function seedOf(): string {
   const seed = process.env[SEED_VAR];
-  if (!seed) throw new Error(`${SEED_VAR} is not set; run with --env-file-if-exists=<file>, or make one with examples/e2e-keys.ts init <file>`);
+  if (!seed) throw new Error(`${SEED_VAR} is not set; run under op run --env-file=config/secrets/e2e.refs (docs/operations.md, Secrets)`);
   return seed;
 }
 

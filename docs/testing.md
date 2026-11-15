@@ -97,7 +97,7 @@ pnpm snap --judges=live <name>  # same fixture with live judges; prints the diff
 
 ### Live judges (T-028)
 
-Live providers (`apps/adjudicator/src/providers/live.ts`) never run in CI or `pnpm verify`: their tests stub `fetch` and check the request shape (provider model ID without the registry's `@date`, output cap, no sampling parameters for Claude, DeepSeek thinking off, no tools), and that a missing key is named, never printed. The live paths of `pnpm demo --live` and the public demo run in tests with `markerFake()` standing in for the models. Real calls happen only on demand: `pnpm demo --live` (keys from `.env`), and `pnpm demo-cloud:deal <op1> <op2> --rubric [--inject]` against a SimChain world of the demo Workers that has the secrets (the script refuses the Sepolia demo). Live models are stochastic and cost money, so their runs are evidence in a task or review, not a gate.
+Live providers (`apps/adjudicator/src/providers/live.ts`) never run in CI or `pnpm verify`: their tests stub `fetch` and check the request shape (provider model ID without the registry's `@date`, output cap, no sampling parameters for Claude, DeepSeek thinking off, no tools), and that a missing key is named, never printed. The live paths of `pnpm demo --live` and the public demo run in tests with `markerFake()` standing in for the models. Real calls happen only on demand: `pnpm demo --live` (keys from 1Password through `op run`, `config/secrets/judges.refs`), and `pnpm demo-cloud:deal <op1> <op2> --rubric [--inject]` against a SimChain world of the demo Workers that has the secrets (the script refuses the Sepolia demo). Live models are stochastic and cost money, so their runs are evidence in a task or review, not a gate.
 
 ### Recorded judges
 

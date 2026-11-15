@@ -4,10 +4,11 @@
 // the operators' funding lane tops up the deal lanes (ADR-0028 §3). Only public addresses are ever printed: never
 // the secret, never a key.
 //
-//   node --env-file-if-exists=.env examples/e2e-keys.ts init .env   makes the secret if the environment has none,
-//                                                                   appends it to .env, prints the addresses
-//   node --env-file-if-exists=.env examples/e2e-keys.ts address     prints the addresses
-//   node --env-file-if-exists=.env examples/e2e-keys.ts topup [--dry-run]
+//   node examples/e2e-keys.ts init <file>   makes the secret if the environment has none,
+//                                           appends it to <file> (mode 0600), prints the addresses. Crow's own
+//                                           seed lives in 1Password: config/secrets/e2e.refs, docs/operations.md
+//   op run --env-file=config/secrets/e2e.refs -- node examples/e2e-keys.ts address   prints the addresses
+//   op run --env-file=config/secrets/e2e.refs -- node examples/e2e-keys.ts topup [--dry-run]
 //                                                                   brings each other key up to 0.04 Sepolia ETH from
 //                                                                   the master, one transfer at a time, on Sepolia only
 //                                                                   (SEPOLIA_RPC_URL, else a public node)
@@ -150,12 +151,12 @@ if (process.argv[1] && import.meta.url === pathToFileURL(process.argv[1]).href) 
   const seed = process.env[SEED_VAR];
   if (cmd === 'address' || cmd === 'topup') {
     if (!seed) {
-      console.error(`${SEED_VAR} is not set; run with --env-file-if-exists=<file>, or make one with init <file>`);
+      console.error(`${SEED_VAR} is not set; run under op run --env-file=config/secrets/e2e.refs, or make one with init <file>`);
       process.exit(1);
     }
     if (cmd === 'address') print(seed);
     else if (file !== undefined && file !== '--dry-run') {
-      console.error('usage: node --env-file-if-exists=<file> examples/e2e-keys.ts topup [--dry-run]');
+      console.error('usage: op run --env-file=config/secrets/e2e.refs -- node examples/e2e-keys.ts topup [--dry-run]');
       process.exit(2);
     } else {
       try {
@@ -172,7 +173,7 @@ if (process.argv[1] && import.meta.url === pathToFileURL(process.argv[1]).href) 
       print(seed);
     } else if (existsSync(file) && SETS_SEED.test(readFileSync(file, 'utf8'))) {
       // Only whether the variable is set leaves this read; nothing in the file is printed.
-      console.error(`refusing: ${file} already has ${SEED_VAR}; load it with --env-file-if-exists=${file} and run address`);
+      console.error(`refusing: ${file} already has ${SEED_VAR}; move it to 1Password with node scripts/secrets/copy.mjs --from ${file}, then run address under op run`);
       process.exit(2);
     } else {
       // A file this creates is readable by its owner only; an existing one keeps its mode, so say when others can read it.
@@ -183,7 +184,7 @@ if (process.argv[1] && import.meta.url === pathToFileURL(process.argv[1]).href) 
       print(fresh);
     }
   } else {
-    console.error('usage: node --env-file-if-exists=<file> examples/e2e-keys.ts <init <file> | address | topup [--dry-run]>');
+    console.error('usage: node examples/e2e-keys.ts <init <file> | address | topup [--dry-run]>; address and topup under op run --env-file=config/secrets/e2e.refs');
     process.exit(2);
   }
 }
