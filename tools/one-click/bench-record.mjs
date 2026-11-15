@@ -10,7 +10,8 @@
 // - API calls: the fetch and curl probes' logs (probes.mjs), model vendors and package registries left out;
 // - doc gaps: each "GUESS:" line the agent wrote (scenarios.mjs, GUESS_RULE);
 // - setup (T-473, version 3 only): the requests that name the party before the first-deal marker, by host, and the
-//   guide files fetched (setupOf). With no marker, or no call logged after it, both read null: unknown.
+//   guide files fetched (setupOf). With no marker, or no call logged after it, both read null: unknown. T-486 added
+//   the listing step's requests before the marker, counted apart, and reads the marker the setup command really writes.
 // A scripted run's record says mode "scripted"; one-click-summary.mjs never takes a headline number from it.
 // Version 3 (T-473) is version 2 with the scenarios s7 and s8 only and the setup block; the deal scenarios keep
 // writing version 2, so a reader of version 2 (Crow Control) keeps reading them. The summary reads both.
@@ -118,24 +119,46 @@ export function apiCallsOf(calls) {
 
 const cap = (o, n) => Object.fromEntries(Object.entries(o).sort((a, b) => b[1] - a[1]).slice(0, n));
 
-// The first-deal marker (T-473, agreed for T-472): when the setup command's first-deal step starts, before it sends
-// anything, it prints this line on standard error and writes it to `first-deal.started` in its folder (probes.mjs,
-// MARKER_FILE). The number is the start time in ms since the epoch, from the same machine's clock as the probes.
+// The first-deal marker: when the setup command's first-deal step starts, before it sends anything, it prints one
+// JSON line on standard error and writes one to `first-deal.started` in its folder (probes.mjs, MARKER_FILE):
+//   {"step":"marker", ..., "startedAtMs": <ms since the epoch>, ...}
+// from the same machine's clock as the probes (examples/setup.ts, step 3). T-473 fixed a plain line for it,
+// `crow-setup: first-deal started <ms>`, and T-472 built the command with JSON lines only, so no real run was read
+// (T-486 measured it and made the two agree). The reader takes the command's JSON line; it still takes the plain line,
+// which the stand-in for the setup command prints (tests/metrics/fixtures/setup-rehearsal.ts).
+// apps/test-agents/src/setup.test.ts runs the real command and fails when this reader finds no time in its output.
 const MARKER_LINE = /^crow-setup: first-deal started (\d{1,16})\r?$/gm;
+/** A line that may be the command's JSON marker: one object on one line that names the step and the time. */
+const MARKER_JSON = /^\{.*"step"\s*:\s*"marker".*\}\r?$/gm;
+/** The time of the command's JSON marker line, or null when the line is not one. */
+function jsonMarkerMs(line) {
+  let o = null;
+  try {
+    o = JSON.parse(line);
+  } catch {
+    return null;
+  }
+  return o !== null && typeof o === 'object' && !Array.isArray(o) && o.step === 'marker' && Number.isSafeInteger(o.startedAtMs) && o.startedAtMs > 0 ? o.startedAtMs : null;
+}
 /** The earliest first-deal marker time in any of `texts`, or null when none holds one. */
 export function firstDealAtOf(texts) {
   let first = null;
+  const take = (ms) => {
+    if (Number.isSafeInteger(ms) && (first === null || ms < first)) first = ms;
+  };
   for (const t of texts ?? []) {
-    for (const m of String(t).matchAll(MARKER_LINE)) {
-      const ms = Number(m[1]);
-      if (Number.isSafeInteger(ms) && (first === null || ms < first)) first = ms;
-    }
+    const text = String(t);
+    for (const m of text.matchAll(MARKER_LINE)) take(Number(m[1]));
+    for (const m of text.matchAll(MARKER_JSON)) take(jsonMarkerMs(m[0]));
   }
   return first;
 }
 
 // Crow-run hosts on Sepolia; in the in-process world the harness passes the world's own origins (crowOrigins).
 const CROW_RUN = /(^|\.)(crow\.direct|escrow\.stream)$/;
+/** The origin and the path of the setup's listing step (T-486; apps/early-access/listing.js, examples/setup-list.ts). */
+export const LISTING_ORIGIN = 'https://join.crow.direct';
+export const LISTING_PATH = '/listing';
 
 /**
  * The setup block of a record (T-473). Pure. A request names the party when it goes to a Crow-run host and is not a
@@ -144,14 +167,26 @@ const CROW_RUN = /(^|\.)(crow\.direct|escrow\.stream)$/;
  * are the GETs of crow.direct's .txt files over the whole run. `calls` are the probes' calls and, in a live run, the
  * agent's WebFetch requests. With no marker, both counts are null (unknown), never 0; so too when no call was logged at
  * or after the marker, since the first deal makes calls and their absence means the probes saw nothing.
- * @param {{ calls?: object[], firstDealAtMs: number|null, crowOrigins?: string[] }} o
- * @returns {{ markerSeen: boolean, requestsBeforeFirstDeal: { total: number, byHost: object }|null, guideFilesFetched: number|null, unknownBecause: string|null }}
+ *
+ * The listing step (T-486, D76) is counted apart, and narrowly. A listing is one request: the first of the run that
+ * is a POST to the listing's own origin (LISTING_ORIGIN, or the origins the scripted world names in `listingOrigins`),
+ * at the path /listing exactly (LISTING_PATH), with no address in its query. Before the marker it is counted in
+ * listingRequestsBeforeFirstDeal and left out of requestsBeforeFirstDeal, which so stays 0 for a run that lists and
+ * for a run that skips. Every other request is held to the rule above: a POST to /listing on an operator's host, one
+ * whose query holds an address, and a second listing all count as requests that name the party. The first form of
+ * this rule took any POST to /listing on any host, and so hid them (the red team's pass, 2026-11-15). The listing
+ * count reads null in the cases where the other counts do.
+ * @param {{ calls?: object[], firstDealAtMs: number|null, crowOrigins?: string[], listingOrigins?: string[] }} o
+ * @returns {{ markerSeen: boolean, requestsBeforeFirstDeal: { total: number, byHost: object }|null, listingRequestsBeforeFirstDeal: { total: number, byHost: object }|null, guideFilesFetched: number|null, unknownBecause: string|null }}
  */
-export function setupOf({ calls = [], firstDealAtMs, crowOrigins = [] }) {
-  if (!Number.isSafeInteger(firstDealAtMs)) return { markerSeen: false, requestsBeforeFirstDeal: null, guideFilesFetched: null, unknownBecause: 'No first-deal marker: the requests before the first deal and the guide files fetched read unknown.' };
-  if (!calls.some((c) => Number.isSafeInteger(c.at) && c.at >= firstDealAtMs)) return { markerSeen: true, requestsBeforeFirstDeal: null, guideFilesFetched: null, unknownBecause: 'The probes logged no call at or after the first-deal marker, so they cannot have seen the setup either: both counts read unknown.' };
+export function setupOf({ calls = [], firstDealAtMs, crowOrigins = [], listingOrigins = [LISTING_ORIGIN] }) {
+  if (!Number.isSafeInteger(firstDealAtMs)) return { markerSeen: false, requestsBeforeFirstDeal: null, listingRequestsBeforeFirstDeal: null, guideFilesFetched: null, unknownBecause: 'No first-deal marker: the requests before the first deal and the guide files fetched read unknown.' };
+  if (!calls.some((c) => Number.isSafeInteger(c.at) && c.at >= firstDealAtMs)) return { markerSeen: true, requestsBeforeFirstDeal: null, listingRequestsBeforeFirstDeal: null, guideFilesFetched: null, unknownBecause: 'The probes logged no call at or after the first-deal marker, so they cannot have seen the setup either: both counts read unknown.' };
   const byHost = {};
+  const listingByHost = {};
   let total = 0;
+  let listings = 0;
+  let listingSeen = false; // the run's one listing: the first request that is one, before the marker or after it
   let guides = 0;
   for (const c of calls) {
     let u = null;
@@ -165,13 +200,18 @@ export function setupOf({ calls = [], firstDealAtMs, crowOrigins = [] }) {
     if (method === 'GET' && u?.hostname === 'crow.direct' && path.endsWith('.txt')) guides += 1;
     const before = !Number.isSafeInteger(c.at) || c.at < firstDealAtMs;
     const crowRun = !!u && (CROW_RUN.test(u.hostname) || crowOrigins.includes(u.origin));
-    if (before && ((crowRun && method !== 'GET') || ADDRESS.test(path) || c.queryHasAddress === true)) {
+    const origin = u ? u.origin : 'unknown';
+    const listing = !listingSeen && method === 'POST' && path === LISTING_PATH && !!u && listingOrigins.includes(u.origin) && c.queryHasAddress !== true;
+    if (listing) listingSeen = true;
+    if (listing && before) {
+      listings += 1;
+      listingByHost[origin] = (listingByHost[origin] ?? 0) + 1;
+    } else if (!listing && before && ((crowRun && method !== 'GET') || ADDRESS.test(path) || c.queryHasAddress === true)) {
       total += 1;
-      const origin = u ? u.origin : 'unknown';
       byHost[origin] = (byHost[origin] ?? 0) + 1;
     }
   }
-  return { markerSeen: true, requestsBeforeFirstDeal: { total, byHost: cap(byHost, 40) }, guideFilesFetched: guides, unknownBecause: null };
+  return { markerSeen: true, requestsBeforeFirstDeal: { total, byHost: cap(byHost, 40) }, listingRequestsBeforeFirstDeal: { total: listings, byHost: cap(listingByHost, 40) }, guideFilesFetched: guides, unknownBecause: null };
 }
 
 /**
@@ -215,15 +255,15 @@ export function scrubSecrets(value, secrets) {
  *   agent: object, outcome: { state: string, commitmentId?: string|null, blockedBy?: string|null, stoppedAt?: string|null },
  *   book: { permissionRequests?: object[], questions?: object[], chatReplies?: object[], wallMs: number, approvalWaitMs?: number, errors?: string[], timedOut?: boolean },
  *   results?: object[], calls?: object[], texts?: string[], prices: object|null, startedAtMs: number, generatedAtMs: number, commit: string, sources?: object[], gaps?: string[],
- *   setup?: { firstDealAtMs: number|null, crowOrigins?: string[], webCalls?: object[] } }} input  setup: a setup scenario's marker time, the
+ *   setup?: { firstDealAtMs: number|null, crowOrigins?: string[], listingOrigins?: string[], webCalls?: object[] } }} input  setup: a setup scenario's marker time, the
  *   world's Crow-run origins, and a live run's WebFetch requests (counted in setup only, never in apiCalls)
  */
 export function buildBenchRecord({ mode, scenario, world, agent, outcome, book, results = [], calls = [], texts = [], prices, startedAtMs, generatedAtMs, commit, sources = [], gaps: harnessGaps = [], setup: setupIn = null }) {
   const gaps = harnessGaps.map(String).slice(0, 20);
   const isSetup = scenario.kind === 'setup';
-  const setupFull = isSetup ? setupOf({ calls: [...calls, ...(setupIn?.webCalls ?? [])], firstDealAtMs: setupIn?.firstDealAtMs ?? null, crowOrigins: setupIn?.crowOrigins ?? [] }) : null;
+  const setupFull = isSetup ? setupOf({ calls: [...calls, ...(setupIn?.webCalls ?? [])], firstDealAtMs: setupIn?.firstDealAtMs ?? null, crowOrigins: setupIn?.crowOrigins ?? [], ...(setupIn?.listingOrigins ? { listingOrigins: setupIn.listingOrigins } : {}) }) : null;
   if (setupFull?.unknownBecause) gaps.push(setupFull.unknownBecause);
-  const setup = setupFull ? { markerSeen: setupFull.markerSeen, requestsBeforeFirstDeal: setupFull.requestsBeforeFirstDeal, guideFilesFetched: setupFull.guideFilesFetched } : null;
+  const setup = setupFull ? { markerSeen: setupFull.markerSeen, requestsBeforeFirstDeal: setupFull.requestsBeforeFirstDeal, listingRequestsBeforeFirstDeal: setupFull.listingRequestsBeforeFirstDeal, guideFilesFetched: setupFull.guideFilesFetched } : null;
   const requests = book.permissionRequests ?? [];
   const questions = book.questions ?? [];
   const replies = book.chatReplies ?? [];

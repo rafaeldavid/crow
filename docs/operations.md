@@ -65,6 +65,16 @@ HOLDBACK_OPERATORS=https://api.crow.direct,https://api2.crow.direct node example
 node apps/early-access/deploy.mjs
 npx wrangler@4 kv key list --binding EMAILS --config apps/early-access/wrangler.jsonc --remote
 
+# the list of who uses Crow (T-486, D76): the same Worker and the same store, under the prefix listing:, once the
+# Worker is deployed with POST /listing. A person reads the listed websites out, then checks each for a Crow card.
+# The list is private: write the file under reports/, which git ignores, or outside the repository.
+# Type the prefix exactly, "listing:". The same store holds the sign-up emails under "email:", and a read-out with
+# no prefix, or a mistyped one, writes people's email addresses into the file. The script refuses such a file whole:
+# it says how many entries are not listed websites, checks none, echoes none and exits 1. Then delete the file.
+# A run shows each listed site this machine's IP address and the time of the run.
+npx wrangler@4 kv key list --binding EMAILS --config apps/early-access/wrangler.jsonc --remote --prefix listing: > reports/listing-keys.json
+node scripts/listing-check.mjs reports/listing-keys.json
+
 # Crow's test seller (T-222): deploys, waits for /health to read operational, and rolls back on its own
 node apps/test-agents/scripts/deploy.mjs
 
@@ -278,6 +288,12 @@ The maintainers keep the notes on agent sessions and permission prompts privatel
 ## Deploy record
 
 Each entry records one deploy as it ran: the date and time in UTC, the commit, each Worker's new version and its rollback target, and what was measured after it. The deploy scripts print the entry's first line (`pnpm demo-cloud:deploy`, `pnpm site:deploy`, `node apps/test-agents/scripts/deploy.mjs`). The values are true for their date: for what runs now, read "What is live" above and each node's discovery.
+
+### The setup page and its command, the card's schema and the goal bundles (site deployed 2026-11-15, 11:24 UTC)
+
+**Site deploy 2026-11-15 11:24 UTC, commit `d72490b` on a detached HEAD: pass.** crow-site `e80d56bd-8954-4d20-9d74-177a3ca8d114` (rollback target `60513ef3-a367-474a-a0a7-b9d440ccf810`).
+
+Rafa ran it, and it published `setup.txt`, `setup.mjs`, `card.schema.json`, the three goal bundles and the new top of `llms.txt`.
 
 ### Deploys owed on 2026-11-14: the faucet allowance, the test seller and the site (operators 14:54 UTC, test seller and site 16:06 UTC)
 

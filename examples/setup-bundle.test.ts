@@ -109,7 +109,12 @@ describe('site/setup.mjs, the bundle (T-472)', () => {
     const published = publishedGuides({ op1: 'https://a.example', op2: 'https://b.example' }).get('setup.txt') as string;
     expect(published.split('\n')).toContain(command);
     expect(published).not.toMatch(/\{\{|^%% /m);
-    expect(Buffer.byteLength(published)).toBeLessThanOrEqual(8000);
+    const { SETUP_MAX_BYTES } = await import(here('../site/guides.mjs'));
+    expect(SETUP_MAX_BYTES).toBe(10_000); // T-486 raised it from 8,000 for the listing step's section
+    expect(Buffer.byteLength(published)).toBeLessThanOrEqual(SETUP_MAX_BYTES);
+    // The page states what an entry on the list means in the command's own four sentences (T-486).
+    const { ENTRY_MEANS } = await import('./setup-list.ts');
+    expect(published).toContain(ENTRY_MEANS);
     expect(command).not.toMatch(/npm/);
   }, 30_000);
 
@@ -273,7 +278,7 @@ describe('site/setup.mjs seller, check and status (T-472)', () => {
     // The recorder is not blind: the check's calls to its own sample API on the loopback address are in its record.
     expect(checked.connections.length).toBeGreaterThan(0);
     const status = await node(at, ['status', '--folder', folder]);
-    expect(jsonLines(status.out)).toEqual([{ step: 'status', folder, exists: true, role: 'seller', sells: 'sample', name: 'seller', steps: ['folder', 'key', 'payout', 'template', 'configuration', 'card'], address, payout: { address, thisKey: true }, card: `${folder}-card`, firstDeal: null, ended: [], openDeals: [] }]);
+    expect(jsonLines(status.out)).toEqual([{ step: 'status', folder, exists: true, role: 'seller', sells: 'sample', name: 'seller', steps: ['folder', 'key', 'payout', 'template', 'configuration', 'card'], address, payout: { address, thisKey: true }, card: `${folder}-card`, firstDeal: null, ended: [], openDeals: [], listing: null }]);
     expect(status.connections).toEqual([]);
     // No line any of the three printed, and no file outside keys/, holds the key or the holding key it derives.
     const said = run.out + run.err + checked.out + checked.err + status.out + status.err;

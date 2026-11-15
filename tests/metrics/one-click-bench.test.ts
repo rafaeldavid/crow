@@ -84,7 +84,7 @@ describe('the scripted runs, one per scenario', () => {
     expect(records[id].schema).toBe('crow.metrics.one-click/3');
     expect(records[id].outcome).toMatchObject({ success: false, state: 'blocked', commitmentId: null });
     expect(records[id].outcome.blockedBy.startsWith(`${task}: `)).toBe(true);
-    expect(records[id].setup).toEqual({ markerSeen: false, requestsBeforeFirstDeal: null, guideFilesFetched: null });
+    expect(records[id].setup).toEqual({ markerSeen: false, requestsBeforeFirstDeal: null, listingRequestsBeforeFirstDeal: null, guideFilesFetched: null });
   });
 });
 

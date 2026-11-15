@@ -14,10 +14,17 @@
 //                               requests that name the party to a Crow-run host. --again offers a new deal after one
 //                               that ended without a release; it never continues the ended one.
 //   node setup.mjs status       the folder's state: the role, the steps done, the addresses, the open deals. No secret.
+//   node setup.mjs list --website <https URL>
+//                               the listing step (T-486, D76): sends the website, and nothing else, to
+//                               Crow's list of who uses it (setup-list.ts). `list --skip` records that the person
+//                               declined and sends nothing. No deal depends on it: first-deal prints one advisory line
+//                               when the folder has neither, and goes on. It opens no file under keys/, takes the
+//                               folder's lock before it sends, and prints no word of the receiver's answer.
 //
 // Every setting is a flag: --folder <path> (default ~/.crow/<name>), --name <name> (default seller), --operators
-// <url>,<url> (default Crow's two), --buyer <url> (default Crow's test buyer) and --test-world (a local test world,
-// never the live service: it needs --operators and --buyer, and every line then says so). The command reads no
+// <url>,<url> (default Crow's two), --buyer <url> (default Crow's test buyer), --list-at <url> (default Crow's list)
+// and --test-world (a local test world, never the live service: it needs --operators, first-deal needs --buyer and
+// list needs --list-at, and every line then says so). The command reads no
 // HOLDBACK_* or CROW_* variable: the bundle's first line removes them, and NODE_TLS_REJECT_UNAUTHORIZED, before any
 // module runs, and main() removes them again. It refuses to run with NODE_OPTIONS, NODE_EXTRA_CA_CERTS or
 // NODE_USE_ENV_PROXY set, naming the variable. A NODE_OPTIONS that loads code has run by then: no file can stop what
@@ -44,6 +51,7 @@ import { fromParty, same, sleep, TEST_BUYER } from './goal-kit.ts';
 import { plain as plainLine } from './plain.ts';
 import { dealKeyOf, holdingKeyOf, loadConfig, startSellerAdapter, type RunningAdapter } from './seller-adapter.ts';
 import { runChecks } from './setup-check.ts';
+import { list, listingAdvice, listingOf, LISTING_URL } from './setup-list.ts';
 import { SAMPLE, SAMPLE_PRICE_UNITS, startSampleApi, type SampleApi } from './setup-sample-api.ts';
 import { addressOf, FILES, formsOf, holdingAddressOf, locked, readKey, readState, realPath, seller, writeState, writeWhole, type Call, type FirstDeal, type J, type State } from './setup-seller.ts';
 import { commitmentIdOf, jcs, knownPins } from './verify.ts';
@@ -74,11 +82,14 @@ const USAGE = [
   "                prints what it sends and to whom, then sells one sample job to Crow's test buyer and follows it to its end.",
   '                --preview prints that and stops. --again offers a new deal after one that ended without a release.',
   "  status        prints the folder's state. It reads no key and sends nothing.",
+  '  list --website <https URL> | --skip [--list-at <url>]',
+  "                sends the website, and nothing else, to Crow's list of who uses it; --skip declines and sends nothing.",
+  '                No deal depends on it. Exit 3: the answer is missing. Default --list-at: ' + LISTING_URL + '.',
   '  --folder      the party\'s folder. Default: ~/.crow/<name>.',
   '  --name        the party\'s name, in the folder\'s default path and on its card. Default: seller.',
   `  --operators   two or more operator URLs, comma-separated. Default: ${CROW_OPERATORS.join(',')}.`,
   "  --buyer       the test buyer's URL. Default: " + TEST_BUYER + '.',
-  '  --test-world  a local test world, never the live service. It needs --operators, and first-deal needs --buyer; every line then says so.',
+  '  --test-world  a local test world, never the live service. It needs --operators, first-deal needs --buyer and list needs --list-at; every line then says so.',
 ].join('\n');
 
 /** Removes every HOLDBACK_* and CROW_* variable from `env`, and the switch that turns certificate checks off: the command takes its settings from flags only. */
@@ -95,6 +106,7 @@ const OWN: Record<string, { values: string[]; switches: string[] }> = {
   check: { values: [], switches: [] },
   'first-deal': { values: ['--buyer'], switches: ['--again', '--preview'] },
   status: { values: [], switches: [] },
+  list: { values: ['--website', '--list-at'], switches: ['--skip'] },
 };
 function flagsOf(command: string, args: readonly string[]): Map<string, string> {
   const values = [...COMMON.values, ...OWN[command]!.values], switches = [...COMMON.switches, ...OWN[command]!.switches];
@@ -119,7 +131,13 @@ const isHttp = (u: string): boolean => {
 /** Whether `u` names this machine: localhost, a name under it, or a loopback or unspecified address. */
 const isLocal = (u: string): boolean => {
   const host = new URL(u).hostname.toLowerCase().replace(/^\[|\]$/g, '').replace(/\.$/, '');
-  return host === 'localhost' || host.endsWith('.localhost') || /^127\./.test(host) || host === '::1' || host === '0.0.0.0' || host === '::' || /^::ffff:127\./.test(host);
+  if (host === 'localhost' || host.endsWith('.localhost') || /^127\./.test(host) || host === '::1' || host === '0.0.0.0' || host === '::' || /^::ffff:127\./.test(host)) return true;
+  // An IPv4 address written inside an IPv6 one, as the URL parser writes it, in hex: ::ffff:7f00:1 and ::7f00:1 are
+  // 127.0.0.1, and ::ffff:0:0 is 0.0.0.0.
+  const inside = /^::(?:ffff:)?([0-9a-f]{1,4}):([0-9a-f]{1,4})$/.exec(host);
+  if (!inside) return false;
+  const high = parseInt(inside[1]!, 16), low = parseInt(inside[2]!, 16);
+  return high >> 8 === 127 || (high === 0 && low === 0);
 };
 /** Why `u` is not a host the live service's commands may call, or '' when it is: https, and not this machine. */
 const notLiveHost = (u: string): string => (new URL(u).protocol !== 'https:' ? 'is not https' : isLocal(u) ? 'is this machine' : '');
@@ -153,8 +171,32 @@ function status(c: Call): number {
     // no journal yet: no deal has started
   }
   const deal = (d: FirstDeal | undefined) => (d === undefined ? null : Object.fromEntries(Object.entries(d).filter(([k]) => k !== 'journalBefore').map(([k, v]) => [k, plain(v, 300)])));
-  c.say({ step: 'status', folder: c.folder, exists: true, role: plain(state.role, 20), sells: plain(state.sells, 20), name: plain(state.name, 40), steps: Object.keys(state.steps).map((s) => plain(s, 40)), address: state.address === undefined ? null : plain(state.address, 42), payout: state.payout ? { address: plain(state.payout.address, 42), thisKey: state.payout.thisKey === true } : null, card: state.card === undefined ? null : plain(state.card, 300), firstDeal: deal(state.firstDeal), ended: (state.ended ?? []).map(deal), openDeals: open });
+  c.say({ step: 'status', folder: c.folder, exists: true, role: plain(state.role, 20), sells: plain(state.sells, 20), name: plain(state.name, 40), steps: Object.keys(state.steps).map((s) => plain(s, 40)), address: state.address === undefined ? null : plain(state.address, 42), payout: state.payout ? { address: plain(state.payout.address, 42), thisKey: state.payout.thisKey === true } : null, card: state.card === undefined ? null : plain(state.card, 300), firstDeal: deal(state.firstDeal), ended: (state.ended ?? []).map(deal), openDeals: open, listing: shown(listingOf(state)), ...(failedListingOf(state) ? { listingFailed: shown(failedListingOf(state)) } : {}) });
   return 0;
+}
+/** A record from the state file as plain values of bounded length; null when there is none. A value that is no text, number or truth value is left out. */
+const shown = (record: object | undefined): Record<string, unknown> | null =>
+  record === undefined ? null : Object.fromEntries(Object.entries(record).filter(([, v]) => ['string', 'number', 'boolean'].includes(typeof v) || v === null).map(([k, v]) => [plain(k, 40), typeof v === 'string' ? plain(v, 300) : v]));
+/** The folder's record of a failed listing when it is one; anything else in its place is read as absent. */
+const failedListingOf = (state: { listingFailed?: unknown }): object | undefined => {
+  const f = state.listingFailed as { website?: unknown } | null | undefined;
+  return f !== null && typeof f === 'object' && !Array.isArray(f) && typeof f.website === 'string' ? f : undefined;
+};
+
+/** `list`: its flags, checked before anything is sent; the step itself is setup-list.ts. */
+async function listStep(c: Call): Promise<number> {
+  const skip = c.flags.has('--skip');
+  const website = c.flags.get('--website');
+  if (skip && website !== undefined) throw new WrongCall('give --website or --skip, not both. Nothing was sent');
+  const given = c.flags.get('--list-at');
+  if (given !== undefined && !isHttp(given)) throw new WrongCall('--list-at takes the address that receives the listing, such as ' + LISTING_URL);
+  // A user name or a password in the address would be saved in crow.json and printed. The message does not repeat it.
+  if (given !== undefined && (new URL(given).username !== '' || new URL(given).password !== '')) throw new WrongCall('--list-at must carry no user name and no password. Nothing was sent');
+  if (skip || website === undefined) return list(c, { skip });
+  const to = given ?? (c.testWorld ? undefined : LISTING_URL);
+  if (to === undefined) throw new WrongCall("--test-world needs --list-at: the test world's own receiver of the listing. Nothing was sent");
+  if (!c.testWorld && notLiveHost(to)) throw new WrongCall(`--list-at: ${urlLine(to)} ${notLiveHost(to)}. Without --test-world the receiver is an https host that is not this machine. Nothing was sent`);
+  return list(c, { website, skip: false, to: new URL(to).href });
 }
 
 async function check(c: Call): Promise<number> {
@@ -267,6 +309,18 @@ export function payeeOf(record: { row: { paidTo: string | null; sellerPayoutAddr
   return { paidTo: null, asAnswered: false, wait: false, note: `The signed terms of this deal pay ${plain(named, 42)}, not the payout address ${answer} this folder was given.` };
 }
 
+/** When the first deal started, in ms since the epoch, as the marker file says it; a file of an earlier version names it as `startedAt`. */
+function markerTimeOf(file: string): number {
+  try {
+    const m = JSON.parse(readFileSync(file, 'utf8')) as { startedAtMs?: unknown; startedAt?: unknown };
+    const ms = Number.isSafeInteger(m.startedAtMs) ? (m.startedAtMs as number) : Date.parse(String(m.startedAt));
+    if (Number.isSafeInteger(ms) && ms > 0) return ms;
+  } catch {
+    // an unreadable marker: the time is now
+  }
+  return Date.now();
+}
+
 async function runFirstDeal(c: Call, state: State, buyerUrl: string, again: boolean): Promise<number> {
   const started = Date.now();
   const save = (change: Partial<FirstDeal>) => {
@@ -309,13 +363,21 @@ async function runFirstDeal(c: Call, state: State, buyerUrl: string, again: bool
 
   const key = readKey(c.folder);
   const payout = state.payout!;
+  // The listing step is Crow's ask and never a gate (T-486, D76): with neither a listing nor a skip, one advisory line.
+  const advice = listingAdvice(state);
+  if (advice !== undefined) c.note({ step: 'list', advisory: true, detail: advice });
   // 2. What the command is about to send, and to whom, before it sends anything.
   c.say(previewLine(c, state, key, buyerUrl));
 
-  // 3. The marker: from here on the command sends requests that name this folder's addresses.
+  // 3. The marker: from here on the command sends requests that name this folder's addresses. The file and the line
+  //    carry the time the first deal started, in ms since the epoch, which the benchmark reads (bench-record.mjs,
+  //    firstDealAtOf); a run that continues a deal prints the first run's time.
   const marker = join(c.folder, FILES.marker);
-  if (!existsSync(marker)) writeFileSync(marker, `${JSON.stringify({ startedAt: new Date().toISOString(), operators: c.operators, buyer: buyerUrl })}\n`);
-  c.note({ step: 'marker', file: marker, detail: 'The first deal starts: the next requests are the first that name this folder to the operators and the test buyer.' });
+  if (!existsSync(marker)) {
+    const now = Date.now();
+    writeFileSync(marker, `${JSON.stringify({ step: 'marker', startedAt: new Date(now).toISOString(), startedAtMs: now, operators: c.operators, buyer: buyerUrl })}\n`);
+  }
+  c.note({ step: 'marker', file: marker, startedAtMs: markerTimeOf(marker), detail: 'The first deal starts: the next requests are the first that name this folder to the operators and the test buyer.' });
   save({ buyer: buyerUrl });
 
   let api: SampleApi | undefined;
@@ -457,6 +519,7 @@ const COMMANDS: Record<string, (c: Call) => number | Promise<number>> = {
   check,
   'first-deal': firstDeal,
   status,
+  list: listStep,
 };
 
 /** Runs one command and returns its exit status. It never calls process.exit, so every line is written first. */
@@ -500,8 +563,8 @@ export async function main(argv: readonly string[]): Promise<number> {
     const hide: Call['hide'] = (value, whole = false) => {
       for (const form of whole ? [value] : formsOf(value)) hidden.add(form);
     };
-    // The folder's key, when there is one, is hidden from the first line on. `status` reads no key.
-    if (command !== 'status' && existsSync(join(folder, FILES.key))) {
+    // The folder's key, when there is one, is hidden from the first line on. `status` and `list` read no key.
+    if (command !== 'status' && command !== 'list' && existsSync(join(folder, FILES.key))) {
       try {
         const key = readKey(folder);
         hide(key);

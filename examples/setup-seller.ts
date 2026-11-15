@@ -86,7 +86,14 @@ export interface State {
   firstDeal?: FirstDeal;
   /** First deals that ended without a release and were set aside by `first-deal --again`. None is ever continued. */
   ended?: FirstDeal[];
+  /** The listing step (T-486): what `list` sent, to whom, when and the answer's status; or that the person declined. No deal reads it. */
+  listing?: Listing;
+  /** The last `list` that the receiver refused or did not answer, with a reason from a fixed list and no word of the answer. It counts as neither a listing nor a skip. */
+  listingFailed?: { website: string; to: string; at: string; status: number | null; reason: string };
 }
+
+/** The listing step's record: a website sent to the list, or a skip. */
+export type Listing = { website: string; to: string; at: string; status: number } | { skipped: true; at: string };
 
 export function readState(folder: string): State | undefined {
   let text: string;
@@ -195,6 +202,15 @@ export function placeProblems(folder: string, card: string): Array<{ flag: strin
   return out;
 }
 
+/** Another live run holds the folder's lock; `pid` is its process number, or NaN when the lock does not name one. */
+export class LockHeld extends Error {
+  readonly pid: number;
+  constructor(message: string, pid: number) {
+    super(message);
+    this.pid = pid;
+  }
+}
+
 /**
  * Runs `body` as the one run working in `folder`: crow.lock names this process. A run that finds the lock of a live
  * process waits up to `waitMs` (0: not at all) and then says so; the lock of a process that is gone is taken over.
@@ -223,7 +239,7 @@ export async function locked<T>(folder: string, waitMs: number, body: () => T | 
       }
     }
     if (gone) rmSync(lock, { force: true });
-    else if (Date.now() >= end) throw new Error(`another run of this command${Number.isSafeInteger(pid) ? ` (process ${pid})` : ''} is working in ${folder}: wait for it to end. If none is, delete ${FILES.lock}`);
+    else if (Date.now() >= end) throw new LockHeld(`another run of this command${Number.isSafeInteger(pid) ? ` (process ${pid})` : ''} is working in ${folder}: wait for it to end. If none is, delete ${FILES.lock}`, pid);
   }
   try {
     return await body();
@@ -357,6 +373,7 @@ export async function seller(c: Call): Promise<number> {
         keys: `${FILES.key} holds the signing key, mode 0600, on this machine only. Never read, print or copy it.`,
         ...(payout.thisKey ? { payoutNote: `Every deal names this folder's standing address ${address} as its payout address in its public terms, which links this folder's deals to one another. Its key is on this machine, in ${FILES.key}.` } : { payoutNote: `Every deal names ${payout.address} as its payout address in its public terms, which links this folder's deals to one another.` }),
         sent: 'nothing',
+        next: "Next, the listing step: list --website <https URL> sends your website to Crow's list of who uses it, and list --skip declines. No deal depends on it. Then first-deal.",
       });
       return 0;
     });

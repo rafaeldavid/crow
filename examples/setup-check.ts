@@ -10,7 +10,8 @@
 //   sample          a result the sample API gives passes the deal's checks, through the adjudicator's first stage
 //   required-field  the same result with a field removed fails them: the checks are not empty
 //   secrets         no key's value is in a file outside keys/, in the folder or in the card's folder
-import { existsSync, mkdirSync, readdirSync, readFileSync, statSync, writeFileSync } from 'node:fs';
+import { randomBytes } from 'node:crypto';
+import { existsSync, mkdirSync, readdirSync, readFileSync, renameSync, statSync, writeFileSync } from 'node:fs';
 import { join } from 'node:path';
 import { parseTermsYaml } from '@holdback/testkit';
 import { checkDelivery } from './check-delivery.ts';
@@ -81,11 +82,21 @@ function withoutAField(result: Uint8Array, format: string): { bytes: Uint8Array;
   return null;
 }
 
+/** True when `e` says the path is not there: another run removed it after it was listed (T-486, the CI race). */
+const gone = (e: unknown): boolean => (e as NodeJS.ErrnoException)?.code === 'ENOENT';
+
 /** Every file under `dir`, by its full path, leaving the folder `skip` out wherever it is reached. A link is listed, never followed. */
 function filesUnder(dir: string, skip: string): { files: string[]; links: string[] } {
   const files: string[] = [], links: string[] = [];
   const walk = (at: string) => {
-    for (const entry of readdirSync(at, { withFileTypes: true })) {
+    let entries;
+    try {
+      entries = readdirSync(at, { withFileTypes: true });
+    } catch (e) {
+      if (gone(e) && at !== dir) return; // a folder another run removed after it was listed: nothing in it to read
+      throw e;
+    }
+    for (const entry of entries) {
       const path = join(at, entry.name);
       if (path === skip) continue;
       if (entry.isSymbolicLink()) links.push(path);
@@ -95,6 +106,59 @@ function filesUnder(dir: string, skip: string): { files: string[]; links: string
   };
   walk(dir);
   return { files, links };
+}
+
+/** What writeWhole needs of the file system; the test passes its own to see the order of the two steps. */
+export interface WriteIo {
+  write(path: string, data: string | Uint8Array): void;
+  rename(from: string, to: string): void;
+}
+const WRITE_FILE_SYSTEM: WriteIo = { write: (p, d) => writeFileSync(p, d), rename: (a, b) => renameSync(a, b) };
+
+/**
+ * Writes `data` to `path` whole: to a temporary name of its own beside it, then renamed into place. Another run that
+ * reads `path` at the same moment sees the file it had or the new one, never a half-written file (T-486: CI caught one
+ * run's check reading sample/terms.json while another run was writing it).
+ */
+export function writeWhole(path: string, data: string | Uint8Array, io: WriteIo = WRITE_FILE_SYSTEM): void {
+  const part = `${path}.${process.pid}.${randomBytes(6).toString('hex')}.part`;
+  io.write(part, data);
+  io.rename(part, path);
+}
+
+/** What the secrets check needs of the file system; the test passes its own to make a file vanish between two steps. */
+export interface ScanIo {
+  size(path: string): number;
+  read(path: string): string;
+}
+const FILE_SYSTEM: ScanIo = { size: (p) => statSync(p).size, read: (p) => readFileSync(p, 'latin1') };
+
+/**
+ * Reads each listed file and fails on the first that holds one of `forms`, a key's value. A file that is gone when it is
+ * read was removed after it was listed, by another run working in the same folder (its `crow.lock`, a temporary file):
+ * it holds nothing now, so it is passed over and counted, not a finding. Any other error still fails the check. Every
+ * file is read, `crow.lock` included: leaving one name out would make a place a key could sit unseen.
+ */
+export function scanFiles(files: Iterable<string>, forms: string[], io: ScanIo = FILE_SYSTEM): { read: number; large: string[]; gone: number } {
+  let read = 0, vanished = 0;
+  const large: string[] = [];
+  for (const path of files) {
+    let text: string;
+    try {
+      if (io.size(path) > MAX_SCANNED_BYTES) {
+        large.push(path);
+        continue;
+      }
+      text = io.read(path);
+    } catch (e) {
+      if (!gone(e)) throw e;
+      vanished += 1;
+      continue;
+    }
+    if (forms.some((f) => text.includes(f))) throw new Error(`${path} holds a key's value: a key belongs in ${FILES.keys}/ only. Remove it from that file`);
+    read += 1;
+  }
+  return { read, large, gone: vanished };
 }
 
 /** The key of each deal the folder's journal holds: each is derived from the signing key and the deal's own nonce. */
@@ -173,8 +237,8 @@ export async function runChecks(folder: string): Promise<CheckResult[]> {
     format = String(t.deliverable?.format);
     const bytes = await sampleResultOf(scope);
     mkdirSync(join(folder, 'sample'), { recursive: true });
-    writeFileSync(join(folder, FILES.sampleTerms), `${JSON.stringify({ deliverable: t.deliverable, acceptance: t.acceptance }, null, 2)}\n`);
-    writeFileSync(join(folder, FILES.sampleResult), bytes);
+    writeWhole(join(folder, FILES.sampleTerms), `${JSON.stringify({ deliverable: t.deliverable, acceptance: t.acceptance }, null, 2)}\n`);
+    writeWhole(join(folder, FILES.sampleResult), bytes);
     const r = checkDelivery({ terms: join(folder, FILES.sampleTerms), file: join(folder, FILES.sampleResult) });
     if (r.exitCode !== 0) throw new Error(`the checks refuse the sample result. ${r.lines.filter((l) => /^Result|^ {2}FAIL|^ {2}OPEN/.test(l)).join(' ')}`);
     result = bytes;
@@ -185,7 +249,7 @@ export async function runChecks(folder: string): Promise<CheckResult[]> {
     if (!result) throw new Error('not run: there is no sample result that passes');
     const cut = withoutAField(result, format);
     if (!cut) throw new Error(`a ${plain(format, 60)} result has no field this check can remove`);
-    writeFileSync(join(folder, FILES.sampleCut), cut.bytes);
+    writeWhole(join(folder, FILES.sampleCut), cut.bytes);
     const r = checkDelivery({ terms: join(folder, FILES.sampleTerms), file: join(folder, FILES.sampleCut) });
     if (r.exitCode !== 1) throw new Error(`the checks still pass the sample result with ${cut.what} removed: they do not check what the result holds`);
     return `the sample result with ${cut.what} removed fails the checks`;
@@ -198,16 +262,9 @@ export async function runChecks(folder: string): Promise<CheckResult[]> {
     // The folder and the card's folder, each file once; keys/ itself is left out wherever a walk reaches it.
     const found = [folder, ...(state?.card && existsSync(state.card) ? [state.card] : [])].map((dir) => filesUnder(dir, join(folder, FILES.keys)));
     const files = new Set(found.flatMap((f) => f.files)), links = [...new Set(found.flatMap((f) => f.links))];
-    const large: string[] = [];
-    for (const path of files) {
-      if (statSync(path).size > MAX_SCANNED_BYTES) {
-        large.push(path);
-        continue;
-      }
-      const text = readFileSync(path, 'latin1');
-      if (forms.some((f) => text.includes(f))) throw new Error(`${path} holds a key's value: a key belongs in ${FILES.keys}/ only. Remove it from that file`);
-    }
-    return `no key's value in the ${files.size - large.length} files read outside ${FILES.keys}/`
+    const { read, large, gone: vanished } = scanFiles(files, forms);
+    return `no key's value in the ${read} files read outside ${FILES.keys}/`
+      + (vanished ? `; ${vanished} listed file${vanished === 1 ? ' was' : 's were'} gone when read, removed by another run in this folder` : '')
       + (large.length ? `; not read, as each is over ${MAX_SCANNED_BYTES} bytes: ${large.map((p) => plain(p, 200)).join(', ')}` : '')
       + (links.length ? `; not followed, as each is a symbolic link: ${links.map((p) => plain(p, 200)).join(', ')}` : '');
   });

@@ -35,6 +35,10 @@ const EXEMPT: Record<string, string> = {
   'examples/signer-anvil.test.ts': "the signer's token-level attack test (T-439); the anvil job's file list is tier 3, so it runs locally until Rafa adds it",
   // Gated on the platform, not on a tool: the cases run in the test shards, on Linux as a user who is not root.
   'packages/core/src/store/store.test.ts': 'gated on mkfifo and on not being root: both hold on the CI runners',
+  // T-486: one case needs a folder its user cannot write, which root and Windows do not give; the CI runners are Linux, not root.
+  'examples/setup-list.test.ts': 'one case gated on not being root and not Windows: both hold on the CI runners',
+  // T-486: one case makes a certificate with openssl, which the CI runners' image carries.
+  'tests/listing-check.test.ts': 'one case gated on openssl being present: the CI runners carry it',
   // A wall-clock run at 10 MB, off unless HOLDBACK_PERF=1: tests do not assert on wall-clock time (docs/team.md).
   'packages/judgment/src/redteam.test.ts': 'an opt-in performance run (HOLDBACK_PERF=1), off by design',
 };
