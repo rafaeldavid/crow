@@ -75,6 +75,16 @@ describe('the scripted runs, one per scenario', () => {
     expect(records[id].outcome).toMatchObject({ success: false, state: 'blocked', commitmentId: null });
     expect(records[id].outcome.blockedBy).toMatch(/^N70: the test seller/);
     expect(records[id].apiCalls.total).toBe(0);
+    expect(records[id].schema).toBe('crow.metrics.one-click/2');
+    expect('setup' in records[id]).toBe(false);
+  });
+
+  // T-473: the two setup scenarios wait for their setup command, and still write a valid version 3 record.
+  it.each([['s7', 'T-483'], ['s8', 'T-475']])('%s writes a blocked setup record that names %s, with both counts unknown', (id, task) => {
+    expect(records[id].schema).toBe('crow.metrics.one-click/3');
+    expect(records[id].outcome).toMatchObject({ success: false, state: 'blocked', commitmentId: null });
+    expect(records[id].outcome.blockedBy.startsWith(`${task}: `)).toBe(true);
+    expect(records[id].setup).toEqual({ markerSeen: false, requestsBeforeFirstDeal: null, guideFilesFetched: null });
   });
 });
 
@@ -244,7 +254,7 @@ describe('the record, from fixed bookkeeping', () => {
   });
 });
 
-describe('the schema, version 2 beside version 1', () => {
+describe('the schema, version 3 beside versions 2 and 1', () => {
   const r = liveRecord();
   it('accepts a live record', () => expect(check('one-click', r)).toEqual({ ok: true, errors: [] }));
   it('refuses an unknown field, an unknown mode and a float for money', () => {
@@ -256,8 +266,9 @@ describe('the schema, version 2 beside version 1', () => {
     expect(check('one-click', { ...r, agent: { ...r.agent, kind: 'scripted' } }).ok).toBe(false);
     expect(check('one-click', { ...r, world: { ...r.world, engine: 'local' } }).ok).toBe(false);
   });
-  it('refuses a version 2 record shaped as version 1, and a run ID outside the six scenarios', () => {
+  it('refuses a record shaped as version 1, and a scenario outside the eight', () => {
+    expect(r.schema).toBe('crow.metrics.one-click/2');
     expect(check('one-click', { ...r, runId: '2026-11-14T10-00-00Z-buyer' }).ok).toBe(false);
-    expect(check('one-click', { ...r, scenario: { ...r.scenario, id: 's7' } }).ok).toBe(false);
+    expect(check('one-click', { ...r, scenario: { ...r.scenario, id: 's9' } }).ok).toBe(false);
   });
 });

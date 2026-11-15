@@ -5,8 +5,8 @@
 - **Depends on:** T-471 (the design). To start: nothing. To unblock its two scenarios: T-483 (a seller's own API) and T-475 (the buyer's setup).
 - **Paths this task may touch:** `tools/one-click/scenarios.mjs`, `tools/one-click/scripted/` (new scripts), `tools/one-click/bench.mjs`, `bench-local.mjs`, `bench-live.mjs`, `bench-record.mjs`, `probes.mjs`, `tools/one-click/README.md`, `scripts/metrics/schemas/one-click.schema.json`, `scripts/metrics/schemas/one-click-summary.schema.json`, `scripts/metrics/one-click-summary.mjs`, `tests/metrics/`, this file. Nothing under `examples/`, `site/` or `apps/`.
 - **Human gate:** yes, for the live runs only: they spend a model key, so Rafa starts them (`tools/one-click/README.md`). The merge has no gate.
-- **Status:** todo
-- **Agent/session:** not started; can run in parallel with T-472
+- **Status:** in progress
+- **Agent/session:** a sub-session of the coordinator, 2026-11-15, branch `t-473-setup-benchmark`
 - **Roadmap row:** N160
 - **Change kind:** 4 is the nearest recipe (tool code and its tests). Local checks: `pnpm exec vitest run tests/metrics`.
 - **Review:** one `reviewer` pass. No red team: the harness's fence and key handling do not change. If the task must widen the sandbox's hosts or the environment filter, it stops and says so in Handoff.
@@ -36,14 +36,14 @@ Non-goals: the setup command itself; the live runs; Crow Control's reader of the
 
 ## Acceptance criteria
 
-- [ ] **Probed first:** whether an agent inside the harness's sandbox can reach a job API on the loopback address. The sandbox's allow-list names no local address. If it cannot without a change to the fence, the task says so in Handoff and s7's live run waits for T-482's machine; the scripted run does not depend on it.
-- [ ] `scenarios.mjs` has `s7` and `s8`, each with a goal that carries every answer a person would give (the price and the payout address; the two limits), because the harness answers every question "yes".
-- [ ] Until the setup command exists, each new scenario is `blockedBy` its task and still writes a valid record. When T-483 lands, s7's scripted agent runs the setup command in the in-process world and ends `Released`; the same for s8 when T-475 lands. This task's pull request may land before either, with the scenarios blocked.
-- [ ] **s7 succeeds only with an outside buyer:** the commitment's buyer is the test buyer's address. A deal the setup command bought itself is recorded as not successful.
-- [ ] The record gains `setup.requestsBeforeFirstDeal` (by host, the count of requests that name the party before the marker) and `setup.guideFilesFetched`. A run with no marker records both as unknown, never as 0. The record's schema version moves, and the summary reads both versions.
-- [ ] The summary reports s7 and s8 apart from the six deal scenarios, so the headline of approvals per deal does not move when they are added.
-- [ ] `tests/metrics` covers: a scripted record with the new fields; a run whose setup step posts to the faucet before the marker, which the count shows as 1; a run with no marker; the summary with and without the new scenarios.
-- [ ] `tools/one-click/README.md` lists the two scenarios and the commands for their live runs. Its stale line that the seller scenario of `run.mjs` waits for the test buyer is corrected.
+- [x] **Probed first:** whether an agent inside the harness's sandbox can reach a job API on the loopback address. The sandbox's allow-list names no local address. If it cannot without a change to the fence, the task says so in Handoff and s7's live run waits for T-482's machine; the scripted run does not depend on it.
+- [x] `scenarios.mjs` has `s7` and `s8`, each with a goal that carries every answer a person would give (the price and the payout address; the two limits), because the harness answers every question "yes".
+- [x] Until the setup command exists, each new scenario is `blockedBy` its task and still writes a valid record. When T-483 lands, s7's scripted agent runs the setup command in the in-process world and ends `Released`; the same for s8 when T-475 lands. This task's pull request may land before either, with the scenarios blocked.
+- [x] **s7 succeeds only with an outside buyer:** the commitment's buyer is the test buyer's address. A deal the setup command bought itself is recorded as not successful.
+- [x] The record gains `setup.requestsBeforeFirstDeal` (by host, the count of requests that name the party before the marker) and `setup.guideFilesFetched`. A run with no marker records both as unknown, never as 0. The record's schema version moves, and the summary reads both versions.
+- [x] The summary reports s7 and s8 apart from the six deal scenarios, so the headline of approvals per deal does not move when they are added.
+- [x] `tests/metrics` covers: a scripted record with the new fields; a run whose setup step posts to the faucet before the marker, which the count shows as 1; a run with no marker; the summary with and without the new scenarios.
+- [x] `tools/one-click/README.md` lists the two scenarios and the commands for their live runs. Its stale line that the seller scenario of `run.mjs` waits for the test buyer is corrected.
 
 ## Out of scope
 
@@ -55,12 +55,44 @@ Non-goals: the setup command itself; the live runs; Crow Control's reader of the
 Fill this in before review. Label each item measured, inferred or guessed.
 
 - Commands run and results:
-- Metrics:
+  - `pnpm exec vitest run tests/metrics`: 256 passed, 17 skipped, 14 files, in 10 s, after the review's fixes [measured, 2026-11-15]. Before them: 234 passed.
+  - `node tools/one-click/bench.mjs --scenario all`: eight valid records. s1, s3, s4 and s6 settle; s2 and s5 blocked on N70; s7 blocked on T-483, s8 on T-475, each with `setup` reading `markerSeen: false` and both counts `null` [measured].
+  - `pnpm exec eslint tools/one-click scripts/metrics tests/metrics` and `pnpm typecheck`: clean [measured].
+  - The rehearsal of s7's scripted path (`tests/metrics/fixtures/setup-rehearsal.ts` through `playScripted`): a faucet post before the marker counts 1, on the in-process operator's origin; without it, 0; both end `Released` with the test buyer as the buyer [measured]. It found one bug before merge: the operator serves `/terms` as the terms object itself, so the buyer is its top-level `buyer`.
+- **The probe** (criterion 1). The pinned Claude Code (`@anthropic-ai/claude-agent-sdk` 0.3.318) writes a macOS sandbox profile that allows outbound connections to `localhost:*` only when `allowLocalBinding` is set; otherwise only to its own proxy's ports [inferred: read from the profile builder in the pinned binary]. `bench-live.mjs` sets no `allowLocalBinding`, and its domain allow-list names no local address [measured, the file]. Rehearsed with `sandbox-exec` against a server on 127.0.0.1:48731: under a profile that allows only another localhost port, `curl` fails to connect (exit 7); under the `localhost:*` rule, it answers [measured]. So an agent in the harness's sandbox cannot reach a job API on the loopback address without a wider fence, and `allowLocalBinding` would open every local port, in and out. The fence is unchanged; s7's live run waits for T-482.
+- Metrics: no live run; none was in scope. The setup numbers in the summary read `missing` until Rafa's first runs.
+- **The review** (one `reviewer` pass on pull request 582, 2026-11-15): ISSUES, 7 findings, 1 High. Six were fixed; one needed no change:
+  1. High, fixed: the count could read 0 when the party was named. Curl's method parsing missed `-XPOST`, `-d@file`, `--request=POST` and `-sd` (now `curlMethodOf`). A query holding an address was dropped; both probes now log whether the query holds one, and never the query.
+  2. Medium, fixed: WebFetch requests reached no probe. They now count in `setup` (not in `apiCalls`). A run whose probes logged no call at or after the marker now reads both counts as unknown.
+  3. Medium, fixed: the schema now refuses counts that contradict "unknown, never 0", and a version 3 record of another scenario.
+  4. Medium, fixed: version 3 for every scenario would have hidden new deal runs from Crow Control, whose reader keeps version 2 only. Deal scenarios keep writing version 2; version 3 is s7 and s8 only.
+  5. Low, fixed: `runs.live` and `runs.liveCompleted` count deal runs only.
+  6. Low, fixed: stale header comments, and the README now names escrow.stream.
+  7. Low, no change: the test buyer could sign with a per-deal key, so the buyer check would refuse a real sale. The test buyer refuses any offer that names a buyer other than its one standing address (`apps/test-agents/src/buyer.ts`, line 147), and that address is its card's `buyer` [measured, the code].
 
 ## Decisions
 
-Choices made inside this task.
+- **The marker** (fixed here, for T-472): when `first-deal` starts, before it sends anything, it prints `crow-setup: first-deal started <ms since the epoch>` on standard error and writes the same line to `first-deal.started` in its folder. The harness takes the earliest marker inside the run's own time: from the script's standard error in a scripted run; from the agent's command output (the time only) and from that file anywhere under the run's two folders in a live run. A time outside the run is ignored.
+- **The request rule's edges.** A call with no time counts as before the marker, and curl's time is to the second, so either reads high. A Crow-run host is crow.direct and its subdomains, and escrow.stream. In the in-process world it is the world's own operator and test-agent origins, so the party's own job API on 127.0.0.1 is not one. An address is `0x` and 40 hex digits not inside a longer hex run, in the path or the query, so a commitment ID is not one. The rule cannot see an address in a body, so a 0 means no request the probes saw named the party; it does not prove none did (README, "What the rule cannot see").
+- **Guide files** count over the whole run, WebFetch requests included, as the design's "13 for a seller with its own API" does. They read unknown with no marker, as the criterion asks.
+- **The record's version:** the setup scenarios write version 3; the six deal scenarios keep writing version 2, so Crow Control's version 2 reader keeps reading them (review, finding 4). Both versions share one `Bench` definition. Version 2 refuses a `setup` block and s7 and s8; version 3 takes s7 and s8 only, and requires a `setup` block whose unknown counts go together.
+- **The summary's version stays 1:** `setup` is an optional field, as `sandboxAuto` was in T-441. The headline, `byScenario`, `runs.live` and `runs.liveCompleted` take the six deal scenarios only. `setup` holds s7 and s8, each with the four numbers in both permission modes and the medians of the two counts over the runs whose counts are known. The headline's rule (one median over every deal scenario) is unchanged.
+- **The goals.** s7: a job API at `{jobApi}`, 20 tUSDC (under the test buyer's 50 tUSDC limit), and `{payout}`, a fresh random 20-byte address per run whose key no one holds. s8: 40 tUSDC per deal and 100 tUSDC per day, above the test seller's 25 tUSDC dataset. A live run whose goal still names a placeholder the harness cannot serve stops before it sends anything.
+- **s7's buyer check** applies to s7 only. s3 and s6 could take it too (follow-up below).
+- **The scripted world's part of a run** moved from `bench.mjs` to `bench-local.mjs` (`playScripted`), so the tests drive the same path.
 
 ## Handoff
 
-Not started. The marker's form is this task's to fix with T-472: one line on the setup command's standard error and one file in its folder is the proposal.
+**State: built; s7 and s8 are blocked, as this task allows.** What waits, and how each blocker's session switches it on:
+
+- **T-472 (the setup command):** print and write the marker as in Decisions. With the sandbox, a live agent can write only in the run's two folders, so the setup folder must be one the person names inside the working folder, or the default `~/.crow/<name>` fails in a live run (inferred from `bench-live.mjs`'s write list).
+- **T-483 (a seller's own API) switches s7's scripted run on:** add a script under `tools/one-click/scripted/` that runs the setup command against `CROW_BENCH_JOB_API` (key in `CROW_BENCH_JOB_API_KEY`, payout in `CROW_BENCH_PAYOUT`; or `{jobApi}` and `{payout}` in its arguments), prints the command's standard error, and ends with `done      commitment <id> Released`. Then set s7's `scripted` to `{ script, args, needs: 'buyer', jobApi: true }`. `tests/metrics/one-click-bench.test.ts` then expects s7 to complete: change its runnable list and drop s7 from the blocked list. Open question for T-483: how a live run gives the job API's credential, since the design keeps secrets out of the chat and `secret` is a person's step.
+- **T-475 (the buyer's setup) switches s8 on:** the same, with `needs: 'seller'`, and remove s8's `live.blockedBy`. s8's live run can then run on this Mac.
+- **T-482 (a machine of its own) switches s7's live run on:** serve the job API beside the agent on that machine, fill `{jobApi}` there, and remove s7's `live.blockedBy`. Until then `bench.mjs --scenario s7 --live` exits 2 and sends nothing.
+- **For Rafa, the first live runs** (once unblocked): the commands are in `tools/one-click/README.md`, "The two setup scenarios"; the same spend-capped `HOLDBACK_AGENT_ANTHROPIC_API_KEY` as the deal scenarios, one run at a time.
+- **For the coordinator, Crow Control's reader** (the private repository, `control/bench.mjs`, out of this task's scope). Deal records stay `crow.metrics.one-click/2`, so the Benchmark panel keeps working unchanged. To show the setup runs, it needs to read `/3` records (scenario IDs s7 and s8, the `setup` block) and the summary's optional `setup` field. Nothing breaks before that; s7 and s8 simply do not show.
+
+**Follow-ups, not built:**
+
+- s3 and s6 sell to the test buyer too, and could take s7's buyer check, so a deal a script bought from itself never counts there either.
+- `run.mjs`'s own message still says the seller scenario waits for T-222; the README now says it runs. `run.mjs` is outside this task's paths.

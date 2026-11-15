@@ -1,7 +1,7 @@
 {
   "$schema": "https://json-schema.org/draft/2020-12/schema",
   "$id": "https://escrow.stream/metrics/schemas/one-click-summary.schema.json",
-  "title": "one-click-summary.json: the benchmark's headline numbers from the harness's version 2 records (T-412, scripts/metrics/one-click-summary.mjs)",
+  "title": "one-click-summary.json: the benchmark's headline numbers from the harness's version 2 and 3 records (T-412, T-473, scripts/metrics/one-click-summary.mjs)",
   "description": "Only live records that reached their scenario's end state fill a number; a number with none reads state missing and value null.",
   "type": "object",
   "$ref": "common.schema.json#/$defs/Envelope",
@@ -47,9 +47,45 @@
         "s5": { "$ref": "#/$defs/Scenario" },
         "s6": { "$ref": "#/$defs/Scenario" }
       }
+    },
+    "setup": {
+      "description": "The setup scenarios (T-473), each apart from the six deal scenarios, so they move no headline number. Absent from summaries written before T-473.",
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["s7", "s8"],
+      "properties": {
+        "s7": { "$ref": "#/$defs/SetupScenario" },
+        "s8": { "$ref": "#/$defs/SetupScenario" }
+      }
     }
   },
   "$defs": {
+    "SetupScenario": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["live", "liveCompleted", "latestLive", "latestScripted", "headline", "sandboxAuto"],
+      "properties": {
+        "live": { "$ref": "common.schema.json#/$defs/Count" },
+        "liveCompleted": { "$ref": "common.schema.json#/$defs/Count" },
+        "latestLive": { "oneOf": [{ "type": "null" }, { "$ref": "#/$defs/Run" }] },
+        "latestScripted": { "oneOf": [{ "type": "null" }, { "$ref": "#/$defs/Run" }] },
+        "headline": { "$ref": "#/$defs/SetupHeadline", "description": "Completed live runs in the prompt permission mode, newest 10." },
+        "sandboxAuto": { "$ref": "#/$defs/SetupHeadline", "description": "Completed live runs in the sandbox-auto permission mode, newest 10." }
+      }
+    },
+    "SetupHeadline": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["approvalsPerDeal", "tokensPerDeal", "timeWithoutUserMs", "costPerDealUsdMicros", "requestsBeforeFirstDeal", "guideFilesFetched"],
+      "properties": {
+        "approvalsPerDeal": { "$ref": "#/$defs/IntMetric" },
+        "timeWithoutUserMs": { "$ref": "#/$defs/IntMetric" },
+        "tokensPerDeal": { "$ref": "#/$defs/Headline/properties/tokensPerDeal" },
+        "costPerDealUsdMicros": { "$ref": "#/$defs/Headline/properties/costPerDealUsdMicros" },
+        "requestsBeforeFirstDeal": { "$ref": "#/$defs/IntMetric", "description": "Median over the runs whose count is known; deals counts those runs." },
+        "guideFilesFetched": { "$ref": "#/$defs/IntMetric", "description": "Median over the runs whose count is known; deals counts those runs." }
+      }
+    },
     "Headline": {
       "type": "object",
       "additionalProperties": false,
@@ -97,7 +133,7 @@
       "additionalProperties": false,
       "required": ["runId", "state", "success"],
       "properties": {
-        "runId": { "type": "string", "pattern": "^\\d{4}-\\d{2}-\\d{2}T\\d{2}-\\d{2}-\\d{2}Z-s[1-6]$" },
+        "runId": { "type": "string", "pattern": "^\\d{4}-\\d{2}-\\d{2}T\\d{2}-\\d{2}-\\d{2}Z-s[1-8]$" },
         "state": { "enum": ["Released", "Refunded", "stopped", "timedOut", "blocked"] },
         "success": { "type": "boolean" },
         "blockedBy": { "type": ["string", "null"], "maxLength": 300 },
