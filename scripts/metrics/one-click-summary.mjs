@@ -24,7 +24,7 @@ import { check, loadSchemas } from './check.mjs';
 import { ROOT, cli, envelope, gitCommit, isMain, quantile, writeJson } from './lib.mjs';
 
 export const MEDIAN_OF = 10;
-const SCENARIO_IDS = ['s1', 's2', 's3', 's4', 's5', 's6']; // the deal scenarios: the headline per deal
+const SCENARIO_IDS = ['s1', 's2', 's3', 's4', 's5', 's6', 's9']; // the deal scenarios: the headline per deal (s9, a buyer by quote from buy.txt: T-489)
 const SETUP_IDS = ['s7', 's8']; // the setup scenarios (T-473): reported apart
 const MAX_BYTES = 1 << 20;
 

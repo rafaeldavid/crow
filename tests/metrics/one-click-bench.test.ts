@@ -49,8 +49,8 @@ describe('the scripted runs, one per scenario', () => {
   });
 
   const runnable = SCENARIO_IDS.filter((id) => !('blockedBy' in SCENARIOS[id as keyof typeof SCENARIOS].scripted));
-  it('runs s1, s3, s4 and s6 today, and records s2 and s5 as blocked', () => {
-    expect(runnable).toEqual(['s1', 's3', 's4', 's6']);
+  it('runs s1, s3, s4, s6 and s9 today, and records s2 and s5 as blocked', () => {
+    expect(runnable).toEqual(['s1', 's3', 's4', 's6', 's9']);
   });
 
   it.each(runnable)('%s reaches its end state against the Crow test agent it names', (id) => {
@@ -266,9 +266,12 @@ describe('the schema, version 3 beside versions 2 and 1', () => {
     expect(check('one-click', { ...r, agent: { ...r.agent, kind: 'scripted' } }).ok).toBe(false);
     expect(check('one-click', { ...r, world: { ...r.world, engine: 'local' } }).ok).toBe(false);
   });
-  it('refuses a record shaped as version 1, and a scenario outside the eight', () => {
+  it('refuses a record shaped as version 1, and a scenario outside the nine', () => {
     expect(r.schema).toBe('crow.metrics.one-click/2');
     expect(check('one-click', { ...r, runId: '2026-11-14T10-00-00Z-buyer' }).ok).toBe(false);
-    expect(check('one-click', { ...r, scenario: { ...r.scenario, id: 's9' } }).ok).toBe(false);
+    expect(check('one-click', { ...r, scenario: { ...r.scenario, id: 's10' } }).ok).toBe(false);
+    // T-489: s9 is a deal scenario, version 2; s7 and s8 stay version 3 only.
+    expect(check('one-click', { ...r, runId: r.runId.replace(/s\d$/, 's9'), scenario: { ...r.scenario, id: 's9' } }).ok).toBe(true);
+    expect(check('one-click', { ...r, runId: r.runId.replace(/s\d$/, 's7'), scenario: { ...r.scenario, id: 's7' } }).ok).toBe(false);
   });
 });

@@ -26,6 +26,9 @@ Run `pnpm install` and `pnpm build` once first (the scripted world imports the b
 | s4 | A delivery that fails the checks | Refunded | the test seller | `examples/try.ts --seller --outcome refund` |
 | s5 | A missed deadline; the buyer reclaims | Refunded | the test seller | blocked: no outcome that never delivers (N70) |
 | s6 | A robot's data log checked against an agreed format | Released | the test buyer | `scripted/robot-log.ts` |
+| s9 | A quoted job, from the buyer's guide alone (T-489): its goal names `https://crow.direct/buy.txt`, not `llms.txt` | Released | the test seller's quote address | `scripted/buy-by-quote.ts`: the pinned `site/buy.mjs`, step by step |
+
+s9 is a deal scenario: the summary counts it in the headline per deal beside s1 to s6. Its live run needs the test seller's quote address and the `buy.txt` that names it, so start it only after both deploys (T-489's Handoff).
 
 ### The two setup scenarios (T-473)
 

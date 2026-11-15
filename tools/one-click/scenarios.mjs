@@ -17,6 +17,7 @@
 // sends anything. A goal's {placeholders} are filled per run (goalFor).
 
 export const DOCS = 'https://crow.direct/llms.txt';
+export const BUY_DOCS = 'https://crow.direct/buy.txt';
 export const SETUP_DOCS = 'https://crow.direct/setup.txt';
 const TAIL = 'using fresh keys you make yourself and test funds only.';
 // Asked of every live agent, so a guess becomes data: one line per guess, read by bench-record.mjs (docGapsOf).
@@ -90,6 +91,15 @@ export const SCENARIOS = {
     party: 'test-seller',
     live: { blockedBy: 'T-475: setup.txt has no buyer path yet (the standing buyer and its limits file)' },
     scripted: { blockedBy: 'T-475: the setup command has no buyer path yet (the standing buyer and its limits file)' },
+  },
+  // T-489: the buyer's guide on its own, against the quote address of Crow's test seller. A deal scenario: the summary
+  // counts its live runs in the headline per deal with s1 to s6. The scripted run is the pinned buy.mjs, step by step.
+  s9: {
+    name: "a quoted job, from the buyer's guide alone",
+    goal: `Using the buyer's guide at ${BUY_DOCS}, buy one job by quote from Crow's live test seller on Sepolia and take the deal through to Released, ${TAIL}`,
+    endState: 'Released',
+    party: 'test-seller',
+    scripted: { script: 'tools/one-click/scripted/buy-by-quote.ts', args: ['--seller', '{seller}'], needs: 'seller' },
   },
 };
 

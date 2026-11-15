@@ -439,8 +439,10 @@ describe("the test seller's named offers (T-420)", () => {
 
   it('lists four offers by name on its card and its page, customers-3 first, each with its terms, fees and ending', async () => {
     const s = startSeller({ world: judged });
-    const card = await (await s.call('/agent.json')).json();
-    expect(card.offers.map((o: J) => o.id)).toEqual(['customers-3', 'summary-judged', 'summary-judged-fails', 'customers-3-silent']);
+    const all = await (await s.call('/agent.json')).json();
+    // T-489: the sample product by quote comes last, priced by its quote address rather than by fixed terms.
+    expect(all.offers.map((o: J) => o.id)).toEqual(['customers-3', 'summary-judged', 'summary-judged-fails', 'customers-3-silent', 'squares']);
+    const card = { ...all, offers: all.offers.slice(0, 4) };
     for (const o of card.offers) {
       expect(typeof o.ends).toBe('string');
       expect(BigInt(o.fees.total.amount)).toBe(BigInt(o.terms.price.amount) + BigInt(o.fees.adjudication.amount) + BigInt(o.fees.operator.amount));

@@ -15,10 +15,18 @@
 //   POST <base>/requests            {"type": "crow-request", proposal: {uri, sha256}, sealedKey, statusTokenHash}
 //   GET  <base>/status?token=<t>    the buyer's own request: status, commitmentId, outcome, transactions
 //   GET  <base>/health              operational or degraded, and how many deals are open
+//   POST <base>/quote               {buyer, buyerEncryptionPublicKey, buyerPaymentAddress?, scope}: an offer on Crow now (T-489)
+//   GET  <base>/defaults            the terms the quote offers, which the buyer's tool compares the offer with
+//
+// The quote address (T-489) serves site/buy.txt: a buyer's agent with the pinned buy.mjs asks for a price for the
+// setup's sample product (quote.ts) and gets an offer from the same standing address, under the same caps as the
+// intake and one of its own (catalog.ts, QUOTE_LIMITS). A quote costs no faucet grant: the standing address holds one
+// mandate, which the faucet renews about once a month.
 import type { Hex } from 'viem';
 import { Agent } from '../../../examples/agent.ts';
 import { freshNonce, jcs, openEnvelopeKey, operatorFeeOf, Refusal, type Intent, type Pin } from '../../../examples/verify.ts';
-import { ITEM_ID, LIMITS, offers, SILENT_TIMING, TIMING, workOf, type Limits, type Offer, type Outcome } from './catalog.ts';
+import { ITEM_ID, LIMITS, offers, QUOTE_LIMITS, QUOTE_TIMING, SILENT_TIMING, TIMING, workOf, type Limits, type Offer, type Outcome } from './catalog.ts';
+import { boundedJson, QUOTE_DESCRIPTION, QUOTE_ID, QUOTE_PRICE_UNITS, quoteDefaults, quoteTerms, quoteWork, readQuote, type QuoteRequest } from './quote.ts';
 import { encryptionKey, publicOf, signingKey } from './keys.ts';
 import { CARD_STYLE } from './headers.ts';
 
@@ -47,9 +55,17 @@ interface Pending {
 export interface Deal {
   n: number;
   status: Status;
-  tokenHash: string;
-  proposal: { uri: string; sha256: string };
-  sealedKey: string;
+  /** The intake's request: its status token's hash, its proposal and its sealed key. A deal by quote has none. */
+  tokenHash?: string;
+  proposal?: { uri: string; sha256: string };
+  sealedKey?: string;
+  /** 'quote': the deal came through POST /quote (T-489), was offered in that request, and sells the sample product. */
+  source?: 'quote';
+  /** A quote's scope, which its work is made from. */
+  scope?: { rows: number };
+  /** A quote's Idempotency-Key, hashed, and the answer it got: the same key and body replay it. */
+  quoteKeyHash?: string;
+  answer?: J;
   receivedAt: number;
   updatedAt: number;
   buyer?: string;
@@ -86,6 +102,9 @@ export interface SellerOptions {
   /** The windows it offers (catalog.ts), and the silent offer's; tests shorten them. */
   timing?: Record<string, number>;
   silentTiming?: Record<string, number>;
+  /** The quote address's windows and its own limits (catalog.ts); tests shorten them. */
+  quoteTiming?: Record<string, number>;
+  quoteLimits?: Partial<typeof QUOTE_LIMITS>;
   /** How long a transient failure is retried before the deal fails. Default 15 minutes. */
   retryForMs?: number;
   now?: () => number;
@@ -103,6 +122,11 @@ const pad = (n: number) => String(n).padStart(9, '0');
 export const storeUri = (uri: URL, origins: string[]): boolean => origins.includes(uri.origin) && /^\/v1\/ciphertext\/sha256:[0-9a-f]{64}$/.test(uri.pathname);
 const json = (body: unknown, status = 200, extra: Record<string, string> = {}) => new Response(JSON.stringify(body, null, 1), { status, headers: { 'content-type': 'application/json', 'cache-control': 'no-store', 'access-control-allow-origin': '*', ...extra } });
 const problem = (status: number, error: string, extra: Record<string, unknown> = {}) => json({ error, ...extra }, status, typeof extra['retryAfterSec'] === 'number' ? { 'retry-after': String(extra['retryAfterSec']) } : {});
+/**
+ * A refusal in the shape the seller adapter answers and buy.mjs reads (T-489): `{type, detail}`, where the detail names
+ * the next step. With `retryAfterSec`, the Retry-After header and the seconds in the body too.
+ */
+const refuse = (status: number, type: string, detail: string, retryAfterSec?: number) => json({ type, detail, ...(retryAfterSec === undefined ? {} : { retryAfterSec }) }, status, retryAfterSec === undefined ? {} : { 'retry-after': String(retryAfterSec) });
 const sha256hex = async (b: Uint8Array) => Buffer.from(await crypto.subtle.digest('SHA-256', new Uint8Array(b))).toString('hex');
 const day = (ms: number) => new Date(ms).toISOString().slice(0, 10);
 const message = (e: unknown) => (e instanceof Error ? e.message : String(e)).slice(0, 300);
@@ -147,12 +171,21 @@ export class TestSeller {
   private readonly clients = new Map<string, number[]>();
   private card: { at: number; value: J } | undefined;
   private prunedAt = 0;
+  /** Quotes run one at a time, so the caps they check and count cannot be raced while an offer is out. */
+  private quoting: Promise<unknown> = Promise.resolve();
+  /** The clients with a quote in line or being answered, and the open slots quotes hold while their offers are made (in memory only). */
+  private readonly inLine = new Set<string>();
+  private quoteSlots = 0;
+  private readonly quoteLimits: typeof QUOTE_LIMITS;
+  private readonly quoteTiming: Record<string, number>;
   private readonly o: SellerOptions;
 
   constructor(o: SellerOptions) {
     this.o = o;
     this.s = o.storage;
     this.limits = { ...LIMITS, ...o.limits };
+    this.quoteLimits = { ...QUOTE_LIMITS, ...o.quoteLimits };
+    this.quoteTiming = o.quoteTiming ?? QUOTE_TIMING;
     this.offers = offers(o.timing ?? TIMING, o.silentTiming ?? SILENT_TIMING);
     this.retryForMs = o.retryForMs ?? 15 * MIN;
     this.now = o.now ?? Date.now;
@@ -207,7 +240,8 @@ export class TestSeller {
       seller: this.agent.address,
       intake: { api: `${base}/requests`, status: `${base}/status`, health: `${base}/health`, encryptionPublicKey: this.intake.encryptionPublicKey, scheme: 'x25519-xsalsa20poly1305' },
       // Pick one by name: "offer": "<id>" in the proposal. Without it, the offer whose deliverable the proposal names.
-      offers: this.offers.map((o) => ({
+      offers: [
+        ...this.offers.map((o) => ({
         id: o.id,
         terms: this.termsOf(o),
         ...(fees ? { fees: fees(o) } : {}),
@@ -221,7 +255,15 @@ export class TestSeller {
             }
           : {}),
       })),
-      limits: this.limits,
+        // T-489: the sample product by quote, for a buyer that follows site/buy.txt. Last: examples/try.ts reads offers[0].
+        {
+          id: QUOTE_ID,
+          description: QUOTE_DESCRIPTION,
+          pricing: { kind: 'quoted', quote: `${base}/quote`, defaults: `${base}/defaults` },
+          ...(fees ? { fees: fees({ price: QUOTE_PRICE_UNITS } as Offer) } : {}),
+        },
+      ],
+      limits: { ...this.limits, quotesWaiting: this.quoteLimits.waiting },
       testTokensOnly: true,
     };
     if (fees) this.card = { at: now, value };
@@ -237,7 +279,8 @@ export class TestSeller {
       offer.fees
         ? `You pay ${units(BigInt(offer.fees.total.amount))} tUSDC in all: the ${units(BigInt(offer.terms.price.amount))} tUSDC price, the adjudicator's fee of ${units(BigInt(offer.fees.adjudication.amount))} tUSDC and the operator's fee of ${units(BigInt(offer.fees.operator.amount))} tUSDC.`
         : "You also pay the adjudicator's fee and the operator's fee, which the operators publish.";
-    const items = card.offers.map((o: J) => `<li><code>${o.id}</code>, ${units(BigInt(o.terms.price.amount))} tUSDC: ${o.ends} ${fees(o)}</li>`).join('\n');
+    const items = card.offers.filter((o: J) => o.terms).map((o: J) => `<li><code>${o.id}</code>, ${units(BigInt(o.terms.price.amount))} tUSDC: ${o.ends} ${fees(o)}</li>`).join('\n');
+    const quoted = card.offers.find((o: J) => o.id === QUOTE_ID);
     const l = card.limits;
     return `<!doctype html>
 <html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1">
@@ -252,6 +295,8 @@ export class TestSeller {
 ${items}
 </ul>
 <p>On <code>customers-3</code>, the columns, the row count (3) and unique IDs decide. To see a refund there, put <code>"test": {"outcome": "refund"}</code> in your proposal: it then delivers 2 rows, the rows check fails, and the price comes back; the two fees do not, and no key is released. The two judged offers are judged by the operators' live panel of pinned models from two families, within a daily budget: it takes ${l.judgedPerDay} judged deals a day (UTC), and none while the panel's budget for the day is spent or the operators' panel is scripted.</p>
+<h2>By quote</h2>
+<p>It also sells Crow's sample product by quote, for a buyer that follows <a href="https://crow.direct/buy.txt">https://crow.direct/buy.txt</a>: <code>squares.csv</code>, the squares of the whole numbers from 1 to <code>rows</code>, for ${units(BigInt(QUOTE_PRICE_UNITS))} tUSDC. ${fees({ terms: { price: { amount: QUOTE_PRICE_UNITS } }, fees: quoted?.fees })} The scope is <code>{"rows": &lt;3 to 50&gt;}</code>; three checks decide, and no judge reads it. Quote address <code>${quoted?.pricing.quote}</code>, defaults <code>${quoted?.pricing.defaults}</code>. At most ${this.quoteLimits.waiting} offers by quote wait for funding at once; an offer you do not fund expires after ${Math.round(Number(this.quoteTiming['offerExpiresInSec']) / 60)} minutes.</p>
 <p>To buy, follow "Try it: one command for each goal" in <a href="https://crow.direct/llms.txt">https://crow.direct/llms.txt</a>, or send a request as "Two agents, two people" in <a href="https://crow.direct/ref/intake.txt">https://crow.direct/ref/intake.txt</a> describes. Every offer comes from <code>${card.seller}</code>: check the seller in the terms against it. Unlike a person's intake, this page lists its address, because a public test seller has nothing to hide between deals.</p>
 <p>Crow's maintainers run both the operators and this seller. It holds its own keys and uses only the operators' public API, but it is not an independent business.</p>
 <p>Limits: ${l.perClientPerHour} requests per IP address an hour and ${l.perClientPerDay} a day; ${l.perHour} offers an hour and ${l.perDay} a day in all; ${l.open} in progress at once. When it is busy, it answers 429 with when to retry.</p>
@@ -269,6 +314,8 @@ ${items}
     if (path === `${base}/status` && request.method === 'GET') return this.status(url.searchParams.get('token') ?? '');
     if (path === `${base}/health` && request.method === 'GET') return this.health();
     if (path === `${base}/requests` && request.method === 'POST') return this.receive(request, client);
+    if (path === `${base}/defaults` && request.method === 'GET') return json(quoteDefaults(), 200, { 'cache-control': 'max-age=300' });
+    if (path === `${base}/quote`) return request.method === 'POST' ? this.quote(request, client) : refuse(405, 'method_not_allowed', `POST the quote to ${this.o.base}/quote, as buy.mjs does (https://crow.direct/buy.txt, step 3)`);
     return problem(404, `not found; the intake is at ${this.o.base}`);
   }
 
@@ -299,18 +346,11 @@ ${items}
     if (d) return problem(503, `the test seller cannot offer now: ${d.reason}`, { retryAfterSec: Math.ceil((d.since + HOUR - this.now()) / 1000) });
     const now = this.now();
     const busy = (why: string, until: number) => problem(429, `the test seller is busy: ${why}`, { retryAfterSec: Math.max(1, Math.ceil((until - now) / 1000)) });
-    const midnight = Date.parse(`${day(now)}T00:00:00Z`) + DAY;
-    if ((await this.s.list({ prefix: 'o:' })).size >= this.limits.open) return busy(`${this.limits.open} deals are in progress`, now + MIN);
+    if ((await this.s.list({ prefix: 'o:' })).size + this.quoteSlots >= this.limits.open) return busy(`${this.limits.open} deals are in progress`, now + MIN);
     // The shared hour and day caps count offers made, so requests that never open cannot use them up (offer() counts).
-    const full = await this.capped(now);
+    const full = (await this.capped(now)) ?? this.clientCapped(client, now);
     if (full) return busy(full.why, full.until);
-    const who = clientKey(client);
-    const mine = (this.clients.get(who) ?? []).filter((t) => now - t < DAY);
-    const mineLastHour = mine.filter((t) => now - t < HOUR);
-    if (mineLastHour.length >= this.limits.perClientPerHour) return busy(`${this.limits.perClientPerHour} requests from your IP address in the last hour`, Math.min(...mineLastHour) + HOUR);
-    if (mine.filter((t) => day(t) === day(now)).length >= this.limits.perClientPerDay) return busy(`${this.limits.perClientPerDay} requests from your IP address today (UTC)`, midnight);
-    this.clients.set(who, [...mine, now]);
-    for (const [c, times] of this.clients) if (times.every((t) => now - t >= DAY)) this.clients.delete(c);
+    this.countClient(client, now);
     const n = ((await this.s.get<number>('n')) ?? 0) + 1;
     const deal: Deal = { n, status: 'received', tokenHash: r.statusTokenHash, proposal: { uri: r.proposal.uri, sha256: r.proposal.sha256 }, sealedKey: r.sealedKey, receivedAt: now, updatedAt: now };
     await this.s.put({ n, [`d:${pad(n)}`]: deal, [`o:${pad(n)}`]: n, [`t:${r.statusTokenHash}`]: n });
@@ -325,6 +365,173 @@ ${items}
     if (lastHour.length >= this.limits.perHour) return { why: `${this.limits.perHour} offers in the last hour`, until: Math.min(...lastHour) + HOUR };
     if (recent.filter((t) => day(t) === day(now)).length >= this.limits.perDay) return { why: `${this.limits.perDay} offers today (UTC)`, until: Date.parse(`${day(now)}T00:00:00Z`) + DAY };
     return null;
+  }
+
+  /** Whether the quotes' own share of the offers (QUOTE_LIMITS.perHour, perDay) is used for the hour or the UTC day. */
+  private async quotesCapped(now: number): Promise<{ why: string; until: number } | null> {
+    const recent = ((await this.s.get<number[]>('recentQuotes')) ?? []).filter((t) => now - t < DAY);
+    const lastHour = recent.filter((t) => now - t < HOUR);
+    if (lastHour.length >= this.quoteLimits.perHour) return { why: `${this.quoteLimits.perHour} offers by quote in the last hour`, until: Math.min(...lastHour) + HOUR };
+    if (recent.filter((t) => day(t) === day(now)).length >= this.quoteLimits.perDay) return { why: `${this.quoteLimits.perDay} offers by quote today (UTC)`, until: Date.parse(`${day(now)}T00:00:00Z`) + DAY };
+    return null;
+  }
+
+  /** Whether this client (an IPv4 address, or an IPv6 /64) has used its requests for the hour or the UTC day, and until when. */
+  private clientCapped(client: string, now: number): { why: string; until: number } | null {
+    const mine = (this.clients.get(clientKey(client)) ?? []).filter((t) => now - t < DAY);
+    const mineLastHour = mine.filter((t) => now - t < HOUR);
+    if (mineLastHour.length >= this.limits.perClientPerHour) return { why: `${this.limits.perClientPerHour} requests from your IP address in the last hour`, until: Math.min(...mineLastHour) + HOUR };
+    if (mine.filter((t) => day(t) === day(now)).length >= this.limits.perClientPerDay) return { why: `${this.limits.perClientPerDay} requests from your IP address today (UTC)`, until: Date.parse(`${day(now)}T00:00:00Z`) + DAY };
+    return null;
+  }
+
+  /** Counts one request for this client, in memory only, and forgets clients idle for a day. */
+  private countClient(client: string, now: number): void {
+    const who = clientKey(client);
+    this.clients.set(who, [...(this.clients.get(who) ?? []).filter((t) => now - t < DAY), now]);
+    for (const [c, times] of this.clients) if (times.every((t) => now - t >= DAY)) this.clients.delete(c);
+  }
+
+  /**
+   * POST <base>/quote (T-489): the body buy.mjs sends, checked before anything is counted; then the caps; then the offer
+   * on Crow, made in this request from the standing address. One quote at a time, so the caps cannot be raced.
+   */
+  private async quote(request: Request, client: string): Promise<Response> {
+    const next = 'Fix it and run buy.mjs again with a new key store directory (https://crow.direct/buy.txt, step 3).';
+    const body = await boundedJson(request);
+    if (body === undefined) return refuse(413, 'invalid_request', `a quote body is at most ${this.quoteLimits.bodyBytes} bytes; buy.mjs sends about 300. ${next}`);
+    if (body === null) return refuse(400, 'invalid_request', `send the quote as one JSON object: {buyer, buyerEncryptionPublicKey, scope}. ${next}`);
+    const q = readQuote(body);
+    if (typeof q === 'string') return refuse(400, 'invalid_request', q);
+    const key = request.headers.get('idempotency-key');
+    if (!key || !/^[\x21-\x7e]{1,200}$/.test(key)) return refuse(400, 'invalid_request', `send an Idempotency-Key header of 1 to 200 printable characters, as buy.mjs does. ${next}`);
+    // No offer to the seller itself or to the zero address: nobody could fund it, and it would hold a waiting slot.
+    const zero = `0x${'0'.repeat(40)}`;
+    if ([q.buyer, q.buyerPaymentAddress].some((x) => x === zero || x === this.agent.address)) return refuse(400, 'invalid_request', `buyer and buyerPaymentAddress must be your own addresses, not the zero address or this seller's. ${next}`);
+    // A client at its own cap is refused before it joins the line, so it cannot fill the line for others (red team, T-489).
+    const capped = this.clientCapped(client, this.now());
+    if (capped) {
+      const sec = Math.max(1, Math.ceil((capped.until - this.now()) / 1000));
+      return refuse(429, 'rate_limited', `the test seller is busy: ${capped.why}. Wait ${sec} s, then run buy.mjs again.`, sec);
+    }
+    // A bounded line, one place per client: a slow offer holds up at most a few others, each well inside buy.mjs's 120 s wait.
+    const who = clientKey(client);
+    if (this.inLine.has(who)) return refuse(429, 'rate_limited', 'your previous quote is still being answered. Wait 15 s, then run buy.mjs again.', 15);
+    if (this.inLine.size >= this.quoteLimits.inLine) return refuse(429, 'rate_limited', `the test seller is answering ${this.inLine.size} other quotes. Wait 15 s, then run buy.mjs again.`, 15);
+    this.inLine.add(who);
+    const run = this.quoting.then(() => this.quoteOnce(q, key, client)).finally(() => this.inLine.delete(who));
+    this.quoting = run.catch(() => undefined);
+    return run;
+  }
+
+  private async quoteOnce(q: QuoteRequest, key: string, client: string): Promise<Response> {
+    const enc = (s: string) => new TextEncoder().encode(s);
+    const keyHash = await sha256hex(enc(key));
+    const bodyHash = await sha256hex(enc(jcs(q)));
+    // The same key with the same body replays the answer; with another body it is a conflict (idempotency, CLAUDE.md).
+    const seen = await this.s.get<{ bodyHash: string; n: number }>(`q:${keyHash}`);
+    if (seen) {
+      if (seen.bodyHash !== bodyHash) return refuse(409, 'idempotency_conflict', 'this Idempotency-Key came with another quote. Run buy.mjs again with a new key store directory: it makes a new key.');
+      const d = await this.s.get<Deal>(`d:${pad(seen.n)}`);
+      if (d?.answer) return json(d.answer);
+    }
+    const d = await this.degraded();
+    if (d) {
+      const sec = Math.max(1, Math.ceil((d.since + HOUR - this.now()) / 1000));
+      return refuse(503, 'seller_unavailable', `the test seller cannot offer now: ${d.reason}. Wait ${sec} s, then run buy.mjs again.`, sec);
+    }
+    const now = this.now();
+    const busy = (why: string, until: number) => {
+      const sec = Math.max(1, Math.ceil((until - now) / 1000));
+      return refuse(429, 'rate_limited', `the test seller is busy: ${why}. Wait ${sec} s, then run buy.mjs again.`, sec);
+    };
+    const open = [...(await this.s.list<number>({ prefix: 'o:' })).values()];
+    if (open.length >= this.limits.open) return busy(`${this.limits.open} deals are in progress`, now + MIN);
+    const deals = (await Promise.all(open.map((n) => this.s.get<Deal>(`d:${pad(n)}`)))).filter((x): x is Deal => x !== undefined);
+    const waiting = deals.filter((x) => x.source === 'quote' && x.status === 'offered');
+    if (waiting.length >= this.quoteLimits.waiting) {
+      // The earliest unfunded offer to expire frees the next slot: about a minute after its offerExpiresAt, once the
+      // operators mark it Expired and the seller's next pass reads it (red team, T-489).
+      const frees = Math.min(...waiting.map((x) => Date.parse(x.terms?.timing?.offerExpiresAt ?? '') + 90_000 || now + MIN));
+      return busy(`${this.quoteLimits.waiting} offers by quote are waiting to be funded or delivered`, Math.max(frees, now + 1000));
+    }
+    const full = (await this.capped(now)) ?? (await this.quotesCapped(now)) ?? this.clientCapped(client, now);
+    if (full) return busy(full.why, full.until);
+    // Counted before the offer is tried, so a request whose offer fails still uses its share: retries cannot flood.
+    this.countClient(client, now);
+    const keep = (list: number[] | undefined) => [...(list ?? []).filter((t) => now - t < DAY), now];
+    await this.s.put({ recent: keep(await this.s.get<number[]>('recent')), recentQuotes: keep(await this.s.get<number[]>('recentQuotes')) });
+    // The open slot this quote takes, held while its offer is made: the intake counts it too, so the two cannot race past `open`.
+    this.quoteSlots++;
+    try {
+      // Every read of the operators happens before the signature; after the submit only this object's storage writes.
+      // The reads have a time limit, so one hung call cannot hold the line (red team, T-489); nothing is sent before it.
+      let timer: ReturnType<typeof setTimeout> | undefined;
+      const late = new Promise<never>((_, reject) => (timer = setTimeout(() => reject(new Error(`the operators did not answer within ${this.quoteLimits.offerWithinSec} s`)), this.quoteLimits.offerWithinSec * 1000)));
+      const made = await Promise.race([this.signQuote(q), late]).finally(() => clearTimeout(timer));
+      await this.sendQuote(made.pending);
+      const n = ((await this.s.get<number>('n')) ?? 0) + 1;
+      const deal: Deal = { n, status: 'offered', source: 'quote', offer: QUOTE_ID, outcome: 'release', countered: false, buyer: q.buyer, scope: q.scope, commitmentId: made.id, terms: made.terms, offeredAt: made.settlement, receivedAt: now, updatedAt: this.now(), quoteKeyHash: keyHash, answer: made.answer };
+      await this.s.put({ n, [`d:${pad(n)}`]: deal, [`o:${pad(n)}`]: n, [`q:${keyHash}`]: { bodyHash, n } });
+      this.log(`test-seller: deal ${n} offered ${made.id} by quote`);
+      return json(made.answer);
+    } catch (e) {
+      this.log(`test-seller: a quote was not offered: ${message(e)}`);
+      return refuse(503, 'seller_unavailable', 'the test seller could not make this offer now. Wait 60 s, then run buy.mjs again.', 60);
+    } finally {
+      this.quoteSlots--;
+    }
+  }
+
+  /** The demo the operators serve, read from every operator: its domain must be the pinned one. */
+  private async demo(): Promise<{ clubId: string; adjudicators: { primary: string; fallback: string; appeal: string } }> {
+    const found = await this.agent.trusted('/.well-known/holdback.json', (x) => ({ domain: x.domain, clubId: x.demo?.clubId, token: x.demo?.token?.id, adjudicators: x.demo?.adjudicators }));
+    // No real money: the seller deals only with operators on the settlement layer it pinned.
+    if (jcs(lower(found.domain)) !== jcs(lower(this.o.pin.domain))) throw new Refused(`the operators serve EIP-712 domain ${jcs(found.domain)}, not the pinned ${jcs(this.o.pin.domain)}`);
+    if (found.token !== this.o.pin.token.id || !found.clubId) throw new Refused(`the operators run no demo in ${this.o.pin.token.symbol}`);
+    const role = (r: string): string => found.adjudicators?.find((x: J) => x.role === r)?.address ?? (() => { throw new Refused(`discovery names no ${r} adjudicator`); })();
+    return { clubId: found.clubId, adjudicators: { primary: role('primary'), fallback: role('fallback'), appeal: role('appeal') } };
+  }
+
+  /**
+   * The offer one quote asks for, signed by the standing address and not yet sent, with the answer the buyer gets.
+   * Everything that reads the operators runs before the signature, so nothing after the submit can fail but storage.
+   */
+  private async signQuote(q: QuoteRequest): Promise<{ id: Hex; terms: J; settlement: number; answer: J; pending: Pending }> {
+    const a = this.agent;
+    const settlement = await a.settlementNow();
+    const { clubId, adjudicators } = await this.demo();
+    await this.ensureMandate(clubId, settlement);
+    const schedule = await a.trusted('/.well-known/holdback.json', (x) => x.fees?.operator ?? null);
+    const { deliverable, checks } = quoteTerms(q.scope);
+    const pays = q.buyerPaymentAddress && q.buyerPaymentAddress !== q.buyer ? { paymentAddress: q.buyerPaymentAddress } : {};
+    const request = {
+      nonce: freshNonce(), disclosure: 'public', template: 'checks-only', clubId, seller: a.address, sellerPayoutAddress: a.address,
+      buyer: { address: q.buyer, encryptionPublicKey: q.buyerEncryptionPublicKey, ...pays }, adjudicators, price: { token: this.o.pin.token.id, amount: QUOTE_PRICE_UNITS }, deliverable, checks, timing: this.quoteTiming,
+    };
+    const prepared = await a.call('POST', '/v1/prepare/offer', request);
+    const intent: Intent = { kind: 'offer', request, registration: await a.registration(adjudicators.primary), rulebookHash: await a.rulebookHash(clubId) };
+    const { path, body } = await a.sign(prepared, intent);
+    const pending: Pending = { step: 'offer', path, body, key: crypto.randomUUID() };
+    const { id, signatures: _s, ...terms } = body; // eslint-disable-line @typescript-eslint/no-unused-vars
+    const operator = schedule ? operatorFeeOf(terms.price, schedule) : 0n;
+    const adjudication = terms.adjudication?.fee ?? { token: terms.price.token, amount: '0' };
+    const total = BigInt(terms.price.amount) + BigInt(adjudication.amount) + operator;
+    const answer = { commitmentId: id, price: terms.price, fees: { adjudication, operator: { token: terms.price.token, amount: operator.toString() }, total: { token: terms.price.token, amount: total.toString() } }, expiresAt: terms.timing.offerExpiresAt };
+    return { id, terms, settlement, answer, pending };
+  }
+
+  /**
+   * Sends a signed quote offer: once, then once more with the same key and body after a transient failure (a lost
+   * answer replays rather than submitting twice). Made when the operators hold it, whatever the answer said.
+   */
+  private async sendQuote(pending: Pending): Promise<void> {
+    try {
+      await this.submit(pending).catch((e) => (e instanceof Refused ? Promise.reject(e) : this.submit(pending)));
+    } catch (e) {
+      const held = await this.agent.call('GET', `/v1/commitments/${pending.body.id}/terms`).catch(() => null);
+      if (String(held?.seller).toLowerCase() !== this.agent.address) throw e;
+    }
   }
 
   /** Whether any deal is open: the Worker keeps the alarm set while one is. */
@@ -358,6 +565,7 @@ ${items}
   /** Opens a request's sealed proposal: the ciphertext from Crow's store, its hash, the key sealed to the intake. */
   private async open(d: Deal): Promise<J> {
     const origins = [...this.o.operators, ...(this.o.aliases ?? [])].map((u) => new URL(u).origin);
+    if (!d.proposal || !d.sealedKey) throw new Refused('the request holds no proposal to open');
     const uri = new URL(d.proposal.uri);
     if (!storeUri(uri, origins)) throw new Refused(`proposal.uri must be a ciphertext URI on ${origins.join(' or ')}`);
     const res = await fetch(uri);
@@ -558,12 +766,8 @@ ${items}
   private async offer(d: Deal, settlement: number): Promise<void> {
     if (!d.pending) {
       const a = this.agent;
-      const found = await a.trusted('/.well-known/holdback.json', (x) => ({ domain: x.domain, clubId: x.demo?.clubId, token: x.demo?.token?.id, adjudicators: x.demo?.adjudicators }));
-      // No real money: the seller deals only with operators on the settlement layer it pinned.
-      if (jcs(lower(found.domain)) !== jcs(lower(this.o.pin.domain))) throw new Refused(`the operators serve EIP-712 domain ${jcs(found.domain)}, not the pinned ${jcs(this.o.pin.domain)}`);
-      if (found.token !== this.o.pin.token.id || !found.clubId) throw new Refused(`the operators run no demo in ${this.o.pin.token.symbol}`);
-      const role = (r: string): string => found.adjudicators?.find((x: J) => x.role === r)?.address ?? (() => { throw new Refused(`discovery names no ${r} adjudicator`); })();
-      const adjudicators = { primary: role('primary'), fallback: role('fallback'), appeal: role('appeal') };
+      const found = await this.demo();
+      const adjudicators = found.adjudicators;
       const want = this.read(await this.open(d), adjudicators);
       const o = want.offer;
       // Only a request whose proposal opened counts against the shared caps: junk cannot use them up.
@@ -637,7 +841,7 @@ ${items}
         if (d.retry) await this.save(d, { retry: undefined });
         return;
       }
-      const work = workOf(this.offerOf(d), d.outcome ?? 'release');
+      const work = d.source === 'quote' && d.scope ? quoteWork(d.scope) : workOf(this.offerOf(d), d.outcome ?? 'release');
       const deliverBy = Date.parse(d.terms.timing.deliverBy);
       if (work === null || settlement >= deliverBy) {
         // No delivery: the silent offer never delivers, and after deliverBy the contract refuses one. The seller follows
@@ -715,6 +919,6 @@ ${items}
     if (now - this.prunedAt < HOUR) return;
     this.prunedAt = now;
     const old = [...(await this.s.list<Deal>({ prefix: 'd:' })).values()].filter((d) => !['received', 'offered', 'delivered'].includes(d.status) && now - d.updatedAt > 7 * DAY);
-    for (let i = 0; i < old.length; i += 64) await this.s.delete(old.slice(i, i + 64).flatMap((d) => [`d:${pad(d.n)}`, `t:${d.tokenHash}`]));
+    for (let i = 0; i < old.length; i += 64) await this.s.delete(old.slice(i, i + 64).flatMap((d) => [`d:${pad(d.n)}`, ...(d.tokenHash ? [`t:${d.tokenHash}`] : []), ...(d.quoteKeyHash ? [`q:${d.quoteKeyHash}`] : [])]));
   }
 }

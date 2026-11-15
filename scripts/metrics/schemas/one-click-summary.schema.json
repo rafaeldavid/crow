@@ -45,7 +45,8 @@
         "s3": { "$ref": "#/$defs/Scenario" },
         "s4": { "$ref": "#/$defs/Scenario" },
         "s5": { "$ref": "#/$defs/Scenario" },
-        "s6": { "$ref": "#/$defs/Scenario" }
+        "s6": { "$ref": "#/$defs/Scenario" },
+        "s9": { "$ref": "#/$defs/Scenario", "description": "A buyer by quote from buy.txt (T-489). Absent from summaries written before T-489." }
       }
     },
     "setup": {
