@@ -1397,3 +1397,29 @@ Today a seller with its own API reads 13 files of 98,462 bytes and runs 22 comma
 - **When it moves into the protocol.** When a second implementation reads the card, by a decision record and a version bump.
 - **Declined:** a directory or registry of cards kept by Crow (D35: rails, not a record-keeper); a seller that is a static page only, which would need Crow to carry messages between parties.
 - **Litmus tests.** Neutrality: a card needs nobody's permission and lives on the party's own domain. The hold and defended judgment: not affected.
+
+## D75. The setup asks each party for its website, for Crow's own list of who uses it; a party can skip it, and no deal depends on it (T-486)
+
+**Status:** adopted, 2026-11-15.
+
+**Adopted 2026-11-15 by T-486** (roadmap row N162). Rafa may overrule any line. Nothing is built or deployed: `docs/tasks/T-486-setup-listing.md` has the build.
+
+**Rafa's words, 2026-11-15.** On the list: "to ensure we know who has crow, you have to submit your website where you're getting crow so we can keep a registry of potential partners." On enforcing it: "Registry required-ish at setup, I don't think we can enforce that if the protocol is onchain and setup used our operator optionally? But maybe policy suggestion?"
+
+- **The ask.** The setup asks every party, seller or buyer, to send Crow its website. It is Crow's stated ask and a step of the setup's default path: `node ~/.crow/setup.mjs list --website <https URL>`.
+- **It is a policy, and nothing enforces it.** Rafa's second sentence is the reason. The protocol is on chain, the setup command is one way in among others, and a party can name other operators or use no setup at all. So the step cannot be a gate, and this decision does not build one. `list --skip` records that the person declined. `first-deal` runs with or without it and prints one advisory line when the person has neither listed nor skipped.
+- **What is sent.** One request with two fields, the website and the role (`seller` or `buyer`), and nothing else: no address, no key, no name, no email. The command prints what it sends, and to whom, before it sends it. No other command of the setup sends anything to the list.
+- **What the list is.** Crow's own record of potential partners, kept in the store that holds the early-access sign-ups: the website, the role, the time and one mark. It stores no IP address. This decision publishes nothing from it.
+- **What the list is not.** A directory. D74 declined a registry of cards through which parties are found, and that stands: no operator, agent, contract or party reads this list, nobody is found through it, and a card still needs nobody's permission. The word "registry" in Rafa's sentence is this list of websites.
+- **Disclosure stays the party's choice (D35).** The rails still need keys, hashes and amounts only. The website is information a party chooses to give Crow, and the setup says so before it sends it.
+- **The mark.** For a seller, the receiver reads the card at `<website>/agent.json` and marks the entry `verified: "card"` when a `crow-agent` card is there, else `verified: "none"`. A buyer publishes no seller's card, so its entry is marked `"none"`. Every entry is kept with its mark. The mark is for Crow's reading of its own list and decides nothing else.
+- **The card need not name an address.** The setup's default card lists no address, because a fresh key signs each deal (D73, D74). A rule that lists a seller only when its card names the address that sent the listing would make a party link its deals in order to be listed. The roadmap row's wording, that Crow lists a seller's website "only when the card published there supports it", can be read as that rule. This decision reads it as the mark above, and Rafa may choose the stricter rule.
+- **What the party gives up, stated in `setup.txt` and in the command's preview.** The request shows Crow the website and the sender's IP address. Crow runs the faucet too, so it can tie the website to the fresh keys that the same IP address asks the faucet for (inferred, `docs/privacy-baseline.md`). A party that wants no such tie skips the step, and nothing about its deals changes.
+- **D73's line "Nothing sent before the first deal" gains one exception.** Before the first deal, the setup sends nothing that names the party to a Crow-run host, except the website, sent only by `list`, which the person can skip. The benchmark keeps its count of requests before the first deal as it is and counts listing requests in a field of their own.
+- **No removal yet.** No command takes a website off the list in this slice. `leave` (T-476) takes it; until then Crow removes an entry by hand.
+- **What it does not change:** no contract, no schema in `spec/schemas/`, no signed type and no operator route. The route is on the sign-up Worker, outside the API contract; its deploy waits for Rafa.
+- **What Rafa may overrule,** each by itself:
+  - **The verification rule.** The alternatives: the card must name the sender's address (above); only entries marked `"card"` are kept; or no check at all.
+  - **Whether the step is part of the default path.** The alternative: the setup mentions the list once and sends only when the person asks for it.
+  - **Where the entries live:** beside the email sign-ups today, under their own prefix.
+- **Litmus tests.** Neutrality: no valid commitment waits for the list, reads it, or settles differently by it. T-486's tests end a first deal `Released` with the listing skipped, with the listing refused, and with the receiver unreachable, and find the list named in no operator, test agent or package source. Crow can refuse or lose a listing and stop nothing. The hold: not affected. Defended judgment: not affected.
