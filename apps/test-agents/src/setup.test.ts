@@ -23,6 +23,8 @@ import { afterAll, beforeAll, describe, expect, it } from 'vitest';
 import { dealKeyOf, holdingKeyOf } from '../../../examples/seller-adapter-core.ts';
 import { serveTwoOrigins, type TwoOrigins } from '../../../examples/two-origins.ts';
 import { knownPins } from '../../../examples/verify.ts';
+import { firstDealAtOf } from '../../../tools/one-click/bench-record.mjs';
+import { markerFilesUnder } from '../../../tools/one-click/probes.mjs';
 import { TestBuyer } from './buyer.ts';
 
 type J = any; // eslint-disable-line @typescript-eslint/no-explicit-any
@@ -241,6 +243,7 @@ describe('site/setup.mjs: seller --sample, then first-deal with Crow\'s test buy
     // first-deal, with ambient settings that would break it if anything read them. While it runs, another program
     // on this machine asks its adapter for a quote, and gets none: the adapter takes a quote only with this run's credential.
     let stranger: Promise<number> | undefined;
+    const dealStarted = Date.now();
     const run = start(at, ['first-deal', '--folder', at.folder, ...testWorld()], AMBIENT, (line) => {
       const quote = /"step":"adapter","ok":true,"quote":"([^"]+)"/.exec(line)?.[1];
       if (quote) stranger = fetch(quote, { method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify({ buyer: buyer.address, buyerEncryptionPublicKey: 'A'.repeat(43), scope: { rows: 5 } }) }).then((r) => r.status, () => 0);
@@ -261,8 +264,17 @@ describe('site/setup.mjs: seller --sample, then first-deal with Crow\'s test buy
     expect(shown.payout).toBe(`The payout address is this folder's standing address ${address}. Every deal names it in its public terms, which links this folder's deals to one another, and its key is on this machine.`);
     expect(shown.sends.map((s: J) => s.to)).toEqual([recorded.urls, recorded.urls[0], recorded.urls, buyer.url, recorded.urls]);
     expect({ ...shown, sent: undefined, notLive: undefined }).toEqual({ ...jsonLines(preview.out)[0], sent: undefined, notLive: undefined }); // what --preview showed is what was sent
-    expect(jsonLines(deal.err).filter((l) => l.step === 'marker')).toEqual([{ step: 'marker', file: marker, detail: expect.stringMatching(/^The first deal starts/), notLive: NOT_LIVE }]);
+    expect(jsonLines(deal.err).filter((l) => l.step === 'marker')).toEqual([{ step: 'marker', file: marker, startedAtMs: expect.any(Number), detail: expect.stringMatching(/^The first deal starts/), notLive: NOT_LIVE }]);
     expect(existsSync(marker)).toBe(true);
+    // The benchmark reads when the first deal started from what this command really writes (T-486): its marker line
+    // on standard error and its marker file give one time, inside the run. This fails if the two drift apart again.
+    const markedAt = firstDealAtOf([deal.err]) as number | null;
+    expect(markedAt, deal.err).not.toBeNull();
+    expect(markedAt!).toBeGreaterThanOrEqual(dealStarted);
+    expect(markedAt!).toBeLessThanOrEqual(Date.now());
+    expect(firstDealAtOf(markerFilesUnder(at.dir))).toBe(markedAt);
+    // Before the marker the folder had neither a listing nor a skip: one advisory line, and the deal went on.
+    expect(jsonLines(deal.err).filter((l) => l.step === 'list')).toEqual([{ step: 'list', advisory: true, detail: expect.stringMatching(/list --website <https URL>.*list --skip.*does not depend on it/), notLive: NOT_LIVE }]);
     // Before the ID went to the buyer, the command read the signed terms: the payout address is the answer given.
     expect(lines.find((l) => l.step === 'terms')).toMatchObject({ ok: true, payout: address, buyer: buyer.address });
     expect(steps.indexOf('terms')).toBeLessThan(steps.indexOf('post'));
@@ -485,5 +497,87 @@ describe('site/setup.mjs: seller --sample, then first-deal with Crow\'s test buy
     }
     expect(asked).toEqual([]);
     expect(existsSync(marker)).toBe(false);
+  }, 60_000);
+});
+
+// T-486 (D75): the listing step is Crow's ask and never a gate. Whoever keeps the list can refuse a listing, lose it or
+// be offline, and a valid deal still settles by its terms: first-deal ends Released in each case, and nothing the
+// operators or the test buyer were asked differs from a run that never heard of the list.
+describe('neutrality: the first deal does not depend on the list (T-486)', () => {
+  let receiver: Server;
+  let listed: string[] = [];
+  let listAt = '', nobody = '';
+  // A test buyer of its own, with the real code: the one above has taken its posts for this minute from this address
+  // (its rule limits.perClientPerMinute), which says nothing about the list.
+  let own: Awaited<ReturnType<typeof serveBuyer>>;
+  beforeAll(async () => {
+    own = await serveBuyer();
+    // A keeper of the list that refuses every listing with a 500, and writes down what it was sent.
+    receiver = createServer(async (req, res) => {
+      const chunks: Buffer[] = [];
+      for await (const c of req) chunks.push(c as Buffer);
+      listed.push(`${req.method} ${req.url} ${Buffer.concat(chunks).toString('utf8')}`);
+      res.writeHead(500, { 'content-type': 'application/json' }).end(JSON.stringify({ error: 'the list is down' }));
+    });
+    await new Promise<void>((resolve) => receiver.listen(0, '127.0.0.1', resolve));
+    listAt = `http://127.0.0.1:${(receiver.address() as AddressInfo).port}/listing`;
+    // An address where nobody listens: a server that was closed.
+    const gone = createServer();
+    await new Promise<void>((resolve) => gone.listen(0, '127.0.0.1', resolve));
+    nobody = `http://127.0.0.1:${(gone.address() as AddressInfo).port}/listing`;
+    await new Promise<void>((resolve) => gone.close(() => resolve()));
+  });
+  afterAll(async () => {
+    await own.close();
+    await new Promise<void>((resolve) => receiver.close(() => resolve()));
+  });
+
+  /** Runs first-deal in a folder the listing step left as it did, and holds the deal to Released with the test buyer. */
+  async function settles(at: ReturnType<typeof fresh>): Promise<{ lines: J[]; notes: J[] }> {
+    asked.length = 0;
+    const deal = await node(at, ['first-deal', '--folder', at.folder, ...testWorld(own.url)]);
+    const lines = jsonLines(deal.out);
+    expect(deal.code, deal.out + deal.err).toBe(0);
+    expect(lines.at(-1)).toMatchObject({ step: 'first-deal', ok: true, state: 'Released', buyer: own.address });
+    // The operators and the test buyer got the deal's own requests and no other: one offer, one delivery, one post to the buyer.
+    expect(posts().filter((p) => p === 'operator /v1/commitments').length).toBe(1);
+    expect(posts().filter((p) => /^operator \/v1\/commitments\/0x[0-9a-f]{64}\/deliveries$/.test(p)).length).toBe(1);
+    expect(posts().filter((p) => p.startsWith('buyer ')).length).toBe(1);
+    expect(asked.some((a) => /listing/.test(a.path))).toBe(false);
+    return { lines, notes: jsonLines(deal.err) };
+  }
+  const advisories = (notes: J[]) => notes.filter((l) => l.step === 'list');
+
+  it('ends Released with the listing skipped, and prints no advisory line', async () => {
+    const at = await made();
+    const skip = await node(at, ['list', '--skip', '--folder', at.folder, ...operators()]);
+    expect(skip.code, skip.out + skip.err).toBe(0);
+    expect(skip.hosts).toEqual([]);
+    expect(stateOf(at.folder).listing).toMatchObject({ skipped: true });
+    const { notes } = await settles(at);
+    expect(advisories(notes)).toEqual([]);
+  }, 60_000);
+
+  it('ends Released with the listing refused: the keeper of the list answers 500', async () => {
+    const at = await made();
+    listed = [];
+    const refused = await node(at, ['list', '--website', 'https://seller.example', '--list-at', listAt, '--folder', at.folder, ...operators()]);
+    expect(refused.code).toBe(1);
+    expect(listed).toEqual(['POST /listing {"website":"https://seller.example/"}']);
+    expect(jsonLines(refused.out).at(-1)).toMatchObject({ step: 'list', ok: false, status: 500, detail: expect.stringMatching(/No deal depends on the list: first-deal runs as before/) });
+    expect(stateOf(at.folder).listing).toBeUndefined();
+    const { notes } = await settles(at);
+    // Neither listed nor skipped: one advisory line, and the deal went on.
+    expect(advisories(notes).length).toBe(1);
+    expect(listed.length).toBe(1); // first-deal sent the list nothing
+  }, 60_000);
+
+  it('ends Released with the keeper of the list unreachable', async () => {
+    const at = await made();
+    const unreachable = await node(at, ['list', '--website', 'https://seller.example', '--list-at', nobody, '--folder', at.folder, ...operators()]);
+    expect(unreachable.code).toBe(1);
+    expect(jsonLines(unreachable.out).at(-1)).toMatchObject({ step: 'list', ok: false, status: null, detail: expect.stringMatching(/the receiver did not answer.*No deal depends on the list/) });
+    const { notes } = await settles(at);
+    expect(advisories(notes).length).toBe(1);
   }, 60_000);
 });
