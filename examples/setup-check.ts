@@ -81,11 +81,21 @@ function withoutAField(result: Uint8Array, format: string): { bytes: Uint8Array;
   return null;
 }
 
+/** True when `e` says the path is not there: another run removed it after it was listed (T-486, the CI race). */
+const gone = (e: unknown): boolean => (e as NodeJS.ErrnoException)?.code === 'ENOENT';
+
 /** Every file under `dir`, by its full path, leaving the folder `skip` out wherever it is reached. A link is listed, never followed. */
 function filesUnder(dir: string, skip: string): { files: string[]; links: string[] } {
   const files: string[] = [], links: string[] = [];
   const walk = (at: string) => {
-    for (const entry of readdirSync(at, { withFileTypes: true })) {
+    let entries;
+    try {
+      entries = readdirSync(at, { withFileTypes: true });
+    } catch (e) {
+      if (gone(e) && at !== dir) return; // a folder another run removed after it was listed: nothing in it to read
+      throw e;
+    }
+    for (const entry of entries) {
       const path = join(at, entry.name);
       if (path === skip) continue;
       if (entry.isSymbolicLink()) links.push(path);
@@ -95,6 +105,41 @@ function filesUnder(dir: string, skip: string): { files: string[]; links: string
   };
   walk(dir);
   return { files, links };
+}
+
+/** What the secrets check needs of the file system; the test passes its own to make a file vanish between two steps. */
+export interface ScanIo {
+  size(path: string): number;
+  read(path: string): string;
+}
+const FILE_SYSTEM: ScanIo = { size: (p) => statSync(p).size, read: (p) => readFileSync(p, 'latin1') };
+
+/**
+ * Reads each listed file and fails on the first that holds one of `forms`, a key's value. A file that is gone when it is
+ * read was removed after it was listed, by another run working in the same folder (its `crow.lock`, a temporary file):
+ * it holds nothing now, so it is passed over and counted, not a finding. Any other error still fails the check. Every
+ * file is read, `crow.lock` included: leaving one name out would make a place a key could sit unseen.
+ */
+export function scanFiles(files: Iterable<string>, forms: string[], io: ScanIo = FILE_SYSTEM): { read: number; large: string[]; gone: number } {
+  let read = 0, vanished = 0;
+  const large: string[] = [];
+  for (const path of files) {
+    let text: string;
+    try {
+      if (io.size(path) > MAX_SCANNED_BYTES) {
+        large.push(path);
+        continue;
+      }
+      text = io.read(path);
+    } catch (e) {
+      if (!gone(e)) throw e;
+      vanished += 1;
+      continue;
+    }
+    if (forms.some((f) => text.includes(f))) throw new Error(`${path} holds a key's value: a key belongs in ${FILES.keys}/ only. Remove it from that file`);
+    read += 1;
+  }
+  return { read, large, gone: vanished };
 }
 
 /** The key of each deal the folder's journal holds: each is derived from the signing key and the deal's own nonce. */
@@ -198,16 +243,9 @@ export async function runChecks(folder: string): Promise<CheckResult[]> {
     // The folder and the card's folder, each file once; keys/ itself is left out wherever a walk reaches it.
     const found = [folder, ...(state?.card && existsSync(state.card) ? [state.card] : [])].map((dir) => filesUnder(dir, join(folder, FILES.keys)));
     const files = new Set(found.flatMap((f) => f.files)), links = [...new Set(found.flatMap((f) => f.links))];
-    const large: string[] = [];
-    for (const path of files) {
-      if (statSync(path).size > MAX_SCANNED_BYTES) {
-        large.push(path);
-        continue;
-      }
-      const text = readFileSync(path, 'latin1');
-      if (forms.some((f) => text.includes(f))) throw new Error(`${path} holds a key's value: a key belongs in ${FILES.keys}/ only. Remove it from that file`);
-    }
-    return `no key's value in the ${files.size - large.length} files read outside ${FILES.keys}/`
+    const { read, large, gone: vanished } = scanFiles(files, forms);
+    return `no key's value in the ${read} files read outside ${FILES.keys}/`
+      + (vanished ? `; ${vanished} listed file${vanished === 1 ? ' was' : 's were'} gone when read, removed by another run in this folder` : '')
       + (large.length ? `; not read, as each is over ${MAX_SCANNED_BYTES} bytes: ${large.map((p) => plain(p, 200)).join(', ')}` : '')
       + (links.length ? `; not followed, as each is a symbolic link: ${links.map((p) => plain(p, 200)).join(', ')}` : '');
   });
