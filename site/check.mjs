@@ -632,7 +632,12 @@ const SETUP_SAYS = [
   ['what this version sends before the marker', 'Before the marker, this version sends nothing to a Crow-run host'],
   ['that this version registers nothing but the website', 'This version registers nothing at Crow but the website `list` sends'],
   ['that the setup asks for no account', '**No account.**'],
-  // T-486 (D75): the listing step. What is sent, to whom, how to skip, what an entry means and what the person gives up.
+  // T-486 (D76): the listing step. What is sent, to whom, how to skip, what an entry means and what the person gives up.
+  ['that a website is a site\'s own address and nothing after it', "The website is the site's own `https` address and nothing after it"],
+  ['what to do when `list` exits 1', 'If `list` exits 1, no deal changed'],
+  ['that a refusal for too many requests may be another caller\'s doing', "may be another caller's doing"],
+  ['that Crow could tie the website to the folder\'s deals', "by the time of its first offer, and through the public payout address to every deal of the folder"],
+  ['the third kind of line on standard error', "the marker, the adapter's log and the advisory on the list"],
   ['the one exception before the marker', 'with one exception: the website, sent only by `list`, which the person can skip'],
   ['the one thing the setup asks for', "It asks for one thing, the person's website, and the person can decline"],
   ['what the listing sends, and to whom', 'sends one POST to https://join.crow.direct/listing whose body is `{"website": "<URL>"}` and nothing else'],

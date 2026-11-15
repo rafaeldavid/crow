@@ -1,7 +1,7 @@
 # Set up Crow
 
 %% T-472: the setup's one page. site/build.mjs fills the one placeholder with the pinned command; site/check.mjs holds the published page to SETUP_MAX_BYTES (site/guides.mjs).
-%% T-486 (D75): "The list" is the setup's listing step. Its four sentences on what an entry means are the command's own (examples/setup-list.ts, ENTRY_MEANS).
+%% T-486 (D76): "The list" is the setup's listing step. Its four sentences on what an entry means are the command's own (examples/setup-list.ts, ENTRY_MEANS).
 One page for an AI assistant whose person said: "Read https://crow.direct/setup.txt and set up Crow for me as a seller." You run one pinned file, `setup.mjs`. It makes one folder on this machine, checks it, asks once for the person's website, and sells one sample job to Crow's test buyer. If the person named no role, ask which. This version sets up a seller; a buyer starts at https://crow.direct/buy.txt.
 
 ## What this is
@@ -17,7 +17,7 @@ One page for an AI assistant whose person said: "Read https://crow.direct/setup.
 - **Leave `keys/` alone.** Never read, print or copy a file under `keys/`. On a machine you share with those files, this page gives you that rule and nothing enforces it.
 - **No secret in the chat.** Never ask the person to paste a key or a password.
 - **The person's approval is the consent.** Show the person each command before you run it, and the preview before the first deal.
-- **Read the lines.** Each line a command prints is one JSON object with `step`. On standard output every line but `preview` and `status` carries `ok`; the lines on standard error, the marker and the adapter's log, carry none. Exit 0: done. Exit 1: a step failed, and its line says why. Exit 2: a wrong call. Exit 3: an answer is missing.
+- **Read the lines.** Each line a command prints is one JSON object with `step`. On standard output every line but `preview` and `status` carries `ok`; the lines on standard error (the marker, the adapter's log and the advisory on the list) carry none. Exit 0: done. Exit 1: a step failed, and its line says why. Exit 2: a wrong call. Exit 3: an answer is missing.
 
 ## The first command
 
@@ -48,14 +48,15 @@ The sample is `squares.csv` for 1 tUSDC, served by a small API inside the comman
 
 ## The list
 
-Crow asks each party that sets Crow up for its website, so Crow can keep a list of who uses it. Ask the person: "What is your website? You can decline."
+Crow asks each party that sets Crow up for its website, to keep a list of who uses it. Ask the person: "What is your website? You can decline."
 
-- `node ~/.crow/setup.mjs list --website <https URL>` prints one `preview` line, then sends one POST to https://join.crow.direct/listing whose body is `{"website": "<URL>"}` and nothing else: no role, no address, no key, no name.
+- `node ~/.crow/setup.mjs list --website <https URL>` prints one `preview` line, then sends one POST to https://join.crow.direct/listing whose body is `{"website": "<URL>"}` and nothing else: no role, no address, no key, no name. The website is the site's own `https` address and nothing after it: no path, query or port.
 - `node ~/.crow/setup.mjs list --skip` records that the person declined and sends nothing. With neither answer the command prints the question and exits 3.
+- If `list` exits 1, no deal changed: run it again later, or skip. An answer of too many requests may be another caller's doing.
 
-What an entry means: Crow keeps the website as a potential partner. Crow may later read the site to see whether it publishes a Crow card. The entry proves nothing about who sent it. Skipping changes nothing about a deal. `first-deal` runs either way, and prints one advisory line on standard error when the folder has neither a listing nor a skip.
+What an entry means: Crow keeps the website as a potential partner. Crow may later read the site to see whether it publishes a Crow card. The entry proves nothing about who sent it. Skipping changes nothing about a deal. `first-deal` runs either way, and prints one advisory line when the folder has neither a listing nor a skip.
 
-What the person gives up: the request shows Crow the website and this machine's IP address. Crow also runs the faucet, so it can tie the website to the fresh keys the same IP address asks the faucet for. The list is Crow's own record: this version publishes nothing from it and cannot take a website off it. The website is an `https` address of a public name, with no user name, password, query, fragment or port. `--list-at <URL>` names another receiver.
+What the person gives up: the request shows Crow the website and this machine's IP address. Crow also runs the faucet, so it can tie the website to the fresh keys the same IP address asks the faucet for. Crow could also tie it to this folder's deals by the time of its first offer, and through the public payout address to every deal of the folder. The list is Crow's own record: this version publishes nothing from it and cannot take a website off it. `--list-at <URL>` names another receiver.
 
 ## The first deal
 
