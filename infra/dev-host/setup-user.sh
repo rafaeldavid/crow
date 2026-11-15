@@ -9,7 +9,6 @@
 # Options:
 #   --public-repo <owner/name>     default rafaeldavid/holdback
 #   --private-repo <owner/name>    default rafaeldavid/crow-private
-#   --vault <name>                 the one vault the service account reads (default: the vault dev-host.refs names)
 #   --project <path>               where the public repository goes (default: escrow in this user's home, so
 #                                  /Users/crow/escrow for the record's user crow). Each person's session user has its own.
 #
@@ -37,7 +36,6 @@ die() { printf 'setup-user: %s\n' "$*" >&2; exit 1; }
 login=""
 public_repo=rafaeldavid/holdback
 private_repo=rafaeldavid/crow-private
-vault=""
 mode=setup
 while [ $# -gt 0 ]; do
   case "$1" in
@@ -45,7 +43,6 @@ while [ $# -gt 0 ]; do
     --agents-login) login="${2:-}"; shift 2 ;;
     --public-repo) public_repo="${2:-}"; shift 2 ;;
     --private-repo) private_repo="${2:-}"; shift 2 ;;
-    --vault) vault="${2:-}"; shift 2 ;;
     --project) PROJECT="${2:-}"; shift 2 ;;
     *) die "unknown option ${1:0:40}. Read the header of this file for the usage." ;;
   esac
@@ -86,8 +83,10 @@ printf '%s' "$login" | grep -Eq '^[A-Za-z0-9-]{1,39}$' || die "--agents-login is
 
 # --- Tools the administrator installed (macOS) or the host provides (Ubuntu) ----------------------------------------
 missing=""
-for t in git node gh gitleaks op ssh-keygen curl java; do command -v "$t" >/dev/null 2>&1 || missing="$missing $t"; done
+for t in git node corepack gh gitleaks op ssh-keygen curl java; do command -v "$t" >/dev/null 2>&1 || missing="$missing $t"; done
 [ -z "$missing" ] || die "missing:$missing. On macOS setup-admin.sh installs them; on Ubuntu see README, 'Ubuntu instead'."
+# macOS ships a java stub that only offers to install Java; a real one answers -version.
+java -version >/dev/null 2>&1 || die "java does not run: on macOS setup-admin.sh installs it; on Ubuntu see README, 'Ubuntu instead'"
 node -e '
   const want = require(process.argv[1]).engines.node.replace(/^>=\s*/, "").split(".").map(Number);
   const have = process.versions.node.split(".").map(Number);
@@ -143,7 +142,8 @@ read_token() { if [ "$os" = macos ]; then security find-generic-password -a "$(i
 ref_of() { sed -n "s/^$1=\(op:\/\/[a-z0-9-]*\/[a-z0-9-]*\/credential\)\$/\1/p" "$REFS"; }
 gh_ref="$(ref_of CROW_AGENTS_GITHUB_TOKEN)"
 [ -n "$gh_ref" ] || die "config/secrets/dev-host.refs names no CROW_AGENTS_GITHUB_TOKEN"
-[ -n "$vault" ] || vault="$(printf '%s' "$gh_ref" | cut -d/ -f3)"
+# The one vault dev-host.refs names (scripts/secrets/refs.mjs, VAULTS); a second person's own vault is a new references file.
+vault="$(printf '%s' "$gh_ref" | cut -d/ -f3)"
 vaults="$(OP_SERVICE_ACCOUNT_TOKEN="$(read_token)" op vault list --format json | node -e 'let s="";process.stdin.on("data",d=>s+=d).on("end",()=>console.log(JSON.parse(s).map(v=>String(v.name).toLowerCase()).sort().join(",")))')"
 [ "$vaults" = "$vault" ] || die "the service account sees the vaults [$vaults], not exactly [$vault]: make a service account for that one vault"
 say "The service account sees one vault: $vault."

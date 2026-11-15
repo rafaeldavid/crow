@@ -42,8 +42,15 @@ export async function down(o, d) {
     if (again.status === 200 && again.droplets.length === leave.length) { gone = true; break; }
     await wait(5000);
   }
-  const t = await d.api.call('GET', `/tags/${encodeURIComponent(tag)}`);
-  const count = t.status === 404 ? 0 : t.json?.tag?.resources?.count;
+  // The tag's resource count can lag the deletes, so it is read until it reaches zero or the tries run out.
+  let t;
+  let count;
+  for (let i = 0; i < (d.tries ?? 24); i++) {
+    t = await d.api.call('GET', `/tags/${encodeURIComponent(tag)}`);
+    count = t.status === 404 ? 0 : t.json?.tag?.resources?.count;
+    if (count === 0 || leave.length) break;
+    await wait(5000);
+  }
   const clean = gone && leave.length === 0 && count === 0;
   log(`  ${clean ? 'ok  ' : 'FAIL'}  no machine or record carries ${tag}${count === undefined ? ` (tag read answered ${t.status})` : ''}`);
   forgetHost(o.run);

@@ -14,7 +14,7 @@
 import { join } from 'node:path';
 import { pathToFileURL } from 'node:url';
 import { attest, ROOT } from '../lib/attest.mjs';
-import { client, fingerprintOfFile, isRun, machineName, parseArgs, PARTY_TAG, runTag, selectForDeletion, TOKEN_VAR } from './do.mjs';
+import { client, DEFAULTS, fingerprintOfFile, isRun, machineName, parseArgs, PARTY_TAG, runTag, selectForDeletion, TOKEN_VAR } from './do.mjs';
 import { KEY } from './ssh.mjs';
 
 const SIZE = 's-1vcpu-512mb-10gb';
@@ -25,7 +25,7 @@ const accepted = (s) => s >= 200 && s < 300;
 export async function make(o, d) {
   const log = d.log ?? ((l) => console.log(l));
   for (const t of [PARTY_TAG, runTag(o.run)]) await d.api.call('POST', '/tags', { name: t });
-  const r = await d.api.call('POST', '/droplets', { name: machineName(o.run, 'team-test'), region: 'fra1', size: SIZE, image: 'ubuntu-24-04-x64', ssh_keys: o.fingerprint ? [o.fingerprint] : [], tags: [PARTY_TAG, runTag(o.run)], ipv6: false, backups: false, monitoring: false, with_droplet_agent: false });
+  const r = await d.api.call('POST', '/droplets', { name: machineName(o.run, 'team-test'), region: DEFAULTS.region, size: SIZE, image: DEFAULTS.image, ssh_keys: o.fingerprint ? [o.fingerprint] : [], tags: [PARTY_TAG, runTag(o.run)], ipv6: false, backups: false, monitoring: false, with_droplet_agent: false });
   if (r.dry) return { ok: true, dry: true };
   const id = r.json?.droplet?.id;
   log(r.status === 202 && id ? `team-test: made ${machineName(o.run, 'team-test')} (${id}) in crow-parties. Next: the probe, with the default team's machine's ID.` : `team-test: the create request answered ${r.status}`);

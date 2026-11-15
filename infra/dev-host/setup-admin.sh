@@ -104,8 +104,11 @@ if [ "$mode" = token ]; then
   [ "$(wc -l < "$TOKEN_STAGED" | tr -d ' ')" -le 1 ] || die "the staged file has more than one line; remove it and pipe the token again"
   head -c 4 "$TOKEN_STAGED" | grep -qx 'ops_' || die "the staged file does not start like a 1Password service account token; remove it and pipe it again"
   id "$session_user" >/dev/null 2>&1 || die "no user $session_user yet: run the setup first"
-  sudo install -d -o "$session_user" -g staff -m 700 "/Users/$session_user/.config" "/Users/$session_user/.config/crow"
-  sudo install -o "$session_user" -g staff -m 600 "$TOKEN_STAGED" "/Users/$session_user/.config/crow/op-token.incoming"
+  # Every write into the session user's home runs as that user, never as root: a link a session planted there can
+  # then lead only to places the session user could write anyway.
+  # shellcheck disable=SC2016,SC2024 # the inner script expands its own $1; the administrator reads its own file
+  sudo -u "$session_user" -H /bin/sh -c 'umask 077 && mkdir -p "$1/.config/crow" && cat > "$1/.config/crow/op-token.incoming"' sh "/Users/$session_user" < "$TOKEN_STAGED" \
+    || die "could not write the token as $session_user"
   rm -P "$TOKEN_STAGED"
   say "setup-admin: the token is in $session_user's folder for setup-user.sh, which moves it into $session_user's Keychain and removes the file."
   exit 0
@@ -254,14 +257,13 @@ if [ -n "$wifi" ]; then
 fi
 
 # --- The files the session user's setup needs ----------------------------------------------------------------------
+# The administrator packs them; the session user's own process unpacks them, so root writes nothing in that home.
 dest="/Users/$session_user/crow-setup"
-sudo rm -rf "$dest"
-for p in infra .nvmrc package.json .github/workflows/ci.yml config/secrets/dev-host.refs scripts/secrets/refs.mjs; do
-  [ -e "$ROOT/$p" ] || die "missing $p in the archive"
-  sudo install -d "$dest/$(dirname "$p")"
-  sudo ditto "$ROOT/$p" "$dest/$p"
-done
-sudo chown -R "$session_user":staff "$dest"
+paths=(infra .nvmrc package.json .github/workflows/ci.yml config/secrets/dev-host.refs scripts/secrets/refs.mjs)
+for p in "${paths[@]}"; do [ -e "$ROOT/$p" ] || die "missing $p in the archive"; done
+# shellcheck disable=SC2016 # the inner script expands its own $1
+tar -C "$ROOT" -cf - "${paths[@]}" | sudo -u "$session_user" -H /bin/sh -c 'rm -rf "$1" && mkdir -p "$1" && tar -xf - -C "$1"' sh "$dest" \
+  || die "could not copy the files as $session_user"
 
 say ""
 say "setup-admin: done. Network: $network, link: $link."

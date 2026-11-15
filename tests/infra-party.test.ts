@@ -146,10 +146,22 @@ describe('up', () => {
     expect(r.ok).toBe(true);
     expect(s.calls.every((c) => c.auth === `Bearer ${TOKEN}`)).toBe(true);
   });
-  it('refuses a run that already has a machine', async () => {
+  it('refuses a second machine of the same role in a run', async () => {
     const s = stub([{ id: 1, name: 'party-r1-buyer', tags: [PARTY_TAG, 'run-r1'] }]);
     expect((await up({ run: 'r1', role: 'buyer' }, deps(s.api, exec('x')))).ok).toBe(false);
     expect(s.calls.some((c) => c.method === 'POST' && c.url === '/v2/droplets')).toBe(false);
+  });
+  it('lets a seller join a run that has a buyer, at another address', async () => {
+    const s = stub([{ id: 1, name: 'party-r1-buyer', tags: [PARTY_TAG, 'run-r1'], networks: v4('192.0.2.1') }]);
+    expect((await up({ run: 'r1', role: 'seller' }, deps(s.api, exec('192.0.2.0')))).ok).toBe(true);
+    expect(s.droplets.map((d) => d.name).sort()).toEqual(['party-r1-buyer', 'party-r1-seller']);
+  });
+  it('accepts cloud-init done with recoverable warnings (exit 2), and stops on an error (exit 1)', async () => {
+    const withCi = (code: number) => (t: unknown, cmd: string[]) => (cmd[0] === 'cloud-init' ? { code, stdout: '', stderr: '' } : exec('192.0.2.0')(t, cmd));
+    expect((await up({ run: 'r3', role: 'buyer' }, deps(stub([]).api, withCi(2)))).ok).toBe(true);
+    const s = stub([]);
+    expect((await up({ run: 'r4', role: 'buyer' }, deps(s.api, withCi(1)))).ok).toBe(false);
+    expect(s.droplets.length).toBe(0);
   });
   it('destroys the machine when its check fails: here its outbound address is not its own', async () => {
     const s = stub([]);

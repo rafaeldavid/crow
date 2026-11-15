@@ -5,8 +5,8 @@
 //   infra/dev-host/with-keys.sh node infra/party/up.mjs --role <buyer|seller> --run <id> [--publish] [--yes]
 //   node infra/party/up.mjs --role buyer --run <id> --dry-run      prints the requests, sends nothing, needs no token
 //
-// The token comes from DIGITALOCEAN_ACCESS_TOKEN only. The run's tag is required, and a run that already has a machine
-// is refused, so each run starts clean. Options: --region, --size, --image (defaults in do.mjs), --ssh-key <public key
+// The token comes from DIGITALOCEAN_ACCESS_TOKEN only. The run's tag is required. A run holds at most one buyer and one
+// seller: a second machine of the same role is refused, so each starts clean. Options: --region, --size, --image (defaults in do.mjs), --ssh-key <public key
 // file> (default ~/.ssh/crow-party.pub), --keep (keep the machine when its check fails; by default it is destroyed).
 // Exit 0 when the machine passed its check, 1 when anything failed, 2 on a usage error.
 import { readFileSync } from 'node:fs';
@@ -63,7 +63,8 @@ export async function up(o, d) {
   if (key.status !== 200) { log(`up: the SSH key ${d.fingerprint} is not in the team (API ${key.status}). Add its public half in DigitalOcean's page, team crow-parties.`); return { ok: false }; }
   const before = await d.api.listByTag(tag);
   if (before.status !== 200) { log(`up: listing ${tag} failed (API ${before.status})`); return { ok: false }; }
-  if (before.droplets.length) { log(`up: ${before.droplets.length} machine(s) already carry ${tag}. Run down.mjs --run ${o.run} first, or pick a new run ID.`); return { ok: false }; }
+  // A run may hold one buyer and one seller; a second machine of the same role is refused, so each starts clean.
+  if (before.droplets.some((x) => x.name === body.name)) { log(`up: ${body.name} already exists. Run down.mjs --run ${o.run} first, or pick a new run ID.`); return { ok: false }; }
   for (const t of body.tags) {
     const r = await d.api.call('POST', '/tags', { name: t });
     if (r.status !== 201 && r.status !== 200 && r.status !== 422) { log(`up: making tag ${t} failed (API ${r.status})`); return { ok: false }; }
@@ -102,8 +103,10 @@ export async function up(o, d) {
   }
   if (!reached) return fail('SSH did not answer in time');
   const sshS = Math.round((now() - t0) / 1000);
+  // cloud-init exits 0 when done, 2 when done with recoverable warnings, 1 on an error.
   const ci = exec(target, ['cloud-init', 'status', '--wait'], { timeoutMs: 900_000 });
-  if (ci.code !== 0) return fail(`cloud-init did not finish cleanly (exit ${ci.code})`);
+  if (ci.code !== 0 && ci.code !== 2) return fail(`cloud-init did not finish (exit ${ci.code})`);
+  if (ci.code === 2) log('up: cloud-init finished with recoverable warnings; the party check decides.');
   const pv = exec(target, ['sudo', 'bash', '-s', '--', '--node-major', d.major ?? nodeMajor(), ...(o.publish ? ['--publish'] : [])], { input: d.provision ?? readFileSync(PROVISION, 'utf8'), timeoutMs: 900_000 });
   if (pv.code !== 0) return fail(`provision.sh failed (exit ${pv.code})`);
 
