@@ -187,8 +187,126 @@ export function goalCommand(name, sha = goalSha256(name)) {
 /** Each goal's command by its llms.txt placeholder. */
 export const goalCommands = () => Object.fromEntries(Object.entries(GOALS).map(([name, g]) => [g.placeholder, goalCommand(name)]));
 
+/**
+ * Three tools that site/setup.mjs carries run their own command line when the running file is their own: each ends in
+ * a block that opens with OWN_MAIN_TEST. Inside one bundled file that test is true for every module, so each tool
+ * would read setup.mjs's arguments as its own: report-converter.ts prints its usage and exits 2 before setup's first
+ * line. The setup bundle replaces the test with `false`, so the block never runs and the bundler leaves it out. The
+ * three files stay as they are (T-472): a file that no longer holds the test exactly once stops the build.
+ */
+const OWN_MAIN_TEST = 'if (process.argv[1] && import.meta.url === pathToFileURL(process.argv[1]).href) {';
+const OWN_MAIN_FILES = ['seller-adapter.ts', 'check-delivery.ts', 'report-converter.ts'];
+const SILENCE_OWN_MAINS = {
+  name: 'silence-own-command-lines',
+  transform: (code, id) => {
+    const file = OWN_MAIN_FILES.find((f) => id.endsWith(`/examples/${f}`));
+    if (!file) return null;
+    if (code.split(OWN_MAIN_TEST).length !== 2) throw new Error(`examples/${file} no longer holds its own command line's test exactly once: site/build.mjs cannot keep it from running inside site/setup.mjs`);
+    return { code: code.replace(OWN_MAIN_TEST, 'if (false) {'), map: null };
+  },
+};
+
+export const SETUP_MJS_URL = `${SITE_URL}setup.mjs`;
+/**
+ * Every package from npm that site/setup.mjs may carry, with the licence line its banner prints (each from the
+ * package's own LICENSE file). The file runs beside a key that lasts, so a package that is not listed here stops the
+ * build: adding one is a decision, with its licence, never a side effect of an import.
+ */
+const SETUP_PACKAGES = Object.freeze({
+  viem: 'MIT License, Copyright (c) 2023-present weth, LLC',
+  abitype: 'MIT License, Copyright (c) 2022-present weth, LLC',
+  '@noble/curves': 'MIT License, Copyright (c) 2022 Paul Miller (https://paulmillr.com)',
+  '@noble/hashes': 'MIT License, Copyright (c) 2022 Paul Miller (https://paulmillr.com)',
+  tweetnacl: 'public domain, The Unlicense',
+  ajv: 'MIT License, Copyright (c) 2015-2021 Evgeny Poberezkin',
+  'ajv-formats': 'MIT License, Copyright (c) 2020 Evgeny Poberezkin',
+  'fast-deep-equal': 'MIT License, Copyright (c) 2017 Evgeny Poberezkin',
+  yaml: 'ISC License, Copyright Eemeli Aro <eemeli@gmail.com>',
+});
+
+/** What a bundle holds, from its module paths: the repository's own files, and each npm package with its version. */
+function bundleContents(moduleIds, root) {
+  const own = [], packages = new Map();
+  for (const id of moduleIds) {
+    if (id.startsWith('\0')) continue; // the bundler's own runtime helpers
+    const npm = /\/node_modules\/\.pnpm\/[^/]+\/node_modules\/((?:@[^/]+\/)?[^/]+)\//.exec(id);
+    if (!npm) {
+      if (!id.startsWith(root)) throw new Error(`site/setup.mjs would carry ${id}, a file outside the repository`);
+      own.push(id.slice(root.length));
+      continue;
+    }
+    const version = new RegExp(`/node_modules/\\.pnpm/${npm[1].replace('/', '\\+')}@([0-9]+\\.[0-9]+\\.[0-9]+)`).exec(id)?.[1];
+    if (!version) throw new Error(`site/setup.mjs: no version in the path of ${id}`);
+    if (packages.has(npm[1]) && packages.get(npm[1]) !== version) throw new Error(`site/setup.mjs would carry two versions of ${npm[1]}: ${packages.get(npm[1])} and ${version}`);
+    packages.set(npm[1], version);
+  }
+  return { own, packages };
+}
+
+/** Lines of at most 118 characters, each a comment. */
+const commentLines = (text) => text.split(' ').reduce((lines, word) => (`${lines.at(-1)} ${word}`.length > 118 ? [...lines, `// ${word}`] : [...lines.slice(0, -1), `${lines.at(-1)} ${word}`]), ['//']).join('\n');
+
+const setupBanner = (moduleIds, root) => {
+  const { own, packages } = bundleContents(moduleIds, root);
+  const unknown = [...packages.keys()].filter((name) => !Object.hasOwn(SETUP_PACKAGES, name));
+  if (unknown.length) throw new Error(`site/setup.mjs would carry ${unknown.join(', ')}, which SETUP_PACKAGES in site/build.mjs does not list: add each with its licence line, or drop the import`);
+  const examples = own.filter((f) => f.startsWith('examples/')).map((f) => f.slice('examples/'.length)).sort();
+  const workspace = [...new Set(own.filter((f) => f.startsWith('packages/')).map((f) => f.split('/')[1]))].sort();
+  const other = own.filter((f) => !f.startsWith('examples/') && !f.startsWith('packages/') && f !== 'site/setup-entry.mjs');
+  if (other.length) throw new Error(`site/setup.mjs would carry ${other.join(', ')}: only site/setup-entry.mjs, examples/ and packages/ belong in it`);
+  return `// setup.mjs: keeps one Crow folder on this machine and runs its first deal on the Crow demo (${SITE_URL}). Test tokens only.
+//   node setup.mjs status | check | first-deal [--folder <path>] [--operators <url>,<url>] [--test-world]
+${commentLines(`Generated by site/build.mjs in https://github.com/rafaeldavid/holdback (do not edit here) from site/setup-entry.mjs, from examples/ (${examples.join(', ')}) and from the built packages/ (${workspace.join(', ')}).`)}
+// It differs from those files in two ways. The own command lines of seller-adapter.ts, check-delivery.ts and
+// report-converter.ts are left out, so only setup's runs. One field of the deployment record, the escrow's token store,
+// which no command here reads, is left out. Not minified, so you can read it before you run it.
+// Self-contained, so it needs Node 22.18 or later and no npm install. It carries these packages from npm:
+${[...packages].sort(([a], [b]) => (a < b ? -1 : 1)).map(([name, version]) => `//   ${name}@${version} (${SETUP_PACKAGES[name]})`).join('\n')}
+// The signing key stays in the folder's keys/ directory, on this machine. The command takes its settings from flags
+// only: the next line removes every HOLDBACK_* and CROW_* variable from its environment before any module runs.
+for (const name of Object.keys(process.env)) if (/^(HOLDBACK|CROW)_/.test(name)) delete process.env[name];
+`;
+};
+
+/**
+ * site/setup-entry.mjs and what it imports, bundled as one plain ESM file with viem and tweetnacl inside, not minified.
+ * Deterministic. `keepOwnMains` builds it without the transform above, for the test that shows why the transform is there.
+ */
+export async function setupBundle(p = pins(), { keepOwnMains = false } = {}) {
+  const root = fileURLToPath(here('../'));
+  // The two libraries the examples import are the versions the lockfile pins for examples/, as in every other bundle.
+  const pinned = (packages) => {
+    for (const name of ['viem', 'tweetnacl']) if (packages.get(name) !== p[name]) throw new Error(`site/setup.mjs would carry ${name}@${packages.get(name)}, not the ${p[name]} the lockfile pins for examples/`);
+  };
+  const bundle = await rolldown({
+    cwd: root,
+    input: fileURLToPath(here('setup-entry.mjs')),
+    plugins: keepOwnMains ? [DROP_TOKEN_STORE] : [DROP_TOKEN_STORE, SILENCE_OWN_MAINS],
+    platform: 'node',
+    tsconfig: fileURLToPath(here('../examples/tsconfig.json')),
+    logLevel: 'warn',
+  });
+  try {
+    // The control build keeps the tools' command lines and what only they import, so it gets no banner and no package list.
+    const banner = keepOwnMains ? "// A control build of site/setup.mjs with the bundled tools' own command lines kept: for a test, never published.\n" : (chunk) => setupBanner(chunk.moduleIds, root);
+    const { output } = await bundle.generate({ format: 'esm', minify: false, banner, codeSplitting: false });
+    if (output.length !== 1 || output[0].type !== 'chunk') throw new Error(`bundling site/setup-entry.mjs gave ${output.length} files, not one`);
+    pinned(bundleContents(output[0].moduleIds, root).packages);
+    const code = output[0].code;
+    if (/tokenStoreImplementation/.test(code)) throw new Error('site/setup.mjs still carries tokenStoreImplementation: the transform that leaves it out no longer matches examples/deployments.ts');
+    // Any tool, these three or one added later, whose own command line's test reached the bundle would run on setup's arguments.
+    if (!keepOwnMains && code.includes('import.meta.url === pathToFileURL(process.argv[1]')) throw new Error("site/setup.mjs still carries a bundled tool's own command line: add the tool to OWN_MAIN_FILES in site/build.mjs");
+    return code;
+  } finally {
+    await bundle.close();
+  }
+}
+
+/** The sha256 of site/setup.mjs, hex. */
+export const setupSha256 = () => createHash('sha256').update(readFileSync(here('setup.mjs'))).digest('hex');
+
 /** The sha256 of site/try.mjs, hex. */
-export const trySha256 = () => createHash('sha256').update(readFileSync(here('try.mjs'))).digest('hex');
+export const trySha256 =() => createHash('sha256').update(readFileSync(here('try.mjs'))).digest('hex');
 
 /**
  * The one command an agent asks its user to approve: install the two pinned packages (no install scripts: neither
@@ -830,7 +948,9 @@ if (import.meta.url === `file://${process.argv[1]}`) {
   const bundle = await tryBundle();
   const buy = await buyBundle();
   const goals = Object.fromEntries(await Promise.all(Object.keys(GOALS).map(async (name) => [name, await goalBundle(name)])));
+  const setup = await setupBundle();
   if (!out) {
+    writeFileSync(here('setup.mjs'), setup);
     // try.mjs, buy.mjs and the goal files first: the pages carry their sha256.
     writeFileSync(here('try.mjs'), bundle);
     writeFileSync(here('buy.mjs'), buy);
@@ -845,12 +965,15 @@ if (import.meta.url === `file://${process.argv[1]}`) {
     writeFileSync(here('pages.css'), PAGES_CSS);
     writeFileSync(here('trust.txt'), trustText({ site: SITE_URL }));
     writeFileSync(here('status.json'), statusJson({ site: SITE_URL }));
-    console.log(`wrote site/try.mjs (sha256 ${trySha256()}), site/buy.mjs (sha256 ${buySha256()}), ${Object.keys(GOALS).map((n) => `site/${n}.mjs (sha256 ${goalSha256(n)})`).join(', ')}, site/index.html, site/home.css, site/home.js, site/404.html, site/trust.html, site/trust.txt, site/status.html, site/status.json and site/pages.css`);
+    console.log(`wrote site/try.mjs (sha256 ${trySha256()}), site/buy.mjs (sha256 ${buySha256()}), ${Object.keys(GOALS).map((n) => `site/${n}.mjs (sha256 ${goalSha256(n)})`).join(', ')}, site/setup.mjs (sha256 ${setupSha256()}), site/index.html, site/home.css, site/home.js, site/404.html, site/trust.html, site/trust.txt, site/status.html, site/status.json and site/pages.css`);
   } else {
     // Publish exactly the committed bundle, and only while it is current: the sha256 below is of that file.
     if (readFileSync(here('try.mjs'), 'utf8') !== bundle) throw new Error('site/try.mjs is stale against examples/: run node site/build.mjs, commit, then publish');
     if (readFileSync(here('buy.mjs'), 'utf8') !== buy) throw new Error('site/buy.mjs is stale against examples/: run node site/build.mjs, commit, then publish');
     for (const [name, code] of Object.entries(goals)) if (readFileSync(here(`${name}.mjs`), 'utf8') !== code) throw new Error(`site/${name}.mjs is stale against examples/: run node site/build.mjs, commit, then publish`);
+    // site/setup.mjs is not published yet (T-472: setup.txt and its pinned command come first), but a publish build
+    // still refuses while the committed file is stale.
+    if (readFileSync(here('setup.mjs'), 'utf8') !== setup) throw new Error('site/setup.mjs is stale against examples/: run node site/build.mjs, commit, then publish');
     const guides = publishedGuides({ op1: arg('op1'), op2: arg('op2') });
     const txt = guides.get('llms.txt');
     mkdirSync(join(out, 'ref'), { recursive: true });
