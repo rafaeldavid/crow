@@ -606,7 +606,7 @@ const setupFile = read('setup.mjs');
 expect(setupFile === (await setupBundle()), 'site/setup.mjs is stale against examples/: run node site/build.mjs');
 const setupImports = [...new Set([...setupFile.matchAll(/^import .* from "([^"]+)";$/gm)].map((m) => m[1]))];
 expect(setupImports.every((m) => m.startsWith('node:')) && !/\bimport\(/.test(setupFile), `site/setup.mjs must import only Node's own modules, and nothing dynamically (it imports ${setupImports.join(', ')})`);
-for (const line of ['for (const name of Object.keys(process.env)) if (/^(HOLDBACK|CROW)_/.test(name)) delete process.env[name];', "Object.defineProperty(globalThis, 'crowEntry', { value: 'setup',"]) {
+for (const line of ["for (const name of Object.keys(process.env)) if (/^(HOLDBACK|CROW)_/.test(name) || name === 'NODE_TLS_REJECT_UNAUTHORIZED') delete process.env[name];", "Object.defineProperty(globalThis, 'crowEntry', { value: 'setup',"]) {
   expect(setupFile.indexOf(line) > 0 && setupFile.indexOf(line) < setupFile.indexOf('\nimport '), `site/setup.mjs's banner must run \`${line}\` before any module`);
 }
 const setupTxt = guides.get('setup.txt') ?? '', setupOut = filledGuides.get('setup.txt') ?? '';
@@ -626,7 +626,18 @@ const SETUP_SAYS = [
   ['the ways the setup leans on Crow-run hosts', '## What leans on Crow-run hosts'],
   ['what the hash does not protect', 'It does not protect against whoever controls crow.direct'],
   ["the optional command that compares the file with the repository's copy", 'curl -fsSL https://raw.githubusercontent.com/rafaeldavid/holdback/main/site/setup.mjs | shasum -a 256'],
+  ['what an answer of the comparison means when the file was not found', 'An answer that starts `e3b0c442` is the hash of nothing'],
+  ['the preview the person sees before the first deal', '`node ~/.crow/setup.mjs first-deal --preview`'],
+  ['what this version sends before the marker', 'Before the marker, this version sends nothing to a Crow-run host'],
+  ['that this version registers nothing', 'This version registers nothing at Crow'],
+  ['that the setup asks for no account', '**No account.**'],
+  ['that deleting the folder deletes the key', 'That deletes the key too'],
+  ['that the folder refusals know common names only', 'it knows common names only'],
+  ['`first-deal --again`', '`first-deal --again` offers a new deal'],
+  ['`first-deal --buyer`', '`first-deal --buyer <URL>`'],
 ];
+// Every command after the first names the file where the first command put it: ~/.crow/setup.mjs.
+expect(setupLine.startsWith('mkdir -p ~/.crow && cd ~/.crow && ') && !/`node setup\.mjs /.test(setupOut), 'setup.txt must run every command after the first as `node ~/.crow/setup.mjs ...`, the file the first command downloads into ~/.crow');
 for (const [what, phrase] of SETUP_SAYS) expect(setupOut.includes(phrase), `setup.txt no longer states ${what} ("${phrase}")`);
 const leans = setupOut.slice(setupOut.indexOf('## What leans on Crow-run hosts'), setupOut.indexOf('## What the hash protects'));
 expect((leans.match(/^\d+\. /gm) ?? []).length === 5, 'setup.txt must list the five ways the setup leans on Crow-run hosts');

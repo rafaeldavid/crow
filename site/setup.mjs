@@ -19,18 +19,19 @@
 //   viem@2.57.13 (MIT License, Copyright (c) 2023-present weth, LLC)
 //   yaml@2.9.1 (ISC License, Copyright Eemeli Aro <eemeli@gmail.com>)
 // The signing key stays in the folder's keys/ directory, on this machine. The command takes its settings from flags
-// only: the next line removes every HOLDBACK_* and CROW_* variable from its environment before any module runs.
-for (const name of Object.keys(process.env)) if (/^(HOLDBACK|CROW)_/.test(name)) delete process.env[name];
+// only: the next line removes every HOLDBACK_* and CROW_* variable from its environment before any module runs, and
+// NODE_TLS_REJECT_UNAUTHORIZED, which would switch off the check of each host's certificate.
+for (const name of Object.keys(process.env)) if (/^(HOLDBACK|CROW)_/.test(name) || name === 'NODE_TLS_REJECT_UNAUTHORIZED') delete process.env[name];
 // The line after it names the one command this file runs (examples/entry.ts), so a bundled tool that asks whether it
 // is the program, such as deal-record.ts, is told no and runs no command line of its own.
 Object.defineProperty(globalThis, 'crowEntry', { value: 'setup', enumerable: false, configurable: false, writable: false });
 
 import { createRequire } from "node:module";
-import { appendFileSync, chmodSync, existsSync, mkdirSync, readFileSync, readdirSync, renameSync, statSync, writeFileSync } from "node:fs";
-import { homedir } from "node:os";
-import { dirname, isAbsolute, join, relative, resolve, sep } from "node:path";
 import * as nc from "node:crypto";
 import { createHash, createHmac, randomBytes, randomUUID, timingSafeEqual } from "node:crypto";
+import { appendFileSync, chmodSync, existsSync, lstatSync, mkdirSync, readFileSync, readdirSync, realpathSync, renameSync, rmSync, statSync, writeFileSync } from "node:fs";
+import { homedir } from "node:os";
+import { basename, dirname, isAbsolute, join, relative, resolve, sep } from "node:path";
 import { fileURLToPath, pathToFileURL } from "node:url";
 import { createServer } from "node:http";
 
@@ -931,7 +932,7 @@ var init__u64 = __esmMin((() => {
 }));
 
 // node_modules/.pnpm/@noble+hashes@1.8.0/node_modules/@noble/hashes/esm/sha2.js
-var SHA256_K, SHA256_W, SHA256$1, sha256$6;
+var SHA256_K, SHA256_W, SHA256$1, sha256$7;
 var init_sha2 = __esmMin((() => {
 	init__md();
 	init_utils$2();
@@ -1078,7 +1079,7 @@ var init_sha2 = __esmMin((() => {
 			clean$1(this.buffer);
 		}
 	};
-	sha256$6 = /* @__PURE__ */ createHasher$1(() => new SHA256$1());
+	sha256$7 = /* @__PURE__ */ createHasher$1(() => new SHA256$1());
 }));
 
 // node_modules/.pnpm/@noble+hashes@1.8.0/node_modules/@noble/hashes/esm/hmac.js
@@ -2615,11 +2616,11 @@ function sqrtMod(y) {
 function taggedHash(tag, ...messages) {
 	let tagP = TAGGED_HASH_PREFIXES[tag];
 	if (tagP === void 0) {
-		const tagH = sha256$6(Uint8Array.from(tag, (c) => c.charCodeAt(0)));
+		const tagH = sha256$7(Uint8Array.from(tag, (c) => c.charCodeAt(0)));
 		tagP = concatBytes$1(tagH, tagH);
 		TAGGED_HASH_PREFIXES[tag] = tagP;
 	}
-	return sha256$6(concatBytes$1(tagP, ...messages));
+	return sha256$7(concatBytes$1(tagP, ...messages));
 }
 function schnorrGetExtPubKey(priv) {
 	let d_ = secp256k1.utils.normPrivateKeyToScalar(priv);
@@ -2746,7 +2747,7 @@ var init_secp256k1 = __esmMin((() => {
 				};
 			}
 		}
-	}, sha256$6);
+	}, sha256$7);
 	TAGGED_HASH_PREFIXES = {};
 	pointToBytes = (point) => point.toRawBytes(true).slice(1);
 	numTo32b = (n) => numberToBytesBE(n, 32);
@@ -2809,7 +2810,7 @@ var init_secp256k1 = __esmMin((() => {
 		m: 1,
 		k: 128,
 		expand: "xmd",
-		hash: sha256$6
+		hash: sha256$7
 	}))();
 	hashToCurve = /* @__PURE__ */ (() => secp256k1_hasher.hashToCurve)();
 	encodeToCurve = /* @__PURE__ */ (() => secp256k1_hasher.encodeToCurve)();
@@ -4433,16 +4434,16 @@ var init_blobsToProofs = __esmMin((() => {
 }));
 
 // node_modules/.pnpm/@noble+hashes@1.8.0/node_modules/@noble/hashes/esm/sha256.js
-var sha256$5;
+var sha256$6;
 var init_sha256$1 = __esmMin((() => {
 	init_sha2();
-	sha256$5 = sha256$6;
+	sha256$6 = sha256$7;
 }));
 
 // node_modules/.pnpm/viem@2.57.13_typescript@6.0.3/node_modules/viem/_esm/utils/hash/sha256.js
-function sha256$4(value, to_) {
+function sha256$5(value, to_) {
 	const to = to_ || "hex";
-	const bytes = sha256$5(isHex(value, { strict: false }) ? toBytes(value) : value);
+	const bytes = sha256$6(isHex(value, { strict: false }) ? toBytes(value) : value);
 	if (to === "bytes") return bytes;
 	return toHex(bytes);
 }
@@ -4474,7 +4475,7 @@ var init_sha256 = __esmMin((() => {
 function commitmentToVersionedHash(parameters) {
 	const { commitment, version = 1 } = parameters;
 	const to = parameters.to ?? (typeof commitment === "string" ? "hex" : "bytes");
-	const versionedHash = sha256$4(commitment, "bytes");
+	const versionedHash = sha256$5(commitment, "bytes");
 	versionedHash.set([version], 0);
 	return to === "bytes" ? versionedHash : bytesToHex(versionedHash);
 }
@@ -9208,7 +9209,7 @@ const ERC3009 = [
 	name: s.split(":")[0],
 	type: s.split(":")[1]
 }));
-const ZERO_ADDRESS$2 = `0x${"0".repeat(40)}`;
+const ZERO_ADDRESS$3 = `0x${"0".repeat(40)}`;
 const PAYMENT_INFO_TYPEHASH = keccak256(toBytes("PaymentInfo(address operator,address payer,address receiver,address token,uint120 maxAmount,uint48 preApprovalExpiry,uint48 authorizationExpiry,uint48 refundExpiry,uint16 minFeeBps,uint16 maxFeeBps,address feeReceiver,uint256 salt)"));
 /**
 * The funding nonce on a chain (ADR-0025): CPP's PaymentInfo hash with the payer zeroed. Every field comes from the
@@ -9221,7 +9222,7 @@ function fundingNonceOf(t, id, c) {
 	const inner = keccak256(encodeAbiParameters(parseAbiParameters("bytes32, address, address, address, address, uint120, uint48, uint48, uint48, uint16, uint16, address, uint256"), [
 		PAYMENT_INFO_TYPEHASH,
 		c.rules,
-		ZERO_ADDRESS$2,
+		ZERO_ADDRESS$3,
 		t.sellerPayoutAddress,
 		t.price.token,
 		total,
@@ -9230,7 +9231,7 @@ function fundingNonceOf(t, id, c) {
 		expiry,
 		0,
 		1e4,
-		ZERO_ADDRESS$2,
+		ZERO_ADDRESS$3,
 		BigInt(id)
 	]));
 	return keccak256(encodeAbiParameters(parseAbiParameters("uint256, address, bytes32"), [
@@ -11014,7 +11015,7 @@ const RECEIPT_TYPES = { Receipt: [
 const lc = (s) => String(s).toLowerCase();
 /** A JSON value with every 0x-hex string lowercased, so addresses compare ignoring case. */
 const lowerAll = (v) => JSON.parse(JSON.stringify(v ?? null), (_k, x) => typeof x === "string" && /^0x[0-9a-fA-F]+$/.test(x) ? x.toLowerCase() : x);
-const sha256$3 = async (b) => `sha256:${Buffer.from(await crypto.subtle.digest("SHA-256", new Uint8Array(b))).toString("hex")}`;
+const sha256$4 = async (b) => `sha256:${Buffer.from(await crypto.subtle.digest("SHA-256", new Uint8Array(b))).toString("hex")}`;
 const sum = (xs) => xs.reduce((a, x) => a + BigInt(x.amount), 0n);
 const isMoney = (m) => typeof m?.token === "string" && typeof m?.amount === "string" && /^(0|[1-9][0-9]*)$/.test(m.amount);
 /**
@@ -11109,7 +11110,7 @@ async function ciphertextOf(sha, first, operators, cache) {
 	let found = null;
 	for (const api of [first, ...operators.filter((o) => o !== first)]) {
 		const b = await bytesFrom(api, `/v1/ciphertext/${sha}`);
-		if (b && await sha256$3(b) === sha) {
+		if (b && await sha256$4(b) === sha) {
 			found = b;
 			break;
 		}
@@ -11286,7 +11287,7 @@ async function view(a, id, o, cache) {
 			let got = null;
 			if (key?.length === 32) try {
 				const aes = await crypto.subtle.importKey("raw", new Uint8Array(key), "AES-GCM", false, ["decrypt"]);
-				got = await sha256$3(new Uint8Array(await crypto.subtle.decrypt({
+				got = await sha256$4(new Uint8Array(await crypto.subtle.decrypt({
 					name: "AES-GCM",
 					iv: ct.slice(0, 12)
 				}, aes, ct.slice(12))));
@@ -11628,16 +11629,6 @@ async function fromParty(url, init = {}) {
 		body
 	};
 }
-/** Polls every operator until each reports one of `states`. A stall names the states seen and the operators' notices. */
-async function until(agent, id, states, timeoutMs, everyMs = 1e3) {
-	let seen = [];
-	for (const end = Date.now() + timeoutMs; Date.now() < end; await sleep(everyMs)) {
-		seen = await Promise.all(agent.sources().map((api) => agent.call("GET", `/v1/commitments/${id}`, void 0, api)));
-		if (seen.every((s) => states.includes(s.escrowState))) return seen[0];
-	}
-	const notices = [...new Set(seen.flatMap((s) => s.notices ?? []))];
-	throw new Error(`still ${seen.map((s) => s.escrowState).join(" / ")} after ${Math.round(timeoutMs / 1e3)} s, waiting for ${states.join(" or ")}${notices.length ? `; the operators say: ${notices.map((n) => plain$4(n)).join(" | ")}` : ""}`);
-}
 
 // examples/plain.ts
 /** C0 and C1 controls, including ESC (terminal escapes), CR, LF and TAB. */
@@ -11750,7 +11741,7 @@ function holdbackDomain(chainId, verifyingContract = SIMCHAIN_VERIFYING_CONTRACT
 	};
 }
 const ZERO32$1 = `0x${"0".repeat(64)}`;
-const ZERO_ADDRESS$1 = `0x${"0".repeat(40)}`;
+const ZERO_ADDRESS$2 = `0x${"0".repeat(40)}`;
 const field = (name, type) => ({
 	name,
 	type
@@ -45732,7 +45723,7 @@ function beaconRule(b) {
 	if (b.round === 0) return "beacon round 0 does not exist on drand quicknet (round 1 is its genesis)";
 	const bytes = b.signature ? (b.signature.length - 2) / 2 : 0;
 	if (bytes !== 48) return `a drand quicknet beacon carries a 48-byte signature, not ${bytes} bytes`;
-	if (sha256$4(b.signature) !== b.value) return "beacon value is not sha256 of the signature";
+	if (sha256$5(b.signature) !== b.value) return "beacon value is not sha256 of the signature";
 }
 function messageRules(m) {
 	if ((m.type === "EarlyAccept" || m.type === "Decision" || m.type === "Dispute") && m.attempt > 255) return `attempt ${m.attempt} exceeds uint8`;
@@ -45791,7 +45782,7 @@ const parseReceipt = parserFor("receipt", true);
 
 // packages/core/dist/crypto/hash.js
 /** `sha256:<lowercase hex>` of the bytes, the common.schema.json Sha256 form. Bytes are not interpreted. */
-function sha256$2(bytes) {
+function sha256$3(bytes) {
 	return `sha256:${createHash("sha256").update(bytes).digest("hex")}`;
 }
 
@@ -53726,7 +53717,7 @@ function evaluate$1(check, input, table, budget) {
 			const bytes = input.references?.get(check.reference.sha256);
 			if (!bytes) return fail$1("reference not available");
 			if (bytes.length > 10485760) return fail$1(`reference is ${bytes.length} bytes; the cap is ${MAX_CIPHERTEXT_BYTES}`);
-			if (sha256$2(bytes) !== check.reference.sha256) return fail$1("reference bytes do not match the committed hash");
+			if (sha256$3(bytes) !== check.reference.sha256) return fail$1("reference bytes do not match the committed hash");
 			let text;
 			try {
 				text = new TextDecoder("utf-8", { fatal: true }).decode(bytes);
@@ -55293,7 +55284,7 @@ function stageOne(intake, acceptance, references, aggregation = { preDecision })
 function preflightDelivery(input) {
 	const { plaintext, mime } = input;
 	const head = {
-		plaintextSha256: sha256$2(plaintext),
+		plaintextSha256: sha256$3(plaintext),
 		bytes: plaintext.length
 	};
 	const refuse = (refused) => ({
@@ -56754,7 +56745,7 @@ function addSalt(report, salt) {
 	const salted = rest.slice(lead.length).startsWith("}") ? `${text.slice(0, open)}${field}${rest}` : `${text.slice(0, open)}${lead}${field},${rest}`;
 	return new TextEncoder().encode(salted);
 }
-var Refused = class extends Error {
+var Refused$1 = class extends Error {
 	status;
 	type;
 	headers;
@@ -56769,7 +56760,7 @@ const BASE_UNITS = /^(0|[1-9][0-9]{0,77})$/;
 /** `{{name}}` or `{{name.length}}`; with a backslash before it, `\{{name}}`, it is the text `{{name}}`. */
 const PLACEHOLDER = /(\\?)\{\{([A-Za-z][A-Za-z0-9]*)(\.length)?\}\}/g;
 const WHOLE_PLACEHOLDER = /^\{\{([A-Za-z][A-Za-z0-9]*)(\.length)?\}\}$/;
-const BEFORE_HOLD = [
+const BEFORE_HOLD$1 = [
 	"Offered",
 	"AcceptedByAdjudicator",
 	"Agreed"
@@ -56793,7 +56784,7 @@ const RULE_KEYS = [
 	"describe",
 	"rubric"
 ];
-const ZERO_ADDRESS = `0x${"0".repeat(40)}`;
+const ZERO_ADDRESS$1 = `0x${"0".repeat(40)}`;
 const isRecord$1 = (v) => v !== null && typeof v === "object" && !Array.isArray(v);
 /** Why one value breaks its rule, or null when it keeps it. `at` names the field, as `scope.lines`. */
 function valueError(at, v, rule) {
@@ -56946,7 +56937,7 @@ function termsFor(c, template, scope, options, deliverWithinSec) {
 	let rubric = filled.rubric;
 	for (const r of c.termsRules ?? []) {
 		if (!r.when.every((w) => holds(w, scope, options))) continue;
-		if (r.refuse !== void 0) throw new Refused(400, "invalid_request", `${r.when.map((w) => w.field).join(" and ")}: ${r.refuse}`);
+		if (r.refuse !== void 0) throw new Refused$1(400, "invalid_request", `${r.when.map((w) => w.field).join(" and ")}: ${r.refuse}`);
 		Object.assign(timing, r.timing);
 		if (r.dropChecks) checks = checks.filter((k) => !r.dropChecks.includes(k.id));
 		for (const k of fill(r.checks ?? [], scope)) {
@@ -56972,8 +56963,8 @@ function refusalFor(c, template, scope, options) {
 	for (const r of c.termsRules ?? []) {
 		if (!r.when.every((w) => holds(w, scope, options))) continue;
 		const fields = r.when.map((w) => w.field).join(" and ");
-		if (r.refuse !== void 0) throw new Refused(400, "invalid_request", `${fields}: ${r.refuse}`);
-		if (r.rubric === true && template.optionalRubric === void 0) throw new Refused(400, "invalid_request", `${fields || "this quote"}: this seller's template has no optional rubric to add`);
+		if (r.refuse !== void 0) throw new Refused$1(400, "invalid_request", `${fields}: ${r.refuse}`);
+		if (r.rubric === true && template.optionalRubric === void 0) throw new Refused$1(400, "invalid_request", `${fields || "this quote"}: this seller's template has no optional rubric to add`);
 	}
 }
 /** A request's body, or null when it is longer than `cap` bytes: the reading stops there. */
@@ -56999,11 +56990,11 @@ async function bodyOf(req, cap) {
 }
 async function readJson(req) {
 	const bytes = await bodyOf(req, MAX_BODY_BYTES);
-	if (bytes === null) throw new Refused(413, "invalid_request", `the request is larger than ${MAX_BODY_BYTES} bytes`);
+	if (bytes === null) throw new Refused$1(413, "invalid_request", `the request is larger than ${MAX_BODY_BYTES} bytes`);
 	try {
 		return JSON.parse(new TextDecoder().decode(bytes));
 	} catch {
-		throw new Refused(400, "invalid_request", "the request body is not JSON");
+		throw new Refused$1(400, "invalid_request", "the request body is not JSON");
 	}
 }
 /** A fixed-window count: 0 when a request is admitted, otherwise the whole seconds until the window ends. */
@@ -57023,7 +57014,7 @@ function counter(limit) {
 		return 0;
 	};
 }
-const sha256$1 = (text) => createHash("sha256").update(text, "utf8").digest();
+const sha256$2 = (text) => createHash("sha256").update(text, "utf8").digest();
 /**
 * The quote route's rate limit and authentication, from the seller's configuration (T-324). The values are the
 * seller's own (D31): any positive whole number. Returns, for each request, the refusal or null to go on.
@@ -57039,15 +57030,15 @@ function gate(c, env) {
 		if (c.quoteAuth.kind !== "bearer") throw new Error("quoteAuth.kind must be \"bearer\"");
 		const list = (env[c.quoteAuth.env] ?? "").split(",").map((s) => s.trim()).filter(Boolean);
 		if (list.length === 0) throw new Error(`set ${c.quoteAuth.env} to one or more quote credentials, comma-separated`);
-		accepted = list.map(sha256$1);
+		accepted = list.map(sha256$2);
 	}
 	const overall = limits.overall ? counter(limits.overall) : null;
-	const limited = (wait) => new Refused(429, "rate_limited", `too many quote requests; try again in ${wait} s`, { "retry-after": String(wait) });
+	const limited = (wait) => new Refused$1(429, "rate_limited", `too many quote requests; try again in ${wait} s`, { "retry-after": String(wait) });
 	return (req) => {
 		if (accepted) {
 			const given = /^bearer ([\x21-\x7e]+)$/i.exec(req.headers.get("authorization") ?? "")?.[1];
-			const digest = given === void 0 ? null : sha256$1(given);
-			if (!digest || !accepted.some((a) => timingSafeEqual(a, digest))) return new Refused(401, "unauthorized", "this quote route needs Authorization: Bearer <credential>", { "www-authenticate": "Bearer realm=\"quote\"" });
+			const digest = given === void 0 ? null : sha256$2(given);
+			if (!digest || !accepted.some((a) => timingSafeEqual(a, digest))) return new Refused$1(401, "unauthorized", "this quote route needs Authorization: Bearer <credential>", { "www-authenticate": "Bearer realm=\"quote\"" });
 		}
 		const waitAll = overall?.(Date.now()) ?? 0;
 		return waitAll ? limited(waitAll) : null;
@@ -57056,7 +57047,7 @@ function gate(c, env) {
 /** Whether a request carries `Authorization: Bearer <credential>` with one of the accepted digests, compared in constant time. */
 function bearerOk(req, accepted) {
 	const given = /^bearer ([\x21-\x7e]+)$/i.exec(req.headers.get("authorization") ?? "")?.[1];
-	const digest = given === void 0 ? null : sha256$1(given);
+	const digest = given === void 0 ? null : sha256$2(given);
 	return digest !== null && accepted.some((a) => timingSafeEqual(a, digest));
 }
 /**
@@ -57088,7 +57079,7 @@ function refusalSettings(c, env) {
 		if (r.readyAuth.kind !== "bearer") throw new Error("redelivery.readyAuth.kind must be \"bearer\"");
 		const list = (env[r.readyAuth.env] ?? "").split(",").map((s) => s.trim()).filter(Boolean);
 		if (list.length === 0) throw new Error(`set ${r.readyAuth.env} to one or more ready credentials, comma-separated`);
-		ready = list.map(sha256$1);
+		ready = list.map(sha256$2);
 	}
 	return {
 		callback,
@@ -57211,7 +57202,7 @@ const SHELL_MEANING = {
 	HOLDBACK_OPERATORS: "the operators' addresses",
 	HOLDBACK_DEPLOYMENT: "the settlement deployment the adapter pins"
 };
-const OPEN_STAGES = [
+const OPEN_STAGES$1 = [
 	"offered",
 	"starting",
 	"start-unknown",
@@ -57302,7 +57293,7 @@ async function createSellerAdapter(c, env, io) {
 	const held = /* @__PURE__ */ new Map();
 	const holders = [["HOLDBACK_KEY", valuesOf("HOLDBACK_KEY", false).map((v) => v.toLowerCase())], ...credentialVars.map(([at, name]) => [at, valuesOf(name, at === "quoteAuth.env" || at === "redelivery.readyAuth.env")])];
 	for (const [at, values] of holders) for (const v of values) {
-		const digest = sha256$1(v).toString("hex");
+		const digest = sha256$2(v).toString("hex");
 		const other = held.get(digest);
 		if (other && other !== at) throw new Error(`${at} and ${other} hold the same value: each credential needs a value of its own`);
 		held.set(digest, at);
@@ -57337,7 +57328,7 @@ async function createSellerAdapter(c, env, io) {
 		const a = named[r];
 		if (a === null && !c.adjudicators) throw new Error(`name adjudicators in the configuration: these operators' discovery names no ${r} adjudicator`);
 		if (typeof a !== "string" || !/^0x[0-9a-fA-F]{40}$/.test(a)) throw new Error(`adjudicators.${r} must be an address: 0x and 40 hex characters`);
-		if (a.toLowerCase() === ZERO_ADDRESS) throw new Error(`adjudicators.${r} is the zero address: name your ${r} adjudicator, or leave adjudicators out to take the ones discovery names`);
+		if (a.toLowerCase() === ZERO_ADDRESS$1) throw new Error(`adjudicators.${r} is the zero address: name your ${r} adjudicator, or leave adjudicators out to take the ones discovery names`);
 	}
 	const adjudicators = {
 		primary: named.primary,
@@ -57370,7 +57361,7 @@ async function createSellerAdapter(c, env, io) {
 		quotes: {}
 	};
 	if (remote) {
-		const foreign = Object.values(journal.deals).filter((d) => OPEN_STAGES.includes(d.stage) && String(d.terms?.seller).toLowerCase() !== remote.address.toLowerCase());
+		const foreign = Object.values(journal.deals).filter((d) => OPEN_STAGES$1.includes(d.stage) && String(d.terms?.seller).toLowerCase() !== remote.address.toLowerCase());
 		if (foreign.length) throw new Error(`the journal holds ${foreign.length} open deals another key offered (${foreign[0].id} first): finish them with that key before the signer signs`);
 	}
 	/** Saves the journal whole, through the shell: it keeps the old copy or the new one, never half of one. */
@@ -57620,7 +57611,7 @@ async function createSellerAdapter(c, env, io) {
 			if (!perDeal) await ensureMandate(await seller.settlementNow());
 		} catch (e) {
 			log(`Quote refused: ${plain$3(e.message)}.`);
-			throw new Refused(503, "seller_unavailable", "the seller holds no mandate to offer now");
+			throw new Refused$1(503, "seller_unavailable", "the seller holds no mandate to offer now");
 		}
 		let quoted;
 		let sellerApiQuoteMs = null;
@@ -57634,7 +57625,7 @@ async function createSellerAdapter(c, env, io) {
 			sellerApiQuoteMs = Date.now() - asked;
 		} catch (e) {
 			log(`Quote failed: ${plain$3(e.message)}.`);
-			throw new Refused(502, "seller_api_failed", "the seller could not price this scope");
+			throw new Refused$1(502, "seller_api_failed", "the seller could not price this scope");
 		}
 		const price = sellerApi.readsToken ? quoted?.price : {
 			...quoted?.price,
@@ -57642,16 +57633,16 @@ async function createSellerAdapter(c, env, io) {
 		};
 		if (!price || typeof price.token !== "string" || typeof price.amount !== "string" || !BASE_UNITS.test(price.amount)) {
 			log("Quote refused: the seller API's price is not {token, amount} with the amount in base units as a decimal string.");
-			throw new Refused(502, "seller_api_failed", "the seller could not price this scope");
+			throw new Refused$1(502, "seller_api_failed", "the seller could not price this scope");
 		}
 		if (price.token.toLowerCase() !== token.id.toLowerCase()) {
 			log(`Quote refused: the seller API priced in ${plain$3(price.token).slice(0, 80)}; this settlement layer's token is ${token.id} (${token.symbol}).`);
-			throw new Refused(502, "seller_api_failed", "the seller could not price this scope");
+			throw new Refused$1(502, "seller_api_failed", "the seller could not price this scope");
 		}
 		const deliverWithinSec = quoted.deliverWithinSec;
-		if (deliverWithinSec !== void 0 && (!Number.isSafeInteger(deliverWithinSec) || deliverWithinSec < 0)) throw new Refused(502, "seller_api_failed", "the seller could not price this scope");
+		if (deliverWithinSec !== void 0 && (!Number.isSafeInteger(deliverWithinSec) || deliverWithinSec < 0)) throw new Refused$1(502, "seller_api_failed", "the seller could not price this scope");
 		const validForSec = quoted.validForSec;
-		if (validForSec !== void 0 && (!Number.isSafeInteger(validForSec) || validForSec < 0)) throw new Refused(502, "seller_api_failed", "the seller could not price this scope");
+		if (validForSec !== void 0 && (!Number.isSafeInteger(validForSec) || validForSec < 0)) throw new Refused$1(502, "seller_api_failed", "the seller could not price this scope");
 		const built = termsFor(c, template, scope, options, deliverWithinSec);
 		if (validForSec !== void 0) built.timing.offerExpiresInSec = Math.min(built.timing.offerExpiresInSec, validForSec);
 		const panel = Array.isArray(built.rubric?.criteria) && built.rubric.criteria.length > 0;
@@ -57660,7 +57651,7 @@ async function createSellerAdapter(c, env, io) {
 		let grantMs = null;
 		if (perDeal) {
 			const waitSec = Math.ceil((dealGrantAfter - Date.now()) / 1e3);
-			if (waitSec > 0) throw new Refused(503, "seller_unavailable", "the seller cannot take a key for a new deal now; try again later", { "retry-after": String(waitSec) });
+			if (waitSec > 0) throw new Refused$1(503, "seller_unavailable", "the seller cannot take a key for a new deal now; try again later", { "retry-after": String(waitSec) });
 			nonce = freshNonce().toLowerCase();
 			signer = new Agent(operators, dealKeyOf(sellerKey, nonce), /* @__PURE__ */ new Uint8Array(32), pin.domain, pin.chain);
 			const asked = Date.now();
@@ -57670,7 +57661,7 @@ async function createSellerAdapter(c, env, io) {
 				const retryAfterSec = Math.max(60, e.retryAfterSec ?? 0);
 				dealGrantAfter = Date.now() + retryAfterSec * 1e3;
 				log(`Quote refused: the faucet gave the deal key ${signer.address} no mandate (${plain$3(e.message)}). No offer is signed with HOLDBACK_KEY instead; the faucet is asked again in ${retryAfterSec} s at the earliest.`);
-				throw new Refused(503, "seller_unavailable", "the seller cannot take a key for a new deal now; try again later", { "retry-after": String(retryAfterSec) });
+				throw new Refused$1(503, "seller_unavailable", "the seller cannot take a key for a new deal now; try again later", { "retry-after": String(retryAfterSec) });
 			}
 			grantMs = Date.now() - asked;
 		}
@@ -57704,7 +57695,7 @@ async function createSellerAdapter(c, env, io) {
 			offer = remote ? await remoteOffer(given) : await signer.offer(given);
 		} catch (e) {
 			log(`Offer failed: ${plain$3(e.message)}.`);
-			throw new Refused(502, "offer_failed", "the seller could not make this offer");
+			throw new Refused$1(502, "offer_failed", "the seller could not make this offer");
 		}
 		const { id, terms } = offer;
 		if (perDeal) signers.set(id, signer);
@@ -57755,18 +57746,18 @@ async function createSellerAdapter(c, env, io) {
 	/** `replayed`: the same Idempotency-Key and body answered before, so the answer is the stored one (T-417). */
 	async function quote(req) {
 		const { buyer, buyerEncryptionPublicKey, buyerPaymentAddress, scope, options } = await readJson(req) ?? {};
-		if (typeof buyer !== "string" || !/^0x[0-9a-fA-F]{40}$/.test(buyer)) throw new Refused(400, "invalid_request", "buyer must be an address: 0x and 40 hex characters");
-		if (buyerPaymentAddress !== void 0 && !isAddressText(buyerPaymentAddress)) throw new Refused(400, "invalid_request", "buyerPaymentAddress must be an address: 0x and 40 hex characters, or left out for the buyer's own");
+		if (typeof buyer !== "string" || !/^0x[0-9a-fA-F]{40}$/.test(buyer)) throw new Refused$1(400, "invalid_request", "buyer must be an address: 0x and 40 hex characters");
+		if (buyerPaymentAddress !== void 0 && !isAddressText(buyerPaymentAddress)) throw new Refused$1(400, "invalid_request", "buyerPaymentAddress must be an address: 0x and 40 hex characters, or left out for the buyer's own");
 		const paying = buyerPaymentAddress?.toLowerCase();
-		if (typeof buyerEncryptionPublicKey !== "string" || !/^[A-Za-z0-9_-]{43}$/.test(buyerEncryptionPublicKey)) throw new Refused(400, "invalid_request", "buyerEncryptionPublicKey must be an x25519 public key, base64url, 43 characters");
+		if (typeof buyerEncryptionPublicKey !== "string" || !/^[A-Za-z0-9_-]{43}$/.test(buyerEncryptionPublicKey)) throw new Refused$1(400, "invalid_request", "buyerEncryptionPublicKey must be an x25519 public key, base64url, 43 characters");
 		const wrong = fieldsError("scope", scope, c.scope) ?? (options === void 0 ? null : fieldsError("options", options, c.options ?? {}));
-		if (wrong) throw new Refused(400, "invalid_request", wrong);
+		if (wrong) throw new Refused$1(400, "invalid_request", wrong);
 		const idempotencyKey = req.headers.get("idempotency-key") ?? void 0;
 		if (idempotencyKey === void 0) return {
 			answer: await offerFor(buyer.toLowerCase(), buyerEncryptionPublicKey, paying, scope, options),
 			replayed: false
 		};
-		if (typeof idempotencyKey !== "string" || !/^[\x21-\x7e]{1,200}$/.test(idempotencyKey)) throw new Refused(400, "invalid_request", "Idempotency-Key must be 1 to 200 printable characters");
+		if (typeof idempotencyKey !== "string" || !/^[\x21-\x7e]{1,200}$/.test(idempotencyKey)) throw new Refused$1(400, "invalid_request", "Idempotency-Key must be 1 to 200 printable characters");
 		const bodyHash = createHash("sha256").update(jcs({
 			buyer: buyer.toLowerCase(),
 			buyerEncryptionPublicKey,
@@ -57775,7 +57766,7 @@ async function createSellerAdapter(c, env, io) {
 			...options === void 0 ? {} : { options }
 		})).digest("hex");
 		const seen = journal.quotes[idempotencyKey] ?? inFlight.get(idempotencyKey);
-		if (seen && seen.bodyHash !== bodyHash) throw new Refused(409, "idempotency_conflict", "this Idempotency-Key was used with another request");
+		if (seen && seen.bodyHash !== bodyHash) throw new Refused$1(409, "idempotency_conflict", "this Idempotency-Key was used with another request");
 		if (seen) return {
 			answer: await seen.answer,
 			replayed: true
@@ -57813,7 +57804,7 @@ async function createSellerAdapter(c, env, io) {
 		const escrowState = () => seller.trusted(`/v1/commitments/${id}`, (x) => x.escrowState);
 		if (deal.stage === "offered") {
 			const state = await escrowState();
-			if (BEFORE_HOLD.includes(state)) return;
+			if (BEFORE_HOLD$1.includes(state)) return;
 			if (state !== "Held") return record(deal, {
 				stage: "closed",
 				note: `the offer ended ${state} with no job started`
@@ -58340,11 +58331,11 @@ async function createSellerAdapter(c, env, io) {
 		} catch (err) {
 			const e = err;
 			emit("quote.refused", {
-				status: e instanceof Refused ? e.status : 500,
-				reason: e instanceof Refused ? e.type : "internal",
+				status: e instanceof Refused$1 ? e.status : 500,
+				reason: e instanceof Refused$1 ? e.type : "internal",
 				ms: Date.now() - asked
 			});
-			if (e instanceof Refused) return send(e.status, {
+			if (e instanceof Refused$1) return send(e.status, {
 				type: e.type,
 				detail: e.message
 			}, e.headers);
@@ -58361,7 +58352,7 @@ async function createSellerAdapter(c, env, io) {
 		idle: async () => {
 			while (running) await running;
 		},
-		hasOpen: () => Object.values(journal.deals).some((d) => OPEN_STAGES.includes(d.stage)),
+		hasOpen: () => Object.values(journal.deals).some((d) => OPEN_STAGES$1.includes(d.stage)),
 		deals: () => structuredClone(Object.values(journal.deals)),
 		pollMs: c.pollMs,
 		address: seller.address,
@@ -58620,7 +58611,7 @@ function readTerms(path) {
 }
 const list = (ids) => ids.map(plain$2).join(", ");
 /** The id a content store keeps bytes under, and the form the terms commit a reference to. */
-const sha256 = (bytes) => `sha256:${createHash("sha256").update(bytes).digest("hex")}`;
+const sha256$1 = (bytes) => `sha256:${createHash("sha256").update(bytes).digest("hex")}`;
 const isReferenceCheck = (c) => c.type === "reference_row_match_min";
 /** The committed hash, or '' for a hostile check without one (the library fails it). */
 const committed = (c) => typeof c.reference?.sha256 === "string" ? c.reference.sha256 : "";
@@ -58686,7 +58677,7 @@ function checkDelivery(options) {
 	const references = /* @__PURE__ */ new Map();
 	for (const path of options.references ?? []) {
 		const bytes = bytesOf(path);
-		const hash = sha256(bytes);
+		const hash = sha256$1(bytes);
 		if (!refChecks.some((c) => committed(c) === hash)) throw new UsageError(`the reference file ${plain$2(path)} hashes to ${hash}, which no reference check in the terms commits to`);
 		if (loadable.has(hash)) references.set(hash, bytes);
 	}
@@ -58806,7 +58797,6 @@ const sampleAddresses = (port) => ({
 * port the system picks. A port another program holds stops the start, naming it.
 */
 async function startSampleApi(token, port = 0) {
-	const jobs = /* @__PURE__ */ new Map();
 	const rowsOf = (scope) => {
 		const rows = scope?.rows;
 		if (!Number.isSafeInteger(rows) || rows < SAMPLE.scope.rows.min || rows > SAMPLE.scope.rows.max) throw new Error(`scope.rows must be a whole number from ${SAMPLE.scope.rows.min} to ${SAMPLE.scope.rows.max}`);
@@ -58827,21 +58817,12 @@ async function startSampleApi(token, port = 0) {
 				});
 			}
 			if (req.method === "POST" && path === "/jobs") {
-				const key = String(req.headers["idempotency-key"] ?? "");
-				if (!key) return send(400, { detail: "POST /jobs needs an Idempotency-Key" });
-				const rows = rowsOf((await json(req)).scope);
-				if (!jobs.has(key)) jobs.set(key, {
-					jobId: `job-${jobs.size + 1}`,
-					rows
-				});
-				return send(200, { jobId: jobs.get(key).jobId });
+				if (!String(req.headers["idempotency-key"] ?? "")) return send(400, { detail: "POST /jobs needs an Idempotency-Key" });
+				return send(200, { jobId: `squares-${rowsOf((await json(req)).scope)}` });
 			}
-			const result = /^\/jobs\/([^/]+)\/result$/.exec(path);
-			if (req.method === "GET" && result) {
-				const job = [...jobs.values()].find((j) => j.jobId === result[1]);
-				if (!job) return send(404, { detail: "no such job" });
-				return res.writeHead(200, { "content-type": "text/csv" }).end(sampleResult({ rows: job.rows }));
-			}
+			const result = /^\/jobs\/squares-([1-9][0-9]?)\/result$/.exec(path);
+			if (req.method === "GET" && result) return res.writeHead(200, { "content-type": "text/csv" }).end(sampleResult({ rows: rowsOf({ rows: Number(result[1]) }) }));
+			if (req.method === "GET" && /^\/jobs\/[^/]+\/result$/.test(path)) return send(404, { detail: "no such job" });
 			return send(404, { detail: "not found" });
 		})().catch((e) => send(400, { detail: e.message }));
 	});
@@ -58865,6 +58846,7 @@ init_getAddress();
 /** The files of a party's folder, by their path inside it. */
 const FILES = {
 	state: "crow.json",
+	lock: "crow.lock",
 	ignore: ".gitignore",
 	keys: "keys",
 	key: join("keys", "signing.key"),
@@ -58889,6 +58871,7 @@ const TIMING = {
 	appealWindowSec: 0,
 	appealDecideSec: 60
 };
+const ZERO_ADDRESS = `0x${"0".repeat(40)}`;
 function readState(folder) {
 	let text;
 	try {
@@ -58900,14 +58883,40 @@ function readState(folder) {
 	if (s?.crow !== "setup/1" || typeof s.steps !== "object" || s.steps === null) throw new Error(`${FILES.state} is not a setup/1 state file`);
 	return s;
 }
-/** Writes a file whole, then renames it into place: a stop leaves the old file or the new one, never half of one. */
+/**
+* Writes a file whole under a name of its own, then renames it into place: a stop leaves the old file or the new one,
+* never half of one, and two runs at once never share a temporary file.
+*/
 function writeWhole(path, text, mode = 384) {
-	writeFileSync(`${path}.tmp`, text, { mode });
-	renameSync(`${path}.tmp`, path);
+	const tmp = join(dirname(path), `.${basename(path)}.${process.pid}.${randomBytes(6).toString("hex")}.tmp`);
+	writeFileSync(tmp, text, {
+		mode,
+		flag: "wx"
+	});
+	chmodSync(tmp, mode);
+	renameSync(tmp, path);
 }
 const writeState = (folder, s) => writeWhole(join(folder, FILES.state), `${JSON.stringify(s, null, 2)}\n`);
+const sha256 = (text) => createHash("sha256").update(text).digest("hex");
+/** What is at `path` without following a link, or undefined when nothing is. */
+const at = (path) => {
+	try {
+		return lstatSync(path);
+	} catch {
+		return;
+	}
+};
+/** Why keys/ or the key file is not what the setup made, or '' when each is a plain folder and a plain file. No link is followed. */
+function keyPlaceProblem(folder) {
+	const keys = at(join(folder, FILES.keys)), key = at(join(folder, FILES.key));
+	if (keys && (keys.isSymbolicLink() || !keys.isDirectory())) return `${FILES.keys}/ is ${keys.isSymbolicLink() ? "a symbolic link" : "not a folder"}: the key would be written, or read, somewhere else. Remove it; the setup makes ${FILES.keys}/ itself`;
+	if (key && (key.isSymbolicLink() || !key.isFile())) return `${FILES.key} is ${key.isSymbolicLink() ? "a symbolic link" : "not a plain file"}: the setup reads no key through a link. Remove it`;
+	return "";
+}
 /** The folder's signing key, read for this process only. Throws, without the file's content, when it is not one key. */
 function readKey(folder) {
+	const wrong = keyPlaceProblem(folder);
+	if (wrong) throw new Error(wrong);
 	let key;
 	try {
 		key = readFileSync(join(folder, FILES.key), "utf8").trim();
@@ -58932,67 +58941,120 @@ function formsOf(key) {
 		bytes.toString("base64").replace(/=+$/, "")
 	];
 }
-/** The nearest folder above `path`, or `path` itself, that exists. */
-function existing(path) {
-	let at = path;
-	while (!existsSync(at) && dirname(at) !== at) at = dirname(at);
-	return at;
+/** `path` with every symbolic link in it followed, as far as the path exists; the part that does not exist yet is kept as written. */
+function realPath(path) {
+	let existing = resolve(path);
+	const rest = [];
+	while (!existsSync(existing) && dirname(existing) !== existing) {
+		rest.unshift(basename(existing));
+		existing = dirname(existing);
+	}
+	return join(realpathSync(existing), ...rest);
 }
 const inside = (child, parent) => {
 	const r = relative(parent, child);
 	return r === "" || !r.startsWith("..") && !isAbsolute(r);
 };
-/** Folder names a sync service keeps: a key in one is copied to every machine the account reaches. */
+/** Folder names a sync service keeps: a key in one is copied to every machine the account reaches. Common names only. */
 const SYNCED = [
 	/^Dropbox/i,
 	/^OneDrive/i,
 	/^Google ?Drive/i,
 	/^iCloud ?Drive/i,
-	/^Mobile Documents$/,
-	/^CloudStorage$/,
+	/^Mobile Documents$/i,
+	/^CloudStorage$/i,
 	/^Nextcloud/i,
 	/^pCloud ?Drive/i,
-	/^Syncthing$/i
+	/^Syncthing$/i,
+	/^Box( Sync)?$/i
 ];
 /**
 * Why the folder may not live at `folder`, each with the flag that overrides it; empty when it may. A git work tree
-* could commit the key, a synced folder copies it to other machines, and the card's folder is served to anyone.
+* could commit the key, a synced folder copies it to other machines, and the card's folder is served to anyone. Each
+* test reads the real path, with every link followed, and ignores the case of letters. It knows common names only: a
+* sync service under another name, or a work tree whose .git is elsewhere, passes.
 */
 function placeProblems(folder, card) {
 	const out = [];
-	for (let at = existing(folder);; at = dirname(at)) {
-		if (existsSync(join(at, ".git"))) {
+	const real = realPath(folder), realCard = realPath(card);
+	for (let dir = real;; dir = dirname(dir)) {
+		if (existsSync(join(dir, ".git"))) {
 			out.push({
 				flag: "--allow-git",
-				detail: `${folder} is inside the git work tree at ${at}: a commit there could carry the key. Choose a folder outside it with --folder, or pass --allow-git to keep this one (its .gitignore covers keys/).`
+				detail: `${real} is inside the git work tree at ${dir}: a commit there could carry the key. Choose a folder outside it with --folder, or pass --allow-git to keep this one (its .gitignore covers keys/).`
 			});
 			break;
 		}
-		if (dirname(at) === at) break;
+		if (dirname(dir) === dir) break;
 	}
-	const synced = folder.split(sep).find((part) => SYNCED.some((re) => re.test(part)));
+	const synced = real.split(sep).find((part) => SYNCED.some((re) => re.test(part)));
+	const icloud = process.platform === "darwin" ? ["Desktop", "Documents"].find((name) => inside(real.toLowerCase(), realPath(join(homedir(), name)).toLowerCase())) : void 0;
 	if (synced) out.push({
 		flag: "--allow-synced",
-		detail: `${folder} is under ${synced}, a folder a sync service copies to other machines: the key would go with it. Choose another folder with --folder, or pass --allow-synced to keep this one.`
+		detail: `${real} is under ${synced}, a folder a sync service copies to other machines: the key would go with it. Choose another folder with --folder, or pass --allow-synced to keep this one.`
 	});
-	if (inside(folder, card) || inside(card, folder)) out.push({
+	else if (icloud) out.push({
+		flag: "--allow-synced",
+		detail: `${real} is under your ${icloud} folder, which iCloud copies to other machines when its Desktop and Documents option is on: the key would go with it. Choose another folder with --folder, or pass --allow-synced to keep this one.`
+	});
+	if (inside(real.toLowerCase(), realCard.toLowerCase()) || inside(realCard.toLowerCase(), real.toLowerCase())) out.push({
 		flag: "--allow-served",
-		detail: `${folder} and the card's folder ${card} hold one another: a folder that is served would hold keys/. Choose a card folder outside it with --card, or pass --allow-served to keep both.`
+		detail: `${real} and the card's folder ${realCard} hold one another: a folder that is served would hold keys/. Choose a card folder outside it with --card, or pass --allow-served to keep both.`
 	});
 	return out;
+}
+/**
+* Runs `body` as the one run working in `folder`: crow.lock names this process. A run that finds the lock of a live
+* process waits up to `waitMs` (0: not at all) and then says so; the lock of a process that is gone is taken over.
+*/
+async function locked(folder, waitMs, body) {
+	const lock = join(folder, FILES.lock);
+	for (const end = Date.now() + waitMs;; await new Promise((r) => setTimeout(r, 100))) {
+		try {
+			writeFileSync(lock, `${process.pid}\n`, {
+				flag: "wx",
+				mode: 384
+			});
+			break;
+		} catch (e) {
+			if (e.code !== "EEXIST") throw e;
+		}
+		let pid = NaN;
+		try {
+			pid = Number(readFileSync(lock, "utf8").trim());
+		} catch {
+			continue;
+		}
+		let gone = pid === process.pid;
+		if (!gone && Number.isSafeInteger(pid) && pid > 0) try {
+			process.kill(pid, 0);
+		} catch (e) {
+			gone = e.code === "ESRCH";
+		}
+		if (gone) rmSync(lock, { force: true });
+		else if (Date.now() >= end) throw new Error(`another run of this command${Number.isSafeInteger(pid) ? ` (process ${pid})` : ""} is working in ${folder}: wait for it to end. If none is, delete ${FILES.lock}`);
+	}
+	try {
+		return await body();
+	} finally {
+		rmSync(lock, { force: true });
+	}
 }
 const QUESTIONS = {
 	"--sample": "This version sells Crow's sample product only: pass --sample to sell it. Your own API comes with a later version.",
 	"--payout": "Where are you paid? Give an address whose key is not on this machine (--payout 0x...), or answer this-key (--payout this-key) to be paid at this folder's own standing address."
 };
+/** A refusal with its own line: the folder is not one the setup may make or continue. */
+var Refused = class extends Error {};
 /** Makes the folder, or finishes one a stopped run left. Returns the exit status: 0 made, 1 refused, 3 an answer is missing. */
 async function seller(c) {
 	const folder = c.folder;
-	let state = readState(folder);
-	const name = c.flags.get("--name") ?? state?.name ?? "seller";
-	const card = resolve(c.flags.get("--card") ?? state?.card ?? `${folder}-card`);
+	const before = readState(folder);
+	const kept = before !== void 0 && before.steps["payout"] !== void 0 && before.steps["key"] !== void 0 && before.address !== void 0 && before.payout !== void 0 && at(join(folder, FILES.key))?.isFile() === true;
+	const name = c.flags.get("--name") ?? (kept ? before.name : void 0) ?? "seller";
+	const card = realPath(c.flags.get("--card") ?? (kept ? before.card : void 0) ?? `${folder}-card`);
 	const payoutGiven = c.flags.get("--payout");
-	const missing = [...c.flags.has("--sample") || state?.sells === "sample" ? [] : ["--sample"], ...payoutGiven !== void 0 || state?.payout ? [] : ["--payout"]];
+	const missing = [...c.flags.has("--sample") || kept ? [] : ["--sample"], ...payoutGiven !== void 0 || kept ? [] : ["--payout"]];
 	if (missing.length) {
 		c.say({
 			step: "seller",
@@ -59014,6 +59076,7 @@ async function seller(c) {
 			ok = false;
 		}
 		if (!ok) throw new Error("--payout takes this-key, or an address: 0x and 40 hex characters, with a valid checksum if in mixed case");
+		if (payoutGiven.toLowerCase() === ZERO_ADDRESS) throw new Error(`--payout ${ZERO_ADDRESS} is the zero address, which nobody holds: a payment there is lost. Give an address whose key the person holds, or this-key`);
 	}
 	const problems = placeProblems(folder, card).filter((p) => !c.flags.has(p.flag));
 	if (problems.length) {
@@ -59025,93 +59088,133 @@ async function seller(c) {
 		});
 		return 1;
 	}
-	const done = (step) => {
-		state.steps[step] ??= (/* @__PURE__ */ new Date()).toISOString();
-		writeState(folder, state);
-	};
-	mkdirSync(join(folder, FILES.keys), {
+	mkdirSync(folder, {
 		recursive: true,
 		mode: 448
 	});
-	chmodSync(folder, 448);
-	chmodSync(join(folder, FILES.keys), 448);
-	if (!existsSync(join(folder, FILES.ignore))) writeFileSync(join(folder, FILES.ignore), "# Written by setup.mjs: the keys never go into a repository.\nkeys/\n");
-	state ??= {
-		crow: "setup/1",
-		role: "seller",
-		sells: "sample",
-		name,
-		createdAt: (/* @__PURE__ */ new Date()).toISOString(),
-		steps: {}
-	};
-	state.card = card;
-	done("folder");
-	const keyFile = join(folder, FILES.key);
-	if (!existsSync(keyFile)) writeFileSync(keyFile, `${generatePrivateKey()}\n`, {
-		mode: 384,
-		flag: "wx"
-	});
-	chmodSync(keyFile, 384);
-	const key = readKey(folder);
-	c.hide(key);
-	c.hide(holdingKeyOf(key));
-	const address = addressOf(key);
-	if (state.address !== void 0 && state.address !== address) throw new Error(`${FILES.key} is not the key ${FILES.state} names (${state.address}): this folder was changed by hand`);
-	state.address = address;
-	done("key");
-	const payout = payoutGiven === void 0 ? state.payout : payoutGiven === "this-key" ? {
-		address,
-		thisKey: true
-	} : {
-		address: payoutGiven.toLowerCase(),
-		thisKey: payoutGiven.toLowerCase() === address
-	};
-	if (state.payout && state.payout.address !== payout.address) throw new Error(`this folder already pays to ${state.payout.address}: to change it, edit payoutAddress in ${FILES.configuration} and payout in ${FILES.state}`);
-	state.payout = payout;
-	done("payout");
-	if (!existsSync(join(folder, FILES.template))) writeWhole(join(folder, FILES.template), `${JSON.stringify(SAMPLE.template, null, 2)}\n`);
-	done("template");
-	if (!existsSync(join(folder, FILES.configuration))) writeWhole(join(folder, FILES.configuration), `${JSON.stringify({
-		port: 0,
-		sellerApi: sampleAddresses(await freePort()),
-		template: FILES.template,
-		scope: SAMPLE.scope,
-		signingKey: "per-deal",
-		payoutAddress: payout.address,
-		timing: TIMING,
-		pollMs: 2e3
-	}, null, 2)}\n`);
-	done("configuration");
-	mkdirSync(card, { recursive: true });
-	if (!existsSync(join(card, "agent.json"))) writeWhole(join(card, CARD_FILE), `${JSON.stringify({
-		type: "crow-agent",
-		status: "draft: not published, and no quote address yet",
-		name,
-		sells: [{
-			deliverable: SAMPLE.template.deliverable,
-			price: {
-				amount: SAMPLE_PRICE_UNITS,
-				unit: "base units of the settlement layer's test token"
-			},
-			scope: SAMPLE.scope
-		}]
-	}, null, 2)}\n`, 420);
-	done("card");
-	c.say({
-		step: "seller",
-		ok: true,
-		folder,
-		card,
-		address,
-		payout: payout.address,
-		keys: `${FILES.key} holds the signing key, mode 0600, on this machine only. Never read, print or copy it.`,
-		...payout.thisKey ? { payoutNote: `Every deal names this folder's standing address ${address} as its payout address in its public terms, which links this folder's deals to one another. Its key is on this machine, in ${FILES.key}.` } : { payoutNote: `Every deal names ${payout.address} as its payout address in its public terms, which links this folder's deals to one another.` },
-		sent: "nothing"
-	});
-	return 0;
+	try {
+		return await locked(folder, 3e4, async () => {
+			let state = readState(folder);
+			const others = readdirSync(folder).filter((n) => n !== FILES.lock && !/^\.crow\.json\..*\.tmp$/.test(n));
+			if (!state && others.length) throw new Refused(`${folder} is not empty and has no ${FILES.state}: the setup makes a folder of its own and adopts nothing that was put there (it holds ${others.slice(0, 5).join(", ")}). Choose an empty folder with --folder, or move those away`);
+			const linked = keyPlaceProblem(folder);
+			if (linked) throw new Refused(linked);
+			chmodSync(folder, 448);
+			state ??= {
+				crow: "setup/1",
+				role: "seller",
+				sells: "sample",
+				name,
+				createdAt: (/* @__PURE__ */ new Date()).toISOString(),
+				steps: {}
+			};
+			state.card = card;
+			const done = (step) => {
+				state.steps[step] ??= (/* @__PURE__ */ new Date()).toISOString();
+				writeState(folder, state);
+			};
+			writeState(folder, state);
+			if (!existsSync(join(folder, FILES.ignore))) writeFileSync(join(folder, FILES.ignore), "# Written by setup.mjs: the keys never go into a repository.\nkeys/\n");
+			done("folder");
+			const keysDir = join(folder, FILES.keys), keyFile = join(folder, FILES.key);
+			if (!at(keysDir)) mkdirSync(keysDir, { mode: 448 });
+			chmodSync(keysDir, 448);
+			for (const n of readdirSync(keysDir)) if (/^\.signing\.key\..*\.tmp$/.test(n)) rmSync(join(keysDir, n), { force: true });
+			if (at(keyFile)) {
+				if (state.steps["key"] === void 0 && state.keyStartedAt === void 0) throw new Refused(`${FILES.key} is in the folder, and ${FILES.state} does not say this setup made it: the setup adopts no key it did not make. Move that file away, then run the same command again`);
+			} else {
+				if (state.steps["key"] !== void 0) throw new Refused(`${FILES.state} says this setup made the key of ${state.address}, and ${FILES.key} is gone. Put the file back. To start over with a new key, use an empty folder (--folder)`);
+				state.keyStartedAt = (/* @__PURE__ */ new Date()).toISOString();
+				writeState(folder, state);
+				writeWhole(keyFile, `${generatePrivateKey()}\n`, 384);
+			}
+			chmodSync(keyFile, 384);
+			const key = readKey(folder);
+			c.hide(key);
+			c.hide(holdingKeyOf(key));
+			const address = addressOf(key);
+			if (state.address !== void 0 && state.address !== address) throw new Refused(`${FILES.key} is not the key ${FILES.state} names (${state.address}): this folder was changed by hand. Put the right file back, or use an empty folder (--folder)`);
+			state.address = address;
+			done("key");
+			const earlier = kept ? state.payout : void 0;
+			const payout = payoutGiven === void 0 ? earlier : payoutGiven === "this-key" ? {
+				address,
+				thisKey: true
+			} : {
+				address: payoutGiven.toLowerCase(),
+				thisKey: payoutGiven.toLowerCase() === address
+			};
+			const changed = earlier !== void 0 && earlier.address !== payout.address;
+			if (changed && existsSync(join(folder, FILES.marker))) throw new Refused(`this folder's first deal started, and its offer names ${earlier.address} as the payout address. For another payout address, make a new folder (--folder)`);
+			state.payout = payout;
+			done("payout");
+			if (!existsSync(join(folder, FILES.template))) writeWhole(join(folder, FILES.template), `${JSON.stringify(SAMPLE.template, null, 2)}\n`);
+			done("template");
+			const configFile = join(folder, FILES.configuration);
+			const there = existsSync(configFile) ? readFileSync(configFile) : void 0;
+			if (there && sha256(there) !== state.files?.configuration) throw new Refused(`${FILES.configuration} is not the file this setup wrote: it was changed, or another program put it there. The seller command keeps no configuration it did not write. Move that file away, then run the same command again to have it written anew`);
+			if (!there || changed) {
+				const port = there ? Number(new URL(JSON.parse(there.toString("utf8")).sellerApi.quote).port) : await freePort();
+				const text = `${JSON.stringify({
+					port: 0,
+					sellerApi: sampleAddresses(port),
+					template: FILES.template,
+					scope: SAMPLE.scope,
+					signingKey: "per-deal",
+					payoutAddress: payout.address,
+					timing: TIMING,
+					pollMs: 3e3
+				}, null, 2)}\n`;
+				state.files = {
+					...state.files,
+					configuration: sha256(text)
+				};
+				writeState(folder, state);
+				writeWhole(configFile, text);
+			}
+			done("configuration");
+			mkdirSync(card, { recursive: true });
+			if (!existsSync(join(card, "agent.json"))) writeWhole(join(card, CARD_FILE), `${JSON.stringify({
+				type: "crow-agent",
+				status: "draft: not published, and no quote address yet",
+				name,
+				sells: [{
+					deliverable: SAMPLE.template.deliverable,
+					price: {
+						amount: SAMPLE_PRICE_UNITS,
+						unit: "base units of the settlement layer's test token"
+					},
+					scope: SAMPLE.scope
+				}]
+			}, null, 2)}\n`, 420);
+			done("card");
+			c.say({
+				step: "seller",
+				ok: true,
+				folder,
+				card,
+				address,
+				payout: payout.address,
+				keys: `${FILES.key} holds the signing key, mode 0600, on this machine only. Never read, print or copy it.`,
+				...payout.thisKey ? { payoutNote: `Every deal names this folder's standing address ${address} as its payout address in its public terms, which links this folder's deals to one another. Its key is on this machine, in ${FILES.key}.` } : { payoutNote: `Every deal names ${payout.address} as its payout address in its public terms, which links this folder's deals to one another.` },
+				sent: "nothing"
+			});
+			return 0;
+		});
+	} catch (e) {
+		if (!(e instanceof Refused)) throw e;
+		c.say({
+			step: "folder",
+			ok: false,
+			detail: `${e.message}. Nothing was sent.`
+		});
+		return 1;
+	}
 }
 /** Whether the folder's own files have the modes the setup gave them, as text for the check; '' when they do. */
 function modeProblem(folder) {
+	const linked = keyPlaceProblem(folder);
+	if (linked) return linked;
 	if (process.platform === "win32") return "";
 	const mode = (p) => statSync(join(folder, p)).mode & 511;
 	if (mode(FILES.keys) !== 448) return `${FILES.keys}/ has mode ${mode(FILES.keys).toString(8)}, not 700`;
@@ -59120,6 +59223,8 @@ function modeProblem(folder) {
 }
 
 // examples/setup-check.ts
+/** The largest file the secrets check reads: 16 MiB. A key file is 67 bytes; a larger file is named, not read. */
+const MAX_SCANNED_BYTES = 16777216;
 const plain$1 = (s, max = 600) => plain$3(String(s ?? "")).slice(0, max);
 /** A stand-in for the settlement layer's token: the check posts nothing, so no operator names the real one. */
 const STAND_IN_TOKEN = "tUSD";
@@ -59200,19 +59305,33 @@ function withoutAField(result, format) {
 	}
 	return null;
 }
-/** Every file under `dir`, by its full path, leaving the folder `skip` out wherever it is reached. */
+/** Every file under `dir`, by its full path, leaving the folder `skip` out wherever it is reached. A link is listed, never followed. */
 function filesUnder(dir, skip) {
-	const out = [];
+	const files = [], links = [];
 	const walk = (at) => {
 		for (const entry of readdirSync(at, { withFileTypes: true })) {
 			const path = join(at, entry.name);
 			if (path === skip) continue;
-			if (entry.isDirectory()) walk(path);
-			else if (entry.isFile()) out.push(path);
+			if (entry.isSymbolicLink()) links.push(path);
+			else if (entry.isDirectory()) walk(path);
+			else if (entry.isFile()) files.push(path);
 		}
 	};
 	walk(dir);
-	return out;
+	return {
+		files,
+		links
+	};
+}
+/** The key of each deal the folder's journal holds: each is derived from the signing key and the deal's own nonce. */
+function dealKeysOf(folder, key) {
+	let deals = [];
+	try {
+		deals = Object.values(JSON.parse(readFileSync(join(folder, FILES.journal), "utf8")).deals ?? {});
+	} catch {
+		return [];
+	}
+	return deals.map((d) => d?.terms?.nonce).filter((n) => typeof n === "string" && /^0x[0-9a-f]{64}$/.test(n)).map((n) => dealKeyOf(key, n));
 }
 /** Runs every check on the folder and returns the results in order. Writes only under the folder's sample/. */
 async function runChecks(folder) {
@@ -59244,9 +59363,27 @@ async function runChecks(folder) {
 	await run("configuration", () => {
 		const file = join(folder, FILES.configuration);
 		const loaded = loadConfig(file);
-		if (typeof JSON.parse(readFileSync(file, "utf8")).template !== "string") throw new Error(`${FILES.configuration} names no template: this file carries none of its own, so name the folder's`);
+		const written = JSON.parse(readFileSync(file, "utf8"));
+		if (typeof written.template !== "string") throw new Error(`${FILES.configuration} names no template: this file carries none of its own, so name the folder's`);
+		const pays = typeof written.payoutAddress === "string" ? written.payoutAddress.toLowerCase() : void 0;
+		if (!state?.payout || pays !== state.payout.address) throw new Error(`${FILES.configuration} pays ${plain$1(pays ?? "the signing key, as it names no payoutAddress", 80)}, and the answer in ${FILES.state} is ${plain$1(state?.payout?.address ?? "missing", 80)}: every offer would name the first. To change where you are paid, run the seller command with --payout`);
+		if (state.sells === "sample") {
+			const api = written.sellerApi;
+			const port = typeof api?.quote === "string" && URL.canParse(api.quote) ? Number(new URL(api.quote).port) : 0;
+			const own = sampleAddresses(port);
+			if (!(port > 0) || Object.keys(api ?? {}).sort().join() !== "quote,result,start" || api.quote !== own.quote || api.start !== own.start || api.result !== own.result) throw new Error(`${FILES.configuration} does not name the sample API at one port on the loopback address for all three calls, as the seller command wrote it: a job would start somewhere else`);
+			for (const field of [
+				"alerts",
+				"quoteAuth",
+				"redelivery",
+				"reportMapping",
+				"mandate",
+				"clubId",
+				"adjudicators"
+			]) if (written[field] !== void 0) throw new Error(`${FILES.configuration} sets ${field}, which a folder that sells the sample does not use: remove it`);
+		}
 		config = loaded;
-		return `the adapter's own loader takes ${FILES.configuration}`;
+		return `the adapter's own loader takes ${FILES.configuration}, which pays ${state.payout.address}`;
 	});
 	const scope = SAMPLE.firstScope;
 	await run("template", () => {
@@ -59314,14 +59451,23 @@ async function runChecks(folder) {
 	});
 	await run("secrets", () => {
 		const key = readKey(folder);
-		const forms = [...formsOf(key), ...formsOf(holdingKeyOf(key))];
-		const files = new Set([folder, ...state?.card && existsSync(state.card) ? [state.card] : []].flatMap((dir) => filesUnder(dir, join(folder, FILES.keys))));
+		const forms = [
+			key,
+			holdingKeyOf(key),
+			...dealKeysOf(folder, key)
+		].flatMap(formsOf);
+		const found = [folder, ...state?.card && existsSync(state.card) ? [state.card] : []].map((dir) => filesUnder(dir, join(folder, FILES.keys)));
+		const files = new Set(found.flatMap((f) => f.files)), links = [...new Set(found.flatMap((f) => f.links))];
+		const large = [];
 		for (const path of files) {
-			if (statSync(path).size > 16777216) continue;
+			if (statSync(path).size > MAX_SCANNED_BYTES) {
+				large.push(path);
+				continue;
+			}
 			const text = readFileSync(path, "latin1");
 			if (forms.some((f) => text.includes(f))) throw new Error(`${path} holds a key's value: a key belongs in ${FILES.keys}/ only. Remove it from that file`);
 		}
-		return `no key's value in the ${files.size} files outside ${FILES.keys}/`;
+		return `no key's value in the ${files.size - large.length} files read outside ${FILES.keys}/` + (large.length ? `; not read, as each is over ${MAX_SCANNED_BYTES} bytes: ${large.map((p) => plain$1(p, 200)).join(", ")}` : "") + (links.length ? `; not followed, as each is a symbolic link: ${links.map((p) => plain$1(p, 200)).join(", ")}` : "");
 	});
 	return results;
 }
@@ -59333,23 +59479,54 @@ const CROW_OPERATORS = ["https://api.crow.direct", "https://api2.crow.direct"];
 const NOT_LIVE = "test world: this is not the live service";
 /** Sepolia's chain ID: the only settlement layer this command signs under without --test-world. */
 const SEPOLIA_CHAIN_ID = 11155111;
+/** The states a commitment ends in, as the operators name them. */
+const ENDED = [
+	"Released",
+	"Refunded",
+	"Expired",
+	"Settled",
+	"Defaulted"
+];
+/** The states of an offer that holds no money yet. */
+const BEFORE_HOLD = [
+	"Offered",
+	"AcceptedByAdjudicator",
+	"Agreed"
+];
+/** The stages in which the adapter's journal still works on a deal (seller-adapter-core.ts). */
+const OPEN_STAGES = [
+	"offered",
+	"starting",
+	"start-unknown",
+	"started",
+	"refused",
+	"delivering"
+];
+/** Node's own settings that change what this file's requests reach or which code runs beside it. */
+const NODE_SETTINGS = [
+	"NODE_OPTIONS",
+	"NODE_EXTRA_CA_CERTS",
+	"NODE_USE_ENV_PROXY"
+];
 const USAGE = [
 	"setup.mjs: makes one Crow folder on this machine and runs its first deal. Test tokens only.",
 	"usage: node setup.mjs <command> [flags]",
 	"  seller --sample --payout <address|this-key> [--card <path>] [--allow-git] [--allow-synced] [--allow-served]",
 	"                makes the folder, then runs the check. It sends nothing. Exit 3: an answer is missing, named in one JSON object.",
 	"  check         runs the conformance check: one JSON line per check, exit 0 only when all pass. It sends nothing.",
-	"  first-deal [--buyer <url>] [--again]",
+	"  first-deal [--preview] [--again] [--buyer <url>]",
 	"                prints what it sends and to whom, then sells one sample job to Crow's test buyer and follows it to its end.",
+	"                --preview prints that and stops. --again offers a new deal after one that ended without a release.",
 	"  status        prints the folder's state. It reads no key and sends nothing.",
 	"  --folder      the party's folder. Default: ~/.crow/<name>.",
 	"  --name        the party's name, in the folder's default path and on its card. Default: seller.",
 	`  --operators   two or more operator URLs, comma-separated. Default: ${CROW_OPERATORS.join(",")}.`,
+	"  --buyer       the test buyer's URL. Default: " + TEST_BUYER + ".",
 	"  --test-world  a local test world, never the live service. It needs --operators, and first-deal needs --buyer; every line then says so."
 ].join("\n");
-/** Removes every HOLDBACK_* and CROW_* variable from `env`: the command takes its settings from flags only. */
+/** Removes every HOLDBACK_* and CROW_* variable from `env`, and the switch that turns certificate checks off: the command takes its settings from flags only. */
 function clearAmbient(env = process.env) {
-	for (const name of Object.keys(env)) if (/^(HOLDBACK|CROW)_/.test(name)) delete env[name];
+	for (const name of Object.keys(env)) if (/^(HOLDBACK|CROW)_/.test(name) || name === "NODE_TLS_REJECT_UNAUTHORIZED") delete env[name];
 }
 /** A wrong call: the usage follows on standard error, and the command exits 2. */
 var WrongCall = class extends Error {};
@@ -59377,7 +59554,7 @@ const OWN = {
 	},
 	"first-deal": {
 		values: ["--buyer"],
-		switches: ["--again"]
+		switches: ["--again", "--preview"]
 	},
 	status: {
 		values: [],
@@ -59403,6 +59580,13 @@ const isHttp = (u) => {
 		return false;
 	}
 };
+/** Whether `u` names this machine: localhost, a name under it, or a loopback or unspecified address. */
+const isLocal = (u) => {
+	const host = new URL(u).hostname.toLowerCase().replace(/^\[|\]$/g, "").replace(/\.$/, "");
+	return host === "localhost" || host.endsWith(".localhost") || /^127\./.test(host) || host === "::1" || host === "0.0.0.0" || host === "::" || /^::ffff:127\./.test(host);
+};
+/** Why `u` is not a host the live service's commands may call, or '' when it is: https, and not this machine. */
+const notLiveHost = (u) => new URL(u).protocol !== "https:" ? "is not https" : isLocal(u) ? "is this machine" : "";
 function operatorsOf(text, testWorld) {
 	if (text === void 0) {
 		if (testWorld) throw new WrongCall("--test-world needs --operators: the test world's own operator URLs. Nothing was sent");
@@ -59410,6 +59594,12 @@ function operatorsOf(text, testWorld) {
 	}
 	const list = text.split(",").map((s) => s.trim().replace(/\/+$/, "")).filter(Boolean);
 	if (list.length < 2 || !list.every(isHttp)) throw new WrongCall("--operators takes two or more http or https URLs, comma-separated");
+	const hosts = list.map((u) => new URL(u).host.toLowerCase());
+	const twice = hosts.find((h, i) => hosts.indexOf(h) !== i);
+	if (twice !== void 0) throw new WrongCall(`--operators names ${plain(twice, 80)} twice: each operator is a host of its own. Nothing was sent`);
+	if (!testWorld) {
+		for (const u of list) if (notLiveHost(u)) throw new WrongCall(`--operators: ${plain(u, 120)} ${notLiveHost(u)}. Without --test-world an operator is an https host that is not this machine. Nothing was sent`);
+	}
 	return list;
 }
 function status(c) {
@@ -59425,23 +59615,28 @@ function status(c) {
 	let open = [];
 	try {
 		const journal = JSON.parse(readFileSync(join(c.folder, FILES.journal), "utf8"));
-		open = Object.entries(journal.deals ?? {}).filter(([, d]) => d.stage !== "closed" && d.stage !== "delivered").map(([id, d]) => ({
+		open = Object.entries(journal.deals ?? {}).filter(([, d]) => OPEN_STAGES.includes(String(d.stage))).map(([id, d]) => ({
 			commitmentId: plain(id, 80),
 			stage: plain(d.stage, 40)
 		}));
 	} catch {}
+	const deal = (d) => d === void 0 ? null : Object.fromEntries(Object.entries(d).filter(([k]) => k !== "journalBefore").map(([k, v]) => [k, plain(v, 300)]));
 	c.say({
 		step: "status",
 		folder: c.folder,
 		exists: true,
-		role: state.role,
-		sells: state.sells,
-		name: state.name,
-		steps: Object.keys(state.steps),
-		address: state.address ?? null,
-		payout: state.payout ?? null,
-		card: state.card ?? null,
-		firstDeal: state.firstDeal ?? null,
+		role: plain(state.role, 20),
+		sells: plain(state.sells, 20),
+		name: plain(state.name, 40),
+		steps: Object.keys(state.steps).map((s) => plain(s, 40)),
+		address: state.address === void 0 ? null : plain(state.address, 42),
+		payout: state.payout ? {
+			address: plain(state.payout.address, 42),
+			thisKey: state.payout.thisKey === true
+		} : null,
+		card: state.card === void 0 ? null : plain(state.card, 300),
+		firstDeal: deal(state.firstDeal),
+		ended: (state.ended ?? []).map(deal),
 		openDeals: open
 	});
 	return 0;
@@ -59454,15 +59649,48 @@ async function check(c) {
 	});
 	return results.every((r) => r.ok) ? 0 : 1;
 }
+/** A party's URL as one plain line: parsed, written back by the URL parser, and at most 200 characters. */
+const urlLine = (u) => plain(new URL(u).href, 200);
 /** Crow's test buyer's card, checked: a crow-buyer card with an address, an encryption key and an intake on its own origin. */
 async function buyerCard(url) {
 	const card = (await fromParty(`${url}/agent.json`)).body;
-	if (card?.type !== "crow-buyer" || !/^0x[0-9a-fA-F]{40}$/.test(card.buyer ?? "") || !/^[A-Za-z0-9_-]{43}$/.test(card.buyerEncryptionPublicKey ?? "")) throw new Error(`${plain(url)}/agent.json is not a crow-buyer card with an address and an encryption key`);
-	if (!isHttp(String(card.intake?.api)) || new URL(card.intake.api).origin !== new URL(url).origin) throw new Error(`the card's intake is not on ${new URL(url).origin}`);
+	if (card?.type !== "crow-buyer" || !/^0x[0-9a-fA-F]{40}$/.test(card.buyer ?? "") || !/^[A-Za-z0-9_-]{43}$/.test(card.buyerEncryptionPublicKey ?? "")) throw new Error(`${urlLine(url)}/agent.json is not a crow-buyer card with an address and an encryption key`);
+	if (typeof card.intake?.api !== "string" || !isHttp(card.intake.api) || new URL(card.intake.api).origin !== new URL(url).origin) throw new Error(`the card's intake is not on ${new URL(url).origin}`);
 	return {
 		buyer: String(card.buyer).toLowerCase(),
 		encryptionPublicKey: card.buyerEncryptionPublicKey,
-		intake: card.intake.api
+		intake: new URL(card.intake.api).href
+	};
+}
+/** What `first-deal` sends, and to whom: one line, printed before anything is sent, and alone by `first-deal --preview`. */
+function previewLine(c, state, key, buyerUrl) {
+	const payout = state.payout;
+	return {
+		step: "preview",
+		sends: [
+			{
+				to: c.operators,
+				what: "reads only, as the deal goes: the discovery document, the club, the adjudicators, the settlement time and the deal by its commitment ID."
+			},
+			{
+				to: c.operators[0],
+				what: `the faucet grant for this deal: the deal's fresh address, and ${holdingAddressOf(key)}, the one holding address every grant of this folder names.`
+			},
+			{
+				to: c.operators,
+				what: `the signed offer. The whole terms become public: the description, every check, the price, the deadlines, the adjudicators, the buyer's address, the deal's fresh address and the payout address ${payout.address}.`
+			},
+			{
+				to: urlLine(buyerUrl),
+				what: "a read of its card, then the commitment ID."
+			},
+			{
+				to: c.operators,
+				what: "the delivery: the encrypted work and its sealed keys. Its size, its time and its SHA-256 become public; its content does not."
+			}
+		],
+		payout: payout.thisKey ? `The payout address is this folder's standing address ${payout.address}. Every deal names it in its public terms, which links this folder's deals to one another, and its key is on this machine.` : `The payout address ${payout.address} is in the public terms of every deal, which links this folder's deals to one another.`,
+		money: "Test tokens only: nothing here is real money."
 	};
 }
 async function firstDeal(c) {
@@ -59475,6 +59703,82 @@ async function firstDeal(c) {
 		});
 		return 1;
 	}
+	const again = c.flags.has("--again");
+	const continued = !again && state.firstDeal?.commitmentId !== void 0 && state.firstDeal.state === void 0 ? state.firstDeal : void 0;
+	const given = c.flags.get("--buyer")?.replace(/\/+$/, "");
+	if (given !== void 0 && !isHttp(given)) throw new WrongCall("--buyer takes the test buyer's URL, such as https://crow.direct/agents/test-buyer");
+	if (continued && (continued.buyer === void 0 || !isHttp(continued.buyer))) throw new Error(`${FILES.state} names no buyer for the deal it holds. Run first-deal --again to offer a new one. Nothing was sent`);
+	if (continued && given !== void 0 && new URL(given).href !== new URL(continued.buyer).href) throw new WrongCall(`this folder's open deal was offered to ${urlLine(continued.buyer)}: run first-deal without --buyer to continue it, or with --again to offer a new one. Nothing was sent`);
+	const buyerUrl = continued?.buyer ?? given ?? (c.testWorld ? void 0 : "https://crow.direct/agents/test-buyer");
+	if (buyerUrl === void 0) throw new WrongCall("--test-world needs --buyer: the test world's own test buyer. Nothing was sent");
+	if (!c.testWorld && notLiveHost(buyerUrl)) throw new WrongCall(`--buyer: ${urlLine(buyerUrl)} ${notLiveHost(buyerUrl)}. Without --test-world the buyer is an https host that is not this machine. Nothing was sent`);
+	if (c.flags.has("--preview")) {
+		c.say({
+			...previewLine(c, state, readKey(c.folder), buyerUrl),
+			sent: "nothing: this is the preview only. Run first-deal without --preview to send it."
+		});
+		return 0;
+	}
+	return locked(c.folder, 0, () => runFirstDeal(c, state, buyerUrl, again));
+}
+/**
+* The deal record of a released first deal: read from every operator with GET requests only, written under deals/,
+* and the last line of `first-deal`. The operators may show the release a moment before its payment: the record is
+* read again, for up to a minute on the live service, until it names who was paid.
+*/
+async function writeRecord(c, state, id, started) {
+	const payout = state.payout;
+	let record = await dealRecord(id, {
+		operators: c.operators,
+		party: "seller"
+	});
+	const count = (ok) => record.checks.filter((x) => x.ok === ok).length;
+	for (let i = 0; i < 10 && (record.row.paidTo === null || count(false) > 0 || record.disagreements.length > 0); i++) {
+		await sleep(c.testWorld ? 300 : 6e3);
+		record = await dealRecord(id, {
+			operators: c.operators,
+			party: "seller"
+		});
+	}
+	mkdirSync(join(c.folder, FILES.deals), { recursive: true });
+	const file = join(c.folder, FILES.deals, `${id}.json`);
+	writeWhole(file, `${JSON.stringify(record, null, 2)}\n`);
+	const sound = count(false) === 0 && record.disagreements.length === 0;
+	const paidTo = record.row.paidTo;
+	const asAnswered = paidTo === payout.address;
+	state.firstDeal = {
+		...state.firstDeal,
+		...sound && asAnswered ? { record: file } : {}
+	};
+	writeState(c.folder, state);
+	c.say({
+		step: "record",
+		ok: sound,
+		file,
+		checks: {
+			passed: count(true),
+			failed: count(false),
+			notRun: count(null)
+		},
+		operatorsAgree: record.disagreements.length === 0
+	});
+	c.say({
+		step: "first-deal",
+		ok: sound && asAnswered,
+		state: "Released",
+		commitmentId: id,
+		buyer: plain(record.row.buyer, 42),
+		paidTo: paidTo === null ? null : plain(paidTo, 42),
+		...asAnswered ? {} : { detail: paidTo === null ? "The deal is released, and the operators do not show its payment yet. Run the same command again to read the record anew." : `The deal paid ${plain(paidTo, 42)}, not the payout address ${payout.address} this folder was given.` },
+		price: record.row.price,
+		transactions: (record.row.transactions ?? []).map((t) => plain(t, 200)),
+		record: file,
+		seconds: Math.round((Date.now() - started) / 1e3)
+	});
+	return sound && asAnswered ? 0 : 1;
+}
+async function runFirstDeal(c, state, buyerUrl, again) {
+	const started = Date.now();
 	const save = (change) => {
 		state.firstDeal = {
 			startedAt: (/* @__PURE__ */ new Date()).toISOString(),
@@ -59483,8 +59787,26 @@ async function firstDeal(c) {
 		};
 		writeState(c.folder, state);
 	};
+	/** The first deal ended without a release: the state keeps how, and the line says what to run. */
+	const giveUp = (how, detail, extra = {}) => {
+		save({
+			state: how,
+			detail: plain(detail, 600),
+			endedAt: (/* @__PURE__ */ new Date()).toISOString()
+		});
+		c.say({
+			step: "first-deal",
+			ok: false,
+			state: how,
+			commitmentId: state.firstDeal?.commitmentId ?? null,
+			...extra,
+			detail: `${plain(detail, 600)} Run first-deal --again to offer a new one.`
+		});
+		return 1;
+	};
 	const before = state.firstDeal;
 	if (before?.state === "Released") {
+		if (before.record === void 0 && /^0x[0-9a-f]{64}$/.test(String(before.commitmentId))) return writeRecord(c, state, before.commitmentId, started);
 		c.say({
 			step: "first-deal",
 			ok: true,
@@ -59495,23 +59817,25 @@ async function firstDeal(c) {
 		});
 		return 0;
 	}
-	if (before?.state !== void 0) {
-		if (!c.flags.has("--again")) {
+	if (before !== void 0 && (before.state !== void 0 || again)) {
+		if (!again) {
 			c.say({
 				step: "first-deal",
 				ok: false,
 				state: plain(before.state, 40),
-				commitmentId: before.commitmentId,
-				detail: "The first deal ended without a release. Run first-deal --again to offer a new one. Nothing was sent now."
+				commitmentId: before.commitmentId ?? null,
+				detail: `The first deal ended without a release${before.detail ? `: ${plain(before.detail, 400)}` : "."} Run first-deal --again to offer a new one. Nothing was sent now.`
 			});
 			return 1;
 		}
+		state.ended = [...state.ended ?? [], {
+			...before,
+			state: before.state ?? "SetAside",
+			endedAt: before.endedAt ?? (/* @__PURE__ */ new Date()).toISOString()
+		}];
 		delete state.firstDeal;
 		writeState(c.folder, state);
 	}
-	const buyerUrl = (c.flags.get("--buyer") ?? state.firstDeal?.buyer ?? (c.testWorld ? void 0 : "https://crow.direct/agents/test-buyer"))?.replace(/\/+$/, "");
-	if (buyerUrl === void 0) throw new WrongCall("--test-world needs --buyer: the test world's own test buyer. Nothing was sent");
-	if (!isHttp(buyerUrl)) throw new WrongCall("--buyer takes the test buyer's URL, such as https://crow.direct/agents/test-buyer");
 	const results = await runChecks(c.folder);
 	const failed = results.filter((r) => !r.ok);
 	for (const r of failed) c.say({
@@ -59533,33 +59857,7 @@ async function firstDeal(c) {
 	});
 	const key = readKey(c.folder);
 	const payout = state.payout;
-	c.say({
-		step: "preview",
-		sends: [
-			{
-				to: c.operators,
-				what: "reads only, as the deal goes: the discovery document, the club, the adjudicators, the settlement time and the deal by its commitment ID."
-			},
-			{
-				to: c.operators[0],
-				what: `the faucet grant for this deal: the deal's fresh address, and ${holdingAddressOf(key)}, the one holding address every grant of this folder names.`
-			},
-			{
-				to: c.operators,
-				what: `the signed offer. The whole terms become public: the description, every check, the price, the deadlines, the adjudicators, the buyer's address, the deal's fresh address and the payout address ${payout.address}.`
-			},
-			{
-				to: buyerUrl,
-				what: "a read of its card, then the commitment ID."
-			},
-			{
-				to: c.operators,
-				what: "the delivery: the encrypted work and its sealed keys. Its size, its time and its SHA-256 become public; its content does not."
-			}
-		],
-		payout: payout.thisKey ? `The payout address is this folder's standing address ${payout.address}. Every deal names it in its public terms, which links this folder's deals to one another, and its key is on this machine.` : `The payout address ${payout.address} is in the public terms of every deal, which links this folder's deals to one another.`,
-		money: "Test tokens only: nothing here is real money."
-	});
+	c.say(previewLine(c, state, key, buyerUrl));
 	const marker = join(c.folder, FILES.marker);
 	if (!existsSync(marker)) writeFileSync(marker, `${JSON.stringify({
 		startedAt: (/* @__PURE__ */ new Date()).toISOString(),
@@ -59592,20 +59890,25 @@ async function firstDeal(c) {
 			chainId: pin.domain.chainId,
 			token: pin.token.symbol
 		});
+		const credential = randomBytes(24).toString("base64url");
+		c.hide(credential, true);
 		const config = {
 			...loadConfig(join(c.folder, FILES.configuration)),
 			journal: join(c.folder, FILES.journal),
+			quoteAuth: {
+				kind: "bearer",
+				env: "CROW_SETUP_QUOTE"
+			},
 			log: (line) => c.note({
 				step: "adapter",
 				log: line
 			})
 		};
-		const quoteAt = typeof config.sellerApi.quote === "string" && isHttp(config.sellerApi.quote) ? new URL(config.sellerApi.quote) : void 0;
-		if (!quoteAt || quoteAt.hostname !== "127.0.0.1" || !(Number(quoteAt.port) > 0)) throw new Error(`${FILES.configuration} must name the sample API on the loopback address with its port, as the seller command wrote it. Nothing was signed or offered`);
-		api = await startSampleApi(pin.token.id, Number(quoteAt.port));
+		api = await startSampleApi(pin.token.id, Number(new URL(String(config.sellerApi.quote)).port));
 		adapter = await startSellerAdapter(config, {
 			HOLDBACK_KEY: key,
-			HOLDBACK_OPERATORS: c.operators.join(",")
+			HOLDBACK_OPERATORS: c.operators.join(","),
+			CROW_SETUP_QUOTE: credential
 		});
 		c.say({
 			step: "adapter",
@@ -59614,12 +59917,23 @@ async function firstDeal(c) {
 			sells: state.sells
 		});
 		const card = await buyerCard(buyerUrl);
-		const journaled = adapter.deals().find((d) => String(d.terms?.buyer).toLowerCase() === card.buyer);
-		let id = state.firstDeal?.commitmentId ?? journaled?.id;
+		const journal = () => adapter.deals();
+		const setAside = new Set((state.ended ?? []).map((e) => e.commitmentId));
+		let id = state.firstDeal?.commitmentId;
+		if (id === void 0 && state.firstDeal?.journalBefore !== void 0) {
+			const known = new Set(state.firstDeal.journalBefore);
+			const gained = journal().filter((d) => !known.has(d.id) && !setAside.has(d.id) && OPEN_STAGES.includes(d.stage));
+			if (gained.length === 1) id = gained[0].id;
+		}
+		const resumed = id !== void 0;
 		if (id === void 0) {
+			save({ journalBefore: journal().map((d) => d.id) });
 			const answer = await fetch(`${adapter.url}/quote`, {
 				method: "POST",
-				headers: { "content-type": "application/json" },
+				headers: {
+					"content-type": "application/json",
+					authorization: `Bearer ${credential}`
+				},
 				body: JSON.stringify({
 					buyer: card.buyer,
 					buyerEncryptionPublicKey: card.encryptionPublicKey,
@@ -59635,8 +59949,10 @@ async function firstDeal(c) {
 				step: "offer",
 				ok: true,
 				commitmentId: id,
-				price: quote.price,
-				fees: quote.fees ?? null,
+				price: {
+					token: plain(quote.price?.token, 80),
+					amount: plain(quote.price?.amount, 80)
+				},
 				expiresAt: plain(quote.expiresAt, 40),
 				buyer: card.buyer
 			});
@@ -59650,9 +59966,102 @@ async function firstDeal(c) {
 				detail: "This deal was offered by an earlier run: no second offer is made."
 			});
 		}
-		const terms = adapter.deals().find((d) => d.id === id)?.terms;
-		if (/^0x[0-9a-f]{64}$/.test(String(terms?.nonce))) c.hide(dealKeyOf(key, terms.nonce));
-		if ((await Promise.all(reader.sources().map((op) => reader.call("GET", `/v1/commitments/${id}`, void 0, op).then((s) => String(s.escrowState))))).every((s) => ["Offered", "AcceptedByAdjudicator"].includes(s))) {
+		const deal = journal().find((d) => d.id === id);
+		if (/^0x[0-9a-f]{64}$/.test(String(deal?.terms?.nonce))) c.hide(dealKeyOf(key, deal.terms.nonce));
+		let clock;
+		const standing = async () => {
+			const states = await Promise.all(reader.sources().map((op) => reader.call("GET", `/v1/commitments/${id}`, void 0, op).then((s) => String(s.escrowState))));
+			if (states.every((s) => s === states[0]) && ENDED.includes(states[0])) return {
+				states,
+				ended: states[0]
+			};
+			const timing = deal?.terms?.timing;
+			if (timing && states.every((s) => BEFORE_HOLD.includes(s))) {
+				if (clock === void 0 || c.testWorld || Date.now() - clock.readAt > 3e4) clock = {
+					settlement: await reader.settlementNow(),
+					readAt: Date.now()
+				};
+				const time = clock.settlement + (Date.now() - clock.readAt);
+				if (time > Date.parse(timing.fundBy) || states.some((s) => s !== "Agreed") && time > Date.parse(timing.offerExpiresAt)) return {
+					states,
+					ended: "Expired"
+				};
+			}
+			return {
+				states,
+				ended: void 0
+			};
+		};
+		let now, ended;
+		try {
+			({states: now, ended} = await standing());
+		} catch (e) {
+			if (!resumed) throw e;
+			return giveUp("Unknown", `The operators do not serve the deal this folder recorded (${plain(e.message, 200)}).`);
+		}
+		if (ended === void 0 && (deal === void 0 || !OPEN_STAGES.includes(deal.stage) && deal.stage !== "delivered")) return giveUp("SetAside", deal === void 0 ? "This folder's journal does not hold the deal, so the adapter cannot deliver it." : `The adapter closed the deal${deal.note ? `: ${plain(deal.note, 300)}` : ""}.`);
+		if (ended === void 0 && now.every((s) => ["Offered", "AcceptedByAdjudicator"].includes(s))) {
+			const served = await reader.trusted(`/v1/commitments/${id}/terms`);
+			const servedId = served.id;
+			const terms = Object.fromEntries(Object.entries(served).filter(([k]) => k !== "id" && k !== "signatures"));
+			const lc = (v) => String(v).toLowerCase();
+			const wrong = [
+				[
+					"commitment ID",
+					commitmentIdOf(terms),
+					id
+				],
+				[
+					"served ID",
+					lc(servedId),
+					id
+				],
+				[
+					"payout address",
+					lc(terms.sellerPayoutAddress),
+					payout.address
+				],
+				[
+					"seller",
+					lc(terms.seller),
+					addressOf(dealKeyOf(key, terms.nonce))
+				],
+				[
+					"buyer",
+					lc(terms.buyer),
+					card.buyer
+				],
+				[
+					"buyer payment address",
+					lc(terms.buyerPaymentAddress),
+					card.buyer
+				],
+				[
+					"buyer encryption key",
+					terms.buyerEncryptionPublicKey,
+					card.encryptionPublicKey
+				],
+				[
+					"price",
+					jcs({
+						token: lc(terms.price?.token),
+						amount: terms.price?.amount
+					}),
+					jcs({
+						token: lc(pin.token.id),
+						amount: SAMPLE_PRICE_UNITS
+					})
+				]
+			].find(([, got, want]) => got !== want);
+			if (wrong) return giveUp("Withheld", `The signed offer's ${wrong[0]} is ${plain(wrong[1], 120)}, not ${plain(wrong[2], 120)}: the commitment ID was not sent to the buyer, and the offer expires by itself. Run check first.`);
+			c.say({
+				step: "terms",
+				ok: true,
+				payout: payout.address,
+				seller: lc(terms.seller),
+				buyer: card.buyer,
+				detail: "The offer every operator serves names the payout address you gave, this deal's own key as the seller, and the buyer's card."
+			});
 			const posted = await fetch(card.intake, {
 				method: "POST",
 				headers: { "content-type": "application/json" },
@@ -59660,69 +60069,36 @@ async function firstDeal(c) {
 				signal: AbortSignal.timeout(3e4)
 			});
 			const taken = await posted.json().catch(() => null);
-			if (posted.status !== 202 && posted.status !== 200) throw new Error(`the test buyer answered ${posted.status}: ${plain(taken?.error, 300)}${taken?.rule ? ` (rule ${plain(taken.rule, 60)})` : ""}`);
+			const why = `${plain(taken?.error ?? taken?.detail, 300)}${taken?.rule ? ` (rule ${plain(taken.rule, 60)})` : ""}`;
+			if (posted.status === 422 || posted.status === 400 || posted.status === 409) return giveUp("RefusedByBuyer", `The test buyer refused the offer (status ${posted.status}): ${why}. The offer expires by itself.`);
+			if (posted.status !== 202 && posted.status !== 200) throw new Error(`the test buyer answered ${posted.status}: ${why}${Number.isSafeInteger(taken?.retryAfterSec) ? `; it asks to wait ${taken.retryAfterSec} s` : ""}`);
 			c.say({
 				step: "post",
 				ok: true,
-				to: card.intake,
+				to: urlLine(card.intake),
 				detail: "The test buyer took the offer: it agrees and funds once the adjudicator accepts."
 			});
 		}
-		const end = await until(reader, id, ["Released", "Refunded"], c.testWorld ? 12e4 : 12e5, c.testWorld ? 250 : 3e3);
+		let end = ended;
+		for (const stop = Date.now() + (c.testWorld ? 12e4 : 12e5); end === void 0; await sleep(c.testWorld ? 250 : 3e3)) {
+			({states: now, ended: end} = await standing());
+			if (end === void 0 && Date.now() > stop) throw new Error(`the deal is still ${now.map((s) => plain(s, 40)).join(" / ")} after ${c.testWorld ? 120 : 1200} s`);
+		}
 		await adapter.close();
 		adapter = void 0;
+		if (end !== "Released") return giveUp(plain(end, 40), end === "Expired" ? "The offer expired before the buyer funded it." : end === "Refunded" ? "The deal ended in a refund: the buyer has its money back." : `The deal ended ${plain(end, 40)}.`);
 		save({
-			state: String(end.escrowState),
+			state: "Released",
 			endedAt: (/* @__PURE__ */ new Date()).toISOString()
 		});
-		if (end.escrowState !== "Released") {
-			c.say({
-				step: "first-deal",
-				ok: false,
-				state: plain(end.escrowState, 40),
-				commitmentId: id,
-				detail: "The deal ended without a release: the buyer has its money back. Run first-deal --again to offer a new one."
-			});
-			return 1;
-		}
-		const record = await dealRecord(id, {
-			operators: c.operators,
-			party: "seller"
-		});
-		const count = (ok) => record.checks.filter((x) => x.ok === ok).length;
-		mkdirSync(join(c.folder, FILES.deals), { recursive: true });
-		const file = join(c.folder, FILES.deals, `${id}.json`);
-		writeWhole(file, `${JSON.stringify(record, null, 2)}\n`);
-		save({ record: file });
-		const sound = count(false) === 0 && record.disagreements.length === 0;
-		c.say({
-			step: "record",
-			ok: sound,
-			file,
-			checks: {
-				passed: count(true),
-				failed: count(false),
-				notRun: count(null)
-			},
-			operatorsAgree: record.disagreements.length === 0
-		});
-		c.say({
-			step: "first-deal",
-			ok: sound,
-			state: "Released",
-			commitmentId: id,
-			buyer: card.buyer,
-			paidTo: payout.address,
-			price: record.row.price,
-			transactions: record.row.transactions,
-			record: file
-		});
-		return sound ? 0 : 1;
+		return await writeRecord(c, state, id, started);
 	} catch (e) {
+		const offered = state.firstDeal?.commitmentId !== void 0;
 		c.say({
 			step: "first-deal",
 			ok: false,
-			detail: `${plain(e.message, 900)}. Run the same command again: it continues this deal and makes no second offer.`
+			commitmentId: state.firstDeal?.commitmentId ?? null,
+			detail: `${plain(e.message, 900)}. ${offered ? "Run the same command again: it continues this deal and makes no second offer." : "No offer was made. Fix what this line names, then run the same command again."}`
 		});
 		return 1;
 	} finally {
@@ -59751,35 +60127,39 @@ async function main(argv) {
 			...line,
 			notLive: NOT_LIVE
 		} : line);
-		for (const form of hidden) out = out.split(form).join("[a key, removed]");
+		for (const form of hidden) out = out.split(form).join("[a secret, removed]");
 		return out;
 	};
+	const say = (line) => console.log(json(line));
 	const [major = 0, minor = 0] = process.versions.node.split(".").map(Number);
 	if (major < 22 || major === 22 && minor < 18) {
 		console.error(text(`setup.mjs: this needs Node 22.18 or later; this is Node ${process.versions.node}. Nothing was made or sent.`));
+		return 2;
+	}
+	const set = NODE_SETTINGS.find((name) => process.env[name]);
+	if (set !== void 0) {
+		console.error(text(`setup.mjs: ${set} is set in the environment. It changes how Node runs this file: it can load other code, trust another certificate authority, or send requests through a proxy. Run the command again without it, for example with: env -u ${set} node setup.mjs ... Nothing was made or sent.`));
 		return 2;
 	}
 	if (command === "--help" || command === "-h") {
 		console.log(text(USAGE));
 		return 0;
 	}
-	let say = (line) => console.log(json(line));
 	try {
 		if (command === void 0 || !Object.hasOwn(COMMANDS, command)) throw new WrongCall(command === void 0 ? "name a command" : `${plain(command, 40)} is not a command of this file`);
 		const flags = flagsOf(command, rest);
 		const operators = operatorsOf(flags.get("--operators"), testWorld);
 		const name = flags.get("--name") ?? "seller";
 		if (!/^[a-z0-9][a-z0-9-]{0,39}$/.test(name)) throw new WrongCall("--name takes 1 to 40 lowercase letters, digits and hyphens");
-		const folder = resolve(flags.get("--folder") ?? join(homedir(), ".crow", name));
-		const hide = (key) => {
-			for (const form of formsOf(key)) hidden.add(form);
+		const folder = realPath(resolve(flags.get("--folder") ?? join(homedir(), ".crow", name)));
+		const hide = (value, whole = false) => {
+			for (const form of whole ? [value] : formsOf(value)) hidden.add(form);
 		};
 		if (command !== "status" && existsSync(join(folder, FILES.key))) try {
 			const key = readKey(folder);
 			hide(key);
 			hide(holdingKeyOf(key));
 		} catch {}
-		say = (line) => console.log(json(line));
 		return await COMMANDS[command]({
 			folder,
 			operators,
