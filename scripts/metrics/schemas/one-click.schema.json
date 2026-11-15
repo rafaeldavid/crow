@@ -657,7 +657,7 @@
           "description": "the setup command's first-deal marker was seen (its line in command output, or its file in the run's folder)"
         },
         "requestsBeforeFirstDeal": {
-          "description": "Before the marker: requests to a Crow-run host that are not a GET, and requests whose path or query holds an address, by host. The listing step's requests are counted apart, in listingRequestsBeforeFirstDeal (T-486). Null when unknown.",
+          "description": "Before the marker: requests to a Crow-run host that are not a GET, and requests whose path or query holds an address, by host. The run's one listing request is counted apart, in listingRequestsBeforeFirstDeal (T-486). Null when unknown.",
           "oneOf": [
             {
               "type": "null"
@@ -717,7 +717,7 @@
           ]
         },
         "listingRequestsBeforeFirstDeal": {
-          "description": "T-486: before the marker, the requests of the setup's listing step, by host: a POST whose path is exactly /listing, on any host. They are left out of requestsBeforeFirstDeal. Optional, so a version 3 record written before T-486 stays valid; null when unknown.",
+          "description": "T-486: before the marker, the setup's listing step, by host: the first POST of the run to the listing's own origin, at the path /listing exactly, with no address in its query. It is left out of requestsBeforeFirstDeal; every other request is held to that field's rule. Optional, so a version 3 record written before T-486 stays valid; null when unknown.",
           "oneOf": [
             {
               "type": "null"

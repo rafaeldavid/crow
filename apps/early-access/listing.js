@@ -71,6 +71,9 @@ export function websiteOf(text) {
 export function clientKey(ip) {
   const text = String(ip ?? '').trim().toLowerCase();
   if (text === '') return 'unknown';
+  // An IPv4 address written inside an IPv6 one is that IPv4 client.
+  const inside = /^::ffff:(\d+\.\d+\.\d+\.\d+)$/.exec(text);
+  if (inside) return inside[1];
   if (!text.includes(':')) return text;
   const [head, tail = ''] = text.split('::');
   const left = head === '' ? [] : head.split(':');
@@ -135,7 +138,7 @@ export async function listing(request, env, deps = {}) {
   // Any other method gets no entry and no word on what is stored: the list is written here and read nowhere.
   if (request.method !== 'POST') return json(405, { error: 'send a POST' }, { allow: 'POST' });
   if (request.headers.get('origin') !== null) return json(403, { error: 'the list takes a request from the setup command, not from a web page' });
-  if (!/^application\/json\b/i.test(request.headers.get('content-type') ?? '')) return json(400, { error: 'send JSON: {"website": "https://..."}' });
+  if (!/^application\/json\s*(;|$)/i.test(request.headers.get('content-type') ?? '')) return json(400, { error: 'send JSON: {"website": "https://..."}' });
   const bytes = request.body ? await readCapped(request.body, LIMITS.bodyBytes) : new Uint8Array();
   if (bytes === null) return json(413, { error: `the body is limited to ${LIMITS.bodyBytes} bytes`, maxBytes: LIMITS.bodyBytes });
   let body;

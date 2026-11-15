@@ -116,6 +116,9 @@ describe('POST /listing: what is refused, with nothing stored (T-486)', () => {
 
   it('another content type, a body that is not a JSON object, and a body over 1,024 bytes', async () => {
     expect(await refused(ok, { 'content-type': 'text/plain' })).toBe(400);
+    // application/json and no neighbour of it; a charset beside it is taken.
+    for (const type of ['application/jsonx', 'application/json-patch+json', 'application/json+x', 'text/json']) expect(await refused(ok, { 'content-type': type }), type).toBe(400);
+    for (const type of ['application/json', 'application/json; charset=utf-8', 'APPLICATION/JSON;charset=UTF-8']) expect((await send(ok, { headers: { 'content-type': type } })).r.status, type).toBe(200);
     expect(await refused('{"website":')).toBe(400);
     expect(await refused('["https://seller.example/"]')).toBe(400);
     expect(await refused('null')).toBe(400);
@@ -244,6 +247,9 @@ describe('POST /listing: what is refused, with nothing stored (T-486)', () => {
     expect(clientKey('2001:db8:1:2:aaaa:bbbb:cccc:dddd')).toBe(clientKey('2001:db8:1:2::1'));
     expect(clientKey('2001:db8:1:2::1')).not.toBe(clientKey('2001:db8:1:3::1'));
     expect(clientKey('')).toBe('unknown');
+    // An IPv4 address written inside an IPv6 one is that IPv4 client, not one bucket for all of them.
+    expect(clientKey('::ffff:203.0.113.7')).toBe('203.0.113.7');
+    expect(clientKey('::ffff:203.0.113.7')).not.toBe(clientKey('::ffff:198.51.100.9'));
   });
 });
 

@@ -500,7 +500,7 @@ describe('site/setup.mjs: seller --sample, then first-deal with Crow\'s test buy
   }, 60_000);
 });
 
-// T-486 (D75): the listing step is Crow's ask and never a gate. Whoever keeps the list can refuse a listing, lose it or
+// T-486 (D76): the listing step is Crow's ask and never a gate. Whoever keeps the list can refuse a listing, lose it or
 // be offline, and a valid deal still settles by its terms: first-deal ends Released in each case, and nothing the
 // operators or the test buyer were asked differs from a run that never heard of the list.
 describe('neutrality: the first deal does not depend on the list (T-486)', () => {

@@ -53,7 +53,7 @@ export const REASONS = Object.freeze({
   broken: { notJson: 'agent.json answered 200 and is not JSON', schema: 'agent.json is JSON and does not pass site/card.schema.json', tooLarge: `agent.json is larger than ${MAX_BYTES} bytes` },
   none: { status: 'agent.json did not answer 200', redirect: 'agent.json answered with a redirect, which is not followed' },
   unreachable: { dns: 'the name did not resolve', timeout: `no answer within ${TIMEOUT_MS / 1000} s`, tls: 'the TLS certificate was not accepted', connection: 'the connection failed' },
-  refused: { website: "not a site's own https address", address: 'the name resolves to a loopback, private or link-local address' },
+  refused: { website: "not a site's own https address", address: 'the name resolves to an address that is not public: loopback, private, link-local or reserved' },
 });
 
 // IPv4 addresses no public website has: this machine, private networks, link-local (the cloud metadata address among
