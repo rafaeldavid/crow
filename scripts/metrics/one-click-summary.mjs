@@ -1,5 +1,5 @@
 #!/usr/bin/env node
-// The benchmark's headline numbers (T-412, roadmap B1), from the harness's records (`crow.metrics.one-click/2`,
+// The benchmark's headline numbers (T-412, roadmap B1), from the harness's records (`crow.metrics.one-click/2` and `/3`,
 // tools/one-click/bench.mjs), for Crow Control's build: approvals per deal, tokens per deal, time without the user,
 // and cost per deal. A plain script, deterministic: no model, no network, no clock but generatedAt.
 //
@@ -88,7 +88,8 @@ export function buildSummary({ records, invalid = [], v1 = 0, generatedAtMs, com
   return {
     ...envelope('one-click-summary', { script: 'scripts/metrics/one-click-summary.mjs', commit, generatedAt: generatedAtMs, sources: [], gaps }),
     medianOf: MEDIAN_OF,
-    runs: { records: records.length, live: live.length, scripted: records.length - live.length, liveCompleted: live.filter((r) => r.outcome.success).length, invalid: invalid.length, versionOne: v1 },
+    // live and liveCompleted count the deal scenarios' runs, as the headline does; setup's own blocks count s7 and s8
+    runs: { records: records.length, live: dealLive.length, scripted: records.filter((r) => r.mode === 'scripted').length, liveCompleted: dealLive.filter((r) => r.outcome.success).length, invalid: invalid.length, versionOne: v1 },
     headline: headlineOf(deals),
     sandboxAuto: { live: auto.length, liveCompleted: auto.filter((r) => r.outcome.success).length, headline: headlineOf(autoDeals) },
     byScenario,

@@ -1,6 +1,6 @@
 #!/usr/bin/env node
-// The benchmark harness (T-412, roadmap B1): runs one of the six outsider scenarios (scenarios.mjs) with a fresh agent
-// and writes one record, `crow.metrics.one-click/2` (bench-record.mjs builds it; scripts/metrics/schemas/
+// The benchmark harness (T-412, roadmap B1): runs one of the six outsider scenarios or the two setup scenarios (scenarios.mjs) with a fresh agent
+// and writes one record, `crow.metrics.one-click/2` or `/3` for a setup scenario (bench-record.mjs builds it; scripts/metrics/schemas/
 // one-click.schema.json checks it). A record that fails its schema is kept as <runId>.json.invalid.
 //
 //   node tools/one-click/bench.mjs --scenario s1                 scripted: no key, no model, no network beyond 127.0.0.1
@@ -158,7 +158,7 @@ async function live(id) {
     r.book.errors.push(...outcome.errors);
   }
   const docs = scenario.kind === 'setup' ? SETUP_DOCS : DOCS;
-  const record = buildBenchRecord({ mode: 'live', scenario, world: { engine: 'sepolia', docs }, agent: r.agent, outcome, book: r.book, results: r.results, calls: r.calls, texts: r.texts, prices, startedAtMs, generatedAtMs: Date.now(), commit, sources: r.sources, gaps: r.gaps, setup: { firstDealAtMs: r.firstDealAtMs } });
+  const record = buildBenchRecord({ mode: 'live', scenario, world: { engine: 'sepolia', docs }, agent: r.agent, outcome, book: r.book, results: r.results, calls: r.calls, texts: r.texts, prices, startedAtMs, generatedAtMs: Date.now(), commit, sources: r.sources, gaps: r.gaps, setup: { firstDealAtMs: r.firstDealAtMs, webCalls: r.webCalls } });
   return { record, secrets: r.secrets };
 }
 

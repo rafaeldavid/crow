@@ -23,7 +23,7 @@ import { basename, dirname, join, resolve } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { PERMISSION_MODES, firstDealAtOf, scrubSecrets } from './bench-record.mjs';
 import { ENV_KEEP, deniedRequest, summaryOf } from './metrics.mjs';
-import { markerFilesUnder, readCalls, writeFetchProbe, writeShellProbes } from './probes.mjs';
+import { ADDRESS, markerFilesUnder, readCalls, writeFetchProbe, writeShellProbes } from './probes.mjs';
 import { GUESS_RULE } from './scenarios.mjs';
 
 const HERE = dirname(fileURLToPath(import.meta.url));
@@ -194,6 +194,26 @@ export function markerTimesOf(msg) {
   return at === null ? [] : [at];
 }
 
+/**
+ * The agent's WebFetch requests in one SDK message (T-473 review, finding 2), as calls for the setup counts: origin,
+ * path and whether the query holds an address, never the query or the prompt. The probes never see these requests,
+ * because Claude Code makes them itself. `at` is when the message arrived, just before the request.
+ */
+export function webFetchCallsOf(msg, at) {
+  if (msg?.type !== 'assistant' || !Array.isArray(msg.message?.content)) return [];
+  const calls = [];
+  for (const block of msg.message.content) {
+    if (block?.type !== 'tool_use' || block.name !== 'WebFetch' || typeof block.input?.url !== 'string') continue;
+    try {
+      const u = new URL(block.input.url);
+      calls.push({ via: 'webfetch', at, method: 'GET', origin: u.origin, path: u.pathname, status: null, queryHasAddress: ADDRESS.test(u.search) });
+    } catch {
+      // not a URL
+    }
+  }
+  return calls;
+}
+
 const asks = (s) => /\?\s*$/.test(s.trim()) || /\b(would you like|shall i|should i|do you want|want me to|let me know if|confirm)\b/i.test(s.slice(-600));
 
 /**
@@ -238,6 +258,7 @@ export async function runLive(o) {
   };
   const said = []; // the assistant's own words only: the doc gaps come from these, never from a tool result
   const markerTimes = []; // T-473: the first-deal marker's times from the agent's command output, and nothing else of it
+  const webCalls = []; // T-473: the agent's WebFetch requests, which no probe sees, for the setup counts only
   const results = [];
   const effortSeen = new Set();
   let init = null;
@@ -322,6 +343,7 @@ export async function runLive(o) {
     for await (const msg of q) {
       raw('sdk', { msg });
       markerTimes.push(...markerTimesOf(msg));
+      webCalls.push(...webFetchCallsOf(msg, Date.now()));
       if (msg.type === 'system' && msg.subtype === 'init') {
         init = msg;
         o.note(`init: model ${msg.model}, Claude Code ${msg.claude_code_version}, key source ${String(msg.apiKeySource ?? 'unreported').slice(0, 20)}`);
@@ -408,6 +430,7 @@ export async function runLive(o) {
   const levels = [...effortSeen];
   return {
     firstDealAtMs,
+    webCalls: webCalls.slice(0, 500),
     book,
     results,
     calls,

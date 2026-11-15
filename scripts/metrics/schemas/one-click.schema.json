@@ -549,7 +549,7 @@
       }
     },
     "V3": {
-      "description": "Version 2 with the setup scenarios s7 and s8 and the setup block (T-473).",
+      "description": "The setup scenarios s7 and s8 (T-473): version 2's fields and the setup block. The six deal scenarios keep writing version 2.",
       "type": "object",
       "$ref": "#/$defs/Bench",
       "unevaluatedProperties": false,
@@ -560,20 +560,26 @@
         "schema": {
           "const": "crow.metrics.one-click/3"
         },
-        "setup": {
-          "description": "The setup scenarios only; null for the six deal scenarios. Counts read null (unknown) when no first-deal marker was seen, never 0.",
-          "oneOf": [
-            {
-              "type": "null"
-            },
-            {
-              "$ref": "#/$defs/Setup"
+        "runId": {
+          "type": "string",
+          "pattern": "^\\d{4}-\\d{2}-\\d{2}T\\d{2}-\\d{2}-\\d{2}Z-s[78]$"
+        },
+        "scenario": {
+          "type": "object",
+          "properties": {
+            "id": {
+              "type": "string",
+              "pattern": "^s[78]$"
             }
-          ]
+          }
+        },
+        "setup": {
+          "$ref": "#/$defs/Setup"
         }
       }
     },
     "Setup": {
+      "description": "Counts read null (unknown) together: when no first-deal marker was seen, or no call was logged at or after it. Never 0 for unknown.",
       "type": "object",
       "additionalProperties": false,
       "required": [
@@ -581,13 +587,68 @@
         "requestsBeforeFirstDeal",
         "guideFilesFetched"
       ],
+      "allOf": [
+        {
+          "if": {
+            "type": "object",
+            "properties": {
+              "markerSeen": {
+                "const": false
+              }
+            },
+            "required": [
+              "markerSeen"
+            ]
+          },
+          "then": {
+            "type": "object",
+            "properties": {
+              "requestsBeforeFirstDeal": {
+                "type": "null"
+              },
+              "guideFilesFetched": {
+                "type": "null"
+              }
+            }
+          }
+        },
+        {
+          "if": {
+            "type": "object",
+            "properties": {
+              "requestsBeforeFirstDeal": {
+                "type": "null"
+              }
+            },
+            "required": [
+              "requestsBeforeFirstDeal"
+            ]
+          },
+          "then": {
+            "type": "object",
+            "properties": {
+              "guideFilesFetched": {
+                "type": "null"
+              }
+            }
+          },
+          "else": {
+            "type": "object",
+            "properties": {
+              "guideFilesFetched": {
+                "type": "integer"
+              }
+            }
+          }
+        }
+      ],
       "properties": {
         "markerSeen": {
           "type": "boolean",
           "description": "the setup command's first-deal marker was seen (its line in command output, or its file in the run's folder)"
         },
         "requestsBeforeFirstDeal": {
-          "description": "Before the marker: requests to a Crow-run host that are not a GET, and requests whose path holds an address, by host. Null when no marker was seen.",
+          "description": "Before the marker: requests to a Crow-run host that are not a GET, and requests whose path or query holds an address, by host. Null when unknown.",
           "oneOf": [
             {
               "type": "null"
@@ -599,6 +660,35 @@
                 "total",
                 "byHost"
               ],
+              "if": {
+                "type": "object",
+                "properties": {
+                  "total": {
+                    "const": 0
+                  }
+                },
+                "required": [
+                  "total"
+                ]
+              },
+              "then": {
+                "type": "object",
+                "properties": {
+                  "byHost": {
+                    "type": "object",
+                    "maxProperties": 0
+                  }
+                }
+              },
+              "else": {
+                "type": "object",
+                "properties": {
+                  "byHost": {
+                    "type": "object",
+                    "minProperties": 1
+                  }
+                }
+              },
               "properties": {
                 "total": {
                   "$ref": "common.schema.json#/$defs/Count"
@@ -618,7 +708,7 @@
           ]
         },
         "guideFilesFetched": {
-          "description": "GETs of crow.direct's .txt files over the whole run. Null when no marker was seen.",
+          "description": "GETs of crow.direct's .txt files over the whole run, WebFetch requests included. Null when unknown.",
           "$ref": "common.schema.json#/$defs/CountOrNull"
         }
       }

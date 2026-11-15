@@ -2,16 +2,16 @@
 // record adds: the requests that name the party before the first deal, and the guide files fetched. The first deal
 // starts at the setup command's first-deal marker; a run with no marker records both counts as unknown, never as 0.
 import { spawnSync } from 'node:child_process';
-import { mkdirSync, mkdtempSync, readdirSync, rmSync, writeFileSync } from 'node:fs';
+import { mkdirSync, mkdtempSync, readFileSync, readdirSync, rmSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { describe, expect, it } from 'vitest';
 import { check } from '../../scripts/metrics/check.mjs';
 import { buildSummary, readRecords } from '../../scripts/metrics/one-click-summary.mjs';
-import { markerTimesOf } from '../../tools/one-click/bench-live.mjs';
+import { markerTimesOf, webFetchCallsOf } from '../../tools/one-click/bench-live.mjs';
 import { playScripted, startJobApi } from '../../tools/one-click/bench-local.mjs';
 import { buyerCheck, buildBenchRecord, firstDealAtOf, setupOf } from '../../tools/one-click/bench-record.mjs';
-import { markerFilesUnder, readCalls } from '../../tools/one-click/probes.mjs';
+import { curlMethodOf, markerFilesUnder, readCalls, writeFetchProbe } from '../../tools/one-click/probes.mjs';
 import { DEAL_IDS, SCENARIOS, SETUP_DOCS, SETUP_IDS, goalFor } from '../../tools/one-click/scenarios.mjs';
 import { COMMIT, NOW, ROOT, config } from './helpers';
 import { liveRecord } from './one-click-records';
@@ -39,9 +39,12 @@ const SETUP_CALLS = [
   call(72, 'GET', 'https://crow.direct', '/ref/checks.txt'),
 ];
 
+// the first deal's own call, so a list of setup calls has one at or after the marker (or both counts read unknown)
+const DEAL = call(90, 'POST', 'https://api.crow.direct', '/v1/commitments');
+
 describe('the request rule, before the first deal', () => {
   it('counts nothing for a setup that sent nothing that names the party, and counts the guide files of the whole run', () => {
-    expect(setupOf({ calls: SETUP_CALLS, firstDealAtMs: MARK })).toEqual({ markerSeen: true, requestsBeforeFirstDeal: { total: 0, byHost: {} }, guideFilesFetched: 3 });
+    expect(setupOf({ calls: SETUP_CALLS, firstDealAtMs: MARK })).toEqual({ markerSeen: true, requestsBeforeFirstDeal: { total: 0, byHost: {} }, guideFilesFetched: 3, unknownBecause: null });
   });
 
   it('counts a setup step that posts to the faucet before the marker as 1', () => {
@@ -55,22 +58,93 @@ describe('the request rule, before the first deal', () => {
       call(11, 'GET', 'https://sepolia.etherscan.io', `/address/${ADDR.toUpperCase().replace('0X', '0x')}`),
       call(12, 'GET', 'https://api.crow.direct', `/v1/commitments/${ID}`),
       call(13, 'HEAD', 'https://crow.direct', '/setup.txt'),
+      DEAL,
     ];
     expect(setupOf({ calls, firstDealAtMs: MARK }).requestsBeforeFirstDeal).toEqual({ total: 3, byHost: { 'https://api2.crow.direct': 1, 'https://sepolia.etherscan.io': 1, 'https://crow.direct': 1 } });
   });
 
+  it('counts a GET whose query holds an address (review, finding 1)', () => {
+    const calls = [{ ...call(10, 'GET', 'https://api.crow.direct', '/v1/commitments'), queryHasAddress: true }, DEAL];
+    expect(setupOf({ calls, firstDealAtMs: MARK }).requestsBeforeFirstDeal).toEqual({ total: 1, byHost: { 'https://api.crow.direct': 1 } });
+  });
+
   it('takes the in-process world\'s own origins as Crow-run, and leaves the party\'s own API out', () => {
-    const calls = [call(10, 'POST', 'http://127.0.0.1:40001', '/v1/faucet'), call(11, 'POST', 'http://127.0.0.1:41000', '/api/v2/estimates')];
+    const calls = [call(10, 'POST', 'http://127.0.0.1:40001', '/v1/faucet'), call(11, 'POST', 'http://127.0.0.1:41000', '/api/v2/estimates'), call(90, 'POST', 'http://127.0.0.1:40001', '/v1/commitments')];
     expect(setupOf({ calls, firstDealAtMs: MARK, crowOrigins: ['http://127.0.0.1:40001'] }).requestsBeforeFirstDeal).toEqual({ total: 1, byHost: { 'http://127.0.0.1:40001': 1 } });
   });
 
   it('counts a call with no time as before the marker, so an unknown order never hides a request', () => {
-    const calls = [{ via: 'curl', at: null, method: 'POST', origin: 'https://api.crow.direct', path: '/v1/faucet', status: 200 }];
+    const calls = [{ via: 'curl', at: null, method: 'POST', origin: 'https://api.crow.direct', path: '/v1/faucet', status: 200 }, DEAL];
     expect(setupOf({ calls, firstDealAtMs: MARK }).requestsBeforeFirstDeal?.total).toBe(1);
   });
 
   it('records both counts as unknown when no marker was seen, never as 0', () => {
-    expect(setupOf({ calls: SETUP_CALLS, firstDealAtMs: null })).toEqual({ markerSeen: false, requestsBeforeFirstDeal: null, guideFilesFetched: null });
+    expect(setupOf({ calls: SETUP_CALLS, firstDealAtMs: null })).toMatchObject({ markerSeen: false, requestsBeforeFirstDeal: null, guideFilesFetched: null, unknownBecause: expect.stringMatching(/^No first-deal marker/) });
+  });
+
+  it('records both counts as unknown when no call was logged at or after the marker (review, finding 2)', () => {
+    expect(setupOf({ calls: [], firstDealAtMs: MARK })).toMatchObject({ markerSeen: true, requestsBeforeFirstDeal: null, guideFilesFetched: null, unknownBecause: expect.stringMatching(/^The probes logged no call/) });
+    expect(setupOf({ calls: SETUP_CALLS.slice(0, 6), firstDealAtMs: MARK }).requestsBeforeFirstDeal).toBe(null);
+  });
+});
+
+describe('the probes see what names the party (review, finding 1)', () => {
+  it.each([
+    ['-sS -XPOST https://api.crow.direct/v1/faucet', 'POST'],
+    ['-sS -X POST https://api.crow.direct/v1/faucet', 'POST'],
+    ['--request=POST https://api.crow.direct/v1/faucet', 'POST'],
+    ['--request PUT https://api.crow.direct/v1/faucet', 'PUT'],
+    ['-d@body.json https://api.crow.direct/v1/faucet', 'POST'],
+    ['-sd {} https://api.crow.direct/v1/faucet', 'POST'],
+    ['-s --data-binary @b https://api.crow.direct/v1/faucet', 'POST'],
+    ['--json {} https://api.crow.direct/v1/faucet', 'POST'],
+    ['-F a=1 https://api.crow.direct/v1/faucet', 'POST'],
+    ['-T file https://api.crow.direct/v1/faucet', 'POST'],
+    ['-G -d a=1 https://api.crow.direct/v1/x', 'GET'],
+    ['-I https://crow.direct/setup.txt', 'HEAD'],
+    ['-fsSL https://crow.direct/setup.txt', 'GET'],
+    ['-sS -o out.txt https://crow.direct/setup.txt', 'GET'],
+    ['-H Accept:x/d https://crow.direct/setup.txt', 'GET'],
+  ])('reads curl %s as %s', (argv, method) => expect(curlMethodOf(argv)).toBe(method));
+
+  it('marks a curl call and a fetch call whose query holds an address, and keeps no query', () => {
+    const dir = mkdtempSync(join(tmpdir(), 'crow-query-'));
+    try {
+      writeFileSync(join(dir, 'curl.log'), `${Math.floor(MARK / 1000)}\t${join(dir, 'none.txt')}\t-sS https://api.crow.direct/v1/commitments?party=${ADDR} \n`);
+      const [c] = readCalls({ curlLog: join(dir, 'curl.log') });
+      expect(c).toMatchObject({ path: '/v1/commitments', queryHasAddress: true });
+      expect(JSON.stringify(c)).not.toContain(ADDR);
+    } finally {
+      rmSync(dir, { recursive: true, force: true });
+    }
+  });
+
+  it("logs the fetch probe's query flag, and never the query", async () => {
+    const dir = mkdtempSync(join(tmpdir(), 'crow-fetch-'));
+    try {
+      const probe = writeFetchProbe(dir);
+      const r = spawnSync(process.execPath, [`--import=${probe.path}`, '--input-type=module', '-e', `await fetch('http://127.0.0.1:9/v1/commitments?party=${ADDR}').catch(() => {}); await fetch('http://127.0.0.1:9/v1/x?a=1').catch(() => {});`], { encoding: 'utf8' });
+      expect(r.status, r.stderr).toBe(0);
+      const calls = readCalls({ fetchLog: probe.log });
+      expect(calls.map((c) => c.queryHasAddress)).toEqual([true, false]);
+      expect(readFileSync(probe.log, 'utf8')).not.toContain(ADDR);
+    } finally {
+      rmSync(dir, { recursive: true, force: true });
+    }
+  });
+
+  it("turns the agent's WebFetch requests into calls for the setup counts, with no query and no prompt", () => {
+    const msg = { type: 'assistant', message: { content: [{ type: 'tool_use', name: 'WebFetch', input: { url: `https://crow.direct/setup.txt?for=${ADDR}`, prompt: 'read it' } }, { type: 'tool_use', name: 'Bash', input: { command: 'ls' } }] } };
+    expect(webFetchCallsOf(msg, MARK - 1)).toEqual([{ via: 'webfetch', at: MARK - 1, method: 'GET', origin: 'https://crow.direct', path: '/setup.txt', status: null, queryHasAddress: true }]);
+    expect(webFetchCallsOf({ type: 'user', message: { content: [] } }, MARK)).toEqual([]);
+  });
+
+  it('counts a WebFetch guide file in a live setup record, and keeps it out of apiCalls', () => {
+    const webCalls = [{ via: 'webfetch', at: T + 1000, method: 'GET', origin: 'https://crow.direct', path: '/setup.txt', status: null, queryHasAddress: false }];
+    const r = liveRecord({ id: 's8', setup: { firstDealAtMs: MARK, webCalls }, calls: [DEAL] });
+    expect(r.setup).toEqual({ markerSeen: true, requestsBeforeFirstDeal: { total: 0, byHost: {} }, guideFilesFetched: 1 });
+    expect(r.apiCalls.total).toBe(1);
+    expect(check('one-click', r)).toEqual({ ok: true, errors: [] });
   });
 });
 
@@ -241,28 +315,45 @@ describe('the record, version 3', () => {
     expect(check('one-click', r)).toEqual({ ok: true, errors: [] });
   });
 
-  it('gives a deal scenario no setup block', () => {
+  it('keeps a deal scenario on version 2, with no setup block, so a reader of version 2 keeps reading it (review, finding 4)', () => {
     const r = liveRecord({ id: 's1' });
-    expect(r.setup).toBe(null);
+    expect(r.schema).toBe('crow.metrics.one-click/2');
+    expect('setup' in r).toBe(false);
     expect(check('one-click', r)).toEqual({ ok: true, errors: [] });
   });
 
-  it('still accepts a version 2 record, and refuses a setup scenario or a setup block in one', () => {
-    const { setup, ...rest } = liveRecord({ id: 's1' });
-    expect(setup).toBe(null);
-    const v2 = { ...rest, schema: 'crow.metrics.one-click/2' };
-    expect(check('one-click', v2)).toEqual({ ok: true, errors: [] });
+  it('refuses a setup block or a setup scenario in a version 2 record', () => {
+    const v2 = liveRecord({ id: 's1' });
     expect(check('one-click', { ...v2, setup: null }).ok).toBe(false);
     expect(check('one-click', { ...v2, runId: '2026-11-14T10-00-00Z-s7', scenario: { ...v2.scenario, id: 's7' } }).ok).toBe(false);
   });
 
-  it('refuses a version 3 record without its setup block, with a 0 written as a string, or with an unknown scenario', () => {
+  it('refuses a version 3 record without its setup block, with a 0 written as a string, or with a deal or unknown scenario', () => {
     const r = buildBenchRecord(recordInput('s7'));
     const noSetup: Record<string, unknown> = { ...r };
     delete noSetup.setup;
     expect(check('one-click', noSetup).ok).toBe(false);
+    expect(check('one-click', { ...r, setup: null }).ok).toBe(false);
     expect(check('one-click', { ...r, setup: { ...r.setup, guideFilesFetched: '0' } }).ok).toBe(false);
     expect(check('one-click', { ...r, runId: '2026-11-14T10-00-00Z-s9', scenario: { ...r.scenario, id: 's9' } }).ok).toBe(false);
+    expect(check('one-click', { ...r, runId: '2026-11-14T10-00-00Z-s1', scenario: { ...r.scenario, id: 's1' } }).ok).toBe(false);
+  });
+
+  it('refuses counts that contradict unknown, never 0 (review, finding 3)', () => {
+    const r = buildBenchRecord(recordInput('s7'));
+    const bad = [
+      { markerSeen: false, requestsBeforeFirstDeal: { total: 0, byHost: {} }, guideFilesFetched: 0 },
+      { markerSeen: false, requestsBeforeFirstDeal: null, guideFilesFetched: 0 },
+      { markerSeen: true, requestsBeforeFirstDeal: null, guideFilesFetched: 3 },
+      { markerSeen: true, requestsBeforeFirstDeal: { total: 0, byHost: {} }, guideFilesFetched: null },
+      { markerSeen: true, requestsBeforeFirstDeal: { total: 1, byHost: {} }, guideFilesFetched: 3 },
+      { markerSeen: true, requestsBeforeFirstDeal: { total: 0, byHost: { 'https://api.crow.direct': 1 } }, guideFilesFetched: 3 },
+    ];
+    for (const setup of bad) expect(check('one-click', { ...r, setup }).ok, JSON.stringify(setup)).toBe(false);
+    for (const setup of [
+      { markerSeen: true, requestsBeforeFirstDeal: null, guideFilesFetched: null }, // a marker, but no call logged after it
+      { markerSeen: true, requestsBeforeFirstDeal: { total: 2, byHost: { 'https://api.crow.direct': 2 } }, guideFilesFetched: 0 },
+    ]) expect(check('one-click', { ...r, setup }), JSON.stringify(setup)).toEqual({ ok: true, errors: [] });
   });
 });
 
@@ -276,7 +367,7 @@ describe('the summary keeps the setup scenarios apart', () => {
     liveRecord({ id: 's7', approvals: 9, wallMs: 360_000, startedAtMs: at(4), setup: { firstDealAtMs: MARK }, calls: SETUP_CALLS }),
     liveRecord({ id: 's7', approvals: 11, wallMs: 400_000, startedAtMs: at(5), setup: { firstDealAtMs: MARK }, calls: [...SETUP_CALLS, call(10, 'POST', 'https://api.crow.direct', '/v1/faucet')] }),
     liveRecord({ id: 's7', approvals: 30, wallMs: 900_000, startedAtMs: at(6), setup: { firstDealAtMs: null }, calls: SETUP_CALLS }),
-    liveRecord({ id: 's8', approvals: 1, wallMs: 60_000, startedAtMs: at(7), setup: { firstDealAtMs: MARK }, calls: SETUP_CALLS.slice(0, 1) }),
+    liveRecord({ id: 's8', approvals: 1, wallMs: 60_000, startedAtMs: at(7), setup: { firstDealAtMs: MARK }, calls: [SETUP_CALLS[0], DEAL] }),
   ];
 
   it('moves no headline number when s7 and s8 records are added', () => {
@@ -311,14 +402,12 @@ describe('the summary keeps the setup scenarios apart', () => {
   it('reads version 2 and version 3 records from one folder', () => {
     const dir = mkdtempSync(join(tmpdir(), 'crow-summary-v3-'));
     try {
-      const v2: Record<string, unknown> = { ...liveRecord({ id: 's1', startedAtMs: at(1) }) };
-      delete v2.setup;
-      writeFileSync(join(dir, 'a.json'), JSON.stringify({ ...v2, schema: 'crow.metrics.one-click/2' }));
+      writeFileSync(join(dir, 'a.json'), JSON.stringify(liveRecord({ id: 's1', startedAtMs: at(1) })));
       writeFileSync(join(dir, 'b.json'), JSON.stringify(liveRecord({ id: 's3', startedAtMs: at(2) })));
       writeFileSync(join(dir, 'c.json'), JSON.stringify(setups()[0]));
       const read = readRecords([dir]);
       expect(read.invalid).toEqual([]);
-      expect(read.records.map((r: { schema: string }) => r.schema).sort()).toEqual(['crow.metrics.one-click/2', 'crow.metrics.one-click/3', 'crow.metrics.one-click/3']);
+      expect(read.records.map((r: { schema: string }) => r.schema).sort()).toEqual(['crow.metrics.one-click/2', 'crow.metrics.one-click/2', 'crow.metrics.one-click/3']);
       const s = buildSummary({ ...read, generatedAtMs: NOW, commit: COMMIT });
       expect(s.headline.approvalsPerDeal).toEqual({ state: 'measured', value: 3, deals: 2 });
       expect(s.setup.s7.live).toBe(1);

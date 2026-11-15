@@ -8,7 +8,7 @@ const STARTED = Date.parse('2026-11-14T10:00:00Z');
 
 // A live record built from fixed bookkeeping, as bench.mjs builds one after a live run.
 const USAGE = { inputTokens: 1_000, outputTokens: 2_000, cacheReadInputTokens: 100_000, cacheCreationInputTokens: 10_000, cacheCreationEphemeral1hInputTokens: 10_000, costUSD: 0.1 };
-export function liveRecord(o: { texts?: string[]; errors?: string[]; success?: boolean; approvals?: number; wallMs?: number; usage?: object; id?: string; startedAtMs?: number; results?: object[]; permissions?: string; calls?: object[]; setup?: { firstDealAtMs: number | null; crowOrigins?: string[] } } = {}) {
+export function liveRecord(o: { texts?: string[]; errors?: string[]; success?: boolean; approvals?: number; wallMs?: number; usage?: object; id?: string; startedAtMs?: number; results?: object[]; permissions?: string; calls?: object[]; setup?: { firstDealAtMs: number | null; crowOrigins?: string[]; webCalls?: object[] } } = {}) {
   const id = o.id ?? 's1';
   const s = { id, ...SCENARIOS[id as keyof typeof SCENARIOS] };
   return buildBenchRecord({

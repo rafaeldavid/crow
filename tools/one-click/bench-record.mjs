@@ -1,5 +1,5 @@
-// The benchmark harness's record (T-412, roadmap B1): one file per run, `crow.metrics.one-click/2`, checked against
-// scripts/metrics/schemas/one-click.schema.json. Pure: it turns the run's bookkeeping into the record, with no model,
+// The benchmark harness's record (T-412, roadmap B1): one file per run, `crow.metrics.one-click/2` for the six deal
+// scenarios and `/3` for the setup scenarios (T-473), checked against scripts/metrics/schemas/one-click.schema.json. Pure: it turns the run's bookkeeping into the record, with no model,
 // no network and no clock of its own. Every number is a field of its inputs or integer arithmetic on them:
 // - approvals: the permission requests the harness answered, the question cards and the chat replies it sent;
 // - tokens: the last SDK result message's modelUsage, per model (taken as the session's running total: guessed, and
@@ -9,12 +9,14 @@
 // - time: wall time, the time the run waited on an approval, and the rest: the time without the user;
 // - API calls: the fetch and curl probes' logs (probes.mjs), model vendors and package registries left out;
 // - doc gaps: each "GUESS:" line the agent wrote (scenarios.mjs, GUESS_RULE);
-// - setup (T-473, the setup scenarios only; null for the six deal scenarios): the requests that name the party before
-//   the first-deal marker, by host, and the guide files fetched (setupOf). With no marker both read null: unknown.
+// - setup (T-473, version 3 only): the requests that name the party before the first-deal marker, by host, and the
+//   guide files fetched (setupOf). With no marker, or no call logged after it, both read null: unknown.
 // A scripted run's record says mode "scripted"; one-click-summary.mjs never takes a headline number from it.
-// Version 3 (T-473) is version 2 with the setup block and the scenarios s7 and s8; the summary reads both.
+// Version 3 (T-473) is version 2 with the scenarios s7 and s8 only and the setup block; the deal scenarios keep
+// writing version 2, so a reader of version 2 (Crow Control) keeps reading them. The summary reads both.
 import { HEX32, divRound, iso } from '../../scripts/metrics/lib.mjs';
 import { MODEL_ID, decimalToMicros, priceNumerator, scrub, tokensOf } from './metrics.mjs';
+import { ADDRESS } from './probes.mjs';
 
 const MILLION = 1_000_000n;
 const count = (v) => (Number.isSafeInteger(v) && v >= 0 ? v : 0);
@@ -134,18 +136,20 @@ export function firstDealAtOf(texts) {
 
 // Crow-run hosts on Sepolia; in the in-process world the harness passes the world's own origins (crowOrigins).
 const CROW_RUN = /(^|\.)(crow\.direct|escrow\.stream)$/;
-// An address in a path: 0x and 40 hex digits, not part of a longer hex run (a commitment ID is 64).
-const ADDRESS = /(^|[^0-9a-fA-F])0x[0-9a-fA-F]{40}(?![0-9a-fA-F])/;
 
 /**
  * The setup block of a record (T-473). Pure. A request names the party when it goes to a Crow-run host and is not a
- * GET, or when its path holds an address; the probes keep no body, so the rule reads none. Requests before the
- * marker are counted; a call with no time counts as before it, so an unknown order never hides one. Guide files are
- * the GETs of crow.direct's .txt files over the whole run. With no marker, both counts are null (unknown), never 0.
+ * GET, or when its path or query holds an address; the probes keep no body, so the rule reads none. Requests before
+ * the marker are counted; a call with no time counts as before it, so an unknown order never hides one. Guide files
+ * are the GETs of crow.direct's .txt files over the whole run. `calls` are the probes' calls and, in a live run, the
+ * agent's WebFetch requests. With no marker, both counts are null (unknown), never 0; so too when no call was logged at
+ * or after the marker, since the first deal makes calls and their absence means the probes saw nothing.
  * @param {{ calls?: object[], firstDealAtMs: number|null, crowOrigins?: string[] }} o
+ * @returns {{ markerSeen: boolean, requestsBeforeFirstDeal: { total: number, byHost: object }|null, guideFilesFetched: number|null, unknownBecause: string|null }}
  */
 export function setupOf({ calls = [], firstDealAtMs, crowOrigins = [] }) {
-  if (!Number.isSafeInteger(firstDealAtMs)) return { markerSeen: false, requestsBeforeFirstDeal: null, guideFilesFetched: null };
+  if (!Number.isSafeInteger(firstDealAtMs)) return { markerSeen: false, requestsBeforeFirstDeal: null, guideFilesFetched: null, unknownBecause: 'No first-deal marker: the requests before the first deal and the guide files fetched read unknown.' };
+  if (!calls.some((c) => Number.isSafeInteger(c.at) && c.at >= firstDealAtMs)) return { markerSeen: true, requestsBeforeFirstDeal: null, guideFilesFetched: null, unknownBecause: 'The probes logged no call at or after the first-deal marker, so they cannot have seen the setup either: both counts read unknown.' };
   const byHost = {};
   let total = 0;
   let guides = 0;
@@ -161,13 +165,13 @@ export function setupOf({ calls = [], firstDealAtMs, crowOrigins = [] }) {
     if (method === 'GET' && u?.hostname === 'crow.direct' && path.endsWith('.txt')) guides += 1;
     const before = !Number.isSafeInteger(c.at) || c.at < firstDealAtMs;
     const crowRun = !!u && (CROW_RUN.test(u.hostname) || crowOrigins.includes(u.origin));
-    if (before && ((crowRun && method !== 'GET') || ADDRESS.test(path))) {
+    if (before && ((crowRun && method !== 'GET') || ADDRESS.test(path) || c.queryHasAddress === true)) {
       total += 1;
       const origin = u ? u.origin : 'unknown';
       byHost[origin] = (byHost[origin] ?? 0) + 1;
     }
   }
-  return { markerSeen: true, requestsBeforeFirstDeal: { total, byHost: cap(byHost, 40) }, guideFilesFetched: guides };
+  return { markerSeen: true, requestsBeforeFirstDeal: { total, byHost: cap(byHost, 40) }, guideFilesFetched: guides, unknownBecause: null };
 }
 
 /**
@@ -211,12 +215,15 @@ export function scrubSecrets(value, secrets) {
  *   agent: object, outcome: { state: string, commitmentId?: string|null, blockedBy?: string|null, stoppedAt?: string|null },
  *   book: { permissionRequests?: object[], questions?: object[], chatReplies?: object[], wallMs: number, approvalWaitMs?: number, errors?: string[], timedOut?: boolean },
  *   results?: object[], calls?: object[], texts?: string[], prices: object|null, startedAtMs: number, generatedAtMs: number, commit: string, sources?: object[], gaps?: string[],
- *   setup?: { firstDealAtMs: number|null, crowOrigins?: string[] } }} input  setup: a setup scenario's marker time and the world's Crow-run origins
+ *   setup?: { firstDealAtMs: number|null, crowOrigins?: string[], webCalls?: object[] } }} input  setup: a setup scenario's marker time, the
+ *   world's Crow-run origins, and a live run's WebFetch requests (counted in setup only, never in apiCalls)
  */
 export function buildBenchRecord({ mode, scenario, world, agent, outcome, book, results = [], calls = [], texts = [], prices, startedAtMs, generatedAtMs, commit, sources = [], gaps: harnessGaps = [], setup: setupIn = null }) {
   const gaps = harnessGaps.map(String).slice(0, 20);
-  const setup = scenario.kind === 'setup' ? setupOf({ calls, firstDealAtMs: setupIn?.firstDealAtMs ?? null, crowOrigins: setupIn?.crowOrigins ?? [] }) : null;
-  if (setup && !setup.markerSeen) gaps.push('No first-deal marker: the requests before the first deal and the guide files fetched read unknown.');
+  const isSetup = scenario.kind === 'setup';
+  const setupFull = isSetup ? setupOf({ calls: [...calls, ...(setupIn?.webCalls ?? [])], firstDealAtMs: setupIn?.firstDealAtMs ?? null, crowOrigins: setupIn?.crowOrigins ?? [] }) : null;
+  if (setupFull?.unknownBecause) gaps.push(setupFull.unknownBecause);
+  const setup = setupFull ? { markerSeen: setupFull.markerSeen, requestsBeforeFirstDeal: setupFull.requestsBeforeFirstDeal, guideFilesFetched: setupFull.guideFilesFetched } : null;
   const requests = book.permissionRequests ?? [];
   const questions = book.questions ?? [];
   const replies = book.chatReplies ?? [];
@@ -251,7 +258,7 @@ export function buildBenchRecord({ mode, scenario, world, agent, outcome, book, 
   if (mode === 'scripted') gaps.push('A scripted run: no model and no person, so it proves the harness and the scenario path, and fills no headline number.');
   const commitmentId = typeof outcome.commitmentId === 'string' && HEX32.test(outcome.commitmentId) ? outcome.commitmentId.toLowerCase() : null;
   return {
-    schema: 'crow.metrics.one-click/3',
+    schema: isSetup ? 'crow.metrics.one-click/3' : 'crow.metrics.one-click/2',
     generatedAt: iso(generatedAtMs),
     generator: { script: 'tools/one-click/bench.mjs', commit },
     sources,
@@ -287,6 +294,6 @@ export function buildBenchRecord({ mode, scenario, world, agent, outcome, book, 
     errors: (book.errors ?? []).slice(0, 20).map(scrub),
     docGaps: docGapsOf(texts),
     timedOut: !!book.timedOut,
-    setup,
+    ...(isSetup ? { setup } : {}),
   };
 }

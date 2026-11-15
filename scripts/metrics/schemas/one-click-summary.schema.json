@@ -82,8 +82,8 @@
         "timeWithoutUserMs": { "$ref": "#/$defs/IntMetric" },
         "tokensPerDeal": { "$ref": "#/$defs/Headline/properties/tokensPerDeal" },
         "costPerDealUsdMicros": { "$ref": "#/$defs/Headline/properties/costPerDealUsdMicros" },
-        "requestsBeforeFirstDeal": { "$ref": "#/$defs/IntMetric", "description": "Median over the runs that saw the first-deal marker; deals counts those runs." },
-        "guideFilesFetched": { "$ref": "#/$defs/IntMetric", "description": "Median over the runs that saw the first-deal marker; deals counts those runs." }
+        "requestsBeforeFirstDeal": { "$ref": "#/$defs/IntMetric", "description": "Median over the runs whose count is known; deals counts those runs." },
+        "guideFilesFetched": { "$ref": "#/$defs/IntMetric", "description": "Median over the runs whose count is known; deals counts those runs." }
       }
     },
     "Headline": {

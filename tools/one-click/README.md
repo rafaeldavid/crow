@@ -52,12 +52,16 @@ node scripts/metrics/one-click-summary.mjs --runs reports/scratch/one-click-benc
 
 **The first-deal marker.** The first deal starts when the setup command's `first-deal` step starts. Before it sends anything, the step prints `crow-setup: first-deal started <ms since the epoch>` on standard error and writes the same line to `first-deal.started` in its folder. The harness takes the earliest marker inside the run's time: a scripted run from the script's standard error; a live run from the output of the agent's commands (the time only) and from that file anywhere in the run's folders.
 
-**The two counts** (the record's `setup`; null for the six deal scenarios):
+**The two counts** (the record's `setup`, in version 3 records only):
 
-- `requestsBeforeFirstDeal`: before the marker, by host, the requests that name the party: any request to a Crow-run host (crow.direct and its subdomains; in the scripted world, the world's own operators and test agent) that is not a GET, and any request whose path holds an address. The probes keep method, host, path, status and time and no body, so the rule reads none. A call with no time counts as before the marker, and a curl call is timed to the second, so one in the marker's own second counts as before it: the count can read high, never low.
+- `requestsBeforeFirstDeal`: before the marker, by host, the requests that name the party. That is any request to a Crow-run host that is not a GET, and any request whose path or query holds an address. Crow-run hosts are crow.direct and its subdomains and escrow.stream; in the scripted world, they are the world's own operators and test agent.
+  - The probes keep method, host, path, status, time and whether the query holds an address. They keep no body and no query, so the rule reads neither. Curl's method comes from its flags: `-X` in any form, or any body flag.
+  - A call with no time counts as before the marker. A curl call is timed to the second, so one in the marker's own second counts as before it.
 - `guideFilesFetched`: the GETs of crow.direct's `.txt` files over the whole run.
 
-A run with no marker records both as `null`, unknown, never 0.
+Both counts take the agent's WebFetch requests too, which no probe sees; `apiCalls` does not. They read `null`, unknown, never 0, in a run with no marker, and in a run whose probes logged no call at or after the marker.
+
+**What the rule cannot see.** An address that only a request body carries (a curl `-d` or a JSON body), a request a tool makes without fetch, curl or WebFetch, and a query that `curl -G` builds from `-d` values. So a 0 means no request the probes saw named the party; it does not prove that none did.
 
 ### What a scripted run is
 
@@ -116,9 +120,9 @@ Cost: about USD 6 for the six (guessed). The prompt-mode runs of 2026-11-14 cost
 
 Exit codes: 0 when every record is valid and every scenario that can run reached its end state; 1 otherwise; 2 when the run could not start.
 
-### What a record means (`crow.metrics.one-click/3`)
+### What a record means (`crow.metrics.one-click/2` and `/3`)
 
-Version 3 (T-473) is version 2 with the scenarios s7 and s8 and the `setup` field; the summary reads both. Version 2 records stay valid and have no `setup`.
+The six deal scenarios write version 2. The setup scenarios s7 and s8 write version 3 (T-473), which is version 2's fields plus `setup`. So a reader of version 2 keeps reading every deal record; the summary reads both.
 
 One file per run, `<runId>.json`, checked against `scripts/metrics/schemas/one-click.schema.json` before it gets its name; a file that fails stays as `<runId>.json.invalid`.
 
@@ -138,7 +142,7 @@ One file per run, `<runId>.json`, checked against `scripts/metrics/schemas/one-c
 | `docGaps` | each place the agent had to guess | the `GUESS:` lines in the agent's own words, never in a tool result |
 | `setup` | a setup scenario's `markerSeen`, `requestsBeforeFirstDeal` (`total` and `byHost`) and `guideFilesFetched`; null for a deal scenario | the probes' calls, timed, and the first-deal marker |
 
-**The summary** (`scripts/metrics/one-click-summary.mjs`, `crow.metrics.one-click-summary/1`) turns the records into the four headline numbers: approvals per deal, tokens per deal (with the uncached input apart), time without the user and cost per deal. Each is the median of the newest 10 live records that reached their end state. With none, it reads `"state": "missing"` and `null`, never 0. `headline` counts `prompt` records only; `sandboxAuto` holds the same four numbers from `sandbox-auto` records, so the two modes never share a median. Both take the six deal scenarios only. `setup` reports s7 and s8 each on its own, with the same four numbers in each mode plus the medians of `requestsBeforeFirstDeal` and `guideFilesFetched` over the runs that saw the marker, so adding a setup run moves no headline number.
+**The summary** (`scripts/metrics/one-click-summary.mjs`, `crow.metrics.one-click-summary/1`) turns the records into the four headline numbers: approvals per deal, tokens per deal (with the uncached input apart), time without the user and cost per deal. Each is the median of the newest 10 live records that reached their end state. With none, it reads `"state": "missing"` and `null`, never 0. `headline` counts `prompt` records only; `sandboxAuto` holds the same four numbers from `sandbox-auto` records, so the two modes never share a median. Both take the six deal scenarios only, and so do `runs.live` and `runs.liveCompleted`. `setup` reports s7 and s8 each on its own, with the same four numbers in each mode plus the medians of `requestsBeforeFirstDeal` and `guideFilesFetched` over the runs whose counts are known, so adding a setup run moves no headline number.
 
 The headline's median is over every deal scenario's records together. On 2026-11-14 the two seller runs (s3, s6) were its median records, at 11 approvals; the four buyer runs alone give 20 (inferred from the records, `docs/research/2026-11-15-setup-baseline.md`). T-473 leaves that rule as it is.
 

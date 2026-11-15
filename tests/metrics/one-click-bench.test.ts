@@ -75,7 +75,8 @@ describe('the scripted runs, one per scenario', () => {
     expect(records[id].outcome).toMatchObject({ success: false, state: 'blocked', commitmentId: null });
     expect(records[id].outcome.blockedBy).toMatch(/^N70: the test seller/);
     expect(records[id].apiCalls.total).toBe(0);
-    expect(records[id].setup).toBe(null);
+    expect(records[id].schema).toBe('crow.metrics.one-click/2');
+    expect('setup' in records[id]).toBe(false);
   });
 
   // T-473: the two setup scenarios wait for their setup command, and still write a valid version 3 record.
@@ -266,7 +267,7 @@ describe('the schema, version 3 beside versions 2 and 1', () => {
     expect(check('one-click', { ...r, world: { ...r.world, engine: 'local' } }).ok).toBe(false);
   });
   it('refuses a record shaped as version 1, and a scenario outside the eight', () => {
-    expect(r.schema).toBe('crow.metrics.one-click/3');
+    expect(r.schema).toBe('crow.metrics.one-click/2');
     expect(check('one-click', { ...r, runId: '2026-11-14T10-00-00Z-buyer' }).ok).toBe(false);
     expect(check('one-click', { ...r, scenario: { ...r.scenario, id: 's9' } }).ok).toBe(false);
   });
