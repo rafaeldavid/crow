@@ -11,7 +11,7 @@
   - Two more, which s9 needs once it is a deal scenario (named here, as the reviewer asked): `scripts/metrics/schemas/one-click-summary.schema.json` (an optional `byScenario.s9`) and `tests/metrics/one-click-setup.test.ts` (the deal scenarios' list).
   - It changes nothing under `apps/hosted-sellers/`, `packages/`, `contracts/src/` or `spec/schemas/`, neither `examples/seller-adapter-core.ts` nor `examples/seller-adapter-api.ts`, and no pinned bundle (`site/buy.mjs`, `site/try.mjs`, `site/setup.mjs`).
 - **Human gate:** yes, for the two deploys, both Rafa's: the Worker `crow-test-agents` first, then the site. The site deploy that publishes the new `buy.txt` waits until the pilot's second buyer has funded its deal. The merge has no gate.
-- **Status:** in progress
+- **Status:** done (on the merge of PR 591; the two deploys wait for Rafa, see Handoff)
 - **Agent/session:** a build session started by the coordinator, 2026-11-15, branch `t-489-test-seller-quote`.
 - **Roadmap row:** N163
 - **Change kind:** 4 is the nearest recipe (a live test service's code), with 1 (an agent guide in `site/`). The brief adds one `reviewer` pass and one `red-teamer` pass on the quote address and its limits, since it touches funds and limits.
