@@ -1353,3 +1353,42 @@ On a chain, the operators that relay a deal check a mandate's roles, cap per dea
 - **The next parallel lane:** Crow's own buying and selling agents, under limits the agents cannot override.
 - **Waiting behind the pilot:** a faster chain and the next contract phase.
 - **Litmus tests.** Neutrality, the hold and defended judgment: unchanged; this orders the work and builds nothing.
+
+## D73. "Set up Crow for me": one file, one pinned command, and nothing sent before the first deal (T-471)
+
+**Status:** adopted, 2026-11-15.
+
+**Adopted 2026-11-15 by T-471,** after a measured baseline, a study of Blygger's start path, one review and one red-team pass. Rafa may overrule any line. Nothing is built. The records: `docs/research/2026-11-15-setup-baseline.md`, `2026-11-15-blygger-study.md` and `2026-11-15-setup-design.md`.
+
+**Rafa's direction, 2026-11-15:** setting Crow up must be as good as blygger.org's start path and "as simple as deploying a new page" on one's own website; the product is "the seller / buyer package"; the setup file "optimizes for least amount of AI assistant effort and privacy"; and the API needs nobody set up until their first deal.
+
+Today a seller with its own API reads 12 files of 90,475 bytes and runs 22 command lines, and the seller adapter calls Crow's faucet when it starts, before any buyer exists (measured, the baseline).
+
+- **One file for the assistant.** `https://crow.direct/setup.txt`, at most 8,000 bytes, a third path in the guide budget. The sentence a person gives: "Read https://crow.direct/setup.txt and set up Crow for me as a seller", or "as a buyer".
+- **One pinned command.** `setup.mjs`, a bundle pinned by SHA-256 like `try.mjs` and `buy.mjs`. It makes the keys, writes the files, checks them, runs the first deal and removes the setup. It takes answers as flags and never prompts, so an assistant and the benchmark can drive it.
+- **Nothing sent before the first deal.** No step before it makes a request that names the party to a Crow-run host. The seller's setup writes `"signingKey": "per-deal"`, which takes each deal key's faucet grant with its quote and not at start. The benchmark counts such requests; the target is 0.
+- **Keys.** The command makes every key on the party's machine, prints addresses only, and passes the key inside its own process. A secret only the person has is typed by the person at a hidden prompt.
+- **Limits.** The setup's limits are enforced by the party's own tool (rung 4 of T-443's ladder), and its output says so. Limits an assistant on the same machine cannot pass come from the person's own wallet or from the signer on another machine or account (T-479).
+- **A check before any offer.** At least 3 real results from the party's API must pass the deal's checks, and a broken result must fail them. The pilot's terms passed one sample and failed real output.
+- **A first deal with no second person.** A seller sells to Crow's test buyer; a buyer buys from Crow's test seller. When a seller's offer does not fit the test buyer's published rules, the command buys the job itself and says so.
+- **Leaving is one command.** It writes the party's records, stops the service, removes what the setup made and says what stays public.
+- **Where the signing part runs.** On the party's own machine for the first deal; on its own host (T-477); on its own Cloudflare account after the pilot (T-478). `setup.txt` does not offer hosting by Crow: there Crow makes and holds the seller's key (ADR-0037).
+- **The measure.** Two benchmark scenarios, set up as a seller and as a buyer, with targets in the design. The targets are guessed and are reset after three live runs each.
+- **The pilot stays first (D72).** No task changes `apps/hosted-sellers`, `examples/seller-adapter-core.ts`, `examples/seller-adapter-api.ts` or `packages/` except T-478, which waits for the pilot's deploy.
+- **What it does not change:** no contract, schema, signed type or API route.
+- **What it does not close.** A first deal on the live service still needs Crow's faucet mandate, an operator to relay the offer and the agreement, and by default Crow's adjudicators. The setup adds no new dependency on Crow and names these three.
+- **Litmus tests.** Neutrality: the setup is a party's own tool over the public API; no step needs Crow's permission or account. The hold: unchanged. Defended judgment: unchanged; the check runs the adjudicator's first stage on the party's own results and judges nothing.
+- **Open for Rafa,** each with a default in the design's "Choices for Rafa": whether `setup.txt` states now that an operator may charge a fee later (default: yes, one line); the first deal when an offer does not fit the test buyer (default: the command buys); the targets; and whether T-478 starts when the pilot's sellers are deployed (default: yes).
+
+## D74. A party's card stays a convention outside the API contract, with a published JSON Schema (T-471)
+
+**Status:** adopted, 2026-11-15.
+
+**Adopted 2026-11-15 by T-471.** Rafa may overrule it. Nothing is built.
+
+- **What a party publishes.** The card that exists today: a `crow-agent` block (a seller) or a `crow-buyer` block (a buyer) in a page on the party's own domain, with the same JSON as `agent.json` beside it (`site/ref/intake.txt`). No new field and no new location.
+- **Two identities, no registry.** The signing key is the party's identity for settlement. The party's own domain is its identity for being found: a buyer knows whose offer it holds by the origin that gave it the offer's ID. By default the card lists no address.
+- **Outside `spec/schemas/`.** No operator serves or reads a card, so it is not part of the API contract, and this needs no decision record of its own and no version bump. Its JSON Schema is published beside the guides (T-474).
+- **When it moves into the protocol.** When a second implementation reads the card, by a decision record and a version bump.
+- **Declined:** a directory or registry of cards kept by Crow (D35: rails, not a record-keeper); a seller that is a static page only, which would need Crow to carry messages between parties.
+- **Litmus tests.** Neutrality: a card needs nobody's permission and lives on the party's own domain. The hold and defended judgment: not affected.
