@@ -91,7 +91,7 @@ describe('site/setup.mjs, the bundle (T-472)', () => {
     for (const mark of ['async function startSellerAdapter(', 'async function createSellerAdapter(', 'function preflightDelivery(', 'function checkDelivery(', 'async function dealRecord(', 'function privateKeyToAccount(', 'nacl.box', `viem@${pins().viem} (`, `tweetnacl@${pins().tweetnacl} (`]) expect(code, mark).toContain(mark);
     // Before any module: the ambient settings are removed, and the one command the file runs is named, so deal-record.ts runs none.
     const firstImport = code.indexOf('\nimport ');
-    for (const line of ["for (const name of Object.keys(process.env)) if (/^(HOLDBACK|CROW)_/.test(name)) delete process.env[name];", "Object.defineProperty(globalThis, 'crowEntry', { value: 'setup',"]) {
+    for (const line of ["for (const name of Object.keys(process.env)) if (/^(HOLDBACK|CROW)_/.test(name) || name === 'NODE_TLS_REJECT_UNAUTHORIZED') delete process.env[name];", "Object.defineProperty(globalThis, 'crowEntry', { value: 'setup',"]) {
       expect(code.indexOf(line), line).toBeGreaterThan(0);
       expect(code.indexOf(line), line).toBeLessThan(firstImport);
     }
@@ -219,7 +219,7 @@ describe('site/setup.mjs seller, check and status (T-472)', () => {
   }, 30_000);
 
   it('makes the folder: a key in keys/ with modes 0700 and 0600, a .gitignore, the configuration, the template, a card apart, and a passing check', async () => {
-    const { at, folder, run } = await made(['--operators', operators]);
+    const { at, folder, run } = await made(['--test-world', '--operators', operators]);
     const lines = jsonLines(run.out);
     const key = keyOf(folder);
     const address = privateKeyToAccount(key).address.toLowerCase();
@@ -247,14 +247,14 @@ describe('site/setup.mjs seller, check and status (T-472)', () => {
     expect(lines.slice(1).map((l) => [l.step, l.check, l.ok])).toEqual([['check', 'folder', true], ['check', 'configuration', true], ['check', 'template', true], ['check', 'sample', true], ['check', 'required-field', true], ['check', 'secrets', true]]);
     sentNothing(run);
     // `check` alone gives the same lines and exit 0; `status` names the role, the steps and the addresses, and no key.
-    const checked = await node(at, ['check', '--folder', folder, '--operators', operators]);
+    const checked = await node(at, ['check', '--folder', folder, '--test-world', '--operators', operators]);
     expect(checked.code, checked.out).toBe(0);
     expect(jsonLines(checked.out)).toEqual(lines.slice(1));
     sentNothing(checked);
     // The recorder is not blind: the check's calls to its own sample API on the loopback address are in its record.
     expect(checked.connections.length).toBeGreaterThan(0);
     const status = await node(at, ['status', '--folder', folder]);
-    expect(jsonLines(status.out)).toEqual([{ step: 'status', folder, exists: true, role: 'seller', sells: 'sample', name: 'seller', steps: ['folder', 'key', 'payout', 'template', 'configuration', 'card'], address, payout: { address, thisKey: true }, card: `${folder}-card`, firstDeal: null, openDeals: [] }]);
+    expect(jsonLines(status.out)).toEqual([{ step: 'status', folder, exists: true, role: 'seller', sells: 'sample', name: 'seller', steps: ['folder', 'key', 'payout', 'template', 'configuration', 'card'], address, payout: { address, thisKey: true }, card: `${folder}-card`, firstDeal: null, ended: [], openDeals: [] }]);
     expect(status.connections).toEqual([]);
     // No line any of the three printed, and no file outside keys/, holds the key or the holding key it derives.
     const said = run.out + run.err + checked.out + checked.err + status.out + status.err;
@@ -305,21 +305,225 @@ describe('site/setup.mjs seller, check and status (T-472)', () => {
   it('resumes: run again after a stop, it makes no second key and keeps the answers', async () => {
     const { at, folder } = await made();
     const key = keyOf(folder);
-    // As if it stopped after the key: the state and the later files are gone.
-    for (const f of ['crow.json', 'adapter.json', 'template.json']) rmSync(join(folder, f));
-    rmSync(`${folder}-card`, { recursive: true });
+    const whole = JSON.parse(readFileSync(join(folder, 'crow.json'), 'utf8'));
+    const stoppedAfter = (steps: string[], extra: J = {}) => writeFileSync(join(folder, 'crow.json'), JSON.stringify({ ...whole, payout: undefined, files: undefined, ...extra, steps: Object.fromEntries(steps.map((s) => [s, whole.steps[s]])) }));
+    const laterFilesGone = () => {
+      for (const f of ['adapter.json', 'template.json']) rmSync(join(folder, f), { force: true });
+      rmSync(`${folder}-card`, { recursive: true, force: true });
+    };
+    // Stopped right after the key step: the state names the key, the later files are not there yet.
+    stoppedAfter(['folder', 'key']);
+    laterFilesGone();
+    // The answers were not recorded yet, so they are asked again; with them the run finishes with the same key.
+    expect((await node(at, ['seller', '--folder', folder])).code).toBe(3);
     const again = await node(at, ['seller', '--sample', '--payout', 'this-key', '--folder', folder]);
     expect(again.code, again.out).toBe(0);
     expect(keyOf(folder)).toBe(key);
     expect(existsSync(join(folder, 'adapter.json')) && existsSync(join(`${folder}-card`, 'agent.json'))).toBe(true);
-    // With the state there, the answers are kept: no flag, no question, the same key.
+    // Stopped between the key file's rename and the state's key step: the state says the key was begun, so it is this setup's.
+    stoppedAfter(['folder'], { address: undefined, keyStartedAt: whole.keyStartedAt });
+    laterFilesGone();
+    const midKey = await node(at, ['seller', '--sample', '--payout', 'this-key', '--folder', folder]);
+    expect(midKey.code, midKey.out).toBe(0);
+    expect(keyOf(folder)).toBe(key);
+    // Stopped while the key was being written: only a temporary file is in keys/. The next run removes it and makes the key.
+    const half = alone();
+    const halfFolder = join(half.dir, 'party');
+    mkdirSync(join(halfFolder, 'keys'), { recursive: true });
+    writeFileSync(join(halfFolder, 'crow.json'), JSON.stringify({ ...whole, address: undefined, payout: undefined, files: undefined, card: `${halfFolder}-card`, steps: { folder: whole.steps.folder } }));
+    writeFileSync(join(halfFolder, 'keys', '.signing.key.123.abcdef.tmp'), '0x12');
+    const fromHalf = await node(half, ['seller', '--sample', '--payout', 'this-key', '--folder', halfFolder]);
+    expect(fromHalf.code, fromHalf.out).toBe(0);
+    expect(readdirSync(join(halfFolder, 'keys'))).toEqual(['signing.key']);
+    // With the whole state there, the answers are kept: no flag, no question, the same key.
     const bare = await node(at, ['seller', '--folder', folder]);
     expect(bare.code, bare.out).toBe(0);
     expect(keyOf(folder)).toBe(key);
-    // Another payout address is not taken silently.
-    const other = await node(at, ['seller', '--payout', '0x00000000000000000000000000000000000c0ffe', '--folder', folder]);
-    expect(other.code).toBe(1);
-    expect(jsonLines(other.out)[0].detail).toMatch(/this folder already pays to 0x[0-9a-f]{40}/);
+    // Before the first deal, the same command with another --payout changes the answer and the configuration together.
+    const elsewhere = '0x00000000000000000000000000000000000c0ffe';
+    const port = new URL(JSON.parse(readFileSync(join(folder, 'adapter.json'), 'utf8')).sellerApi.quote).port;
+    const other = await node(at, ['seller', '--payout', elsewhere, '--folder', folder]);
+    expect(other.code, other.out).toBe(0);
+    expect(jsonLines(other.out)[0]).toMatchObject({ payout: elsewhere });
+    const config = JSON.parse(readFileSync(join(folder, 'adapter.json'), 'utf8'));
+    expect(config.payoutAddress).toBe(elsewhere);
+    expect(new URL(config.sellerApi.quote).port).toBe(port); // the sample API keeps its port
+    expect(keyOf(folder)).toBe(key);
+    // Once the first deal started, its offer names the payout address: no change in this folder.
+    writeFileSync(join(folder, 'first-deal.started'), '{}');
+    const late = await node(at, ['seller', '--payout', 'this-key', '--folder', folder]);
+    expect(late.code).toBe(1);
+    expect(jsonLines(late.out)[0].detail).toMatch(/this folder's first deal started, and its offer names 0x0+c0ffe as the payout address/);
+    // A key file that is gone is never replaced by a new key.
+    rmSync(join(folder, 'keys', 'signing.key'));
+    const gone = await node(at, ['seller', '--sample', '--payout', elsewhere, '--folder', folder]);
+    expect(gone.code).toBe(1);
+    expect(jsonLines(gone.out)[0].detail).toMatch(/keys\/signing\.key is gone\. Put the file back/);
+    expect(existsSync(join(folder, 'keys', 'signing.key'))).toBe(false);
+  }, 120_000);
+
+  it('adopts nothing that was in the folder before it: a key, a keys/ link, a configuration or a state file\'s answer', async () => {
+    const planted = (name: string) => {
+      const at = alone();
+      const folder = join(at.dir, name);
+      mkdirSync(folder, { recursive: true });
+      return { at, folder };
+    };
+    const run = (at: { dir: string; file: string }, folder: string, flags = ['--sample', '--payout', 'this-key']) => node(at, ['seller', ...flags, '--folder', folder]);
+    const refusal = (r: Run) => jsonLines(r.out).find((l) => l.ok === false)?.detail as string;
+    // A key that was there first. Its value is made here, at run time, and is no key the test keeps.
+    const k = planted('key');
+    mkdirSync(join(k.folder, 'keys'));
+    const plantedKey = `0x${createHash('sha256').update('planted').digest('hex')}`;
+    writeFileSync(join(k.folder, 'keys', 'signing.key'), `${plantedKey}\n`);
+    const withKey = await run(k.at, k.folder);
+    expect(withKey.code, withKey.out).toBe(1);
+    expect(refusal(withKey)).toMatch(/is not empty and has no crow\.json: the setup makes a folder of its own and adopts nothing that was put there \(it holds keys\)/);
+    expect(withKey.out).not.toContain(privateKeyToAccount(plantedKey as `0x${string}`).address.toLowerCase());
+    // The same key with a state file beside it that does not say the setup made a key.
+    writeFileSync(join(k.folder, 'crow.json'), JSON.stringify({ crow: 'setup/1', role: 'seller', sells: 'sample', name: 'seller', createdAt: '2026-11-15T00:00:00.000Z', steps: {} }));
+    const withState = await run(k.at, k.folder);
+    expect(withState.code, withState.out).toBe(1);
+    expect(refusal(withState)).toMatch(/keys\/signing\.key is in the folder, and crow\.json does not say this setup made it: the setup adopts no key it did not make\. Move that file away/);
+    // keys/ as a link to another folder: no key is written through it, and the other folder's mode is untouched.
+    const l = planted('link');
+    const elsewhere = join(l.at.dir, 'elsewhere');
+    mkdirSync(elsewhere, { mode: 0o755 });
+    writeFileSync(join(l.folder, 'crow.json'), JSON.stringify({ crow: 'setup/1', role: 'seller', sells: 'sample', name: 'seller', createdAt: '2026-11-15T00:00:00.000Z', steps: {} }));
+    symlinkSync(elsewhere, join(l.folder, 'keys'));
+    const withLink = await run(l.at, l.folder);
+    expect(withLink.code, withLink.out).toBe(1);
+    expect(refusal(withLink)).toMatch(/keys\/ is a symbolic link: the key would be written, or read, somewhere else/);
+    expect(readdirSync(elsewhere)).toEqual([]);
+    expect(mode(elsewhere)).toBe(0o755);
+    // A configuration that was there first.
+    const a = planted('adapter');
+    writeFileSync(join(a.folder, 'adapter.json'), JSON.stringify({ sellerApi: { quote: 'http://127.0.0.1:9/quote', start: 'http://localhost:9/evil/jobs', result: 'http://localhost:9/evil/jobs/{jobId}/result' }, payoutAddress: '0x000000000000000000000000000000000000dead' }));
+    const withAdapter = await run(a.at, a.folder, ['--sample', '--payout', '0x00000000000000000000000000000000000c0ffe']);
+    expect(withAdapter.code, withAdapter.out).toBe(1);
+    expect(refusal(withAdapter)).toMatch(/is not empty and has no crow\.json/);
+    // A state file that answers the payout question: the answers of a state the setup did not finish are not taken.
+    const s = planted('state');
+    writeFileSync(join(s.folder, 'crow.json'), JSON.stringify({ crow: 'setup/1', role: 'seller', sells: 'sample', name: 'seller', createdAt: '2026-11-15T00:00:00.000Z', steps: {}, payout: { address: '0x000000000000000000000000000000000000dead', thisKey: false } }));
+    const withAnswer = await run(s.at, s.folder, []);
+    expect(withAnswer.code, withAnswer.out).toBe(3);
+    expect(existsSync(join(s.folder, 'keys'))).toBe(false);
+    const overridden = await run(s.at, s.folder);
+    expect(overridden.code, overridden.out).toBe(0);
+    expect(jsonLines(overridden.out)[0].payout).toBe(jsonLines(overridden.out)[0].address); // this-key, not the planted answer
+  }, 120_000);
+
+  it('the payout the person gave is the one the configuration pays: a changed adapter.json fails the check, and seller keeps none it did not write', async () => {
+    const { at, folder } = await made();
+    const good = readFileSync(join(folder, 'adapter.json'), 'utf8');
+    const edit = (change: (j: J) => void) => {
+      const j = JSON.parse(good);
+      change(j);
+      writeFileSync(join(folder, 'adapter.json'), JSON.stringify(j, null, 2));
+    };
+    const cases: Array<[(j: J) => void, RegExp]> = [
+      [(j) => (j.payoutAddress = '0x000000000000000000000000000000000000dead'), /adapter\.json pays 0x0{36}dead, and the answer in crow\.json is 0x[0-9a-f]{40}: every offer would name the first/],
+      [(j) => delete j.payoutAddress, /adapter\.json pays the signing key, as it names no payoutAddress, and the answer in crow\.json is/],
+      [(j) => (j.sellerApi.start = 'http://localhost:9/evil/jobs'), /does not name the sample API at one port on the loopback address for all three calls/],
+      [(j) => (j.sellerApi.baseUrl = 'http://localhost:9'), /does not name the sample API at one port/],
+      [(j) => (j.alerts = { callback: 'http://localhost:9/evil/alerts' }), /adapter\.json sets alerts, which a folder that sells the sample does not use/],
+    ];
+    for (const [change, why] of cases) {
+      edit(change);
+      const checked = await node(at, ['check', '--folder', folder]);
+      expect(checked.code, checked.out).toBe(1);
+      expect(jsonLines(checked.out).find((l) => l.check === 'configuration')).toMatchObject({ ok: false, detail: expect.stringMatching(why) });
+      const deal = await node(at, ['first-deal', '--folder', folder, '--test-world', '--operators', operators, '--buyer', buyer]);
+      expect(deal.code, deal.out).toBe(1);
+      expect(existsSync(join(folder, 'first-deal.started'))).toBe(false);
+      sentNothing(deal);
+      // seller does not keep the changed file, and does not write over it either: it names the remedy.
+      const again = await node(at, ['seller', '--folder', folder]);
+      expect(again.code, again.out).toBe(1);
+      expect(jsonLines(again.out)[0].detail).toMatch(/adapter\.json is not the file this setup wrote: it was changed, or another program put it there\. .* Move that file away, then run the same command again/);
+    }
+    // The remedy: the file moved away, the same command writes it anew, and the check passes.
+    rmSync(join(folder, 'adapter.json'));
+    const anew = await node(at, ['seller', '--folder', folder]);
+    expect(anew.code, anew.out).toBe(0);
+  }, 120_000);
+
+  it('refuses the zero address as the payout address, by name', async () => {
+    const at = alone();
+    const run = await node(at, ['seller', '--sample', '--payout', `0x${'00'.repeat(20)}`, '--folder', join(at.dir, 'party')]);
+    expect(run.code).toBe(1);
+    expect(jsonLines(run.out)[0].detail).toMatch(/is the zero address, which nobody holds: a payment there is lost/);
+    expect(existsSync(join(at.dir, 'party'))).toBe(false);
+  }, 30_000);
+
+  it('tests the folder\'s real path: a synced folder behind a link, a card folder in another letter case, and iCloud\'s Documents', async () => {
+    const at = alone();
+    const flags = ['--sample', '--payout', 'this-key'];
+    // A link that leads into a synced folder.
+    mkdirSync(join(at.dir, 'dropbox', 'real'), { recursive: true });
+    symlinkSync(join(at.dir, 'dropbox', 'real'), join(at.dir, 'link'));
+    const behind = await node(at, ['seller', ...flags, '--folder', join(at.dir, 'link', 'party')]);
+    expect(behind.code, behind.out).toBe(1);
+    expect(jsonLines(behind.out)).toEqual([{ step: 'folder', ok: false, flag: '--allow-synced', detail: expect.stringMatching(/dropbox\/real\/party is under dropbox, a folder a sync service copies/) }]);
+    expect(existsSync(join(at.dir, 'dropbox', 'real', 'party'))).toBe(false);
+    // The card's folder named as the party's folder in another letter case: one folder where letter case is ignored.
+    const cased = await node(at, ['seller', ...flags, '--folder', join(at.dir, 'served', 'party'), '--card', join(at.dir, 'served', 'PARTY')]);
+    expect(cased.code, cased.out).toBe(1);
+    expect(jsonLines(cased.out)).toEqual([{ step: 'folder', ok: false, flag: '--allow-served', detail: expect.stringMatching(/hold one another/) }]);
+    expect(existsSync(join(at.dir, 'served'))).toBe(false);
+    for (const name of ['Box', 'OneDrive - Acme', 'icloud drive']) expect((await node(at, ['seller', ...flags, '--folder', join(at.dir, name, 'party')])).code, name).toBe(1);
+    if (process.platform === 'darwin') {
+      const docs = await node(at, ['seller', ...flags, '--folder', join(at.dir, 'Documents', 'crow')]);
+      expect(docs.code, docs.out).toBe(1);
+      expect(jsonLines(docs.out)[0]).toMatchObject({ flag: '--allow-synced', detail: expect.stringMatching(/is under your Documents folder, which iCloud copies to other machines/) });
+    }
+  }, 60_000);
+
+  it('eight runs at once into one new folder make one key, and every run ends well', async () => {
+    const at = alone();
+    const folder = join(at.dir, 'party');
+    const runs = await Promise.all(Array.from({ length: 8 }, () => node(at, ['seller', '--sample', '--payout', 'this-key', '--folder', folder])));
+    expect(runs.map((r) => r.code), runs.map((r) => r.out).join('\n')).toEqual(Array.from({ length: 8 }, () => 0));
+    expect(new Set(runs.map((r) => jsonLines(r.out)[0].address)).size).toBe(1);
+    expect(JSON.parse(readFileSync(join(folder, 'crow.json'), 'utf8')).steps).toHaveProperty('card');
+    expect(readdirSync(folder).filter((n) => /\.tmp$|^crow\.lock$/.test(n))).toEqual([]);
+    expect(readdirSync(join(folder, 'keys'))).toEqual(['signing.key']);
+  }, 120_000);
+
+  it('gives the key and the state their modes under a permissive umask', async () => {
+    const at = alone();
+    const folder = join(at.dir, 'party');
+    writeFileSync(join(at.dir, 'umask0.mjs'), `process.umask(0);\nawait import(${JSON.stringify(at.file)});\n`);
+    const run = await node({ dir: at.dir, file: join(at.dir, 'umask0.mjs') }, ['seller', '--sample', '--payout', 'this-key', '--folder', folder]);
+    expect(run.code, run.out + run.err).toBe(0);
+    expect([mode(folder), mode(join(folder, 'keys')), mode(join(folder, 'keys', 'signing.key')), mode(join(folder, 'crow.json')), mode(join(folder, 'adapter.json'))]).toEqual([0o700, 0o700, 0o600, 0o600, 0o600]);
+  }, 30_000);
+
+  it("refuses to run with Node's own ambient settings, naming the variable, and removes the one that switches certificate checks off", async () => {
+    const at = alone();
+    const folder = join(at.dir, 'party');
+    for (const [name, value] of [['NODE_USE_ENV_PROXY', '1'], ['NODE_EXTRA_CA_CERTS', join(at.dir, 'ca.pem')], ['NODE_OPTIONS', '--no-warnings']] as const) {
+      const run = await node(at, ['seller', '--sample', '--payout', 'this-key', '--folder', folder], { [name]: value, HTTP_PROXY: 'http://127.0.0.1:9', HTTPS_PROXY: 'http://127.0.0.1:9' });
+      expect(run.code, run.out + run.err).toBe(2);
+      expect(run.err).toMatch(new RegExp(`^setup\\.mjs: ${name} is set in the environment\\. .* Nothing was made or sent\\.$`, 'm'));
+      expect(existsSync(folder)).toBe(false);
+      expect(run.connections).toEqual([]);
+    }
+    // NODE_TLS_REJECT_UNAUTHORIZED is deleted before any module runs: a probe loaded after the bundle sees none.
+    writeFileSync(join(at.dir, 'probe.mjs'), `await import(${JSON.stringify(at.file)});\nconsole.error('TLS=' + String(process.env.NODE_TLS_REJECT_UNAUTHORIZED));\n`);
+    const probe = await node({ dir: at.dir, file: join(at.dir, 'probe.mjs') }, ['status', '--folder', folder], { NODE_TLS_REJECT_UNAUTHORIZED: '0' });
+    expect(probe.err).toMatch(/TLS=undefined/);
+  }, 60_000);
+
+  it('the secrets check follows no link and says so, and reads no file over its limit and says so', async () => {
+    const { at, folder } = await made();
+    writeFileSync(join(at.dir, 'outside.txt'), keyOf(folder)); // the key's value, outside the folder
+    symlinkSync(join(at.dir, 'outside.txt'), join(folder, 'link.txt'));
+    writeFileSync(join(folder, 'large.bin'), Buffer.alloc(16 * 1024 * 1024 + 1));
+    const checked = await node(at, ['check', '--folder', folder]);
+    expect(checked.code, checked.out).toBe(0);
+    const secrets = jsonLines(checked.out).find((l) => l.check === 'secrets');
+    expect(secrets.detail).toMatch(/not read, as each is over 16777216 bytes: .*large\.bin; not followed, as each is a symbolic link: .*link\.txt$/);
   }, 60_000);
 
   it('the check holds a bad setup back: each cause fails it by name, and first-deal then refuses and sends nothing', async () => {
