@@ -43,7 +43,7 @@ The runbook has the steps in order, with the commands. In short:
 
 ## The check
 
-The record's check (section 6, "The check") lists what must fail, what must be absent and what must pass on the host. Each line runs as the session user and prints its name only. **It is not in this folder yet.** T-485 built the setup and the party machine; the host check is the next piece of work, and the move stops at step 6 until it exists. The party's own check is in `infra/party/check.mjs`.
+The record's check (section 6, "The check") lists what must fail, what must be absent and what must pass on the host. Each line runs as the session user and prints its name only. **It is not built.** A safety classifier stopped its writing in T-485, and how it is done is Rafa's decision. The move stops at step 6 until he decides. The party's own check is in `infra/party/check.mjs`.
 
 ## Ubuntu instead
 

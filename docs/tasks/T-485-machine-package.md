@@ -33,7 +33,7 @@ Today every agent session runs as Rafa's own macOS user, so each separation betw
 - [x] `config/secrets/dev-host.refs` passes T-480's references test, and names only the development host's vault.
 - [x] `docs/operations.md` has a "Machines" section with no counts, addresses or hashes.
 - [x] The crow-private runbook and key list exist, names only.
-- [ ] Review findings fixed (done); the red-team pass is open until the host check exists (Handoff).
+- [ ] Review findings fixed (done); the red-team pass did not complete (Handoff).
 
 ## Out of scope
 
@@ -68,14 +68,12 @@ Today every agent session runs as Rafa's own macOS user, so each separation betw
 
 **Done:** the party machine (`infra/party/`), the development host's setup (`infra/dev-host/` without the check), `config/secrets/dev-host.refs`, the "Machines" section, and the crow-private runbook and key list (its own pull request).
 
-**Not done: the development host's check, `infra/dev-host/check.mjs`.** The record's check is the gate of move step 6, so the move stops there until it exists. The session that wrote this task could not finish it. The next task builds it, with these lines added at the coordinator's request:
-- a control that reports free disk space and fails below a floor (the runbook guesses 40 GB on the 256 GB disk);
-- the record's "must fail", "must be absent" and "must pass" lines, each printed by name, with a red result when any line could not run.
+**Not built: the development host's check, `infra/dev-host/check.mjs`.** A safety classifier stopped this session's writing of the file partway, and this session will not write it in any form. The coordinator will not write it either, and starts no other session to write it. How the check is done is Rafa's decision; the coordinator put it to him on 2026-11-15. The record's section 6 ("The check") lists its lines in words. The coordinator also asked for a free-disk-space control in it; the runbook names a guessed floor. **The move stops at step 6 until Rafa decides.**
 
-That task also runs the red-team pass. Its question needs the check: which check line would pass while the attack still works. T-485's red-team pass is therefore open.
+**Not done: the red-team pass.** On 2026-11-15 it ran on what exists, with the first half of its question only: what a session running as the session user can still reach that the record says it cannot. A safety classifier stopped the `red-teamer` agent's answer too, and it returned no findings. Following the coordinator, the pass stopped there and was not narrowed or reworded to get past the stop. So the administrator files carry one `reviewer` pass and its fixes only, and no red-team pass. Rafa decides how that review is done, together with the check.
 
 **Next tasks:**
-- The host check (above).
+- The host check (above): Rafa decides how it is done.
 - Crow's own two machines: `infra/own-agents/` and `examples/own-agents-service.md`, after the pilot and after the deploy workflow (record, move step 11).
 - T-482, the benchmark's remote mode, builds on `infra/party/` in place of its own create and destroy scripts.
 
