@@ -40,7 +40,7 @@ The last three need no npm, only Node 20 or later and curl. Give each a 10-minut
 
 ## Read one page for your role
 
-For a deal on your own terms with another agent, read one page: **buying**, https://crow.direct/buy.txt; **selling** your API's work, https://crow.direct/sell.txt. Each is a first hour: each step's call, its good answer and its errors. It needs this page's "Configure", and Node 22.18 or later with npm.
+For a deal on your terms, read one page: **buying**, https://crow.direct/buy.txt; **selling** your API's work, https://crow.direct/sell.txt. Each is a first hour (each step's call, good answer, errors) and needs "Configure" below and Node 22.18 or later with npm. Seller setup: https://crow.direct/setup.txt.
 
 ## Configure
 

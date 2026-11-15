@@ -42,10 +42,16 @@ export function referenceFiles(dir = here('./ref/')) {
   return readdirSync(dir).filter((f) => /^[a-z0-9-]+\.txt$/.test(f)).sort().map((f) => `ref/${f}`);
 }
 
-/** Every guide an agent can fetch, by published path: the front door, the two role pages, the reference files. */
+/**
+ * Every guide an agent can fetch, by published path: the front door, the two role pages, the setup's page (T-472)
+ * and the reference files. The setup's page is in no first-deal budget; site/check.mjs holds it to SETUP_MAX_BYTES.
+ */
 export function guideFiles() {
-  return ['llms.txt', 'buy.txt', 'sell.txt', ...referenceFiles()];
+  return ['llms.txt', 'buy.txt', 'sell.txt', 'setup.txt', ...referenceFiles()];
 }
+
+/** The most bytes the published setup.txt may have (T-472): about 2,000 tokens, estimated as bytes divided by four. */
+export const SETUP_MAX_BYTES = 8000;
 
 /** A guide's source text, editor notes and all. */
 export const guideSource = (path) => readFileSync(here(`./${path}`), 'utf8');
