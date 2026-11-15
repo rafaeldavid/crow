@@ -16,6 +16,7 @@ import { fileURLToPath } from 'node:url';
 import { privateKeyToAccount } from 'viem/accounts';
 import { afterAll, beforeAll, describe, expect, it } from 'vitest';
 import { holdingKeyOf } from './seller-adapter.ts';
+import { payeeOf } from './setup.ts';
 
 type J = any; // eslint-disable-line @typescript-eslint/no-explicit-any
 const here = (p: string) => fileURLToPath(new URL(p, import.meta.url));
@@ -164,6 +165,24 @@ describe('site/setup.mjs, the bundle (T-472)', () => {
     expect(jsonLines(none.out)).toEqual([{ step: 'first-deal', ok: false, detail: expect.stringMatching(/run the seller command first\. Nothing was sent\./) }]);
     expect(none.connections).toEqual([]);
   }, 30_000);
+});
+
+describe('who a released deal paid, as its record shows it (T-472, found by the live run)', () => {
+  const answer = '0x00000000000000000000000000000000000c0ffe', other = '0x000000000000000000000000000000000000dead';
+  const record = (paidTo: string | null, named: string, postings: boolean | null, outcome = 'Released') => ({ row: { paidTo, sellerPayoutAddress: named, outcome }, checks: [{ check: 'postings follow the outcome', ok: postings }] });
+
+  it('SimChain: the record names the payee, which must be the answer', () => {
+    expect(payeeOf(record(answer, answer, true), answer)).toEqual({ paidTo: answer, asAnswered: true, wait: false });
+    expect(payeeOf(record(other, answer, true), answer)).toMatchObject({ paidTo: other, asAnswered: false, wait: false, note: expect.stringMatching(/The deal paid 0x0+dead, not the payout address 0x0+c0ffe/) });
+    // A payee that is not there yet, where the record should name one: read again.
+    expect(payeeOf(record(null, answer, true), answer)).toMatchObject({ paidTo: null, asAnswered: false, wait: true });
+  });
+
+  it("a chain: the operators' events carry no postings, so the record names no payee and the signed terms' payout address is held to the answer", () => {
+    expect(payeeOf(record(null, answer, null), answer)).toMatchObject({ paidTo: null, asAnswered: true, wait: false, note: expect.stringMatching(/carry no postings on this settlement layer.*pay 0x0+c0ffe, the payout address this folder was given/) });
+    expect(payeeOf(record(null, other, null), answer)).toMatchObject({ paidTo: null, asAnswered: false, wait: false, note: expect.stringMatching(/pay 0x0+dead, not the payout address 0x0+c0ffe/) });
+    expect(payeeOf(record(null, answer, null, 'Refunded'), answer)).toMatchObject({ asAnswered: false });
+  });
 });
 
 describe('site/setup.mjs seller, check and status (T-472)', () => {

@@ -59733,7 +59733,8 @@ async function writeRecord(c, state, id, started) {
 		party: "seller"
 	});
 	const count = (ok) => record.checks.filter((x) => x.ok === ok).length;
-	for (let i = 0; i < 10 && (record.row.paidTo === null || count(false) > 0 || record.disagreements.length > 0); i++) {
+	const unsound = () => count(false) > 0 || record.disagreements.length > 0;
+	for (let i = 0; i < 10 && (unsound() || payeeOf(record, payout.address).wait); i++) {
 		await sleep(c.testWorld ? 300 : 6e3);
 		record = await dealRecord(id, {
 			operators: c.operators,
@@ -59743,12 +59744,11 @@ async function writeRecord(c, state, id, started) {
 	mkdirSync(join(c.folder, FILES.deals), { recursive: true });
 	const file = join(c.folder, FILES.deals, `${id}.json`);
 	writeWhole(file, `${JSON.stringify(record, null, 2)}\n`);
-	const sound = count(false) === 0 && record.disagreements.length === 0;
-	const paidTo = record.row.paidTo;
-	const asAnswered = paidTo === payout.address;
+	const sound = !unsound();
+	const payee = payeeOf(record, payout.address);
 	state.firstDeal = {
 		...state.firstDeal,
-		...sound && asAnswered ? { record: file } : {}
+		...sound && payee.asAnswered ? { record: file } : {}
 	};
 	writeState(c.folder, state);
 	c.say({
@@ -59764,18 +59764,54 @@ async function writeRecord(c, state, id, started) {
 	});
 	c.say({
 		step: "first-deal",
-		ok: sound && asAnswered,
+		ok: sound && payee.asAnswered,
 		state: "Released",
 		commitmentId: id,
 		buyer: plain(record.row.buyer, 42),
-		paidTo: paidTo === null ? null : plain(paidTo, 42),
-		...asAnswered ? {} : { detail: paidTo === null ? "The deal is released, and the operators do not show its payment yet. Run the same command again to read the record anew." : `The deal paid ${plain(paidTo, 42)}, not the payout address ${payout.address} this folder was given.` },
+		paidTo: payee.paidTo === null ? null : plain(payee.paidTo, 42),
+		payoutAddress: record.row.sellerPayoutAddress === null ? null : plain(record.row.sellerPayoutAddress, 42),
+		...payee.note ? { detail: payee.note } : {},
 		price: record.row.price,
 		transactions: (record.row.transactions ?? []).map((t) => plain(t, 200)),
 		record: file,
 		seconds: Math.round((Date.now() - started) / 1e3)
 	});
-	return sound && asAnswered ? 0 : 1;
+	return sound && payee.asAnswered ? 0 : 1;
+}
+/**
+* Who a released deal paid, as its record shows it, against the payout address the folder was given (`answer`).
+* SimChain's events carry postings, so the record names the payee. A chain's events carry none (deal-record.ts): the
+* record then names no payee and its postings checks say so, and what it does show is the payout address in the
+* signed terms, which the contract pays on a release. `wait`: the record should name a payee and does not yet.
+*/
+function payeeOf(record, answer) {
+	const paidTo = record.row.paidTo;
+	if (paidTo !== null) return {
+		paidTo,
+		asAnswered: paidTo === answer,
+		wait: false,
+		...paidTo === answer ? {} : { note: `The deal paid ${plain(paidTo, 42)}, not the payout address ${answer} this folder was given.` }
+	};
+	const noPostings = record.checks.some((x) => x.check === "postings follow the outcome" && x.ok === null);
+	const named = record.row.sellerPayoutAddress;
+	if (!noPostings) return {
+		paidTo: null,
+		asAnswered: false,
+		wait: true,
+		note: "The deal is released, and the operators do not show its payment yet. Run the same command again to read the record anew."
+	};
+	if (record.row.outcome === "Released" && named === answer) return {
+		paidTo: null,
+		asAnswered: true,
+		wait: false,
+		note: `The operators' events carry no postings on this settlement layer, so the record names no payee. The signed terms of this released deal pay ${answer}, the payout address this folder was given; the transactions show the transfer.`
+	};
+	return {
+		paidTo: null,
+		asAnswered: false,
+		wait: false,
+		note: `The signed terms of this deal pay ${plain(named, 42)}, not the payout address ${answer} this folder was given.`
+	};
 }
 async function runFirstDeal(c, state, buyerUrl, again) {
 	const started = Date.now();
