@@ -271,7 +271,7 @@ describe('the first-deal marker', () => {
 
 describe('the two setup scenarios', () => {
   it('adds s7 and s8 as setup scenarios beside the six deal scenarios', () => {
-    expect(DEAL_IDS).toEqual(['s1', 's2', 's3', 's4', 's5', 's6']);
+    expect(DEAL_IDS).toEqual(['s1', 's2', 's3', 's4', 's5', 's6', 's9']);
     expect(SETUP_IDS).toEqual(['s7', 's8']);
     expect(SCENARIOS.s7).toMatchObject({ kind: 'setup', endState: 'Released', party: 'test-buyer', buyerMustBe: 'test-buyer' });
     expect(SCENARIOS.s8).toMatchObject({ kind: 'setup', endState: 'Released', party: 'test-seller' });

@@ -129,3 +129,17 @@ export interface Limits {
   judgedPerDay: number;
 }
 export const LIMITS: Limits = { open: 10, perHour: 20, perDay: 100, perClientPerHour: 3, perClientPerDay: 10, judgedPerDay: 5 };
+
+/**
+ * The quote address's windows (T-489): the setup command's, which Crow's test buyer also takes. 10 minutes to agree,
+ * 15 to fund, the work due within the hour of the offer; the judging windows are the demo club's shortest. An unfunded
+ * quote frees its slot when its funding window closes.
+ */
+export const QUOTE_TIMING = { offerExpiresInSec: 600, fundWithinSec: 900, deliverWithinSec: 3600, judgeWithinSec: 60, fallbackWithinSec: 60, appealWindowSec: 0, appealDecideSec: 60 };
+/**
+ * The quote address's own limits (T-489), on top of LIMITS, which quotes share with the intake:
+ * - waiting: offers by quote not yet funded, at once. An unfunded quote holds one of the `open` slots until its funding
+ *   window closes, so quotes never hold more than half of them and the intake and the front door's "Try it" keep working.
+ * - bodyBytes: the largest quote body read, in bytes. A body from buy.mjs is about 300 bytes.
+ */
+export const QUOTE_LIMITS = { waiting: 5, bodyBytes: 4096 };
