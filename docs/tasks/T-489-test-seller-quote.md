@@ -82,6 +82,8 @@ Labels: **[measured]** run here; **[inferred]** read in the code; **[guessed]**.
 - **The offer equals the published defaults for every scope** [measured by the reviewer]: `quoteTerms({rows})` against the adapter core's `fill` of the defaults for rows 3 to 50: 0 mismatches.
 - **No faucet grant per quote** [measured]: four quotes in a row made at most one faucet call (the standing address's first mandate). The red team counted 1 faucet request across about 55 quotes.
 
+- **`/verify` at `a0071113`** [measured], the kind's local checks: `pnpm exec vitest run apps/test-agents tests/card-schema.test.ts tests/metrics tests/site-guides.test.ts`: 24 files passed, 2 skipped; 424 tests passed, 17 skipped. `node site/build.mjs && node site/check.mjs`: PASS, buyer's path 4,609 of 5,000 tokens, no generated file changed. `pnpm typecheck` and `eslint` on the changed sources: clean. No snapshot step in this kind, so no snapshot diff. The full `pnpm verify` was not run (it is for before a deploy); CI is the gate.
+
 ### Reviews
 
 One `reviewer` pass and one `red-teamer` pass, both on commit `50f20b18`, given CLAUDE.md, this file and the code. Neither found a Critical or High issue. Each fix below has a test in `quote.test.ts`; the fixes were not reviewed again (one round, `docs/team.md`).
