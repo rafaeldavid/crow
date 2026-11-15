@@ -5,8 +5,8 @@
 - **Depends on:** T-471 (the plan and its design, `docs/research/2026-11-15-setup-design.md`); pull request 578 (T-469), which adds self-contained pinned bundles and `examples/goal-kit.ts` and changes `site/build.mjs`, `site/check.mjs` and the top of `site/llms.txt`. Start from `main` after 578 merges.
 - **Paths this task may touch:** new files only, plus the site's build lists: `site/setup.txt`, `site/setup-entry.mjs`, `site/setup.mjs` (generated), `examples/setup.ts`, `examples/setup-seller.ts`, `examples/setup-check.ts`, `examples/setup-sample-api.ts`, `examples/setup*.test.ts`, `site/build.mjs`, `site/check.mjs`, `site/guides.mjs`, one line in `site/llms.txt`, `tests/site-guides.test.ts`, this file. It imports `examples/seller-adapter.ts`, `examples/seller-adapter-core.ts`, `examples/seller-adapter-api.ts`, `examples/check-delivery.ts`, `examples/report-converter.ts`, `examples/deal-record.ts`, `examples/goal-kit.ts` and `packages/` and changes none of them.
 - **Human gate:** yes, for one step only: the site deploy that publishes `setup.txt` and `setup.mjs` is Rafa's. The merge has no gate.
-- **Status:** todo
-- **Agent/session:** not started; the coordinator starts it after it has read the plan
+- **Status:** in progress
+- **Agent/session:** an implementer sub-session started by the coordinator on 2026-11-15, on branch `t-472-setup-first-slice`. It works in two phases: Phase A proves the bundle and stops for the coordinator; Phase B builds the rest.
 - **Roadmap row:** N160
 - **Change kind:** 4 is the nearest recipe (client code in `examples/`), with 1 (an agent guide in `site/`). Local checks: `pnpm exec vitest run examples/setup tests/site-guides.test.ts`, `node site/build.mjs && node site/check.mjs`.
 - **Review:** one `red-teamer` pass (keys, secrets, what leaves the machine) and one `reviewer` pass. Blocking findings only.
@@ -78,10 +78,43 @@ Fill this in before review. Label each item measured, inferred or guessed.
 - The requests each command made, by host:
 - Metrics:
 
+### Phase A, the bundle (2026-11-15)
+
+Each line is measured unless it says otherwise. Paths are relative to the worktree.
+
+- **The bundle builds to one file.** `node site/build.mjs` wrote `site/setup.mjs`: 2,241,580 bytes, SHA-256 `eb314c233501b8266e020fb6322761f90027fa34a74f9a60745d5be8cfa27de1`. Every `import` in it names a Node built-in, and it holds no `import()`. It carries the adapter's Node shell and core, the check library (`packages/judgment`, `packages/core`), `packages/testkit` with `packages/settlement`, and nine packages from npm, which its banner lists with their versions and licences.
+- **It runs with nothing installed.** `pnpm exec vitest run examples/setup-bundle.test.ts` passed 7 of 7 tests in about 2.4 s. Each test copies the committed file alone into a fresh empty folder under the system's temporary folder and runs it there with `node`, with only `PATH` and `HOME` in its environment. By hand, the copy at `reports/scratch/t-472/alone-a1/setup.mjs` in the main checkout answered `status` with one JSON line and exit 0.
+- **No bundled tool's own command line runs.** With six argument shapes the three tools would take, the file prints only its own lines. The control build, without the transform, prints `check-delivery`'s and `report-converter`'s usage on `status` and exits 2 before `status` runs.
+- **The adapter starts from inside the bundle.** Against the demo world served in the test's process, `first-deal --test-world --operators <the two URLs>` started the adapter with the folder's key in the `env` argument, read its own `/defaults` (status 200), and stopped. The run had other operators, another key and a signer URL in `HOLDBACK_OPERATORS`, `HOLDBACK_KEY` and `CROW_SIGNER_URL`; none changed it. No printed line held the key in hex or base64.
+- **The frozen files are unchanged.** `git diff --stat origin/main --` over `apps/hosted-sellers`, `packages`, the nine frozen files in `examples/` and the five generated bundles printed nothing. `site/try.mjs` is `04ef4434fb4b5635bb3c49df69c7547f3200c6c41f903237ee37098be23f75c8` and `site/buy.mjs` is `e74ff2230f0d4fd426525095731e42d50b65b55ab7792a43cab73c302b22eb88`, before and after (`shasum -a 256`).
+- **Other checks.** `pnpm typecheck` passed. `pnpm exec eslint` over the new files and `site/build.mjs` reported 0 errors. `node site/check.mjs` passed, with the buyer's first-deal path at 4,581 of 5,000 tokens. `gitleaks dir site/setup.mjs` (version 8.30.1, default rules) found no leak; CI's own rules are not measured.
+- **Inferred, not measured:** CI builds the same bytes. The bundle now holds `tsc`'s output of `packages/`, so the stale-bundle test compares against CI's own build of those packages.
+
 ## Decisions
 
 Choices made inside this task. Escalate anything that changes architecture, a contract or a defense to an ADR.
 
+**Restated intent.** A person tells their assistant to read one page and set them up as a seller. The assistant reads `setup.txt`, runs one pinned file, and the person's own machine sells Crow's sample product to Crow's test buyer on Sepolia, ending `Released`. The file makes a folder with a key that lasts, the seller adapter's configuration, a sample API on the loopback address and a deal template; it checks them; then it runs the first deal through the adapter in its own process. Before that first deal starts, no Crow-run host learns the party's address, key, domain or terms, and the key never leaves `keys/`. This task builds only the sample path. It leaves out the party's own API, a public quote address, the buyer's setup, leaving, the card's schema and `setup.txt`'s place in the token budget, and it changes nothing in the adapter, the hosted sellers or `packages/`.
+
+**Phase A's choices (2026-11-15).**
+
+- **The three own command lines: a transform that replaces the test with `false`.** `site/build.mjs` replaces the exact line `if (process.argv[1] && import.meta.url === pathToFileURL(process.argv[1]).href) {` in `examples/seller-adapter.ts`, `check-delivery.ts` and `report-converter.ts` with `if (false) {`. The build stops when one of the three no longer holds that line exactly once, and when the finished bundle still holds such a test from any file. The bundler then drops each block and what only it imports, which leaves the file at 2,241,580 bytes against the control build's 3,274,571 bytes (measured).
+- **The entry runs the command with no test of its own.** A test that compares the running file's path with the module's fails silently through a symbolic link: on macOS the temporary folder is one, and there the control build's tools did not run at all (measured). So `site/setup-entry.mjs` always runs `main`, and the bundle exports nothing.
+- **Ambient settings are removed twice.** The bundle's banner deletes every `HOLDBACK_*` and `CROW_*` variable before any module runs, because `examples/goal-kit.ts` reads `HOLDBACK_OPERATORS` when it loads; `main()` deletes them again for a run from source.
+- **A list of allowed npm packages.** `SETUP_PACKAGES` in `site/build.mjs` names each package the bundle may carry with its licence line. A package that is not listed stops the build. The control build pulled in `ox`, and the list stopped it (measured).
+- **`first-deal` and `check` exist in part.** To prove the adapter and the check library inside the real file, `check` runs two of its checks (the adapter's loader, the sample result) and `first-deal` starts the adapter, reads `/defaults` and stops with exit 1. `first-deal` runs only with `--test-world` until its marker is built, so no commit can send anything to a Crow-run host before the marker exists. The folder's file names in `examples/setup.ts` (`FILES`) are a first choice and may change in Phase B.
+- **One path outside the task's list:** `eslint.config.js`, one entry, `site/setup.mjs` added to the ignored generated files, beside the other bundles.
+
 ## Handoff
 
-Not started. Start from the design's sections named under Context. The first thing to prove is the bundle (the first criterion). If it cannot be built, write what stops it here and stop: the fallback, a clone of the repository at a tag, changes the approvals count and is the coordinator's call.
+**In progress: Phase A is done and committed; Phase B has not started.** The coordinator decides whether Phase B starts.
+
+- **To resume:** read Evidence, "Phase A", and Decisions above. Run `pnpm exec vitest run examples/setup-bundle.test.ts` and `node site/build.mjs` first; both must pass before any change.
+- **Phase B builds** every acceptance criterion but the first: `seller --sample`, the full `check`, `first-deal` with its marker and the deal with Crow's test buyer, `status`, the sample API, `site/setup.txt` with its pinned command, the checks in `site/check.mjs`, the line in `site/llms.txt`, and the leak, request-recording, ambient-settings and resume tests.
+- **Known for Phase B:**
+  - `examples/deal-record.ts` and other newer commands test `isMain` in `examples/entry.ts`, which is true inside a bundle unless the banner declares `globalThis.crowEntry`. Declare it in the setup banner when one of them is imported.
+  - `examples/goal-kit.ts` fixes its operators when it loads. `first-deal` must build its own `Agent` from `--operators` and use only the kit's helpers that take no operator.
+  - The adapter's shipped template path points beside the bundle, where no such file is. The folder's configuration must always name its own `template`.
+  - `site/setup.mjs` is written by `node site/build.mjs` and a publish build refuses a stale one, but no publish build copies it out yet: that lands with `setup.txt`.
+  - `packages/testkit`'s index brings `yaml` and parts of `packages/settlement` into the bundle, about 7,000 lines the setup never calls. A resolve step in `site/build.mjs` that takes only the kit's `untrusted.js` would drop them; it is not done.
+- **If the bundle stops building:** the fallback, a clone of the repository at a tag, changes the approvals count and is the coordinator's call.
