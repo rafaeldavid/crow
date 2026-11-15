@@ -6,9 +6,13 @@
 // `node --experimental-transform-types`.
 import { spawn } from 'node:child_process';
 import { randomBytes } from 'node:crypto';
+import { mkdtempSync, rmSync } from 'node:fs';
 import { createServer } from 'node:http';
+import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { ROOT } from '../../scripts/metrics/lib.mjs';
+import { buyerCheck, firstDealAtOf } from './bench-record.mjs';
+import { readCalls, writeFetchProbe } from './probes.mjs';
 
 const src = (p) => join(ROOT, p);
 
@@ -77,6 +81,9 @@ export async function startLocal(needs) {
   return {
     operators: [...demo.urls],
     party: party.url,
+    // T-473: the origins that stand for Crow-run hosts in this world (the operators and the test agent), for the count of
+    // requests before the first deal; a job API the harness serves for the party is not one of them
+    crowOrigins: [...new Set([...demo.urls, party.url].map((u) => new URL(u).origin))],
     close: async () => {
       for (const c of closers) await c().catch(() => undefined);
     },
@@ -84,24 +91,106 @@ export async function startLocal(needs) {
 }
 
 /**
- * Runs a scripted agent: `node --experimental-transform-types --import=<probe> <script> <args>`, with the operators and
- * the test agent's URL in its environment. Returns its exit code, its output and its wall time.
+ * T-473: a seller's job API of another shape (examples/seller-adapter-job-stub.ts) on 127.0.0.1, for s7: the party's own
+ * API that the setup command maps. A fresh test key per run, held in this process. Returns { url, key, close }.
  */
-export function runScripted({ script, args, operators, party, needs, probe, timeoutMs = 120_000 }) {
+export async function startJobApi() {
+  const { startJobStub } = await import(src('examples/seller-adapter-job-stub.ts'));
+  const key = randomBytes(16).toString('hex');
+  const stub = await startJobStub({ key });
+  return { url: stub.base, key, close: () => stub.close() };
+}
+
+/** A commitment's buyer as the operator serves its signed terms (`GET /v1/commitments/<id>/terms`, the terms object itself), or null. */
+export async function buyerOf(operator, id) {
+  try {
+    const r = await fetch(`${operator}/v1/commitments/${id}/terms`, { signal: AbortSignal.timeout(10_000) });
+    const j = r.ok ? await r.json() : null;
+    return typeof j?.buyer === 'string' ? j.buyer : null;
+  } catch {
+    return null;
+  }
+}
+
+/** The test buyer's address from its card (`<base>/agent.json`, field `buyer`), or null. */
+export async function testBuyerAddress(base) {
+  try {
+    const r = await fetch(`${base}/agent.json`, { signal: AbortSignal.timeout(10_000) });
+    const j = r.ok ? await r.json() : null;
+    return typeof j?.buyer === 'string' ? j.buyer : null;
+  } catch {
+    return null;
+  }
+}
+
+/**
+ * Runs a scripted agent: `node --experimental-transform-types --import=<probe> <script> <args>`, with the operators and
+ * the test agent's URL in its environment. `values` fills an argument's {placeholders} ({seller} is the test agent),
+ * and `extraEnv` adds to its environment (a setup scenario's job API). Returns its exit code, its output and its wall time.
+ */
+export function runScripted({ script, args, operators, party, needs, probe, values = {}, extraEnv = {}, timeoutMs = 120_000 }) {
   return new Promise((resolve) => {
     const started = Date.now();
-    const argv = args.map((a) => a.replace('{seller}', party));
-    const env = { PATH: process.env.PATH ?? '', HOME: process.env.HOME ?? '', HOLDBACK_OPERATORS: operators.join(','), ...(needs === 'buyer' ? { CROW_TEST_BUYER: party } : {}) };
+    const fill = { seller: party, ...values };
+    const argv = args.map((a) => a.replace(/\{(\w+)\}/g, (m, k) => fill[k] ?? m));
+    const env = { PATH: process.env.PATH ?? '', HOME: process.env.HOME ?? '', HOLDBACK_OPERATORS: operators.join(','), ...(needs === 'buyer' ? { CROW_TEST_BUYER: party } : {}), ...extraEnv };
     const child = spawn(process.execPath, ['--experimental-transform-types', '--no-warnings', `--import=${probe}`, src(script), ...argv], { env, cwd: ROOT, stdio: ['ignore', 'pipe', 'pipe'] });
     let out = '';
+    let err = ''; // standard error alone, for the first-deal marker (T-473), which the setup command prints there
     child.stdout.on('data', (d) => (out += d.toString()));
-    child.stderr.on('data', (d) => (out += d.toString()));
+    child.stderr.on('data', (d) => {
+      out += d.toString();
+      if (err.length < 2_000_000) err += d.toString();
+    });
     const timer = setTimeout(() => child.kill('SIGKILL'), timeoutMs);
     child.on('exit', (code, signal) => {
       clearTimeout(timer);
-      resolve({ code, timedOut: signal === 'SIGKILL', out: out.slice(-20_000), wallMs: Date.now() - started });
+      const ended = Date.now();
+      // a marker time outside the run is not this run's
+      const mark = firstDealAtOf([err]);
+      resolve({ code, timedOut: signal === 'SIGKILL', out: out.slice(-20_000), firstDealAtMs: mark !== null && mark >= started && mark <= ended ? mark : null, wallMs: ended - started });
     });
   });
+}
+
+/**
+ * Plays one scripted scenario in the in-process world (bench.mjs; T-473 moved it here so a test drives the same path):
+ * the world and its test agent, s7's job API when the scenario asks for one, the script with the fetch probe, then the
+ * checks of its outcome. The script's own "done" line is not enough: the operator must report the same end state for
+ * the same commitment, and for s7 the commitment's buyer must be the test buyer. Returns { run, outcome, calls, crowOrigins }.
+ */
+export async function playScripted(scenario, { payout }) {
+  const { script, args, needs, jobApi: wantsJobApi } = scenario.scripted;
+  const probeDir = mkdtempSync(join(tmpdir(), 'crow-bench-scripted-'));
+  const probe = writeFetchProbe(probeDir);
+  const world = await startLocal(needs);
+  let jobApi = null;
+  let run;
+  let outcome;
+  try {
+    jobApi = wantsJobApi ? await startJobApi() : null;
+    const values = { payout, ...(jobApi ? { jobApi: jobApi.url } : {}) };
+    const extraEnv = jobApi ? { CROW_BENCH_JOB_API: jobApi.url, CROW_BENCH_JOB_API_KEY: jobApi.key, CROW_BENCH_PAYOUT: payout } : {};
+    run = await runScripted({ script, args, operators: world.operators, party: world.party, needs, probe: probe.path, values, extraEnv });
+    outcome = scriptedOutcome(run, scenario);
+    if (outcome.commitmentId && ['Released', 'Refunded'].includes(outcome.state)) {
+      const seen = await operatorState(world.operators[0], outcome.commitmentId);
+      if (seen !== outcome.state) {
+        outcome.errors.push(`the script said ${outcome.state}, the operator reports ${seen ?? 'nothing'}`);
+        outcome.stoppedAt = 'the operator does not report the end state the script printed';
+        outcome.state = 'stopped';
+      }
+    }
+    if (scenario.buyerMustBe === 'test-buyer' && outcome.commitmentId) {
+      outcome = buyerCheck(outcome, { buyer: await buyerOf(world.operators[0], outcome.commitmentId), testBuyer: await testBuyerAddress(world.party) });
+    }
+  } finally {
+    await jobApi?.close().catch(() => undefined);
+    await world.close();
+  }
+  const calls = readCalls({ fetchLog: probe.log });
+  rmSync(probeDir, { recursive: true, force: true });
+  return { run, outcome, calls, crowOrigins: world.crowOrigins };
 }
 
 /** What the operator reports for a commitment: its escrowState, or null when it cannot be read. */

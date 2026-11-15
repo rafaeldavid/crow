@@ -9,6 +9,7 @@ import { describe, expect, it } from 'vitest';
 import { check } from '../../scripts/metrics/check.mjs';
 import { buildSummary, readRecords } from '../../scripts/metrics/one-click-summary.mjs';
 import { markerTimesOf } from '../../tools/one-click/bench-live.mjs';
+import { playScripted, startJobApi } from '../../tools/one-click/bench-local.mjs';
 import { buyerCheck, buildBenchRecord, firstDealAtOf, setupOf } from '../../tools/one-click/bench-record.mjs';
 import { markerFilesUnder, readCalls } from '../../tools/one-click/probes.mjs';
 import { DEAL_IDS, SCENARIOS, SETUP_DOCS, SETUP_IDS, goalFor } from '../../tools/one-click/scenarios.mjs';
@@ -163,19 +164,60 @@ describe('s7 succeeds only with an outside buyer', () => {
   });
   it('records a deal the setup command bought itself as not successful', () => {
     const o = buyerCheck(released, { buyer: ADDR, testBuyer });
-    expect(o).toMatchObject({ state: 'stopped', stoppedAt: "the commitment's buyer is not Crow's test buyer" });
+    expect(o).toMatchObject({ state: 'stopped', stoppedAt: "the buyer is not Crow's test buyer" });
     expect(o.errors).toEqual([`the buyer was ${ADDR}, not Crow's test buyer`]);
     expect(released.state).toBe('Released'); // the check returns a new outcome; it changes nothing it was given
     const record = buildBenchRecord({ ...recordInput('s7'), outcome: o });
-    expect(record.outcome).toMatchObject({ success: false, state: 'stopped', stoppedAt: "the commitment's buyer is not Crow's test buyer" });
+    expect(record.outcome).toMatchObject({ success: false, state: 'stopped', stoppedAt: "the buyer is not Crow's test buyer" });
     expect(check('one-click', record)).toEqual({ ok: true, errors: [] });
   });
   it('records a buyer that could not be read as not successful', () => {
-    expect(buyerCheck(released, { buyer: null, testBuyer })).toMatchObject({ state: 'stopped', stoppedAt: "the commitment's buyer could not be read" });
+    expect(buyerCheck(released, { buyer: null, testBuyer })).toMatchObject({ state: 'stopped', stoppedAt: 'the buyer of the commitment could not be read' });
   });
   it('leaves a run that did not reach its end state as it was', () => {
     const stopped = { state: 'stopped', commitmentId: null, stoppedAt: 'no commitment', errors: [] };
     expect(buyerCheck(stopped, { buyer: null, testBuyer })).toEqual(stopped);
+  });
+});
+
+describe("s7's scripted path, rehearsed in the in-process world", () => {
+  // The harness's own scripted path with a stand-in for the setup command (fixtures/setup-rehearsal.ts) until T-483.
+  const rehearse = async (args: string[]) => {
+    const scenario = { id: 's7', ...SCENARIOS.s7, scripted: { script: 'tests/metrics/fixtures/setup-rehearsal.ts', args, needs: 'buyer' as const, jobApi: true } };
+    const { run, outcome, calls, crowOrigins } = await playScripted(scenario, { payout: ADDR });
+    const record = buildBenchRecord({ mode: 'scripted', scenario, world: { engine: 'local', docs: 'in-process' }, agent: { script: scenario.scripted.script }, outcome, book: { wallMs: run.wallMs, errors: outcome.errors, timedOut: run.timedOut }, calls, setup: { firstDealAtMs: run.firstDealAtMs, crowOrigins }, prices, startedAtMs: T, generatedAtMs: T + 1, commit: COMMIT });
+    return { record, run, crowOrigins };
+  };
+
+  it('counts a faucet post before the marker as 1, and ends Released with the test buyer', async () => {
+    const { record, run, crowOrigins } = await rehearse(['--faucet-first']);
+    expect(record.outcome, run.out).toMatchObject({ success: true, state: 'Released' });
+    const operator = crowOrigins[0];
+    expect(record.setup).toEqual({ markerSeen: true, requestsBeforeFirstDeal: { total: 1, byHost: { [operator]: 1 } }, guideFilesFetched: 0 });
+    // the job API was called before the marker and is the party's own, so it is not counted
+    expect(Object.keys(record.apiCalls.byHost).filter((h) => !crowOrigins.includes(h))).toHaveLength(1);
+    expect(check('one-click', record)).toEqual({ ok: true, errors: [] });
+  }, 60_000);
+
+  it('counts 0 for a setup that sends nothing naming the party before the first deal', async () => {
+    const { record, run } = await rehearse([]);
+    expect(record.outcome, run.out).toMatchObject({ success: true, state: 'Released' });
+    expect(record.setup).toEqual({ markerSeen: true, requestsBeforeFirstDeal: { total: 0, byHost: {} }, guideFilesFetched: 0 });
+  }, 60_000);
+});
+
+describe("s7's job API in the scripted world", () => {
+  it('serves a job API of another shape on 127.0.0.1, which takes its own fresh key only', async () => {
+    const api = await startJobApi();
+    try {
+      expect(api.url).toMatch(/^http:\/\/127\.0\.0\.1:\d+\/api\/v2\/$/);
+      expect(api.key).toMatch(/^[0-9a-f]{32}$/);
+      const ask = (key: string) => fetch(`${api.url}estimates`, { method: 'POST', headers: { 'content-type': 'application/json', 'x-api-key': key }, body: JSON.stringify({ target: 'example.org', depth: 1, client: 'bench' }) });
+      expect((await ask(api.key)).status).toBe(200);
+      expect((await ask('wrong')).status).toBe(401);
+    } finally {
+      await api.close();
+    }
   });
 });
 
@@ -216,7 +258,8 @@ describe('the record, version 3', () => {
 
   it('refuses a version 3 record without its setup block, with a 0 written as a string, or with an unknown scenario', () => {
     const r = buildBenchRecord(recordInput('s7'));
-    const { setup: _drop, ...noSetup } = r;
+    const noSetup: Record<string, unknown> = { ...r };
+    delete noSetup.setup;
     expect(check('one-click', noSetup).ok).toBe(false);
     expect(check('one-click', { ...r, setup: { ...r.setup, guideFilesFetched: '0' } }).ok).toBe(false);
     expect(check('one-click', { ...r, runId: '2026-11-14T10-00-00Z-s9', scenario: { ...r.scenario, id: 's9' } }).ok).toBe(false);
@@ -268,7 +311,8 @@ describe('the summary keeps the setup scenarios apart', () => {
   it('reads version 2 and version 3 records from one folder', () => {
     const dir = mkdtempSync(join(tmpdir(), 'crow-summary-v3-'));
     try {
-      const { setup: _drop, ...v2 } = liveRecord({ id: 's1', startedAtMs: at(1) });
+      const v2: Record<string, unknown> = { ...liveRecord({ id: 's1', startedAtMs: at(1) }) };
+      delete v2.setup;
       writeFileSync(join(dir, 'a.json'), JSON.stringify({ ...v2, schema: 'crow.metrics.one-click/2' }));
       writeFileSync(join(dir, 'b.json'), JSON.stringify(liveRecord({ id: 's3', startedAtMs: at(2) })));
       writeFileSync(join(dir, 'c.json'), JSON.stringify(setups()[0]));
