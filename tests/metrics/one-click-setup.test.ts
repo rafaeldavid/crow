@@ -10,7 +10,7 @@ import { check } from '../../scripts/metrics/check.mjs';
 import { buildSummary, readRecords } from '../../scripts/metrics/one-click-summary.mjs';
 import { markerTimesOf, webFetchCallsOf } from '../../tools/one-click/bench-live.mjs';
 import { playScripted, startJobApi } from '../../tools/one-click/bench-local.mjs';
-import { buyerCheck, buildBenchRecord, firstDealAtOf, setupOf } from '../../tools/one-click/bench-record.mjs';
+import { buyerCheck, buildBenchRecord, firstDealAtOf, LISTING_ORIGIN, setupOf } from '../../tools/one-click/bench-record.mjs';
 import { curlMethodOf, markerFilesUnder, readCalls, writeFetchProbe } from '../../tools/one-click/probes.mjs';
 import { DEAL_IDS, SCENARIOS, SETUP_DOCS, SETUP_IDS, goalFor } from '../../tools/one-click/scenarios.mjs';
 import { COMMIT, NOW, ROOT, config } from './helpers';
@@ -49,8 +49,38 @@ describe('the request rule, before the first deal', () => {
     expect(setupOf({ calls: SETUP_CALLS, firstDealAtMs: MARK })).toEqual({ markerSeen: true, requestsBeforeFirstDeal: { total: 0, byHost: {} }, listingRequestsBeforeFirstDeal: NO_LISTING, guideFilesFetched: 3, unknownBecause: null });
   });
 
-  // T-486 (D75): the setup's listing step is counted apart, by method and path alone: a POST whose path is /listing.
+  // T-486 (D76): the setup's listing step is counted apart. A listing is one request and no more: the first POST of
+  // the run to the listing's own origin, at the path /listing, with no address in its query. Every other request is
+  // held to the rule above, so nothing hides behind the path (the red team's pass, 2026-11-15, hid seven that way).
   const LIST = call(20, 'POST', 'https://join.crow.direct', '/listing');
+  const NAMED = (n: number, hosts: Record<string, number>) => ({ total: n, byHost: hosts });
+  const counts = (calls: object[], extra: object = {}) => {
+    const s = setupOf({ calls: [...calls, DEAL], firstDealAtMs: MARK, ...extra });
+    return [s.requestsBeforeFirstDeal, s.listingRequestsBeforeFirstDeal];
+  };
+  it("is the listing's own origin: a POST to /listing on an operator's host names the party", () => {
+    expect(LISTING_ORIGIN).toBe('https://join.crow.direct');
+    expect(counts([call(20, 'POST', 'https://api.crow.direct', '/listing')])).toEqual([NAMED(1, { 'https://api.crow.direct': 1 }), NO_LISTING]);
+    expect(counts([call(20, 'POST', 'https://api2.crow.direct', '/listing'), call(21, 'POST', 'https://crow.direct', '/listing')])).toEqual([NAMED(2, { 'https://api2.crow.direct': 1, 'https://crow.direct': 1 }), NO_LISTING]);
+    // A stranger's host is neither Crow-run nor the listing's: such a POST is counted nowhere, as before T-486.
+    expect(counts([call(20, 'POST', 'https://lists.example', '/listing')])).toEqual([NAMED(0, {}), NO_LISTING]);
+    // The scripted world names its own receiver; join.crow.direct is then a Crow-run host like any other.
+    expect(counts([call(20, 'POST', 'http://127.0.0.1:40009', '/listing')], { listingOrigins: ['http://127.0.0.1:40009'] })).toEqual([NAMED(0, {}), NAMED(1, { 'http://127.0.0.1:40009': 1 })]);
+    expect(counts([LIST], { listingOrigins: ['http://127.0.0.1:40009'] })).toEqual([NAMED(1, { 'https://join.crow.direct': 1 }), NO_LISTING]);
+  });
+
+  it('has no address in its query: a POST to /listing?address=0x... names the party', () => {
+    expect(counts([{ ...LIST, queryHasAddress: true }])).toEqual([NAMED(1, { 'https://join.crow.direct': 1 }), NO_LISTING]);
+    // And it does not use up the run's one listing: the plain one after it is still the listing.
+    expect(counts([{ ...LIST, queryHasAddress: true }, call(21, 'POST', 'https://join.crow.direct', '/listing')])).toEqual([NAMED(1, { 'https://join.crow.direct': 1 }), NAMED(1, { 'https://join.crow.direct': 1 })]);
+  });
+
+  it('is the first such request of the run: a second one names the party', () => {
+    expect(counts([LIST, call(21, 'POST', 'https://join.crow.direct', '/listing'), call(22, 'POST', 'https://join.crow.direct', '/listing')])).toEqual([NAMED(2, { 'https://join.crow.direct': 2 }), NAMED(1, { 'https://join.crow.direct': 1 })]);
+    // The red team's seven: four with an address in the query, two to operators, one to a stranger with an address.
+    const seven = [...Array(4).fill({ ...LIST, queryHasAddress: true }), call(20, 'POST', 'https://api.crow.direct', '/listing'), call(20, 'POST', 'https://api2.crow.direct', '/listing'), { ...call(20, 'POST', 'https://collector.example', '/listing'), queryHasAddress: true }];
+    expect(counts(seven)).toEqual([NAMED(7, { 'https://join.crow.direct': 4, 'https://api.crow.direct': 1, 'https://api2.crow.direct': 1, 'https://collector.example': 1 }), NO_LISTING]);
+  });
   it('counts a listing before the marker in its own field, and leaves it out of the requests that name the party', () => {
     const listed = setupOf({ calls: [...SETUP_CALLS, LIST], firstDealAtMs: MARK });
     expect(listed.requestsBeforeFirstDeal).toEqual({ total: 0, byHost: {} });
@@ -63,22 +93,16 @@ describe('the request rule, before the first deal', () => {
     expect([both.requestsBeforeFirstDeal?.total, both.listingRequestsBeforeFirstDeal?.total]).toEqual([1, 1]);
   });
 
-  it('knows a listing by its method and path on any host, and nothing else as one', () => {
-    const calls = [
-      LIST,
-      call(21, 'POST', 'https://lists.example', '/listing'), // another keeper of a list
-      call(22, 'POST', 'http://127.0.0.1:40009', '/listing'), // the in-process world's receiver
-      call(23, 'GET', 'https://join.crow.direct', '/listing'), // a read is no listing, and names no one
-      call(24, 'POST', 'https://join.crow.direct', '/listing/x'), // another path on a Crow-run host: a request that names the party
-      call(25, 'POST', 'https://join.crow.direct', '/early-access'),
-      call(95, 'POST', 'https://join.crow.direct', '/listing'), // after the marker: not before the first deal
-      DEAL,
-    ];
-    const s = setupOf({ calls, firstDealAtMs: MARK });
-    expect(s.listingRequestsBeforeFirstDeal).toEqual({ total: 3, byHost: { 'https://join.crow.direct': 1, 'https://lists.example': 1, 'http://127.0.0.1:40009': 1 } });
-    expect(s.requestsBeforeFirstDeal).toEqual({ total: 2, byHost: { 'https://join.crow.direct': 2 } });
-    // A listing with no time counts as before the marker, as any call does.
-    expect(setupOf({ calls: [{ via: 'curl', at: null, method: 'POST', origin: 'https://join.crow.direct', path: '/listing', status: 200 }, DEAL], firstDealAtMs: MARK }).listingRequestsBeforeFirstDeal?.total).toBe(1);
+  it('knows a listing by its method and its exact path, and nothing near it as one', () => {
+    // A read is no listing, and names no one. A method in lower case, as a probe might log it, is still the listing.
+    expect(counts([call(23, 'GET', 'https://join.crow.direct', '/listing')])).toEqual([NAMED(0, {}), NO_LISTING]);
+    expect(counts([call(20, 'post', 'https://join.crow.direct', '/listing')])).toEqual([NAMED(0, {}), NAMED(1, { 'https://join.crow.direct': 1 })]);
+    // Near misses on the listing's own host are requests that name the party.
+    const near = [call(24, 'POST', 'https://join.crow.direct', '/listing/'), call(24, 'POST', 'https://join.crow.direct', '/listing/x'), call(24, 'PUT', 'https://join.crow.direct', '/listing'), call(24, 'POST', 'https://join.crow.direct', '/Listing'), call(25, 'POST', 'https://join.crow.direct', '/early-access')];
+    expect(counts(near)).toEqual([NAMED(5, { 'https://join.crow.direct': 5 }), NO_LISTING]);
+    // After the marker it is not before the first deal. With no time it counts as before, as any call does.
+    expect(counts([call(95, 'POST', 'https://join.crow.direct', '/listing')])).toEqual([NAMED(0, {}), NO_LISTING]);
+    expect(counts([{ via: 'curl', at: null, method: 'POST', origin: 'https://join.crow.direct', path: '/listing', status: 200 }])[1]).toEqual(NAMED(1, { 'https://join.crow.direct': 1 }));
   });
 
   it('records the listing count as unknown with the other counts, never as 0', () => {
