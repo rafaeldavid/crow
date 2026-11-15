@@ -46,7 +46,8 @@ beforeAll(async () => {
     const name = String(req.headers.host).split(':')[0]!;
     asked.push(`${req.method} ${name} ${req.url}`);
     const site = SITES.get(name);
-    if (!site || req.url !== '/agent.json') return void res.writeHead(404).end();
+    // Called only when it is one of this table's functions: the name comes from the request's Host header.
+    if (typeof site !== 'function' || req.url !== '/agent.json') return void res.writeHead(404).end();
     site(res);
   });
   await new Promise<void>((resolve) => standIn.listen(0, '127.0.0.1', resolve));
