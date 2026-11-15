@@ -279,6 +279,12 @@ The maintainers keep the notes on agent sessions and permission prompts privatel
 
 Each entry records one deploy as it ran: the date and time in UTC, the commit, each Worker's new version and its rollback target, and what was measured after it. The deploy scripts print the entry's first line (`pnpm demo-cloud:deploy`, `pnpm site:deploy`, `node apps/test-agents/scripts/deploy.mjs`). The values are true for their date: for what runs now, read "What is live" above and each node's discovery.
 
+### The setup page and its command, the card's schema and the goal bundles (site deployed 2026-11-15, 11:24 UTC)
+
+**Site deploy 2026-11-15 11:24 UTC, commit `d72490b` on a detached HEAD: pass.** crow-site `e80d56bd-8954-4d20-9d74-177a3ca8d114` (rollback target `60513ef3-a367-474a-a0a7-b9d440ccf810`).
+
+Rafa ran it, and it published `setup.txt`, `setup.mjs`, `card.schema.json`, the three goal bundles and the new top of `llms.txt`.
+
 ### Deploys owed on 2026-11-14: the faucet allowance, the test seller and the site (operators 14:54 UTC, test seller and site 16:06 UTC)
 
 **Site deploy 2026-11-14 16:06 UTC, commit `8c465bb` on a detached HEAD: pass.** crow-site `a8ca3320-b0a9-42ce-a6a1-a2ce2fdfd1ee` (rollback target `2282f633-7bc9-4794-9a67-c61406685562`).
