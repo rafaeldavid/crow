@@ -141,5 +141,11 @@ export const QUOTE_TIMING = { offerExpiresInSec: 600, fundWithinSec: 900, delive
  * - waiting: offers by quote not yet funded, at once. An unfunded quote holds one of the `open` slots until its funding
  *   window closes, so quotes never hold more than half of them and the intake and the front door's "Try it" keep working.
  * - bodyBytes: the largest quote body read, in bytes. A body from buy.mjs is about 300 bytes.
+ * - inLine: quotes in line at once, the one being answered included, and at most one per client. Quotes are answered
+ *   one at a time; an offer on Sepolia takes a few seconds, so 4 in line stay well inside buy.mjs's 120 s wait.
+ * - perHour, perDay: offers by quote per rolling hour and per UTC day, a share of LIMITS.perHour and perDay (which
+ *   quotes count in too), so quotes alone can never use up the intake's and "Try it"'s offers (red team, T-489).
+ * - offerWithinSec: how long one quote's reads of the operators may take before it is refused with 503, so one hung
+ *   call cannot hold the line.
  */
-export const QUOTE_LIMITS = { waiting: 5, bodyBytes: 4096 };
+export const QUOTE_LIMITS = { waiting: 5, bodyBytes: 4096, inLine: 4, perHour: 10, perDay: 50, offerWithinSec: 30 };

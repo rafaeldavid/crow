@@ -227,9 +227,9 @@ describe('the quote address', () => {
     expect(full.status).toBe(429);
     const j = await full.json();
     expect(j.detail).toMatch(/2 offers by quote are waiting to be funded/);
-    // The next slot frees when the first funding window closes: about QUOTE_TIMING.fundWithinSec from now.
-    expect(j.retryAfterSec).toBeGreaterThan(QUOTE_TIMING.fundWithinSec - 60);
-    expect(j.retryAfterSec).toBeLessThanOrEqual(QUOTE_TIMING.fundWithinSec + 5);
+    // The next slot frees about 90 s after the first unfunded offer expires.
+    expect(j.retryAfterSec).toBeGreaterThan(QUOTE_TIMING.offerExpiresInSec + 60);
+    expect(j.retryAfterSec).toBeLessThanOrEqual(QUOTE_TIMING.offerExpiresInSec + 95);
   }, 60_000);
 
   it('shares the seller-wide hour cap with the intake', async () => {
@@ -262,9 +262,108 @@ describe('the quote address', () => {
     const r = await post(seller, quoteBody());
     expect(r.status).toBe(503);
     expect(r.headers.get('retry-after')).toBe('60');
-    expect((await r.json()).detail).toMatch(/run buy\.mjs again with a new key store directory/);
+    expect((await r.json()).detail).toMatch(/Wait 60 s, then run buy\.mjs again\./);
     expect((await storage.list({ prefix: 'o:' })).size).toBe(0);
   });
+});
+
+describe('the quote address after the review (T-489)', () => {
+  it('names the seconds to wait in a degraded 503, not only in Retry-After', async () => {
+    const storage = new MemoryStorage();
+    await storage.put({ degraded: { reason: 'its mandate has expired and the faucet did not renew it', since: Date.now() } });
+    const r = await post(quiet(demo.urls, { storage }), quoteBody());
+    expect(r.status).toBe(503);
+    const sec = Number(r.headers.get('retry-after'));
+    expect(sec).toBeGreaterThan(3500);
+    expect((await r.json()).detail).toMatch(new RegExp(`Wait ${sec} s, then run buy\\.mjs again`));
+  });
+
+  it('keeps a bounded line: past QUOTE_LIMITS.inLine a quote is refused with 429 at once', async () => {
+    const seller = quiet(demo.urls, { quoteLimits: { inLine: 1 }, limits: { perClientPerHour: 100, perClientPerDay: 100 } });
+    const answers = await Promise.all([1, 2, 3].map((i) => post(seller, quoteBody(), { client: `198.51.100.${10 + i}` })));
+    const statuses = answers.map((a) => a.status).sort();
+    expect(statuses[0]).toBe(200);
+    expect(statuses).toContain(429);
+    const refused = answers.find((a) => a.status === 429)!;
+    expect(refused.headers.get('retry-after')).toBe('15');
+    expect((await refused.json()).detail).toMatch(/answering 1 other quotes\. Wait 15 s/);
+  }, 30_000);
+
+  it('gives quotes their own share of the offers, so quotes alone never use up the hour (red team M1)', async () => {
+    const seller = quiet(demo.urls, { quoteLimits: { perHour: 1 }, limits: { perClientPerHour: 100, perClientPerDay: 100 } });
+    expect((await post(seller, quoteBody())).status).toBe(200);
+    const r = await post(seller, quoteBody(), { client: '192.0.2.70' });
+    expect(r.status).toBe(429);
+    expect((await r.json()).detail).toMatch(/1 offers by quote in the last hour\. Wait \d+ s/);
+    expect(QUOTE_LIMITS.perHour).toBeLessThan(20); // LIMITS.perHour: the intake keeps the rest
+    expect(QUOTE_LIMITS.perDay).toBeLessThan(100); // LIMITS.perDay
+  }, 30_000);
+
+  it('refuses a client at its cap before the line, so it cannot fill the line for others (red team M2)', async () => {
+    const seller = quiet(demo.urls, { quoteLimits: { inLine: 2 }, limits: { perClientPerHour: 1 } });
+    expect((await post(seller, quoteBody(), { client: '203.0.113.50' })).status).toBe(200);
+    const flood = [0, 1, 2, 3, 4].map(() => post(seller, quoteBody(), { client: '203.0.113.50' }));
+    const honest = post(seller, quoteBody(), { client: '203.0.113.51' });
+    const answers = await Promise.all(flood);
+    expect(answers.map((a) => a.status)).toEqual([429, 429, 429, 429, 429]);
+    expect((await answers[0]!.json()).detail).toMatch(/1 requests from your IP address in the last hour/);
+    expect((await honest).status).toBe(200);
+  }, 30_000);
+
+  it('allows one quote in line per client', async () => {
+    const seller = quiet(demo.urls, { limits: { perClientPerHour: 100, perClientPerDay: 100 } });
+    const [a, b] = await Promise.all([post(seller, quoteBody(), { client: '203.0.113.60' }), post(seller, quoteBody(), { client: '203.0.113.60' })]);
+    expect([a.status, b.status].sort()).toEqual([200, 429]);
+    expect((await (a.status === 429 ? a : b).json()).detail).toMatch(/your previous quote is still being answered/);
+  }, 30_000);
+
+  it('refuses an offer nobody could fund: to the seller itself or the zero address (red team L5)', async () => {
+    const seller = quiet(demo.urls, { limits: { perClientPerHour: 100, perClientPerDay: 100 } });
+    const zero = `0x${'0'.repeat(40)}`;
+    for (const o of [{ buyer: seller.agent.address }, { buyer: zero }, { buyerPaymentAddress: zero }, { buyerPaymentAddress: seller.agent.address }]) {
+      const r = await post(seller, quoteBody(o));
+      expect(r.status).toBe(400);
+      expect((await r.json()).detail).toMatch(/must be your own addresses/);
+    }
+  });
+
+  it('answers 503 when the operators do not answer within QUOTE_LIMITS.offerWithinSec, and sends nothing (red team L3)', async () => {
+    const storage = new MemoryStorage();
+    const seller = quiet(demo.urls, { storage, quoteLimits: { offerWithinSec: 0.001 } });
+    const r = await post(seller, quoteBody());
+    expect(r.status).toBe(503);
+    expect((await r.json()).detail).toMatch(/Wait 60 s, then run buy\.mjs again/);
+    expect((await storage.list({ prefix: 'd:' })).size).toBe(0);
+  });
+
+  it('records an offer whose answer was lost: the retry with the same key replays, and the deal is followed', async () => {
+    const storage = new MemoryStorage();
+    const seller = quiet(demo.urls, { storage });
+    const real = globalThis.fetch;
+    let dropped = 0;
+    const spy = vi.spyOn(globalThis, 'fetch').mockImplementation(async (input: RequestInfo | URL, init?: RequestInit) => {
+      const url = String(input instanceof Request ? input.url : input);
+      const res = await real(input, init);
+      // The first submitted offer reaches the operator, and its answer is lost on the way back.
+      if (dropped === 0 && init?.method === 'POST' && /\/v1\/commitments$/.test(new URL(url).pathname)) {
+        dropped++;
+        throw new TypeError('fetch failed');
+      }
+      return res;
+    });
+    let r: Response;
+    try {
+      r = await post(seller, quoteBody());
+    } finally {
+      spy.mockRestore();
+    }
+    expect(dropped).toBe(1);
+    expect(r.status).toBe(200);
+    const { commitmentId } = await r.json();
+    const deals = [...(await storage.list<J>({ prefix: 'd:' })).values()];
+    expect(deals).toMatchObject([{ status: 'offered', source: 'quote', commitmentId }]);
+    expect((await storage.list({ prefix: 'o:' })).size).toBe(1);
+  }, 30_000);
 });
 
 describe('readQuote', () => {

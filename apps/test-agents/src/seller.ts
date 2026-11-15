@@ -173,6 +173,9 @@ export class TestSeller {
   private prunedAt = 0;
   /** Quotes run one at a time, so the caps they check and count cannot be raced while an offer is out. */
   private quoting: Promise<unknown> = Promise.resolve();
+  /** The clients with a quote in line or being answered, and the open slots quotes hold while their offers are made (in memory only). */
+  private readonly inLine = new Set<string>();
+  private quoteSlots = 0;
   private readonly quoteLimits: typeof QUOTE_LIMITS;
   private readonly quoteTiming: Record<string, number>;
   private readonly o: SellerOptions;
@@ -343,12 +346,12 @@ ${items}
     if (d) return problem(503, `the test seller cannot offer now: ${d.reason}`, { retryAfterSec: Math.ceil((d.since + HOUR - this.now()) / 1000) });
     const now = this.now();
     const busy = (why: string, until: number) => problem(429, `the test seller is busy: ${why}`, { retryAfterSec: Math.max(1, Math.ceil((until - now) / 1000)) });
-    if ((await this.s.list({ prefix: 'o:' })).size >= this.limits.open) return busy(`${this.limits.open} deals are in progress`, now + MIN);
+    if ((await this.s.list({ prefix: 'o:' })).size + this.quoteSlots >= this.limits.open) return busy(`${this.limits.open} deals are in progress`, now + MIN);
     // The shared hour and day caps count offers made, so requests that never open cannot use them up (offer() counts).
     const full = (await this.capped(now)) ?? this.clientCapped(client, now);
     if (full) return busy(full.why, full.until);
     this.countClient(client, now);
-    const n =((await this.s.get<number>('n')) ?? 0) + 1;
+    const n = ((await this.s.get<number>('n')) ?? 0) + 1;
     const deal: Deal = { n, status: 'received', tokenHash: r.statusTokenHash, proposal: { uri: r.proposal.uri, sha256: r.proposal.sha256 }, sealedKey: r.sealedKey, receivedAt: now, updatedAt: now };
     await this.s.put({ n, [`d:${pad(n)}`]: deal, [`o:${pad(n)}`]: n, [`t:${r.statusTokenHash}`]: n });
     this.log(`test-seller: deal ${n} received`);
@@ -361,6 +364,15 @@ ${items}
     const lastHour = recent.filter((t) => now - t < HOUR);
     if (lastHour.length >= this.limits.perHour) return { why: `${this.limits.perHour} offers in the last hour`, until: Math.min(...lastHour) + HOUR };
     if (recent.filter((t) => day(t) === day(now)).length >= this.limits.perDay) return { why: `${this.limits.perDay} offers today (UTC)`, until: Date.parse(`${day(now)}T00:00:00Z`) + DAY };
+    return null;
+  }
+
+  /** Whether the quotes' own share of the offers (QUOTE_LIMITS.perHour, perDay) is used for the hour or the UTC day. */
+  private async quotesCapped(now: number): Promise<{ why: string; until: number } | null> {
+    const recent = ((await this.s.get<number[]>('recentQuotes')) ?? []).filter((t) => now - t < DAY);
+    const lastHour = recent.filter((t) => now - t < HOUR);
+    if (lastHour.length >= this.quoteLimits.perHour) return { why: `${this.quoteLimits.perHour} offers by quote in the last hour`, until: Math.min(...lastHour) + HOUR };
+    if (recent.filter((t) => day(t) === day(now)).length >= this.quoteLimits.perDay) return { why: `${this.quoteLimits.perDay} offers by quote today (UTC)`, until: Date.parse(`${day(now)}T00:00:00Z`) + DAY };
     return null;
   }
 
@@ -393,7 +405,21 @@ ${items}
     if (typeof q === 'string') return refuse(400, 'invalid_request', q);
     const key = request.headers.get('idempotency-key');
     if (!key || !/^[\x21-\x7e]{1,200}$/.test(key)) return refuse(400, 'invalid_request', `send an Idempotency-Key header of 1 to 200 printable characters, as buy.mjs does. ${next}`);
-    const run = this.quoting.then(() => this.quoteOnce(q, key, client));
+    // No offer to the seller itself or to the zero address: nobody could fund it, and it would hold a waiting slot.
+    const zero = `0x${'0'.repeat(40)}`;
+    if ([q.buyer, q.buyerPaymentAddress].some((x) => x === zero || x === this.agent.address)) return refuse(400, 'invalid_request', `buyer and buyerPaymentAddress must be your own addresses, not the zero address or this seller's. ${next}`);
+    // A client at its own cap is refused before it joins the line, so it cannot fill the line for others (red team, T-489).
+    const capped = this.clientCapped(client, this.now());
+    if (capped) {
+      const sec = Math.max(1, Math.ceil((capped.until - this.now()) / 1000));
+      return refuse(429, 'rate_limited', `the test seller is busy: ${capped.why}. Wait ${sec} s, then run buy.mjs again.`, sec);
+    }
+    // A bounded line, one place per client: a slow offer holds up at most a few others, each well inside buy.mjs's 120 s wait.
+    const who = clientKey(client);
+    if (this.inLine.has(who)) return refuse(429, 'rate_limited', 'your previous quote is still being answered. Wait 15 s, then run buy.mjs again.', 15);
+    if (this.inLine.size >= this.quoteLimits.inLine) return refuse(429, 'rate_limited', `the test seller is answering ${this.inLine.size} other quotes. Wait 15 s, then run buy.mjs again.`, 15);
+    this.inLine.add(who);
+    const run = this.quoting.then(() => this.quoteOnce(q, key, client)).finally(() => this.inLine.delete(who));
     this.quoting = run.catch(() => undefined);
     return run;
   }
@@ -410,28 +436,40 @@ ${items}
       if (d?.answer) return json(d.answer);
     }
     const d = await this.degraded();
-    if (d) return refuse(503, 'seller_unavailable', `the test seller cannot offer now: ${d.reason}. Wait the seconds named here, then run buy.mjs again with a new key store directory.`, Math.max(1, Math.ceil((d.since + HOUR - this.now()) / 1000)));
+    if (d) {
+      const sec = Math.max(1, Math.ceil((d.since + HOUR - this.now()) / 1000));
+      return refuse(503, 'seller_unavailable', `the test seller cannot offer now: ${d.reason}. Wait ${sec} s, then run buy.mjs again.`, sec);
+    }
     const now = this.now();
     const busy = (why: string, until: number) => {
       const sec = Math.max(1, Math.ceil((until - now) / 1000));
-      return refuse(429, 'rate_limited', `the test seller is busy: ${why}. Wait ${sec} s, then run buy.mjs again with a new key store directory.`, sec);
+      return refuse(429, 'rate_limited', `the test seller is busy: ${why}. Wait ${sec} s, then run buy.mjs again.`, sec);
     };
     const open = [...(await this.s.list<number>({ prefix: 'o:' })).values()];
     if (open.length >= this.limits.open) return busy(`${this.limits.open} deals are in progress`, now + MIN);
     const deals = (await Promise.all(open.map((n) => this.s.get<Deal>(`d:${pad(n)}`)))).filter((x): x is Deal => x !== undefined);
     const waiting = deals.filter((x) => x.source === 'quote' && x.status === 'offered');
     if (waiting.length >= this.quoteLimits.waiting) {
-      // The earliest funding window to close frees the next slot.
-      const frees = Math.min(...waiting.map((x) => Date.parse(x.terms?.timing?.fundBy ?? '') || now + MIN));
-      return busy(`${this.quoteLimits.waiting} offers by quote are waiting to be funded`, Math.max(frees, now + 1000));
+      // The earliest unfunded offer to expire frees the next slot: about a minute after its offerExpiresAt, once the
+      // operators mark it Expired and the seller's next pass reads it (red team, T-489).
+      const frees = Math.min(...waiting.map((x) => Date.parse(x.terms?.timing?.offerExpiresAt ?? '') + 90_000 || now + MIN));
+      return busy(`${this.quoteLimits.waiting} offers by quote are waiting to be funded or delivered`, Math.max(frees, now + 1000));
     }
-    const full = (await this.capped(now)) ?? this.clientCapped(client, now);
+    const full = (await this.capped(now)) ?? (await this.quotesCapped(now)) ?? this.clientCapped(client, now);
     if (full) return busy(full.why, full.until);
     // Counted before the offer is tried, so a request whose offer fails still uses its share: retries cannot flood.
     this.countClient(client, now);
-    await this.s.put({ recent: [...((await this.s.get<number[]>('recent')) ?? []).filter((t) => now - t < DAY), now] });
+    const keep = (list: number[] | undefined) => [...(list ?? []).filter((t) => now - t < DAY), now];
+    await this.s.put({ recent: keep(await this.s.get<number[]>('recent')), recentQuotes: keep(await this.s.get<number[]>('recentQuotes')) });
+    // The open slot this quote takes, held while its offer is made: the intake counts it too, so the two cannot race past `open`.
+    this.quoteSlots++;
     try {
-      const made = await this.offerByQuote(q);
+      // Every read of the operators happens before the signature; after the submit only this object's storage writes.
+      // The reads have a time limit, so one hung call cannot hold the line (red team, T-489); nothing is sent before it.
+      let timer: ReturnType<typeof setTimeout> | undefined;
+      const late = new Promise<never>((_, reject) => (timer = setTimeout(() => reject(new Error(`the operators did not answer within ${this.quoteLimits.offerWithinSec} s`)), this.quoteLimits.offerWithinSec * 1000)));
+      const made = await Promise.race([this.signQuote(q), late]).finally(() => clearTimeout(timer));
+      await this.sendQuote(made.pending);
       const n = ((await this.s.get<number>('n')) ?? 0) + 1;
       const deal: Deal = { n, status: 'offered', source: 'quote', offer: QUOTE_ID, outcome: 'release', countered: false, buyer: q.buyer, scope: q.scope, commitmentId: made.id, terms: made.terms, offeredAt: made.settlement, receivedAt: now, updatedAt: this.now(), quoteKeyHash: keyHash, answer: made.answer };
       await this.s.put({ n, [`d:${pad(n)}`]: deal, [`o:${pad(n)}`]: n, [`q:${keyHash}`]: { bodyHash, n } });
@@ -439,7 +477,9 @@ ${items}
       return json(made.answer);
     } catch (e) {
       this.log(`test-seller: a quote was not offered: ${message(e)}`);
-      return refuse(503, 'seller_unavailable', 'the test seller could not make this offer now. Wait the seconds named here, then run buy.mjs again with a new key store directory.', 60);
+      return refuse(503, 'seller_unavailable', 'the test seller could not make this offer now. Wait 60 s, then run buy.mjs again.', 60);
+    } finally {
+      this.quoteSlots--;
     }
   }
 
@@ -453,12 +493,16 @@ ${items}
     return { clubId: found.clubId, adjudicators: { primary: role('primary'), fallback: role('fallback'), appeal: role('appeal') } };
   }
 
-  /** The offer one quote asks for, signed by the standing address and submitted; with the answer the buyer gets. */
-  private async offerByQuote(q: QuoteRequest): Promise<{ id: Hex; terms: J; settlement: number; answer: J }> {
+  /**
+   * The offer one quote asks for, signed by the standing address and not yet sent, with the answer the buyer gets.
+   * Everything that reads the operators runs before the signature, so nothing after the submit can fail but storage.
+   */
+  private async signQuote(q: QuoteRequest): Promise<{ id: Hex; terms: J; settlement: number; answer: J; pending: Pending }> {
     const a = this.agent;
     const settlement = await a.settlementNow();
     const { clubId, adjudicators } = await this.demo();
     await this.ensureMandate(clubId, settlement);
+    const schedule = await a.trusted('/.well-known/holdback.json', (x) => x.fees?.operator ?? null);
     const { deliverable, checks } = quoteTerms(q.scope);
     const pays = q.buyerPaymentAddress && q.buyerPaymentAddress !== q.buyer ? { paymentAddress: q.buyerPaymentAddress } : {};
     const request = {
@@ -469,15 +513,25 @@ ${items}
     const intent: Intent = { kind: 'offer', request, registration: await a.registration(adjudicators.primary), rulebookHash: await a.rulebookHash(clubId) };
     const { path, body } = await a.sign(prepared, intent);
     const pending: Pending = { step: 'offer', path, body, key: crypto.randomUUID() };
-    // One retry with the same key and body: a lost answer replays rather than submitting twice.
-    await this.submit(pending).catch((e) => (e instanceof Refused ? Promise.reject(e) : this.submit(pending)));
     const { id, signatures: _s, ...terms } = body; // eslint-disable-line @typescript-eslint/no-unused-vars
-    const schedule = await a.trusted('/.well-known/holdback.json', (x) => x.fees?.operator ?? null);
     const operator = schedule ? operatorFeeOf(terms.price, schedule) : 0n;
     const adjudication = terms.adjudication?.fee ?? { token: terms.price.token, amount: '0' };
     const total = BigInt(terms.price.amount) + BigInt(adjudication.amount) + operator;
     const answer = { commitmentId: id, price: terms.price, fees: { adjudication, operator: { token: terms.price.token, amount: operator.toString() }, total: { token: terms.price.token, amount: total.toString() } }, expiresAt: terms.timing.offerExpiresAt };
-    return { id, terms, settlement, answer };
+    return { id, terms, settlement, answer, pending };
+  }
+
+  /**
+   * Sends a signed quote offer: once, then once more with the same key and body after a transient failure (a lost
+   * answer replays rather than submitting twice). Made when the operators hold it, whatever the answer said.
+   */
+  private async sendQuote(pending: Pending): Promise<void> {
+    try {
+      await this.submit(pending).catch((e) => (e instanceof Refused ? Promise.reject(e) : this.submit(pending)));
+    } catch (e) {
+      const held = await this.agent.call('GET', `/v1/commitments/${pending.body.id}/terms`).catch(() => null);
+      if (String(held?.seller).toLowerCase() !== this.agent.address) throw e;
+    }
   }
 
   /** Whether any deal is open: the Worker keeps the alarm set while one is. */
