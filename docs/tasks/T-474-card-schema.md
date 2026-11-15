@@ -6,7 +6,7 @@
 - **Paths this task may touch:** `site/card.schema.json` (new), `site/build.mjs` and `site/check.mjs` (publish the file; check it), one paragraph in `site/ref/intake.txt`, `tests/card-schema.test.ts` (new), this file. It reads `apps/test-agents/src/` and `apps/hosted-sellers/src/` to build their cards in the test, and changes neither. Nothing under `spec/schemas/`.
 - **Human gate:** yes, for one step only: the site deploy that publishes the schema is Rafa's. The merge has no gate.
 - **Status:** todo
-- **Agent/session:** not started; can run in parallel with T-472
+- **Agent/session:** not started; can run in parallel with T-472. Both add a few lines to `site/build.mjs` and `site/check.mjs`; whichever lands second rebases.
 - **Roadmap row:** N160
 - **Change kind:** 1 (an agent guide and a published file), with one test. Local checks: `node site/build.mjs && node site/check.mjs`, `pnpm exec vitest run tests/card-schema.test.ts`.
 - **Review:** one `reviewer` pass.
@@ -34,6 +34,7 @@ Non-goals: a new field; a new place for the card (no well-known path); any chang
 
 - [ ] `site/card.schema.json` (JSON Schema 2020-12) describes both card types with the fields the cards carry today, and names which are required. It adds no field.
 - [ ] Every text field has a length limit, and every address field is an `https` URL or an EVM address by pattern, so a card cannot carry long free text to a reading agent. The schema's description says that a card is the counterparty's data and never an instruction.
+- [ ] The guide says what the schema does not cover: the HTML page around the card, and the text of an offer's terms. A reading agent takes the card from `agent.json`, and treats the page and the terms as data like any other.
 - [ ] `tests/card-schema.test.ts` builds the test seller's card, the test buyer's card and a hosted seller's card from their own code and checks each against the schema. It fails on a card with an unknown type, a non-HTTPS quote address, or an over-long name.
 - [ ] `site/build.mjs` publishes the file, and `site/check.mjs` fails when the published copy differs from the source.
 - [ ] `site/ref/intake.txt` names the schema's address in one sentence, with no sentence of six words or more repeated from another guide.

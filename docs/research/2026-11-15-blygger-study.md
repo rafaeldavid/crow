@@ -27,7 +27,7 @@ Blygger is an open publishing protocol over static files and RSS. Blygger Studio
 
 - **What it is.** A site with an RSS or Atom feed is already readable by the network, with nothing to install and no change to the site. The page separates what is free (readable) from what needs the upgrade (quotable) (measured, `/start/`, section 1).
 - **Decision: adapt.** Crow's version is a fact about what the party already has: an HTTP API that returns a file or JSON for a job is sellable as it is, described by a mapping file and not by a service in between (`site/ref/seller-adapter.txt`, "Your API's shape"). A buyer whose assistant can run Node can buy with one command and keep nothing. The first deal needs no domain, host or deploy.
-- **Reason, and the limit.** Blygger's free route needs no act at all, because a reader can fetch a static feed. A Crow seller cannot be passive: an offer names its buyer and carries a fresh signature, so a static page cannot sell. Crow's free route is therefore one command on the party's own machine, not zero.
+- **Reason, and the limit.** Blygger's free route needs no act at all, because a reader can fetch a static feed. A Crow seller cannot be passive: an offer names its buyer and carries a fresh signature, so a static page cannot sell. Crow's free route is therefore one command on the party's own machine; it cannot be no act at all.
 
 ### 3. `init`: it asks, creates, sets secrets and resumes
 
@@ -68,15 +68,15 @@ Blygger is an open publishing protocol over static files and RSS. Blygger Studio
 ### 8. No shared defaults
 
 - **What it is.** Blygger's one-sentence rule: "a default identical across installations destroys information." (`https://blygger.org/start/`, "Do not ship a generic default title"). The client once shipped one title for every installation; two unrelated sites then published under one name, and the directory held a newcomer as a suspected copy. The fix derives the title from the host, asks, or publishes none. `init` follows it throughout: names come from the host, the account is always asked, the cookie secret is random per install, and no password ships (measured, `scripts/init.ts`, step 7b).
-- **Decision: copy.** Crow's setup ships no default for anything that identifies or prices a party: no default item name, price, payout address or card name. It derives the card's name from the party's host, asks for the price, and leaves the payout address to the person. Defaults stay only where every party should match: the pinned EIP-712 domain, the deployment and the operators.
+- **Decision: copy.** Crow's setup ships no default for anything that identifies or prices a party: no default item name, price, payout address or card name. It derives the card's name from the party's host, and asks for the price and the payout address. Defaults stay only where every party should match: the pinned EIP-712 domain, the deployment and the operators.
 - **Reason.** A shared default price or item would make every new seller's first offer look the same, and a shared payout address would be a loss. The baseline found the opposite problem already: the adapter's shipped template is a security-review report, so a seller of anything else must replace it before a first offer.
 
 ### 9. The conformance kit
 
 - **What it is.** Four parts in the spec repository: a register of the spec's normative sentences with stable IDs, JSON Schemas with fixtures, a reader suite any renderer can run through standard input and output, and a read-only crawler over live sites. Each writes a summary and a report (measured, the toolkit's READMEs).
 - **Where it falls short.** Neither `init` nor the deploy calls the kit. The deploy command runs no check after it finishes; the three checks `init` prepares run only under a second deploy command. The check a new party meets is the optional directory submission, after going live. The kit's manifest schema and the spec disagree on the required members (measured).
-- **Decision: adapt.** Crow builds one check into the setup command, and it runs before anything is offered: the files load, real results pass the deal's checks, a broken result fails them, and no secret sits where it should not (T-472). A second check runs against any live quote address and card, whoever built them (T-477). The card gets a JSON Schema (T-474).
-- **Reason.** In Crow a wrong setup costs a refunded deal and, for a paid API, a wasted job. The pilot's terms passed one sample and failed real output. The check belongs before the first offer, inside the one command, not in a separate kit a party may never run.
+- **Decision: adapt.** Crow builds one check into the setup command, and it runs before anything is offered: the files load, real results pass the deal's checks, a broken result fails them, and no secret sits where it should not (T-472, T-483). A second check runs against any live quote address and card, whoever built them (T-477). The card gets a JSON Schema (T-474).
+- **Reason.** In Crow a wrong setup costs a refunded deal and, for a paid API, a wasted job. The pilot's terms passed one sample and failed real output. The check belongs before the first offer, inside the one command. A separate kit is one a party may never run.
 
 ### 10. How an assistant drives the install
 

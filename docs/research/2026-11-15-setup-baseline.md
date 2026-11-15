@@ -9,7 +9,7 @@ Labels: **measured** (read in the file named, or in a recorded run), **inferred*
 1. **Neither role needs an account, a sign-up, an API token, an allow-list entry, Sepolia ETH or a person at Crow** (measured: no such gate in `apps/operator/src` or `apps/demo-cloud/src`; `site/ref/http.txt`, "Discover and get test tUSDC").
 2. **Both roles need one thing from a Crow-run host before a first deal: a mandate in the demo club.** The operators refuse an offer or an agreement from a key that holds none (`packages/settlement/evm/evm-settlement.ts`, `scopeFor`, 403 `scope_exceeded`). Only Crow's faucet issues one; `POST /v1/agents` and `POST /v1/clubs` answer 501 (`docs/api.md`) (measured).
 3. **A buyer's tools ask the faucet inside the first deal. The seller adapter asks at start, before any buyer exists** (`examples/seller-adapter-core.ts`, "no mandate, no start") (measured).
-4. **A seller with an API of its own reads about 90 KB, runs 22 command lines and takes 10 actions by a person.** Nothing measures that path (measured for the files and commands; the counts are this record's own).
+4. **A seller with an API of its own reads about 98 KB, runs 22 command lines and takes 10 actions by a person.** Nothing measures that path (measured for the files and commands; the counts are this record's own).
 5. **A buyer has one pinned command that took 1 approval** (measured 2026-11-05, `docs/tasks/T-229-one-click-homepage.md`). A buyer's agent that starts from the docs took 8 to 28 approvals (measured 2026-11-14, `docs/tasks/T-412-benchmark-harness.md`).
 6. **No command sets a party up, checks a setup or removes one.** A search of `examples/` for an init, doctor, self-test or conformance command finds none (measured).
 
@@ -65,7 +65,7 @@ Four paths exist. All figures are measured unless labelled.
 | Publish the card | `site/ref/intake.txt` (16,775 bytes) | none given | Writes a `crow-agent` block into a page by hand; the shipped Caddyfile answers 404 for it | none | The page is public |
 | First deal | (the buyer's side) | the buyer's commands | **A buyer must exist** | the buyer's quote credential, out of band | The full public terms, the delivery's size, time and SHA-256 (`docs/privacy-baseline.md`) |
 
-**Counts for path a** (this record's own count from the files above): 12 files, 90,475 bytes, about 22,619 tokens estimated; 22 command lines and 3 files written by hand; 10 actions by a person; 1 required secret and up to 4 more. No secret reaches Crow or the chat when the steps are followed (inferred).
+**Counts for path a** (this record's own count from the files the table names, with the two guide pages at their published size): 13 files, 98,462 bytes (measured: `wc` on the files, and `guide-budget.json` for the two guide pages), about 24,616 tokens estimated; 22 command lines and 3 files written by hand; 10 actions by a person; 1 required secret and up to 4 more. No secret reaches Crow or the chat when the steps are followed (inferred).
 
 ### Path b: what the pilot's seller needed by hand
 
@@ -89,6 +89,21 @@ Scenario s3 of the benchmark, a seller that starts a deal with Crow's test buyer
 | b | `buy.mjs` against a seller's quote address (`site/buy.txt`) | Not measured: Crow runs no quoting seller for strangers. By design a person approves 3 commands: the install, the quote, the payment |
 | c | Plain HTTP (`site/ref/http.txt`, `signing.txt`, `http-buyer.txt`) | Scenarios s1, s2 and s5: 20, 25 and 28 approvals; 1,095,097, 1,918,005 and 3,581,026 tokens (2026-11-14) |
 | d | A signer with a rules file (`examples/signer.ts`, `examples/own-buyer.ts`) | Never run live. It needs the repository, a build, three keys, a mandate signed in a wallet and a rules file written by hand |
+
+### Paths a and b, step by step
+
+| Step | The assistant reads | Command | A person does | Secrets | What leaves the machine |
+| --- | --- | --- | --- | --- | --- |
+| a: get the command | `llms.txt`: 6,331 bytes published, about 1,583 tokens estimated | 1 fetch | Names the page, or pastes the home page's prompt | none | GET crow.direct: an IP address |
+| a: the one command | nothing | 1 line: install two pinned packages, download `try.mjs` (94,340 bytes), check its SHA-256, run it | 1 approval | A signing key and an encryption key, made by the script, in memory only | npm and crow.direct: an IP address. Then discovery, the faucet, a sealed proposal to the test seller, the agreement and the funding (list below) |
+| b: read the buyer's page | `llms.txt` and `buy.txt`: 18,173 bytes, 4,544 tokens estimated, 91% of the 5,000-token budget | 2 fetches | Approves them | none | GET crow.direct: an IP address |
+| b: install the tools | nothing | 1 line: install two pinned packages, download `buy.mjs` (201,201 bytes), check its SHA-256 | 1 approval | none | npm and crow.direct: an IP address |
+| b: find the seller | the seller's page | 1 fetch | **Gives the seller's page address;** nothing in the docs finds a seller | none | The seller's host: an IP address |
+| b: ask for a price | nothing | 1 line, 5 arguments | **Gives the scope and the most to pay;** a quote credential if the seller wants one | A deal key and an encryption secret in a file of mode 0600; the quote credential in the environment | To the seller: the buyer's address, public key and scope. Reads on both operators |
+| b: check the offer | the JSON the tool prints | none | **Approves the offer** field by field | none | nothing |
+| b: approve and pay | nothing | 1 line | 1 approval | Three signatures by the deal key | **`POST /v1/faucet` with the address and the deal's total;** the agreement and the funding, then the chain |
+| b: or pay from a wallet | `ref/buyer-signer.txt` (11,903 bytes) | 2 lines | **Signs in the wallet** | The wallet's key never reaches the tools | The faucet mints the total to the wallet's address |
+| b: follow, open, record | nothing | 1 or 2 lines | Reads the outcome | The key file is kept while its address holds tokens | Reads on both operators |
 
 **What a buyer's first deal sends** (path a, measured in `examples/try.ts`):
 
@@ -118,7 +133,7 @@ Six live runs, 2026-11-14, each a fresh Claude Code on `claude-opus-5-5` at medi
 
 ## What the design must close
 
-1. One file for the assistant, in place of 12 files and about 22,600 tokens for a seller.
+1. One file for the assistant, in place of 13 files and about 24,600 tokens for a seller.
 2. One command that makes the key, writes the files and checks them, in place of 22 command lines and 3 hand-written files.
 3. No request that names the party before its first deal: the adapter's start-up faucet call is the one that does today.
 4. Terms checked against several real results before any offer: the pilot's checks failed real output after they passed one sample.
