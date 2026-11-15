@@ -65,6 +65,12 @@ HOLDBACK_OPERATORS=https://api.crow.direct,https://api2.crow.direct node example
 node apps/early-access/deploy.mjs
 npx wrangler@4 kv key list --binding EMAILS --config apps/early-access/wrangler.jsonc --remote
 
+# the list of who uses Crow (T-486, D75): the same Worker and the same store, under the prefix listing:, once the
+# Worker is deployed with POST /listing. A person reads the listed websites out, then checks each for a Crow card.
+# The list is private: write the file under reports/, which git ignores, or outside the repository
+npx wrangler@4 kv key list --binding EMAILS --config apps/early-access/wrangler.jsonc --remote --prefix listing: > reports/listing-keys.json
+node scripts/listing-check.mjs reports/listing-keys.json
+
 # Crow's test seller (T-222): deploys, waits for /health to read operational, and rolls back on its own
 node apps/test-agents/scripts/deploy.mjs
 

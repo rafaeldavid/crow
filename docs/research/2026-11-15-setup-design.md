@@ -12,6 +12,7 @@ Labels: **measured**, **inferred**, **guessed**, as in the baseline.
 2. **One file.** `setup.txt` is written for the assistant, at most 8,000 bytes, about 2,000 tokens. The assistant needs no other file for the sample path.
 3. **One command.** `setup.mjs`, pinned by its SHA-256 like `try.mjs`. It makes the keys, writes the files, checks them, runs the first deal and removes the setup. It takes answers as flags and never prompts.
 4. **Nothing sent before the first deal.** The steps before it make no request that names the party to a Crow-run host. The benchmark counts those requests; the target is 0.
+   - **Added 2026-11-15 (T-486, D75):** one exception since this record. The setup's `list` step sends the party's website, and nothing else, to Crow's own list of who uses it, before the first deal. The person can skip it, no deal depends on it, and the benchmark counts it in a field of its own, so the target above stays 0. D75 in `docs/decisions-today.md` has the decision.
 5. **Keys made where they are used.** The command makes every key on the party's machine, prints addresses only, and never puts a key on a command line or in the chat.
 6. **A check before any offer.** Real results from the party's API must pass the deal's checks, 3 of them unless the person sets another number, and a broken result must fail them.
 7. **A first deal with no second person:** a seller sells one job to Crow's test buyer; a buyer buys from Crow's test seller.
