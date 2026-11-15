@@ -72,6 +72,8 @@ Today every agent session runs as Rafa's own macOS user, so each separation betw
 
 **Not done: the red-team pass.** On 2026-11-15 it ran on what exists, with the first half of its question only: what a session running as the session user can still reach that the record says it cannot. A safety classifier stopped the `red-teamer` agent's answer too, and it returned no findings. Following the coordinator, the pass stopped there and was not narrowed or reworded to get past the stop. So the administrator files carry one `reviewer` pass and its fixes only, and no red-team pass. Rafa decides how that review is done, together with the check.
 
+**Not done: the configuration audit's fixes.** On 2026-11-15, at Rafa's word, one reviewer audited the setup files against published hardening baselines. A safety classifier stopped the pass that applied its fixes, so none is applied. Its report is in the T-485 session's transcript and is not copied into either repository. Rafa decides whether and how the fixes are made.
+
 **Next tasks:**
 - The host check (above): Rafa decides how it is done.
 - Crow's own two machines: `infra/own-agents/` and `examples/own-agents-service.md`, after the pilot and after the deploy workflow (record, move step 11).
