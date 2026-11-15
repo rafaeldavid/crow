@@ -2,10 +2,10 @@
 
 - **Lane:** demo (the hosted seller adapter, `apps/hosted-sellers/`)
 - **Phase:** 2
-- **Depends on:** **the pilot's hosted sellers being deployed** (D72); T-477 (the card files and the check of a live address).
-- **Paths this task may touch:** `apps/hosted-sellers/` (its deploy and secrets scripts, and a README), `examples/setup-publish.ts` (a `--cloudflare` mode), `examples/setup-leave.ts` (removing the Worker), the "Publish" section of `site/setup.txt`, `site/setup.mjs` (generated), `docs/operations.md` (the hosted seller's runbook), this file.
-- **Human gate:** yes. A deploy to any Cloudflare account waits for the account's owner; the test deploy on Crow's own account is Rafa's.
-- **Status:** todo, **waiting for the pilot's deploy**. It is the only task of this plan that changes `apps/hosted-sellers`, and any change there before the pilot's sellers are deployed forces another rehearsal.
+- **Depends on:** T-483 (a seller's own API over HTTPS, which the Worker calls), T-474 (the card's schema). Runs after T-476, because each changes the setup bundle. It no longer waits for the pilot's deploy and no longer depends on T-477 (D75).
+- **Paths this task may touch:** a new app for the party's own seller Worker (for example `apps/own-seller/`: its entry, its Durable Object class, its configuration writer, its tests and a README), `pnpm-workspace.yaml` only if the new app needs it, `examples/setup-publish.ts` (new: the card files and a `--cloudflare` mode), `examples/setup-publish*.test.ts` (new), `examples/setup-check.ts` (the card's local check and `check --published`), `examples/setup-leave.ts` (removing the Worker), one entry in `examples/setup.ts`'s command table, the "Publish" section of `site/setup.txt`, `site/setup.mjs` and the pinned Worker file beside it (generated), this file. It imports `examples/seller-adapter-core.ts` and `apps/hosted-sellers/src/` (`journalStore`, `checkBundle`, `bundleSha256`, `TEST_CHAINS`) and changes none of them: `apps/hosted-sellers`, `examples/seller-adapter-core.ts`, `examples/seller-adapter-api.ts` and `packages/` stay frozen until the pilot's sellers are deployed (D72, D73).
+- **Human gate:** yes. A deploy to any Cloudflare account waits for the account's owner; the measured run needs a Cloudflare account that is not Crow's production account, free plan first, which is Rafa's to provide.
+- **Status:** todo. The first way a seller goes live (D75); it starts after T-476 merges.
 - **Agent/session:** not started
 - **Roadmap row:** N160
 - **Change kind:** 4, with 8 for the test deploy. Local checks: `apps/hosted-sellers`' tests, `pnpm exec vitest run examples/setup`.
@@ -67,4 +67,11 @@ Choices made inside this task.
 
 ## Handoff
 
-Not started, and not to start until the coordinator says the pilot's hosted sellers are deployed. Then read `apps/hosted-sellers/scripts/deploy.ts` and `secrets.ts` first: the smallest change may be a second shell around the same Worker, with the routes and the account as inputs.
+Not started; starts after T-476 merges. Read `docs/research/2026-11-15-first-go-live-path.md` and D75 first.
+
+- **Build first what T-477 planned and needs no host,** so T-477 can reuse it: the card's local check against the card's schema, `check --published` with every rule in T-477's fifth and sixth criteria (HTTPS only, no redirect, no private address, the other-origin flag, a fixed reason per check, no fetched text, no quote sent), the rule that a quote address is never open by default (a quote credential or `--open`, and the most quotes a day over all callers), and the card files. Those criteria of T-477 become this task's; T-477 keeps the host's files.
+- **The Worker is a second shell in new paths.** Today's Worker cannot serve another domain: `apps/hosted-sellers/src/worker.ts:161` refuses any address that is not `https://crow.direct`, `:204` writes that Crow runs the seller, and `deploy-plan.ts` fixes the zone and the routes. Write a new Durable Object class with the base address as an input; import the core and the hosted seller's helpers; change no frozen path. The pilot's bundle SHA-256 then stays the same by construction, and the criterion that measures it still runs.
+- **Ship the Worker prebuilt,** pinned by SHA-256 beside `setup.mjs`, with the seller's configuration uploaded beside it as a data module. Run one pinned Wrangler version from npm.
+- **`workers.dev` by default,** a route on the party's own zone when the party asks. Check that the account has a `workers.dev` subdomain before the first deploy: Wrangler's own prompt for one cannot run without a terminal.
+- **Measure on a free account first:** a cold quote and one full deal. The free plan allows 10 ms of CPU per request, and a cold signature took about 30 ms in Node (the research record). Evidence names the plan the guide states. Also measure the `CF-Worker` header on `workers.dev`.
+- **After the pilot's deploy,** a later task may fold this Worker's class and the hosted seller's into one class with the address as a parameter.
