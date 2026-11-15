@@ -5,7 +5,7 @@
 - **Depends on:** T-471 (the design). To start: nothing. To unblock its two scenarios: T-483 (a seller's own API) and T-475 (the buyer's setup).
 - **Paths this task may touch:** `tools/one-click/scenarios.mjs`, `tools/one-click/scripted/` (new scripts), `tools/one-click/bench.mjs`, `bench-local.mjs`, `bench-live.mjs`, `bench-record.mjs`, `probes.mjs`, `tools/one-click/README.md`, `scripts/metrics/schemas/one-click.schema.json`, `scripts/metrics/schemas/one-click-summary.schema.json`, `scripts/metrics/one-click-summary.mjs`, `tests/metrics/`, this file. Nothing under `examples/`, `site/` or `apps/`.
 - **Human gate:** yes, for the live runs only: they spend a model key, so Rafa starts them (`tools/one-click/README.md`). The merge has no gate.
-- **Status:** in progress
+- **Status:** done (pull request 582, merged 2026-11-15, merge commit `4699b0e5`; s7 and s8 stay blocked on T-483, T-475 and T-482, as the task allows)
 - **Agent/session:** a sub-session of the coordinator, 2026-11-15, branch `t-473-setup-benchmark`
 - **Roadmap row:** N160
 - **Change kind:** 4 is the nearest recipe (tool code and its tests). Local checks: `pnpm exec vitest run tests/metrics`.
