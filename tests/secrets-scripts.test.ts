@@ -24,13 +24,14 @@ try { stdin = argv.includes('-') ? fs.readFileSync(0, 'utf8') : ''; } catch {}
 fs.appendFileSync(process.env.OP_STUB_LOG, JSON.stringify({ argv, stdin }) + '\\n');
 const save = () => fs.writeFileSync(process.env.OP_STUB_STATE, JSON.stringify(state));
 const cmd = argv.slice(0, 3).join(' ');
-if (argv[0] === 'whoami') { if (!state.signedIn) { process.stderr.write('[ERROR] account is not signed in\\n'); process.exit(1); } process.stdout.write('User Type: HUMAN\\n'); process.exit(0); }
+if (argv[0] === 'whoami') { if (!state.signedIn) { process.stderr.write('[ERROR] account is not signed in\\n'); process.exit(1); } process.stdout.write(JSON.stringify({ url: 'my.1password.example', email: 'someone@example.com', user_type: 'HUMAN' })); process.exit(0); }
 if (cmd.startsWith('vault list')) { process.stdout.write(JSON.stringify(state.vaults)); process.exit(0); }
 if (cmd.startsWith('item template get')) { process.stdout.write(JSON.stringify({ category: 'API_CREDENTIAL', fields: [{ id: state.fieldId || 'credential', type: 'CONCEALED' }] })); process.exit(0); }
 if (cmd.startsWith('item list')) { process.stdout.write(JSON.stringify(state.items.map((t, i) => ({ id: 'i' + i, title: t })))); process.exit(0); }
 if (cmd.startsWith('item create')) {
   const body = JSON.parse(stdin);
-  if (body.title === state.failCreateFor) { process.stderr.write('[ERROR] could not save ' + body.fields[0].value + '\\n'); process.exit(1); }
+  // A failing op that quotes the value raw and JSON-escaped: the copy must show neither.
+  if (body.title === state.failCreateFor) { process.stderr.write('[ERROR] could not save ' + JSON.stringify(body.fields[0].value).slice(1, -1).replace(/-/g, '\\\\u002d') + ' ' + body.fields[0].value + '\\n'); process.exit(1); }
   state.items.push(body.title); save();
   process.stdout.write(JSON.stringify(body)); process.exit(0);
 }
@@ -55,6 +56,7 @@ const calls = (): Array<{ argv: string[]; stdin: string }> => (existsSync(log) ?
 function noValueIn(text: string) {
   for (const value of Object.values(VALUES)) expect(text).not.toContain(value);
   for (const value of Object.values(VALUES).filter((x) => x.length > 8)) expect(text).not.toContain(value.slice(0, 12));
+  expect(text).not.toContain('z9'.repeat(8));
 }
 
 beforeEach(() => {
@@ -69,7 +71,7 @@ beforeEach(() => {
   writeFileSync(envFile, `# made up\nA_KEY=${VALUES.A_KEY}\nB_KEY="${VALUES.B_KEY}"\nexport C_KEY=${VALUES.C_KEY}\nSTRAY_TOKEN=${VALUES.STRAY_TOKEN}\nSHORT_KEY=${VALUES.SHORT_KEY}\nEMPTY_KEY=\n`);
   refsDir = join(dir, 'refs');
   mkdirSync(refsDir);
-  writeFileSync(join(refsDir, 'one.refs'), '# job one\nA_KEY=op://crow/mac-a/credential\nB_KEY=op://crow/mac-b/credential\nA_BASE_URL=https://api.example.com\n');
+  writeFileSync(join(refsDir, 'one.refs'), '# job one\nA_KEY=op://crow/mac-a/credential\nB_KEY=op://crow/mac-b/credential\nHOLDBACK_AGENT_OPENAI_COMPATIBLE_BASE_URL=https://api.deepseek.com\n');
   writeFileSync(join(refsDir, 'two.refs'), 'C_KEY=op://crow/mac-c/credential\nSHORT_KEY=op://crow/mac-short/credential\nMISSING_KEY=op://crow/mac-missing/credential\nEMPTY_KEY=op://crow/mac-empty/credential\n');
   writeState({});
 });
@@ -89,13 +91,13 @@ describe('the copy', () => {
 
   it('creates the missing items through stdin, leaves existing ones alone and prints no value', () => {
     writeState({ items: ['mac-b'] });
-    const r = run(COPY, ['--from', envFile, '--refs', refsDir]);
+    const r = run(COPY, ['--yes', '--from', envFile, '--refs', refsDir]);
     expect(r.code, r.out).toBe(0);
     expect(r.out).toMatch(/A_KEY\s+created \(mac-a\)/);
     expect(r.out).toMatch(/B_KEY\s+exists, left alone \(mac-b\)/);
     expect(r.out).toMatch(/C_KEY\s+created \(mac-c\)/);
     expect(r.out).toMatch(/MISSING_KEY\s+missing in the file/);
-    expect(r.out).toMatch(/A_BASE_URL\s+plain configuration/);
+    expect(r.out).toMatch(/HOLDBACK_AGENT_OPENAI_COMPATIBLE_BASE_URL\s+plain configuration/);
     expect(r.out).toMatch(/STRAY_TOKEN\s+in the file, not in the inventory/);
     noValueIn(r.out);
     const creates = calls().filter((c) => c.argv[0] === 'item' && c.argv[1] === 'create');
@@ -109,20 +111,21 @@ describe('the copy', () => {
   });
 
   it('a second run changes nothing', () => {
-    run(COPY, ['--from', envFile, '--refs', refsDir]);
+    run(COPY, ['--yes', '--from', envFile, '--refs', refsDir]);
     const before = calls().length;
-    const r = run(COPY, ['--from', envFile, '--refs', refsDir]);
+    const r = run(COPY, ['--yes', '--from', envFile, '--refs', refsDir]);
     expect(r.code).toBe(0);
     expect(calls().slice(before).some((c) => c.argv[1] === 'create')).toBe(false);
     expect(r.out).toMatch(/A_KEY\s+exists, left alone/);
   });
 
-  it('stops at the first failure, with the error line redacted', () => {
+  it('stops at the first failure and shows none of op\'s error text, which quotes the value', () => {
     writeState({ failCreateFor: 'mac-c' });
-    const r = run(COPY, ['--from', envFile, '--refs', refsDir]);
+    const r = run(COPY, ['--yes', '--from', envFile, '--refs', refsDir]);
     expect(r.code).toBe(1);
     expect(r.out).toContain('op item create failed for C_KEY');
-    expect(r.out).toContain('[redacted]');
+    expect(r.out).not.toContain('could not save');
+    expect(r.out).toMatch(/C_KEY\s+failed: op item create exited 1/);
     expect(r.out).toMatch(/SHORT_KEY\s+not reached/);
     noValueIn(r.out);
     expect(calls().filter((c) => c.argv[1] === 'create').map((c) => JSON.parse(c.stdin).title)).toEqual(['mac-a', 'mac-b', 'mac-c']);
@@ -130,22 +133,22 @@ describe('the copy', () => {
 
   it('stops before reading items when op is not signed in, or the vault or field is missing', () => {
     writeState({ signedIn: false });
-    let r = run(COPY, ['--from', envFile, '--refs', refsDir]);
+    let r = run(COPY, ['--yes', '--from', envFile, '--refs', refsDir]);
     expect([r.code, calls().length]).toEqual([1, 1]);
     expect(r.out).toContain('Integrate with 1Password CLI');
     writeState({ vaults: [{ id: 'v2', name: 'Private' }] });
-    r = run(COPY, ['--from', envFile, '--refs', refsDir]);
+    r = run(COPY, ['--yes', '--from', envFile, '--refs', refsDir]);
     expect(r.code).toBe(1);
     expect(r.out).toContain('op vault create Crow');
     writeState({ fieldId: 'password' });
-    r = run(COPY, ['--from', envFile, '--refs', refsDir]);
+    r = run(COPY, ['--yes', '--from', envFile, '--refs', refsDir]);
     expect(r.code).toBe(1);
     expect(calls().some((c) => c.argv[1] === 'create')).toBe(false);
   });
 
   it('refuses invalid references files and a missing file, without op', () => {
     writeFileSync(join(refsDir, 'bad.refs'), `A_KEY=${VALUES.A_KEY}\n`);
-    let r = run(COPY, ['--from', envFile, '--refs', refsDir]);
+    let r = run(COPY, ['--yes', '--from', envFile, '--refs', refsDir]);
     expect(r.code).toBe(2);
     noValueIn(r.out);
     rmSync(join(refsDir, 'bad.refs'));
@@ -154,9 +157,34 @@ describe('the copy', () => {
     expect(calls()).toEqual([]);
   });
 
+  it('shows the op path, account and vault, and creates nothing without a yes', () => {
+    const r = run(COPY, ['--from', envFile, '--refs', refsDir]);
+    expect(r.code).toBe(2);
+    expect(r.out).toContain(`op:      ${join(bin, 'op')}`);
+    expect(r.out).toContain('Account: my.1password.example (someone@example.com)');
+    expect(r.out).toContain('Vault:   Crow (v1)');
+    expect(r.out).toContain('Items to create: mac-a, mac-b, mac-c, mac-short');
+    expect(calls().some((c) => c.argv[1] === 'create')).toBe(false);
+  });
+
+  it('refuses a service account or Connect token in the environment, before any op call', () => {
+    const r = run(COPY, ['--yes', '--from', envFile, '--refs', refsDir], { OP_SERVICE_ACCOUNT_TOKEN: 'x' });
+    expect(r.code).toBe(2);
+    expect(calls()).toEqual([]);
+  });
+
+  it('prints a line that parses to no variable name as a count, never the line', () => {
+    const fragment = 'fragment-of-wrapped-' + 'k3'.repeat(10) + '==';
+    writeFileSync(envFile, `${readFileSync(envFile, 'utf8')}${fragment}\n`);
+    for (const r of [run(COPY, ['--dry-run', '--from', envFile, '--refs', refsDir]), run(CHECK, [join(refsDir, 'one.refs'), '--from', envFile, '--inventory', refsDir])]) {
+      expect(r.out).not.toContain(fragment.slice(0, 24));
+      expect(r.out).toMatch(/1 line of the (local )?file parse(s)? to no variable name/);
+    }
+  });
+
   it('works when op is missing, and says so', () => {
     rmSync(join(bin, 'op'));
-    const r = run(COPY, ['--from', envFile, '--refs', refsDir]);
+    const r = run(COPY, ['--yes', '--from', envFile, '--refs', refsDir]);
     expect(r.code).toBe(1);
     expect(r.out).toContain('op is not installed');
   });
@@ -166,14 +194,14 @@ describe('the check', () => {
   const one = () => join(refsDir, 'one.refs');
   const two = () => join(refsDir, 'two.refs');
   // The values op run would put in the environment.
-  const resolved = { A_KEY: VALUES.A_KEY, B_KEY: 'changed-in-the-vault-' + 'y8'.repeat(8), A_BASE_URL: 'https://api.example.com' };
+  const resolved = { A_KEY: VALUES.A_KEY, B_KEY: 'changed-in-the-vault-' + 'y8'.repeat(8), HOLDBACK_AGENT_OPENAI_COMPATIBLE_BASE_URL: 'https://api.deepseek.com' };
 
   it('prints set and length class, same or differs, and stray names, never a value', () => {
     const r = run(CHECK, [one(), '--from', envFile, '--inventory', refsDir], resolved);
     expect(r.code, r.out).toBe(0);
     expect(r.out).toMatch(/A_KEY\s+plausible; same as the local file/);
     expect(r.out).toMatch(/B_KEY\s+plausible; differs from the local file/);
-    expect(r.out).toMatch(/A_BASE_URL\s+plain, as the references file says/);
+    expect(r.out).toMatch(/HOLDBACK_AGENT_OPENAI_COMPATIBLE_BASE_URL\s+plain, as the references file says/);
     expect(r.out).toMatch(/STRAY_TOKEN\s+in the local file, not in the inventory/);
     noValueIn(r.out);
     expect(calls()).toEqual([]);

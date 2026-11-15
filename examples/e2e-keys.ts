@@ -156,7 +156,7 @@ if (process.argv[1] && import.meta.url === pathToFileURL(process.argv[1]).href) 
     }
     if (cmd === 'address') print(seed);
     else if (file !== undefined && file !== '--dry-run') {
-      console.error('usage: node --env-file-if-exists=<file> examples/e2e-keys.ts topup [--dry-run]');
+      console.error('usage: op run --env-file=config/secrets/e2e.refs -- node examples/e2e-keys.ts topup [--dry-run]');
       process.exit(2);
     } else {
       try {
@@ -173,7 +173,7 @@ if (process.argv[1] && import.meta.url === pathToFileURL(process.argv[1]).href) 
       print(seed);
     } else if (existsSync(file) && SETS_SEED.test(readFileSync(file, 'utf8'))) {
       // Only whether the variable is set leaves this read; nothing in the file is printed.
-      console.error(`refusing: ${file} already has ${SEED_VAR}; load it with --env-file-if-exists=${file} and run address`);
+      console.error(`refusing: ${file} already has ${SEED_VAR}; move it to 1Password with node scripts/secrets/copy.mjs --from ${file}, then run address under op run`);
       process.exit(2);
     } else {
       // A file this creates is readable by its owner only; an existing one keeps its mode, so say when others can read it.
@@ -184,7 +184,7 @@ if (process.argv[1] && import.meta.url === pathToFileURL(process.argv[1]).href) 
       print(fresh);
     }
   } else {
-    console.error('usage: node --env-file-if-exists=<file> examples/e2e-keys.ts <init <file> | address | topup [--dry-run]>');
+    console.error('usage: node examples/e2e-keys.ts <init <file> | address | topup [--dry-run]>; address and topup under op run --env-file=config/secrets/e2e.refs');
     process.exit(2);
   }
 }

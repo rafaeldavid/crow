@@ -19,7 +19,7 @@ The two agents meet only through Crow. The seller publishes a card on its own pa
 ```
 pnpm duet list --buyer deepseek --seller claude                   # the models, the caps, the most a run can cost; sends nothing
 pnpm duet run --scenario paid --buyer scripted --seller scripted  # no keys: the harness end to end, about 5 s
-node --env-file=<env file> tools/duet/duet.ts run --buyer deepseek --seller claude --scenario paid
+op run --env-file=config/secrets/agents.refs -- node tools/duet/duet.ts run --buyer deepseek --seller claude --scenario paid
 pnpm duet replay <run folder>                                     # the summary and the page again, from record.jsonl
 ```
 

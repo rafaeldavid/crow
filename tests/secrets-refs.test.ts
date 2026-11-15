@@ -5,7 +5,7 @@ import { readdirSync, readFileSync } from 'node:fs';
 import { join } from 'node:path';
 import { describe, expect, it } from 'vitest';
 // @ts-expect-error: a plain .mjs module with no type declarations
-import { lengthClass, loadRefs, parseRefs, redact } from '../scripts/secrets/refs.mjs';
+import { lengthClass, loadRefs, parseRefs, PLAIN, redact } from '../scripts/secrets/refs.mjs';
 
 const ROOT = join(import.meta.dirname, '..');
 const DIR = join(ROOT, 'config', 'secrets');
@@ -53,10 +53,27 @@ describe('parseRefs', () => {
       expect(parseRefs(`A_KEY=${ref}`, 'f').errors.length, ref).toBe(1);
   });
 
-  it('accepts a reference and an https base URL', () => {
-    const { entries, errors } = parseRefs('A_KEY=op://crow/mac-a/credential\nA_BASE_URL=https://api.deepseek.com\n', 'f');
+  it('accepts a reference and a pinned base URL', () => {
+    const { entries, errors } = parseRefs('A_KEY=op://crow/mac-a/credential\nHOLDBACK_OPENAI_COMPATIBLE_BASE_URL=https://api.deepseek.com\n', 'f');
     expect(errors).toEqual([]);
-    expect(entries.map((e: { name: string }) => e.name)).toEqual(['A_KEY', 'A_BASE_URL']);
+    expect(entries.map((e: { name: string }) => e.name)).toEqual(['A_KEY', 'HOLDBACK_OPENAI_COMPATIBLE_BASE_URL']);
+  });
+
+  it('refuses a base URL pointed at another host, since the key travels to it', () => {
+    for (const line of ['HOLDBACK_OPENAI_COMPATIBLE_BASE_URL=https://attacker.example', 'HOLDBACK_AGENT_OPENAI_COMPATIBLE_BASE_URL=https://api.deepseek.com.evil.example', 'OTHER_BASE_URL=https://api.deepseek.com'])
+      expect(parseRefs(line, 'f').errors.length, line).toBe(1);
+  });
+
+  it('pins each base URL to the host the judges and agents call (a change here is a reviewed change)', () => {
+    expect(PLAIN).toEqual({ HOLDBACK_OPENAI_COMPATIBLE_BASE_URL: 'https://api.deepseek.com', HOLDBACK_AGENT_OPENAI_COMPATIBLE_BASE_URL: 'https://api.deepseek.com' });
+  });
+});
+
+describe('loadRefs', () => {
+  it('names a missing file or folder as an error, without a stack trace', () => {
+    const { entries, errors } = loadRefs([join(ROOT, 'no-such-folder'), DIR]);
+    expect(errors).toEqual([`${join(ROOT, 'no-such-folder')}: no such file or folder`]);
+    expect(entries.length).toBeGreaterThan(0);
   });
 });
 

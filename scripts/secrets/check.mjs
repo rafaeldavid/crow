@@ -13,7 +13,7 @@ import { existsSync, readFileSync } from 'node:fs';
 import { dirname, join } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { parseEnv } from 'node:util';
-import { lengthClass, loadRefs } from './refs.mjs';
+import { isName, lengthClass, loadRefs } from './refs.mjs';
 
 const ROOT = join(dirname(fileURLToPath(import.meta.url)), '..', '..');
 const usage = 'usage: op run --env-file=<refs> -- node scripts/secrets/check.mjs <refs file>... [--from <file>] [--inventory <file or folder>]...';
@@ -47,16 +47,21 @@ for (const e of given.entries) {
   const v = process.env[e.name];
   let state = lengthClass(v);
   if (state === 'not set' || state === 'empty' || state === 'still a reference') ok = false;
-  if (e.plain) state = v === e.plain ? 'plain, as the references file says' : `plain, ${state === 'not set' ? 'not set' : 'differs from the references file'}`;
+  if (e.plain) {
+    if (v !== e.plain) ok = false;
+    state = v === e.plain ? 'plain, as the references file says' : `plain, ${state === 'not set' ? 'not set' : 'differs from the references file'}`;
+  }
   if (local && v !== undefined) state += local[e.name] === undefined ? '; not in the local file' : local[e.name] === v ? '; same as the local file' : '; differs from the local file';
   lines.push([e.name, state]);
 }
 const known = new Set(all.entries.map((e) => e.name));
-const extra = local ? Object.keys(local).filter((n) => !known.has(n)).sort() : [];
+const extra = local ? Object.keys(local).filter((n) => !known.has(n) && isName(n)).sort() : [];
+const odd = local ? Object.keys(local).filter((n) => !isName(n)).length : 0;
 for (const n of extra) lines.push([n, 'in the local file, not in the inventory']);
 
 const width = Math.max(...lines.map(([n]) => n.length));
 console.log(`Check under op run of ${files.join(', ')}${local ? `, compared with ${from}` : ''}:`);
 for (const [n, s] of lines) console.log(`  ${n.padEnd(width)}  ${s}`);
+if (odd) console.log(`  ${odd} line${odd === 1 ? '' : 's'} of the local file parse to no variable name (not shown).`);
 console.log(ok ? 'check: every name is set.' : 'check: a name is not set: see the lines above.');
 process.exit(ok ? 0 : 1);

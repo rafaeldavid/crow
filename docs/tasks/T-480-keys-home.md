@@ -3,7 +3,7 @@
 - **Lane:** infra
 - **Phase:** 2
 - **Depends on:** none
-- **Paths this task may touch:** `config/secrets/`, `config/keys.template` (removed), `config/keys-dev-env.template`, `scripts/secrets/`, `tests/secrets-*.test.ts`, `docs/operations.md`, `docs/secrets-inventory.md`, `docs/demo.md`, `docs/api.md`, `docs/testing.md`, `docs/redeploy-contracts.md`, `package.json` (scripts), and the usage lines of `apps/demo/src/{bin,cli}.ts`, `apps/demo-cloud/scripts/feedback.ts`, `examples/e2e-{keys,round,settle}.ts`, `examples/send-timeout.ts`
+- **Paths this task may touch:** `config/secrets/`, `config/keys.template` (removed), `config/keys-dev-env.template`, `scripts/secrets/`, `tests/secrets-*.test.ts`, `docs/operations.md`, `docs/secrets-inventory.md`, `docs/demo.md`, `docs/api.md`, `docs/testing.md`, `docs/redeploy-contracts.md`, `package.json` (scripts), and the usage lines of `apps/demo/src/{bin,cli}.ts`, `apps/demo-cloud/scripts/feedback.ts`, `examples/e2e-{keys,round,settle}.ts`, `examples/send-timeout.ts`, `tools/duet/README.md`, `tools/duet/duet.ts`
 - **Human gate:** yes: Rafa installs `op`, signs in, runs the copy and the check, pushes the runtime secrets, runs one test deal and removes the file. No agent runs `op` or reads the file.
 - **Status:** in progress
 - **Agent/session:** a sub-session of the coordinator, 2026-11-15
@@ -53,9 +53,20 @@ Today Rafa's keys sit in one `.env` file in the project folder, and every comman
 | **A. Wrangler's OAuth login (today)** | Yes: the token file is readable and the token is account-wide. Fails the rule. | Nothing enforced; his go-ahead is policy only |
 | **B. `op run` in the agent's shell, Rafa approving with Touch ID** | Yes: once approved, `op` in that terminal session reads every item his account can see, for 10 idle minutes and up to 12 hours (1Password, "App integration security", read 2026-11-15). Fails the rule. | A Touch ID prompt per session, which does not say what will be read |
 | **C. A 1Password service account limited to a vault `Crow Agents`** that holds only a Cloudflare token scoped to the named Workers | No: a service account reaches only the vaults granted at creation, and its access cannot change (1Password, "Service accounts", read 2026-11-15). The agent's shell holds the service account's token, which is as good as holding the scoped Cloudflare token. Passes. | Nothing per run; the go-ahead stays policy |
-| **D. Deploys in GitHub Actions, behind an environment with Rafa as required reviewer** | No: no Cloudflare credential reaches an agent's shell at all. The token is an environment secret, released only to a job on `main` that Rafa approved. Passes. | One click, "Review deployments, Approve", on each deploy run; GitHub enforces it |
+| **D. Deploys in GitHub Actions, behind an environment with Rafa as required reviewer** | No Cloudflare credential reaches an agent's shell. The token is an environment secret, released only to a job on `main` that Rafa approved. Passes only once agents stop acting as Rafa on GitHub (below). | One click, "Review deployments, Approve", on each deploy run; GitHub enforces it |
 
-**Recommendation: D.** It turns Rafa's go-ahead, which he gives for every deploy today, into the one approval GitHub enforces, and it deploys the commit on `main` that CI tested. The token it holds is a Cloudflare API token scoped to the Workers it deploys ("Specified Workers", role Editor: deploy, versions, rollback and secret changes on those Workers only; Cloudflare, "Workers authorization", read 2026-11-15). Route changes also need Workers Routes on the zone, and creating a new Worker needs a wider token, which stays Rafa's.
+**The red team's finding (High, measured on 2026-11-15): on the Mac today, every row above is policy, not construction.** Agents run as Rafa's own macOS user, so an agent's shell can:
+- read Wrangler's token file and Rafa's GitHub login, whose token carries the `repo` and `workflow` scopes;
+- read the environment of any process Rafa starts, with `ps eww`, so the keys of an `op run` command are readable while it runs;
+- write to every folder on `PATH`, so a planted `op` could take the values the copy pipes to it. The copy calls `op` by its absolute path and prints that path, which narrows this and does not close it.
+
+Under option D as first drawn, an agent with Rafa's GitHub token could change the deploy workflow and approve the deployment as Rafa: GitHub cannot tell them apart. A CODEOWNERS rule does not help for the same reason, since agents open pull requests as Rafa.
+
+So **two separations make D hold by construction**, and both are Rafa's:
+1. **Agents get a GitHub identity of their own:** a GitHub App, or a fine-grained token without the `workflow` scope or admin rights, which cannot review deployments. The deploy environment turns on "prevent self-review".
+2. **Agents run as a separate macOS user,** or in a virtual machine or container, so Rafa's home folder, his Keychain and his processes are out of reach.
+
+**Recommendation: D, with both separations.** It turns Rafa's go-ahead, which he gives for every deploy today, into the one approval GitHub enforces, and it deploys the commit on `main` that CI tested. Until the separations exist, the rule "an agent's shell cannot read a key it has no business with" holds as policy only, and this doc says so instead of claiming construction. The token it holds is a Cloudflare API token scoped to the Workers it deploys ("Specified Workers", role Editor: deploy, versions, rollback and secret changes on those Workers only; Cloudflare, "Workers authorization", read 2026-11-15). Route changes also need Workers Routes on the zone, and creating a new Worker needs a wider token, which stays Rafa's.
 
 - **What it needs, all Rafa's:** a workflow file in `.github/` and an environment with its reviewer rule (tier 3 and repository settings), and the scoped token issued in Cloudflare. This task builds none of it; the Handoff lists it.
 - **Until it lands,** agents' deploys keep Wrangler's login (option A), a known gap. Once it lands, Rafa runs `wrangler logout` on the Mac and uses `config/secrets/cloudflare.refs` for his own Wrangler commands.
@@ -74,7 +85,8 @@ Today Rafa's keys sit in one `.env` file in the project folder, and every comman
 - **Search (measured):** `git grep` over every tracked file, with `.env*` and `.dev.vars*` excluded by pathspec, for `process.env`, `env.`, `--env-file`, `dotenv` and the secret-shaped names; the Wrangler secret names in `apps/*/scripts` and `apps/hosted-sellers/src/deploy-plan.ts`; `secrets.` in `.github/workflows/` (only `GITHUB_TOKEN`). In crow-private, the same search on `origin/main` found its console commands loading the same file.
 - **The local files (measured, by path only):** `find /Users/rafa/Documents/escrow -name '.env*'` lists one local env file besides the committed `.env.example`: `/Users/rafa/Documents/escrow/.env`. No `.dev.vars*` file exists.
 - **Tests (measured, 2026-11-15):** `pnpm exec vitest run tests/secrets-refs.test.ts tests/secrets-scripts.test.ts`: 21 tests pass. With `examples/send-timeout.test.ts`, `examples/e2e-round.test.ts` and `apps/demo/src/cli.test.ts` after `pnpm build`: pass. `pnpm typecheck` and ESLint on the changed files: clean.
-- **Not verified (no `op`, no value):** that `op item template get "API Credential"` names its secret field `credential`. The copy checks it first and stops, creating nothing, if not. That `op run` takes `--env-file` more than once is inferred from its reference page (the flag is a `stringArray`, and "the last environment file takes precedence"); the copy prints one command per file set, so a single file always works.
+- **Not verified (no `op`, no value):** that `op item template get "API Credential"` names its secret field `credential`. The copy checks it first and stops, creating nothing, if not. That `op run` takes `--env-file` more than once is inferred from its reference page (the flag is a `stringArray`, and "the last environment file takes precedence"); the copy prints one command per file set, so a single file always works. That `op item create … -` reads the item from standard input is documented ("Pass the `-` character as the first argument"); if it did not, the check would show the item "empty". Whether `op` keeps the top-level `notesPlain` the copy sends is unverified; nothing depends on it.
+- **Reviews (2026-11-15):** the `reviewer` returned ISSUES (two High: step 6's private folder did not exist yet, and `site/try.mjs` needs two npm packages; Medium and Low wording). The `red-teamer` returned two High (the "by construction" claims held only as policy; a one-line change to a base URL would send a key to another host) and three Medium (a wrapped value printed as a name, `op`'s error text echoing an escaped value, the account never shown). All are fixed in the third commit: the steps, the design's wording, pinned base URLs (`PLAIN` in `refs.mjs`), names printed only when shaped like a variable, no `op` error text after a value went in, the account, vault and `op` path shown before a typed yes, and a refusal while a service account or Connect token is set. Tests cover each.
 
 ## Decisions
 
@@ -115,56 +127,89 @@ op whoami
 op vault create Crow
 ```
 
-5. **Bring the main checkout up to date** once this pull request has merged. It prints the files it fast-forwarded.
+5. **Bring both checkouts up to date,** once this pull request and crow-private's PR 85 have merged. Each prints the files it fast-forwarded.
 
 ```bash
 git -C /Users/rafa/Documents/escrow pull --ff-only
 ```
 
-6. **Preview the copy.** It reads the file, calls no `op`, and lists each name as "would be copied", "missing in the file" or "in the file, not in the inventory". Send the coordinator the names of the last kind, names only. The private repository's folder joins once its own references file has merged.
+```bash
+git -C /Users/rafa/Documents/escrow/reports/crow-private pull --ff-only
+```
+
+6. **Check that the scripts are the reviewed ones.** Agents merge pull requests, so a later change to these files would run with your file open. This lists every commit that changed them. It should show only commits whose subject starts with "T-480:" and the merge of holdback PR 579; anything else, stop and ask the coordinator.
+
+```bash
+git -C /Users/rafa/Documents/escrow log --format='%h %as %s' -- scripts/secrets config/secrets apps/demo-cloud/scripts/secrets.mjs
+```
+
+7. **Preview the copy.** It reads the file, calls no `op`, and lists each name as "would be copied", "missing in the file" or "in the file, not in the inventory". A line that parses to no name is counted, never shown. Send the coordinator the names of the "not in the inventory" kind, names only.
 
 ```bash
 node /Users/rafa/Documents/escrow/scripts/secrets/copy.mjs --dry-run --refs /Users/rafa/Documents/escrow/config/secrets --refs /Users/rafa/Documents/escrow/reports/crow-private/control/secrets
 ```
 
-7. **Run the copy.** It lists each name as "created", "exists, left alone" or "missing in the file", and ends with the check's command for the files whose items all exist. A failure stops it with what to do; running it again leaves the items already made alone.
+8. **Run the copy.** Before it writes anything it prints the `op` it calls, which should be `/opt/homebrew/bin/op`, your account and the vault, and the items it will create, then asks you to type `yes`. Any other `op` path, account or vault: answer no. It then lists each name as "created", "exists, left alone" or "missing in the file", and ends with the check's command for the files whose items all exist. A failure stops it with what to do, and shows none of `op`'s own error text; running it again leaves the items already made alone.
 
 ```bash
 node /Users/rafa/Documents/escrow/scripts/secrets/copy.mjs --refs /Users/rafa/Documents/escrow/config/secrets --refs /Users/rafa/Documents/escrow/reports/crow-private/control/secrets
 ```
 
-8. **Run the check** the copy printed, from the same folder. For the live judges alone it reads as below. Each line should say "plausible; same as the local file", and the last line "check: every name is set."
+9. **Run the check the copy printed,** from the same folder, as it printed it: it names every references file whose items exist and both inventory folders. It should read:
+   - each key: "plausible; same as the local file";
+   - each base URL: "plain, as the references file says; same as the local file";
+   - no line "in the local file, not in the inventory", "not set", "empty" or "differs";
+   - the last line: "check: every name is set."
+
+   For the live judges alone the command reads:
 
 ```bash
-op run --env-file=/Users/rafa/Documents/escrow/config/secrets/judges.refs -- node /Users/rafa/Documents/escrow/scripts/secrets/check.mjs /Users/rafa/Documents/escrow/config/secrets/judges.refs
+op run --env-file=/Users/rafa/Documents/escrow/config/secrets/judges.refs -- node /Users/rafa/Documents/escrow/scripts/secrets/check.mjs /Users/rafa/Documents/escrow/config/secrets/judges.refs --inventory /Users/rafa/Documents/escrow/config/secrets --inventory /Users/rafa/Documents/escrow/reports/crow-private/control/secrets
 ```
 
-9. **Push the judges' keys to holdback-op1 from 1Password.** The values are the same as today's, so the live judges do not change. It prints "Set HOLDBACK_ANTHROPIC_API_KEY, HOLDBACK_OPENAI_COMPATIBLE_API_KEY, HOLDBACK_OPENAI_COMPATIBLE_BASE_URL on holdback-op1."
+10. **Push the judges' keys to holdback-op1 from 1Password.** Only if step 9 showed the base URL "same as the local file": then the values equal today's and the live judges do not change. If it said "differs", stop and tell the coordinator. It prints "Set HOLDBACK_ANTHROPIC_API_KEY, HOLDBACK_OPENAI_COMPATIBLE_API_KEY, HOLDBACK_OPENAI_COMPATIBLE_BASE_URL on holdback-op1."
 
 ```bash
 op run --env-file=/Users/rafa/Documents/escrow/config/secrets/judges.refs -- pnpm -C /Users/rafa/Documents/escrow demo-cloud:secrets
 ```
 
-10. **Run one test deal** against the live operators and the test seller. It ends with the deal released.
+11. **Run one test deal** against both live operators, from the workspace. The first two commands install and build the checkout you pulled; the third ends with the deal `Released`, within about three minutes.
 
 ```bash
-node /Users/rafa/Documents/escrow/site/try.mjs --seller https://crow.direct/agents/test-seller
+pnpm -C /Users/rafa/Documents/escrow install --frozen-lockfile
 ```
 
-11. **Only then, remove the file:** move `/Users/rafa/Documents/escrow/.env` to the Trash in Finder (Go, then Go to Folder, the path above; hidden files show with Command-Shift-Period). After that, `ls -a /Users/rafa/Documents/escrow` lists no `.env`.
+```bash
+pnpm -C /Users/rafa/Documents/escrow build
+```
+
+```bash
+HOLDBACK_OPERATORS=https://api.crow.direct,https://api2.crow.direct node /Users/rafa/Documents/escrow/examples/try.ts
+```
+
+12. **Only then, remove the file,** and only if step 9 was clean. In Finder, Go, then Go to Folder, `/Users/rafa/Documents/escrow` (Command-Shift-Period shows hidden files), move `.env` to the Trash, then empty the Trash: a file in the Trash stays readable. After that, `ls -a /Users/rafa/Documents/escrow` lists no `.env`. Older copies may sit in Time Machine; revoking the old keys (below) is what retires them.
 
 ### What row N137 still needs from Rafa afterwards
 
-- **New keys, one per job and machine,** each with a spend cap at its provider, each in its own item: the live demo's Anthropic and DeepSeek keys apart from holdback-op1's (`mac-demo-judges-anthropic`, `mac-demo-judges-deepseek`, then a `demo-live.refs`), and the one-click bench's Anthropic key apart from duet's. Push holdback-op1's new keys with step 9, and run one deal (step 10).
-- **Revoke the old keys** at Anthropic and DeepSeek once the new ones work, then empty the Trash.
-- **The deploy design (option D):** a Cloudflare API token scoped to the deployed Workers; a GitHub environment `deploy` with Rafa as required reviewer and `main` as its only branch; then `wrangler logout` on the Mac.
+- **New keys, one per job and machine,** each with a spend cap at its provider, each in its own item: the live demo's Anthropic and DeepSeek keys apart from holdback-op1's (`mac-demo-judges-anthropic`, `mac-demo-judges-deepseek`, then a `demo-live.refs`), and the one-click bench's Anthropic key apart from duet's. Push holdback-op1's new keys with step 10, and run one deal (step 11).
+- **Revoke the old keys** at Anthropic and DeepSeek once the new ones work.
+- **The two separations the design needs:** a GitHub identity for agents (a GitHub App or a fine-grained token without the `workflow` scope or admin rights), and a separate macOS user, virtual machine or container for agent sessions.
+- **The deploy design (option D):** a Cloudflare API token scoped to the deployed Workers; a GitHub environment `deploy` with Rafa as required reviewer, "prevent self-review" on and `main` as its only branch; then `wrangler logout` on the Mac.
 - **`.env.example`,** committed from the starter kit and named by `.gitignore`. No agent may open it to reword it, so Rafa deletes or rewrites it himself. Nothing reads it (measured: `git grep` finds no reference).
 
 ### Proposed tier 3 changes (Rafa's files)
 
 - `.github/workflows/deploy.yml` for option D, and the environment rule.
-- `.github/CODEOWNERS`: Rafa as owner of `scripts/secrets/` and `config/secrets/`, since he runs those scripts with his keys and agents merge pull requests.
-- `.claude/settings.json`: deny `Bash(op:*)`, `Bash(op *)` and Bash reads of `.env*`, beside today's Read rules, which cover the Read tool only.
+- `.github/CODEOWNERS`: Rafa as owner of `scripts/secrets/` and `config/secrets/`. It binds only once agents have their own GitHub identity: today they open pull requests as Rafa, and an author cannot review his own. Until then step 6 of the list is the guard.
+- `.claude/settings.json`: deny `Bash(op:*)` and Bash reads of `.env*`, beside today's Read rules, which cover the Read tool only. This is a tripwire, not a fence: `/opt/homebrew/bin/op` or a `node -e` spawn gets past it (red team).
+
+### Left for later (Low findings, recorded)
+
+- `examples/e2e-keys.ts init <file>` still writes a fresh seed into a plain file; Crow's own seed moves to 1Password with the copy.
+- Foundry's `forge` may load a `.env` it finds by itself (inferred, not measured), so contract commands could read the root `.env` until it is gone.
+- `apps/demo-cloud/scripts/secrets.mjs` runs `npx -y wrangler@4`, a version fetched at run time, with the three keys in its environment; pin an exact version.
+- crow-private's `control/new-kek.mjs` still appends a new console key to the env file it is given; a rotation then ends with the copy run on that file.
+- The old remote branch `t-480-keys-home` holds one commit that gitleaks flagged as a false positive (an item title beside the word "key"). No pull request uses it; deleting it is Rafa's call.
 
 ### Open questions
 

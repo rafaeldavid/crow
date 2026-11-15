@@ -3,16 +3,24 @@
 // `op run --env-file=<file> -- <command>`, or `NAME=<value>` for plain configuration that is not a secret
 // (today an https base URL only). This module parses and checks the files; it never resolves a reference
 // and never reads a secret.
-import { readdirSync, readFileSync, statSync } from 'node:fs';
+import { existsSync, readdirSync, readFileSync, statSync } from 'node:fs';
 import { basename, join } from 'node:path';
 
 /** Vault, item and field names: lowercase letters, digits and hyphens, so a reference needs no quoting or ID. */
 const PART = '[a-z0-9][a-z0-9-]*';
 const REF = new RegExp(`^op://(${PART})/(${PART})/(${PART})$`);
 const NAME = /^[A-Z][A-Z0-9_]*$/;
-/** Plain values are allowed only for these names, and only as an https origin with an optional plain path. */
-const PLAIN_NAME = /_BASE_URL$/;
-const PLAIN_VALUE = /^https:\/\/[a-z0-9.-]+(\/[A-Za-z0-9._/-]*)?$/;
+/** Whether a string has the shape of a variable name; the scripts print no other key of the local file. */
+export const isName = (n) => NAME.test(n);
+/**
+ * The plain configuration a references file may hold: each allowed name with its one allowed value. A key travels
+ * to the host its base URL names, so a new host is a change to this table, beside the test that pins it
+ * (tests/secrets-refs.test.ts), and never a one-line edit of a references file.
+ */
+export const PLAIN = Object.freeze({
+  HOLDBACK_OPENAI_COMPATIBLE_BASE_URL: 'https://api.deepseek.com',
+  HOLDBACK_AGENT_OPENAI_COMPATIBLE_BASE_URL: 'https://api.deepseek.com',
+});
 /** The one vault every reference names (the design in docs/tasks/T-480-keys-home.md). */
 export const VAULT = 'crow';
 /** Every item holds one key, in one field of this name (the API Credential category's own secret field). */
@@ -41,7 +49,7 @@ export function parseRefs(text, file) {
       if (m[1] !== VAULT) return void errors.push(`${at}: ${name} names vault "${m[1]}", not "${VAULT}"`);
       if (m[3] !== FIELD) return void errors.push(`${at}: ${name} names field "${m[3]}", not "${FIELD}"`);
       entries.push({ name, file, line: i + 1, ref: { vault: m[1], item: m[2], field: m[3] } });
-    } else if (PLAIN_NAME.test(name) && PLAIN_VALUE.test(value)) {
+    } else if (Object.hasOwn(PLAIN, name) && PLAIN[name] === value) {
       entries.push({ name, file, line: i + 1, plain: value });
     } else {
       errors.push(`${at}: ${name} is neither an op://${VAULT}/<item>/<field> reference nor allowed plain configuration`);
@@ -64,7 +72,9 @@ export function refsFiles(path) {
 export function loadRefs(paths) {
   const all = [];
   const errors = [];
-  for (const p of paths.flatMap(refsFiles)) {
+  const missing = paths.filter((p) => !existsSync(p));
+  for (const p of missing) errors.push(`${p}: no such file or folder`);
+  for (const p of paths.filter((x) => !missing.includes(x)).flatMap(refsFiles)) {
     if (basename(p).startsWith('.env')) { errors.push(`${p}: a references file never has a name starting with .env`); continue; }
     const r = parseRefs(readFileSync(p, 'utf8'), p);
     all.push(...r.entries);
