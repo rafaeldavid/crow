@@ -78,7 +78,8 @@ Three rules shape it, each taken from the Blygger study:
 
 - **No prompt.** A missing answer makes the command print one JSON object that names each question in plain words, and exit with status 3. The assistant asks the person and runs the command again. Only `secret` prompts, and only a person runs it.
 - **Each step checks before it creates.** Progress is in `crow.json` in the folder. A rerun after a failure continues, with no second key, offer or delivery.
-- **No shared default for what identifies or prices a party.** The command asks for the price and the item's name, derives the card's name from the party's host, and leaves the payout address unset until the person gives one. It pins what every party must share: the EIP-712 domain, the deployment and the operators.
+- **No shared default for what identifies or prices a party.** The command asks for the price, the item's name and the payout address, and derives the card's name from the party's host. It pins what every party must share: the EIP-712 domain, the deployment and the operators.
+- **The payout address is always asked.** With a fresh key for each deal and no payout address, every deal would name the standing key's address as its payout address, which links the deals in their public terms (measured: the adapter warns of it at start, `examples/seller-adapter-core.ts`). The person gives an address whose key is not on this machine, or answers "this folder's key" and is told what that links and where that key lives.
 
 **Why a bundle and not a clone.** Today's seller path clones the repository, installs and builds: one long command, minutes, and the whole source tree. A pinned bundle is one download with a hash, the pattern that took the buyer's test deal to 1 approval (measured, T-229). The risk is that the adapter and the check library do not bundle into one file that runs with two pinned packages; T-472 proves that first and stops if it fails.
 
