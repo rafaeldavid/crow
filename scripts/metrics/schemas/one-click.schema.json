@@ -606,6 +606,9 @@
               "requestsBeforeFirstDeal": {
                 "type": "null"
               },
+              "listingRequestsBeforeFirstDeal": {
+                "type": "null"
+              },
               "guideFilesFetched": {
                 "type": "null"
               }
@@ -629,6 +632,9 @@
             "properties": {
               "guideFilesFetched": {
                 "type": "null"
+              },
+              "listingRequestsBeforeFirstDeal": {
+                "type": "null"
               }
             }
           },
@@ -637,6 +643,9 @@
             "properties": {
               "guideFilesFetched": {
                 "type": "integer"
+              },
+              "listingRequestsBeforeFirstDeal": {
+                "type": "object"
               }
             }
           }
@@ -648,7 +657,67 @@
           "description": "the setup command's first-deal marker was seen (its line in command output, or its file in the run's folder)"
         },
         "requestsBeforeFirstDeal": {
-          "description": "Before the marker: requests to a Crow-run host that are not a GET, and requests whose path or query holds an address, by host. Null when unknown.",
+          "description": "Before the marker: requests to a Crow-run host that are not a GET, and requests whose path or query holds an address, by host. The listing step's requests are counted apart, in listingRequestsBeforeFirstDeal (T-486). Null when unknown.",
+          "oneOf": [
+            {
+              "type": "null"
+            },
+            {
+              "type": "object",
+              "additionalProperties": false,
+              "required": [
+                "total",
+                "byHost"
+              ],
+              "if": {
+                "type": "object",
+                "properties": {
+                  "total": {
+                    "const": 0
+                  }
+                },
+                "required": [
+                  "total"
+                ]
+              },
+              "then": {
+                "type": "object",
+                "properties": {
+                  "byHost": {
+                    "type": "object",
+                    "maxProperties": 0
+                  }
+                }
+              },
+              "else": {
+                "type": "object",
+                "properties": {
+                  "byHost": {
+                    "type": "object",
+                    "minProperties": 1
+                  }
+                }
+              },
+              "properties": {
+                "total": {
+                  "$ref": "common.schema.json#/$defs/Count"
+                },
+                "byHost": {
+                  "type": "object",
+                  "maxProperties": 40,
+                  "propertyNames": {
+                    "pattern": "^(unknown|https?://[A-Za-z0-9.:\\[\\]-]{1,200})$"
+                  },
+                  "additionalProperties": {
+                    "$ref": "common.schema.json#/$defs/Count"
+                  }
+                }
+              }
+            }
+          ]
+        },
+        "listingRequestsBeforeFirstDeal": {
+          "description": "T-486: before the marker, the requests of the setup's listing step, by host: a POST whose path is exactly /listing, on any host. They are left out of requestsBeforeFirstDeal. Optional, so a version 3 record written before T-486 stays valid; null when unknown.",
           "oneOf": [
             {
               "type": "null"

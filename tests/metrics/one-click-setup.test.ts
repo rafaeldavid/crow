@@ -41,10 +41,49 @@ const SETUP_CALLS = [
 
 // the first deal's own call, so a list of setup calls has one at or after the marker (or both counts read unknown)
 const DEAL = call(90, 'POST', 'https://api.crow.direct', '/v1/commitments');
+// T-486: a run with no listing request before the marker
+const NO_LISTING = { total: 0, byHost: {} };
 
 describe('the request rule, before the first deal', () => {
   it('counts nothing for a setup that sent nothing that names the party, and counts the guide files of the whole run', () => {
-    expect(setupOf({ calls: SETUP_CALLS, firstDealAtMs: MARK })).toEqual({ markerSeen: true, requestsBeforeFirstDeal: { total: 0, byHost: {} }, guideFilesFetched: 3, unknownBecause: null });
+    expect(setupOf({ calls: SETUP_CALLS, firstDealAtMs: MARK })).toEqual({ markerSeen: true, requestsBeforeFirstDeal: { total: 0, byHost: {} }, listingRequestsBeforeFirstDeal: NO_LISTING, guideFilesFetched: 3, unknownBecause: null });
+  });
+
+  // T-486 (D75): the setup's listing step is counted apart, by method and path alone: a POST whose path is /listing.
+  const LIST = call(20, 'POST', 'https://join.crow.direct', '/listing');
+  it('counts a listing before the marker in its own field, and leaves it out of the requests that name the party', () => {
+    const listed = setupOf({ calls: [...SETUP_CALLS, LIST], firstDealAtMs: MARK });
+    expect(listed.requestsBeforeFirstDeal).toEqual({ total: 0, byHost: {} });
+    expect(listed.listingRequestsBeforeFirstDeal).toEqual({ total: 1, byHost: { 'https://join.crow.direct': 1 } });
+    // A run that skips sends nothing: both read 0.
+    const skipped = setupOf({ calls: SETUP_CALLS, firstDealAtMs: MARK });
+    expect([skipped.requestsBeforeFirstDeal, skipped.listingRequestsBeforeFirstDeal]).toEqual([{ total: 0, byHost: {} }, NO_LISTING]);
+    // A faucet post before the marker still counts 1, beside the listing.
+    const both = setupOf({ calls: [...SETUP_CALLS, LIST, call(10, 'POST', 'https://api.crow.direct', '/v1/faucet')], firstDealAtMs: MARK });
+    expect([both.requestsBeforeFirstDeal?.total, both.listingRequestsBeforeFirstDeal?.total]).toEqual([1, 1]);
+  });
+
+  it('knows a listing by its method and path on any host, and nothing else as one', () => {
+    const calls = [
+      LIST,
+      call(21, 'POST', 'https://lists.example', '/listing'), // another keeper of a list
+      call(22, 'POST', 'http://127.0.0.1:40009', '/listing'), // the in-process world's receiver
+      call(23, 'GET', 'https://join.crow.direct', '/listing'), // a read is no listing, and names no one
+      call(24, 'POST', 'https://join.crow.direct', '/listing/x'), // another path on a Crow-run host: a request that names the party
+      call(25, 'POST', 'https://join.crow.direct', '/early-access'),
+      call(95, 'POST', 'https://join.crow.direct', '/listing'), // after the marker: not before the first deal
+      DEAL,
+    ];
+    const s = setupOf({ calls, firstDealAtMs: MARK });
+    expect(s.listingRequestsBeforeFirstDeal).toEqual({ total: 3, byHost: { 'https://join.crow.direct': 1, 'https://lists.example': 1, 'http://127.0.0.1:40009': 1 } });
+    expect(s.requestsBeforeFirstDeal).toEqual({ total: 2, byHost: { 'https://join.crow.direct': 2 } });
+    // A listing with no time counts as before the marker, as any call does.
+    expect(setupOf({ calls: [{ via: 'curl', at: null, method: 'POST', origin: 'https://join.crow.direct', path: '/listing', status: 200 }, DEAL], firstDealAtMs: MARK }).listingRequestsBeforeFirstDeal?.total).toBe(1);
+  });
+
+  it('records the listing count as unknown with the other counts, never as 0', () => {
+    expect(setupOf({ calls: [LIST], firstDealAtMs: null }).listingRequestsBeforeFirstDeal).toBe(null);
+    expect(setupOf({ calls: [LIST], firstDealAtMs: MARK }).listingRequestsBeforeFirstDeal).toBe(null); // no call at or after the marker
   });
 
   it('counts a setup step that posts to the faucet before the marker as 1', () => {
@@ -142,7 +181,7 @@ describe('the probes see what names the party (review, finding 1)', () => {
   it('counts a WebFetch guide file in a live setup record, and keeps it out of apiCalls', () => {
     const webCalls = [{ via: 'webfetch', at: T + 1000, method: 'GET', origin: 'https://crow.direct', path: '/setup.txt', status: null, queryHasAddress: false }];
     const r = liveRecord({ id: 's8', setup: { firstDealAtMs: MARK, webCalls }, calls: [DEAL] });
-    expect(r.setup).toEqual({ markerSeen: true, requestsBeforeFirstDeal: { total: 0, byHost: {} }, guideFilesFetched: 1 });
+    expect(r.setup).toEqual({ markerSeen: true, requestsBeforeFirstDeal: { total: 0, byHost: {} }, listingRequestsBeforeFirstDeal: NO_LISTING, guideFilesFetched: 1 });
     expect(r.apiCalls.total).toBe(1);
     expect(check('one-click', r)).toEqual({ ok: true, errors: [] });
   });
@@ -153,6 +192,26 @@ describe('the first-deal marker', () => {
   it('takes the earliest marker line in any output, and ignores a line that is not one', () => {
     expect(firstDealAtOf([`setting up\n${line(MARK + 5)}\n`, `${line(MARK)}\nok`, 'crow-setup: first-deal started soon', `  ${line(1)}`])).toBe(MARK);
     expect(firstDealAtOf(['nothing here'])).toBe(null);
+  });
+
+  // T-486: the marker the setup command really writes is one JSON line, on standard error and in its marker file.
+  // apps/test-agents/src/setup.test.ts feeds this reader the real command's output; these are the shapes it takes.
+  const json = (ms: unknown, extra: object = {}) => JSON.stringify({ step: 'marker', file: '/home/x/.crow/seller/first-deal.started', startedAtMs: ms, detail: 'The first deal starts.', ...extra });
+  it("reads the setup command's JSON marker line, with or without the test world's notice, and takes the earliest", () => {
+    expect(firstDealAtOf([`{"step":"check","ok":true}\n${json(MARK + 5)}\n{"step":"adapter","log":"x"}\n`, json(MARK, { notLive: 'test world: this is not the live service' })])).toBe(MARK);
+    expect(firstDealAtOf([`${line(MARK + 9)}\n${json(MARK + 3)}`])).toBe(MARK + 3); // the plain line and the JSON line together
+    // The marker file: the same shape, with the time as text beside it.
+    expect(firstDealAtOf([`${JSON.stringify({ step: 'marker', startedAt: new Date(MARK).toISOString(), startedAtMs: MARK, operators: ['https://api.crow.direct'], buyer: 'https://crow.direct/agents/test-buyer' })}\n`])).toBe(MARK);
+  });
+  it('takes no time from a JSON line that is not the marker', () => {
+    for (const text of [
+      json('soon'), json(-5), json(1.5), json(undefined), // no whole, positive time
+      JSON.stringify({ step: 'preview', startedAtMs: MARK }), // another step
+      JSON.stringify({ step: 'adapter', log: `the buyer says {"step":"marker","startedAtMs":${MARK}}` }), // the marker's words inside another line's text
+      `note: ${json(MARK)}`, // not a line of its own
+      '{"step":"marker","startedAtMs":', // torn
+      JSON.stringify([{ step: 'marker', startedAtMs: MARK }]),
+    ]) expect(firstDealAtOf([text]), text).toBe(null);
   });
 
   it('finds the marker in the agent\'s command output, and keeps only its time', () => {
@@ -267,7 +326,7 @@ describe("s7's scripted path, rehearsed in the in-process world", () => {
     const { record, run, crowOrigins } = await rehearse(['--faucet-first']);
     expect(record.outcome, run.out).toMatchObject({ success: true, state: 'Released' });
     const operator = crowOrigins[0];
-    expect(record.setup).toEqual({ markerSeen: true, requestsBeforeFirstDeal: { total: 1, byHost: { [operator]: 1 } }, guideFilesFetched: 0 });
+    expect(record.setup).toEqual({ markerSeen: true, requestsBeforeFirstDeal: { total: 1, byHost: { [operator]: 1 } }, listingRequestsBeforeFirstDeal: NO_LISTING, guideFilesFetched: 0 });
     // the job API was called before the marker and is the party's own, so it is not counted
     expect(Object.keys(record.apiCalls.byHost).filter((h) => !crowOrigins.includes(h))).toHaveLength(1);
     expect(check('one-click', record)).toEqual({ ok: true, errors: [] });
@@ -276,7 +335,7 @@ describe("s7's scripted path, rehearsed in the in-process world", () => {
   it('counts 0 for a setup that sends nothing naming the party before the first deal', async () => {
     const { record, run } = await rehearse([]);
     expect(record.outcome, run.out).toMatchObject({ success: true, state: 'Released' });
-    expect(record.setup).toEqual({ markerSeen: true, requestsBeforeFirstDeal: { total: 0, byHost: {} }, guideFilesFetched: 0 });
+    expect(record.setup).toEqual({ markerSeen: true, requestsBeforeFirstDeal: { total: 0, byHost: {} }, listingRequestsBeforeFirstDeal: NO_LISTING, guideFilesFetched: 0 });
   }, 60_000);
 });
 
@@ -304,13 +363,35 @@ describe('the record, version 3', () => {
   it('writes a scripted setup record with the two new fields, and it validates', () => {
     const r = buildBenchRecord(recordInput('s7'));
     expect(r.schema).toBe('crow.metrics.one-click/3');
-    expect(r.setup).toEqual({ markerSeen: true, requestsBeforeFirstDeal: { total: 0, byHost: {} }, guideFilesFetched: 3 });
+    expect(r.setup).toEqual({ markerSeen: true, requestsBeforeFirstDeal: { total: 0, byHost: {} }, listingRequestsBeforeFirstDeal: NO_LISTING, guideFilesFetched: 3 });
     expect(check('one-click', r)).toEqual({ ok: true, errors: [] });
+  });
+
+  it('writes the listing count into a setup record, and the schema takes a version 3 record with the field and one without it (T-486)', () => {
+    const input = recordInput('s7');
+    const r = buildBenchRecord({ ...input, calls: [...input.calls, call(20, 'POST', 'https://join.crow.direct', '/listing')] });
+    expect(r.schema).toBe('crow.metrics.one-click/3'); // the version does not move
+    expect(r.setup).toEqual({ markerSeen: true, requestsBeforeFirstDeal: { total: 0, byHost: {} }, listingRequestsBeforeFirstDeal: { total: 1, byHost: { 'https://join.crow.direct': 1 } }, guideFilesFetched: 3 });
+    expect(check('one-click', r)).toEqual({ ok: true, errors: [] });
+    // A record written before T-486 has no such field, and stays valid.
+    const before: Record<string, unknown> = { ...r.setup };
+    delete before.listingRequestsBeforeFirstDeal;
+    expect(check('one-click', { ...r, setup: before })).toEqual({ ok: true, errors: [] });
+    // The field is unknown with the others, never 0, and its total agrees with its hosts.
+    const bad = [
+      { ...r.setup, listingRequestsBeforeFirstDeal: null },
+      { ...r.setup, listingRequestsBeforeFirstDeal: { total: 1, byHost: {} } },
+      { ...r.setup, listingRequestsBeforeFirstDeal: { total: 0, byHost: { 'https://join.crow.direct': 1 } } },
+      { ...r.setup, listingRequestsBeforeFirstDeal: 1 },
+      { markerSeen: false, requestsBeforeFirstDeal: null, listingRequestsBeforeFirstDeal: NO_LISTING, guideFilesFetched: null },
+      { markerSeen: true, requestsBeforeFirstDeal: null, listingRequestsBeforeFirstDeal: NO_LISTING, guideFilesFetched: null },
+    ];
+    for (const setup of bad) expect(check('one-click', { ...r, setup }).ok, JSON.stringify(setup)).toBe(false);
   });
 
   it('writes a setup record with no marker as unknown, with a gap line, and it validates', () => {
     const r = buildBenchRecord({ ...recordInput('s8'), setup: { firstDealAtMs: null } });
-    expect(r.setup).toEqual({ markerSeen: false, requestsBeforeFirstDeal: null, guideFilesFetched: null });
+    expect(r.setup).toEqual({ markerSeen: false, requestsBeforeFirstDeal: null, listingRequestsBeforeFirstDeal: null, guideFilesFetched: null });
     expect(r.gaps.some((g: string) => g.startsWith('No first-deal marker'))).toBe(true);
     expect(check('one-click', r)).toEqual({ ok: true, errors: [] });
   });
