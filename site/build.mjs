@@ -937,6 +937,8 @@ export function referenceText(guides) {
 
 /** The images a publish build copies as they are. */
 export const ASSETS = ['crow.png', 'crow-2x.webp', 'crow-mark.svg', 'favicon.png', 'og.png'];
+/** A party's card's JSON Schema (T-474, D74): a publish build copies it as it is, served at https://crow.direct/card.schema.json. */
+export const CARD_SCHEMA = 'card.schema.json';
 
 /** The published files: placeholders filled, editor notes gone. */
 export function filled(md, { op1, op2, command = tryCommand(), goals = goalCommands() }) {
@@ -1021,6 +1023,7 @@ if (import.meta.url === `file://${process.argv[1]}`) {
     // tree has uncommitted changes or git cannot answer.
     writeFileSync(join(out, 'version.json'), `${JSON.stringify({ commit: buildCommit() }, null, 2)}\n`);
     for (const f of ASSETS) writeFileSync(join(out, f), readFileSync(here(f)));
+    writeFileSync(join(out, CARD_SCHEMA), readFileSync(here(CARD_SCHEMA)));
     // T-428: the favicon set from the brand kit, at the site's root, so /favicon.ico answers a client that asks blind.
     for (const f of ICON_FILES) writeFileSync(join(out, f), iconBytes(f));
     // The visual walkthrough of a real two-agent deal, served at /visualdemo.

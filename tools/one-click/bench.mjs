@@ -1,6 +1,6 @@
 #!/usr/bin/env node
-// The benchmark harness (T-412, roadmap B1): runs one of the six outsider scenarios (scenarios.mjs) with a fresh agent
-// and writes one record, `crow.metrics.one-click/2` (bench-record.mjs builds it; scripts/metrics/schemas/
+// The benchmark harness (T-412, roadmap B1): runs one of the six outsider scenarios or the two setup scenarios (scenarios.mjs) with a fresh agent
+// and writes one record, `crow.metrics.one-click/2` or `/3` for a setup scenario (bench-record.mjs builds it; scripts/metrics/schemas/
 // one-click.schema.json checks it). A record that fails its schema is kept as <runId>.json.invalid.
 //
 //   node tools/one-click/bench.mjs --scenario s1                 scripted: no key, no model, no network beyond 127.0.0.1
@@ -15,18 +15,23 @@
 // Options (live only): --model (claude-opus-5-5), --effort (medium), --permissions (prompt | sandbox-auto; T-441),
 // --max-replies (4), --timeout-min (40), --idle-min (5), --unsandboxed, --logs <dir> (raw messages, scrubbed, outside git).
 import { spawnSync } from 'node:child_process';
-import { mkdirSync, mkdtempSync, readFileSync, renameSync, rmSync, writeFileSync } from 'node:fs';
-import { tmpdir } from 'node:os';
+import { randomBytes } from 'node:crypto';
+import { mkdirSync, readFileSync, renameSync, writeFileSync } from 'node:fs';
 import { basename, join, resolve, sep } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { parseArgs } from 'node:util';
 import { check } from '../../scripts/metrics/check.mjs';
 import { ROOT, gitCommit } from '../../scripts/metrics/lib.mjs';
 import { PERMISSIONS } from './bench-live.mjs'; // no SDK at import: runLive() loads it
-import { benchRunId, buildBenchRecord, scrubSecrets } from './bench-record.mjs';
+import { benchRunId, buildBenchRecord, buyerCheck, scrubSecrets } from './bench-record.mjs';
 import { EFFORTS, REQUESTED_MODEL_ID } from './metrics.mjs';
-import { readCalls, writeFetchProbe } from './probes.mjs';
-import { DOCS, SCENARIOS, SCENARIO_IDS } from './scenarios.mjs';
+import { DOCS, SCENARIOS, SCENARIO_IDS, SETUP_DOCS, goalFor } from './scenarios.mjs';
+
+// T-473: a setup scenario's payout address, fresh for each run: 20 random bytes, so no key for it exists anywhere and two
+// runs never share one. Test tokens paid to it are lost, which is the point: the seller's key is not the payout's.
+const freshPayout = () => `0x${randomBytes(20).toString('hex')}`;
+const TEST_BUYER = 'https://crow.direct/agents/test-buyer';
+const LIVE_OPERATOR = 'https://api.crow.direct';
 
 const KEY_VAR = 'HOLDBACK_AGENT_ANTHROPIC_API_KEY';
 
@@ -59,6 +64,8 @@ try {
 const ids = args.scenario === 'all' ? SCENARIO_IDS : [args.scenario];
 if (!args.scenario || !ids.every((id) => SCENARIOS[id])) fail(`--scenario is one of ${SCENARIO_IDS.join(', ')}${args.live ? '' : ', or all'}`);
 if (args.live && ids.length !== 1) fail('--live runs one scenario at a time');
+// T-473: a setup scenario whose setup.txt cannot do it yet is refused before the key check, so nothing is spent on it.
+if (args.live && SCENARIOS[ids[0]].live?.blockedBy) fail(`${ids[0]}'s live run waits for ${SCENARIOS[ids[0]].live.blockedBy}; nothing was sent`);
 
 // The key check comes before anything else a live run does, the SDK import included. The key is never printed.
 const key = args.live ? (process.env[KEY_VAR] ?? '').trim() : '';
@@ -123,31 +130,10 @@ async function scripted(id) {
   if ('blockedBy' in scenario.scripted) {
     return { record: buildBenchRecord({ ...base, agent: {}, outcome: { state: 'blocked', blockedBy: scenario.scripted.blockedBy }, book: { wallMs: 0 }, generatedAtMs: Date.now() }), complete: false };
   }
-  const { script, args: argv, needs } = scenario.scripted;
-  const { operatorState, runScripted, scriptedOutcome, startLocal } = await import('./bench-local.mjs');
-  const probeDir = mkdtempSync(join(tmpdir(), 'crow-bench-scripted-'));
-  const probe = writeFetchProbe(probeDir);
-  const world = await startLocal(needs);
-  let run;
-  let outcome;
-  try {
-    run = await runScripted({ script, args: argv, operators: world.operators, party: world.party, needs, probe: probe.path });
-    outcome = scriptedOutcome(run, scenario);
-    // The script's own "done" line is not enough: the operator must report the same end state for the same commitment.
-    if (outcome.commitmentId && ['Released', 'Refunded'].includes(outcome.state)) {
-      const seen = await operatorState(world.operators[0], outcome.commitmentId);
-      if (seen !== outcome.state) {
-        outcome.errors.push(`the script said ${outcome.state}, the operator reports ${seen ?? 'nothing'}`);
-        outcome.stoppedAt = 'the operator does not report the end state the script printed';
-        outcome.state = 'stopped';
-      }
-    }
-  } finally {
-    await world.close();
-  }
-  const calls = readCalls({ fetchLog: probe.log });
-  rmSync(probeDir, { recursive: true, force: true });
-  const record = buildBenchRecord({ ...base, agent: { script }, outcome, book: { wallMs: run.wallMs, errors: outcome.errors, timedOut: run.timedOut }, calls, generatedAtMs: Date.now() });
+  const { script } = scenario.scripted;
+  const { playScripted } = await import('./bench-local.mjs');
+  const { run, outcome, calls, crowOrigins } = await playScripted(scenario, { payout: freshPayout() });
+  const record = buildBenchRecord({ ...base, agent: { script }, outcome, book: { wallMs: run.wallMs, errors: outcome.errors, timedOut: run.timedOut }, calls, setup: { firstDealAtMs: run.firstDealAtMs, crowOrigins }, generatedAtMs: Date.now() });
   if (!record.outcome.success) console.error(run.out.split('\n').slice(-15).join('\n'));
   return { record, complete: true };
 }
@@ -158,9 +144,21 @@ async function live(id) {
   const runId = benchRunId(startedAtMs, id);
   const note = (s) => console.error(`[${String(Math.round((Date.now() - startedAtMs) / 1000)).padStart(5)} s] ${s}`);
   note(`scenario ${id} live: ${scenario.name}; model ${args.model}, effort ${args.effort}, permissions ${permissions}${args.unsandboxed ? ', unsandboxed' : ', in the OS sandbox'}`);
+  // T-473: a goal's answers are filled per run; one this harness cannot serve stops the run before anything is sent
+  const goal = goalFor(scenario, { payout: freshPayout() });
+  const unfilled = /\{(\w+)\}/.exec(goal);
+  if (unfilled) fail(`${id}'s goal names {${unfilled[1]}}, which a live run of this harness does not serve; nothing was sent`);
   const { runLive } = await import('./bench-live.mjs');
-  const r = await runLive({ scenario, key, model: args.model, effort: args.effort, permissions, maxReplies, timeoutMs, idleMs, sandboxed: !args.unsandboxed, logsDir, runId, note });
-  const record = buildBenchRecord({ mode: 'live', scenario, world: { engine: 'sepolia', docs: DOCS }, agent: r.agent, outcome: r.outcome, book: r.book, results: r.results, calls: r.calls, texts: r.texts, prices, startedAtMs, generatedAtMs: Date.now(), commit, sources: r.sources, gaps: r.gaps });
+  const r = await runLive({ scenario, goal, key, model: args.model, effort: args.effort, permissions, maxReplies, timeoutMs, idleMs, sandboxed: !args.unsandboxed, logsDir, runId, note });
+  let outcome = r.outcome;
+  if (scenario.buyerMustBe === 'test-buyer' && outcome.commitmentId) {
+    // bench-local.mjs imports its TypeScript only inside startLocal and startJobApi, so these two plain reads load here
+    const { buyerOf, testBuyerAddress } = await import('./bench-local.mjs');
+    outcome = buyerCheck({ ...outcome, errors: [] }, { buyer: await buyerOf(LIVE_OPERATOR, outcome.commitmentId), testBuyer: await testBuyerAddress(TEST_BUYER) });
+    r.book.errors.push(...outcome.errors);
+  }
+  const docs = scenario.kind === 'setup' ? SETUP_DOCS : DOCS;
+  const record = buildBenchRecord({ mode: 'live', scenario, world: { engine: 'sepolia', docs }, agent: r.agent, outcome, book: r.book, results: r.results, calls: r.calls, texts: r.texts, prices, startedAtMs, generatedAtMs: Date.now(), commit, sources: r.sources, gaps: r.gaps, setup: { firstDealAtMs: r.firstDealAtMs, webCalls: r.webCalls } });
   return { record, secrets: r.secrets };
 }
 

@@ -99,7 +99,7 @@ Measured on 2026-11-15 at commit `8392b363` unless a line says otherwise. Paths 
 | Criterion | The test or check that shows it |
 | --- | --- |
 | The bundle is proved first | `examples/setup-bundle.test.ts`, "the bundle": one file, Node built-ins only, no tool's own command line with seven argument shapes (a `deal-record` shape among them), and a control build without the transform |
-| `setup.txt`, its size and its command | `site/check.mjs` group 19 fails above 8,000 bytes, on a stale bundle, hash or command. `examples/setup-bundle.test.ts`, "setup.txt carries the one command", fails on the same in CI, which does not run `site/check.mjs` |
+| `setup.txt`, its size and its command | `site/check.mjs` group 20 fails above 8,000 bytes, on a stale bundle, hash or command. `examples/setup-bundle.test.ts`, "setup.txt carries the one command", fails on the same in CI, which does not run `site/check.mjs` |
 | The pinned hashes and the frozen paths | The lines above |
 | End to end, scripted | `apps/test-agents/src/setup.test.ts`, first test: `Released`, the test buyer as the buyer, a deal record with no failed check and no disagreement |
 | Nothing before the first deal | The same test: the operators and the test buyer record each request with whether the marker file was there; none came before it. A recorder in the command's process lists every connection |
@@ -109,7 +109,7 @@ Measured on 2026-11-15 at commit `8392b363` unless a line says otherwise. Paths 
 | Keys | "makes the folder": modes 0700 and 0600. The leak test searches every printed line and every file outside `keys/` for the standing key, the deal's key and the faucet holding key, in hex and base64 |
 | The check holds a bad setup back | "the check holds a bad setup back": six causes, each named, and `first-deal` refuses after each with no marker written |
 | Resume | "resumes" in both files: no second key after a stop; killed after the test buyer took the offer, the next run makes no second offer, one faucet grant and one delivery |
-| What `setup.txt` says | `site/check.mjs` group 19 holds a phrase of each statement and the five numbered ways |
+| What `setup.txt` says | `site/check.mjs` group 20 holds a phrase of each statement and the five numbered ways |
 | One live run on Sepolia | Not done: the coordinator orders it |
 | The red-team pass | Not done: the coordinator orders it |
 

@@ -1,5 +1,5 @@
 #!/usr/bin/env node
-// The benchmark's headline numbers (T-412, roadmap B1), from the harness's records (`crow.metrics.one-click/2`,
+// The benchmark's headline numbers (T-412, roadmap B1), from the harness's records (`crow.metrics.one-click/2` and `/3`,
 // tools/one-click/bench.mjs), for Crow Control's build: approvals per deal, tokens per deal, time without the user,
 // and cost per deal. A plain script, deterministic: no model, no network, no clock but generatedAt.
 //
@@ -12,16 +12,20 @@
 // - The headline counts records in the prompt permission mode only (a record without agent.permissions is one);
 //   sandboxAuto holds the same four numbers from sandbox-auto records (T-441). The two never share a median.
 // - With no such record a number reads state "missing" and value null, never 0.
+// - The headline and byScenario take the six deal scenarios only. The setup scenarios s7 and s8 (T-473) fill `setup`,
+//   each on its own, with the same numbers plus the medians of the requests before the first deal and of the guide
+//   files fetched over the runs that saw the first-deal marker; so adding them moves no headline number.
 // - Every file is checked against scripts/metrics/schemas/one-click.schema.json; a file that fails is counted and named
-//   in a gap line, and left out. Version 1 files (run.mjs, the homepage run) are counted and left out: they are not
-//   one of the six scenarios.
+//   in a gap line, and left out. Versions 2 and 3 are read alike (3 adds the setup block). Version 1 files (run.mjs, the
+//   homepage run) are counted and left out: they are not one of the scenarios.
 import { readFileSync, readdirSync, statSync } from 'node:fs';
 import { join } from 'node:path';
 import { check, loadSchemas } from './check.mjs';
 import { ROOT, cli, envelope, gitCommit, isMain, quantile, writeJson } from './lib.mjs';
 
 export const MEDIAN_OF = 10;
-const SCENARIO_IDS = ['s1', 's2', 's3', 's4', 's5', 's6'];
+const SCENARIO_IDS = ['s1', 's2', 's3', 's4', 's5', 's6']; // the deal scenarios: the headline per deal
+const SETUP_IDS = ['s7', 's8']; // the setup scenarios (T-473): reported apart
 const MAX_BYTES = 1 << 20;
 
 const median = (values) => quantile(values.filter((v) => Number.isSafeInteger(v)).sort((a, b) => a - b), 50);
@@ -41,12 +45,15 @@ export function buildSummary({ records, invalid = [], v1 = 0, generatedAtMs, com
   if (v1) gaps.push(`${v1} version 1 run file(s) (the homepage run, run.mjs) are left out: they are not one of the six scenarios.`);
   const newestFirst = [...records].sort((a, b) => (a.runId < b.runId ? 1 : a.runId > b.runId ? -1 : 0));
   const live = newestFirst.filter((r) => r.mode === 'live' && r.agent.kind === 'claude-code' && r.world.engine === 'sepolia');
+  // T-473: the headline per deal is the six deal scenarios'; a setup run is a fetch, a setup and a deal, so it stays apart
+  const dealLive = live.filter((r) => SCENARIO_IDS.includes(r.scenario.id));
   // T-441: the headline is Claude Code's default permission mode only; sandbox-auto records fill their own block
-  const prompt = live.filter((r) => permissionsOf(r) === 'prompt');
-  const auto = live.filter((r) => permissionsOf(r) === 'sandbox-auto');
+  const prompt = dealLive.filter((r) => permissionsOf(r) === 'prompt');
+  const auto = dealLive.filter((r) => permissionsOf(r) === 'sandbox-auto');
   const deals = prompt.filter((r) => r.outcome.success).slice(0, MEDIAN_OF);
   if (!live.length) gaps.push('No live record yet, so every headline number reads missing. Scripted records prove the harness and never fill one.');
-  else if (!prompt.length) gaps.push(`${live.length} live record(s), none in the prompt permission mode, so every headline number reads missing.`);
+  else if (!dealLive.length) gaps.push(`${live.length} live record(s), all of setup scenarios, which fill setup only, so every headline number reads missing.`);
+  else if (!prompt.length) gaps.push(`${dealLive.length} live deal record(s), none in the prompt permission mode, so every headline number reads missing.`);
   else if (!deals.length) gaps.push(`${prompt.length} live prompt-mode record(s), none of which reached its end state, so every headline number reads missing.`);
   if (auto.length) gaps.push(`${auto.length} live sandbox-auto record(s) fill sandboxAuto, not the headline.`);
   const autoDeals = auto.filter((r) => r.outcome.success).slice(0, MEDIAN_OF);
@@ -55,26 +62,52 @@ export function buildSummary({ records, invalid = [], v1 = 0, generatedAtMs, com
     if (ds.length && priced < ds.length) gaps.push(`${ds.length - priced} of ${ds.length} ${what} have no cost: a model the price table does not price.`);
   }
 
-  const byScenario = {};
-  for (const id of SCENARIO_IDS) {
+  const scenarioOf = (id) => {
     const mine = newestFirst.filter((r) => r.scenario.id === id);
     const ownLive = mine.filter((r) => live.includes(r));
     const lastScripted = mine.find((r) => r.mode === 'scripted') ?? null;
-    byScenario[id] = {
-      live: ownLive.length,
-      liveCompleted: ownLive.filter((r) => r.outcome.success).length,
-      latestLive: ownLive[0] ? { runId: ownLive[0].runId, state: ownLive[0].outcome.state, success: ownLive[0].outcome.success, permissions: permissionsOf(ownLive[0]) } : null,
-      latestScripted: lastScripted ? { runId: lastScripted.runId, state: lastScripted.outcome.state, success: lastScripted.outcome.success, blockedBy: lastScripted.outcome.blockedBy } : null,
+    return {
+      own: ownLive,
+      row: {
+        live: ownLive.length,
+        liveCompleted: ownLive.filter((r) => r.outcome.success).length,
+        latestLive: ownLive[0] ? { runId: ownLive[0].runId, state: ownLive[0].outcome.state, success: ownLive[0].outcome.success, permissions: permissionsOf(ownLive[0]) } : null,
+        latestScripted: lastScripted ? { runId: lastScripted.runId, state: lastScripted.outcome.state, success: lastScripted.outcome.success, blockedBy: lastScripted.outcome.blockedBy } : null,
+      },
     };
+  };
+  const byScenario = {};
+  for (const id of SCENARIO_IDS) byScenario[id] = scenarioOf(id).row;
+  const setup = {};
+  for (const id of SETUP_IDS) {
+    const { own, row } = scenarioOf(id);
+    const runs = (mode) => own.filter((r) => permissionsOf(r) === mode && r.outcome.success).slice(0, MEDIAN_OF);
+    setup[id] = { ...row, headline: setupHeadlineOf(runs('prompt')), sandboxAuto: setupHeadlineOf(runs('sandbox-auto')) };
   }
 
   return {
     ...envelope('one-click-summary', { script: 'scripts/metrics/one-click-summary.mjs', commit, generatedAt: generatedAtMs, sources: [], gaps }),
     medianOf: MEDIAN_OF,
-    runs: { records: records.length, live: live.length, scripted: records.length - live.length, liveCompleted: live.filter((r) => r.outcome.success).length, invalid: invalid.length, versionOne: v1 },
+    // live and liveCompleted count the deal scenarios' runs, as the headline does; setup's own blocks count s7 and s8
+    runs: { records: records.length, live: dealLive.length, scripted: records.filter((r) => r.mode === 'scripted').length, liveCompleted: dealLive.filter((r) => r.outcome.success).length, invalid: invalid.length, versionOne: v1 },
     headline: headlineOf(deals),
     sandboxAuto: { live: auto.length, liveCompleted: auto.filter((r) => r.outcome.success).length, headline: headlineOf(autoDeals) },
     byScenario,
+    setup,
+  };
+}
+
+/**
+ * A setup scenario's numbers over its completed runs, newest first: the four of the headline, plus the medians of the
+ * requests before the first deal and of the guide files fetched over the runs whose count is known. Pure.
+ */
+function setupHeadlineOf(runs) {
+  const known = (pick) => runs.map(pick).filter((v) => Number.isSafeInteger(v));
+  const metric = (values) => ({ state: values.length ? 'measured' : 'missing', value: median(values), deals: values.length });
+  return {
+    ...headlineOf(runs),
+    requestsBeforeFirstDeal: metric(known((r) => r.setup?.requestsBeforeFirstDeal?.total)),
+    guideFilesFetched: metric(known((r) => r.setup?.guideFilesFetched)),
   };
 }
 

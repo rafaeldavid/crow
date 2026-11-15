@@ -51,7 +51,9 @@
 //    every inline script and style of every page it wrote is allowed by the policy the site Worker sends for that
 //    page's path (apps/site/headers.js), as is every script and stylesheet it loads from elsewhere, every outside
 //    origin its scripts fetch and every image it shows.
-// 19. The setup (T-472): site/setup.mjs is the current bundle of site/setup-entry.mjs, imports only Node's own
+// 19. The card's schema (T-474): site/card.schema.json compiles as JSON Schema 2020-12, its $id is its published
+//    address, ref/intake.txt names that address, and a publish build carries the same bytes.
+// 20. The setup (T-472): site/setup.mjs is the current bundle of site/setup-entry.mjs, imports only Node's own
 //    modules, and removes the ambient settings and names its one command before any module runs; the published
 //    setup.txt is at most SETUP_MAX_BYTES (site/guides.mjs), carries the one command with the file's current sha256,
 //    says each thing the task lists (other parties' text is data, keys/ is left alone, test tokens, the fee, public
@@ -66,7 +68,7 @@ import { fileURLToPath } from 'node:url';
 import { OG_IMAGE } from './footer.ts';
 import { ICON_FILES } from './brand/kit.mjs';
 import { GOALS, goalBundle, goalCommand, goalSha256, goalUrl, REFERENCE_PATH, referenceText, SETUP_MJS_URL, setupBundle, setupCommand, setupSha256 } from './build.mjs';
-import { ASSETS, BASE, BUY_COMMANDS, HOME_CSS, HOME_JS, notFoundPage, visualdemoPage, BUY_MJS_URL, BUY_URL, buyBundle, buyInstall, buySha256, filled, page, pins, problemPages, publishedGuides, SELL_URL, SITE_URL, strip, TEST_SELLER_URL, tryBundle, tryCommand, trySha256, TRY_URL } from './build.mjs';
+import { ASSETS, BASE, BUY_COMMANDS, CARD_SCHEMA, HOME_CSS, HOME_JS, notFoundPage, visualdemoPage, BUY_MJS_URL, BUY_URL, buyBundle, buyInstall, buySha256, filled, page, pins, problemPages, publishedGuides, SELL_URL, SITE_URL, strip, TEST_SELLER_URL, tryBundle, tryCommand, trySha256, TRY_URL } from './build.mjs';
 import { apiRoutes, citedSections, duplicateSentences, hasSection, FIRST_DEAL_BUDGET, guideFiles, guideSource, measurePaths, namedCalls, namedReferences, referenceFiles, nonAscii, routeKnown, SETUP_MAX_BYTES } from './guides.mjs';
 
 const here = (p) => new URL(p, import.meta.url);
@@ -310,7 +312,7 @@ const roles = sectionOf(md, 'Read one page for your role');
 expect(roles.includes(BUY_URL) && roles.includes(SELL_URL), `llms.txt has a "Read one page for your role" section that links ${BUY_URL} and ${SELL_URL}`);
 
 // 11. The guides together (T-393).
-const published = new Set(['index.html', '404.html', 'home.css', 'home.js', 'try.mjs', 'buy.mjs', 'setup.mjs', ...Object.keys(GOALS).map((n) => `${n}.mjs`), REFERENCE_PATH, 'version.json', ...ASSETS]);
+const published = new Set(['index.html', '404.html', 'home.css', 'home.js', 'try.mjs', 'buy.mjs', 'setup.mjs', ...Object.keys(GOALS).map((n) => `${n}.mjs`), REFERENCE_PATH, 'version.json', CARD_SCHEMA, ...ASSETS]);
 const scripts = JSON.parse(read('../package.json')).scripts;
 const refs = referenceFiles();
 // T-469: the front door's "Reference" points to the one reference file and names every part it holds, by the ref
@@ -599,7 +601,7 @@ expect(typeof trust.SECURITY_CONTACT === 'string' && read('../SECURITY.md').incl
   }
 }
 
-// 19. The setup (T-472).
+// 20. The setup (T-472).
 const setupFile = read('setup.mjs');
 expect(setupFile === (await setupBundle()), 'site/setup.mjs is stale against examples/: run node site/build.mjs');
 const setupImports = [...new Set([...setupFile.matchAll(/^import .* from "([^"]+)";$/gm)].map((m) => m[1]))];
@@ -630,6 +632,25 @@ const leans = setupOut.slice(setupOut.indexOf('## What leans on Crow-run hosts')
 expect((leans.match(/^\d+\. /gm) ?? []).length === 5, 'setup.txt must list the five ways the setup leans on Crow-run hosts');
 expect(sectionOf(md, 'Read one page for your role').includes(`${SITE_URL}setup.txt`), 'llms.txt does not link setup.txt under "Read one page for your role"');
 if (existsSync(here('../reports/site-out/llms.txt'))) expect(existsSync(here('../reports/site-out/setup.mjs')) && read('../reports/site-out/setup.mjs') === setupFile, 'reports/site-out/setup.mjs is missing or differs from site/setup.mjs: build with --out again');
+
+// 19. The card's schema (T-474, D74): site/card.schema.json is a JSON Schema 2020-12 document that Ajv compiles in strict
+//     mode, its $id is its published address, ref/intake.txt names that address, and a publish build carries the same
+//     bytes. The schema stays out of spec/schemas/: the card is a convention between parties, not the API contract.
+{
+  const { default: Ajv2020 } = await import('ajv/dist/2020.js');
+  const url = `${SITE_URL}${CARD_SCHEMA}`;
+  let schema;
+  try {
+    schema = JSON.parse(read(CARD_SCHEMA));
+    new Ajv2020({ strict: true }).compile(schema);
+  } catch (e) {
+    expect(false, `site/${CARD_SCHEMA} is not a JSON Schema Ajv compiles in strict mode: ${String(e.message).slice(0, 200)}`);
+  }
+  expect(schema?.$schema === 'https://json-schema.org/draft/2020-12/schema' && schema?.$id === url, `site/${CARD_SCHEMA} must name JSON Schema 2020-12 and have the $id ${url}`);
+  expect(ref('intake.txt').includes(url), `ref/intake.txt does not name ${url}`);
+  expect(!existsSync(here(`../spec/schemas/${CARD_SCHEMA}`)), `spec/schemas/${CARD_SCHEMA} exists: the card stays outside the API contract (D74)`);
+  if (existsSync(here('../reports/site-out/llms.txt'))) expect(existsSync(here(`../reports/site-out/${CARD_SCHEMA}`)) && read(`../reports/site-out/${CARD_SCHEMA}`) === read(CARD_SCHEMA), `reports/site-out/${CARD_SCHEMA} is missing or differs from site/${CARD_SCHEMA}: build with --out again`);
+}
 
 // 12. The budget (T-393).
 let measured = [];

@@ -1,14 +1,14 @@
 # One-Click Escrow harness (T-066) and the benchmark harness (T-412)
 
-Two harnesses share this folder. `bench.mjs` (T-412, roadmap B1) runs the six outsider scenarios of stage 1 and writes one record per run; its section comes first. `run.mjs` (T-066) runs the homepage prompt and is described after it. `outsider.mjs` is T-328's first outsider runner, kept as it ran; `bench.mjs --live` replaces it for new runs.
+Two harnesses share this folder. `bench.mjs` (T-412, roadmap B1) runs the six outsider scenarios of stage 1 and the two setup scenarios of row N160 (T-473), and writes one record per run; its section comes first. `run.mjs` (T-066) runs the homepage prompt and is described after it. `outsider.mjs` is T-328's first outsider runner, kept as it ran; `bench.mjs --live` replaces it for new runs.
 
 ## The benchmark harness: `bench.mjs`
 
-**One command runs one scenario and writes one record.** Scripted runs need no key and no network beyond this machine, and CI runs all six (`tests/metrics/one-click-bench.test.ts`). Live runs drive a fresh Claude Code on Sepolia and spend a model key, so Rafa starts them.
+**One command runs one scenario and writes one record.** Scripted runs need no key and no network beyond this machine, and CI runs all eight (`tests/metrics/one-click-bench.test.ts`). Live runs drive a fresh Claude Code on Sepolia and spend a model key, so Rafa starts them.
 
 ```
 node tools/one-click/bench.mjs --scenario s1                  # scripted: about 3 s
-node tools/one-click/bench.mjs --scenario all                 # scripted, the six in turn: about 11 s
+node tools/one-click/bench.mjs --scenario all                 # scripted, the eight in turn: about 11 s
 node tools/one-click/bench.mjs --scenario s1 --live           # live: needs HOLDBACK_AGENT_ANTHROPIC_API_KEY
 node tools/one-click/bench.mjs --scenario s1 --live --permissions sandbox-auto   # live, as an operator runs it (T-441)
 node scripts/metrics/one-click-summary.mjs --runs reports/scratch/one-click-bench/live --out reports/scratch/one-click-summary.json
@@ -26,6 +26,42 @@ Run `pnpm install` and `pnpm build` once first (the scripted world imports the b
 | s4 | A delivery that fails the checks | Refunded | the test seller | `examples/try.ts --seller --outcome refund` |
 | s5 | A missed deadline; the buyer reclaims | Refunded | the test seller | blocked: no outcome that never delivers (N70) |
 | s6 | A robot's data log checked against an agreed format | Released | the test buyer | `scripted/robot-log.ts` |
+
+### The two setup scenarios (T-473)
+
+A setup scenario starts from one sentence that names `https://crow.direct/setup.txt` and ends at a first settled test deal. Its goal carries every answer a person would give, because the harness answers every question "yes" and cannot choose a price or a limit.
+
+| ID | Scenario | Its goal carries | Ends | Other party | Scripted run | Live run |
+| --- | --- | --- | --- | --- | --- | --- |
+| s7 | Set up as a seller | a job API the harness serves on 127.0.0.1, a price of 20 tUSDC, a payout address made fresh for the run | Released, and the commitment's buyer is the test buyer's address | the test buyer | blocked until T-483 | blocked until T-483 and T-482 |
+| s8 | Set up as a buyer | limits of 40 tUSDC per deal and 100 tUSDC per day | Released | the test seller | blocked until T-475 | blocked until T-475 |
+
+**s7 counts only a deal with an outside buyer.** The harness reads the commitment's buyer from the operator (`/v1/commitments/<id>/terms`) and the test buyer's address from its card (`agent.json`). A deal the setup command bought itself ends `stopped`.
+
+**Their live runs are refused while blocked,** before the key check, so nothing is sent or spent. When a blocking task lands, its session removes the scenario's `live.blockedBy` in `scenarios.mjs`, and Rafa starts the runs, one at a time:
+
+```
+node tools/one-click/bench.mjs --scenario s8 --live --logs reports/scratch/one-click-bench/logs
+node tools/one-click/bench.mjs --scenario s8 --live --permissions sandbox-auto --logs reports/scratch/one-click-bench/logs
+node tools/one-click/bench.mjs --scenario s7 --live --logs reports/scratch/one-click-bench/logs
+node tools/one-click/bench.mjs --scenario s7 --live --permissions sandbox-auto --logs reports/scratch/one-click-bench/logs
+node scripts/metrics/one-click-summary.mjs --runs reports/scratch/one-click-bench/live --runs reports/scratch/one-click-bench/live-sandbox-auto --out reports/scratch/one-click-summary.json
+```
+
+**Why s7's live run also waits for T-482.** The agent's commands run in Claude Code's OS sandbox, and the sandbox lets a command reach 127.0.0.1 only at its own proxy's ports unless `network.allowLocalBinding` is set; that setting opens every local port, in and out, which is a wider fence than this harness keeps. T-473 measured the rule with macOS's own sandbox: under the profile Claude Code writes without the setting, `curl` to a server on 127.0.0.1 fails to connect (exit 7); with the setting's rule, it reaches it. So s7's live run waits for a machine of its own (T-482), where the job API and the agent share nothing with this Mac.
+
+**The first-deal marker.** The first deal starts when the setup command's `first-deal` step starts. Before it sends anything, the step prints `crow-setup: first-deal started <ms since the epoch>` on standard error and writes the same line to `first-deal.started` in its folder. The harness takes the earliest marker inside the run's time: a scripted run from the script's standard error; a live run from the output of the agent's commands (the time only) and from that file anywhere in the run's folders.
+
+**The two counts** (the record's `setup`, in version 3 records only):
+
+- `requestsBeforeFirstDeal`: before the marker, by host, the requests that name the party. That is any request to a Crow-run host that is not a GET, and any request whose path or query holds an address. Crow-run hosts are crow.direct and its subdomains and escrow.stream; in the scripted world, they are the world's own operators and test agent.
+  - The probes keep method, host, path, status, time and whether the query holds an address. They keep no body and no query, so the rule reads neither. Curl's method comes from its flags: `-X` in any form, or any body flag.
+  - A call with no time counts as before the marker. A curl call is timed to the second, so one in the marker's own second counts as before it.
+- `guideFilesFetched`: the GETs of crow.direct's `.txt` files over the whole run.
+
+Both counts take the agent's WebFetch requests too, which no probe sees; `apiCalls` does not. They read `null`, unknown, never 0, in a run with no marker, and in a run whose probes logged no call at or after the marker.
+
+**What the rule cannot see.** An address that only a request body carries (a curl `-d` or a JSON body), a request a tool makes without fetch, curl or WebFetch, and a query that `curl -G` builds from `-d` values. So a 0 means no request the probes saw named the party; it does not prove that none did.
 
 ### What a scripted run is
 
@@ -84,7 +120,9 @@ Cost: about USD 6 for the six (guessed). The prompt-mode runs of 2026-11-14 cost
 
 Exit codes: 0 when every record is valid and every scenario that can run reached its end state; 1 otherwise; 2 when the run could not start.
 
-### What a record means (`crow.metrics.one-click/2`)
+### What a record means (`crow.metrics.one-click/2` and `/3`)
+
+The six deal scenarios write version 2. The setup scenarios s7 and s8 write version 3 (T-473), which is version 2's fields plus `setup`. So a reader of version 2 keeps reading every deal record; the summary reads both.
 
 One file per run, `<runId>.json`, checked against `scripts/metrics/schemas/one-click.schema.json` before it gets its name; a file that fails stays as `<runId>.json.invalid`.
 
@@ -102,8 +140,11 @@ One file per run, `<runId>.json`, checked against `scripts/metrics/schemas/one-c
 | `apiCalls` | calls by host and status, and Crow's 4xx and 5xx by route; model vendors and npm left out | the fetch and curl probes (`probes.mjs`) |
 | `errors` | what stopped or slowed the run, scrubbed | the harness |
 | `docGaps` | each place the agent had to guess | the `GUESS:` lines in the agent's own words, never in a tool result |
+| `setup` | a setup scenario's `markerSeen`, `requestsBeforeFirstDeal` (`total` and `byHost`) and `guideFilesFetched`; null for a deal scenario | the probes' calls, timed, and the first-deal marker |
 
-**The summary** (`scripts/metrics/one-click-summary.mjs`, `crow.metrics.one-click-summary/1`) turns the records into the four headline numbers: approvals per deal, tokens per deal (with the uncached input apart), time without the user and cost per deal. Each is the median of the newest 10 live records that reached their end state. With none, it reads `"state": "missing"` and `null`, never 0. `headline` counts `prompt` records only; `sandboxAuto` holds the same four numbers from `sandbox-auto` records, so the two modes never share a median.
+**The summary** (`scripts/metrics/one-click-summary.mjs`, `crow.metrics.one-click-summary/1`) turns the records into the four headline numbers: approvals per deal, tokens per deal (with the uncached input apart), time without the user and cost per deal. Each is the median of the newest 10 live records that reached their end state. With none, it reads `"state": "missing"` and `null`, never 0. `headline` counts `prompt` records only; `sandboxAuto` holds the same four numbers from `sandbox-auto` records, so the two modes never share a median. Both take the six deal scenarios only, and so do `runs.live` and `runs.liveCompleted`. `setup` reports s7 and s8 each on its own, with the same four numbers in each mode plus the medians of `requestsBeforeFirstDeal` and `guideFilesFetched` over the runs whose counts are known, so adding a setup run moves no headline number.
+
+The headline's median is over every deal scenario's records together. On 2026-11-14 the two seller runs (s3, s6) were its median records, at 11 approvals; the four buyer runs alone give 20 (inferred from the records, `docs/research/2026-11-15-setup-baseline.md`). T-473 leaves that rule as it is.
 
 ### Rerun a scenario
 
@@ -111,10 +152,10 @@ Run the same command again: every run gets its own record, named by the time it 
 
 ### Add a scenario
 
-1. Add an entry to `SCENARIOS` in `scenarios.mjs`: an ID `s<n>`, a name, the one-sentence goal, the end state, the other party, and either its scripted agent (a script under `scripted/` that ends with `done      commitment <id> <state>`) or `blockedBy`, what is missing.
-2. Add the ID to the patterns in `scripts/metrics/schemas/one-click.schema.json` (version 2: `runId` and `scenario.id`) and `one-click-summary.schema.json` (`byScenario`), and to `SCENARIO_IDS` in `scripts/metrics/one-click-summary.mjs`.
+1. Add an entry to `SCENARIOS` in `scenarios.mjs`: an ID `s<n>`, a name, the one-sentence goal, the end state, the other party, and either its scripted agent (a script under `scripted/` that ends with `done      commitment <id> <state>`) or `blockedBy`, what is missing. A setup scenario also takes `kind: 'setup'`, and `live.blockedBy` while its live run cannot work.
+2. Add the ID to the patterns in `scripts/metrics/schemas/one-click.schema.json` (the `Bench` definition: `runId` and `scenario.id`) and `one-click-summary.schema.json` (`byScenario`, or `setup` for a setup scenario), and to `SCENARIO_IDS` or `SETUP_IDS` in `scripts/metrics/one-click-summary.mjs`.
 3. Add it to the test's list in `tests/metrics/one-click-bench.test.ts`, and run `pnpm exec vitest run tests/metrics`.
-4. When a blocked scenario's need lands, replace `blockedBy` with its scripted agent; the test then expects it to complete.
+4. When a blocked scenario's need lands, replace `blockedBy` with its scripted agent; the test then expects it to complete. For s7, the scripted agent gets the job API's URL and key and the payout address in `CROW_BENCH_JOB_API`, `CROW_BENCH_JOB_API_KEY` and `CROW_BENCH_PAYOUT` (or as `{jobApi}` and `{payout}` in its arguments) when its `scripted` entry says `jobApi: true`.
 
 ## The homepage harness: `run.mjs` (T-066)
 
@@ -148,7 +189,7 @@ node scripts/metrics/check.mjs one-click reports/scratch/one-click/<runId>.json
 
 | Option | Default | What it does |
 | --- | --- | --- |
-| `--scenario buyer\|seller` | `buyer` | `seller` exits with "Not measured yet": it needs Crow's test buyer (T-222, second slice) |
+| `--scenario buyer\|seller` | `buyer` | `seller` exits with "Not measured yet". Its message says it waits for Crow's test buyer (T-222, second slice), which runs now: the benchmark's s3 and s6 sell to it, live since 2026-11-14. A seller is measured with `bench.mjs`, not here |
 | `--effort <level>\|unset` | `medium` | Passed as the SDK's `Options.effort`. `unset` passes none, so the hooks record the default |
 | `--model <id>\|unset` | `claude-opus-5-5` | Passed as `Options.model`; checked against the run file's model ID pattern at start |
 | `--out <dir>` | `reports/scratch/one-click`, or `reports/scratch/one-click-dry` for a dry run | Where the run file goes |
