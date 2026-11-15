@@ -4,10 +4,11 @@
 // the operators' funding lane tops up the deal lanes (ADR-0028 §3). Only public addresses are ever printed: never
 // the secret, never a key.
 //
-//   node --env-file-if-exists=.env examples/e2e-keys.ts init .env   makes the secret if the environment has none,
-//                                                                   appends it to .env, prints the addresses
-//   node --env-file-if-exists=.env examples/e2e-keys.ts address     prints the addresses
-//   node --env-file-if-exists=.env examples/e2e-keys.ts topup [--dry-run]
+//   node examples/e2e-keys.ts init <file>   makes the secret if the environment has none,
+//                                           appends it to <file> (mode 0600), prints the addresses. Crow's own
+//                                           seed lives in 1Password: config/secrets/e2e.refs, docs/operations.md
+//   op run --env-file=config/secrets/e2e.refs -- node examples/e2e-keys.ts address   prints the addresses
+//   op run --env-file=config/secrets/e2e.refs -- node examples/e2e-keys.ts topup [--dry-run]
 //                                                                   brings each other key up to 0.04 Sepolia ETH from
 //                                                                   the master, one transfer at a time, on Sepolia only
 //                                                                   (SEPOLIA_RPC_URL, else a public node)
@@ -150,7 +151,7 @@ if (process.argv[1] && import.meta.url === pathToFileURL(process.argv[1]).href) 
   const seed = process.env[SEED_VAR];
   if (cmd === 'address' || cmd === 'topup') {
     if (!seed) {
-      console.error(`${SEED_VAR} is not set; run with --env-file-if-exists=<file>, or make one with init <file>`);
+      console.error(`${SEED_VAR} is not set; run under op run --env-file=config/secrets/e2e.refs, or make one with init <file>`);
       process.exit(1);
     }
     if (cmd === 'address') print(seed);

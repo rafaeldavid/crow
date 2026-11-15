@@ -319,11 +319,11 @@ The old world's storage stays: never delete it, because a rollback serves it aga
 
 ## Step 7. The live rounds
 
-**Who:** Rafa, in his terminal: the rounds load his `E2E_SEPOLIA_SEED`, and a session must not. List the scenarios first with `node $W/examples/e2e-round.ts list`. On 2026-11-13 two ran: the escalation, `run 5b --t220 --no-homepage`, and the two money addresses, `run 12 --no-homepage`, each from the folder that holds his env file:
+**Who:** Rafa, in his terminal: the rounds load his `E2E_SEPOLIA_SEED`, and a session must not. List the scenarios first with `node $W/examples/e2e-round.ts list`. On 2026-11-13 two ran: the escalation, `run 5b --t220 --no-homepage`, and the two money addresses, `run 12 --no-homepage`, each in his own terminal with 1Password signed in (`docs/operations.md`, Secrets):
 
 ```sh
-node --env-file-if-exists=.env $W/examples/e2e-round.ts run 5b --t220 --no-homepage
-node --env-file-if-exists=.env $W/examples/e2e-round.ts run 12 --no-homepage
+op run --env-file=$W/config/secrets/e2e.refs -- node $W/examples/e2e-round.ts run 5b --t220 --no-homepage
+op run --env-file=$W/config/secrets/e2e.refs -- node $W/examples/e2e-round.ts run 12 --no-homepage
 ```
 
 Each prints `results: … pass`. The escalation proves the operators' gas estimate for an escalation's decision on Sepolia, which no local world can show. If it fails, an escalated deal ends by its default, a refund: fix forward before the merge, or roll back as in step 6. Record each deal's gas from its receipts, as in step 6.3.

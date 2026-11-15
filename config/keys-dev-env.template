@@ -1,9 +1,7 @@
-
-# --- Isolated development environment (added 2026-11-01) ---
-# Append to your existing .env (keeps the keys already there):
-#   cat config/keys-dev-env.template >> .env
+# The names and scopes of the tokens an isolated environment (Claude Code cloud or a VM) needs. Set each one as that
+# environment's own secret, never in a file. On Rafa's Mac they live in 1Password instead (T-480): the references
+# are config/secrets/cloudflare.refs and config/secrets/github.refs, and docs/operations.md (Secrets) says how to run.
 # Give each token the narrowest scope that works, so a mistake by an agent cannot reach the rest of your accounts.
-# In the new environment (Claude Code cloud or an exe.dev VM), set these as that environment's secrets.
 
 # GitHub: a fine-grained personal access token for ONE repository.
 # github.com/settings/personal-access-tokens/new → Resource owner: rafaeldavid → Only select repositories: holdback
@@ -21,7 +19,7 @@ GH_TOKEN=
 CLOUDFLARE_API_TOKEN=
 CLOUDFLARE_ACCOUNT_ID=
 
-# Model keys for the live judges are already above (HOLDBACK_ANTHROPIC_API_KEY, HOLDBACK_OPENAI_COMPATIBLE_*).
+# Model keys for the live judges: config/secrets/judges.refs (HOLDBACK_ANTHROPIC_API_KEY, HOLDBACK_OPENAI_COMPATIBLE_*).
 # Set a monthly spend limit for each in the Anthropic console and the DeepSeek platform as well as the code's daily cap.
 
 # Only if the new environment runs Claude Code with an API key instead of signing in to your Claude account:
