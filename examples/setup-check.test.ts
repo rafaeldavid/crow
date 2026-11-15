@@ -2,11 +2,11 @@
 // when one run's check listed the folder, another run removed its crow.lock, and the read of that file threw. These
 // tests make the file vanish at a chosen step through scanFiles' file-system seam, so they need no race to show it.
 import { randomBytes } from 'node:crypto';
-import { mkdtempSync, readFileSync, rmSync, statSync, writeFileSync } from 'node:fs';
+import { mkdtempSync, readdirSync, readFileSync, rmSync, statSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { afterAll, describe, expect, it } from 'vitest';
-import { scanFiles, type ScanIo } from './setup-check.ts';
+import { scanFiles, writeWhole, type ScanIo, type WriteIo } from './setup-check.ts';
 
 const dir = mkdtempSync(join(tmpdir(), 'crow-scan-'));
 afterAll(() => rmSync(dir, { recursive: true, force: true }));
@@ -50,5 +50,36 @@ describe('the secrets check, with a file that vanishes', () => {
     const denied = (p: string) => Object.assign(new Error(`EACCES: permission denied, open '${p}'`), { code: 'EACCES' });
     const io: ScanIo = { ...real, read: (p) => { throw denied(p); } };
     expect(() => scanFiles(files, [secret], io)).toThrow(/EACCES/);
+  });
+});
+
+// T-486: the second race CI found in "eight runs at once": one run's check read sample/terms.json while another run was
+// writing it. The check now writes each sample file whole: to a name of its own, then renamed into place.
+describe('the check writes its sample files whole', () => {
+  it('writes to a temporary name beside the file and renames it into place, never writing the file itself', () => {
+    const steps: string[][] = [];
+    const io: WriteIo = { write: (p) => void steps.push(['write', p]), rename: (a, b) => void steps.push(['rename', a, b]) };
+    const path = join(dir, 'sample-terms.json');
+    writeWhole(path, '{}', io);
+    expect(steps.length).toBe(2);
+    expect(steps[0]![0]).toBe('write');
+    expect(steps[0]![1]).not.toBe(path);
+    expect(steps[0]![1]!.startsWith(`${path}.`)).toBe(true);
+    expect(steps[1]).toEqual(['rename', steps[0]![1], path]);
+  });
+
+  it('gives two writes of one file two temporary names, so two runs never share one', () => {
+    const names: string[] = [];
+    const io: WriteIo = { write: (p) => void names.push(p), rename: () => undefined };
+    writeWhole(join(dir, 'x.json'), '{}', io);
+    writeWhole(join(dir, 'x.json'), '{}', io);
+    expect(new Set(names).size).toBe(2);
+  });
+
+  it('leaves the whole content and no temporary file behind on the real file system', () => {
+    const path = join(dir, 'whole.json');
+    writeWhole(path, '{"a":1}\n');
+    expect(readFileSync(path, 'utf8')).toBe('{"a":1}\n');
+    expect(readdirSync(dir).filter((n) => n.startsWith('whole.json.'))).toEqual([]);
   });
 });

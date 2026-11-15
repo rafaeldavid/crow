@@ -10,7 +10,8 @@
 //   sample          a result the sample API gives passes the deal's checks, through the adjudicator's first stage
 //   required-field  the same result with a field removed fails them: the checks are not empty
 //   secrets         no key's value is in a file outside keys/, in the folder or in the card's folder
-import { existsSync, mkdirSync, readdirSync, readFileSync, statSync, writeFileSync } from 'node:fs';
+import { randomBytes } from 'node:crypto';
+import { existsSync, mkdirSync, readdirSync, readFileSync, renameSync, statSync, writeFileSync } from 'node:fs';
 import { join } from 'node:path';
 import { parseTermsYaml } from '@holdback/testkit';
 import { checkDelivery } from './check-delivery.ts';
@@ -105,6 +106,24 @@ function filesUnder(dir: string, skip: string): { files: string[]; links: string
   };
   walk(dir);
   return { files, links };
+}
+
+/** What writeWhole needs of the file system; the test passes its own to see the order of the two steps. */
+export interface WriteIo {
+  write(path: string, data: string | Uint8Array): void;
+  rename(from: string, to: string): void;
+}
+const WRITE_FILE_SYSTEM: WriteIo = { write: (p, d) => writeFileSync(p, d), rename: (a, b) => renameSync(a, b) };
+
+/**
+ * Writes `data` to `path` whole: to a temporary name of its own beside it, then renamed into place. Another run that
+ * reads `path` at the same moment sees the file it had or the new one, never a half-written file (T-486: CI caught one
+ * run's check reading sample/terms.json while another run was writing it).
+ */
+export function writeWhole(path: string, data: string | Uint8Array, io: WriteIo = WRITE_FILE_SYSTEM): void {
+  const part = `${path}.${process.pid}.${randomBytes(6).toString('hex')}.part`;
+  io.write(part, data);
+  io.rename(part, path);
 }
 
 /** What the secrets check needs of the file system; the test passes its own to make a file vanish between two steps. */
@@ -218,8 +237,8 @@ export async function runChecks(folder: string): Promise<CheckResult[]> {
     format = String(t.deliverable?.format);
     const bytes = await sampleResultOf(scope);
     mkdirSync(join(folder, 'sample'), { recursive: true });
-    writeFileSync(join(folder, FILES.sampleTerms), `${JSON.stringify({ deliverable: t.deliverable, acceptance: t.acceptance }, null, 2)}\n`);
-    writeFileSync(join(folder, FILES.sampleResult), bytes);
+    writeWhole(join(folder, FILES.sampleTerms), `${JSON.stringify({ deliverable: t.deliverable, acceptance: t.acceptance }, null, 2)}\n`);
+    writeWhole(join(folder, FILES.sampleResult), bytes);
     const r = checkDelivery({ terms: join(folder, FILES.sampleTerms), file: join(folder, FILES.sampleResult) });
     if (r.exitCode !== 0) throw new Error(`the checks refuse the sample result. ${r.lines.filter((l) => /^Result|^ {2}FAIL|^ {2}OPEN/.test(l)).join(' ')}`);
     result = bytes;
@@ -230,7 +249,7 @@ export async function runChecks(folder: string): Promise<CheckResult[]> {
     if (!result) throw new Error('not run: there is no sample result that passes');
     const cut = withoutAField(result, format);
     if (!cut) throw new Error(`a ${plain(format, 60)} result has no field this check can remove`);
-    writeFileSync(join(folder, FILES.sampleCut), cut.bytes);
+    writeWhole(join(folder, FILES.sampleCut), cut.bytes);
     const r = checkDelivery({ terms: join(folder, FILES.sampleTerms), file: join(folder, FILES.sampleCut) });
     if (r.exitCode !== 1) throw new Error(`the checks still pass the sample result with ${cut.what} removed: they do not check what the result holds`);
     return `the sample result with ${cut.what} removed fails the checks`;

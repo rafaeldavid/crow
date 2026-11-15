@@ -58887,7 +58887,7 @@ function readState(folder) {
 * Writes a file whole under a name of its own, then renames it into place: a stop leaves the old file or the new one,
 * never half of one, and two runs at once never share a temporary file.
 */
-function writeWhole(path, text, mode = 384) {
+function writeWhole$1(path, text, mode = 384) {
 	const tmp = join(dirname(path), `.${basename(path)}.${process.pid}.${randomBytes(6).toString("hex")}.tmp`);
 	writeFileSync(tmp, text, {
 		mode,
@@ -58896,7 +58896,7 @@ function writeWhole(path, text, mode = 384) {
 	chmodSync(tmp, mode);
 	renameSync(tmp, path);
 }
-const writeState = (folder, s) => writeWhole(join(folder, FILES.state), `${JSON.stringify(s, null, 2)}\n`);
+const writeState = (folder, s) => writeWhole$1(join(folder, FILES.state), `${JSON.stringify(s, null, 2)}\n`);
 const sha256 = (text) => createHash("sha256").update(text).digest("hex");
 /** What is at `path` without following a link, or undefined when nothing is. */
 const at = (path) => {
@@ -59134,7 +59134,7 @@ async function seller(c) {
 				if (state.steps["key"] !== void 0) throw new Refused(`${FILES.state} says this setup made the key of ${state.address}, and ${FILES.key} is gone. Put the file back. To start over with a new key, use an empty folder (--folder)`);
 				state.keyStartedAt = (/* @__PURE__ */ new Date()).toISOString();
 				writeState(folder, state);
-				writeWhole(keyFile, `${generatePrivateKey()}\n`, 384);
+				writeWhole$1(keyFile, `${generatePrivateKey()}\n`, 384);
 			}
 			chmodSync(keyFile, 384);
 			const key = readKey(folder);
@@ -59156,7 +59156,7 @@ async function seller(c) {
 			if (changed && existsSync(join(folder, FILES.marker))) throw new Refused(`this folder's first deal started, and its offer names ${earlier.address} as the payout address. For another payout address, make a new folder (--folder)`);
 			state.payout = payout;
 			done("payout");
-			if (!existsSync(join(folder, FILES.template))) writeWhole(join(folder, FILES.template), `${JSON.stringify(SAMPLE.template, null, 2)}\n`);
+			if (!existsSync(join(folder, FILES.template))) writeWhole$1(join(folder, FILES.template), `${JSON.stringify(SAMPLE.template, null, 2)}\n`);
 			done("template");
 			const configFile = join(folder, FILES.configuration);
 			const there = existsSync(configFile) ? readFileSync(configFile) : void 0;
@@ -59178,11 +59178,11 @@ async function seller(c) {
 					configuration: sha256(text)
 				};
 				writeState(folder, state);
-				writeWhole(configFile, text);
+				writeWhole$1(configFile, text);
 			}
 			done("configuration");
 			mkdirSync(card, { recursive: true });
-			if (!existsSync(join(card, "agent.json"))) writeWhole(join(card, CARD_FILE), `${JSON.stringify({
+			if (!existsSync(join(card, "agent.json"))) writeWhole$1(join(card, CARD_FILE), `${JSON.stringify({
 				type: "crow-agent",
 				status: "draft: not published, and no quote address yet",
 				name,
@@ -59341,6 +59341,20 @@ function filesUnder(dir, skip) {
 		links
 	};
 }
+const WRITE_FILE_SYSTEM = {
+	write: (p, d) => writeFileSync(p, d),
+	rename: (a, b) => renameSync(a, b)
+};
+/**
+* Writes `data` to `path` whole: to a temporary name of its own beside it, then renamed into place. Another run that
+* reads `path` at the same moment sees the file it had or the new one, never a half-written file (T-486: CI caught one
+* run's check reading sample/terms.json while another run was writing it).
+*/
+function writeWhole(path, data, io = WRITE_FILE_SYSTEM) {
+	const part = `${path}.${process.pid}.${randomBytes(6).toString("hex")}.part`;
+	io.write(part, data);
+	io.rename(part, path);
+}
 const FILE_SYSTEM = {
 	size: (p) => statSync(p).size,
 	read: (p) => readFileSync(p, "latin1")
@@ -59478,11 +59492,11 @@ async function runChecks(folder) {
 		format = String(t.deliverable?.format);
 		const bytes = await sampleResultOf(scope);
 		mkdirSync(join(folder, "sample"), { recursive: true });
-		writeFileSync(join(folder, FILES.sampleTerms), `${JSON.stringify({
+		writeWhole(join(folder, FILES.sampleTerms), `${JSON.stringify({
 			deliverable: t.deliverable,
 			acceptance: t.acceptance
 		}, null, 2)}\n`);
-		writeFileSync(join(folder, FILES.sampleResult), bytes);
+		writeWhole(join(folder, FILES.sampleResult), bytes);
 		const r = checkDelivery({
 			terms: join(folder, FILES.sampleTerms),
 			file: join(folder, FILES.sampleResult)
@@ -59495,7 +59509,7 @@ async function runChecks(folder) {
 		if (!result) throw new Error("not run: there is no sample result that passes");
 		const cut = withoutAField(result, format);
 		if (!cut) throw new Error(`a ${plain$2(format, 60)} result has no field this check can remove`);
-		writeFileSync(join(folder, FILES.sampleCut), cut.bytes);
+		writeWhole(join(folder, FILES.sampleCut), cut.bytes);
 		if (checkDelivery({
 			terms: join(folder, FILES.sampleTerms),
 			file: join(folder, FILES.sampleCut)
@@ -60094,7 +60108,7 @@ async function writeRecord(c, state, id, started) {
 	}
 	mkdirSync(join(c.folder, FILES.deals), { recursive: true });
 	const file = join(c.folder, FILES.deals, `${id}.json`);
-	writeWhole(file, `${JSON.stringify(record, null, 2)}\n`);
+	writeWhole$1(file, `${JSON.stringify(record, null, 2)}\n`);
 	const sound = !unsound();
 	const payee = payeeOf(record, payout.address);
 	state.firstDeal = {
