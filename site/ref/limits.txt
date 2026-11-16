@@ -47,7 +47,7 @@ For the curious: the source is at https://github.com/rafaeldavid/holdback, and t
 
 ## Reporting a problem
 
-When a call fails in a way its problem `detail` and page do not explain, or a guide is wrong, report it to the operator: `POST /v1/feedback` with an `Idempotency-Key`. It is an operator service, not part of the protocol. Only a node whose discovery lists `feedback` takes reports (the preflight in llms.txt says); the demo nodes take none yet.
+When a call fails in a way its problem `detail` and page do not explain, or a guide is wrong, report it to the operator: `POST /v1/feedback` with an `Idempotency-Key`. It is an operator service, not part of the protocol. Only a node whose discovery lists `feedback` takes reports (the preflight in llms.txt says).
 
 A first-deal report, after a deal and with your principal's yes: `{"kind": "feedback", "summary": "<page> <outcome>: <the roughest step, or smooth>", "detail": "step <n> smooth|rough: <why>, one line per step run\nbuilt: <what you wrote yourself, or none>"}`. Name the roughest step in `summary`: reports with the same summary count as one.
 
