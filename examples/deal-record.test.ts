@@ -225,9 +225,17 @@ describe('deal-record.ts writes one verified record of a finished deal (T-333)',
 });
 
 /** A proxy in front of one operator that rewrites some answers: the escrow state, the terms' price, a ciphertext URI. */
-async function proxy(target: string, lie: { state?: string; tamperPrice?: string; ciphertextUri?: string; noPostings?: boolean; txs?: Record<string, string> }): Promise<{ url: string; close(): Promise<void> }> {
+async function proxy(target: string, lie: { state?: string; tamperPrice?: string; ciphertextUri?: string; noPostings?: boolean; txs?: Record<string, string>; refuseEvents?: { times: number; status: number } }): Promise<{ url: string; close(): Promise<void> }> {
+  let refusals = 0;
   const server = createServer(async (req, res) => {
     const path = req.url ?? '/';
+    // T-492: the events read refused `times` times with `status` (429 names a 0 s wait), then served.
+    if (lie.refuseEvents && /\/events/.test(path) && refusals < lie.refuseEvents.times) {
+      refusals++;
+      const s = lie.refuseEvents.status;
+      res.writeHead(s, { 'content-type': 'application/problem+json' }).end(JSON.stringify({ type: s === 429 ? 'rate_limited' : 'internal', status: s, ...(s === 429 ? { retryAfterSec: 0 } : {}) }));
+      return;
+    }
     const up = await realFetch(`${target}${path}`, { method: req.method! });
     let text = Buffer.from(await up.arrayBuffer()).toString();
     if (up.ok && (up.headers.get('content-type') ?? '').includes('json')) {
@@ -252,6 +260,42 @@ async function proxy(target: string, lie: { state?: string; tamperPrice?: string
     }),
   };
 }
+
+describe('deal-record.ts never reads a refused read as missing data (T-492)', () => {
+  let refunded: Deal;
+  beforeAll(async () => {
+    refunded = await deal(BAD);
+  }, 60_000);
+  const both = (url: string) => [world.info.operators[0]!, url];
+
+  it('retries a 429 and a 500 on the events read, and the refund is in the record', async () => {
+    for (const status of [429, 500]) {
+      const busy = await proxy(world.info.operators[1]!, { refuseEvents: { times: 2, status } });
+      try {
+        const r = await dealRecord(refunded.id, { operators: both(busy.url), party: 'buyer' });
+        expect(r.checks.find((x) => x.check === 'every read answered'), String(status)).toMatchObject({ ok: true });
+        expect(r.row, String(status)).toMatchObject({ outcome: 'Refunded', refundedTo: refunded.buyer.address.toLowerCase() });
+        // The retry reads the busy operator about 1 s after the other, so `steps` may differ by the closing
+        // `appeal.expired` the world appends in between; the money sections must agree.
+        expect(r.disagreements.map((d) => d.section).filter((s) => ['terms', 'outcome', 'settlement'].includes(s)), String(status)).toEqual([]);
+      } finally {
+        await busy.close();
+      }
+    }
+  }, 30_000);
+
+  it('names a read still refused after its retries as a failed check, instead of a record that says no refund', async () => {
+    const down = await proxy(world.info.operators[1]!, { refuseEvents: { times: 99, status: 429 } });
+    try {
+      const r = await dealRecord(refunded.id, { operators: both(down.url), party: 'buyer' });
+      const c = r.checks.find((x) => x.check === 'every read answered');
+      expect(c).toMatchObject({ ok: false, why: expect.stringContaining(`${down.url}: /v1/commitments/${refunded.id}/events answered 429 after 3 tries`) });
+      expect(c?.why).toContain('refundedTo may read null');
+    } finally {
+      await down.close();
+    }
+  }, 30_000);
+});
 
 describe('deal-record.ts when a release\'s event carries no postings (T-390)', () => {
   // A chain's events carry no postings, and there the record marks its postings checks not run (pin.chain set; not
