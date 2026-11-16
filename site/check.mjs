@@ -70,7 +70,7 @@ import { OG_IMAGE } from './footer.ts';
 import { trustFacts } from './trust.mjs';
 import { ICON_FILES } from './brand/kit.mjs';
 import { GOALS, goalBundle, goalCommand, goalSha256, goalUrl, NODE_MIN, NODE_PERMISSION, PREFLIGHT, preflightCommand, REFERENCE_PATH, referenceText, SETUP_MJS_URL, setupBundle, setupCommand, setupSha256 } from './build.mjs';
-import { ASSETS, BASE, BUY_COMMANDS, CARD_SCHEMA, HOME_CSS, HOME_JS, notFoundPage, visualdemoPage, BUY_MJS_URL, BUY_URL, buyBundle, buyInstall, buySha256, filled, page, pins, problemPages, publishedGuides, SELL_URL, SITE_URL, strip, TEST_SELLER_URL, tryBundle, tryCommand, trySha256, TRY_URL } from './build.mjs';
+import { ASSETS, BASE, BUY_COMMANDS, CARD_SCHEMA, HOME_CSS, HOME_JS, notFoundPage, visualdemoPage, BUY_MJS_URL, BUY_URL, buyBundle, buyInstall, buySha256, filled, page, pins, problemPages, publishedGuides, SELL_URL, SITE_URL, sourceCommitOf, strip, TEST_SELLER_URL, tryBundle, tryCommand, trySha256, TRY_URL } from './build.mjs';
 import { apiRoutes, citedSections, duplicateSentences, hasSection, FIRST_DEAL_BUDGET, guideFiles, guideSource, measurePaths, namedCalls, namedReferences, referenceFiles, nonAscii, routeKnown, SETUP_MAX_BYTES } from './guides.mjs';
 
 const here = (p) => new URL(p, import.meta.url);
@@ -227,15 +227,16 @@ for (const p of ['llms.txt', 'ref/http.txt', 'ref/signing.txt', 'ref/http-buyer.
 
 // 7. try.mjs and the one command.
 const bundle = read('try.mjs');
-expect(bundle === (await tryBundle()), 'site/try.mjs is stale against examples/: run node site/build.mjs');
+// Current for the source commit its banner names (T-496); the publish build checks that commit against the tree.
+expect(bundle === (await tryBundle(undefined, { commit: sourceCommitOf(bundle) })), 'site/try.mjs is stale against examples/: run node site/build.mjs');
 const imports = [...bundle.matchAll(/^import .* from "([^"]+)";$/gm)].map((m) => m[1]).sort();
-expect(JSON.stringify(imports) === JSON.stringify(['tweetnacl', 'viem', 'viem/accounts']) && !/@holdback\/|\bimport\(/.test(bundle), 'site/try.mjs must import only viem, viem/accounts and tweetnacl');
+expect(JSON.stringify(imports) === JSON.stringify(['node:fs']) && !/@holdback\//.test(bundle), 'site/try.mjs must carry viem and tweetnacl inside and import only node:fs (tests/site-bundles.test.ts)');
 const { viem, tweetnacl } = pins();
 const command = tryCommand();
-expect(command.includes(` viem@${viem} tweetnacl@${tweetnacl} `) && command.includes(`curl -fsSLO ${TRY_URL} `), 'the try command does not pin the lockfile versions or fetch try.mjs from the site');
-expect(bundle.includes(`npm install viem@${viem} tweetnacl@${tweetnacl}`), 'the try.mjs banner names other versions than the command');
+expect(!command.includes('npm') && command.includes(`curl -fsSL ${TRY_URL} -o try.mjs.part `), 'the try command installs from npm or does not fetch try.mjs from the site');
+expect(bundle.includes(`viem@${viem} (MIT License`) && bundle.includes(`tweetnacl@${tweetnacl} (public domain`), 'the try.mjs banner names other versions than the lockfile pins');
 const filledTry = sampleTxt.slice(sampleTxt.indexOf('## Try it'));
-expect(filledTry.split('\n').find((l) => l.startsWith('mkdir ')) === command, 'a filled llms.txt does not carry the current try command at the top of "Try it"');
+expect(filledTry.split('\n').find((l) => l.startsWith(`curl -fsSL ${TRY_URL} `)) === command, 'a filled llms.txt does not carry the current try command at the top of "Try it"');
 // One-Click Escrow (D51, T-229): the copied prompt carries the exact command, so a fresh assistant asks for one
 // approval; the visible page shows only the Try line.
 const span = /<span id="prompt" hidden>([^<]*)<\/span>/.exec(html);
@@ -243,7 +244,7 @@ const prompt = (span?.[1] ?? '').replaceAll('&quot;', '"').replaceAll('&lt;', '<
 expect(prompt.split('\n').includes(command) && prompt.includes(trySha256()), "the Try line's prompt does not carry the current try command on a line of its own");
 expect(prompt.includes(`${SITE_URL}llms.txt`), "the Try line's prompt does not name llms.txt");
 const visible = html.replace(span?.[0] ?? '', '');
-expect(!visible.includes('mkdir -p crow-try') && !visible.includes(trySha256()), 'index.html shows the try command outside the hidden prompt: the page shows only the Try line');
+expect(!visible.includes('try.mjs.part') && !visible.includes(trySha256()), 'index.html shows the try command outside the hidden prompt: the page shows only the Try line');
 // The clipboard fallback shows the prompt for a hand copy. pre-line collapses the two spaces in
 // `echo "<sha256>  try.mjs" | shasum -a 256 -c`, and shasum then refuses the line; pre-wrap keeps them.
 expect(/\.copied \{[^}]*white-space: pre-wrap;/.test(HOME_CSS), "the .copied fallback must use white-space: pre-wrap, or a hand copy breaks the command's hash check");
@@ -287,11 +288,11 @@ expect(command.endsWith(`&& node ${NODE_PERMISSION} try.mjs --seller ${TEST_SELL
 // its principal the command, who runs each role and what the run exposes, and wait for one yes; after the deal, one
 // first-deal report with the principal's yes. The pages name the Node that runs the permission flag.
 const days = String(trustFacts().requestLogDays);
-const tryFacts = ['wait for one yes', 'Crow runs the other party, the three adjudicators and both operators', 'The deal is public on Sepolia', `keep request lines without it for ${days} days`, 'npm sees it', "Crow's adjudicators can read the work", 'the operators cannot', 'send one first-deal report (`ref/limits.txt`, "Reporting a problem")', "under Node's permission flag"];
+const tryFacts = ['wait for one yes', 'Crow runs the other party, the three adjudicators and both operators', 'The deal is public on Sepolia', `keep request lines without it for ${days} days`, "Crow's adjudicators can read the work", 'the operators cannot', 'send one first-deal report (`ref/limits.txt`, "Reporting a problem")', "under Node's permission flag"];
 const filledTryIt = filledTry.slice(0, filledTry.indexOf('\n## ', 3));
 for (const f of tryFacts) expect(filledTryIt.includes(f), `"Try it" does not say: ${f}`);
 expect(filledTryIt.indexOf('wait for one yes') < filledTryIt.indexOf('```'), '"Try it" must ask for the principal\'s yes before its first command');
-for (const f of ['wait for their one yes', 'this prompt is not that yes', 'Crow runs the seller, the three adjudicators and both operators', 'the deal is public on Sepolia', `request lines without it for ${days} days`, 'npm sees your IP', "Crow's adjudicators can read the work, and the operators cannot", 'first-deal report', `Node ${NODE_MIN} or later`]) expect(prompt.includes(f), `the home page's prompt does not say: ${f}`);
+for (const f of ['wait for their one yes', 'this prompt is not that yes', 'Crow runs the seller, the three adjudicators and both operators', 'the deal is public on Sepolia', `request lines without it for ${days} days`, "Crow's adjudicators can read the work, and the operators cannot", 'first-deal report', `Node ${NODE_MIN} or later`]) expect(prompt.includes(f), `the home page's prompt does not say: ${f}`);
 expect(prompt.indexOf('wait for their one yes') < prompt.indexOf(command), "the home page's prompt must ask for the yes before the command");
 expect(!/Node 20\b/.test(sampleTxt) && !/Node 20\b/.test(prompt), `llms.txt or the home page's prompt still says Node 20: the goal commands run under the permission flag on Node ${NODE_MIN} or later`);
 for (const line of [command, ...Object.keys(GOALS).map((n) => goalCommand(n))]) expect(line.includes(` node ${NODE_PERMISSION} `), `a goal command runs without ${NODE_PERMISSION}: ${line}`);

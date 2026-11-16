@@ -4,9 +4,12 @@
 // The source (examples/try.ts) and the published bundle (site/try.mjs) both run a deal.
 import { spawn } from 'node:child_process';
 import { createHash } from 'node:crypto';
-import { readFileSync } from 'node:fs';
+import { copyFileSync, mkdirSync, mkdtempSync, readdirSync, readFileSync, realpathSync, rmSync } from 'node:fs';
+import { tmpdir } from 'node:os';
+import { join } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { MemoryStorage, PublicWorld } from '@holdback/demo-cloud';
+import { MemoryFeedbackStore } from '@holdback/operator';
 import { afterAll, beforeAll, describe, expect, it } from 'vitest';
 import { finality } from './finality.ts';
 import { serveTwoOrigins } from './two-origins.ts';
@@ -17,8 +20,8 @@ const here = (f: string) => fileURLToPath(new URL(f, import.meta.url));
  * The demo world as two nodes: http://127.0.0.1:<port> is node 0, http://localhost:<port> node 1 (world.test.ts).
  * `rewrite` alters the successful answers of the nodes listed in `lying`.
  */
-async function serve(rewrite?: (path: string, body: string) => string, lying: number[] = [0]): Promise<{ urls: [string, string]; close(): Promise<void> }> {
-  const world = await PublicWorld.open({ storage: new MemoryStorage(), env: { OPERATOR_FEE_BPS: '1', OPERATOR_FEE_MIN: '10000' } });
+async function serve(rewrite?: (path: string, body: string) => string, lying: number[] = [0], { reports = false } = {}): Promise<{ urls: [string, string]; close(): Promise<void> }> {
+  const world = await PublicWorld.open({ storage: new MemoryStorage(), env: { OPERATOR_FEE_BPS: '1', OPERATOR_FEE_MIN: '10000' }, ...(reports ? { feedbackStore: new MemoryFeedbackStore() } : {}) });
   return serveTwoOrigins(world, { tickMs: 100, rewrite: rewrite && ((node, path, body) => (lying.includes(node) ? rewrite(path, body) : undefined)) });
 }
 
@@ -46,6 +49,8 @@ function expectDeal(r: Run): string {
   expect(r.code, r.out).toBe(0);
   for (const step of ['keys', 'faucet', 'offer', 'accepted', 'check', 'fund', 'deliver', 'outcome', 'open', 'balances', 'final']) expect(r.out, step).toMatch(new RegExp(`^${step} +\\S`, 'm'));
   expect(r.out).toMatch(/^faucet +1000 tUSD each, both admitted to demo-club$/m);
+  // T-496: who runs each role, before any money moves; on other operators than Crow's it claims none for Crow.
+  expect(r.out).toMatch(/^roles +buyer: this script, with fresh keys; seller: this script too; adjudicators \(primary, fallback, appeal\): 0x[0-9a-f]{6}\.\.\.[0-9a-f]{4}, 0x[0-9a-f]{6}\.\.\.[0-9a-f]{4}, 0x[0-9a-f]{6}\.\.\.[0-9a-f]{4}, as the operators' discovery names them; operators: 127\.0\.0\.1:\d+ and localhost:\d+$/m);
   // T-390: phase one's terms have no appeal window, so the closing line says the decision is final, and names no window.
   expect(r.out).toMatch(/^final +\S.*; final at the decision, since the terms have no appeal window$/m);
   expect(r.out).not.toMatch(/appeal window closes/);
@@ -129,17 +134,87 @@ describe('try.ts', () => {
     }
   }, 60_000);
 
-  it('site/try.mjs is the current bundle of examples/try.ts, and that bundle runs a deal', async () => {
-    const { tryBundle } = await import(here('../site/build.mjs'));
+  it('site/try.mjs is the current bundle of examples/try.ts, and that bundle runs a deal with no npm install', async () => {
+    const { tryBundle, sourceCommitOf, sourceCommitProblem, tryFiles } = await import(here('../site/build.mjs'));
     const committed = readFileSync(here('../site/try.mjs'), 'utf8');
-    expect(committed === (await tryBundle()), 'site/try.mjs is stale: run node site/build.mjs').toBe(true);
-    // Only viem and tweetnacl stay imports; nothing from the workspace, no other file.
+    // The code is current for the commit its banner names (T-496). That commit is checked where the clone has it:
+    // CI's shallow clone does not, and the publish build refuses one that does not hold.
+    const commit = sourceCommitOf(committed);
+    expect(commit, 'site/try.mjs names no source commit: commit examples/, then run node site/build.mjs').toMatch(/^[0-9a-f]{40}$/);
+    expect(committed === (await tryBundle(undefined, { commit })), 'site/try.mjs is stale: run node site/build.mjs').toBe(true);
+    const problem = sourceCommitProblem(commit, tryFiles(committed));
+    if (!problem?.endsWith('is not in this clone')) expect(problem).toBeNull();
+    expect(tryFiles(committed)).toEqual(['examples/agent.ts', 'examples/deployments.ts', 'examples/finality.ts', 'examples/try.ts', 'examples/verify.ts']);
+    // viem and tweetnacl are inside; the one import is Node's fs, for --out (tests/site-bundles.test.ts pins the rest).
     const imports = [...committed.matchAll(/^import .* from "([^"]+)";$/gm)].map((m) => m[1]);
-    expect(new Set(imports)).toEqual(new Set(['viem', 'viem/accounts', 'tweetnacl']));
-    expect(committed).not.toMatch(/@holdback\/|\bimport\(/);
-    // As `node try.mjs` runs it in a folder where npm installed the two packages: piped in from examples/,
-    // where they resolve, so no file is written.
-    expectDeal(await node(['--input-type=module', '-'], demo.urls, { stdin: committed, cwd: here('.') }));
+    expect(imports).toEqual(['node:fs']);
+    // As the one command runs it: one file in an empty folder, no node_modules anywhere above it, no npm.
+    const dir = realpathSync(mkdtempSync(join(tmpdir(), 'crow-try-')));
+    try {
+      copyFileSync(here('../site/try.mjs'), join(dir, 'try.mjs'));
+      expectDeal(await node([join(dir, 'try.mjs')], demo.urls, { cwd: dir }));
+      // It wrote nothing: the folder holds only the file itself.
+      expect(readdirSync(dir)).toEqual(['try.mjs']);
+    } finally {
+      rmSync(dir, { recursive: true, force: true });
+    }
+  }, 60_000);
+
+  it('with --out, writes the terms, the transaction hashes, the data and its SHA-256, and runs under node --permission', async () => {
+    const dir = realpathSync(mkdtempSync(join(tmpdir(), 'crow-try-')));
+    try {
+      copyFileSync(here('../site/try.mjs'), join(dir, 'try.mjs'));
+      const out = join(dir, 'record');
+      // Under the permission model without write access, --out refuses before any deal, and names the flag.
+      const denied = await node(['--permission', `--allow-fs-read=${dir}`, join(dir, 'try.mjs'), '--out', out], demo.urls, { cwd: dir });
+      expect(denied.code, denied.out).toBe(1);
+      expect(denied.out).toContain(`create the folder first (mkdir -p ${out}), then add --allow-fs-write=${out}`);
+      expect(denied.out).not.toMatch(/^faucet /m);
+      // Granted a folder that did not exist when Node started, which Node does not let it write: refused before the deal too.
+      const missing = await node(['--permission', `--allow-fs-read=${dir}`, `--allow-fs-write=${out}`, join(dir, 'try.mjs'), '--out', out], demo.urls, { cwd: dir });
+      expect(missing.code, missing.out).toBe(1);
+      expect(missing.out).not.toMatch(/^faucet /m);
+      // With the folder made first and write access to it only, the deal runs and the record is there.
+      mkdirSync(out, { recursive: true });
+      const r = await node(['--permission', `--allow-fs-read=${dir}`, `--allow-fs-write=${out}`, join(dir, 'try.mjs'), '--out', out], demo.urls, { cwd: dir });
+      const id = expectDeal(r);
+      expect(r.out).toContain(`record    wrote ${out}/${id}.json and ${out}/${id}.csv`);
+      expect(readdirSync(out).sort()).toEqual([`${id}.csv`, `${id}.json`]);
+      const csv = readFileSync(join(out, `${id}.csv`));
+      expect(csv.toString()).toBe('customer_id,email\n1,ada@example.com\n2,alan@example.com\n3,grace@example.com\n');
+      const record = JSON.parse(readFileSync(join(out, `${id}.json`), 'utf8'));
+      expect(record).toMatchObject({ type: 'crow-try-record', commitmentId: id, state: 'Released', operators: demo.urls, transactions: [], data: { file: `${id}.csv`, format: 'text/csv', bytes: csv.length, sha256: createHash('sha256').update(csv).digest('hex') } });
+      expect(record.terms.price).toEqual({ token: 'tUSD', amount: '25000000' });
+      // No key in the record.
+      expect(JSON.stringify(record)).not.toMatch(/privateKey|secretKey/i);
+    } finally {
+      rmSync(dir, { recursive: true, force: true });
+    }
+  }, 90_000);
+
+  it('ends with the report route when the operators take reports, after the done line', async () => {
+    const reporting = await serve(undefined, [], { reports: true });
+    try {
+      const r = await node([here('./try.ts')], reporting.urls);
+      expect(r.code, r.out).toBe(0);
+      const [op1, op2] = reporting.urls;
+      expect(r.out).toMatch(/\ndone +commitment 0x[0-9a-f]{64} Released\nreport +.*\n$/);
+      expect(r.out.trimEnd().split('\n').at(-1)).toBe(`report    with your principal's yes, report a problem or this first deal: POST ${op1}/v1/feedback or ${op2}/v1/feedback (https://crow.direct/ref/limits.txt, "Reporting a problem")`);
+    } finally {
+      await reporting.close();
+    }
+  }, 60_000);
+
+  it("names the faucet's own limits when a run stops", async () => {
+    // An operator that funds nothing: the faucet answers 429, as it does past its limit per client.
+    const capped = await serve((path, body) => (path === '/v1/faucet' ? '{' : body), [0, 1]);
+    try {
+      const r = await node([here('./try.ts')], capped.urls);
+      expect(r.code, r.out).toBe(1);
+      expect(r.out).toMatch(/^Nothing here is real money\. Run it again for a fresh deal; the faucet funds at most 50 new addresses per client every 60 min\.$/m);
+    } finally {
+      await capped.close();
+    }
   }, 60_000);
 
   it('llms.txt carries the one command, with the sha256 of site/try.mjs and the lockfile versions, and the homepage copies it without showing it', async () => {
@@ -149,7 +224,8 @@ describe('try.ts', () => {
     const v = (name: string) => (JSON.parse(readFileSync(here(`./node_modules/${name}/package.json`), 'utf8')) as { version: string }).version;
     expect(pins()).toEqual({ viem: v('viem'), tweetnacl: v('tweetnacl') });
     const command = tryCommand();
-    expect(command).toBe(`mkdir -p crow-try && cd crow-try && npm init -y >/dev/null && npm install --silent --ignore-scripts viem@${v('viem')} tweetnacl@${v('tweetnacl')} && curl -fsSLO https://crow.direct/try.mjs && echo "${sha}  try.mjs" | shasum -a 256 -c && node --permission --allow-fs-read=. try.mjs --seller https://crow.direct/agents/test-seller`);
+    // T-496: no npm. The file is checked as try.mjs.part and becomes try.mjs only when its SHA-256 matches.
+    expect(command).toBe(`curl -fsSL https://crow.direct/try.mjs -o try.mjs.part && echo "${sha}  try.mjs.part" | shasum -a 256 -c && mv try.mjs.part try.mjs && node --permission --allow-fs-read=. try.mjs --seller https://crow.direct/agents/test-seller`);
     const md = readFileSync(here('../site/llms.txt'), 'utf8');
     const html = readFileSync(here('../site/index.html'), 'utf8');
     expect(html === page(md), 'site/index.html is stale: run node site/build.mjs').toBe(true);
@@ -160,11 +236,11 @@ describe('try.ts', () => {
     expect(prompt.split('\n')).toContain(command);
     expect(prompt).toContain('https://crow.direct/llms.txt');
     const visible = html.replace(span?.[0] ?? '', '');
-    expect(visible).not.toContain('mkdir -p crow-try');
+    expect(visible).not.toContain('try.mjs.part');
     expect(visible).not.toContain(sha);
     const txt: string = filled(md.split('\n').filter((l) => !l.startsWith('%% CONFIRM')).join('\n'), { op1: 'https://op1.example', op2: 'https://op2.example' });
     const tryIt = txt.slice(txt.indexOf('## Try it'), txt.indexOf('\n## ', txt.indexOf('## Try it') + 3));
-    expect(tryIt.split('\n').find((l) => l.startsWith('mkdir '))).toBe(command);
+    expect(tryIt.split('\n').find((l) => l.startsWith('curl -fsSL https://crow.direct/try.mjs '))).toBe(command);
     // Each fetch before the command is one more approval: "Try it" asks for none, and keeps the sha256 pin and the source.
     expect(tryIt).not.toMatch(/before you ask|fetch https:\/\/crow\.direct\/try\.mjs/);
     expect(tryIt).toContain('runs it only if its SHA-256 matches the one in the command');
