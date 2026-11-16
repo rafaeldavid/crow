@@ -1,0 +1,99 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://escrow.stream/metrics/schemas/agent-session.schema.json",
+  "title": "agent-session/<label>.json: one real agent session's numbers, read from its Claude Code transcript (T-493)",
+  "description": "Written by tools/one-click/session-record.mjs for a purchase or a sale an agent ran for a person, such as the pilot's scans, where the benchmark harness cannot drive the agent because the person approves real offers. Numbers and tool names only: no message text, no command, no path, no address, no scope.",
+  "type": "object",
+  "$ref": "common.schema.json#/$defs/Envelope",
+  "unevaluatedProperties": false,
+  "required": ["label", "session", "approvals", "tokens", "time", "tools"],
+  "properties": {
+    "schema": { "const": "crow.metrics.agent-session/1" },
+    "label": { "type": "string", "pattern": "^[a-z0-9][a-z0-9-]{0,63}$", "description": "The run's own name, given by whoever runs the converter, such as pilot-scan-1-buyer" },
+    "session": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["claudeCodeVersion", "entries", "startedAt", "endedAt", "subagentEntries"],
+      "properties": {
+        "claudeCodeVersion": { "type": ["string", "null"], "pattern": "^\\d+\\.\\d+\\.\\d+", "maxLength": 40 },
+        "entries": { "$ref": "common.schema.json#/$defs/Count" },
+        "subagentEntries": { "$ref": "common.schema.json#/$defs/Count", "description": "Entries marked isSidechain; their tool permissions and tokens are counted with the session's" },
+        "startedAt": { "$ref": "common.schema.json#/$defs/IsoOrNull" },
+        "endedAt": { "$ref": "common.schema.json#/$defs/IsoOrNull" }
+      }
+    },
+    "approvals": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["total", "toolPermission", "questions", "messages", "byTool", "autoAllowed", "denied"],
+      "properties": {
+        "total": { "$ref": "common.schema.json#/$defs/Count", "description": "toolPermission + questions + messages: every answer a person gave, as the benchmark counts approvals" },
+        "toolPermission": { "$ref": "common.schema.json#/$defs/Count", "description": "Tool calls a person allowed, once or for good (permissionDecision source user_temporary or user_permanent)" },
+        "questions": { "$ref": "common.schema.json#/$defs/Count", "description": "Question cards a person answered (AskUserQuestion results)" },
+        "messages": { "$ref": "common.schema.json#/$defs/Count", "description": "Messages a person sent after the session's first, mid-turn ones included (origin kind human)" },
+        "byTool": {
+          "type": "object",
+          "maxProperties": 60,
+          "propertyNames": { "pattern": "^[A-Za-z0-9_.-]{1,80}$" },
+          "additionalProperties": { "$ref": "common.schema.json#/$defs/Count" }
+        },
+        "autoAllowed": { "$ref": "common.schema.json#/$defs/Count", "description": "Tool calls the person's settings allowed with no question (source config)" },
+        "denied": { "$ref": "common.schema.json#/$defs/Count", "description": "Tool calls refused, by a person or by the settings" }
+      }
+    },
+    "tokens": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["calls", "byModel", "total"],
+      "properties": {
+        "calls": { "$ref": "common.schema.json#/$defs/Count", "description": "Model calls, each counted once however many transcript entries it wrote" },
+        "byModel": {
+          "type": "object",
+          "maxProperties": 10,
+          "propertyNames": { "pattern": "^[a-z0-9.@\\[\\]-]{1,64}$" },
+          "additionalProperties": { "$ref": "#/$defs/Tokens" }
+        },
+        "total": { "$ref": "#/$defs/Tokens" }
+      }
+    },
+    "time": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["wallMs", "waitingOnPersonMs", "withoutUserMs", "method"],
+      "properties": {
+        "wallMs": { "$ref": "common.schema.json#/$defs/Ms" },
+        "waitingOnPersonMs": { "$ref": "common.schema.json#/$defs/Ms" },
+        "withoutUserMs": { "$ref": "common.schema.json#/$defs/Ms" },
+        "method": { "type": "string", "maxLength": 300 }
+      }
+    },
+    "tools": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["calls", "byTool"],
+      "properties": {
+        "calls": { "$ref": "common.schema.json#/$defs/Count" },
+        "byTool": {
+          "type": "object",
+          "maxProperties": 60,
+          "propertyNames": { "pattern": "^[A-Za-z0-9_.-]{1,80}$" },
+          "additionalProperties": { "$ref": "common.schema.json#/$defs/Count" }
+        }
+      }
+    }
+  },
+  "$defs": {
+    "Tokens": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["calls", "input", "cacheWrite", "cacheRead", "output"],
+      "properties": {
+        "calls": { "$ref": "common.schema.json#/$defs/Count" },
+        "input": { "$ref": "common.schema.json#/$defs/Count", "description": "Uncached input tokens" },
+        "cacheWrite": { "$ref": "common.schema.json#/$defs/Count" },
+        "cacheRead": { "$ref": "common.schema.json#/$defs/Count" },
+        "output": { "$ref": "common.schema.json#/$defs/Count" }
+      }
+    }
+  }
+}

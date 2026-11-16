@@ -161,6 +161,29 @@ Run the same command again: every run gets its own record, named by the time it 
 3. Add it to the test's list in `tests/metrics/one-click-bench.test.ts`, and run `pnpm exec vitest run tests/metrics`.
 4. When a blocked scenario's need lands, replace `blockedBy` with its scripted agent; the test then expects it to complete. For s7, the scripted agent gets the job API's URL and key and the payout address in `CROW_BENCH_JOB_API`, `CROW_BENCH_JOB_API_KEY` and `CROW_BENCH_PAYOUT` (or as `{jobApi}` and `{payout}` in its arguments) when its `scripted` entry says `jobApi: true`.
 
+## A real session's numbers: `session-record.mjs` (T-493)
+
+**For a deal an agent ran for a person, where the harness cannot drive the agent**, such as a pilot purchase whose offer a person reads and approves. It reads that session's Claude Code transcript afterwards and writes one `crow.metrics.agent-session/1` record (`scripts/metrics/schemas/agent-session.schema.json`):
+- approvals, as the harness counts them: tool calls a person allowed, questions answered, and messages after the first;
+- tokens per model, each model call counted once;
+- wall time and time without the user;
+- tool calls by name.
+
+```sh
+node tools/one-click/session-record.mjs ~/.claude/projects/<project>/<session id>.jsonl --label pilot-scan-1-buyer --out reports/scratch/agent-session/pilot-scan-1-buyer.json
+```
+
+- **It writes numbers and tool names only:** no message, command, path, address, repository or credential. A transcript can hold all of those, so it never leaves the machine it was made on, and only the record goes on. The label is the run's own short name; it refuses one with capitals, spaces or slashes.
+- **What it reads, and how sure it is** [measured on real transcripts on 2026-11-16]:
+  - A tool result's `permissionDecision`: `user_temporary` is a person's yes; `user_permanent` with `reasonType: rule`, and `config`, are a stored rule or the settings, with no question asked.
+  - A person's message: origin kind `human`, sent between turns or mid-turn.
+  - Tokens: `message.usage`.
+
+  A Claude Code version that marks these another way makes the record say so in `gaps`, not count 0 silently.
+- **Waiting time is an upper bound:** for a call a person allowed, it runs from the call to its result, which includes the call's own run.
+- Subagents write their own transcripts; pass them after the session's to count their calls too.
+- **Not yet:** the summary and Crow Control do not read these records; that is the next step (`docs/tasks/T-493-session-record.md`, Handoff).
+
 ## The homepage harness: `run.mjs` (T-066)
 
 The harness measures what a fresh assistant needs to run one honest deal from the homepage prompt: the user approvals, the tokens and their cost at Opus 5.5 list prices, and where the time goes. It drives a fresh Claude Code through the Agent SDK and writes one run file, `one-click/<runId>.json`, that Crow Control reads (headline metrics 1 to 3). `outsider.mjs`, beside it, is T-328's harness for runs that start from `llms.txt` alone.
