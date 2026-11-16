@@ -111,36 +111,99 @@ export const lateWorkLine = (w: NonNullable<ReturnType<typeof lateWorkOf>>): str
   `The work was delivered late and accepted by a mutual settlement, which released its key${w.keyReleasedTo ? ` to ${w.keyReleasedTo}` : ''}; delivery hash ${w.deliveryHash ?? 'not confirmed (pass your signed settlement and the delivery: --settlement <file> --delivery <file>)'}.`;
 
 /** GET from one operator: the parsed body on 2xx, the status otherwise, null when it does not answer in 15 s. */
-async function get(api: string, path: string): Promise<{ status: number; body: J } | null> {
+// T-492: a refused read is retried and then reported, never read as missing data. Before, a 429 on the events read
+// left the record with no postings, so a refunded deal's record said no refund had reached the buyer.
+/** Tries per read: a 429 waits the seconds it names (at most `maxWaitSec`), a 5xx or no answer waits `pauseMs`. */
+export const RETRY = { tries: 3, maxWaitSec: 30, pauseMs: 1_000 };
+const refusedStatus = (s: number) => s === 429 || s >= 500;
+/** The wait a 429 names: the problem's `retryAfterSec`, else the Retry-After header, else 1 s; at most `maxWaitSec`. */
+async function waitOf(res: Response): Promise<number> {
+  let sec = Number(res.headers.get('retry-after'));
   try {
-    const res = await fetch(`${api}${path}`, { signal: AbortSignal.timeout(15_000) });
-    return { status: res.status, body: res.ok ? await res.json() : null };
+    const p: J = await res.clone().json();
+    if (Number.isFinite(p?.retryAfterSec)) sec = Number(p.retryAfterSec);
   } catch {
+    // not JSON: the header stands
+  }
+  return Math.min(Math.max(Number.isFinite(sec) && sec > 0 ? sec : 1, 0), RETRY.maxWaitSec) * 1000;
+}
+/**
+ * One GET with the retries above. The answer, or null when the operator never answered. A read still refused after its
+ * tries (a 429, a 5xx or no answer) is added to `refused` as "<path> <what happened>", so the record can say so.
+ */
+/** The only paths the record reads: the operator's public routes, with IDs, hashes and query values in plain characters. */
+const READ_PATH = /^\/(?:\.well-known\/holdback\.json|v1\/[A-Za-z0-9._:/-]+(?:\?[A-Za-z0-9._:=&-]+)?)$/;
+/**
+ * The URL of one read: a path the record builds on one configured operator. A path that is not one of the operator's
+ * public routes, or a URL that would leave the operator's origin, is refused before any request (T-492): parts of a
+ * path come from a commitment ID or an operator's own answer.
+ */
+function readUrl(api: string, path: string): URL {
+  const base = new URL(api);
+  if (!READ_PATH.test(path)) throw new Error(`the record reads the operators' public routes only, not ${JSON.stringify(path.slice(0, 120))}`);
+  const url = new URL(`${base.origin}${base.pathname.replace(/\/+$/, '')}${path}`);
+  if (url.origin !== base.origin) throw new Error(`the record reads the configured operator ${base.origin} only`);
+  return url;
+}
+async function fetchRead(api: string, path: string, refused?: string[]): Promise<Response | null> {
+  let url: URL;
+  try {
+    url = readUrl(api, path);
+  } catch (e) {
+    refused?.push(`${path.split('?')[0]!.slice(0, 120)} not read: ${(e as Error).message}`);
     return null;
   }
+  let last: Response | null = null;
+  for (let i = 0; i < RETRY.tries; i++) {
+    let wait = RETRY.pauseMs;
+    try {
+      last = await fetch(url, { signal: AbortSignal.timeout(15_000) });
+      if (!refusedStatus(last.status)) return last;
+      if (last.status === 429) wait = await waitOf(last);
+      if (i < RETRY.tries - 1) await last.body?.cancel(); // free the connection before waiting; the last answer stays readable
+    } catch {
+      last = null;
+    }
+    if (i < RETRY.tries - 1) await new Promise((r) => setTimeout(r, wait));
+  }
+  refused?.push(`${path.split('?')[0]} ${last ? `answered ${last.status}` : 'did not answer'} after ${RETRY.tries} tries`);
+  return last;
 }
-async function bytesFrom(api: string, path: string): Promise<Uint8Array | null> {
+/** GET from one operator: the parsed body on 2xx, the status otherwise, null when it does not answer. */
+async function get(api: string, path: string, refused?: string[]): Promise<{ status: number; body: J } | null> {
+  const res = await fetchRead(api, path, refused);
+  if (!res) return null;
   try {
-    const res = await fetch(`${api}${path}`, { signal: AbortSignal.timeout(15_000) });
-    return res.ok ? new Uint8Array(await res.arrayBuffer()) : null;
+    return { status: res.status, body: res.ok ? await res.json() : null };
+  } catch {
+    refused?.push(`${path.split('?')[0]} answered ${res.status} with a body that is not JSON`);
+    return { status: res.status, body: null };
+  }
+}
+async function bytesFrom(api: string, path: string, refused?: string[]): Promise<Uint8Array | null> {
+  const res = await fetchRead(api, path, refused);
+  try {
+    return res?.ok ? new Uint8Array(await res.arrayBuffer()) : null;
   } catch {
     return null;
   }
 }
 
 /** What one operator serves for the deal. */
-type Answers = { api: string; discovery: J; state: J; terms: { status: number; body: J } | null; events: J[]; receipts: J[]; judgment: J | null; balances: Record<string, J>; key: J[] | null };
+type Answers = { api: string; discovery: J; state: J; terms: { status: number; body: J } | null; events: J[]; receipts: J[]; judgment: J | null; balances: Record<string, J>; key: J[] | null; refused: string[] };
 
 async function read(api: string, id: Hex, party: 'buyer' | 'seller', wantKey: boolean): Promise<Answers | null> {
-  const discovery = await get(api, '/.well-known/holdback.json');
-  const state = await get(api, `/v1/commitments/${id}`);
+  const refused: string[] = []; // reads this operator still refused after their retries (T-492)
+  const g = (path: string) => get(api, path, refused);
+  const discovery = await g('/.well-known/holdback.json');
+  const state = await g(`/v1/commitments/${id}`);
   if (!discovery?.body || !state?.body) return null;
-  const terms = await get(api, `/v1/commitments/${id}/terms`);
+  const terms = await g(`/v1/commitments/${id}/terms`);
   const page = async (path: string) => {
     const items: J[] = [];
     let cursor: string | null = null;
     for (let i = 0; i < 50; i++) {
-      const r = await get(api, `${path}?limit=200${cursor ? `&cursor=${cursor}` : ''}`);
+      const r = await g(`${path}?limit=200${cursor ? `&cursor=${cursor}` : ''}`);
       if (!r?.body || !Array.isArray(r.body.items)) break;
       items.push(...r.body.items);
       cursor = typeof r.body.nextCursor === 'string' && CURSOR.test(r.body.nextCursor) ? r.body.nextCursor : null;
@@ -150,30 +213,37 @@ async function read(api: string, id: Hex, party: 'buyer' | 'seller', wantKey: bo
   };
   const events = (await page(`/v1/commitments/${id}/events`)).sort((a, b) => a.seq - b.seq);
   const receipts = await page(`/v1/commitments/${id}/receipts`);
-  const judgment = (await get(api, `/v1/commitments/${id}/judgment`))?.body ?? null;
+  const judgment = (await g(`/v1/commitments/${id}/judgment`))?.body ?? null;
   const t = terms?.body ?? {};
   const balances: Record<string, J> = {};
   // The parties' signing addresses and, when they differ, the two money addresses (ADR-0033), which hold the deal's money.
   for (const role of ['buyer', 'seller', 'buyerPaymentAddress', 'sellerPayoutAddress']) {
     const at = lc(t[role]);
     const signer = role === 'buyerPaymentAddress' ? lc(t.buyer) : role === 'sellerPayoutAddress' ? lc(t.seller) : null;
-    if (ADDRESS.test(String(t[role])) && at !== signer) balances[role] = (await get(api, `/v1/balances/${at}`))?.body ?? null;
+    if (ADDRESS.test(String(t[role])) && at !== signer) balances[role] = (await g(`/v1/balances/${at}`))?.body ?? null;
   }
-  const key = wantKey && party === 'buyer' && ADDRESS.test(String(t.buyer)) ? ((await get(api, `/v1/commitments/${id}/key?recipient=${lc(t.buyer)}`))?.body?.items ?? null) : null;
-  return { api, discovery: discovery.body, state: state.body, terms, events, receipts, judgment, balances, key };
+  const key = wantKey && party === 'buyer' && ADDRESS.test(String(t.buyer)) ? ((await g(`/v1/commitments/${id}/key?recipient=${lc(t.buyer)}`))?.body?.items ?? null) : null;
+  return { api, discovery: discovery.body, state: state.body, terms, events, receipts, judgment, balances, key, refused };
 }
 
-/** The ciphertext with this ID from the configured operators, `first` first, checked against the ID. */
-async function ciphertextOf(sha: string, first: string, operators: string[], cache: Map<string, Uint8Array | null>): Promise<Uint8Array | null> {
+/**
+ * The ciphertext with this ID from the configured operators, `first` first, checked against the ID. When no operator
+ * served it and some refused the read, those refusals go into `refused` (T-492): the bytes may exist, unread.
+ */
+async function ciphertextOf(sha: string, first: string, operators: string[], cache: Map<string, Uint8Array | null>, refused: string[]): Promise<Uint8Array | null> {
   if (cache.has(sha)) return cache.get(sha)!;
   let found: Uint8Array | null = null;
+  const tried: string[] = [];
   for (const api of [first, ...operators.filter((o) => o !== first)]) {
-    const b = await bytesFrom(api, `/v1/ciphertext/${sha}`);
+    const local: string[] = [];
+    const b = await bytesFrom(api, `/v1/ciphertext/${sha}`, local);
+    tried.push(...local.map((r) => (api === first ? r : `${r} at ${api}`)));
     if (b && (await sha256(b)) === sha) {
       found = b;
       break;
     }
   }
+  if (!found) refused.push(...tried);
   cache.set(sha, found);
   return found;
 }
@@ -298,7 +368,7 @@ async function view(a: Answers, id: Hex, o: Options, cache: Map<string, Uint8Arr
     delivery = { attempt: p.attempt, deliveryHash: lc(p.deliveryHash), plaintextSha256: p.plaintextSha256, ciphertext: { uri: p.ciphertext?.uri, sha256: p.ciphertext?.sha256, bytes: p.ciphertext?.bytes }, submittedAt: d.at };
     const sha = String(p.ciphertext?.sha256);
     // The bytes come from a configured operator's store at /v1/ciphertext/<sha256>, never from the recorded URI.
-    const ct = CIPHERTEXT_ID.test(sha) ? await ciphertextOf(sha, a.api, o.operators, cache) : null;
+    const ct = CIPHERTEXT_ID.test(sha) ? await ciphertextOf(sha, a.api, o.operators, cache, a.refused) : null;
     if (ct) add('ciphertext sha256', ct.length === Number(p.ciphertext?.bytes), `the ${ct.length} bytes a configured operator stores hash to the recorded ciphertext.sha256`);
     else add('ciphertext sha256', null, CIPHERTEXT_ID.test(sha) ? 'no configured operator serves bytes that hash to the recorded ciphertext.sha256' : 'the recorded ciphertext.sha256 is malformed');
     const released = (a.key ?? []).find((k: J) => lc(k.recipient) === lc(t?.buyer));
@@ -451,6 +521,9 @@ export async function dealRecord(id: Hex, o: Options): Promise<DealRecord> {
 
   const missing = operators.filter((api) => !views.has(api));
   const checks: Check[] = [{ check: 'all operators answered', ok: missing.length === 0, ...(missing.length ? { why: `no answer from ${missing.join(', ')}` } : { how: `${operators.length} of ${operators.length} configured operators answered` }) }];
+  // T-492: a read an operator refused after its retries is a gap in the record, never data. Name each one.
+  const refused = answered.flatMap((a) => a.refused.map((r) => `${a.api}: ${r}`));
+  checks.push({ check: 'every read answered', ok: refused.length === 0, ...(refused.length ? { why: `${refused.join('; ')}. What those reads hold is missing from this record, so fields such as refundedTo may read null: run it again later` } : { how: `every read was answered, after at most ${RETRY.tries} tries each` }) });
   // A check every answering operator's view gives the same result is written once; otherwise once per operator.
   const names = [...new Set([...views.values()].flatMap((v) => v.checks.map((c) => c.check)))];
   for (const name of names) {

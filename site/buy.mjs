@@ -2124,6 +2124,7 @@ var init_help = __esmMin((() => {
 
 // examples/deal-record.ts
 var deal_record_exports = /* @__PURE__ */ __exportAll({
+	RETRY: () => RETRY,
 	dealRecord: () => dealRecord,
 	lateWorkLine: () => lateWorkLine,
 	lateWorkOf: () => lateWorkOf
@@ -2147,36 +2148,88 @@ function lateWorkOf(events, settlement) {
 		keyReleasedTo: ADDRESS.test(String(key.payload?.recipient)) ? lc(key.payload.recipient) : null
 	};
 }
-/** GET from one operator: the parsed body on 2xx, the status otherwise, null when it does not answer in 15 s. */
-async function get(api, path) {
+/** The wait a 429 names: the problem's `retryAfterSec`, else the Retry-After header, else 1 s; at most `maxWaitSec`. */
+async function waitOf(res) {
+	let sec = Number(res.headers.get("retry-after"));
 	try {
-		const res = await fetch(`${api}${path}`, { signal: AbortSignal.timeout(15e3) });
+		const p = await res.clone().json();
+		if (Number.isFinite(p?.retryAfterSec)) sec = Number(p.retryAfterSec);
+	} catch {}
+	return Math.min(Math.max(Number.isFinite(sec) && sec > 0 ? sec : 1, 0), RETRY.maxWaitSec) * 1e3;
+}
+/**
+* The URL of one read: a path the record builds on one configured operator. A path that is not one of the operator's
+* public routes, or a URL that would leave the operator's origin, is refused before any request (T-492): parts of a
+* path come from a commitment ID or an operator's own answer.
+*/
+function readUrl(api, path) {
+	const base = new URL(api);
+	if (!READ_PATH.test(path)) throw new Error(`the record reads the operators' public routes only, not ${JSON.stringify(path.slice(0, 120))}`);
+	const url = new URL(`${base.origin}${base.pathname.replace(/\/+$/, "")}${path}`);
+	if (url.origin !== base.origin) throw new Error(`the record reads the configured operator ${base.origin} only`);
+	return url;
+}
+async function fetchRead(api, path, refused) {
+	let url;
+	try {
+		url = readUrl(api, path);
+	} catch (e) {
+		refused?.push(`${path.split("?")[0].slice(0, 120)} not read: ${e.message}`);
+		return null;
+	}
+	let last = null;
+	for (let i = 0; i < RETRY.tries; i++) {
+		let wait = RETRY.pauseMs;
+		try {
+			last = await fetch(url, { signal: AbortSignal.timeout(15e3) });
+			if (!refusedStatus(last.status)) return last;
+			if (last.status === 429) wait = await waitOf(last);
+			if (i < RETRY.tries - 1) await last.body?.cancel();
+		} catch {
+			last = null;
+		}
+		if (i < RETRY.tries - 1) await new Promise((r) => setTimeout(r, wait));
+	}
+	refused?.push(`${path.split("?")[0]} ${last ? `answered ${last.status}` : "did not answer"} after ${RETRY.tries} tries`);
+	return last;
+}
+/** GET from one operator: the parsed body on 2xx, the status otherwise, null when it does not answer. */
+async function get(api, path, refused) {
+	const res = await fetchRead(api, path, refused);
+	if (!res) return null;
+	try {
 		return {
 			status: res.status,
 			body: res.ok ? await res.json() : null
 		};
 	} catch {
-		return null;
+		refused?.push(`${path.split("?")[0]} answered ${res.status} with a body that is not JSON`);
+		return {
+			status: res.status,
+			body: null
+		};
 	}
 }
-async function bytesFrom(api, path) {
+async function bytesFrom(api, path, refused) {
+	const res = await fetchRead(api, path, refused);
 	try {
-		const res = await fetch(`${api}${path}`, { signal: AbortSignal.timeout(15e3) });
-		return res.ok ? new Uint8Array(await res.arrayBuffer()) : null;
+		return res?.ok ? new Uint8Array(await res.arrayBuffer()) : null;
 	} catch {
 		return null;
 	}
 }
 async function read(api, id, party, wantKey) {
-	const discovery = await get(api, "/.well-known/holdback.json");
-	const state = await get(api, `/v1/commitments/${id}`);
+	const refused = [];
+	const g = (path) => get(api, path, refused);
+	const discovery = await g("/.well-known/holdback.json");
+	const state = await g(`/v1/commitments/${id}`);
 	if (!discovery?.body || !state?.body) return null;
-	const terms = await get(api, `/v1/commitments/${id}/terms`);
+	const terms = await g(`/v1/commitments/${id}/terms`);
 	const page = async (path) => {
 		const items = [];
 		let cursor = null;
 		for (let i = 0; i < 50; i++) {
-			const r = await get(api, `${path}?limit=200${cursor ? `&cursor=${cursor}` : ""}`);
+			const r = await g(`${path}?limit=200${cursor ? `&cursor=${cursor}` : ""}`);
 			if (!r?.body || !Array.isArray(r.body.items)) break;
 			items.push(...r.body.items);
 			cursor = typeof r.body.nextCursor === "string" && CURSOR.test(r.body.nextCursor) ? r.body.nextCursor : null;
@@ -2186,7 +2239,7 @@ async function read(api, id, party, wantKey) {
 	};
 	const events = (await page(`/v1/commitments/${id}/events`)).sort((a, b) => a.seq - b.seq);
 	const receipts = await page(`/v1/commitments/${id}/receipts`);
-	const judgment = (await get(api, `/v1/commitments/${id}/judgment`))?.body ?? null;
+	const judgment = (await g(`/v1/commitments/${id}/judgment`))?.body ?? null;
 	const t = terms?.body ?? {};
 	const balances = {};
 	for (const role of [
@@ -2197,9 +2250,9 @@ async function read(api, id, party, wantKey) {
 	]) {
 		const at = lc(t[role]);
 		const signer = role === "buyerPaymentAddress" ? lc(t.buyer) : role === "sellerPayoutAddress" ? lc(t.seller) : null;
-		if (ADDRESS.test(String(t[role])) && at !== signer) balances[role] = (await get(api, `/v1/balances/${at}`))?.body ?? null;
+		if (ADDRESS.test(String(t[role])) && at !== signer) balances[role] = (await g(`/v1/balances/${at}`))?.body ?? null;
 	}
-	const key = wantKey && party === "buyer" && ADDRESS.test(String(t.buyer)) ? (await get(api, `/v1/commitments/${id}/key?recipient=${lc(t.buyer)}`))?.body?.items ?? null : null;
+	const key = wantKey && party === "buyer" && ADDRESS.test(String(t.buyer)) ? (await g(`/v1/commitments/${id}/key?recipient=${lc(t.buyer)}`))?.body?.items ?? null : null;
 	return {
 		api,
 		discovery: discovery.body,
@@ -2209,20 +2262,28 @@ async function read(api, id, party, wantKey) {
 		receipts,
 		judgment,
 		balances,
-		key
+		key,
+		refused
 	};
 }
-/** The ciphertext with this ID from the configured operators, `first` first, checked against the ID. */
-async function ciphertextOf(sha, first, operators, cache) {
+/**
+* The ciphertext with this ID from the configured operators, `first` first, checked against the ID. When no operator
+* served it and some refused the read, those refusals go into `refused` (T-492): the bytes may exist, unread.
+*/
+async function ciphertextOf(sha, first, operators, cache, refused) {
 	if (cache.has(sha)) return cache.get(sha);
 	let found = null;
+	const tried = [];
 	for (const api of [first, ...operators.filter((o) => o !== first)]) {
-		const b = await bytesFrom(api, `/v1/ciphertext/${sha}`);
+		const local = [];
+		const b = await bytesFrom(api, `/v1/ciphertext/${sha}`, local);
+		tried.push(...local.map((r) => api === first ? r : `${r} at ${api}`));
 		if (b && await sha256$1(b) === sha) {
 			found = b;
 			break;
 		}
 	}
+	if (!found) refused.push(...tried);
 	cache.set(sha, found);
 	return found;
 }
@@ -2379,7 +2440,7 @@ async function view(a, id, o, cache) {
 			submittedAt: d.at
 		};
 		const sha = String(p.ciphertext?.sha256);
-		const ct = CIPHERTEXT_ID.test(sha) ? await ciphertextOf(sha, a.api, o.operators, cache) : null;
+		const ct = CIPHERTEXT_ID.test(sha) ? await ciphertextOf(sha, a.api, o.operators, cache, a.refused) : null;
 		if (ct) add("ciphertext sha256", ct.length === Number(p.ciphertext?.bytes), `the ${ct.length} bytes a configured operator stores hash to the recorded ciphertext.sha256`);
 		else add("ciphertext sha256", null, CIPHERTEXT_ID.test(sha) ? "no configured operator serves bytes that hash to the recorded ciphertext.sha256" : "the recorded ciphertext.sha256 is malformed");
 		const released = (a.key ?? []).find((k) => lc(k.recipient) === lc(t?.buyer));
@@ -2586,6 +2647,12 @@ async function dealRecord(id, o) {
 		ok: missing.length === 0,
 		...missing.length ? { why: `no answer from ${missing.join(", ")}` } : { how: `${operators.length} of ${operators.length} configured operators answered` }
 	}];
+	const refused = answered.flatMap((a) => a.refused.map((r) => `${a.api}: ${r}`));
+	checks.push({
+		check: "every read answered",
+		ok: refused.length === 0,
+		...refused.length ? { why: `${refused.join("; ")}. What those reads hold is missing from this record, so fields such as refundedTo may read null: run it again later` } : { how: `every read was answered, after at most ${RETRY.tries} tries each` }
+	});
 	const names = [...new Set([...views.values()].flatMap((v) => v.checks.map((c) => c.check)))];
 	for (const name of names) {
 		const per = [...views.entries()].map(([api, v]) => ({
@@ -2698,7 +2765,7 @@ async function main(argv) {
 	process.stderr.write(`Record of ${r.commitmentId} written${out ? ` to ${out}` : ""}: ${count(true)} checks passed, ${count(null)} not run, ${count(false)} failed. ${r.disagreements.length ? `Operators differ on ${r.disagreements.map((d) => d.section).join(", ")}.` : `The ${r.operators.filter((x) => x.answered).length} answering operators agree.`}\n`);
 	return count(false) || r.disagreements.length ? 1 : 0;
 }
-var ID$1, ADDRESS, CIPHERTEXT_ID, CURSOR, SECTIONS, SETTLED, RECEIPT_TYPES, lc, lowerAll, sha256$1, sum, isMoney$1, lateWorkLine;
+var ID$1, ADDRESS, CIPHERTEXT_ID, CURSOR, SECTIONS, SETTLED, RECEIPT_TYPES, lc, lowerAll, sha256$1, sum, isMoney$1, lateWorkLine, RETRY, refusedStatus, READ_PATH;
 var init_deal_record = __esmMin((() => {
 	init_entry();
 	init_help();
@@ -2738,6 +2805,13 @@ var init_deal_record = __esmMin((() => {
 	sum = (xs) => xs.reduce((a, x) => a + BigInt(x.amount), 0n);
 	isMoney$1 = (m) => typeof m?.token === "string" && typeof m?.amount === "string" && /^(0|[1-9][0-9]*)$/.test(m.amount);
 	lateWorkLine = (w) => `The work was delivered late and accepted by a mutual settlement, which released its key${w.keyReleasedTo ? ` to ${w.keyReleasedTo}` : ""}; delivery hash ${w.deliveryHash ?? "not confirmed (pass your signed settlement and the delivery: --settlement <file> --delivery <file>)"}.`;
+	RETRY = {
+		tries: 3,
+		maxWaitSec: 30,
+		pauseMs: 1e3
+	};
+	refusedStatus = (s) => s === 429 || s >= 500;
+	READ_PATH = /^\/(?:\.well-known\/holdback\.json|v1\/[A-Za-z0-9._:/-]+(?:\?[A-Za-z0-9._:=&-]+)?)$/;
 	if (isMain(import.meta.url, "deal-record")) main(process.argv.slice(2)).then((code) => process.exit(code), (e) => {
 		process.stderr.write(`deal-record: ${e instanceof Error ? e.message : String(e)}\n`);
 		process.exit(2);
