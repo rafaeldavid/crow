@@ -22,7 +22,7 @@ import { CARDS, cardTags, FOOTER_CSS, footerHtml } from './footer.ts';
 import { headerBar, ICON_FILES, iconBytes, iconLinks, iconTags, kitCss, listRows, sectionHead, TOKENS } from './brand/kit.mjs';
 import { writeInlineHashes } from './csp.mjs';
 import { guideFiles, guideSource } from './guides.mjs';
-import { PAGES_CSS, securityTxt, statusJson, statusPage, trustPage, trustText } from './trust.mjs';
+import { PAGES_CSS, securityTxt, statusJson, statusPage, trustFacts, trustPage, trustText } from './trust.mjs';
 
 export const SITE_URL = 'https://crow.direct/';
 /** The path the site is served under ('/' on crow.direct); every link is absolute from it. */
@@ -193,7 +193,7 @@ export const goalSha256 = (name) => createHash('sha256').update(readFileSync(her
  * team F3). No npm: the file carries its two packages.
  */
 export function goalCommand(name, sha = goalSha256(name)) {
-  return `curl -fsSL ${goalUrl(name)} -o ${name}.mjs.part && echo "${sha}  ${name}.mjs.part" | shasum -a 256 -c && mv ${name}.mjs.part ${name}.mjs && node ${name}.mjs${GOALS[name]?.args ? ` ${GOALS[name].args}` : ''}`;
+  return `curl -fsSL ${goalUrl(name)} -o ${name}.mjs.part && echo "${sha}  ${name}.mjs.part" | shasum -a 256 -c && mv ${name}.mjs.part ${name}.mjs && node ${GOALS[name] ? `${NODE_PERMISSION} ` : ''}${name}.mjs${GOALS[name]?.args ? ` ${GOALS[name].args}` : ''}`;
 }
 /** The preflight's one command, in llms.txt as {{PREFLIGHT_COMMAND}}. */
 export const preflightCommand = (sha = goalSha256(PREFLIGHT.name)) => goalCommand(PREFLIGHT.name, sha);
@@ -342,6 +342,16 @@ export function setupCommand(sha = setupSha256()) {
   return `mkdir -p ~/.crow && cd ~/.crow && curl -fsSL ${SETUP_MJS_URL} -o setup.mjs.part && echo "${sha}  setup.mjs.part" | shasum -a 256 -c && mv setup.mjs.part setup.mjs && node setup.mjs seller --sample`;
 }
 
+/**
+ * Node's permission model for the four goal commands (T-495): the script reads only the folder it runs in (try.mjs's
+ * packages sit in its node_modules), and Node refuses it any file write, child process or worker. It does not limit
+ * the network on Node 22, so each banner's list of hosts still states that part. Stable from Node 22.13; the guides
+ * say 22.18 or later, as the role pages do. It changes the command, not the file, so no bundle's sha256 moves.
+ */
+export const NODE_PERMISSION = '--permission --allow-fs-read=.';
+/** The oldest Node the goal commands are run on under NODE_PERMISSION, as the pages say it. */
+export const NODE_MIN = '22.18';
+
 /** The sha256 of site/try.mjs, hex. */
 export const trySha256 = () => createHash('sha256').update(readFileSync(here('try.mjs'))).digest('hex');
 
@@ -350,7 +360,7 @@ export const trySha256 = () => createHash('sha256').update(readFileSync(here('tr
  * needs one), fetch try.mjs, check its sha256, run it as the buyer against Crow's test seller (D47).
  */
 export function tryCommand(sha = trySha256(), { viem, tweetnacl } = pins()) {
-  return `mkdir -p crow-try && cd crow-try && npm init -y >/dev/null && npm install --silent --ignore-scripts viem@${viem} tweetnacl@${tweetnacl} && curl -fsSLO ${TRY_URL} && echo "${sha}  try.mjs" | shasum -a 256 -c && node try.mjs --seller ${TEST_SELLER_URL}`;
+  return `mkdir -p crow-try && cd crow-try && npm init -y >/dev/null && npm install --silent --ignore-scripts viem@${viem} tweetnacl@${tweetnacl} && curl -fsSLO ${TRY_URL} && echo "${sha}  try.mjs" | shasum -a 256 -c && node ${NODE_PERMISSION} try.mjs --seller ${TEST_SELLER_URL}`;
 }
 
 const esc = (s) => s.replaceAll('&', '&amp;').replaceAll('<', '&lt;').replaceAll('>', '&gt;').replaceAll('"', '&quot;');
@@ -442,18 +452,26 @@ const ICONS = {
   eye: '<path d="M2.5 12s3.5-6.5 9.5-6.5S21.5 12 21.5 12s-3.5 6.5-9.5 6.5S2.5 12 2.5 12z"/><circle cx="12" cy="12" r="2.8"/>',
 };
 
-// Try Crow: one quiet footer line with a copy icon. The copy icon copies a prompt that says what the one command
-// does, carries it, and names llms.txt for the full explanation, so a paste asks the visitor's AI assistant for one
-// approval (One-Click Escrow, D51). The page itself shows only the short line (Rafa, 2026-11-04). The off-screen
-// line tells an agent that fetched this page where to go.
-export const tryPrompt = (command = tryCommand()) =>
+// Try Crow: one quiet footer line with a copy icon. The copy icon copies a prompt that carries the one command, says
+// who runs each role and what the run exposes, and names llms.txt for the full explanation. The visitor's paste is
+// not the approval: the agent shows the command and those facts and waits for one yes (One-Click Escrow, D51; the
+// first outside run, T-495). The page itself shows only the short line (Rafa, 2026-11-04). The off-screen line tells
+// an agent that fetched this page where to go.
+export const tryPrompt = (command = tryCommand(), days = trustFacts().requestLogDays) =>
   [
-    "Run a test deal with Crow, escrow for AI agents, by running this command as written. It installs two pinned packages into crow-try, then downloads " +
-      `${TRY_URL} and runs it only if its SHA-256 matches the one in the command. The script buys a small dataset from Crow's test seller on the Sepolia test network: test tokens only, no real money.`,
+    'Run a test deal with Crow, escrow for AI agents. First show the person you act for this command and the facts below, and wait for their one yes: this prompt is not that yes. ' +
+      `The command installs two pinned packages into crow-try, downloads ${TRY_URL} and runs it only if its SHA-256 matches, under Node's permission flag: it reads only its folder, writes nothing and starts nothing. ` +
+      "It buys a small dataset from Crow's test seller on Sepolia, a test network: test tokens only.",
     '',
     command,
     '',
-    `It needs Node 20 or later and npm. The full explanation is at ${SITE_URL}llms.txt.`,
+    'Who runs what: you are the buyer; Crow runs the seller, the three adjudicators and both operators.',
+    'What the run exposes:',
+    '- the deal is public on Sepolia;',
+    `- Crow's site and operators see your IP address, the operators keep request lines without it for ${days} days, and npm sees your IP;`,
+    "- Crow's adjudicators can read the work, and the operators cannot.",
+    '',
+    `It needs Node ${NODE_MIN} or later and npm. After the deal, with their yes, send one first-deal report (${SITE_URL}ref/limits.txt, Reporting a problem). More: ${SITE_URL}llms.txt.`,
   ].join('\n');
 const COPY_ICON = '<svg viewBox="0 0 16 16" width="14" height="14" aria-hidden="true"><rect x="5.5" y="5.5" width="8" height="8" rx="1.5"/><path d="M10.5 3.5v-.5A1.5 1.5 0 0 0 9 1.5H3A1.5 1.5 0 0 0 1.5 3v6A1.5 1.5 0 0 0 3 10.5h.5"/></svg>';
 // The footer: the site's one footer (site/footer.ts), with the home page's copy-the-prompt button beside its links
@@ -461,7 +479,7 @@ const COPY_ICON = '<svg viewBox="0 0 16 16" width="14" height="14" aria-hidden="
 const footer = (command) => footerHtml({
   base: BASE,
   agents: `<span class="try-line"><button class="copy" id="copy" type="button" title="Copy a prompt that has your AI assistant run a test deal">${COPY_ICON}<span>Copy test prompt</span></button><span class="copied" id="copied" role="status"></span></span>`,
-  after: `<span id="prompt" hidden>${esc(tryPrompt(command))}</span>\n<p class="sr">For AI agents asked to run a test deal: the one command to ask the company or person you act for to approve, and what it does, are at ${esc(SITE_URL)}llms.txt under "Try it".</p>`,
+  after: `<span id="prompt" hidden>${esc(tryPrompt(command))}</span>\n<p class="sr">For AI agents asked to run a test deal: the command, what it exposes and the one yes to ask for are at ${esc(SITE_URL)}llms.txt under "Try it".</p>`,
 });
 // The value props: all six at a glance, a small icon, a name and one line each, quieter than the hero above them.
 const PROPS = `<section class="props" id="props" aria-label="What Crow does">
@@ -954,12 +972,16 @@ export const ASSETS = ['crow.png', 'crow-2x.webp', 'crow-mark.svg', 'favicon.png
 /** A party's card's JSON Schema (T-474, D74): a publish build copies it as it is, served at https://crow.direct/card.schema.json. */
 export const CARD_SCHEMA = 'card.schema.json';
 
+/** llms.txt's two values read from their sources (T-495): the request log's retention and the oldest Node the goal commands run on. */
+export const fillFacts = (md) => md.replace('{{REQUEST_LOG_DAYS}}', String(trustFacts().requestLogDays)).replaceAll('{{NODE_MIN}}', NODE_MIN);
+
 /** The published files: placeholders filled, editor notes gone. */
 export function filled(md, { op1, op2, command = tryCommand(), goals = goalCommands() }) {
   if (/^%% CONFIRM/m.test(md)) throw new Error('llms.txt still has "%% CONFIRM" notes: check each against the deployed API, fix the text, delete the note, then build again');
   const ok = (u) => typeof u === 'string' && /^https:\/\/[^\s/]+$/.test(u);
   if (!ok(op1) || !ok(op2)) throw new Error('--op1 and --op2 are https origins with no path and no trailing slash, e.g. https://holdback-op1.example.workers.dev');
   let out = strip(md).replace('{{OP1}}', op1).replace('{{OP2}}', op2).replace('{{TRY_COMMAND}}', () => command);
+  out = fillFacts(out);
   for (const [placeholder, line] of Object.entries(goals)) out = out.replace(placeholder, () => line);
   if (/\{\{[A-Z0-9_]+\}\}/.test(out)) throw new Error('a placeholder is left unfilled');
   return out;

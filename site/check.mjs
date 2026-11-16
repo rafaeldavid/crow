@@ -67,8 +67,9 @@ import { existsSync, readdirSync, readFileSync } from 'node:fs';
 import { join } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { OG_IMAGE } from './footer.ts';
+import { trustFacts } from './trust.mjs';
 import { ICON_FILES } from './brand/kit.mjs';
-import { GOALS, goalBundle, goalCommand, goalSha256, goalUrl, PREFLIGHT, preflightCommand, REFERENCE_PATH, referenceText, SETUP_MJS_URL, setupBundle, setupCommand, setupSha256 } from './build.mjs';
+import { GOALS, goalBundle, goalCommand, goalSha256, goalUrl, NODE_MIN, NODE_PERMISSION, PREFLIGHT, preflightCommand, REFERENCE_PATH, referenceText, SETUP_MJS_URL, setupBundle, setupCommand, setupSha256 } from './build.mjs';
 import { ASSETS, BASE, BUY_COMMANDS, CARD_SCHEMA, HOME_CSS, HOME_JS, notFoundPage, visualdemoPage, BUY_MJS_URL, BUY_URL, buyBundle, buyInstall, buySha256, filled, page, pins, problemPages, publishedGuides, SELL_URL, SITE_URL, strip, TEST_SELLER_URL, tryBundle, tryCommand, trySha256, TRY_URL } from './build.mjs';
 import { apiRoutes, citedSections, duplicateSentences, hasSection, FIRST_DEAL_BUDGET, guideFiles, guideSource, measurePaths, namedCalls, namedReferences, referenceFiles, nonAscii, routeKnown, SETUP_MAX_BYTES } from './guides.mjs';
 
@@ -113,7 +114,7 @@ expect(count(md, '{{OP1}}') === 1 && configure.includes('OP1={{OP1}}'), '{{OP1}}
 expect(count(md, '{{OP2}}') === 1 && configure.includes('OP2={{OP2}}'), '{{OP2}} must appear once in llms.txt, as OP2={{OP2}} under Configure');
 const tryIt = md.slice(md.indexOf('## Try it'), md.indexOf('\n## ', md.indexOf('## Try it') + 3));
 expect(count(md, '{{TRY_COMMAND}}') === 1 && tryIt.includes('```sh\n{{TRY_COMMAND}}\n```') && tryIt.indexOf('```') === tryIt.indexOf('```sh\n{{TRY_COMMAND}}'), '{{TRY_COMMAND}} must appear once in llms.txt, as the first code block of "Try it"');
-expect((md.match(/\{\{[^}]*\}\}/g) ?? []).every((p) => ['{{OP1}}', '{{OP2}}', '{{TRY_COMMAND}}', PREFLIGHT.placeholder, ...Object.values(GOALS).map((g) => g.placeholder)].includes(p)), 'llms.txt has an unknown {{placeholder}}');
+expect((md.match(/\{\{[^}]*\}\}/g) ?? []).every((p) => ['{{OP1}}', '{{OP2}}', '{{TRY_COMMAND}}', '{{REQUEST_LOG_DAYS}}', '{{NODE_MIN}}', PREFLIGHT.placeholder, ...Object.values(GOALS).map((g) => g.placeholder)].includes(p)), 'llms.txt has an unknown {{placeholder}}');
 // A link as build.mjs renders one (https, trailing punctuation left out), parsed, so a look-alike host or a longer
 // path does not count (CodeQL js/incomplete-url-substring-sanitization).
 const mdLinks = (md.match(/https:\/\/[^\s<)]+[^\s<).,;:]/g) ?? []).filter((u) => URL.canParse(u)).map((u) => new URL(u));
@@ -259,7 +260,7 @@ for (const [name, g] of Object.entries(GOALS)) {
   expect(file.includes(`viem@${pins().viem}`) && file.includes(`tweetnacl@${pins().tweetnacl}`) && file.includes('MIT License, Copyright (c) 2023-present weth, LLC'), `site/${name}.mjs's banner does not name the bundled viem and tweetnacl, with viem's licence`);
   expect(existsSync(here(`../${g.source}`)) && tryIt.includes(`\`${g.source.split('/').pop()}\``), `"Try it" does not name ${g.source}, the source of ${name}.mjs`);
   const line = goalCommand(name);
-  expect(line.includes(`curl -fsSL ${goalUrl(name)} -o ${name}.mjs.part `) && line.includes(`echo "${goalSha256(name)}  ${name}.mjs.part" | shasum -a 256 -c && mv ${name}.mjs.part ${name}.mjs && node ${name}.mjs`) && !/npm/.test(line), `the ${name} command does not fetch ${goalUrl(name)} as ${name}.mjs.part, check its current sha256 before naming it ${name}.mjs, and run it without npm`);
+  expect(line.includes(`curl -fsSL ${goalUrl(name)} -o ${name}.mjs.part `) && line.includes(`echo "${goalSha256(name)}  ${name}.mjs.part" | shasum -a 256 -c && mv ${name}.mjs.part ${name}.mjs && node ${NODE_PERMISSION} ${name}.mjs`) && !/npm/.test(line), `the ${name} command does not fetch ${goalUrl(name)} as ${name}.mjs.part, check its current sha256 before naming it ${name}.mjs, and run it without npm`);
   expect(count(md, g.placeholder) === 1 && tryIt.includes(`\`\`\`sh\n${g.placeholder}\n\`\`\``) && filledTry.split('\n').includes(line), `${g.placeholder} must appear once in llms.txt, in its own sh block under "Try it", filled with the current ${name} command`);
   if (existsSync(here('../reports/site-out/llms.txt'))) expect(existsSync(here(`../reports/site-out/${name}.mjs`)) && read(`../reports/site-out/${name}.mjs`) === file, `reports/site-out/${name}.mjs is missing or differs from site/${name}.mjs: build with --out again`);
 }
@@ -281,7 +282,19 @@ for (const [name, g] of Object.entries(GOALS)) {
 
 // 8. Crow's test seller.
 const { LIMITS, TIMING, CHECKS, PRICE_UNITS } = await import(here('../apps/test-agents/src/catalog.ts'));
-expect(command.endsWith(`&& node try.mjs --seller ${TEST_SELLER_URL}`), "the try command does not buy from Crow's test seller");
+expect(command.endsWith(`&& node ${NODE_PERMISSION} try.mjs --seller ${TEST_SELLER_URL}`), "the try command does not buy from Crow's test seller under Node's permission flag");
+// The first outside run (T-495): before any goal command runs, "Try it" and the home page's prompt have the agent show
+// its principal the command, who runs each role and what the run exposes, and wait for one yes; after the deal, one
+// first-deal report with the principal's yes. The pages name the Node that runs the permission flag.
+const days = String(trustFacts().requestLogDays);
+const tryFacts = ['wait for one yes', 'Crow runs the other party, the three adjudicators and both operators', 'The deal is public on Sepolia', `keep request lines without it for ${days} days`, 'npm sees it', "Crow's adjudicators can read the work", 'the operators cannot', 'send one first-deal report (`ref/limits.txt`, "Reporting a problem")', "under Node's permission flag"];
+const filledTryIt = filledTry.slice(0, filledTry.indexOf('\n## ', 3));
+for (const f of tryFacts) expect(filledTryIt.includes(f), `"Try it" does not say: ${f}`);
+expect(filledTryIt.indexOf('wait for one yes') < filledTryIt.indexOf('```'), '"Try it" must ask for the principal\'s yes before its first command');
+for (const f of ['wait for their one yes', 'this prompt is not that yes', 'Crow runs the seller, the three adjudicators and both operators', 'the deal is public on Sepolia', `request lines without it for ${days} days`, 'npm sees your IP', "Crow's adjudicators can read the work, and the operators cannot", 'first-deal report', `Node ${NODE_MIN} or later`]) expect(prompt.includes(f), `the home page's prompt does not say: ${f}`);
+expect(prompt.indexOf('wait for their one yes') < prompt.indexOf(command), "the home page's prompt must ask for the yes before the command");
+expect(!/Node 20\b/.test(sampleTxt) && !/Node 20\b/.test(prompt), `llms.txt or the home page's prompt still says Node 20: the goal commands run under the permission flag on Node ${NODE_MIN} or later`);
+for (const line of [command, ...Object.keys(GOALS).map((n) => goalCommand(n))]) expect(line.includes(` node ${NODE_PERMISSION} `), `a goal command runs without ${NODE_PERMISSION}: ${line}`);
 const intake = ref('intake.txt');
 const testSeller = intake.indexOf("## Crow's test seller") < 0 ? '' : intake.slice(intake.indexOf("## Crow's test seller"), intake.indexOf('\n## ', intake.indexOf("## Crow's test seller") + 3));
 expect(testSeller.includes(TEST_SELLER_URL) && testSeller.includes(`${TEST_SELLER_URL}/agent.json`) && tryIt.includes('`ref/intake.txt`'), `ref/intake.txt does not describe Crow's test seller at ${TEST_SELLER_URL} and its card, or "Try it" does not point there`);
