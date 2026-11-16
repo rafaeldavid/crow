@@ -42,7 +42,7 @@ Non-goals: binding the report store or deploying (Rafa's gates); changing any pi
 
 All measured on 2026-11-16 in the worktree, on Node 22.22.2.
 
-- `node site/build.mjs && node site/check.mjs`: PASS. The pinned bundles keep their SHA-256: `git diff --stat origin/main` over `site/try.mjs`, `buy.mjs`, `setup.mjs`, `try-sell.mjs`, `try-judged.mjs` and `try-reclaim.mjs` is empty. `site/preflight.mjs` is 12,578 bytes, SHA-256 `c9f60123…` at the first build (the build prints the current one).
+- `node site/build.mjs && node site/check.mjs`: PASS. The pinned bundles keep their SHA-256: `git diff --stat origin/main` over `site/try.mjs`, `buy.mjs`, `setup.mjs`, `try-sell.mjs`, `try-judged.mjs` and `try-reclaim.mjs` is empty. `site/preflight.mjs` is about 13 KB; `node site/build.mjs` prints its current SHA-256.
 - Guide budgets, before and after (bytes divided by four):
 
   | Path | Before | After | Limit |
@@ -50,10 +50,11 @@ All measured on 2026-11-16 in the worktree, on Node 22.22.2.
   | Buyer, `llms.txt` + `buy.txt` | 4,605 tokens | 4,613 tokens | 5,000 tokens |
   | Seller, `llms.txt` + `sell.txt` | 4,191 tokens | 4,244 tokens | 5,000 tokens |
   | Plain-HTTP buyer | 9,446 tokens | 9,439 tokens | 9,450 tokens |
-  | `setup.txt` | 9,884 bytes | 9,974 bytes | 10,000 bytes |
+  | `setup.txt` | 9,884 bytes | 9,984 bytes | 10,000 bytes |
 
   `llms.txt` lost four explanations written for people (Rafa, 2026-11-16: the agent pages are for machines) to make room: the Etherscan sentence, the domain's working-name note, the reason not to take the domain from an operator, and the repeated escrow name.
-- `pnpm exec vitest run tests/site-guides.test.ts tests/cut-feature-alignment.test.ts examples/preflight.test.ts examples/examples.test.ts`: 4 files, 35 tests passed. `examples/preflight.test.ts` holds 8 of them: the pin equals `verify.ts`'s `pinOf`; GETs only; every failure reported in one run (4 fails and 1 warn from one bad world); variable values never printed; operators that disagree fail; operator text that holds line breaks or escape codes is never printed raw.
+- `pnpm exec vitest run tests/site-guides.test.ts tests/cut-feature-alignment.test.ts examples/preflight.test.ts examples/examples.test.ts`: 4 files, 35 tests passed before the review's fixes; `examples/preflight.test.ts` alone, 11 of 11 after them. Its tests: the pin equals `verify.ts`'s `pinOf`; GETs only; every failure reported in one run (4 fails and 1 warn from one bad world); variable values never printed; operators that disagree fail; operator text with line breaks or escape codes never printed raw; the clock band as `buy.mjs` holds it; an operator URL printed without its user or password; a malformed discovery reported, never thrown.
+- Review: one `reviewer` pass, PASS with no blocking finding. All four of its points are fixed in this PR: the uneven clock band (a machine over 60 s behind now fails), "it" in `setup.txt` now names `first-deal`, operator URLs are printed cleaned, and a non-string `verifyingContract` no longer throws.
 - `eslint` on the changed files and `tsc -p examples/tsconfig.json --noEmit`: no findings.
 - Live, `node site/preflight.mjs` against `api.crow.direct` and `api2.crow.direct`: 12 ok, 1 note (`these operators take no reports`), 0 warn, 0 fail, exit 0; the operators answered in 317 to 354 ms. With `HOLDBACK_DEPLOYMENT` and `CROW_QUOTE_CREDENTIAL` set: 1 warn and 1 note naming the two, neither value printed, exit 0. `--bogus`: exit 2.
 

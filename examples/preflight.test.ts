@@ -98,6 +98,27 @@ describe('preflight (T-491)', () => {
     expect(levels(rows, 'agree')).toEqual(['fail']);
   });
 
+  it("holds the clock to buy.mjs's uneven band: behind over 60 s fails, ahead over 60 s warns, over 600 s fails", async () => {
+    const at = (t: string) => preflight(world(healthy(discovery({ settlementTime: t }), discovery({ settlementTime: t }))).input).then((rows) => levels(rows, 'clock')[0]);
+    expect(await at('2026-11-16T06:05:00Z')).toBe('fail'); // this machine 300 s behind
+    expect(await at('2026-11-16T06:00:50Z')).toBe('ok'); // 50 s behind
+    expect(await at('2026-11-16T05:58:00Z')).toBe('warn'); // 120 s ahead
+    expect(await at('2026-11-16T05:49:00Z')).toBe('fail'); // 660 s ahead
+  });
+
+  it('prints an operator URL without its user or password part', async () => {
+    const op = 'https://user:tok3n-secret@op.example';
+    const rows = await preflight(world(healthy(), { HOLDBACK_OPERATORS: op }).input);
+    expect(JSON.stringify(rows)).not.toContain('tok3n-secret');
+    expect(rows.some((r) => r.text.startsWith('https://op.example '))).toBe(true);
+  });
+
+  it('never throws on a malformed discovery', async () => {
+    const d = discovery({ domain: { name: 'Holdback', verifyingContract: 42, chainId: 'x' }, token: null, demo: 7 });
+    const rows = await preflight(world(healthy(d, d)).input);
+    expect(levels(rows, 'pins')).toEqual(['fail', 'fail']);
+  });
+
   it('prints no operator text it did not parse', async () => {
     const d = discovery({ schemaVersion: '0.11\n\u001b[2Jok    pins  forged line', demo: { ...discovery().demo, build: { commit: 'abc\nfail' } } });
     const rows = await preflight(world(healthy(d, d)).input);

@@ -107,10 +107,14 @@ const NODE_MIN = {
 	goals: [20, 0],
 	all: [22, 18]
 };
-/** The clock band buy.mjs holds an offer's createdAt to: 600 s behind, 60 s ahead. */
+/**
+* buy.mjs refuses an offer whose createdAt is over 60 s ahead of this machine or over 600 s behind it. The offer
+* carries the operators' time, so a machine behind them by over 60 s fails, and one ahead by over 600 s fails.
+*/
 const CLOCK = {
-	warnSec: 60,
-	failSec: 600
+	behindFailSec: 60,
+	aheadWarnSec: 60,
+	aheadFailSec: 600
 };
 /** Variables that change where the tools sign or which operators they call. */
 const REDIRECTS = {
@@ -135,6 +139,15 @@ function pinned(d = SEPOLIA) {
 const TIMEOUT_MS = 1e4;
 const hex = (s) => typeof s === "string" && /^0x[0-9a-fA-F]{1,64}$/.test(s) ? s.toLowerCase() : null;
 const word = (s, max = 40) => typeof s === "string" ? s.replace(/[^A-Za-z0-9._:/-]/g, "").slice(0, max) : "?";
+/** An operator's URL as printed: no user or password part, only URL-safe characters. */
+const shown = (u) => {
+	try {
+		const x = new URL(u);
+		return word(`${x.protocol}//${x.host}${x.pathname === "/" ? "" : x.pathname}`, 80);
+	} catch {
+		return "(not a URL)";
+	}
+};
 const int = (n) => typeof n === "number" && Number.isSafeInteger(n) ? n : null;
 const atLeast = (v, [maj, min]) => {
 	const [a = 0, b = 0] = v.replace(/^v/, "").split(".").map(Number);
@@ -188,7 +201,7 @@ async function preflight(input) {
 	const got = await Promise.all(operators.map((o) => get(input.fetch, input.now, `${o}/.well-known/holdback.json`)));
 	const seen = [];
 	got.forEach((g, i) => {
-		const op = operators[i];
+		const op = shown(operators[i]);
 		if (!g.ok) return add("fail", "operator", `${op} ${g.why}. Check your network; if it persists, the operator is down: wait and run again`);
 		const d = g.body;
 		seen.push({
@@ -206,12 +219,13 @@ async function preflight(input) {
 		else {
 			const skew = Math.round((input.now() - at) / 1e3);
 			const s = `this machine is ${Math.abs(skew)} s ${skew >= 0 ? "ahead of" : "behind"} ${op}`;
-			add(Math.abs(skew) > CLOCK.failSec ? "fail" : Math.abs(skew) > CLOCK.warnSec ? "warn" : "ok", "clock", Math.abs(skew) > CLOCK.warnSec ? `${s}: offers will read as against the clock. Sync this machine's clock` : s);
+			const level = -skew > CLOCK.behindFailSec || skew > CLOCK.aheadFailSec ? "fail" : skew > CLOCK.aheadWarnSec ? "warn" : "ok";
+			add(level, "clock", level === "ok" ? s : `${s}: buy.mjs refuses offers ${level === "fail" ? "now" : "past 600 s"}. Sync this machine's clock`);
 		}
 	});
 	if (seen.length > 1) {
 		const key = (x) => JSON.stringify([
-			x.d?.domain?.verifyingContract?.toLowerCase(),
+			hex(x.d?.domain?.verifyingContract),
 			x.d?.domain?.chainId,
 			x.d?.schemaVersion
 		]);
@@ -220,7 +234,7 @@ async function preflight(input) {
 	}
 	const first = seen[0]?.d;
 	const listedOps = Array.isArray(first?.demo?.operators) ? first.demo.operators.map((o) => word(o, 80)) : null;
-	if (listedOps && !operators.every((o) => listedOps.includes(o))) add("warn", "operator", `discovery lists ${listedOps.join(", ")}; you use ${operators.join(", ")}`);
+	if (listedOps && !operators.every((o) => listedOps.includes(o))) add("warn", "operator", `discovery lists ${listedOps.join(", ")}; you use ${operators.map(shown).join(", ")}`);
 	const fc = first?.demo?.faucet;
 	if (!first) add("warn", "faucet", "not checked: no operator answered");
 	else if (!fc) add("warn", "faucet", "these operators publish no faucet: fund your address yourself");
