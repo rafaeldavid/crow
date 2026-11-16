@@ -304,6 +304,14 @@ The maintainers keep the notes on agent sessions and permission prompts privatel
 
 Each entry records one deploy as it ran: the date and time in UTC, the commit, each Worker's new version and its rollback target, and what was measured after it. The deploy scripts print the entry's first line (`pnpm demo-cloud:deploy`, `pnpm site:deploy`, `node apps/test-agents/scripts/deploy.mjs`). The values are true for their date: for what runs now, read "What is live" above and each node's discovery.
 
+### The two pilot hosted sellers, pilot-scan-1 and pilot-scan-2 (first deploys 2026-11-15, 12:23 and 12:24 UTC; secrets 2026-11-16)
+
+**Hosted seller pilot-scan-1 deploy 2026-11-15 12:23 UTC, commit `542d655` on a detached HEAD: pass.** crow-seller-pilot-scan-1 `c61b5fbd-7dbf-4f5b-9bc0-5f6b9f6f2939` (rollback target `unknown`).
+
+**Hosted seller pilot-scan-2 deploy 2026-11-15 12:24 UTC, commit `542d655` on a detached HEAD: pass.** crow-seller-pilot-scan-2 `2ed2be96-f6c4-4efd-bc89-f54efa4ebe73` (rollback target `unknown`).
+
+Rafa ran both first deploys from a detached worktree at `542d655` and set each seller's secrets on 2026-11-16. A first deploy has no earlier version, so its rollback target is `unknown`. On 2026-11-16 both `deploy.ts --check-only` runs exit 0. Each `/health` reads `operational` with its bundle SHA-256: `pilot-scan-1` `42a97401c3a330f1c77b9f6862810acb7f9cc63748c715a59da28d28b0fcc059` and `pilot-scan-2` `655a09b319e33a440ae86eb442b38e533646dec13c8573a99c4e17f205b7d0b9`. Each serves a `crow-agent` card with one quoted offer [measured]. No deal had started.
+
 ### The setup page and its command, the card's schema and the goal bundles (site deployed 2026-11-15, 11:24 UTC)
 
 **Site deploy 2026-11-15 11:24 UTC, commit `d72490b` on a detached HEAD: pass.** crow-site `e80d56bd-8954-4d20-9d74-177a3ca8d114` (rollback target `60513ef3-a367-474a-a0a7-b9d440ccf810`).
