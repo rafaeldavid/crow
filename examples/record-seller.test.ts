@@ -228,9 +228,13 @@ describe('the record seller\'s own calls', () => {
     await new Promise((ok) => setTimeout(ok, 300));
     const before = seen.length;
     expect(before).toBeGreaterThan(0);
-    // The stand-in serves too little for a record, so the job fails; the next poll runs it again.
-    expect((await fetch(r.api.result.replace('{jobId}', job))).status).toBe(202);
-    await new Promise((ok) => setTimeout(ok, 300));
+    // The stand-in serves too little for a record, so the job fails; the next poll runs it again. The record retries
+    // the operator that is down for about 2 s first (T-492), so poll until the second run reaches the stand-in.
+    const end = Date.now() + 10_000;
+    while (seen.length <= before && Date.now() < end) {
+      expect((await fetch(r.api.result.replace('{jobId}', job))).status).toBe(202);
+      await new Promise((ok) => setTimeout(ok, 300));
+    }
     expect(seen.length).toBeGreaterThan(before);
     expect((await fetch(r.api.result.replace('{jobId}', 'not-a-job'))).status).toBe(404);
   });
