@@ -11060,7 +11060,28 @@ async function waitOf(res) {
 * One GET with the retries above. The answer, or null when the operator never answered. A read still refused after its
 * tries (a 429, a 5xx or no answer) is added to `refused` as "<path> <what happened>", so the record can say so.
 */
-async function fetchRead(url, path, refused) {
+/** The only paths the record reads: the operator's public routes, with IDs, hashes and query values in plain characters. */
+const READ_PATH = /^\/(?:\.well-known\/holdback\.json|v1\/[A-Za-z0-9._:/-]+(?:\?[A-Za-z0-9._:=&-]+)?)$/;
+/**
+* The URL of one read: a path the record builds on one configured operator. A path that is not one of the operator's
+* public routes, or a URL that would leave the operator's origin, is refused before any request (T-492): parts of a
+* path come from a commitment ID or an operator's own answer.
+*/
+function readUrl(api, path) {
+	const base = new URL(api);
+	if (!READ_PATH.test(path)) throw new Error(`the record reads the operators' public routes only, not ${JSON.stringify(path.slice(0, 120))}`);
+	const url = new URL(`${base.origin}${base.pathname.replace(/\/+$/, "")}${path}`);
+	if (url.origin !== base.origin) throw new Error(`the record reads the configured operator ${base.origin} only`);
+	return url;
+}
+async function fetchRead(api, path, refused) {
+	let url;
+	try {
+		url = readUrl(api, path);
+	} catch (e) {
+		refused?.push(`${path.split("?")[0].slice(0, 120)} not read: ${e.message}`);
+		return null;
+	}
 	let last = null;
 	for (let i = 0; i < RETRY.tries; i++) {
 		let wait = RETRY.pauseMs;
@@ -11079,7 +11100,7 @@ async function fetchRead(url, path, refused) {
 }
 /** GET from one operator: the parsed body on 2xx, the status otherwise, null when it does not answer. */
 async function get(api, path, refused) {
-	const res = await fetchRead(`${api}${path}`, path, refused);
+	const res = await fetchRead(api, path, refused);
 	if (!res) return null;
 	try {
 		return {
@@ -11095,7 +11116,7 @@ async function get(api, path, refused) {
 	}
 }
 async function bytesFrom(api, path, refused) {
-	const res = await fetchRead(`${api}${path}`, path, refused);
+	const res = await fetchRead(api, path, refused);
 	try {
 		return res?.ok ? new Uint8Array(await res.arrayBuffer()) : null;
 	} catch {

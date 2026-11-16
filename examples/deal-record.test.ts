@@ -279,8 +279,8 @@ describe('deal-record.ts never reads a refused read as missing data (T-492)', ()
         const r = await dealRecord(refunded.id, { operators: both(busy.url), party: 'buyer' });
         expect(r.checks.find((x) => x.check === 'every read answered'), String(status)).toMatchObject({ ok: true });
         expect(r.row, String(status)).toMatchObject({ outcome: 'Refunded', refundedTo: refunded.buyer.address.toLowerCase() });
-        // The retry reads the busy operator about 1 s after the other, so `steps` may differ by the closing
-        // `appeal.expired` the world appends in between; the money sections must agree.
+        // The retry reads the busy operator about 1 s after the other, so `steps` may differ by the closing event
+        // the world appends in between; the money sections must agree.
         expect(r.disagreements.map((d) => d.section).filter((s) => ['terms', 'outcome', 'settlement'].includes(s)), String(status)).toEqual([]);
       } finally {
         await busy.close();
@@ -297,6 +297,22 @@ describe('deal-record.ts never reads a refused read as missing data (T-492)', ()
       expect(c?.why).toContain('refundedTo may read null');
     } finally {
       await down.close();
+    }
+  }, 30_000);
+
+  it("reads only the configured operators' public routes: a ciphertext ID that would leave them is never fetched", async () => {
+    // An operator's answer names the ciphertext; the record checks its form before building a path, and the read
+    // guard refuses any path outside the operators' routes. The lying operator's ID is malformed, so nothing is read.
+    const liar = await proxy(world.info.operators[1]!, { ciphertextUri: 'https://elsewhere.example/x' });
+    watching = true;
+    sent.length = 0;
+    try {
+      const r = await dealRecord(refunded.id, { operators: both(liar.url), party: 'buyer' });
+      expect(sent.every((s) => s.method === 'GET' && [world.info.operators[0]!, liar.url].some((o) => s.url.startsWith(`${o}/`)))).toBe(true);
+      expect(r.checks.find((x) => x.check === 'every read answered')).toMatchObject({ ok: true });
+    } finally {
+      watching = false;
+      await liar.close();
     }
   }, 30_000);
 

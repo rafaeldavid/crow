@@ -2158,10 +2158,25 @@ async function waitOf(res) {
 	return Math.min(Math.max(Number.isFinite(sec) && sec > 0 ? sec : 1, 0), RETRY.maxWaitSec) * 1e3;
 }
 /**
-* One GET with the retries above. The answer, or null when the operator never answered. A read still refused after its
-* tries (a 429, a 5xx or no answer) is added to `refused` as "<path> <what happened>", so the record can say so.
+* The URL of one read: a path the record builds on one configured operator. A path that is not one of the operator's
+* public routes, or a URL that would leave the operator's origin, is refused before any request (T-492): parts of a
+* path come from a commitment ID or an operator's own answer.
 */
-async function fetchRead(url, path, refused) {
+function readUrl(api, path) {
+	const base = new URL(api);
+	if (!READ_PATH.test(path)) throw new Error(`the record reads the operators' public routes only, not ${JSON.stringify(path.slice(0, 120))}`);
+	const url = new URL(`${base.origin}${base.pathname.replace(/\/+$/, "")}${path}`);
+	if (url.origin !== base.origin) throw new Error(`the record reads the configured operator ${base.origin} only`);
+	return url;
+}
+async function fetchRead(api, path, refused) {
+	let url;
+	try {
+		url = readUrl(api, path);
+	} catch (e) {
+		refused?.push(`${path.split("?")[0].slice(0, 120)} not read: ${e.message}`);
+		return null;
+	}
 	let last = null;
 	for (let i = 0; i < RETRY.tries; i++) {
 		let wait = RETRY.pauseMs;
@@ -2180,7 +2195,7 @@ async function fetchRead(url, path, refused) {
 }
 /** GET from one operator: the parsed body on 2xx, the status otherwise, null when it does not answer. */
 async function get(api, path, refused) {
-	const res = await fetchRead(`${api}${path}`, path, refused);
+	const res = await fetchRead(api, path, refused);
 	if (!res) return null;
 	try {
 		return {
@@ -2196,7 +2211,7 @@ async function get(api, path, refused) {
 	}
 }
 async function bytesFrom(api, path, refused) {
-	const res = await fetchRead(`${api}${path}`, path, refused);
+	const res = await fetchRead(api, path, refused);
 	try {
 		return res?.ok ? new Uint8Array(await res.arrayBuffer()) : null;
 	} catch {
@@ -2750,7 +2765,7 @@ async function main(argv) {
 	process.stderr.write(`Record of ${r.commitmentId} written${out ? ` to ${out}` : ""}: ${count(true)} checks passed, ${count(null)} not run, ${count(false)} failed. ${r.disagreements.length ? `Operators differ on ${r.disagreements.map((d) => d.section).join(", ")}.` : `The ${r.operators.filter((x) => x.answered).length} answering operators agree.`}\n`);
 	return count(false) || r.disagreements.length ? 1 : 0;
 }
-var ID$1, ADDRESS, CIPHERTEXT_ID, CURSOR, SECTIONS, SETTLED, RECEIPT_TYPES, lc, lowerAll, sha256$1, sum, isMoney$1, lateWorkLine, RETRY, refusedStatus;
+var ID$1, ADDRESS, CIPHERTEXT_ID, CURSOR, SECTIONS, SETTLED, RECEIPT_TYPES, lc, lowerAll, sha256$1, sum, isMoney$1, lateWorkLine, RETRY, refusedStatus, READ_PATH;
 var init_deal_record = __esmMin((() => {
 	init_entry();
 	init_help();
@@ -2796,6 +2811,7 @@ var init_deal_record = __esmMin((() => {
 		pauseMs: 1e3
 	};
 	refusedStatus = (s) => s === 429 || s >= 500;
+	READ_PATH = /^\/(?:\.well-known\/holdback\.json|v1\/[A-Za-z0-9._:/-]+(?:\?[A-Za-z0-9._:=&-]+)?)$/;
 	if (isMain(import.meta.url, "deal-record")) main(process.argv.slice(2)).then((code) => process.exit(code), (e) => {
 		process.stderr.write(`deal-record: ${e instanceof Error ? e.message : String(e)}\n`);
 		process.exit(2);

@@ -41,8 +41,8 @@ All measured on 2026-11-16 in the worktree, on Node 22.22.2.
   - `vitest run examples/deal-record.test.ts examples/record-seller.test.ts examples/audit-deal.test.ts examples/buyer-signer-addresses.test.ts`: 71 of 71 passed.
   - `examples/record-seller.test.ts`: its restart test now waits for the second run, up to 10 s, in place of a fixed 300 ms. The record retries the operator that is down for about 2 s first.
 - **The bundles:** `node site/build.mjs && node site/check.mjs` passes. Hashes, first 16 hex digits, before and after:
-  - `site/buy.mjs`: `e74ff2230f0d4fd4` to `dacd061cce22b387`.
-  - `site/setup.mjs`: `3b2b84e017df5679` to `9fb75acbb37be682`.
+  - `site/buy.mjs`: `e74ff2230f0d4fd4` to `a9a18edcb12693ae`.
+  - `site/setup.mjs`: `3b2b84e017df5679` to `f3b405fb93ffa64b`.
   - `site/try.mjs`: `04ef4434fb4b5635`, unchanged.
   - Only dated records name the old hashes; no partner kit does (searched the public repository and crow-private's `design-partners/`, `control/` and `strategy/`).
 - `eslint` on the changed files and `tsc -p examples/tsconfig.json --noEmit`: no findings.
@@ -51,7 +51,12 @@ All measured on 2026-11-16 in the worktree, on Node 22.22.2.
   - `setup.ts`'s `writeRecord` keeps its 10 rereads but stops after 2 minutes on the live service, since a refused read now fails a check.
   - A retried answer's body is cancelled before the wait.
 
-  After the fixes: the record tests 72 of 72; the setup tests (`setup-bundle`, `setup-list`, `setup-check`, `one-click-setup`) 104 of 104; the site check passes.
+- **CI, first run:** two real failures, both fixed without a rerun.
+  - `tests/cut-feature-alignment.test.ts` found a new file naming a cut feature: a comment in the new test named the `appeal.expired` event. The test depends on no cut feature, so the comment now says "the closing event".
+  - CodeQL `js/request-forgery` (alert 37, `deal-record.ts`) found that the URL of a read depends on a user-provided value. The deal record also runs inside the record seller's HTTP service, where a remote caller names the commitment ID.
+  - The ID was already checked against its pattern before use, but the guarantee now sits at the request: `readUrl` builds every URL from a configured operator plus a path, refuses a path outside the operators' public routes, and refuses a URL that leaves the operator's origin. A refused path is reported in `every read answered`. A new test checks that every request goes to a configured operator.
+
+  After the fixes: the record tests 75 of 75, the cut-feature test included; the setup tests (`setup-bundle`, `setup-list`, `setup-check`, `one-click-setup`) 104 of 104; the site check passes.
 
 ## Handoff
 
