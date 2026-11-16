@@ -19,7 +19,7 @@
 // and the startup guards refuse anything else at run time. A cutover deploys the Workers one at a time instead
 // (docs/operations.md, Settlement).
 import { fileURLToPath } from 'node:url';
-import { checkout, dealGuard, liveVersion, recordLine, rollback, sh, waitForCommit } from '../../../scripts/deploy-lib.mjs';
+import { checkout, dealGuard, finishDeploy, liveVersion, recordLine, rollback, sh, waitForCommit } from '../../../scripts/deploy-lib.mjs';
 
 const NODES = ['https://api.crow.direct', 'https://api2.crow.direct'];
 const WORKERS = [
@@ -111,4 +111,4 @@ const against = served && !served.failure ? `, against commit \`${commit.slice(0
 const orphaned = guard?.withdrawnOrphans?.length ? ` Declined under the recorded withdrawal of ${override}: ${guard.withdrawnOrphans.map((o) => `\`${o.id}\``).join(', ')}.` : '';
 const deal = smoke?.id ? ` Smoke deal \`${smoke.id}\` ${smoke.state} in ${smoke.seconds} s${against}.` : '';
 console.log(`\nThe record line for docs/operations.md:\n\n${recordLine({ title: 'Deploy', startedAt, commit, branch, failure, workers: WORKERS, note: `${deal}${orphaned}` })}\n`);
-process.exit(failure ? 1 : 0);
+process.exit(await finishDeploy(failure ? 1 : 0, process.argv.slice(2)));

@@ -175,7 +175,7 @@ describe('pnpm site:deploy', () => {
     // Stand-ins first on the PATH say they ran and fail, so this run cannot reach git, the build or wrangler.
     const bin = mkdtempSync(join(tmpdir(), 'crow-site-deploy-bin-'));
     try {
-      for (const name of ['git', 'npx', 'pnpm']) {
+      for (const name of ['git', 'npx', 'pnpm', 'gh']) {
         writeFileSync(join(bin, name), `#!/bin/sh\necho "stand-in ${name} ran: $*"\nexit 1\n`);
         chmodSync(join(bin, name), 0o755);
       }
