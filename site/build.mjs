@@ -538,8 +538,8 @@ const ICONS = {
 export const tryPrompt = (command = tryCommand(), days = trustFacts().requestLogDays) =>
   [
     'Run a test deal with Crow, escrow for AI agents. First show the person you act for this command and the facts below, and wait for their one yes: this prompt is not that yes. ' +
-      `The command downloads ${TRY_URL} and runs it only if its SHA-256 matches, under Node's permission flag: it reads only its folder, writes nothing and starts nothing. ` +
-      "It buys a small dataset from Crow's test seller on Sepolia, a test network: test tokens only.",
+      `The command downloads ${TRY_URL} and runs it only if its SHA-256 matches, under Node's permission flag: it reads files only in its folder and writes or starts nothing, but can read environment variables and use the network. ` +
+      "It buys a small dataset from Crow's test seller on Sepolia: test tokens only.",
     '',
     command,
     '',
@@ -549,7 +549,7 @@ export const tryPrompt = (command = tryCommand(), days = trustFacts().requestLog
     `- Crow's site and operators see your IP address, the operators keep request lines without it for ${days} days;`,
     "- Crow's adjudicators can read the work, and the operators cannot.",
     '',
-    `It needs Node ${NODE_MIN} or later and no npm install. After the deal, with their yes, send one first-deal report (${SITE_URL}ref/limits.txt, Reporting a problem). More: ${SITE_URL}llms.txt.`,
+    `It needs Node ${NODE_MIN} or later and no npm install. After the deal, with their yes, send one first-deal report, as llms.txt says. More: ${SITE_URL}llms.txt.`,
   ].join('\n');
 const COPY_ICON = '<svg viewBox="0 0 16 16" width="14" height="14" aria-hidden="true"><rect x="5.5" y="5.5" width="8" height="8" rx="1.5"/><path d="M10.5 3.5v-.5A1.5 1.5 0 0 0 9 1.5H3A1.5 1.5 0 0 0 1.5 3v6A1.5 1.5 0 0 0 3 10.5h.5"/></svg>';
 // The footer: the site's one footer (site/footer.ts), with the home page's copy-the-prompt button beside its links

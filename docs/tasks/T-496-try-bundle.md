@@ -5,7 +5,7 @@
 - **Depends on:** T-495 on the try path, which gives the prompt its roles, exposure and permission flag (roadmap row N168)
 - **Paths this task may touch:** `examples/try.ts`, `examples/try.test.ts`, `site/build.mjs`, `site/check.mjs` (its try checks), `site/try.mjs`, `site/index.html`, `site/llms.txt` (one sentence of the try section), `tests/site-bundles.test.ts` (new), `apps/test-agents/src/try.test.ts` (the lines it pins), this file.
 - **Human gate:** the site deploy that publishes the new `try.mjs` and its hash, Rafa's.
-- **Status:** review
+- **Status:** done
 - **Agent/session:** the try-bundle session, 2026-11-16, branch `t-496-try-bundle`.
 - **Roadmap row:** N169
 - **Change kind:** 1 (copy and agent docs: the published command and its page), with the examples' own tests for the code
@@ -59,7 +59,7 @@ All measured on 2026-11-16, on branch `t-496-try-bundle`.
 
 ## Handoff
 
-- **Built on T-495 (PR 600), not yet merged.** This branch carries its commit; merge PR 600 first. T-495's prompt and the try section of `llms.txt` lose their "npm sees your IP" line here, since the try command installs nothing now.
+- **Built on T-495 (PR 600), merged 2026-11-16 as `bd440f9f`;** main was merged into this branch after it. T-495's prompt and the try section of `llms.txt` lose their "npm sees your IP" line here, since the try command installs nothing now.
 
 - **The deploy is Rafa's.** Until it runs, crow.direct serves the old `try.mjs` and the old command; a copy of the new command fails its hash check, which is the safe way to fail. After the deploy, a copy of the old command fails its hash check the same way.
 - **The redeploy flow** (`scripts/record-copies.mjs`) rewrites `examples/deployments.ts` and rebuilds before committing, so its `try.mjs` reads "Source commit: none" until the copies are committed and `node site/build.mjs` runs again. The CI test says which command to run.
