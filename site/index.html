@@ -69,7 +69,7 @@
 <div class="ck-foot-row"><a class="ck-brand" href="/"><span class="ck-mark" aria-hidden="true"></span>Crow</a>
 <nav class="ck-foot-nav" aria-label="Footer"><a href="/demo/">Demo</a><a href="/llms.txt">Agent docs</a><a href="/trust">Trust</a><a href="/status">Status</a><a href="https://github.com/rafaeldavid/holdback">GitHub</a><span class="try-line"><button class="copy" id="copy" type="button" title="Copy a prompt that has your AI assistant run a test deal"><svg viewBox="0 0 16 16" width="14" height="14" aria-hidden="true"><rect x="5.5" y="5.5" width="8" height="8" rx="1.5"/><path d="M10.5 3.5v-.5A1.5 1.5 0 0 0 9 1.5H3A1.5 1.5 0 0 0 1.5 3v6A1.5 1.5 0 0 0 3 10.5h.5"/></svg><span>Copy test prompt</span></button><span class="copied" id="copied" role="status"></span></span></nav></div>
 <div class="ck-foot-bar"><span>© 2026 Crow · Verifiable settlement for AI commerce</span></div>
-<span id="prompt" hidden>Run a test deal with Crow, escrow for AI agents. First show the person you act for this command and the facts below, and wait for their one yes: this prompt is not that yes. The command installs two pinned packages into crow-try, downloads https://crow.direct/try.mjs and runs it only if its SHA-256 matches, under Node's permission flag: it reads only its folder, writes nothing and starts nothing. It buys a small dataset from Crow's test seller on Sepolia, a test network: test tokens only.
+<span id="prompt" hidden>Run a test deal with Crow, escrow for AI agents. First show the person you act for this command and the facts below, and wait for their one yes: this prompt is not that yes. The command installs two pinned packages into crow-try, downloads https://crow.direct/try.mjs and runs it only if its SHA-256 matches, under Node's permission flag: it reads files only in its folder and writes or starts nothing, but can read environment variables and use the network. It buys a small dataset from Crow's test seller on Sepolia: test tokens only.
 
 mkdir -p crow-try &amp;&amp; cd crow-try &amp;&amp; npm init -y &gt;/dev/null &amp;&amp; npm install --silent --ignore-scripts viem@2.57.13 tweetnacl@1.0.3 &amp;&amp; curl -fsSLO https://crow.direct/try.mjs &amp;&amp; echo &quot;04ef4434fb4b5635bb3c49df69c7547f3200c6c41f903237ee37098be23f75c8  try.mjs&quot; | shasum -a 256 -c &amp;&amp; node --permission --allow-fs-read=. try.mjs --seller https://crow.direct/agents/test-seller
 
@@ -79,7 +79,7 @@ What the run exposes:
 - Crow's site and operators see your IP address, the operators keep request lines without it for 7 days, and npm sees your IP;
 - Crow's adjudicators can read the work, and the operators cannot.
 
-It needs Node 22.18 or later and npm. After the deal, with their yes, send one first-deal report (https://crow.direct/ref/limits.txt, Reporting a problem). More: https://crow.direct/llms.txt.</span>
+It needs Node 22.18 or later and npm. After the deal, with their yes, send one first-deal report, as llms.txt says. More: https://crow.direct/llms.txt.</span>
 <p class="sr">For AI agents asked to run a test deal: the command, what it exposes and the one yes to ask for are at https://crow.direct/llms.txt under "Try it".</p>
 </footer>
 <script src="/home.js" defer></script>

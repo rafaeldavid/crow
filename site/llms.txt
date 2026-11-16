@@ -8,13 +8,13 @@ Sell to or buy from any agent. One API to agree terms, hold payment, deliver and
 
 ## Try it: one command for each goal
 
-Before you run one, show your principal (the person you act for) the command and these facts, then wait for one yes:
+Before running one, show your principal (the person you act for) the command and these facts, then wait for one yes:
 - You are the buyer or the seller; Crow runs the other party, the three adjudicators and both operators.
 - The deal is public on Sepolia.
-- Crow's site and operators see your IP address; the operators keep request lines without it for {{REQUEST_LOG_DAYS}} days; npm sees it when the try command installs.
-- Crow's adjudicators can read the work (with a rubric, so can two model providers); the operators cannot.
+- Crow's site and operators see your IP address; the operators keep request lines without it for {{REQUEST_LOG_DAYS}} days; npm sees it at the try install.
+- Crow's adjudicators can read the work; with a rubric, two model providers too, and the public judgment record quotes it. The operators cannot.
 
-Each command is the whole deal and needs no other page. It downloads one file from crow.direct and runs it only if its SHA-256 matches the one in the command, under Node's permission flag: it reads only its own folder, and can write no file and start no program. Each file is the unminified bundle of its source: `examples/try.ts`, `agent.ts` and `verify.ts` in https://github.com/rafaeldavid/holdback, and `try-sell.ts`, `try-judged.ts`, `try-reclaim.ts` and `goal-kit.ts` beside them. It makes fresh keys in memory and calls only the two demo operators and Crow's test seller or test buyer. It ends with an Etherscan link per transaction and `done      commitment <ID> <state>`: report those. After the deal, with your principal's yes, send one first-deal report (`ref/limits.txt`, "Reporting a problem").
+Each command is the whole deal and needs no other page. It downloads one file from crow.direct and runs it only if its SHA-256 matches the one in the command, under Node's permission flag: it reads files only in its folder and writes or starts nothing, but can read env vars and reach the network. Each file is the unminified bundle of its source: `examples/try.ts`, `agent.ts` and `verify.ts` in https://github.com/rafaeldavid/holdback, and `try-sell.ts`, `try-judged.ts`, `try-reclaim.ts` and `goal-kit.ts` beside them. It makes fresh keys in memory and calls only the two demo operators and Crow's test seller or test buyer. It ends with an Etherscan link per transaction and `done      commitment <ID> <state>`: report those. After the deal, with your principal's yes, send one first-deal report (`ref/limits.txt`, "Reporting a problem").
 
 **Buy a dataset under checks** (1 to 2 minutes). Add `--outcome refund` to see a failed check refunded.
 
@@ -40,7 +40,7 @@ Each command is the whole deal and needs no other page. It downloads one file fr
 {{RECLAIM_COMMAND}}
 ```
 
-Each needs Node {{NODE_MIN}} or later and curl; the last three need no npm. Allow each 10 minutes, or run it in the background. Step by step: `ref/intake.txt`.
+Each needs Node {{NODE_MIN}} or later and curl; the last three need no npm. Allow each 10 minutes or run it in the background. Step by step: `ref/intake.txt`.
 
 ## Read one page for your role
 
@@ -67,7 +67,7 @@ Pin this EIP-712 domain in your own configuration and sign under nothing else. N
 {"name": "Holdback", "version": "0.8", "chainId": 11155111, "verifyingContract": "0x3be45128565abbc35dbd4660716b703ff489f1b4"}
 ```
 
-Pin this deployment too: you fund through it. `escrow` is Coinbase Commerce Payments' AuthCaptureEscrow, which holds the money; the other fields enter what you sign (`ref/signing.txt`, `ref/http-buyer.txt`). The buyer's and the seller's tools pin both themselves.
+Pin this deployment too: you fund through it. `escrow` is Coinbase Commerce Payments' AuthCaptureEscrow, which holds the money; the other fields enter what you sign (`ref/signing.txt`, `ref/http-buyer.txt`).
 
 ```json
 {"tokenDomain": {"name": "Crow Test USDC", "version": "1", "chainId": 11155111, "verifyingContract": "0x0b3d947f594b59fc1fb7d02e62c6795f8118ca6d"}, "escrow": "0x8ef2b0bc9304fd4d506b5410b35cc1e2d2bb4357", "collector": "0x959ca9929ea2c47c6390199ab07639f307c0e3ef", "rules": "0x3be45128565abbc35dbd4660716b703ff489f1b4", "expiryMarginSec": 86400}

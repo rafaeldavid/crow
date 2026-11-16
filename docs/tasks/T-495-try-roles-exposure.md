@@ -52,6 +52,14 @@ All measured on 2026-11-16 unless labelled.
 - **Budgets.** The plain-HTTP buyer's path was 9,442 tokens before the change and is 9,449 of 9,450 after (bytes divided by four). The first-deal paths: buyer 4,623 and seller 4,254 of 5,000. `site/index.html` is 7,987 of 8,000 bytes.
 - **Checks.** `node site/build.mjs && node site/check.mjs`: PASS. `pnpm typecheck` and `pnpm lint`: no findings. `pnpm test`: the first run failed 7 tests in 2 files, both pinned to the old shape (`examples/try.test.ts` expected the old try command; `tools/duet/world.ts` fills `llms.txt` itself and did not know the two new placeholders). Both now use the build's own values (`fillFacts` in `site/build.mjs`); `vitest run examples/try.test.ts tools/duet/duet.test.ts tests/site-guides.test.ts`: 3 files, 61 tests passed. The rest of the first run: 237 files passed.
 
+- **Review (2026-11-16, `reviewer` agent): ISSUES, all fixed in the second commit.** The structure passed. No bundle changed. Every new check fails when its text is removed (measured by mutation). Nothing moved out of `llms.txt` is lost downstream. The five issues and their fixes:
+  1. The text said the flag confines the file. It does not limit environment variables or the network (measured on Node 22.22.2: 75 env keys readable, `fetch` returns 200). The prompt, "Try it" and the trust answer now say so.
+  2. The trust answer said "as the commands do"; the preflight and setup commands run without the flag. It now says "as the four goal commands do", says Node calls the flag a safeguard for trusted code, not a sandbox, and says to run the command in a shell whose environment holds no secrets.
+  3. The rebuild step named no commit. It now finds the commit whose `site/try.mjs` has the command's hash, and a hash match claims the public source only after a rebuild.
+  4. The rubric exposure now says the public judgment record quotes the work (`ref/limits.txt`, "Public terms").
+  5. `--work <file>` reads under the flag only inside the command's folder. `ref/intake.txt` now says so.
+- **After the fixes (measured):** `node site/check.mjs`: PASS. The plain-HTTP buyer's path is 9,450 of 9,450 tokens. The home page is 7,990 of 8,000 bytes. All seven bundle hashes are unchanged. The 3 test files pass (61 tests); `pnpm lint` reports no findings. To pay for the fixes: the prompt points to llms.txt for the report route, and `llms.txt` drops the line that the buyer's and the seller's tools pin the deployment themselves.
+
 ## Decisions
 
 - **Where the budget came from.** The try section's new text cost about 200 tokens. To pay for it on the plain-HTTP buyer's path:
