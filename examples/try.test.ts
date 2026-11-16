@@ -225,7 +225,7 @@ describe('try.ts', () => {
     expect(pins()).toEqual({ viem: v('viem'), tweetnacl: v('tweetnacl') });
     const command = tryCommand();
     // T-496: no npm. The file is checked as try.mjs.part and becomes try.mjs only when its SHA-256 matches.
-    expect(command).toBe(`curl -fsSL https://crow.direct/try.mjs -o try.mjs.part && echo "${sha}  try.mjs.part" | shasum -a 256 -c && mv try.mjs.part try.mjs && node --permission --allow-fs-read=. try.mjs --seller https://crow.direct/agents/test-seller`);
+    expect(command).toBe(`mkdir -p crow-try && cd crow-try && curl -fsSL https://crow.direct/try.mjs -o try.mjs.part && echo "${sha}  try.mjs.part" | shasum -a 256 -c && mv try.mjs.part try.mjs && node --permission --allow-fs-read=. try.mjs --seller https://crow.direct/agents/test-seller`);
     const md = readFileSync(here('../site/llms.txt'), 'utf8');
     const html = readFileSync(here('../site/index.html'), 'utf8');
     expect(html === page(md), 'site/index.html is stale: run node site/build.mjs').toBe(true);
@@ -240,7 +240,7 @@ describe('try.ts', () => {
     expect(visible).not.toContain(sha);
     const txt: string = filled(md.split('\n').filter((l) => !l.startsWith('%% CONFIRM')).join('\n'), { op1: 'https://op1.example', op2: 'https://op2.example' });
     const tryIt = txt.slice(txt.indexOf('## Try it'), txt.indexOf('\n## ', txt.indexOf('## Try it') + 3));
-    expect(tryIt.split('\n').find((l) => l.startsWith('curl -fsSL https://crow.direct/try.mjs '))).toBe(command);
+    expect(tryIt.split('\n').find((l) => l.startsWith('mkdir -p crow-try '))).toBe(command);
     // Each fetch before the command is one more approval: "Try it" asks for none, and keeps the sha256 pin and the source.
     expect(tryIt).not.toMatch(/before you ask|fetch https:\/\/crow\.direct\/try\.mjs/);
     expect(tryIt).toContain('runs it only if its SHA-256 matches the one in the command');

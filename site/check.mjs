@@ -233,10 +233,10 @@ const imports = [...bundle.matchAll(/^import .* from "([^"]+)";$/gm)].map((m) =>
 expect(JSON.stringify(imports) === JSON.stringify(['node:fs']) && !/@holdback\//.test(bundle), 'site/try.mjs must carry viem and tweetnacl inside and import only node:fs (tests/site-bundles.test.ts)');
 const { viem, tweetnacl } = pins();
 const command = tryCommand();
-expect(!command.includes('npm') && command.includes(`curl -fsSL ${TRY_URL} -o try.mjs.part `), 'the try command installs from npm or does not fetch try.mjs from the site');
+expect(!command.includes('npm') && command.startsWith(`mkdir -p crow-try && cd crow-try && curl -fsSL ${TRY_URL} -o try.mjs.part `), 'the try command installs from npm or does not fetch try.mjs from the site');
 expect(bundle.includes(`viem@${viem} (MIT License`) && bundle.includes(`tweetnacl@${tweetnacl} (public domain`), 'the try.mjs banner names other versions than the lockfile pins');
 const filledTry = sampleTxt.slice(sampleTxt.indexOf('## Try it'));
-expect(filledTry.split('\n').find((l) => l.startsWith(`curl -fsSL ${TRY_URL} `)) === command, 'a filled llms.txt does not carry the current try command at the top of "Try it"');
+expect(filledTry.split('\n').find((l) => l.startsWith('mkdir -p crow-try ')) === command, 'a filled llms.txt does not carry the current try command at the top of "Try it"');
 // One-Click Escrow (D51, T-229): the copied prompt carries the exact command, so a fresh assistant asks for one
 // approval; the visible page shows only the Try line.
 const span = /<span id="prompt" hidden>([^<]*)<\/span>/.exec(html);

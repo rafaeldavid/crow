@@ -32,6 +32,15 @@ export function contents(code: string): Contents {
         break;
       case 'CallExpression':
       case 'NewExpression': {
+        // An alias of eval or Function counts as the thing itself: (0, eval)(...), globalThis.eval(...), x['Function'](...), and any .constructor(...) call.
+        const c = node['callee'] as Node;
+        const last = c?.type === 'SequenceExpression' ? (c['expressions'] as Node[]).at(-1) : undefined;
+        const member = c?.type === 'MemberExpression' ? (c['computed'] ? ((c['property'] as Node)['value'] as string) : name(c['property'])) : undefined;
+        if (name(last) === 'eval' || member === 'eval') loads.add('eval');
+        if (member === 'Function') loads.add('Function');
+        // new this.constructor() with no argument is a class copying itself (noble's hashes); anything else may build a function.
+        if (member === 'constructor' && ((c['object'] as Node).type !== 'ThisExpression' || (node['arguments'] as Node[]).length > 0)) loads.add('.constructor()');
+        if (member === 'getBuiltinModule') loads.add('getBuiltinModule');
         const callee = name(node['callee']);
         const arg = (node['arguments'] as Node[])[0];
         const literal = arg?.type === 'Literal' ? JSON.stringify(arg['value']) : '...';
@@ -40,7 +49,8 @@ export function contents(code: string): Contents {
         break;
       }
       case 'MemberExpression':
-        if (name(node['object']) === 'process' && !node['computed']) proc.add(name(node['property'])!);
+        if (name(node['object']) === 'process') proc.add(node['computed'] ? '[computed]' : name(node['property'])!);
+        if (name(node['object']) === 'WebAssembly') loads.add('WebAssembly');
         break;
       case 'Literal':
         if (typeof node['value'] === 'string') strings.push(node['value']);
@@ -52,7 +62,11 @@ export function contents(code: string): Contents {
     for (const [k, v] of Object.entries(node)) if (k !== 'type' && k !== 'start' && k !== 'end') walk(v);
   };
   walk(parseAst(code));
-  for (const s of strings) for (const m of s.matchAll(/\b(?:https?|wss?):\/\/([a-z0-9.-]+)/gi)) hosts.add(m[1]!.toLowerCase());
+  for (const s of strings) {
+    for (const m of s.matchAll(/\b(?:https?|wss?):\/\/([a-z0-9.-]+)/gi)) hosts.add(m[1]!.toLowerCase());
+    // A URL whose host is joined on at run time: the string ends at the scheme.
+    if (/\b(?:https?|wss?):\/\/$/i.test(s)) hosts.add('(joined at run time)');
+  }
   for (const m of imports) if (/^(node:)?(child_process|vm|worker_threads|cluster|inspector|wasi)$/.test(m)) loads.add(m);
   for (const m of ['binding', '_linkedBinding', 'dlopen']) if (proc.has(m)) loads.add(`process.${m}`);
   const sorted = (s: Set<string>) => [...s].sort();
@@ -79,8 +93,9 @@ const EXPECTED: Record<string, Omit<Contents, 'loads'>> = {
     imports: ['node:crypto', 'node:fs', 'node:http', 'node:module', 'node:os', 'node:path', 'node:url'],
     requires: ['__require("buffer")', '__require("crypto")', '__require("process")', 'createRequire(...)'],
     process: ['argv', 'cwd', 'env', 'exit', 'exitCode', 'kill', 'pid', 'platform', 'stderr', 'stdout', 'versions'],
-    // 127.0.0.1 is the local preview it serves; holdback.dev and json-schema.org are schema IDs; the rest are examples in its help.
-    hosts: ['127.0.0.1', 'abitype.dev', 'adapter', 'api.crow.direct', 'api2.crow.direct', 'crow.direct', 'docs.soliditylang.org', 'holdback.dev', 'join.crow.direct', 'json-schema.org', 'sample', 'seller.example', 'sepolia.etherscan.io', 'viem.sh', 'your-site.example'],
+    // 127.0.0.1 is the local preview it serves, whose bound address is joined at run time; holdback.dev and json-schema.org
+    // are schema IDs; the rest are examples in its help.
+    hosts: ['(joined at run time)', '127.0.0.1', 'abitype.dev', 'adapter', 'api.crow.direct', 'api2.crow.direct', 'crow.direct', 'docs.soliditylang.org', 'holdback.dev', 'join.crow.direct', 'json-schema.org', 'sample', 'seller.example', 'sepolia.etherscan.io', 'viem.sh', 'your-site.example'],
   },
 };
 
@@ -115,6 +130,10 @@ describe('the published bundles (T-496)', () => {
         '// https://comment.example is a comment, which is not code',
       ].join('\n'),
     );
+    const aliased = contents("(0, eval)('1'); globalThis.eval('1'); globalThis['Function']('x'); (() => {}).constructor('x')(); process['binding']; globalThis.process.getBuiltinModule('child_process'); WebAssembly.instantiate(b); fetch('https://' + h);");
+    expect(aliased.loads).toEqual(['.constructor()', 'Function', 'WebAssembly', 'eval', 'getBuiltinModule']);
+    expect(aliased.process).toEqual(['[computed]']);
+    expect(aliased.hosts).toEqual(['(joined at run time)']);
     expect(planted.loads).toEqual(['eval', 'import()', 'new Function', 'node:child_process', 'process.binding']);
     expect(planted.requires).toEqual(['__require("os")', 'require("fs")']);
     expect(planted.hosts).toEqual(['evil.example']);
