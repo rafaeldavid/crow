@@ -67,6 +67,10 @@ function expectWithSeller(r: Run, state: 'Released' | 'Refunded'): void {
   expect(r.out).toMatch(/^faucet +1000 tUSD, admitted to demo-club$/m);
   expect(r.out).toMatch(/^seller +Crow's test seller at http:\/\/127\.0\.0\.1:\d+\/agents\/test-seller: it offers from 0x[0-9a-f]{6}\.\.\.[0-9a-f]{4}, 26\.01 tUSD in all for this deal$/m);
   expect(r.out).toMatch(/^offered +0x[0-9a-f]{6}\.\.\.[0-9a-f]{4} offered by the test seller$/m);
+  // T-496: the buyer proposes the terms, and the run says who runs each role before any money moves.
+  if (state === 'Released') expect(r.out).toMatch(/^propose +sealed proposal stored on Crow \(\d+ bytes\) and sent to the intake: this buyer's own terms: the price, the work and the three checks$/m);
+  expect(r.out).toMatch(/^roles +buyer: this script, with fresh keys; seller: Crow's test seller at http:\/\/127\.0\.0\.1:\d+\/agents\/test-seller; adjudicators \(primary, fallback, appeal\): .+; operators: .+$/m);
+  expect(r.out).not.toMatch(/the seller's own terms/);
   expect(r.out).not.toMatch(/[^\x00-\x7f]/);
   expect(r.out).toMatch(/^fund +Held: 26 tUSD held \(25 price \+ 1 adjudication fee\), operator fee 0\.01 tUSD$/m);
   expect(r.out).toMatch(/with Crow's test seller as the other party/);
