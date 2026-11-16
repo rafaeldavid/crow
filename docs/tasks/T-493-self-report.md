@@ -25,6 +25,8 @@ Rafa wants the pilot's purchases to give data for analysis: approvals, time and 
 
 - `node site/build.mjs && node site/check.mjs`: PASS, 2026-11-16 [measured]. `ref/limits.txt` is outside every budgeted first-deal path, so no budget moves.
 
+- **CI, first run:** `apps/test-agents/src/try-goals.test.ts` (try-reclaim) failed with "operators disagree on settlement-layer time". It was not rerun. The cause is in the test and already on `main`: it jumped the world's clock 310 s while the command read both operators' time in parallel, beyond the command's 5 s tolerance. The test now moves the clock in steps of at most 4 s, 50 ms apart, and it passes [measured]. Repeating it in one test world cannot reproduce the race, because the test seller allows 3 requests an hour; the cause is read from the log and the code [inferred].
+
 ## Handoff
 
 - The pilot run sheet (crow-private `design-partners/partner-a/kit/run-sheet.md`, "Measuring each scan") uses this report; Rafa reads reports with `apps/demo-cloud/scripts/feedback.ts list received`.
