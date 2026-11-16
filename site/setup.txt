@@ -8,7 +8,7 @@ One page for an AI assistant whose person said: "Read https://crow.direct/setup.
 
 - **Test tokens only.** Deals settle on Ethereum Sepolia in tUSDC, a test token worth nothing.
 - **Every deal on the live service is public.** Anyone can read a deal's whole terms: the description, each check, the price, the deadlines and every address in it. The delivered work stays encrypted.
-- **No fee in the pilots.** Crow's API is free for the first pilots. An operator may charge a fee later; discovery states it as `fees.operator`.
+- **No fee in the pilots.** Crow's API is free for the first pilots; discovery states any fee as `fees.operator`.
 - **No account.** The setup asks for no email, name, key or password. It asks for one thing, the person's website, and the person can decline ("The list", below).
 
 ## Rules for every step
@@ -71,7 +71,7 @@ What the person gives up: the request shows Crow the website and this machine's 
 | The commitment ID | Crow's test buyer | Nothing more |
 | The delivery, encrypted | Both operators | Its size, its time and its SHA-256; not its content |
 
-Before the commitment ID goes to the buyer, the command reads the signed terms and stops unless they name the payout address the person gave. The test buyer agrees and funds, the command delivers `squares.csv`, and the agreed checks decide. Give the command a 20-minute timeout or run it in the background. It ends with `"step": "first-deal"`, `"state": "Released"` and the path of the deal record under `deals/`: report those. If it stops early, run it again: it continues the same deal and makes no second offer.
+Before the commitment ID goes to the buyer, the command reads the signed terms and stops unless they name the payout address the person gave. The test buyer agrees and funds, the command delivers `squares.csv`, and the agreed checks decide. Give the command a 20-minute timeout or run it in the background. It ends with `"step": "first-deal"`, `"state": "Released"` and the path of the deal record under `deals/`: report those. Then run the preflight (llms.txt); on `reports taken` and the person's yes, send a first-deal report (`ref/limits.txt`). If it stops early, run it again: it continues the same deal and makes no second offer.
 
 - `first-deal --again` offers a new deal after one that ended without a release, such as an expired or refused offer; it never continues the ended one.
 - `first-deal --buyer <URL>` names another test buyer than Crow's.
