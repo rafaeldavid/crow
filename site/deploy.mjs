@@ -17,7 +17,7 @@
 import { createHash } from 'node:crypto';
 import { readFileSync, realpathSync, rmSync } from 'node:fs';
 import { fileURLToPath } from 'node:url';
-import { checkout, liveVersion, recordLine, rollback, sh } from '../scripts/deploy-lib.mjs';
+import { checkout, finishDeploy, liveVersion, recordLine, rollback, sh } from '../scripts/deploy-lib.mjs';
 import { SITE_URL, TRY_URL, trySha256 } from './build.mjs';
 
 const WORKER = 'crow-site';
@@ -133,7 +133,7 @@ async function probe(url, timeoutMs) {
 
 // Run as a command, not imported by a test. Node resolves the script's symbolic links, so compare real paths.
 if (process.argv[1] && realpathSync(process.argv[1]) === fileURLToPath(import.meta.url)) {
-  process.exit(
+  process.exit(await finishDeploy(
     await deploy({
       args: process.argv.slice(2),
       sh,
@@ -145,5 +145,6 @@ if (process.argv[1] && realpathSync(process.argv[1]) === fileURLToPath(import.me
       log: console.log,
       error: console.error,
     }),
-  );
+    process.argv.slice(2),
+  ));
 }

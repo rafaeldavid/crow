@@ -15,7 +15,7 @@
 // and 4 to 6 do not run. The secret TEST_AGENTS_SEED is set once, by scripts/seed.mjs (docs/operations.md, "Crow's test
 // seller"); a Worker that was never deployed has no live version, so its first upload is `wrangler deploy` by hand.
 import { fileURLToPath } from 'node:url';
-import { sh } from '../../../scripts/deploy-lib.mjs';
+import { finishDeploy, sh } from '../../../scripts/deploy-lib.mjs';
 import { deploy } from './deploy-checks.mjs';
 
 const here = (p) => fileURLToPath(new URL(p, import.meta.url));
@@ -30,7 +30,7 @@ async function probe(url, timeoutMs) {
   }
 }
 
-process.exit(
+process.exit(await finishDeploy(
   await deploy({
     args: process.argv.slice(2),
     config: here('../wrangler.jsonc'),
@@ -41,4 +41,5 @@ process.exit(
     log: console.log,
     error: console.error,
   }),
-);
+  process.argv.slice(2),
+));

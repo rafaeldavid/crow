@@ -2,11 +2,11 @@
 // (T-436): deploys one hosted seller's Worker, crow-seller-<slug>, from a detached worktree at origin/main, and checks
 // it. Deploys wait for Rafa. The steps are in src/deploy-plan.ts (deploySeller); docs/operations.md, "Hosted sellers",
 // has the first deploy's runbook.
-import { checkout, liveVersion, recordLine, rollback, sh } from '../../../scripts/deploy-lib.mjs';
+import { checkout, finishDeploy, liveVersion, recordLine, rollback, sh } from '../../../scripts/deploy-lib.mjs';
 import { deploySeller } from '../src/deploy-plan.ts';
 import { main, probe, readSeller, shell, writeGenerated } from './effects.ts';
 
-process.exit(
+process.exit(await finishDeploy(
   await deploySeller({
     args: process.argv.slice(2),
     readSeller,
@@ -23,4 +23,5 @@ process.exit(
     log: (line) => console.log(line),
     error: (line) => console.error(line),
   }),
-);
+  process.argv.slice(2),
+));

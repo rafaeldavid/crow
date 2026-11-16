@@ -149,6 +149,36 @@ export function recordLine({ title, startedAt, commit, branch, failure, workers,
   return `**${title} ${when}, commit \`${commit.slice(0, 7) || 'unknown'}\`${on}: ${failure ? `FAIL, ${failure}` : 'pass'}.** ${versions.join(', ')}.${note}`;
 }
 
+/** The workflow that builds Crow Control, in the maintainers' private repository (crow-private `control/README.md`). */
+export const CONSOLE_BUILD = { repo: 'rafaeldavid/crow-private', workflow: 'control-hourly.yml', ref: 'main' };
+
+/**
+ * After a deploy, starts a Crow Control build, so its page shows what this deploy changed within minutes instead of
+ * after its two-hour wait between automatic builds (N166, 2026-11-16: the page showed the operators behind 40 minutes
+ * after they were deployed). A manual run always builds. It never fails the deploy: without `gh`, a login or access to
+ * that repository it says so in one line and names the command to run by hand.
+ * @returns {Promise<string>} the one line to print
+ */
+export async function refreshConsole(run = sh) {
+  const args = ['workflow', 'run', CONSOLE_BUILD.workflow, '--repo', CONSOLE_BUILD.repo, '--ref', CONSOLE_BUILD.ref];
+  const r = await run('gh', args, { show: false, timeoutMs: 30_000 });
+  return r.code === 0
+    ? 'Crow Control: a build started; the page shows this deploy in about 5 minutes.'
+    : `Crow Control: no build started (gh ${r.code === null ? 'timed out' : `exit ${r.code}`}); the page shows this deploy at its next build, or run: gh ${args.join(' ')}`;
+}
+
+/**
+ * A deploy command's last step: when the deploy may have changed what runs (it passed, or failed after an upload and
+ * rolled back), start a Crow Control build and print its line. A refusal before any upload (exit 2), a dry run and a
+ * check-only run change nothing, so they start none.
+ * @returns {Promise<number>} the deploy's own exit code, unchanged
+ */
+export async function finishDeploy(code, args = [], { run = sh, log = console.log } = {}) {
+  if (code === 2 || args.includes('--dry-run') || args.includes('--check-only')) return code;
+  log(await refreshConsole(run));
+  return code;
+}
+
 /**
  * Waits until every node's discovery (`GET <node>/`) names `commit` as `demo.build.commit`, so a check that follows
  * runs against the code just deployed. The World Durable Object kept serving the previous instance for about five

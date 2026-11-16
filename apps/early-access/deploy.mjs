@@ -12,7 +12,7 @@
 // (tests/early-access-deploy.test.ts).
 import { realpathSync } from 'node:fs';
 import { fileURLToPath } from 'node:url';
-import { checkout, liveVersion, recordLine, rollback, sh } from '../../scripts/deploy-lib.mjs';
+import { checkout, finishDeploy, liveVersion, recordLine, rollback, sh } from '../../scripts/deploy-lib.mjs';
 
 export const WORKER = 'crow-early-access';
 export const VERSION_URL = 'https://join.crow.direct/version.json';
@@ -114,7 +114,8 @@ async function probe(url, timeoutMs) {
 
 // Run as a command, not imported by a test. Node resolves the script's symbolic links, so compare real paths.
 if (process.argv[1] && realpathSync(process.argv[1]) === fileURLToPath(import.meta.url)) {
-  process.exit(
+  process.exit(await finishDeploy(
     await deploy({ args: process.argv.slice(2), sh, probe, sleep: (ms) => new Promise((r) => setTimeout(r, ms)), now: Date.now, log: console.log, error: console.error }),
-  );
+    process.argv.slice(2),
+  ));
 }
