@@ -68,7 +68,7 @@ import { join } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { OG_IMAGE } from './footer.ts';
 import { ICON_FILES } from './brand/kit.mjs';
-import { GOALS, goalBundle, goalCommand, goalSha256, goalUrl, REFERENCE_PATH, referenceText, SETUP_MJS_URL, setupBundle, setupCommand, setupSha256 } from './build.mjs';
+import { GOALS, goalBundle, goalCommand, goalSha256, goalUrl, PREFLIGHT, preflightCommand, REFERENCE_PATH, referenceText, SETUP_MJS_URL, setupBundle, setupCommand, setupSha256 } from './build.mjs';
 import { ASSETS, BASE, BUY_COMMANDS, CARD_SCHEMA, HOME_CSS, HOME_JS, notFoundPage, visualdemoPage, BUY_MJS_URL, BUY_URL, buyBundle, buyInstall, buySha256, filled, page, pins, problemPages, publishedGuides, SELL_URL, SITE_URL, strip, TEST_SELLER_URL, tryBundle, tryCommand, trySha256, TRY_URL } from './build.mjs';
 import { apiRoutes, citedSections, duplicateSentences, hasSection, FIRST_DEAL_BUDGET, guideFiles, guideSource, measurePaths, namedCalls, namedReferences, referenceFiles, nonAscii, routeKnown, SETUP_MAX_BYTES } from './guides.mjs';
 
@@ -113,7 +113,7 @@ expect(count(md, '{{OP1}}') === 1 && configure.includes('OP1={{OP1}}'), '{{OP1}}
 expect(count(md, '{{OP2}}') === 1 && configure.includes('OP2={{OP2}}'), '{{OP2}} must appear once in llms.txt, as OP2={{OP2}} under Configure');
 const tryIt = md.slice(md.indexOf('## Try it'), md.indexOf('\n## ', md.indexOf('## Try it') + 3));
 expect(count(md, '{{TRY_COMMAND}}') === 1 && tryIt.includes('```sh\n{{TRY_COMMAND}}\n```') && tryIt.indexOf('```') === tryIt.indexOf('```sh\n{{TRY_COMMAND}}'), '{{TRY_COMMAND}} must appear once in llms.txt, as the first code block of "Try it"');
-expect((md.match(/\{\{[^}]*\}\}/g) ?? []).every((p) => ['{{OP1}}', '{{OP2}}', '{{TRY_COMMAND}}', ...Object.values(GOALS).map((g) => g.placeholder)].includes(p)), 'llms.txt has an unknown {{placeholder}}');
+expect((md.match(/\{\{[^}]*\}\}/g) ?? []).every((p) => ['{{OP1}}', '{{OP2}}', '{{TRY_COMMAND}}', PREFLIGHT.placeholder, ...Object.values(GOALS).map((g) => g.placeholder)].includes(p)), 'llms.txt has an unknown {{placeholder}}');
 // A link as build.mjs renders one (https, trailing punctuation left out), parsed, so a look-alike host or a longer
 // path does not count (CodeQL js/incomplete-url-substring-sanitization).
 const mdLinks = (md.match(/https:\/\/[^\s<)]+[^\s<).,;:]/g) ?? []).filter((u) => URL.canParse(u)).map((u) => new URL(u));
@@ -263,6 +263,21 @@ for (const [name, g] of Object.entries(GOALS)) {
   expect(count(md, g.placeholder) === 1 && tryIt.includes(`\`\`\`sh\n${g.placeholder}\n\`\`\``) && filledTry.split('\n').includes(line), `${g.placeholder} must appear once in llms.txt, in its own sh block under "Try it", filled with the current ${name} command`);
   if (existsSync(here('../reports/site-out/llms.txt'))) expect(existsSync(here(`../reports/site-out/${name}.mjs`)) && read(`../reports/site-out/${name}.mjs`) === file, `reports/site-out/${name}.mjs is missing or differs from site/${name}.mjs: build with --out again`);
 }
+// The preflight (T-491): site/preflight.mjs is the current bundle of examples/preflight.ts, imports only Node's own
+// modules (no package at all, so it never runs beside a key), and llms.txt carries its pinned command once, in its
+// own sh block in "Read one page for your role"; each role page and the setup's page say to run it.
+{
+  const file = read(`${PREFLIGHT.name}.mjs`);
+  expect(file === (await goalBundle(PREFLIGHT.name)), `site/${PREFLIGHT.name}.mjs is stale against ${PREFLIGHT.source}: run node site/build.mjs`);
+  const imports = [...file.matchAll(/^import .* from "([^"]+)";$/gm)].map((m) => m[1]);
+  expect(imports.every((m) => m.startsWith('node:')) && !/\bimport\(/.test(file) && !/node_modules/.test(file), `site/${PREFLIGHT.name}.mjs must bundle no package and import only Node's own modules (it imports ${imports.join(', ')})`);
+  const line = preflightCommand();
+  expect(line.includes(`echo "${goalSha256(PREFLIGHT.name)}  ${PREFLIGHT.name}.mjs.part" | shasum -a 256 -c && mv ${PREFLIGHT.name}.mjs.part ${PREFLIGHT.name}.mjs && node ${PREFLIGHT.name}.mjs`), 'the preflight command does not check the current sha256 before it runs');
+  const rolePart = md.slice(md.indexOf('## Read one page for your role'), md.indexOf('\n## ', md.indexOf('## Read one page for your role') + 3));
+  expect(count(md, PREFLIGHT.placeholder) === 1 && rolePart.includes(`\`\`\`sh\n${PREFLIGHT.placeholder}\n\`\`\``) && filledTry.includes(line), `${PREFLIGHT.placeholder} must appear once in llms.txt, in its own sh block under "Read one page for your role", filled with the current command`);
+  for (const page of ['buy.txt', 'sell.txt', 'setup.txt']) expect(read(page).includes('preflight'), `${page} does not say to run the preflight from llms.txt`);
+  if (existsSync(here('../reports/site-out/llms.txt'))) expect(read(`../reports/site-out/${PREFLIGHT.name}.mjs`) === file, `reports/site-out/${PREFLIGHT.name}.mjs differs from site/${PREFLIGHT.name}.mjs: build with --out again`);
+}
 
 // 8. Crow's test seller.
 const { LIMITS, TIMING, CHECKS, PRICE_UNITS } = await import(here('../apps/test-agents/src/catalog.ts'));
@@ -313,7 +328,7 @@ const roles = sectionOf(md, 'Read one page for your role');
 expect(roles.includes(BUY_URL) && roles.includes(SELL_URL), `llms.txt has a "Read one page for your role" section that links ${BUY_URL} and ${SELL_URL}`);
 
 // 11. The guides together (T-393).
-const published = new Set(['index.html', '404.html', 'home.css', 'home.js', 'try.mjs', 'buy.mjs', 'setup.mjs', ...Object.keys(GOALS).map((n) => `${n}.mjs`), REFERENCE_PATH, 'version.json', CARD_SCHEMA, ...ASSETS]);
+const published = new Set(['index.html', '404.html', 'home.css', 'home.js', 'try.mjs', 'buy.mjs', 'setup.mjs', `${PREFLIGHT.name}.mjs`, ...Object.keys(GOALS).map((n) => `${n}.mjs`), REFERENCE_PATH, 'version.json', CARD_SCHEMA, ...ASSETS]);
 const scripts = JSON.parse(read('../package.json')).scripts;
 const refs = referenceFiles();
 // T-469: the front door's "Reference" points to the one reference file and names every part it holds, by the ref
