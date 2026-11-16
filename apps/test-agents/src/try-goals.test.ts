@@ -132,11 +132,21 @@ describe('try-reclaim.mjs (scenario s5)', () => {
   });
 
   it('funds the silent offer, waits for deliverBy by settlement time, and reclaims the hold', async () => {
-    // Settlement time jumps past deliverBy (5 minutes) once the hold is funded, so the test takes seconds, not minutes.
+    // Settlement time moves past deliverBy (5 minutes) once the hold is funded, so the test takes seconds, not minutes.
+    // It moves in steps of at most 4 s, 50 ms apart, not in one jump: the command reads both operators' time in
+    // parallel and refuses when they differ by more than 5 s, which one 310 s jump between the two reads made happen
+    // (CI, 2026-11-16, PR 597: "operators disagree on settlement-layer time").
+    let ticking: ReturnType<typeof setInterval> | undefined;
     const run = start([bundle('try-reclaim'), '--seller', s.url], world.urls, (line) => {
-      if (/^wait +nothing is delivered/.test(line)) skew = 310_000;
+      if (/^wait +nothing is delivered/.test(line) && !ticking) {
+        ticking = setInterval(() => {
+          skew = Math.min(310_000, skew + 4_000);
+          if (skew >= 310_000) clearInterval(ticking);
+        }, 50);
+      }
     });
     const r = await run.done;
+    clearInterval(ticking);
     expectDone(r, 'Refunded');
     expect(r.out).toMatch(/^wait +nothing is delivered; deliverBy is \S+, judged by the block's timestamp/m);
     expect(r.out).toMatch(/^(reclaim|refunded) /m);
