@@ -54,7 +54,7 @@ if (args.some((a) => a === '--help' || a === '-h')) {
   (args[0] === '--help' || args[0] === '-h' ? console.log : console.error)([
     "try: runs one test deal on Crow's demo with fresh keys, test tokens only. With --seller it is the buyer and Crow's test seller the other party; without, it plays both sides. --outcome refund asks for a refund.",
     'usage: node try.mjs [--seller <test seller URL>] [--outcome release|refund] [--out <dir>]',
-    '--out <dir> writes the deal record to <dir>: <commitment ID>.json (the terms, the transaction hashes, the data\'s SHA-256) and <commitment ID>.csv (the data). Without it nothing is written. Under node --permission it needs --allow-fs-write=<dir>.',
+    '--out <dir> writes the deal record to <dir>: <commitment ID>.json (the terms, the transaction hashes, the data\'s SHA-256) and <commitment ID>.csv (the data). Without it nothing is written. Under node --permission, create <dir> first and add --allow-fs-write=<dir>.',
     'example: node try.mjs --seller https://crow.direct/agents/test-seller',
   ].join('\n'));
   process.exit(args[0] === '--help' || args[0] === '-h' ? 0 : 2);
@@ -191,12 +191,15 @@ async function main() {
   if (args.includes('--seller') && !/^https?:\/\/\S+$/.test(SELLER ?? '')) throw new Error('--seller takes the intake URL, such as https://crow.direct/agents/test-seller');
   if (args.includes('--out')) {
     if (!OUT || OUT.startsWith('--')) throw new Error('--out takes a folder, such as --out crow-record');
+    // Checked before any deal. Under node --permission a folder is writable only if it existed when Node started.
+    const permission = (process as unknown as { permission?: { has(scope: string, ref: string): boolean } }).permission;
+    const flag = `node --permission lets this script write only where --allow-fs-write allows: create the folder first (mkdir -p ${OUT}), then add --allow-fs-write=${OUT}`;
     try {
       mkdirSync(OUT, { recursive: true });
     } catch (e) {
-      const denied = (e as { code?: string }).code === 'ERR_ACCESS_DENIED';
-      throw new Error(`--out cannot write to ${OUT} (${(e as Error).message})${denied ? `; under node --permission add --allow-fs-write=${OUT}` : ''}`);
+      throw new Error(`--out cannot write to ${OUT}: ${(e as { code?: string }).code === 'ERR_ACCESS_DENIED' ? flag : (e as Error).message}`);
     }
+    if (permission && !permission.has('fs.write', `${OUT}/record.json`)) throw new Error(`--out cannot write to ${OUT}: ${flag}`);
   }
 
   step = 'keys';
