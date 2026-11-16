@@ -164,6 +164,14 @@ Source: contracts/test/, https://github.com/rafaeldavid/holdback/tree/main/contr
 Yes. Each contract's source code is published on Sourcify, and the deployment record names the commit and the compiler settings, so anyone can rebuild the bytecode and compare it.
 Source: docs/operations.md, "Sepolia contracts (T-206)", https://github.com/rafaeldavid/holdback/blob/main/docs/operations.md#sepolia-contracts-t-206; contracts/deployments/sepolia.json, https://github.com/rafaeldavid/holdback/blob/main/contracts/deployments/sepolia.json
 
+### How do I check a command before I run it?
+
+Compare its file with Crow's public repository, or rebuild the file yourself. Each command on crow.direct downloads one file and runs it only if the file's SHA-256 matches the one in the command. Two ways to check that hash:
+- Compare: the same file is committed in the repository under site/, for example site/try.mjs. Hash that copy with shasum -a 256 and compare the result with the command's hash.
+- Rebuild: clone the repository and find the commit whose site/try.mjs has the command's hash (git log -p -- site/try.mjs). Check it out, run pnpm install, then node site/build.mjs. The build is deterministic, so git status then shows no change to the file.
+A matching hash proves that the file you run is the one Crow published and committed and, if you rebuilt it, that it comes from the public source. It does not prove that the code is safe to run, and it does not protect you from Crow, which controls both crow.direct and the repository. Read the file, which is not minified, and run it as the four goal commands do, under Node's permission flag: the file can then read files only in its own folder and can write no file and start no program, though it can still read environment variables and reach the network. Node describes the flag as a safeguard for trusted code, not a sandbox, so run the command in a shell whose environment holds no secrets. The try command also installs two packages from npm, which the hash does not cover.
+Source: site/try.mjs, https://github.com/rafaeldavid/holdback/blob/main/site/try.mjs; site/build.mjs, https://github.com/rafaeldavid/holdback/blob/main/site/build.mjs; crow.direct/llms.txt, "Try it", https://crow.direct/llms.txt
+
 ### Does Crow hold a security certification?
 
 No. Crow holds no SOC 2, ISO 27001 or other certification yet.
