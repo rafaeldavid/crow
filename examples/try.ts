@@ -22,7 +22,8 @@
 //   node examples/try.ts [--seller <url>]              from the repository
 //   HOLDBACK_OPERATORS=<url>,<url>                     other operators (two distinct origins)
 //
-// Source: https://github.com/rafaeldavid/holdback/blob/main/examples/try.ts, with agent.ts and verify.ts.
+// Source: https://github.com/rafaeldavid/holdback/blob/main/examples/try.ts, with agent.ts, verify.ts, finality.ts and
+// deployments.ts.
 import { mkdirSync, writeFileSync } from 'node:fs';
 import nacl from 'tweetnacl';
 import { recoverTypedDataAddress, type Hex } from 'viem';
@@ -405,7 +406,7 @@ async function main() {
   step = 'done';
   say(`commitment ${id} ${done.escrowState}`);
   // The report route, from each operator's own discovery: a report is the agent's choice, with its principal's yes.
-  const takes = await Promise.all(OPERATORS.map((op) => buyer.call('GET', '/.well-known/holdback.json', undefined, op).then((d: J) => (typeof d?.feedback?.path === 'string' ? `${op}${d.feedback.path}` : null), () => null)));
+  const takes = await Promise.all(OPERATORS.map((op) => buyer.call('GET', '/.well-known/holdback.json', undefined, op).then((d: J) => (typeof d?.feedback?.path === 'string' && /^\/[A-Za-z0-9/_-]{1,64}$/.test(d.feedback.path) ? `${op}${d.feedback.path}` : null), () => null)));
   const routes = takes.filter((r): r is string => r !== null);
   step = 'report';
   if (routes.length) say(`with your principal's yes, report a problem or this first deal: POST ${routes.join(' or ')} (https://crow.direct/ref/limits.txt, "Reporting a problem")`);
@@ -417,7 +418,7 @@ try {
 } catch (e) {
   const refused = e instanceof Refusal;
   console.error(`${refused ? 'refused' : 'stopped'} at ${step}: ${(e as Error).message}`);
-  const limit = faucetLimits ? `the faucet funds at most ${faucetLimits.perClient} new addresses per client every ${faucetLimits.everySec / 60} min` : "the faucet's limits per client are in the operators' discovery, demo.faucet";
+  const limit = faucetLimits ? `the faucet funds at most ${faucetLimits.perClient} new addresses per client every ${faucetLimits.everySec % 60 === 0 ? `${faucetLimits.everySec / 60} min` : `${faucetLimits.everySec} s`}` : "the faucet's limits per client are in the operators' discovery, demo.faucet";
   if (!refused) console.error(`Nothing here is real money. Run it again for a fresh deal; ${limit}.`);
   process.exit(refused ? 3 : 1);
 }
