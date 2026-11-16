@@ -2169,6 +2169,7 @@ async function fetchRead(url, path, refused) {
 			last = await fetch(url, { signal: AbortSignal.timeout(15e3) });
 			if (!refusedStatus(last.status)) return last;
 			if (last.status === 429) wait = await waitOf(last);
+			if (i < RETRY.tries - 1) await last.body?.cancel();
 		} catch {
 			last = null;
 		}
@@ -2194,8 +2195,8 @@ async function get(api, path, refused) {
 		};
 	}
 }
-async function bytesFrom(api, path) {
-	const res = await fetchRead(`${api}${path}`, path);
+async function bytesFrom(api, path, refused) {
+	const res = await fetchRead(`${api}${path}`, path, refused);
 	try {
 		return res?.ok ? new Uint8Array(await res.arrayBuffer()) : null;
 	} catch {
@@ -2250,17 +2251,24 @@ async function read(api, id, party, wantKey) {
 		refused
 	};
 }
-/** The ciphertext with this ID from the configured operators, `first` first, checked against the ID. */
-async function ciphertextOf(sha, first, operators, cache) {
+/**
+* The ciphertext with this ID from the configured operators, `first` first, checked against the ID. When no operator
+* served it and some refused the read, those refusals go into `refused` (T-492): the bytes may exist, unread.
+*/
+async function ciphertextOf(sha, first, operators, cache, refused) {
 	if (cache.has(sha)) return cache.get(sha);
 	let found = null;
+	const tried = [];
 	for (const api of [first, ...operators.filter((o) => o !== first)]) {
-		const b = await bytesFrom(api, `/v1/ciphertext/${sha}`);
+		const local = [];
+		const b = await bytesFrom(api, `/v1/ciphertext/${sha}`, local);
+		tried.push(...local.map((r) => api === first ? r : `${r} at ${api}`));
 		if (b && await sha256$1(b) === sha) {
 			found = b;
 			break;
 		}
 	}
+	if (!found) refused.push(...tried);
 	cache.set(sha, found);
 	return found;
 }
@@ -2417,7 +2425,7 @@ async function view(a, id, o, cache) {
 			submittedAt: d.at
 		};
 		const sha = String(p.ciphertext?.sha256);
-		const ct = CIPHERTEXT_ID.test(sha) ? await ciphertextOf(sha, a.api, o.operators, cache) : null;
+		const ct = CIPHERTEXT_ID.test(sha) ? await ciphertextOf(sha, a.api, o.operators, cache, a.refused) : null;
 		if (ct) add("ciphertext sha256", ct.length === Number(p.ciphertext?.bytes), `the ${ct.length} bytes a configured operator stores hash to the recorded ciphertext.sha256`);
 		else add("ciphertext sha256", null, CIPHERTEXT_ID.test(sha) ? "no configured operator serves bytes that hash to the recorded ciphertext.sha256" : "the recorded ciphertext.sha256 is malformed");
 		const released = (a.key ?? []).find((k) => lc(k.recipient) === lc(t?.buyer));

@@ -272,7 +272,10 @@ async function writeRecord(c: Call, state: State, id: Hex, started: number): Pro
   const count = (ok: boolean | null) => record.checks.filter((x) => x.ok === ok).length;
   const unsound = () => count(false) > 0 || record.disagreements.length > 0;
   // Read again while a check fails or the operators differ, and while a record that should name a payee names none yet.
-  for (let i = 0; i < 10 && (unsound() || payeeOf(record, payout.address).wait); i++) {
+  // At most 10 rereads and 2 minutes in all (T-492): a read an operator keeps refusing now fails a check, and each
+  // record may wait up to a minute in its retries, so a count alone could hold first-deal for over 10 minutes.
+  const until = Date.now() + (c.testWorld ? 15_000 : 120_000);
+  for (let i = 0; i < 10 && Date.now() < until && (unsound() || payeeOf(record, payout.address).wait); i++) {
     await sleep(c.testWorld ? 300 : 6000);
     record = await dealRecord(id, { operators: c.operators, party: 'seller' });
   }

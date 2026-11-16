@@ -225,10 +225,14 @@ describe('deal-record.ts writes one verified record of a finished deal (T-333)',
 });
 
 /** A proxy in front of one operator that rewrites some answers: the escrow state, the terms' price, a ciphertext URI. */
-async function proxy(target: string, lie: { state?: string; tamperPrice?: string; ciphertextUri?: string; noPostings?: boolean; txs?: Record<string, string>; refuseEvents?: { times: number; status: number } }): Promise<{ url: string; close(): Promise<void> }> {
+async function proxy(target: string, lie: { state?: string; tamperPrice?: string; ciphertextUri?: string; noPostings?: boolean; txs?: Record<string, string>; refuseEvents?: { times: number; status: number }; refuseCiphertext?: boolean }): Promise<{ url: string; close(): Promise<void> }> {
   let refusals = 0;
   const server = createServer(async (req, res) => {
     const path = req.url ?? '/';
+    if (lie.refuseCiphertext && path.startsWith('/v1/ciphertext/')) {
+      res.writeHead(503, { 'content-type': 'application/problem+json' }).end(JSON.stringify({ type: 'internal', status: 503 }));
+      return;
+    }
     // T-492: the events read refused `times` times with `status` (429 names a 0 s wait), then served.
     if (lie.refuseEvents && /\/events/.test(path) && refusals < lie.refuseEvents.times) {
       refusals++;
@@ -295,6 +299,19 @@ describe('deal-record.ts never reads a refused read as missing data (T-492)', ()
       await down.close();
     }
   }, 30_000);
+
+  it('names a ciphertext no operator would serve, instead of only "no operator serves it"', async () => {
+    const a = await proxy(world.info.operators[0]!, { refuseCiphertext: true });
+    const b = await proxy(world.info.operators[1]!, { refuseCiphertext: true });
+    try {
+      const r = await dealRecord(refunded.id, { operators: [a.url, b.url], party: 'buyer' });
+      expect(r.checks.find((x) => x.check === 'ciphertext sha256')).toMatchObject({ ok: null });
+      expect(r.checks.find((x) => x.check === 'every read answered')).toMatchObject({ ok: false, why: expect.stringMatching(/\/v1\/ciphertext\/sha256:[0-9a-f]{64} answered 503 after 3 tries/) });
+    } finally {
+      await a.close();
+      await b.close();
+    }
+  }, 60_000);
 });
 
 describe('deal-record.ts when a release\'s event carries no postings (T-390)', () => {

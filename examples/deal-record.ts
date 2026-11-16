@@ -139,6 +139,7 @@ async function fetchRead(url: string, path: string, refused?: string[]): Promise
       last = await fetch(url, { signal: AbortSignal.timeout(15_000) });
       if (!refusedStatus(last.status)) return last;
       if (last.status === 429) wait = await waitOf(last);
+      if (i < RETRY.tries - 1) await last.body?.cancel(); // free the connection before waiting; the last answer stays readable
     } catch {
       last = null;
     }
@@ -158,8 +159,8 @@ async function get(api: string, path: string, refused?: string[]): Promise<{ sta
     return { status: res.status, body: null };
   }
 }
-async function bytesFrom(api: string, path: string): Promise<Uint8Array | null> {
-  const res = await fetchRead(`${api}${path}`, path);
+async function bytesFrom(api: string, path: string, refused?: string[]): Promise<Uint8Array | null> {
+  const res = await fetchRead(`${api}${path}`, path, refused);
   try {
     return res?.ok ? new Uint8Array(await res.arrayBuffer()) : null;
   } catch {
@@ -204,17 +205,24 @@ async function read(api: string, id: Hex, party: 'buyer' | 'seller', wantKey: bo
   return { api, discovery: discovery.body, state: state.body, terms, events, receipts, judgment, balances, key, refused };
 }
 
-/** The ciphertext with this ID from the configured operators, `first` first, checked against the ID. */
-async function ciphertextOf(sha: string, first: string, operators: string[], cache: Map<string, Uint8Array | null>): Promise<Uint8Array | null> {
+/**
+ * The ciphertext with this ID from the configured operators, `first` first, checked against the ID. When no operator
+ * served it and some refused the read, those refusals go into `refused` (T-492): the bytes may exist, unread.
+ */
+async function ciphertextOf(sha: string, first: string, operators: string[], cache: Map<string, Uint8Array | null>, refused: string[]): Promise<Uint8Array | null> {
   if (cache.has(sha)) return cache.get(sha)!;
   let found: Uint8Array | null = null;
+  const tried: string[] = [];
   for (const api of [first, ...operators.filter((o) => o !== first)]) {
-    const b = await bytesFrom(api, `/v1/ciphertext/${sha}`);
+    const local: string[] = [];
+    const b = await bytesFrom(api, `/v1/ciphertext/${sha}`, local);
+    tried.push(...local.map((r) => (api === first ? r : `${r} at ${api}`)));
     if (b && (await sha256(b)) === sha) {
       found = b;
       break;
     }
   }
+  if (!found) refused.push(...tried);
   cache.set(sha, found);
   return found;
 }
@@ -339,7 +347,7 @@ async function view(a: Answers, id: Hex, o: Options, cache: Map<string, Uint8Arr
     delivery = { attempt: p.attempt, deliveryHash: lc(p.deliveryHash), plaintextSha256: p.plaintextSha256, ciphertext: { uri: p.ciphertext?.uri, sha256: p.ciphertext?.sha256, bytes: p.ciphertext?.bytes }, submittedAt: d.at };
     const sha = String(p.ciphertext?.sha256);
     // The bytes come from a configured operator's store at /v1/ciphertext/<sha256>, never from the recorded URI.
-    const ct = CIPHERTEXT_ID.test(sha) ? await ciphertextOf(sha, a.api, o.operators, cache) : null;
+    const ct = CIPHERTEXT_ID.test(sha) ? await ciphertextOf(sha, a.api, o.operators, cache, a.refused) : null;
     if (ct) add('ciphertext sha256', ct.length === Number(p.ciphertext?.bytes), `the ${ct.length} bytes a configured operator stores hash to the recorded ciphertext.sha256`);
     else add('ciphertext sha256', null, CIPHERTEXT_ID.test(sha) ? 'no configured operator serves bytes that hash to the recorded ciphertext.sha256' : 'the recorded ciphertext.sha256 is malformed');
     const released = (a.key ?? []).find((k: J) => lc(k.recipient) === lc(t?.buyer));

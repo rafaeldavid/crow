@@ -41,11 +41,17 @@ All measured on 2026-11-16 in the worktree, on Node 22.22.2.
   - `vitest run examples/deal-record.test.ts examples/record-seller.test.ts examples/audit-deal.test.ts examples/buyer-signer-addresses.test.ts`: 71 of 71 passed.
   - `examples/record-seller.test.ts`: its restart test now waits for the second run, up to 10 s, in place of a fixed 300 ms. The record retries the operator that is down for about 2 s first.
 - **The bundles:** `node site/build.mjs && node site/check.mjs` passes. Hashes, first 16 hex digits, before and after:
-  - `site/buy.mjs`: `e74ff2230f0d4fd4` to `02d708ee1821f1fa`.
-  - `site/setup.mjs`: `3b2b84e017df5679` to `c25ff65fc775ca73`.
+  - `site/buy.mjs`: `e74ff2230f0d4fd4` to `dacd061cce22b387`.
+  - `site/setup.mjs`: `3b2b84e017df5679` to `9fb75acbb37be682`.
   - `site/try.mjs`: `04ef4434fb4b5635`, unchanged.
   - Only dated records name the old hashes; no partner kit does (searched the public repository and crow-private's `design-partners/`, `control/` and `strategy/`).
 - `eslint` on the changed files and `tsc -p examples/tsconfig.json --noEmit`: no findings.
+- **Review:** one `reviewer` pass returned PASS with no blocking finding. Its three notes are fixed here:
+  - A ciphertext that no operator would serve now names its refused reads in `every read answered` (new test).
+  - `setup.ts`'s `writeRecord` keeps its 10 rereads but stops after 2 minutes on the live service, since a refused read now fails a check.
+  - A retried answer's body is cancelled before the wait.
+
+  After the fixes: the record tests 72 of 72; the setup tests (`setup-bundle`, `setup-list`, `setup-check`, `one-click-setup`) 104 of 104; the site check passes.
 
 ## Handoff
 
