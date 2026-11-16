@@ -197,8 +197,8 @@ export function goalCommand(name, sha = goalSha256(name)) {
 }
 /** The preflight's one command, in llms.txt as {{PREFLIGHT_COMMAND}}. */
 export const preflightCommand = (sha = goalSha256(PREFLIGHT.name)) => goalCommand(PREFLIGHT.name, sha);
-/** Each goal's command by its llms.txt placeholder. */
-export const goalCommands = () => Object.fromEntries(Object.entries(GOALS).map(([name, g]) => [g.placeholder, goalCommand(name)]));
+/** Each pinned command llms.txt carries beside try.mjs's, by its placeholder: the goals', then the preflight's (T-491). */
+export const goalCommands = () => ({ ...Object.fromEntries(Object.entries(GOALS).map(([name, g]) => [g.placeholder, goalCommand(name)])), [PREFLIGHT.placeholder]: preflightCommand() });
 
 /**
  * Three tools that site/setup.mjs carries run their own command line when the running file is their own: each ends in
@@ -955,7 +955,7 @@ export const ASSETS = ['crow.png', 'crow-2x.webp', 'crow-mark.svg', 'favicon.png
 export const CARD_SCHEMA = 'card.schema.json';
 
 /** The published files: placeholders filled, editor notes gone. */
-export function filled(md, { op1, op2, command = tryCommand(), goals = { ...goalCommands(), [PREFLIGHT.placeholder]: preflightCommand() } }) {
+export function filled(md, { op1, op2, command = tryCommand(), goals = goalCommands() }) {
   if (/^%% CONFIRM/m.test(md)) throw new Error('llms.txt still has "%% CONFIRM" notes: check each against the deployed API, fix the text, delete the note, then build again');
   const ok = (u) => typeof u === 'string' && /^https:\/\/[^\s/]+$/.test(u);
   if (!ok(op1) || !ok(op2)) throw new Error('--op1 and --op2 are https origins with no path and no trailing slash, e.g. https://holdback-op1.example.workers.dev');
