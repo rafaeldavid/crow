@@ -11040,35 +11040,79 @@ function lateWorkOf(events, settlement) {
 /** The one line the record prints for late work accepted by settlement. */
 const lateWorkLine = (w) => `The work was delivered late and accepted by a mutual settlement, which released its key${w.keyReleasedTo ? ` to ${w.keyReleasedTo}` : ""}; delivery hash ${w.deliveryHash ?? "not confirmed (pass your signed settlement and the delivery: --settlement <file> --delivery <file>)"}.`;
 /** GET from one operator: the parsed body on 2xx, the status otherwise, null when it does not answer in 15 s. */
-async function get(api, path) {
+/** Tries per read: a 429 waits the seconds it names (at most `maxWaitSec`), a 5xx or no answer waits `pauseMs`. */
+const RETRY = {
+	tries: 3,
+	maxWaitSec: 30,
+	pauseMs: 1e3
+};
+const refusedStatus = (s) => s === 429 || s >= 500;
+/** The wait a 429 names: the problem's `retryAfterSec`, else the Retry-After header, else 1 s; at most `maxWaitSec`. */
+async function waitOf(res) {
+	let sec = Number(res.headers.get("retry-after"));
 	try {
-		const res = await fetch(`${api}${path}`, { signal: AbortSignal.timeout(15e3) });
+		const p = await res.clone().json();
+		if (Number.isFinite(p?.retryAfterSec)) sec = Number(p.retryAfterSec);
+	} catch {}
+	return Math.min(Math.max(Number.isFinite(sec) && sec > 0 ? sec : 1, 0), RETRY.maxWaitSec) * 1e3;
+}
+/**
+* One GET with the retries above. The answer, or null when the operator never answered. A read still refused after its
+* tries (a 429, a 5xx or no answer) is added to `refused` as "<path> <what happened>", so the record can say so.
+*/
+async function fetchRead(url, path, refused) {
+	let last = null;
+	for (let i = 0; i < RETRY.tries; i++) {
+		let wait = RETRY.pauseMs;
+		try {
+			last = await fetch(url, { signal: AbortSignal.timeout(15e3) });
+			if (!refusedStatus(last.status)) return last;
+			if (last.status === 429) wait = await waitOf(last);
+		} catch {
+			last = null;
+		}
+		if (i < RETRY.tries - 1) await new Promise((r) => setTimeout(r, wait));
+	}
+	refused?.push(`${path.split("?")[0]} ${last ? `answered ${last.status}` : "did not answer"} after ${RETRY.tries} tries`);
+	return last;
+}
+/** GET from one operator: the parsed body on 2xx, the status otherwise, null when it does not answer. */
+async function get(api, path, refused) {
+	const res = await fetchRead(`${api}${path}`, path, refused);
+	if (!res) return null;
+	try {
 		return {
 			status: res.status,
 			body: res.ok ? await res.json() : null
 		};
 	} catch {
-		return null;
+		refused?.push(`${path.split("?")[0]} answered ${res.status} with a body that is not JSON`);
+		return {
+			status: res.status,
+			body: null
+		};
 	}
 }
 async function bytesFrom(api, path) {
+	const res = await fetchRead(`${api}${path}`, path);
 	try {
-		const res = await fetch(`${api}${path}`, { signal: AbortSignal.timeout(15e3) });
-		return res.ok ? new Uint8Array(await res.arrayBuffer()) : null;
+		return res?.ok ? new Uint8Array(await res.arrayBuffer()) : null;
 	} catch {
 		return null;
 	}
 }
 async function read(api, id, party, wantKey) {
-	const discovery = await get(api, "/.well-known/holdback.json");
-	const state = await get(api, `/v1/commitments/${id}`);
+	const refused = [];
+	const g = (path) => get(api, path, refused);
+	const discovery = await g("/.well-known/holdback.json");
+	const state = await g(`/v1/commitments/${id}`);
 	if (!discovery?.body || !state?.body) return null;
-	const terms = await get(api, `/v1/commitments/${id}/terms`);
+	const terms = await g(`/v1/commitments/${id}/terms`);
 	const page = async (path) => {
 		const items = [];
 		let cursor = null;
 		for (let i = 0; i < 50; i++) {
-			const r = await get(api, `${path}?limit=200${cursor ? `&cursor=${cursor}` : ""}`);
+			const r = await g(`${path}?limit=200${cursor ? `&cursor=${cursor}` : ""}`);
 			if (!r?.body || !Array.isArray(r.body.items)) break;
 			items.push(...r.body.items);
 			cursor = typeof r.body.nextCursor === "string" && CURSOR.test(r.body.nextCursor) ? r.body.nextCursor : null;
@@ -11078,7 +11122,7 @@ async function read(api, id, party, wantKey) {
 	};
 	const events = (await page(`/v1/commitments/${id}/events`)).sort((a, b) => a.seq - b.seq);
 	const receipts = await page(`/v1/commitments/${id}/receipts`);
-	const judgment = (await get(api, `/v1/commitments/${id}/judgment`))?.body ?? null;
+	const judgment = (await g(`/v1/commitments/${id}/judgment`))?.body ?? null;
 	const t = terms?.body ?? {};
 	const balances = {};
 	for (const role of [
@@ -11089,9 +11133,9 @@ async function read(api, id, party, wantKey) {
 	]) {
 		const at = lc(t[role]);
 		const signer = role === "buyerPaymentAddress" ? lc(t.buyer) : role === "sellerPayoutAddress" ? lc(t.seller) : null;
-		if (ADDRESS$1.test(String(t[role])) && at !== signer) balances[role] = (await get(api, `/v1/balances/${at}`))?.body ?? null;
+		if (ADDRESS$1.test(String(t[role])) && at !== signer) balances[role] = (await g(`/v1/balances/${at}`))?.body ?? null;
 	}
-	const key = wantKey && party === "buyer" && ADDRESS$1.test(String(t.buyer)) ? (await get(api, `/v1/commitments/${id}/key?recipient=${lc(t.buyer)}`))?.body?.items ?? null : null;
+	const key = wantKey && party === "buyer" && ADDRESS$1.test(String(t.buyer)) ? (await g(`/v1/commitments/${id}/key?recipient=${lc(t.buyer)}`))?.body?.items ?? null : null;
 	return {
 		api,
 		discovery: discovery.body,
@@ -11101,7 +11145,8 @@ async function read(api, id, party, wantKey) {
 		receipts,
 		judgment,
 		balances,
-		key
+		key,
+		refused
 	};
 }
 /** The ciphertext with this ID from the configured operators, `first` first, checked against the ID. */
@@ -11478,6 +11523,12 @@ async function dealRecord(id, o) {
 		ok: missing.length === 0,
 		...missing.length ? { why: `no answer from ${missing.join(", ")}` } : { how: `${operators.length} of ${operators.length} configured operators answered` }
 	}];
+	const refused = answered.flatMap((a) => a.refused.map((r) => `${a.api}: ${r}`));
+	checks.push({
+		check: "every read answered",
+		ok: refused.length === 0,
+		...refused.length ? { why: `${refused.join("; ")}. What those reads hold is missing from this record, so fields such as refundedTo may read null: run it again later` } : { how: `every read was answered, after at most ${RETRY.tries} tries each` }
+	});
 	const names = [...new Set([...views.values()].flatMap((v) => v.checks.map((c) => c.check)))];
 	for (const name of names) {
 		const per = [...views.entries()].map(([api, v]) => ({
