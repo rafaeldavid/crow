@@ -8,7 +8,6 @@
 - **Status:** done
 - **Agent/session:** the expo/exact review session, 2026-11-16, branch `n166-deploy-refresh`.
 - **Roadmap row:** N166
-- **Roadmap row:** N166
 - **Change kind:** 4 is the nearest (deploy scripts); 3 for the page.
 
 ## Intent
