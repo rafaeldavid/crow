@@ -5,8 +5,9 @@
 - **Depends on:** T-404 (the rebuilt page), T-454 (the build's skip rule)
 - **Paths this task may touch:** in holdback, `scripts/deploy-lib.mjs`, the five deploy entries (`site/deploy.mjs`, `apps/demo-cloud/scripts/deploy.mjs`, `apps/early-access/deploy.mjs`, `apps/test-agents/scripts/deploy.mjs`, `apps/hosted-sellers/scripts/deploy.ts`), `tests/deploy-refresh.test.ts` (new), the `gh` stand-ins in `apps/demo-cloud/src/deploy-preflight.test.ts` and `tests/site-deploy.test.ts`, one paragraph of `docs/operations.md`, this file. In crow-private, `control/console.html` and `control/test/fresh.test.mjs` (new), in its own pull request.
 - **Human gate:** the Crow Control Worker deploy that ships the page, Rafa's, given 2026-11-16 ("Yes, go ahead" to the plan).
-- **Status:** review
+- **Status:** done
 - **Agent/session:** the expo/exact review session, 2026-11-16, branch `n166-deploy-refresh`.
+- **Roadmap row:** N166
 - **Roadmap row:** N166
 - **Change kind:** 4 is the nearest (deploy scripts); 3 for the page.
 
@@ -34,4 +35,5 @@ All measured on 2026-11-16.
 ## Handoff
 
 - The page change reaches control.crow.direct only after the Crow Control Worker deploy: `npx wrangler@4.151.3 deploy --config reports/crow-private/control/wrangler.access.jsonc` (crow-private `control/README.md`).
-- Next on row N166: a plain "what it is" and "done when" for each open roadmap row, in the rows' `public.intent` and `public.doneWhen`, shown in the Work tab; and clearer labels where one does not stand alone.
+- Row N166's rest shipped in crow-private PRs 92 and 93, deployed 2026-11-16 as Worker version `fed96a77`: every open roadmap row carries a "What it is" and a "Done when", the Link inventory is grouped, rows the roadmap marks done read done, and "In flight" counts only rows with open work (merged work nothing closes has its own group, "merged, row open"). Measured on a local build from main at 13:26 UTC: 145 of 145 open rows described, 0 rows in flight with 0 open pull requests.
+- Nothing is left on this task.
