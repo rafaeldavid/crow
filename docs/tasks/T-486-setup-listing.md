@@ -15,7 +15,7 @@
   - `docs/operations.md`, "Deploy record": the entry for the site deploy of 2026-11-15, 11:24 UTC, which Rafa ran and which had no record line.
   - `docs/tasks/T-469-one-command-per-goal.md`: its status line, set to done. Pull request 578 merged on 2026-11-15 and the file still said review.
 - **Human gate:** yes, for two steps, both Rafa's to run: the deploy of the Worker `crow-early-access` with the new route, then the site deploy that publishes the new `setup.txt` and `setup.mjs`. The Worker goes first. The merge has no gate.
-- **Status:** review (built, reviewed once and red-teamed once, fixed and checked on a maintainer's machine on 2026-11-15; committed on `t-486-setup-listing`, not pushed: the coordinator opens the pull request)
+- **Status:** done (pull request 590, merged 2026-11-15 as `c6de351c`; the sign-up Worker serves `/listing` since its deploy of 15:29 UTC that day, read from `join.crow.direct/version.json`)
 - **Agent/session:** a sub-session of the coordinator, 2026-11-15, branch `t-486-setup-listing`. Phase A wrote this file and the decision and stopped. Phase B built it, with one change from Rafa while it was being built: the request carries the website alone. A fix round followed the reviewer's and the red team's passes.
 - **Roadmap row:** N162
 - **Change kind:** 4 is the nearest recipe (client code in `examples/` and a Worker route), with 1 (an agent guide in `site/`). Local checks: `pnpm exec vitest run examples/setup apps/test-agents/src/setup.test.ts tests/early-access-listing.test.ts tests/listing-check.test.ts tests/site-guides.test.ts tests/metrics`, `node site/build.mjs && node site/check.mjs`, `pnpm typecheck`, `eslint` on the changed sources.

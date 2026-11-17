@@ -5,7 +5,7 @@
 - **Depends on:** T-491 (the first-deal report and the live report route)
 - **Paths this task may touch:** `site/ref/limits.txt`, this file.
 - **Human gate:** the site deploy, Rafa's.
-- **Status:** review
+- **Status:** done (pull request 597, merged 2026-11-16 as `ee3adb3d`; live since the site deploy of 09:56 UTC)
 - **Agent/session:** the expo/exact review session, 2026-11-16, branch `t-493-self-report`.
 - **Roadmap row:** N165
 - **Change kind:** 1 (an agent page).

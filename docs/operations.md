@@ -11,8 +11,9 @@ The standing runbook comes first and points to the source of each value: the dep
 | https://crow.direct (and `www.`) | The site: the landing page from Rafa's mock (D56), early access, the Try line; agent docs at `/llms.txt` | `site/` (`site/llms.txt` is the one source; `site/build.mjs` renders the page) | Cloudflare Worker `crow-site`, static assets behind `apps/site/worker.js` (`apps/site/wrangler.jsonc`) |
 | https://api.crow.direct | Operator node 1, home of the World Durable Object (the faucet, the adjudicators and the operators' view), which settles on Ethereum Sepolia since 2026-11-03 (D41; SimChain on a rollback) | `apps/demo-cloud/` (wraps `apps/operator`, `packages/settlement/sim`, `apps/adjudicator`) | Worker `holdback-op1` (`apps/demo-cloud/wrangler.op1.jsonc`) |
 | https://api2.crow.direct | Operator node 2, same world, own receipt key | same | Worker `holdback-op2` (`wrangler.op2.jsonc`) |
-| https://join.crow.direct | Early-access email sign-ups (KV `EMAILS`: address, time, page; nothing else) | `apps/early-access/` | Worker `crow-early-access`, one KV namespace for both hostnames |
-| https://crow.direct/agents/test-seller | Crow's test seller (D47, T-222): a standing party that sells one test dataset over the operators' public API. Live since 2026-11-04 (T-222 Evidence). Since T-489 it also answers quotes at `/agents/test-seller/quote`, with its terms at `/defaults`, for a buyer that follows `buy.txt` (the setup's sample product, 1 tUSDC, checks only); live once Rafa deploys the Worker. Beside it, at `/agents/test-buyer`, Crow's test buyer (T-239), live since 2026-11-11 | `apps/test-agents/` (reuses `examples/agent.ts` and `verify.ts`) | Worker `crow-test-agents` on the route `crow.direct/agents/test-seller*` (`apps/test-agents/wrangler.jsonc`) |
+| https://join.crow.direct | Early-access email sign-ups (KV `EMAILS`: address, time, page; nothing else). Since 2026-11-15 also `/listing` (T-486), which takes a party's website after its first deal, in the same store; the request carries the website and nothing else | `apps/early-access/` | Worker `crow-early-access`, one KV namespace for both hostnames |
+| https://crow.direct/agents/test-seller | Crow's test seller (D47, T-222): a standing party that sells one test dataset over the operators' public API. Live since 2026-11-04 (T-222 Evidence). Since T-489 it also answers quotes at `/agents/test-seller/quote`, with its terms at `/defaults`, for a buyer that follows `buy.txt` (the setup's sample product, 1 tUSDC, checks only), live since the deploy of 2026-11-16. Beside it, at `/agents/test-buyer`, Crow's test buyer (T-239), live since 2026-11-11 | `apps/test-agents/` (reuses `examples/agent.ts` and `verify.ts`) | Worker `crow-test-agents` on the route `crow.direct/agents/test-seller*` (`apps/test-agents/wrangler.jsonc`) |
+| https://crow.direct/agents/pilot-scan-1 and `/agents/pilot-scan-2` | The first pilot's two hosted sellers (ADR-0037, T-435, T-436), each a Worker with one Durable Object; `/health` reads `operational` with its configuration's SHA-256 and the deals in flight | `apps/hosted-sellers/`, built from a frozen seller folder | Workers `crow-seller-pilot-scan-1` and `crow-seller-pilot-scan-2` (`apps/hosted-sellers/scripts/deploy.ts`) |
 | Ethereum Sepolia (chain 11155111) | The phase-one contracts and their tUSDC test token, which the live demo settles on since the cutover of 2026-11-13 (below). Earlier deployments still settle the deals opened on them | `contracts/src/` at the record's `commit`; addresses and margins in `contracts/deployments/sepolia.json`, the EIP-712 domain in each node's `/v1/status`; earlier deployments in the dated records beside it (`sepolia-<date>-domain-<version>.json`) | `contracts/script/deploy-sepolia.sh` (T-206, T-383), with a throwaway deployer key |
 | escrow.stream, www.escrow.stream, join.escrow.stream, escrow.stream/agents/test-seller | The old hostnames, kept while the forwarding runs (T-312): the site answers with a 301 to the same path on crow.direct, sign-ups and the test seller with a 308 (a browser sign-up from an old page is served in place). api.escrow.stream and api2.escrow.stream are not redirected: the operators serve both hostnames | `apps/site/worker.js`, `apps/early-access/worker.js`, `apps/test-agents/src/worker.ts` | the same Workers, with the old hostnames as extra Custom Domains and routes |
 | npc.here.now/escrow | Old address; a redirect to escrow.stream, which forwards to crow.direct | `reports/redirect/` (not in git) | here.now; no further publishing needed |
@@ -305,6 +306,30 @@ The maintainers keep the notes on agent sessions and permission prompts privatel
 ## Deploy record
 
 Each entry records one deploy as it ran: the date and time in UTC, the commit, each Worker's new version and its rollback target, and what was measured after it. The deploy scripts print the entry's first line (`pnpm demo-cloud:deploy`, `pnpm site:deploy`, `node apps/test-agents/scripts/deploy.mjs`). The values are true for their date: for what runs now, read "What is live" above and each node's discovery.
+
+### The lost-answer retry and the try path's fixes (site deployed 2026-11-17, 05:51 UTC)
+
+**Site deploy 2026-11-17 05:51 UTC, commit `7a75f7d8`: pass.** crow-site `388eb4be-2f72-4401-a6d4-738d93a47e9d` (rollback target `ce62448c-7bbe-42c9-86e4-0bec01bd85cc`).
+
+It published T-497's retry (`buy.mjs` changed hash on Rafa's word) and carried T-495's and T-496's try path (pull requests 600 and 602). Measured after it: all seven bundles on crow.direct hash as on `main`, and `version.json` names `7a75f7d8` (T-497 Evidence). The rollback target `ce62448c` is a site version deployed between 2026-11-16 09:56 UTC and this deploy; no record line was kept for it.
+
+### The preflight, the deal-record fix, the report route and the self-report form (deployed 2026-11-16)
+
+**Site deploy 2026-11-16 06:32 UTC, commit `39b2d1c` on branch `main`: pass.** crow-site `6a5976d7-db12-4715-9c42-a6c5fa493af9` (rollback target `e1459b15-d49a-4bee-a4a0-ac38c5fe8416`). It published T-491's preflight and T-489's `buy.txt`.
+
+**Site deploy 2026-11-16 07:43 UTC, commit `32cf4fe` on branch `main`: pass.** crow-site `6bebc651-5d60-405f-a2ad-9b03bfcffd22` (rollback target `6a5976d7-db12-4715-9c42-a6c5fa493af9`). It published T-492's deal-record fix.
+
+**Deploy 2026-11-16 07:55 UTC, commit `52d4f19` on branch `main`: pass.** holdback-op1 `dc0373ee-f2b2-4c38-84de-98349e4c2dee` (rollback target `c153aaad-b36f-4e37-ad57-7220cfc56ccf`), holdback-op2 `14f9d594-cde1-477f-9198-7f5102538eab` (rollback target `19869e39-396f-4a3c-a0f2-14901b125e26`). It binds the `FEEDBACK` store on operator 1 (T-491, pull request 594). A smoke deal Released in 42 s; discovery lists `feedback`, and one test report was received and listed.
+
+**Site deploy 2026-11-16 08:02 UTC, commit `52d4f19` on branch `main`: pass.** crow-site `f09588d7-6abf-465d-9bf3-a96882523b8e` (read from `crow.direct/version.json`).
+
+**Test seller deploy 2026-11-16 08:27 UTC, commit `52d4f19`: pass.** crow-test-agents `6d849e88-c10d-461e-a88c-5a5a06e7b9ab` (rollback target `46286cb7-c7f8-41a1-99bd-d42c3517dedd`). It published T-489's quote route. The seller and the buyer read `operational` 1 s after the upload.
+
+**Site deploy 2026-11-16 09:56 UTC, commit `ee3adb3` on branch `main`: pass.** crow-site `bef9ceb9-041e-4518-b31c-c5794f667891` (rollback target `f09588d7-6abf-465d-9bf3-a96882523b8e`). It published T-493's self-report form in `ref/limits.txt`.
+
+### The listing route on the sign-up Worker (deployed 2026-11-15, 15:29 UTC)
+
+**Sign-up Worker deploy 2026-11-15 15:29 UTC, commit `0b2bf7b`: pass.** crow-early-access `ddd45aa9-c8f8-4036-a41e-890e487eae59`, read from `join.crow.direct/version.json`; no rollback target was recorded. Measured on 2026-11-17: `/listing` answers 405 with `allow: POST`, as T-486's Handoff expects. The site version `e1459b15`, live before 2026-11-16 06:32 UTC, has no record line.
 
 ### The two pilot hosted sellers, pilot-scan-1 and pilot-scan-2 (first deploys 2026-11-15, 12:23 and 12:24 UTC; secrets 2026-11-16)
 

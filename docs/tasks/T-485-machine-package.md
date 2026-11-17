@@ -5,7 +5,7 @@
 - **Depends on:** T-484 (the decision record, crow-private `strategy/2026-11-15-dev-infrastructure-decision.md`); T-480 (the keys' move to 1Password: `config/secrets/`, `scripts/secrets/`)
 - **Paths this task may touch:** `infra/dev-host/`, `infra/party/`, `config/secrets/dev-host.refs`, `scripts/secrets/refs.mjs` and `scripts/secrets/copy.mjs` (one rule each: a second vault for `dev-host.refs` only; Decisions, 1), `tests/secrets-refs.test.ts`, `tests/infra-*.test.ts`, `docs/operations.md` (one section, "Machines"), this file. In crow-private: `company-ops/dev-host/README.md`, `company-ops/dev-host/keys.md`.
 - **Human gate:** yes. Rafa reviews and approves both pull requests himself: he runs these files as administrator and with his keys. Agents do not merge them. Every real run (the Mac mini's setup, the team test, a party machine) is his.
-- **Status:** review
+- **Status:** done (pull request 583, merged 2026-11-15 as `7bc91f05`, with crow-private pull request 88). The development host's check, the red-team pass and the audit's fixes are not done; how they get done is Rafa's decision (roadmap row N161)
 - **Agent/session:** a sub-session of the coordinator, 2026-11-15
 - **Roadmap row:** N161
 - **Change kind:** infrastructure that carries secrets and access. Local checks: `shellcheck`, `bash -n`, `pnpm exec vitest run tests/infra-dev-host.test.ts tests/infra-party.test.ts tests/secrets-refs.test.ts tests/secrets-scripts.test.ts`, ESLint on the new files. One `reviewer` pass and one `red-teamer` pass.

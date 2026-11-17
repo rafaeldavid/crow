@@ -84,12 +84,12 @@ Every change must pass three litmus tests (`CLAUDE.md`):
 
 ## Status
 
-As of 2026-11-13:
+As of 2026-11-17:
 
 - **Live: the phase-one contracts on Sepolia,** since the cutover of 2026-11-13 ([`docs/operations.md`](docs/operations.md) has the dated record). The contracts drop what is not in phase one (party appeals, bonds, Permit2 funding, other tokens and payouts to third addresses) and add the buyer's payment address and the seller's payout address (ADR-0031, ADR-0032 and ADR-0033). The two operator nodes, the test seller and buyer, and the site all run on them. Addresses, the deployed commit and the margins are fields of [`contracts/deployments/sepolia.json`](contracts/deployments/sepolia.json); the live schema version and EIP-712 domain are in each node's `/v1/status`.
 - **Frozen for an audit:** the tag `contracts-phase-one-1`, whose `contracts/src` equals the record's `commit`. [`docs/audit/scope.md`](docs/audit/scope.md) is the audit's starting point. The version with the audit's fixes will be `contracts-phase-one-2`.
 - **Done: Phase 1** (2026-11-01): the walking skeleton on SimChain, the narrated demo and the HTTP API on two operator nodes. **Met: Phase 2's exit criteria** (D54): settlement on EVM (the Ethereum virtual machine), with the public demo on Sepolia. `docs/plan.md` lists each phase's tasks and records each criterion.
-- **Next:** the pilots' cases rehearsed on the new deployment, then an external audit.
+- **Running: the first pilot.** Its cases were rehearsed on the new deployment, and its first real deal on Sepolia was funded on 2026-11-17, through a hosted seller (`docs/operations.md`, What is live). **Next:** the pilot's deals to Released, then an external audit.
 - **Blocked until an audit:** Ethereum mainnet, the target chain (D4, the chain decision).
 - **Costs and counts:** the gas of each deal step is in its Sepolia receipts; the cutover's smoke deal and round are in the dated record in `docs/operations.md`, and `pnpm metrics:ops-cost` estimates a deal's cost from the operators' public event log. The demo charges no operator fee for the first pilots and pays the gas itself (discovery's `fees.operator`). `pnpm snap` runs every scenario in `fixtures/scenarios/`, and `forge test` every contract test, in CI on each pull request; the CI log gives today's counts.
 - **Limits,** as "Honest limits" in https://crow.direct/ref/limits.txt lists them:
