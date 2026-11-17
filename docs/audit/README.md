@@ -173,13 +173,7 @@ This section is a dated record. The deployment record, [`contracts/deployments/s
 
 ### Deployment on Sepolia (chain ID 11155111) [measured: `sepolia.json`; Sourcify's API v2]
 
-| Contract | Address | Sourcify |
-| --- | --- | --- |
-| HoldbackRules | `0x3BE45128565ABBc35DbD4660716b703Ff489f1b4` | [exact match](https://repo.sourcify.dev/11155111/0x3BE45128565ABBc35DbD4660716b703Ff489f1b4) |
-| DrandQuicknetBeacon | `0x1Eca7edB6531231C73fA0eb875816cEBd70c0645` | [exact match](https://repo.sourcify.dev/11155111/0x1Eca7edB6531231C73fA0eb875816cEBd70c0645) |
-| AuthCaptureEscrow | `0x8ef2b0Bc9304Fd4D506b5410B35Cc1e2D2BB4357` | [exact match](https://repo.sourcify.dev/11155111/0x8ef2b0Bc9304Fd4D506b5410B35Cc1e2D2BB4357) |
-| ERC3009PaymentCollector | `0x959CA9929ea2c47c6390199Ab07639F307c0e3ef` | [exact match](https://repo.sourcify.dev/11155111/0x959CA9929ea2c47c6390199Ab07639F307c0e3ef) |
-| TestUSDC (tUSDC, out of scope) | `0x0b3d947f594B59Fc1Fb7D02E62C6795F8118cA6D` | [exact match](https://repo.sourcify.dev/11155111/0x0b3d947f594B59Fc1Fb7D02E62C6795F8118cA6D) |
+The five contracts' addresses (HoldbackRules, DrandQuicknetBeacon, AuthCaptureEscrow, ERC3009PaymentCollector and TestUSDC, which is out of scope) are in `contracts/deployments/sepolia.json`, which `examples/deployments.ts` (`SEPOLIA`) carries. Each is an exact match on Sourcify at `https://repo.sourcify.dev/11155111/<address>`.
 
 - Each address on Etherscan: `https://sepolia.etherscan.io/address/<address>#code`. Etherscan's verification state was not read: the site refuses scripted requests. Blockscout reports `HoldbackRules` verified [measured].
 - Constructor arguments of `HoldbackRules`, in order: the escrow, the collector, an expiry margin of 86,400 s, the beacon, the token, and a beacon margin of 29 s (the record's `contracts.HoldbackRules.args`).
