@@ -237,6 +237,15 @@ describe('an existing job for a new deal (T-501)', () => {
     expect(stub!.requests.some((r) => r.path.endsWith('/done-7'))).toBe(false);
   }, 45_000);
 
+  it('refuses every existing job when jobScope leaves out a scope field the start sends (T-501 red team)', async () => {
+    const { running } = await adapter({ seedRuns: [{ id: 'shallow-1', input: { target: 'vault-core', depth: 1 }, workspace: WS }] }, (b) => api(b, { jobScope: { target: '/run/input/target' } }));
+    const { id } = await quote(running, 'buyer-2');
+    const res = await name(running, id, { jobId: 'shallow-1', existing: true });
+    const body = (await res.json()) as J;
+    expect([res.status, body.type]).toEqual([409, 'cannot_check']);
+    expect(body.detail).toContain('sellerApi.result.jobScope must also name depth, which the start sends');
+  }, 45_000);
+
   it('moves a job from a refused deal only when the request names that deal, and closes it', async () => {
     const { running } = await adapter({ seedRuns: seeded, notesStatus: 500 });
     const first = await quote(running, 'buyer-1');

@@ -145,6 +145,8 @@ export interface SellerApi {
    * and a pinned workspace has its `resultPointer`. Without both, no existing job is taken for a deal.
    */
   checksJob: boolean;
+  /** When `checksJob` is false: what the configuration lacks, for the route's refusal. */
+  checksJobNot: string;
 }
 
 const PLACEHOLDER = /\{\{([A-Za-z][A-Za-z0-9]*)(?:\.([A-Za-z][A-Za-z0-9]*))?\}\}/g;
@@ -549,7 +551,18 @@ export function sellerApiClient(api: J, env: Readonly<Record<string, string | un
       return [k, pointerParts(`sellerApi.result.jobScope.${k}`, p)];
     });
   }
-  const checksJob = jobScope !== undefined && (!workspace || workspace.resultAt !== undefined);
+  // T-501 red team: an existing job stands in for the start, so jobScope must cover every scope field the start sends,
+  // and the start may send no options, which no pointer compares. `{{scope}}` whole sends every field.
+  const startText = JSON.stringify({ url: start.url, headers: start.headers, body: start.body ?? null });
+  const startScope = new Set<string>();
+  let startOptions = false;
+  for (const [, n, f] of startText.matchAll(PLACEHOLDER)) {
+    if (n === 'scope') for (const x of f === undefined ? fields.scope : [f]) startScope.add(x);
+    if (n === 'options') startOptions = true;
+  }
+  const uncovered = [...startScope].filter((k) => !jobScope?.some(([j]) => j === k));
+  const checksJob = jobScope !== undefined && uncovered.length === 0 && !startOptions && (!workspace || workspace.resultAt !== undefined);
+  const checksJobNot = jobScope === undefined ? 'set sellerApi.result.jobScope' : uncovered.length ? `sellerApi.result.jobScope must also name ${uncovered.map(short).join(', ')}, which the start sends` : startOptions ? 'the start sends options, which jobScope cannot compare' : 'set sellerApi.workspace.resultPointer with a pinned workspace';
 
   const strict = base !== undefined; // a mapping or a credential: no redirects, and answers capped
   const send = async (p: Prepared, given: Values, extra: Record<string, string> = {}, cap: number | undefined = strict ? DELIVERY_CAP_BYTES : undefined): Promise<{ status: number; bytes: Uint8Array }> => {
@@ -595,6 +608,7 @@ export function sellerApiClient(api: J, env: Readonly<Record<string, string | un
     readsToken,
     startRepeatable,
     checksJob,
+    checksJobNot,
     ...(startOneShotBecause ? { startOneShotBecause } : {}),
     describe: `The seller API is ${base ? `under ${base.href}` : 'at the three configured addresses'}, with ${auth ? `a credential from ${auth.env} in header ${auth.header}` : 'no credential'}${unitsAt !== undefined ? `; a quote prices ${plain(unitsAt)} units at ${unitPrice} base units each` : ''}; its job state is read by ${status.by === 'http' ? 'HTTP status' : 'a status field'}${files ? `, and a result's further files are added at ${plain(rm.files.into)}` : ''}${merge ? `; once the job is done, the artifacts call adds its answer at ${plain(rm.merge.into)}` : ''}${jobScope ? `; a job whose request names another ${jobScope.map(([k]) => plain(k)).join(', ')} than the deal's is not delivered` : ''}${workspace ? `; every quote and start runs in the pinned workspace${workspace.resultAt ? ', and a result from another is not delivered' : ''}` : ''}.`,
 

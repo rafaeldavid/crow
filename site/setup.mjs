@@ -56440,7 +56440,20 @@ function sellerApiClient(api, env, fields) {
 			return [k, pointerParts(`sellerApi.result.jobScope.${k}`, p)];
 		});
 	}
-	const checksJob = jobScope !== void 0 && (!workspace || workspace.resultAt !== void 0);
+	const startText = JSON.stringify({
+		url: start.url,
+		headers: start.headers,
+		body: start.body ?? null
+	});
+	const startScope = /* @__PURE__ */ new Set();
+	let startOptions = false;
+	for (const [, n, f] of startText.matchAll(PLACEHOLDER$1)) {
+		if (n === "scope") for (const x of f === void 0 ? fields.scope : [f]) startScope.add(x);
+		if (n === "options") startOptions = true;
+	}
+	const uncovered = [...startScope].filter((k) => !jobScope?.some(([j]) => j === k));
+	const checksJob = jobScope !== void 0 && uncovered.length === 0 && !startOptions && (!workspace || workspace.resultAt !== void 0);
+	const checksJobNot = jobScope === void 0 ? "set sellerApi.result.jobScope" : uncovered.length ? `sellerApi.result.jobScope must also name ${uncovered.map(short).join(", ")}, which the start sends` : startOptions ? "the start sends options, which jobScope cannot compare" : "set sellerApi.workspace.resultPointer with a pinned workspace";
 	const strict = base !== void 0;
 	const send = async (p, given, extra = {}, cap = strict ? DELIVERY_CAP_BYTES : void 0) => {
 		const v = {
@@ -56497,6 +56510,7 @@ function sellerApiClient(api, env, fields) {
 		readsToken,
 		startRepeatable,
 		checksJob,
+		checksJobNot,
 		...startOneShotBecause ? { startOneShotBecause } : {},
 		describe: `The seller API is ${base ? `under ${base.href}` : "at the three configured addresses"}, with ${auth ? `a credential from ${auth.env} in header ${auth.header}` : "no credential"}${unitsAt !== void 0 ? `; a quote prices ${plain$4(unitsAt)} units at ${unitPrice} base units each` : ""}; its job state is read by ${status.by === "http" ? "HTTP status" : "a status field"}${files ? `, and a result's further files are added at ${plain$4(rm.files.into)}` : ""}${merge ? `; once the job is done, the artifacts call adds its answer at ${plain$4(rm.merge.into)}` : ""}${jobScope ? `; a job whose request names another ${jobScope.map(([k]) => plain$4(k)).join(", ")} than the deal's is not delivered` : ""}${workspace ? `; every quote and start runs in the pinned workspace${workspace.resultAt ? ", and a result from another is not delivered" : ""}` : ""}.`,
 		async quote(v) {
@@ -57576,6 +57590,8 @@ async function createSellerAdapter(c, env, io) {
 	const save = () => io.saveJournal(journal);
 	/** T-501: deals whose named existing job the job route is reading now. Their start waits until the read ends. */
 	const attaching = /* @__PURE__ */ new Set();
+	/** T-501 review: deals the deal loop is working on now. The job route moves no job out of one of them. */
+	const advancing = /* @__PURE__ */ new Set();
 	let eventsBroken = false;
 	const emit = (type, fields) => {
 		if (!io.appendEvent) return;
@@ -58265,6 +58281,7 @@ async function createSellerAdapter(c, env, io) {
 				}, why);
 			}
 			const attempt = (deal.refusals ?? 0) + 1;
+			if (deal.jobMovedTo !== void 0 || deal.stage === "closed") return;
 			record(deal, {
 				stage: "delivering",
 				ready: false,
@@ -58314,6 +58331,7 @@ async function createSellerAdapter(c, env, io) {
 	}
 	/** Records a refused result and alerts the seller once for each distinct result. The delivery waits. */
 	function refuse(deal, now, resultSha256, detail, why) {
+		if (deal.jobMovedTo !== void 0) return;
 		const deliverBy = deal.terms.timing.deliverBy;
 		const every = refusal.refetchEverySec;
 		const nextFetchAt = every === void 0 ? void 0 : new Date(now + every * 1e3).toISOString();
@@ -58390,6 +58408,7 @@ async function createSellerAdapter(c, env, io) {
 				"refused",
 				"delivering"
 			].includes(deal.stage)) continue;
+			advancing.add(deal.id);
 			try {
 				await advance(deal, passNow, full);
 				lastError.delete(deal.id);
@@ -58397,6 +58416,8 @@ async function createSellerAdapter(c, env, io) {
 				const message = plain$4(e.message);
 				if (!closed && lastError.get(deal.id) !== message) log(`${deal.id} waits at ${deal.stage}: ${message}. The adapter tries again at the next poll.`);
 				lastError.set(deal.id, message);
+			} finally {
+				advancing.delete(deal.id);
 			}
 		}
 	}
@@ -58503,7 +58524,7 @@ async function createSellerAdapter(c, env, io) {
 			detail: "this adapter holds no such deal"
 		});
 		/** The other deal that holds the job, by its started job or its named existing one. */
-		const holderOf = (job) => Object.values(journal.deals).find((d) => d.id !== deal.id && (d.jobId === job || d.existingJob?.jobId === job));
+		const holderOf = (job) => Object.values(journal.deals).find((d) => d.id !== deal.id && d.jobMovedTo === void 0 && (d.jobId === job || d.existingJob?.jobId === job));
 		if (existing === true) return existingJobNamed(deal, jobId, fromRaw === void 0 ? void 0 : fromRaw.toLowerCase(), holderOf);
 		if (deal.stage !== "start-unknown") return send(409, {
 			type: "not_waiting",
@@ -58546,7 +58567,7 @@ async function createSellerAdapter(c, env, io) {
 		});
 		if (!sellerApi.checksJob) return send(409, {
 			type: "cannot_check",
-			detail: "this seller cannot check an existing job: set sellerApi.result.jobScope, and sellerApi.workspace.resultPointer with a pinned workspace"
+			detail: `this seller cannot check an existing job: ${sellerApi.checksJobNot}`
 		});
 		const taken = () => {
 			const holder = holderOf(jobId);
@@ -58561,6 +58582,10 @@ async function createSellerAdapter(c, env, io) {
 			if (holder.stage !== "refused" && holder.stage !== "closed") return send(409, {
 				type: "job_taken",
 				detail: `job ${jobId} belongs to deal ${holder.id}, which is ${holder.stage}: a job moves only from a refused or closed deal`
+			});
+			if (advancing.has(holder.id)) return send(409, {
+				type: "holder_busy",
+				detail: `deal ${holder.id} is being worked on now; send the request again in a few seconds`
 			});
 		};
 		const before = taken();
@@ -58612,18 +58637,18 @@ async function createSellerAdapter(c, env, io) {
 		const after = taken();
 		if (after) return after;
 		const holder = from === void 0 ? void 0 : holderOf(jobId);
+		deal.existingJob = {
+			jobId,
+			...holder ? { from: holder.id } : {},
+			at: (/* @__PURE__ */ new Date()).toISOString()
+		};
 		if (holder) record(holder, {
 			stage: "closed",
 			ready: false,
 			jobMovedTo: id,
 			note: `its job ${jobId} moved to deal ${id}, named by the seller's operator; this deal delivers nothing, and its buyer may reclaim the hold after deliverBy ${holder.terms.timing.deliverBy}`
 		});
-		deal.existingJob = {
-			jobId,
-			...holder ? { from: holder.id } : {},
-			at: (/* @__PURE__ */ new Date()).toISOString()
-		};
-		save();
+		else save();
 		log(`${id} job ${jobId} is named as an existing job by the seller's operator${holder ? `, moved from deal ${holder.id}` : ""}; once funded, the deal follows it and sends no start.`);
 		emit("job.attached", {
 			commitmentId: id,

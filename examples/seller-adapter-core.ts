@@ -1533,7 +1533,7 @@ export async function createSellerAdapter(c: SellerAdapterConfig, env: Readonly<
       // settlement layer first, so the adapter never delivers twice.
       const attempt = (deal.refusals ?? 0) + 1;
       // T-501 review: a deal whose job moved to another deal delivers nothing, whatever this pass read before.
-      if (deal.jobMovedTo !== undefined || deal.stage === 'closed') return;
+      if (deal.jobMovedTo !== undefined || (deal.stage as Stage) === 'closed') return;
       record(deal, { stage: 'delivering', ready: false, note: `delivering ${pre.bytes} bytes, ${pre.plaintextSha256}` });
       await (remote ? remoteDeliver(deal, bytes) : signerOf(deal).deliver(deal.terms, bytes));
       record(deal, { stage: 'delivered', note: `${pre.bytes} bytes, ${pre.plaintextSha256}` });
@@ -1722,7 +1722,7 @@ export async function createSellerAdapter(c: SellerAdapterConfig, env: Readonly<
     if (deal.stage !== 'offered') return send(409, { type: 'not_waiting', detail: `the deal is ${deal.stage}: an existing job is named only before the deal is funded, while no start has been sent` });
     const named = deal.existingJob?.jobId ?? (attaching.has(id) ? '(being checked)' : undefined);
     if (named !== undefined) return send(409, { type: 'already_named', detail: `the deal already has job ${named} named` });
-    if (!sellerApi.checksJob) return send(409, { type: 'cannot_check', detail: 'this seller cannot check an existing job: set sellerApi.result.jobScope, and sellerApi.workspace.resultPointer with a pinned workspace' });
+    if (!sellerApi.checksJob) return send(409, { type: 'cannot_check', detail: `this seller cannot check an existing job: ${sellerApi.checksJobNot}` });
     const taken = (): Response | undefined => {
       const holder = holderOf(jobId);
       if (!holder) return from === undefined ? undefined : send(409, { type: 'not_holder', detail: `deal ${from} does not hold job ${jobId} in this journal` });
@@ -1756,9 +1756,10 @@ export async function createSellerAdapter(c: SellerAdapterConfig, env: Readonly<
     const after = taken();
     if (after) return after;
     const holder = from === undefined ? undefined : holderOf(jobId);
-    if (holder) record(holder, { stage: 'closed', ready: false, jobMovedTo: id, note: `its job ${jobId} moved to deal ${id}, named by the seller's operator; this deal delivers nothing, and its buyer may reclaim the hold after deliverBy ${holder.terms.timing.deliverBy}` });
+    // Both deals change in one journal write (T-501 red team): a crash leaves the job with one of them, never neither.
     deal.existingJob = { jobId, ...(holder ? { from: holder.id } : {}), at: new Date().toISOString() };
-    save();
+    if (holder) record(holder, { stage: 'closed', ready: false, jobMovedTo: id, note: `its job ${jobId} moved to deal ${id}, named by the seller's operator; this deal delivers nothing, and its buyer may reclaim the hold after deliverBy ${holder.terms.timing.deliverBy}` });
+    else save();
     log(`${id} job ${jobId} is named as an existing job by the seller's operator${holder ? `, moved from deal ${holder.id}` : ''}; once funded, the deal follows it and sends no start.`);
     emit('job.attached', { commitmentId: id, from: holder?.id ?? null });
     wake();

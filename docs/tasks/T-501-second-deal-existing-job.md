@@ -5,7 +5,7 @@
 - **Depends on:** T-435 (the workspace guard), T-408 (naming a job), T-366 (the seller API mapping)
 - **Paths this task may touch:** `examples/seller-adapter-api.ts`, `examples/seller-adapter-core.ts`, `examples/seller-adapter-job-stub.ts`, `examples/seller-adapter-existing-job.test.ts` (new), `site/ref/seller-adapter.txt` (the two fields and the route), `site/setup.mjs` (rebuilt: it bundles the adapter core), this file.
 - **Human gate:** yes. Every live step waits for Rafa: the redeploy of `pilot-scan-1`, the new quote and funding on the buyer's machine, naming the job, and the record.
-- **Status:** in progress
+- **Status:** review
 - **Agent/session:** the second-deal session, 2026-11-17, branch `t-501-second-deal`.
 - **Roadmap row:** N88
 - **Change kind:** 5 by risk (the seller's workspace guard and its start logic move money and spend the partner's credits): the examples' tests, one review pass and one red-team pass.
@@ -41,15 +41,27 @@ A configuration that cannot run both checks, with no `jobScope` or a pinned work
 
 ## Acceptance criteria
 
-- [ ] Tests fail without the change: the artifacts call, the existing job and every refusal below.
-- [ ] The artifacts call runs only after the workspace check, answers 2xx, and stays under the cap.
-- [ ] An existing job is delivered with no start call; one from another workspace or another scope, a running one, and one held by another deal are refused; the route needs the ready credential.
-- [ ] The local proof on the real export, kept out of every tracked file: the corrected folder releases the new deal with no start, and the old folder on the new code still refuses.
+- [x] Tests fail without the change: the artifacts call, the existing job and every refusal below.
+- [x] The artifacts call runs only after the workspace check, answers 2xx, and stays under the cap.
+- [x] An existing job is delivered with no start call; one from another workspace or another scope, a running one, and one held by another deal are refused; the route needs the ready credential.
+- [x] The local proof on the real export, kept out of every tracked file: the corrected folder releases the new deal with no start, and the old folder on the new code still refuses.
 
 ## Evidence
 
-Fill this in before review. Label each item measured, inferred or guessed.
+- **Test first** [measured]: `examples/seller-adapter-existing-job.test.ts` failed 14 of 14 on `origin/main` (`b7ff63f2`) with the stub change alone. After the review and the red team it holds 16 tests, which pass. `vitest run examples/seller-adapter apps/hosted-sellers`: 9 files, 162 tests, pass.
+- **Review and red team** [measured]: one Opus review pass and one Opus red-team pass. Both found that a closed deal kept counting as a moved job's holder, so a stale `from` gave one job to two deals (High, reproduced by both). The red team also found that a refused deal part-way through a refetch could deliver after its job moved (High, reproduced). Both are fixed in `9881e4d1`, with a third-deal test. Also fixed: `jobScope` must cover every scope field the start sends, and the start may send no options (Medium); the two deals of a move change in one journal write (Low); a test for the size cap (Low). `pnpm typecheck` and ESLint on the changed files: clean.
+- **The site** [measured]: `site/setup.mjs` bundles the adapter core, so `node site/build.mjs` rebuilt it; `node site/check.mjs` passes. Its published hash changes at the next site deploy, Rafa's.
+- **The local proof with the partner's real export** [measured, 2026-11-17 15:18 to 15:22 UTC]: run from the private kit (`rehearsal/hosted-kit-run.ts`, Cloudflare's local runtime, SimChain, test tokens, the export kept in git-ignored scratch files). The corrected seller folder released a new deal with the finished job, 1 quote call and 0 start calls at the stand-in. Before funding, naming a job in another workspace answered 409 `wrong_workspace`, one of another commit 409 `wrong_scope`, and a caller with no credential 401. The current folder on this code refuses every existing job (`cannot_check`) and still refuses the report as live ("NOT CONVERTED"). The record is in the private kit's evidence file.
 
 ## Decisions
 
+- **Only before funding.** An existing job is named only while the deal is `offered`. Naming it for a funded deal would race the start, which may already be sent. The buyer's commands stop for the owner between the quote and the funding, which leaves the time.
+- **The scope match is the configuration's.** `jobScope` names pointers, not a rule the adapter infers from the start body. It applies to every result once set, so a job named for a `start-unknown` deal is checked too.
+- **An artifacts failure after the checks does not refuse a named job.** The artifacts call runs only after the workspace, scope and status checks pass, so its failure at naming time holds the delivery later, as for a started job.
+- **A moved job closes its old deal.** The adapter then never delivers one job into two deals. The old deal's buyer reclaims the hold after its `deliverBy`, as the contract allows with no one acting.
+
 ## Handoff
+
+- **Done:** the code, its tests, the reference page and the rebuilt `site/setup.mjs`; the corrected terms and seller folder in the private kit; the local proof.
+- **Waits for Rafa:** every live step: the redeploy of `pilot-scan-1` with the corrected folder, a new quote and funding on the buyer's machine, naming the finished job before funding, and the deal's record. The private kit's run sheet holds them.
+- **Left open (Low, red team):** the route answers `holder_busy` while the deal loop works on the holder; the caller sends the request again. The holder record is per journal: a job named in another adapter's journal is not seen. Crow's own seller (`pilot-scan-2`) can take the same two fields when its folder is next rebuilt.
