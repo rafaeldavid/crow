@@ -1,7 +1,7 @@
 // The three scenarios (T-391), each a company's brief for each side and what the run should end with. A brief is
 // what a person would tell its agent: what it sells or needs, the budget, where the docs and its tools are, and the
 // owner's own rules. It says nothing else about Crow: an agent that cannot work from the docs is the finding.
-import { readFileSync } from 'node:fs';
+import { fillTemplate, REVIEW_SCOPE, template } from './review.ts';
 import type { Policy } from './tools.ts';
 
 type J = any; // eslint-disable-line @typescript-eslint/no-explicit-any
@@ -9,10 +9,13 @@ type J = any; // eslint-disable-line @typescript-eslint/no-explicit-any
 export type ScenarioName = 'paid' | 'refund' | 'bad-offer' | 'late-offer';
 export const SCENARIOS: readonly ScenarioName[] = ['paid', 'refund', 'bad-offer', 'late-offer'];
 
-/** The work the buyer wants: an audit of three files at one commit, 400 lines. The job API prices it at 700.00 test tokens. */
-export const SCOPE = { commit: '7c1e4b9a2d3f5068a1b2c3d4e5f60718293a4b5c', files: ['contracts/Vault.sol', 'contracts/InterestModel.sol', 'contracts/PriceFeed.sol'], lines: 400 } as const;
-/** The buyer's budget, everything included: 750.00 test tokens in base units (6 decimals). */
-export const BUDGET = '750000000';
+/**
+ * The work the buyer wants: the demo security review of two files of a training repository at one commit, 80 lines
+ * (review.ts, T-500). The job API quotes it at 40.00 test tokens.
+ */
+export const SCOPE = REVIEW_SCOPE;
+/** The buyer's budget, everything included: 50.00 test tokens in base units (6 decimals). */
+export const BUDGET = '50000000';
 /**
  * What a person reads as each agent's name (Rafa, 2026-11-12): the replay page, the printed plan and run lines, the
  * tickets. The record's own roles stay `buyer` and `seller`, so every record replays.
@@ -20,7 +23,7 @@ export const BUDGET = '750000000';
 export const AGENT_NAME = { buyer: 'Enterprise Procurement Agent', seller: 'Enterprise Sales Agent' } as const;
 
 /** What the buyer buys, as the replay page names it. */
-export const ITEM = 'a software security audit';
+export const ITEM = 'a security review of two smart-contract files';
 /** The checks the buyer requires in every offer: each file in scope reviewed, every finding inside the scope. */
 export const REQUIRED_CHECKS = ['coverage', 'scope'] as const;
 /** The buyer's dates: the report within 3 days (259,200 s), judging within a day after that, an offer made within 10 minutes of now. */
@@ -35,22 +38,11 @@ export const CREATED_AT_BAND_SEC = 600;
  * with the same name: a check kept by name and emptied would otherwise pass (the second red team's High).
  */
 export function ownerChecks(ids: readonly string[] = REQUIRED_CHECKS, scope: J = SCOPE): Record<string, unknown> {
-  const template = JSON.parse(readFileSync(new URL('../../examples/seller-adapter.template.json', import.meta.url), 'utf8'));
-  const value = (path: string): J => (path.endsWith('.length') ? scope[path.slice(0, -7)]?.length : scope[path]);
-  const fill = (node: J): J => {
-    if (typeof node === 'string') {
-      const whole = /^\{\{([\w.]+)\}\}$/.exec(node);
-      if (whole) return value(whole[1]!);
-      return node.replace(/\{\{([\w.]+)\}\}/g, (_m, p: string) => String(value(p)));
-    }
-    if (Array.isArray(node)) return node.map(fill);
-    if (node && typeof node === 'object') return Object.fromEntries(Object.entries(node).map(([k, v]) => [k, fill(v)]));
-    return node;
-  };
+  const checks = fillTemplate(template().checks, scope) as J[];
   return Object.fromEntries(ids.map((id) => {
-    const c = (template.checks as J[]).find((x) => x.id === id);
+    const c = checks.find((x) => x.id === id);
     if (!c) throw new Error(`the audit-report template has no check ${id}`);
-    return [id, fill(c)];
+    return [id, c];
   }));
 }
 

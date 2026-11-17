@@ -3,12 +3,14 @@
 // operators (`--world`), which is how the same command later runs against Sepolia. Either way the runner adds:
 //   - a small web: the agent docs (llms.txt and sell.txt, with this world's operators filled in, when run locally) and
 //     the seller's own public page, served from the seller's folder;
-//   - the seller's job API: examples/seller-adapter-stub.ts, the repository's audit-report stub, unchanged.
+//   - the seller's job API: review-job-api.ts, in the shape of examples/seller-adapter-stub.ts, answering with the demo
+//     security review of review.ts (T-500).
 import { existsSync, lstatSync, readFileSync, realpathSync } from 'node:fs';
 import { createServer, type IncomingMessage, type Server, type ServerResponse } from 'node:http';
 import type { AddressInfo } from 'node:net';
 import { extname, resolve, sep } from 'node:path';
-import { startStubSellerApi, type StubSellerApi } from '../../examples/seller-adapter-stub.ts';
+import type { StubSellerApi } from '../../examples/seller-adapter-stub.ts';
+import { startReviewJobApi } from './review-job-api.ts';
 import type { Recorder } from './record.ts';
 
 type J = any; // eslint-disable-line @typescript-eslint/no-explicit-any
@@ -143,7 +145,7 @@ async function rest(o: WorldOptions, operators: string[], local: boolean, closer
   const docs = local ? await localGuide(operators) : undefined;
   const w = await web({ ...(docs ? { docs: { guide: docs.guide, sell: docs.sell, home: docs.home, notFound: docs.notFound, pages: docs.pages } } : {}), sellers: { [o.sellerName]: o.sellerPublic } });
   closers.push(() => closeServer(w.server));
-  const jobApi = await startStubSellerApi({ port: 0, report: o.report, token, pollsUntilComplete: 1 });
+  const jobApi = await startReviewJobApi({ report: o.report, token, pollsUntilComplete: 1 });
   closers.push(() => jobApi.close());
   return {
     operators,

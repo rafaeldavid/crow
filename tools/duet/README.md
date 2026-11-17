@@ -134,7 +134,7 @@ The published page differs from the local one in two ways:
 
 The record's secret list has already been applied to everything on the page.
 
-**Three ways a deal ends.** Under the player, the page shows three live test deals on Sepolia, one per ending: the work passes, the work fails, the seller goes silent (T-427). `endings.ts` writes the section; its deals, times, amounts and transactions are in `endings.json`, taken from each deal's public record on the live API, so a refresh is a change of that file and one publish. The seconds on the cards are computed from the record's own times. Without scripts the three cards stack; with scripts a switch shows one at a time.
+**Three ways a deal ends.** Under the player, the page shows three live test deals on Sepolia, one per ending: the work passes, the work fails, the seller goes silent (T-427). Since T-500 all three are the security review the replay shows, of the kind Crow's first pilot runs: `node tools/duet/review-deals.ts --outcome release|refund|reclaim` sells it to Crow's test buyer from a fresh seller key, delivering the demo report, the report without its first proof of concept (the proof check fails), or nothing. `endings.ts` writes the section; its deals, times, amounts and transactions are in `endings.json`, taken from each deal's public record on the live API, so a refresh is a change of that file and one publish. The seconds on the cards are computed from the record's own times. Without scripts the three cards stack; with scripts a switch shows one at a time.
 
 The early-access controls open the site's sign-up pop-up (`site/drawer.ts`) when scripts run, and fall back to that link when they do not.
 
@@ -197,7 +197,7 @@ The phase-one contracts are live on Sepolia since 2026-11-13 (`contracts/deploym
 
 Two things to check on the first run:
 
-- Whether the faucet's grant (`demo.faucet.grant` in the test service's discovery) covers the job API stub's price plus the adjudication fee. The stub's price is in the brief's comment in `tools/duet/scenarios.ts`.
+- Whether the faucet's grant (`demo.faucet.grant` in the test service's discovery) covers the job API's quoted price plus the adjudication fee. The price is `REVIEW_PRICE_UNITS` in `tools/duet/review.ts`.
 - That the seller page and the job API stay local. The buyer reaches them on 127.0.0.1, and the seller adapter listens there.
 
 ## Files
@@ -209,7 +209,10 @@ Two things to check on the first run:
 | `loop.ts` | One agent's loop, caps, stall detection, system prompt |
 | `providers.ts` | Anthropic, OpenAI-compatible and scripted providers; the pinned registry |
 | `tools.ts` | The fenced tools and the company's approval policy |
-| `world.ts` | The local phase-one world, the docs and seller page, the job API (`examples/seller-adapter-stub.ts`) |
+| `world.ts` | The local phase-one world, the docs and seller page, the job API (`review-job-api.ts`) |
+| `review.ts` | The demo security review (T-500): the scope (Damn Vulnerable DeFi v4, two files at one commit), the terms filled from `examples/seller-adapter.template.json`, and the demo report in `review/report.json` |
+| `review-job-api.ts` | The seller's job API in the local run, in the shape of `examples/seller-adapter-stub.ts`, answering with the demo report. The stub itself is bundled into `buy.mjs` and `setup.mjs`, so it stays as it is |
+| `review-deals.ts` | One live security-review deal with Crow's test buyer on Sepolia: `--outcome release`, `refund` or `reclaim`. It filled `endings.json` |
 | `scenarios.ts` | The three scenarios and the two companies' briefs |
 | `scripted.ts` | The scripted agents the tests play |
 | `record.ts`, `measures.ts`, `replay.ts` | The record and its secret list, the seven measures, the page |

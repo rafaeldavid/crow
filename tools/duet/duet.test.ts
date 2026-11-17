@@ -9,9 +9,10 @@ import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { afterAll, describe, expect, it } from 'vitest';
 import { measure } from './measures.ts';
-import { buyerBriefDirect, scenario, sellerBriefDirect } from './scenarios.ts';
+import { buyerBriefDirect, ITEM, scenario, sellerBriefDirect } from './scenarios.ts';
 import { limitsFor, overLimits } from './tickets.ts';
 import { checkEndings, ENDINGS, ENDINGS_CSS, ENDINGS_SCRIPT, endingsSection, seconds } from './endings.ts';
+import { CHECK_WORDS, REPOSITORY, REVIEW_CHECK_IDS, REVIEW_SCOPE } from './review.ts';
 import { CROW_MARK, EARLY_ACCESS, ENGINEERS, forPublishing, HERO, JOIN, PITCH, replayPage } from './replay.ts';
 import { startWorld } from './world.ts';
 import { runAgent } from './loop.ts';
@@ -28,7 +29,7 @@ const readerText = (html: string) => html.replace(/<style[\s\S]*?<\/style>|<scri
 const BANNED: Array<[string, RegExp]> = [['commitment', /\bcommitments?\b/i], ['escrowState', /escrowstate/i], ['adjudicator', /adjudicat/i], ['EIP-712', /eip-?712/i], ['Released', /\bReleased\b/], ['Refunded', /\bRefunded\b/], ['hold as a noun', /\b(the|a|an|its|this|that|your) hold\b/i], ['settlement layer', /settlement layer/i], ['escrow', /\bescrow\b/i]];
 // The ontology's calming claims refused until a fact backs them (crow-private strategy note of 2026-11-14), and the
 // phrase that names the buyer's worry instead of its answer.
-const REFUSED = /\bindependent\b|\bsecure\b|\baudited\b|\bguarantee|\bprivate deals?\b|\bno one can\b|Neither side can take it/i;
+const REFUSED = /\bindependent\b|\bsecure\b|\baudited\b|\bguarantee|\bprivate deals?\b|\bno one can\b|Neither side can take it|agent-native|\binsurance\b|\barbitration\b/i;
 const banned = (text: string) => BANNED.filter(([, re]) => re.test(text)).map(([w]) => `${w}: …${text.slice(Math.max(0, text.search(BANNED.find(([x]) => x === w)![1]) - 60), text.search(BANNED.find(([x]) => x === w)![1]) + 60)}…`);
 const lines = (file: string) => readFileSync(file, 'utf8').split('\n').filter(Boolean).map((l) => JSON.parse(l));
 
@@ -105,7 +106,7 @@ describe('three scenarios, scripted, on the local phase-one world', () => {
       // Money is said in test dollars, never as "tokens", which a reader could take for AI model tokens.
       expect(readerText(page)).not.toMatch(/test tokens/);
       // Whole amounts show no decimals, and one dollar is singular (T-400).
-      if (name === 'paid') expect(readerText(page)).toMatch(/700 test dollars/);
+      if (name === 'paid') expect(readerText(page)).toMatch(/40 test dollars/);
       expect(readerText(page)).not.toMatch(/\d\.00 test dollar|\b1 test dollars/);
       // Where a reader checks a payment record, the token keeps its real name (in the demo deal's facts).
       expect(page).toMatch(/<dt>Test money<\/dt><dd>Test dollars: the test token [A-Za-z0-9]+, with six decimals\./);
@@ -134,7 +135,7 @@ describe('three scenarios, scripted, on the local phase-one world', () => {
       for (const b of PITCH.beats) expect(page).toContain(`<span class="beat-label">${b.label}</span>`);
       // The proof beat tells what this run did: Rafa's sentence when the work passed, what happened instead otherwise.
       const ending = name === 'paid' ? 'paid' : name === 'refund' ? 'refunded' : 'declined';
-      expect(page).toContain(PITCH.proof(ending, 'a software security audit').replace(/'/g, '&#39;'));
+      expect(page).toContain(PITCH.proof(ending, ITEM).replace(/'/g, '&#39;'));
       expect(page.indexOf('beat-label">Proof')).toBeLessThan(page.indexOf('<h3 class="block-title">How the payment is held</h3>'));
       // One accent: the filled button is the primary action; no chat bubble uses it.
       expect(page).not.toMatch(/#007aff|#0a84ff/i);
@@ -238,7 +239,7 @@ describe('three ways a deal ends (T-427): live test deals under the player', () 
     expect(ENDINGS_SCRIPT).toContain("setAttribute('role','tabpanel')");
   });
   it("gives each card its rule, the record's own times and amounts, and links to its public record and transaction", () => {
-    const want: Record<string, [string, string]> = { passes: ['68 s', '10 test dollars'], fails: ['31 s', '10 test dollars'], silent: ['6 min 5 s', '26 test dollars'] };
+    const want: Record<string, [string, string]> = { passes: ['41 s', '40 test dollars'], fails: ['51 s', '40 test dollars'], silent: ['5 min 21 s', '41 test dollars'] };
     for (const x of ENDINGS.endings) {
       const cardHtml = html.slice(html.indexOf(`id="ending-${x.key}"`), html.indexOf('</article>', html.indexOf(`id="ending-${x.key}"`)));
       expect(cardHtml).toContain(`<dd>${want[x.key]![0]}</dd>`);
@@ -248,8 +249,24 @@ describe('three ways a deal ends (T-427): live test deals under the player', () 
     }
     const silent = ENDINGS.endings.find((x) => x.key === 'silent')!;
     expect(silent.how).toContain(`${seconds(silent.deliverBy!, silent.endedAt)} seconds after that deadline`);
-    expect(silent.how).toContain(`${seconds(silent.offeredAt, silent.deliverBy!) / 60} minutes from the offer`);
-    expect(readerText(html)).toContain('14 November 2026');
+    // deliverBy counts from the settlement time the offer was prepared at, a second before the record's offer event.
+    expect(silent.how).toContain(`${Math.round(seconds(silent.offeredAt, silent.deliverBy!) / 60)} minutes from the offer`);
+    expect(readerText(html)).toContain('17 November 2026');
+  });
+  it('shows the security-review deal of the pilot\'s kind: the repository, the commit, the files, the price, the five checks and their limits (T-500)', () => {
+    const text = readerText(html);
+    expect(text).toContain("This is the kind of deal Crow's first pilot runs: an agent buys a security review of a smart-contract repository, and agreed checks decide whether the seller is paid.");
+    expect(text).toContain("The checks test the report's shape and scope, not how good the review is: a report with no findings passes them.");
+    expect(text).toContain('demo findings written for this page');
+    expect(text).toContain(REPOSITORY.name);
+    expect(text).toContain(REVIEW_SCOPE.commit.slice(0, 12));
+    for (const f of REVIEW_SCOPE.files) expect(text).toContain(f);
+    expect(text).toContain('40 test dollars, quoted by the seller');
+    for (const id of REVIEW_CHECK_IDS) expect(text).toContain(CHECK_WORDS[id]);
+    // Every link goes to Crow, the live records, Sepolia's explorer or the training repository at the reviewed commit.
+    const links = [...html.matchAll(/href="([^"]+)"/g)].map((m) => m[1]!);
+    const allowed = [/^https:\/\/api\.crow\.direct\/v1\/commitments\/0x[0-9a-f]{64}$/, /^https:\/\/sepolia\.etherscan\.io\/tx\/0x[0-9a-f]{64}$/, /^https:\/\/crow\.direct\/llms\.txt$/, new RegExp(`^${REPOSITORY.url}/(tree|blob)/${REVIEW_SCOPE.commit}(/|$)`)];
+    for (const l of links) expect(allowed.some((re) => re.test(l)), l).toBe(true);
   });
   it("uses the page's words: no refused claim, no protocol word", () => {
     expect(readerText(html)).not.toMatch(REFUSED);
