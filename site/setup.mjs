@@ -55891,6 +55891,8 @@ function convertReport(mapping, bytes) {
 const DELIVERY_CAP_BYTES = 1048576;
 /** A result whose job ran in another account than `sellerApi.workspace` names (T-435): never delivered. */
 var WrongWorkspace = class extends Error {};
+/** A result whose job asked for another scope than the deal's, by `sellerApi.result.jobScope` (T-501): never delivered. */
+var WrongScope = class extends Error {};
 /** A further file could not be fetched or added: the delivery waits, and the seller is alerted. */
 var FilesNotAdded = class extends Error {};
 const PLACEHOLDER$1 = /\{\{([A-Za-z][A-Za-z0-9]*)(?:\.([A-Za-z][A-Za-z0-9]*))?\}\}/g;
@@ -55911,6 +55913,18 @@ const isRecord$2 = (v) => v !== null && typeof v === "object" && !Array.isArray(
 */
 const isRedirect = (res) => res.type === "opaqueredirect" || res.status >= 300 && res.status <= 399;
 const short = (v) => plain$4(String(v)).slice(0, 80);
+/** Two JSON values are the same; two lists are the same items in any order (T-501, the job's request). */
+function sameValue(a, b) {
+	if (Array.isArray(a) && Array.isArray(b)) {
+		if (a.length !== b.length) return false;
+		const key = (x) => x.map((i) => JSON.stringify(i)).sort();
+		const [ka, kb] = [key(a), key(b)];
+		return ka.every((x, i) => x === kb[i]);
+	}
+	if (Array.isArray(a) || Array.isArray(b)) return false;
+	if (a === void 0 || b === void 0) return a === b;
+	return JSON.stringify(a) === JSON.stringify(b);
+}
 /** The names each call may use. `scope` and `options` stand alone only, as a whole body value. */
 const NAMES = {
 	quote: [
@@ -55945,7 +55959,8 @@ const NAMES = {
 		"jobId",
 		"file",
 		"workspace"
-	]
+	],
+	merge: ["jobId", "workspace"]
 };
 /** Throws unless every placeholder in `text` is a name this call may use; `whole`: the string is a whole body value. */
 function checkText(at, text, use, fields, whole) {
@@ -56099,7 +56114,8 @@ function sellerApiClient(api, env, fields) {
 				api.start,
 				api.result,
 				rmap.reportCall,
-				rmap.files
+				rmap.files,
+				rmap.merge
 			].map((cl) => typeof cl === "string" ? cl : isRecord$2(cl) ? cl.path : void 0).filter((x) => typeof x === "string");
 			for (const path of all) {
 				const segs = segmentsOf(path);
@@ -56117,7 +56133,8 @@ function sellerApiClient(api, env, fields) {
 			const paths = [
 				typeof call === "string" ? call : isRecord$2(call) ? call.path : void 0,
 				isRecord$2(call) && isRecord$2(call.reportCall) ? call.reportCall.path : void 0,
-				isRecord$2(call) && isRecord$2(call.files) ? call.files.path : void 0
+				isRecord$2(call) && isRecord$2(call.files) ? call.files.path : void 0,
+				isRecord$2(call) && isRecord$2(call.merge) ? call.merge.path : void 0
 			];
 			for (const path of paths) if (typeof path === "string" && path.split(/[/?#]/).some((seg) => seg === w.id || seg === encodeURIComponent(w.id))) throw new Error(`sellerApi.${k}: a path names the workspace as text; write {{workspace}}, so the paths and sellerApi.workspace.id can never differ`);
 		}
@@ -56167,7 +56184,8 @@ function sellerApiClient(api, env, fields) {
 		"sellerApi.start": "the start",
 		"sellerApi.result": "the result",
 		"sellerApi.result.reportCall": "the report call",
-		"sellerApi.result.files": "a file"
+		"sellerApi.result.files": "a file",
+		"sellerApi.result.merge": "the artifacts call"
 	};
 	const prepare = (at, c, use, defaults, extraKeys, reserved) => {
 		if (typeof c === "string") {
@@ -56287,7 +56305,9 @@ function sellerApiClient(api, env, fields) {
 		"status",
 		"report",
 		"reportCall",
-		"files"
+		"files",
+		"merge",
+		"jobScope"
 	], []);
 	const rm = isRecord$2(r) ? r : {};
 	let status = {
@@ -56391,6 +56411,36 @@ function sellerApiClient(api, env, fields) {
 			encoding: f.encoding ?? "utf8"
 		};
 	}
+	let merge;
+	if (rm.merge !== void 0) {
+		const m = rm.merge;
+		if (!isRecord$2(m)) throw new Error("sellerApi.result.merge must be an object: path and into");
+		for (const k of Object.keys(m)) if (!["path", "into"].includes(k)) throw new Error(`sellerApi.result.merge has a field the adapter does not take: ${short(k)}`);
+		if (rm.reportCall !== void 0) throw new Error("sellerApi.result.merge and sellerApi.result.reportCall cannot both be set: the artifacts call adds to the result call's answer, which a report call replaces");
+		if (typeof m.path !== "string" || !m.path.split(/[/?#]/).includes("{{jobId}}")) throw new Error("sellerApi.result.merge.path must be a path under sellerApi.baseUrl with {{jobId}} as one whole segment");
+		const into = pointerParts("sellerApi.result.merge.into", m.into);
+		if (into.length === 0) throw new Error("sellerApi.result.merge.into must name a field inside the result, not the whole result");
+		const carries = m.path.split(/[?#]/)[0].split("/").includes("{{workspace}}");
+		if (workspace && !carries && !workspace.resultAt) throw new Error("sellerApi.result.merge needs sellerApi.workspace.resultPointer, or {{workspace}} in its path: the call runs only after the job is known to be in the pinned workspace");
+		merge = {
+			call: prepare("sellerApi.result.merge", { path: m.path }, "merge", {
+				method: "GET",
+				body: void 0
+			}, [], []),
+			into,
+			carries
+		};
+	}
+	let jobScope;
+	if (rm.jobScope !== void 0) {
+		const s = rm.jobScope;
+		if (!isRecord$2(s) || Object.keys(s).length === 0) throw new Error("sellerApi.result.jobScope must name one or more scope fields, each with a JSON pointer into the result answer");
+		jobScope = Object.entries(s).map(([k, p]) => {
+			if (!fields.scope.includes(k)) throw new Error(`sellerApi.result.jobScope names ${short(k)}, which the scope rules do not define`);
+			return [k, pointerParts(`sellerApi.result.jobScope.${k}`, p)];
+		});
+	}
+	const checksJob = jobScope !== void 0 && (!workspace || workspace.resultAt !== void 0);
 	const strict = base !== void 0;
 	const send = async (p, given, extra = {}, cap = strict ? DELIVERY_CAP_BYTES : void 0) => {
 		const v = {
@@ -56398,12 +56448,14 @@ function sellerApiClient(api, env, fields) {
 			workspace: workspace?.id
 		};
 		const url = urlFor(p.what, p.url, v, base);
-		if (workspace && [
+		const named = [
 			"sellerApi.quote",
 			"sellerApi.start",
 			"sellerApi.result.reportCall",
-			"sellerApi.result.files"
-		].includes(p.what) && !url.pathname.split("/").includes(workspace.segment)) throw new Error(`${p.label} would go to ${url.pathname}, which does not name the pinned workspace: nothing was sent`);
+			"sellerApi.result.files",
+			...merge?.carries ? ["sellerApi.result.merge"] : []
+		];
+		if (workspace && named.includes(p.what) && !url.pathname.split("/").includes(workspace.segment)) throw new Error(`${p.label} would go to ${url.pathname}, which does not name the pinned workspace: nothing was sent`);
 		const headers = Object.create(null);
 		for (const [k, t] of Object.entries(p.headers)) {
 			const filled = t.replace(PLACEHOLDER$1, (_m, name, field) => asText(valueOf(v, name, field)));
@@ -56444,8 +56496,9 @@ function sellerApiClient(api, env, fields) {
 	return {
 		readsToken,
 		startRepeatable,
+		checksJob,
 		...startOneShotBecause ? { startOneShotBecause } : {},
-		describe: `The seller API is ${base ? `under ${base.href}` : "at the three configured addresses"}, with ${auth ? `a credential from ${auth.env} in header ${auth.header}` : "no credential"}${unitsAt !== void 0 ? `; a quote prices ${plain$4(unitsAt)} units at ${unitPrice} base units each` : ""}; its job state is read by ${status.by === "http" ? "HTTP status" : "a status field"}${files ? `, and a result's further files are added at ${plain$4(rm.files.into)}` : ""}${workspace ? `; every quote and start runs in the pinned workspace${workspace.resultAt ? ", and a result from another is not delivered" : ""}` : ""}.`,
+		describe: `The seller API is ${base ? `under ${base.href}` : "at the three configured addresses"}, with ${auth ? `a credential from ${auth.env} in header ${auth.header}` : "no credential"}${unitsAt !== void 0 ? `; a quote prices ${plain$4(unitsAt)} units at ${unitPrice} base units each` : ""}; its job state is read by ${status.by === "http" ? "HTTP status" : "a status field"}${files ? `, and a result's further files are added at ${plain$4(rm.files.into)}` : ""}${merge ? `; once the job is done, the artifacts call adds its answer at ${plain$4(rm.merge.into)}` : ""}${jobScope ? `; a job whose request names another ${jobScope.map(([k]) => plain$4(k)).join(", ")} than the deal's is not delivered` : ""}${workspace ? `; every quote and start runs in the pinned workspace${workspace.resultAt ? ", and a result from another is not delivered" : ""}` : ""}.`,
 		async quote(v) {
 			const { status: code, bytes } = await send(quote, v);
 			okFor("the quote", code);
@@ -56516,6 +56569,48 @@ function sellerApiClient(api, env, fields) {
 				if (w === void 0 || !status.done.includes(w)) throw new Error(`the seller API's job status ${w === void 0 ? "is missing" : `"${short(w)}" is none of the configured values`}`);
 			}
 			pinned();
+			if (jobScope) {
+				let doc;
+				try {
+					doc = JSON.parse(new TextDecoder("utf-8", { fatal: true }).decode(bytes));
+				} catch {
+					throw new WrongScope("the result answer is not JSON, so the job's request cannot be read");
+				}
+				for (const [field, at] of jobScope) {
+					const got = pick(doc, at);
+					const want = isRecord$2(v.scope) && Object.hasOwn(v.scope, field) ? v.scope[field] : void 0;
+					if (!sameValue(got, want)) throw new WrongScope(`the job asked for ${plain$4(field)} ${short(JSON.stringify(got) ?? "nothing")}, not the deal's ${short(JSON.stringify(want) ?? "nothing")}`);
+				}
+			}
+			if (merge) {
+				let got;
+				try {
+					got = await send(merge.call, { jobId: v.jobId });
+				} catch (e) {
+					throw new FilesNotAdded(`the artifacts call: ${plain$4(e.message)}`);
+				}
+				if (got.status < 200 || got.status > 299) throw new FilesNotAdded(`the seller API answered ${got.status} to the artifacts call`);
+				let doc;
+				let added;
+				try {
+					doc = JSON.parse(new TextDecoder("utf-8", { fatal: true }).decode(bytes));
+					added = JSON.parse(new TextDecoder("utf-8", { fatal: true }).decode(got.bytes));
+				} catch {
+					throw new FilesNotAdded("the result or the artifacts call's answer is not JSON");
+				}
+				const parent = pick(doc, merge.into.slice(0, -1));
+				const last = merge.into[merge.into.length - 1];
+				if (!isRecord$2(parent)) throw new FilesNotAdded(`the result has no object at ${plain$4(rm.merge.into)}'s parent, to add the artifacts to`);
+				if (Object.hasOwn(parent, last)) throw new FilesNotAdded(`the result already has a field at ${plain$4(rm.merge.into)}`);
+				Object.defineProperty(parent, last, {
+					value: added,
+					enumerable: true,
+					writable: true,
+					configurable: true
+				});
+				done = new TextEncoder().encode(JSON.stringify(doc));
+				if (done.length > 1048576) throw new FilesNotAdded(`the result with its artifacts is ${done.length} bytes, more than the delivery cap of ${DELIVERY_CAP_BYTES}`);
+			}
 			if (reportCall) {
 				const second = await send(reportCall, v);
 				ok2xx("the report call", second.status);
@@ -57479,6 +57574,8 @@ async function createSellerAdapter(c, env, io) {
 	}
 	/** Saves the journal whole, through the shell: it keeps the old copy or the new one, never half of one. */
 	const save = () => io.saveJournal(journal);
+	/** T-501: deals whose named existing job the job route is reading now. Their start waits until the read ends. */
+	const attaching = /* @__PURE__ */ new Set();
 	let eventsBroken = false;
 	const emit = (type, fields) => {
 		if (!io.appendEvent) return;
@@ -57928,6 +58025,15 @@ async function createSellerAdapter(c, env, io) {
 				note: "every operator shows the hold funded"
 			});
 		}
+		if (deal.stage === "starting" && attaching.has(id)) return;
+		if (deal.stage === "starting" && deal.existingJob) {
+			const { jobId, from } = deal.existingJob;
+			record(deal, {
+				stage: "started",
+				jobId,
+				note: `job ${jobId}: an existing job, named by the seller's operator; no start was sent${from ? `; it came from deal ${from}` : ""}`
+			});
+		}
 		if (deal.stage === "starting" && deal.startConfig !== void 0 && deal.startConfig !== startConfig) {
 			const deliverBy = deal.terms.timing.deliverBy;
 			record(deal, {
@@ -58032,6 +58138,16 @@ async function createSellerAdapter(c, env, io) {
 			try {
 				job = await sellerApi.result(values);
 			} catch (e) {
+				if (e instanceof WrongScope) return refuse(deal, now, createHash("sha256").update(`wrong-scope ${e.message}`, "utf8").digest("hex"), {
+					result: "wrong_scope",
+					scope: e.message,
+					checks: []
+				}, `the job's request is not the deal's scope: ${e.message}`);
+				if (e instanceof FilesNotAdded) return refuse(deal, now, createHash("sha256").update(`files-not-added ${e.message}`, "utf8").digest("hex"), {
+					result: "files_not_added",
+					files: e.message,
+					checks: []
+				}, `its artifacts could not be added: ${e.message}`);
 				if (!(e instanceof WrongWorkspace)) throw e;
 				return refuse(deal, now, createHash("sha256").update(`wrong-workspace ${e.message}`, "utf8").digest("hex"), {
 					result: "wrong_workspace",
@@ -58355,19 +58471,30 @@ async function createSellerAdapter(c, env, io) {
 			type: "too_large",
 			detail: "the body is a JSON object with one jobId"
 		});
-		let jobId;
+		let body;
 		try {
-			jobId = JSON.parse(new TextDecoder().decode(bytes))?.jobId;
+			body = JSON.parse(new TextDecoder().decode(bytes));
 		} catch {
 			return send(400, {
 				type: "invalid_body",
 				detail: "the body is JSON: {\"jobId\": \"<the job's ID>\"}"
 			});
 		}
+		let jobId = isRecord$1(body) ? body.jobId : void 0;
 		if (Number.isSafeInteger(jobId) && jobId >= 0) jobId = String(jobId);
 		if (typeof jobId !== "string" || !/^[\x21-\x7e]{1,200}$/.test(jobId)) return send(400, {
 			type: "invalid_body",
 			detail: "jobId is the job's ID: 1 to 200 printable characters, or a whole number"
+		});
+		const existing = body.existing;
+		const fromRaw = body.from;
+		if (existing !== void 0 && typeof existing !== "boolean") return send(400, {
+			type: "invalid_body",
+			detail: "existing is true or false"
+		});
+		if (fromRaw !== void 0 && (existing !== true || typeof fromRaw !== "string" || !/^0x[0-9a-fA-F]{64}$/.test(fromRaw))) return send(400, {
+			type: "invalid_body",
+			detail: "from, with existing true, is the commitment ID of the deal that holds the job"
 		});
 		const id = commitmentId.toLowerCase();
 		const deal = Object.hasOwn(journal.deals, id) ? journal.deals[id] : void 0;
@@ -58375,11 +58502,14 @@ async function createSellerAdapter(c, env, io) {
 			type: "not_found",
 			detail: "this adapter holds no such deal"
 		});
+		/** The other deal that holds the job, by its started job or its named existing one. */
+		const holderOf = (job) => Object.values(journal.deals).find((d) => d.id !== deal.id && (d.jobId === job || d.existingJob?.jobId === job));
+		if (existing === true) return existingJobNamed(deal, jobId, fromRaw === void 0 ? void 0 : fromRaw.toLowerCase(), holderOf);
 		if (deal.stage !== "start-unknown") return send(409, {
 			type: "not_waiting",
 			detail: `the deal is ${deal.stage}, not waiting for its job's ID`
 		});
-		const holder = Object.values(journal.deals).find((d) => d.id !== deal.id && d.jobId === jobId);
+		const holder = holderOf(jobId);
 		if (holder) return send(409, {
 			type: "job_taken",
 			detail: `job ${jobId} belongs to another deal in this journal, ${holder.id}`
@@ -58394,6 +58524,117 @@ async function createSellerAdapter(c, env, io) {
 			commitmentId: id,
 			stage: deal.stage,
 			jobId
+		});
+	}
+	/**
+	* T-501: POST /deals/<commitmentId>/job with {"jobId", "existing": true, "from"?}: the seller's operator names a job
+	* that already finished for a deal that is not yet funded, so the adapter sends no start for it. The job must be
+	* done, in the pinned workspace, and asked for the deal's scope; a job another deal holds moves only when `from`
+	* names that deal and it is refused or closed. That deal is then closed, so one job is delivered into one deal.
+	*/
+	async function existingJobNamed(deal, jobId, from, holderOf) {
+		const id = deal.id;
+		const open = () => deal.stage === "offered" || deal.stage === "starting" && !(deal.startAttempts > 0);
+		if (deal.stage !== "offered") return send(409, {
+			type: "not_waiting",
+			detail: `the deal is ${deal.stage}: an existing job is named only before the deal is funded, while no start has been sent`
+		});
+		const named = deal.existingJob?.jobId ?? (attaching.has(id) ? "(being checked)" : void 0);
+		if (named !== void 0) return send(409, {
+			type: "already_named",
+			detail: `the deal already has job ${named} named`
+		});
+		if (!sellerApi.checksJob) return send(409, {
+			type: "cannot_check",
+			detail: "this seller cannot check an existing job: set sellerApi.result.jobScope, and sellerApi.workspace.resultPointer with a pinned workspace"
+		});
+		const taken = () => {
+			const holder = holderOf(jobId);
+			if (!holder) return from === void 0 ? void 0 : send(409, {
+				type: "not_holder",
+				detail: `deal ${from} does not hold job ${jobId} in this journal`
+			});
+			if (from !== holder.id) return send(409, {
+				type: "job_taken",
+				detail: `job ${jobId} belongs to deal ${holder.id}; name it as "from" to move the job from that deal`
+			});
+			if (holder.stage !== "refused" && holder.stage !== "closed") return send(409, {
+				type: "job_taken",
+				detail: `job ${jobId} belongs to deal ${holder.id}, which is ${holder.stage}: a job moves only from a refused or closed deal`
+			});
+		};
+		const before = taken();
+		if (before) return before;
+		attaching.add(id);
+		let job;
+		try {
+			job = await sellerApi.result({
+				commitmentId: id,
+				quoteId: deal.quoteId,
+				jobId,
+				buyer: deal.terms.buyer,
+				scope: deal.scope,
+				options: deal.options
+			});
+		} catch (e) {
+			if (e instanceof WrongWorkspace) return send(409, {
+				type: "wrong_workspace",
+				detail: plain$4(e.message)
+			});
+			if (e instanceof WrongScope) return send(409, {
+				type: "wrong_scope",
+				detail: plain$4(e.message)
+			});
+			if (e instanceof FilesNotAdded) job = "checked";
+			else return send(502, {
+				type: "seller_api",
+				detail: `the job could not be read: ${plain$4(e.message)}`
+			});
+		} finally {
+			attaching.delete(id);
+		}
+		if (job !== "checked" && job.state === "running") return send(409, {
+			type: "not_finished",
+			detail: `job ${jobId} is not done${job.status ? ` (${plain$4(job.status)})` : ""}: name a finished job`
+		});
+		if (job !== "checked" && job.state === "failed") return send(409, {
+			type: "job_failed",
+			detail: `job ${jobId} failed (${plain$4(job.status)})`
+		});
+		if (!open()) return send(409, {
+			type: "not_waiting",
+			detail: `the deal became ${deal.stage} while the job was read; nothing was named`
+		});
+		if (deal.existingJob) return send(409, {
+			type: "already_named",
+			detail: `the deal already has job ${deal.existingJob.jobId} named`
+		});
+		const after = taken();
+		if (after) return after;
+		const holder = from === void 0 ? void 0 : holderOf(jobId);
+		if (holder) record(holder, {
+			stage: "closed",
+			ready: false,
+			jobMovedTo: id,
+			note: `its job ${jobId} moved to deal ${id}, named by the seller's operator; this deal delivers nothing, and its buyer may reclaim the hold after deliverBy ${holder.terms.timing.deliverBy}`
+		});
+		deal.existingJob = {
+			jobId,
+			...holder ? { from: holder.id } : {},
+			at: (/* @__PURE__ */ new Date()).toISOString()
+		};
+		save();
+		log(`${id} job ${jobId} is named as an existing job by the seller's operator${holder ? `, moved from deal ${holder.id}` : ""}; once funded, the deal follows it and sends no start.`);
+		emit("job.attached", {
+			commitmentId: id,
+			from: holder?.id ?? null
+		});
+		wake();
+		return send(202, {
+			commitmentId: id,
+			stage: deal.stage,
+			jobId,
+			...holder ? { from: holder.id } : {}
 		});
 	}
 	/** One request, by its path under the adapter's address: the same routes the Node server served before T-434. */

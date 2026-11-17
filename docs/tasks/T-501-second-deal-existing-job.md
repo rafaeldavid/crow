@@ -3,7 +3,7 @@
 - **Lane:** demo (the seller adapter in `examples/`, which the hosted sellers bundle)
 - **Phase:** 2
 - **Depends on:** T-435 (the workspace guard), T-408 (naming a job), T-366 (the seller API mapping)
-- **Paths this task may touch:** `examples/seller-adapter-api.ts`, `examples/seller-adapter-core.ts`, `examples/seller-adapter-job-stub.ts`, `examples/seller-adapter-existing-job.test.ts` (new), `examples/seller-adapter-service.md`, this file.
+- **Paths this task may touch:** `examples/seller-adapter-api.ts`, `examples/seller-adapter-core.ts`, `examples/seller-adapter-job-stub.ts`, `examples/seller-adapter-existing-job.test.ts` (new), `site/ref/seller-adapter.txt` (the two fields and the route), `site/setup.mjs` (rebuilt: it bundles the adapter core), this file.
 - **Human gate:** yes. Every live step waits for Rafa: the redeploy of `pilot-scan-1`, the new quote and funding on the buyer's machine, naming the job, and the record.
 - **Status:** in progress
 - **Agent/session:** the second-deal session, 2026-11-17, branch `t-501-second-deal`.
