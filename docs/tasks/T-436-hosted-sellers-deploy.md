@@ -65,7 +65,4 @@ Measured on 2026-11-14 on branch `t-436-hosted-sellers-deploy`, stacked on T-435
 
 ## Handoff
 
-Rafa's first deploy follows `docs/operations.md`, "Hosted sellers, the first deploy of one". It needs a private folder for the company, in the private repository: `hosted.json`, `adapter.json` and the files `adapter.json` names. For the pilot's company, `adapter.json` is the kit's adapter configuration, with three changes:
-- no `journal` or `port`;
-- credential variables that do not start with `HOLDBACK_`;
-- `sellerApi.workspace` set, the quote and start paths carrying `{{workspace}}`.
+**State: done.** Rafa ran the first deploys of two hosted sellers on 2026-11-15, `pilot-scan-1` and `pilot-scan-2`, and set their secrets on 2026-11-16. Both read operational. The deploy record is in `docs/operations.md` (PR 592). Their seller folders were written by the pilot's session (T-470) and approved by Rafa on 2026-11-15. A later hosted seller follows the same runbook, "Hosted sellers, the first deploy of one". The remaining follow-ups are roadmap row N154.
