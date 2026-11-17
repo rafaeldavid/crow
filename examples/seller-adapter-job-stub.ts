@@ -45,6 +45,8 @@ export interface JobStubOptions {
   /** The status and body the notes route answers; default 200 and one note per run. */
   notesStatus?: number;
   notesBody?: J;
+  /** A finished run's output by its input's target, in place of the made-up review (T-502: reports that fail a check). */
+  outputs?: Record<string, J>;
 }
 
 export interface JobStub {
@@ -138,7 +140,8 @@ export async function startJobStub(o: JobStubOptions): Promise<JobStub> {
         // The run's own request, as the job's answer names it: what jobScope reads (T-501).
         if (run.state === 'running' || (run.state === undefined && n < until)) return send(200, { run: { id: run.id, state: run.state ?? (n === 0 ? 'queued' : 'running'), input: run.input, ...where } });
         if (run.state === 'error' || o.fail) return send(200, { run: { id: run.id, state: 'error', input: run.input, ...where }, detail: 'the job ran out of memory' });
-        const output = { summary: `Reviewed ${run.input?.target} to depth ${run.input?.depth}.`, target: run.input?.target, proofs: o.fileList ?? Object.keys(DEFAULT_FILES) };
+        const given = o.outputs && typeof run.input?.target === 'string' && Object.hasOwn(o.outputs, run.input.target) ? o.outputs[run.input.target] : undefined;
+        const output = given ?? { summary: `Reviewed ${run.input?.target} to depth ${run.input?.depth}.`, target: run.input?.target, proofs: o.fileList ?? Object.keys(DEFAULT_FILES) };
         return send(200, { run: { id: run.id, state: 'complete', input: run.input, ...where }, output });
       }
       return send(404, { detail: 'not found' });
