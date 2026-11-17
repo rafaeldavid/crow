@@ -11,7 +11,7 @@
   - Two more, which s9 needs once it is a deal scenario (named here, as the reviewer asked): `scripts/metrics/schemas/one-click-summary.schema.json` (an optional `byScenario.s9`) and `tests/metrics/one-click-setup.test.ts` (the deal scenarios' list).
   - It changes nothing under `apps/hosted-sellers/`, `packages/`, `contracts/src/` or `spec/schemas/`, neither `examples/seller-adapter-core.ts` nor `examples/seller-adapter-api.ts`, and no pinned bundle (`site/buy.mjs`, `site/try.mjs`, `site/setup.mjs`).
 - **Human gate:** yes, for the two deploys, both Rafa's: the Worker `crow-test-agents` first, then the site. The site deploy that publishes the new `buy.txt` waits until the pilot's second buyer has funded its deal. The merge has no gate.
-- **Status:** done (on the merge of PR 591; the two deploys wait for Rafa, see Handoff)
+- **Status:** done (PR 591; deployed 2026-11-16, and a `buy.txt` run against the deployed seller Released on 2026-11-17, in Evidence)
 - **Agent/session:** a build session started by the coordinator, 2026-11-15, branch `t-489-test-seller-quote`.
 - **Roadmap row:** N163
 - **Change kind:** 4 is the nearest recipe (a live test service's code), with 1 (an agent guide in `site/`). The brief adds one `reviewer` pass and one `red-teamer` pass on the quote address and its limits, since it touches funds and limits.
@@ -101,6 +101,8 @@ One `reviewer` pass and one `red-teamer` pass, both on commit `50f20b18`, given 
 | Red team L4: refusals sent buyers to a new directory, and the waiting cap's wait was 900 s for a slot that frees at about 660 s | Low | 429 and 503 say "run buy.mjs again", as `buy.txt` does; the wait counts from `offerExpiresAt` plus 90 s |
 | Red team L5: offers to the seller itself or to the zero address | Low | refused with 400 |
 | Reviewer 7: idempotency hashes the normalised body (address case, an empty `options`) | Low | kept: the adapter's core does the same |
+
+- **Against the deployed seller, 2026-11-17 [measured]:** the pinned `buy.mjs` from `buy.txt` (SHA-256 `ce610626…1311d`, as published) asked `https://crow.direct/agents/test-seller/quote` for `{"rows":5}`. It stopped with exit status 3 and 0 differences from the defaults, then approved and funded 2 tUSDC (1 price, 1 adjudication fee). The deal was Released at 09:42:48 UTC with the five squares delivered: commitment `0x955924726422d35adf74fc395c0f891547fa3cb4dfb4c7c8659703d060f59508`, decision transaction `0xef8745909fd5dcf57cc092c75857b06b027280c4a79ccc2e09931e09a02f91d7`. The test seller ran crow-test-agents `1adabc54` (deployed 09:39 UTC).
 
 ## Decisions
 
