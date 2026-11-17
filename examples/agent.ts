@@ -37,11 +37,16 @@ const sha = async (b: Uint8Array) => `sha256:${Buffer.from(await crypto.subtle.d
 /** How many times Agent.call sends a request whose answer is lost on the network, and the wait before each retry (1 s, then 2 s). */
 export const CALL_ATTEMPTS = 3;
 const CALL_BACKOFF_MS = 1000;
-/** Network errors that mean the request never reached the operator, so no answer was lost: they are not retried. */
-const NEVER_SENT = new Set(['ECONNREFUSED', 'ENOTFOUND']);
+/**
+ * Network errors that are not retried. Most mean the request never reached the operator, so no answer was lost: a
+ * refused or timed-out connection, a host or network out of reach, a name that does not resolve, a TLS failure, a port
+ * fetch refuses. A headers timeout means the operator held the request for minutes: a retry would only wait as long again.
+ */
+const NOT_RETRIED = new Set(['ECONNREFUSED', 'ENOTFOUND', 'EHOSTUNREACH', 'ENETUNREACH', 'UND_ERR_CONNECT_TIMEOUT', 'UND_ERR_HEADERS_TIMEOUT']);
 const neverSent = (e: unknown) => {
   const cause = (e as { cause?: { code?: string; message?: string } })?.cause;
-  return NEVER_SENT.has(cause?.code ?? '') || cause?.message === 'bad port'; // a port fetch refuses to call, such as 9
+  const code = cause?.code ?? '';
+  return NOT_RETRIED.has(code) || /^(ERR_TLS_|ERR_SSL_|UNABLE_TO_|SELF_SIGNED|DEPTH_ZERO)|CERT/.test(code) || cause?.message === 'bad port'; // a port fetch refuses to call, such as 9
 };
 /** A fetch failure with its cause, which fetch keeps out of the message: "fetch failed: other side closed (UND_ERR_SOCKET)". */
 const networkError = (e: unknown): string => {
@@ -82,7 +87,7 @@ export class Agent {
         res = await fetch(`${api}${path}`, init);
       } catch (e) {
         // A refused or unresolved connection never reached the operator: nothing to replay, so the caller moves on at once.
-        if (attempt >= CALL_ATTEMPTS || neverSent(e)) throw new TypeError(`${method} ${path} at ${new URL(String(api)).host}: no answer after ${attempt} tries (${networkError(e)})`, { cause: e });
+        if (attempt >= CALL_ATTEMPTS || neverSent(e)) throw new TypeError(`${method} ${path} at ${new URL(String(api)).host}: no answer after ${attempt} ${attempt === 1 ? 'try' : 'tries'} (${networkError(e)})`, { cause: e });
         await new Promise((r) => setTimeout(r, CALL_BACKOFF_MS * attempt));
       }
     }

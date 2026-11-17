@@ -67,9 +67,23 @@ describe('Agent.call when the answer is lost (T-497)', () => {
     for (const [to, cause] of [[url, /ECONNREFUSED/], ['http://127.0.0.1:9', /bad port/]] as const) {
       const started = Date.now();
       const err = await agent(to).call('GET', '/v1/commitments/0xabc').catch((e: Error) => e);
-      expect((err as Error).message).toMatch(/^GET \/v1\/commitments\/0xabc at 127\.0\.0\.1:\d+: no answer after 1 tries \(fetch failed: /);
+      expect((err as Error).message).toMatch(/^GET \/v1\/commitments\/0xabc at 127\.0\.0\.1:\d+: no answer after 1 try \(fetch failed: /);
       expect((err as Error).message).toMatch(cause);
       expect(Date.now() - started).toBeLessThan(900);
+    }
+    // A TLS failure is not retried either: the request never reached the operator.
+    const tls = Object.assign(new TypeError('fetch failed'), { cause: Object.assign(new Error('unable to verify the first certificate'), { code: 'UNABLE_TO_VERIFY_LEAF_SIGNATURE' }) });
+    const real = globalThis.fetch;
+    let calls = 0;
+    globalThis.fetch = (async () => {
+      calls++;
+      throw tls;
+    }) as typeof fetch;
+    try {
+      await expect(agent('https://op.example').call('GET', '/x')).rejects.toThrow(/no answer after 1 try \(fetch failed: unable to verify the first certificate \(UNABLE_TO_VERIFY_LEAF_SIGNATURE\)\)/);
+      expect(calls).toBe(1);
+    } finally {
+      globalThis.fetch = real;
     }
   });
 
