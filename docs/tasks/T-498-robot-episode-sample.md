@@ -5,7 +5,7 @@
 - **Depends on:** T-469 (the goal commands and their bundles), T-496 (the bundle import pins in `tests/site-bundles.test.ts`)
 - **Paths this task may touch:** `examples/try-sell.ts`, `examples/robot-episode.ts` (new), `examples/robot-episode.test.ts` (new), `apps/test-agents/src/try-goals.test.ts` (the robot-episode cases), `site/llms.txt` (one sentence in the sell goal), `site/sell.txt` (one line), `site/ref/checks.txt` (one recipe section), the files `node site/build.mjs` writes from them (`site/try-sell.mjs` and the filled `llms.txt`), this file.
 - **Human gate:** the site deploy that publishes the new `try-sell.mjs` and its hash, Rafa's. The one live run on Sepolia comes after it.
-- **Status:** merged on 2026-11-17 (PR 606); not done. The site deploy and the one live run on Sepolia wait for Rafa.
+- **Status:** done (PR 606, merged 2026-11-17; the site deploy of 09:37 UTC and one live run on Sepolia, Released, are in Evidence)
 - **Agent/session:** planned by the robot-data research session, 2026-11-17, branch `t-498-robot-episode-sample` (this file only); built by a build session the same day, branch `t-498-robot-episode-build`.
 - **Roadmap row:** T-240
 - **Change kind:** 1 (copy and agent docs: the published command and its guides), with the examples' own tests for the code
@@ -71,7 +71,7 @@ Fill this in before review. Label each item measured, inferred or guessed.
 - Metrics [measured]:
   - The 10 s episode is 228,464 bytes (1,250 frames at 125 Hz), built in 20 ms. The ten checks are 8,585 bytes of JSON.
   - `site/try-sell.mjs` grew from 362,902 to 377,547 bytes.
-- Not yet run: the published command on Sepolia (the last criterion), after Rafa's site deploy.
+- **Live on Sepolia, 2026-11-17 [measured]:** after the site deploy of 09:37 UTC (crow-site `d0511744`, commit `711fbd7`), the published `try-sell.mjs` hashed to the `b5fa2e36…e561` that llms.txt pins. One run of `--sample robot-episode` from it, under `--permission`, sold 1,250 frames (10 s at 125 Hz, 226,164 bytes delivered) for 20 tUSDC to Crow's test buyer. All ten checks passed and the deal was Released in 57 s: commitment `0x9aa4ad00d920e14b9d374679d4ca4954238bfc729bdc51e5f6b6597eb8dafdd6`, decision transaction `0xda63eb6fd270ad8bb9e4d2ec9c0c79c5369211ff765cc16e1aa766d4647c403a`.
 
 ## Decisions
 
