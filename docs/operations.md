@@ -307,6 +307,12 @@ The maintainers keep the notes on agent sessions and permission prompts privatel
 
 Each entry records one deploy as it ran: the date and time in UTC, the commit, each Worker's new version and its rollback target, and what was measured after it. The deploy scripts print the entry's first line (`pnpm demo-cloud:deploy`, `pnpm site:deploy`, `node apps/test-agents/scripts/deploy.mjs`). The values are true for their date: for what runs now, read "What is live" above and each node's discovery.
 
+### The pilot's second deal: pilot-scan-1 with the artifacts call and an existing job (deployed 2026-11-17, 16:10 UTC)
+
+**Hosted seller pilot-scan-1 deploy 2026-11-17 16:10 UTC, commit `dc6238f` on a detached HEAD: pass.** crow-seller-pilot-scan-1 `096d7162-224b-4181-af84-fd52355139df` (rollback target `26ca51fd-7fe3-48d7-aa5e-96a65ab9e156`).
+
+It carries T-501 (pull request 617) and T-497's retry, with a corrected seller folder; Rafa reviewed its fingerprint and ran it from a clean worktree. The deal guard found 1 open deal, none at `starting`. Afterwards `/health` read `operational` with that deal still `refused` [measured]. At 16:22:36 UTC the pilot's second deal on this seller was Released, delivering the scan that had already finished, with no new start. `pilot-scan-2` keeps its earlier version.
+
 ### The demo page's security-review deal (site deployed 2026-11-17, 09:46 UTC)
 
 **Site deploy 2026-11-17 09:46 UTC, commit `a7cf276` on a detached HEAD: pass.** crow-site `fe12f7a0-6d72-4b1f-a47a-dd6a12dfa243` (rollback target `d0511744-178a-40e9-be86-8b6f5737d5d9`).
