@@ -307,6 +307,12 @@ The maintainers keep the notes on agent sessions and permission prompts privatel
 
 Each entry records one deploy as it ran: the date and time in UTC, the commit, each Worker's new version and its rollback target, and what was measured after it. The deploy scripts print the entry's first line (`pnpm demo-cloud:deploy`, `pnpm site:deploy`, `node apps/test-agents/scripts/deploy.mjs`). The values are true for their date: for what runs now, read "What is live" above and each node's discovery.
 
+### The demo page's security-review deal (site deployed 2026-11-17, 09:46 UTC)
+
+**Site deploy 2026-11-17 09:46 UTC, commit `a7cf276` on a detached HEAD: pass.** crow-site `fe12f7a0-6d72-4b1f-a47a-dd6a12dfa243` (rollback target `d0511744-178a-40e9-be86-8b6f5737d5d9`).
+
+It published T-500 (pull request 610): the demo page shows a security-review deal of the kind Crow's first pilot runs, from three live test deals with Crow's test buyer. Rafa ran it from his terminal; the permission classifier refused the session's own run. Wrangler uploaded 4 changed files: `demo/index.html`, `version.json`, `csp-hashes.json` and `guide-budget.json`. Before it, the 26 guides and bundles built from `origin/main` (`buy.txt`, `llms.txt`, the `ref/` pages and every `.mjs` bundle) matched what crow.direct served, byte for byte. Measured after it (plain GETs, 09:48 UTC): `version.json` names commit `a7cf2761` and version `fe12f7a0…`; `https://crow.direct/demo/` answers 200 and carries the deal box, the pilot sentence, the sentence on what the checks prove, the three cards (41 s, 51 s, 5 min 21 s) and their three settlement transactions; `try.mjs` hashes to `fd7d9a4a…` and `buy.mjs` to `ce610626…`, both unchanged.
+
 ### The lost-answer retry and the try path's fixes (site deployed 2026-11-17, 05:51 UTC)
 
 **Site deploy 2026-11-17 05:51 UTC, commit `7a75f7d8`: pass.** crow-site `388eb4be-2f72-4401-a6d4-738d93a47e9d` (rollback target `ce62448c-7bbe-42c9-86e4-0bec01bd85cc`).

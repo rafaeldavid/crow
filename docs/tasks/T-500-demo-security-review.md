@@ -6,7 +6,7 @@
 - **Depends on:** T-427 (the three endings), T-239 (Crow's test buyer), T-391 (the two-agent replay)
 - **Paths this task may touch:** `site/demo/index.html`, `tools/duet/` (new `review.ts`, `review-deals.ts`, `review-job-api.ts`, `review/`; changes to `scenarios.ts`, `world.ts`, `scripted.ts`, `replay.ts`, `endings.ts`, `endings.json`, `duet.test.ts`, `README.md`), this file. Never: `apps/test-agents`, `apps/hosted-sellers`, `examples/` (the stub is bundled into `buy.mjs` and `setup.mjs`), `packages/`, `contracts/src/`, the guides, `site/try.mjs`, `site/buy.mjs`, `site/setup.mjs` or any other pinned bundle.
 - **Human gate:** the site deploy is Rafa's.
-- **Status:** review (PR 610); the site deploy waits for Rafa
+- **Status:** done. PR 610, merged 2026-11-17 as `a7cf2761`; site deployed 2026-11-17 09:46 UTC, crow-site `fe12f7a0-6d72-4b1f-a47a-dd6a12dfa243`
 - **Agent/session:** the T-500 session, 2026-11-17, branch `t-500-demo-security-review`
 - **Roadmap row:** N102
 
@@ -44,7 +44,7 @@ Rafa decided on 2026-11-17 that the demo page at crow.direct/demo should show th
 - [x] No private name in the diff (`roadmap/deny.txt`); no refused word on the page.
 - [x] `node site/build.mjs && node site/check.mjs` and `pnpm exec vitest run tools/duet` pass; pinned bundles unchanged.
 - [x] One `reviewer` pass; findings fixed or recorded.
-- [ ] Merged by hand when every check passes; deploy commands handed to the coordinator.
+- [x] Merged by hand when every check passes; the site deployed (Rafa ran the command after the classifier refused the session's run) and checked live.
 
 ## Evidence
 
@@ -69,7 +69,7 @@ All measured on 2026-11-17 in this branch's worktree unless marked otherwise.
 
 ## Handoff
 
-**Built and reviewed; the site deploy waits for Rafa.** No Worker changed, so the site is the only deploy.
+**Done: merged and live.** Merged by hand as `a7cf2761` after every check passed. Site deploy 2026-11-17 09:46 UTC: crow-site `fe12f7a0-6d72-4b1f-a47a-dd6a12dfa243` (rollback target `d0511744-178a-40e9-be86-8b6f5737d5d9`), recorded in `docs/operations.md`, "Deploy record". The steps below are how it ran. No Worker changed, so the site is the only deploy.
 
 - **Pull request:** 610, branch `t-500-demo-security-review`. One `reviewer` pass: PASS, four Low findings, all fixed in commit `cb3e4551` (the briefs say two files; this file's replay ID, severity and evidence).
 - **Deploy, after the merge, in a fresh detached checkout of `origin/main`** (the deploy refuses a checkout that differs from its commit):
