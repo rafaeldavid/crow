@@ -12,7 +12,7 @@ import { preflightDelivery } from '@holdback/judgment';
 import { plain } from './plain.ts';
 import { Agent } from './agent.ts';
 import { convertReport, parseReportMapping, ReportNotConverted, type ReportMapping } from './report-converter.ts';
-import { FilesNotAdded, isRedirect, sellerApiClient, WrongWorkspace, type SellerApiConfig } from './seller-adapter-api.ts';
+import { FilesNotAdded, isRedirect, sellerApiClient, WrongScope, WrongWorkspace, type SellerApiConfig } from './seller-adapter-api.ts';
 import { commitmentIdOf, freshNonce, isAddressText, jcs, knownPins, moneyAddressWarnings, operatorFeeOf, publicOfferTerms, typedDataFile, typedOf, verifyPrepared } from './verify.ts';
 
 type J = any; // eslint-disable-line @typescript-eslint/no-explicit-any
@@ -382,6 +382,13 @@ export interface Deal {
    * same body again. The signer signs one delivery per deal, so a fresh one would be refused.
    */
   signedDelivery?: { path: string; body: J };
+  /**
+   * T-501: a job that already finished, named by the seller's operator before the deal was funded. Once funded, the
+   * deal follows that job and sends no start. `from`: the deal that held the job before, now closed.
+   */
+  existingJob?: { jobId: string; from?: Hex; at: string };
+  /** T-501: this deal's job was moved to that deal, which delivers it; this one delivers nothing. */
+  jobMovedTo?: Hex;
 }
 export interface Journal {
   deals: Record<string, Deal>;
@@ -1009,6 +1016,10 @@ export async function createSellerAdapter(c: SellerAdapterConfig, env: Readonly<
   }
   /** Saves the journal whole, through the shell: it keeps the old copy or the new one, never half of one. */
   const save = () => io.saveJournal(journal);
+  /** T-501: deals whose named existing job the job route is reading now. Their start waits until the read ends. */
+  const attaching = new Set<string>();
+  /** T-501 review: deals the deal loop is working on now. The job route moves no job out of one of them. */
+  const advancing = new Set<string>();
   // ---- Events (T-417): one JSON line each, for the seller's product metrics; never content, keys or identities ----
   let eventsBroken = false;
   const emit = (type: string, fields: Record<string, unknown>) => {
@@ -1367,6 +1378,13 @@ export async function createSellerAdapter(c: SellerAdapterConfig, env: Readonly<
       // counts its attempts from 0 here, so a journal without the count (written before T-408) reads as attempted.
       record(deal, { stage: 'starting', startAttempts: 0, note: 'every operator shows the hold funded' });
     }
+    if (deal.stage === 'starting' && attaching.has(id)) return; // T-501: the job route is reading a named job; no start until it ends
+    if (deal.stage === 'starting' && deal.existingJob) {
+      // T-501: the seller's operator named a job that already finished, and the route checked it. No start is sent,
+      // so no new job runs and nothing is charged at the seller's API. The result step checks the job again.
+      const { jobId, from } = deal.existingJob;
+      record(deal, { stage: 'started', jobId, note: `job ${jobId}: an existing job, named by the seller's operator; no start was sent${from ? `; it came from deal ${from}` : ''}` });
+    }
     if (deal.stage === 'starting' && deal.startConfig !== undefined && deal.startConfig !== startConfig) {
       // T-435: the configuration that decides where the start goes changed after this deal was priced, by a redeploy
       // or an edit. A start now could run the job in another account, or look new to an API that dedups by key. The
@@ -1427,6 +1445,14 @@ export async function createSellerAdapter(c: SellerAdapterConfig, env: Readonly<
       try {
         job = await sellerApi.result(values);
       } catch (e) {
+        if (e instanceof WrongScope) {
+          // T-501: a job that asked for another scope is never delivered: the deal holds, and the seller hears of it once.
+          return refuse(deal, now, createHash('sha256').update(`wrong-scope ${e.message}`, 'utf8').digest('hex'), { result: 'wrong_scope', scope: e.message, checks: [] }, `the job's request is not the deal's scope: ${e.message}`);
+        }
+        if (e instanceof FilesNotAdded) {
+          // T-501: the artifacts call failed: the delivery waits, as for a file that cannot be added.
+          return refuse(deal, now, createHash('sha256').update(`files-not-added ${e.message}`, 'utf8').digest('hex'), { result: 'files_not_added', files: e.message, checks: [] }, `its artifacts could not be added: ${e.message}`);
+        }
         if (!(e instanceof WrongWorkspace)) throw e;
         // A job from another account is never delivered (T-435): the deal holds, and the seller hears of it once.
         return refuse(deal, now, createHash('sha256').update(`wrong-workspace ${e.message}`, 'utf8').digest('hex'), { result: 'wrong_workspace', workspace: e.message, checks: [] }, `the job did not run in the pinned workspace: ${e.message}`);
@@ -1506,6 +1532,8 @@ export async function createSellerAdapter(c: SellerAdapterConfig, env: Readonly<
       // Recorded before the call: a crash between the call and its record makes the next start read the
       // settlement layer first, so the adapter never delivers twice.
       const attempt = (deal.refusals ?? 0) + 1;
+      // T-501 review: a deal whose job moved to another deal delivers nothing, whatever this pass read before.
+      if (deal.jobMovedTo !== undefined || (deal.stage as Stage) === 'closed') return;
       record(deal, { stage: 'delivering', ready: false, note: `delivering ${pre.bytes} bytes, ${pre.plaintextSha256}` });
       await (remote ? remoteDeliver(deal, bytes) : signerOf(deal).deliver(deal.terms, bytes));
       record(deal, { stage: 'delivered', note: `${pre.bytes} bytes, ${pre.plaintextSha256}` });
@@ -1544,6 +1572,7 @@ export async function createSellerAdapter(c: SellerAdapterConfig, env: Readonly<
 
   /** Records a refused result and alerts the seller once for each distinct result. The delivery waits. */
   function refuse(deal: Deal, now: number, resultSha256: string, detail: { result: string; checks: FailedCheck[] } & Record<string, unknown>, why: string): void {
+    if (deal.jobMovedTo !== undefined) return; // T-501 review: a deal whose job moved stays closed
     const deliverBy: string = deal.terms.timing.deliverBy;
     const every = refusal.refetchEverySec;
     const nextFetchAt = every === undefined ? undefined : new Date(now + every * 1000).toISOString();
@@ -1597,6 +1626,7 @@ export async function createSellerAdapter(c: SellerAdapterConfig, env: Readonly<
     for (const deal of Object.values(journal.deals)) {
       if (closed) return;
       if (!['offered', 'starting', 'start-unknown', 'started', 'refused', 'delivering'].includes(deal.stage)) continue;
+      advancing.add(deal.id);
       try {
         await advance(deal, passNow, full);
         lastError.delete(deal.id);
@@ -1604,6 +1634,8 @@ export async function createSellerAdapter(c: SellerAdapterConfig, env: Readonly<
         const message = plain((e as Error).message);
         if (!closed && lastError.get(deal.id) !== message) log(`${deal.id} waits at ${deal.stage}: ${message}. The adapter tries again at the next poll.`);
         lastError.set(deal.id, message);
+      } finally {
+        advancing.delete(deal.id);
       }
     }
   }
@@ -1650,23 +1682,88 @@ export async function createSellerAdapter(c: SellerAdapterConfig, env: Readonly<
     if (!bearerOk(req, refusal.ready!)) return send(401, { type: 'unauthorized', detail: 'this route needs Authorization: Bearer <credential>' }, { 'www-authenticate': 'Bearer realm="job"' });
     const bytes = await bodyOf(req, 4096);
     if (bytes === null) return send(413, { type: 'too_large', detail: 'the body is a JSON object with one jobId' });
-    let jobId: unknown;
+    let body: J;
     try {
-      jobId = JSON.parse(new TextDecoder().decode(bytes))?.jobId;
+      body = JSON.parse(new TextDecoder().decode(bytes));
     } catch {
       return send(400, { type: 'invalid_body', detail: 'the body is JSON: {"jobId": "<the job\'s ID>"}' });
     }
+    let jobId: unknown = isRecord(body) ? body.jobId : undefined;
     if (Number.isSafeInteger(jobId) && (jobId as number) >= 0) jobId = String(jobId);
     if (typeof jobId !== 'string' || !/^[\x21-\x7e]{1,200}$/.test(jobId)) return send(400, { type: 'invalid_body', detail: 'jobId is the job\'s ID: 1 to 200 printable characters, or a whole number' });
+    const existing: unknown = body.existing;
+    const fromRaw: unknown = body.from;
+    if (existing !== undefined && typeof existing !== 'boolean') return send(400, { type: 'invalid_body', detail: 'existing is true or false' });
+    if (fromRaw !== undefined && (existing !== true || typeof fromRaw !== 'string' || !/^0x[0-9a-fA-F]{64}$/.test(fromRaw))) return send(400, { type: 'invalid_body', detail: 'from, with existing true, is the commitment ID of the deal that holds the job' });
     const id = commitmentId.toLowerCase();
     const deal = Object.hasOwn(journal.deals, id) ? journal.deals[id]! : undefined;
     if (!deal) return send(404, { type: 'not_found', detail: 'this adapter holds no such deal' });
+    /** The other deal that holds the job, by its started job or its named existing one. */
+    // A deal whose job moved on (`jobMovedTo`) holds it no more: the deal it moved to does (T-501 review).
+    const holderOf = (job: string) => Object.values(journal.deals).find((d) => d.id !== deal.id && d.jobMovedTo === undefined && (d.jobId === job || d.existingJob?.jobId === job));
+    if (existing === true) return existingJobNamed(deal, jobId, fromRaw === undefined ? undefined : (fromRaw.toLowerCase() as Hex), holderOf);
     if (deal.stage !== 'start-unknown') return send(409, { type: 'not_waiting', detail: `the deal is ${deal.stage}, not waiting for its job's ID` });
-    const holder = Object.values(journal.deals).find((d) => d.id !== deal.id && d.jobId === jobId);
+    const holder = holderOf(jobId);
     if (holder) return send(409, { type: 'job_taken', detail: `job ${jobId} belongs to another deal in this journal, ${holder.id}` });
     record(deal, { stage: 'started', jobId, note: `job ${jobId}, named by the seller's operator` });
     wake();
     return send(202, { commitmentId: id, stage: deal.stage, jobId });
+  }
+
+  /**
+   * T-501: POST /deals/<commitmentId>/job with {"jobId", "existing": true, "from"?}: the seller's operator names a job
+   * that already finished for a deal that is not yet funded, so the adapter sends no start for it. The job must be
+   * done, in the pinned workspace, and asked for the deal's scope; a job another deal holds moves only when `from`
+   * names that deal and it is refused or closed. That deal is then closed, so one job is delivered into one deal.
+   */
+  async function existingJobNamed(deal: Deal, jobId: string, from: Hex | undefined, holderOf: (job: string) => Deal | undefined): Promise<Response> {
+    const id = deal.id;
+    const open = () => deal.stage === 'offered' || (deal.stage === 'starting' && !(deal.startAttempts! > 0));
+    if (deal.stage !== 'offered') return send(409, { type: 'not_waiting', detail: `the deal is ${deal.stage}: an existing job is named only before the deal is funded, while no start has been sent` });
+    const named = deal.existingJob?.jobId ?? (attaching.has(id) ? '(being checked)' : undefined);
+    if (named !== undefined) return send(409, { type: 'already_named', detail: `the deal already has job ${named} named` });
+    if (!sellerApi.checksJob) return send(409, { type: 'cannot_check', detail: `this seller cannot check an existing job: ${sellerApi.checksJobNot}` });
+    const taken = (): Response | undefined => {
+      const holder = holderOf(jobId);
+      if (!holder) return from === undefined ? undefined : send(409, { type: 'not_holder', detail: `deal ${from} does not hold job ${jobId} in this journal` });
+      if (from !== holder.id) return send(409, { type: 'job_taken', detail: `job ${jobId} belongs to deal ${holder.id}; name it as "from" to move the job from that deal` });
+      if (holder.stage !== 'refused' && holder.stage !== 'closed') return send(409, { type: 'job_taken', detail: `job ${jobId} belongs to deal ${holder.id}, which is ${holder.stage}: a job moves only from a refused or closed deal` });
+      // The deal loop may be part-way through that deal's pass, fetching or delivering its result (T-501 review).
+      if (advancing.has(holder.id)) return send(409, { type: 'holder_busy', detail: `deal ${holder.id} is being worked on now; send the request again in a few seconds` });
+      return undefined;
+    };
+    const before = taken();
+    if (before) return before;
+    attaching.add(id);
+    let job: Awaited<ReturnType<typeof sellerApi.result>> | 'checked';
+    try {
+      job = await sellerApi.result({ commitmentId: id, quoteId: deal.quoteId, jobId, buyer: deal.terms.buyer, scope: deal.scope, options: deal.options });
+    } catch (e) {
+      if (e instanceof WrongWorkspace) return send(409, { type: 'wrong_workspace', detail: plain(e.message) });
+      if (e instanceof WrongScope) return send(409, { type: 'wrong_scope', detail: plain(e.message) });
+      // The artifacts call runs after the workspace, scope and status checks have passed; its failure only holds the
+      // delivery later, as it would for a started job.
+      if (e instanceof FilesNotAdded) job = 'checked';
+      else return send(502, { type: 'seller_api', detail: `the job could not be read: ${plain((e as Error).message)}` });
+    } finally {
+      attaching.delete(id);
+    }
+    if (job !== 'checked' && job.state === 'running') return send(409, { type: 'not_finished', detail: `job ${jobId} is not done${job.status ? ` (${plain(job.status)})` : ''}: name a finished job` });
+    if (job !== 'checked' && job.state === 'failed') return send(409, { type: 'job_failed', detail: `job ${jobId} failed (${plain(job.status)})` });
+    // Read again after the call: the deal or the job's holder may have moved meanwhile.
+    if (!open()) return send(409, { type: 'not_waiting', detail: `the deal became ${deal.stage} while the job was read; nothing was named` });
+    if (deal.existingJob) return send(409, { type: 'already_named', detail: `the deal already has job ${deal.existingJob.jobId} named` });
+    const after = taken();
+    if (after) return after;
+    const holder = from === undefined ? undefined : holderOf(jobId);
+    // Both deals change in one journal write (T-501 red team): a crash leaves the job with one of them, never neither.
+    deal.existingJob = { jobId, ...(holder ? { from: holder.id } : {}), at: new Date().toISOString() };
+    if (holder) record(holder, { stage: 'closed', ready: false, jobMovedTo: id, note: `its job ${jobId} moved to deal ${id}, named by the seller's operator; this deal delivers nothing, and its buyer may reclaim the hold after deliverBy ${holder.terms.timing.deliverBy}` });
+    else save();
+    log(`${id} job ${jobId} is named as an existing job by the seller's operator${holder ? `, moved from deal ${holder.id}` : ''}; once funded, the deal follows it and sends no start.`);
+    emit('job.attached', { commitmentId: id, from: holder?.id ?? null });
+    wake();
+    return send(202, { commitmentId: id, stage: deal.stage, jobId, ...(holder ? { from: holder.id } : {}) });
   }
 
   /** One request, by its path under the adapter's address: the same routes the Node server served before T-434. */

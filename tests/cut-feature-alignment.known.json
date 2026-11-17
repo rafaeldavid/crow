@@ -1,5 +1,10 @@
 {
   "files": {
+    "docs/audit/README.md": "docs/audit [R12]",
+    "docs/audit/engagement.md": "docs/audit [R12]",
+    "docs/audit/functions.md": "docs/audit [R12]",
+    "docs/audit/known-issues.md": "docs/audit [R12]",
+    "docs/audit/test-quality.md": "docs/audit [R12]",
     "examples/deployments.ts": "examples/ pinned client [R6c-3 for G; open for the rest]",
     "fixtures/clubs/data-services-v1.yaml": "fixtures/ [R6c-1, R6 part 1]",
     "fixtures/scenarios/neutrality.adjudicator-never-accepts.scenario.yaml": "fixtures/ [R6c-1, R6 part 1]",

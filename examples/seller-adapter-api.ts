@@ -69,6 +69,16 @@ export interface ResultMapping extends CallMapping {
   /** A second call, made once the job is done, whose answer holds the result. */
   reportCall?: CallMapping;
   files?: FilesMapping;
+  /**
+   * A second call, made once the job is done and its workspace checked, whose JSON answer goes into the result at
+   * `into` (T-501): an API that serves a job's artifacts apart from the job. Its path takes `{{jobId}}` only.
+   */
+  merge?: { path: string; into: string };
+  /**
+   * Where the result call's answer names the job's own request, by scope field (T-501): each must equal the deal's
+   * scope, a list in any order. A result whose job asked for another scope is never delivered.
+   */
+  jobScope?: Record<string, string>;
 }
 /**
  * The one account at your API that the adapter's jobs run in (T-435, ADR-0037 section 5): a workspace, a project or a
@@ -82,6 +92,8 @@ export interface WorkspacePin {
 
 /** A result whose job ran in another account than `sellerApi.workspace` names (T-435): never delivered. */
 export class WrongWorkspace extends Error {}
+/** A result whose job asked for another scope than the deal's, by `sellerApi.result.jobScope` (T-501): never delivered. */
+export class WrongScope extends Error {}
 
 export interface SellerApiConfig {
   /** Every request goes under this address. Required with a mapping or a credential. */
@@ -128,6 +140,13 @@ export interface SellerApi {
   result(v: Values): Promise<JobAnswer>;
   /** The result with its further files added, or the result as it is when none are configured. */
   withFiles(result: Uint8Array, v: Values): Promise<Uint8Array>;
+  /**
+   * Whether a result call can tell an existing job's account and request (T-501): `sellerApi.result.jobScope` is set,
+   * and a pinned workspace has its `resultPointer`. Without both, no existing job is taken for a deal.
+   */
+  checksJob: boolean;
+  /** When `checksJob` is false: what the configuration lacks, for the route's refusal. */
+  checksJobNot: string;
 }
 
 const PLACEHOLDER = /\{\{([A-Za-z][A-Za-z0-9]*)(?:\.([A-Za-z][A-Za-z0-9]*))?\}\}/g;
@@ -143,6 +162,18 @@ const isRecord = (v: J): boolean => v !== null && typeof v === 'object' && !Arra
  */
 export const isRedirect = (res: Response): boolean => res.type === 'opaqueredirect' || (res.status >= 300 && res.status <= 399);
 const short = (v: J) => plain(String(v)).slice(0, 80);
+/** Two JSON values are the same; two lists are the same items in any order (T-501, the job's request). */
+function sameValue(a: J, b: J): boolean {
+  if (Array.isArray(a) && Array.isArray(b)) {
+    if (a.length !== b.length) return false;
+    const key = (x: J[]) => x.map((i) => JSON.stringify(i)).sort();
+    const [ka, kb] = [key(a), key(b)];
+    return ka.every((x, i) => x === kb[i]);
+  }
+  if (Array.isArray(a) || Array.isArray(b)) return false;
+  if (a === undefined || b === undefined) return a === b;
+  return JSON.stringify(a) === JSON.stringify(b);
+}
 
 /** The names each call may use. `scope` and `options` stand alone only, as a whole body value. */
 const NAMES = {
@@ -150,6 +181,8 @@ const NAMES = {
   start: ['buyer', 'scope', 'options', 'commitmentId', 'quoteId', 'workspace'],
   result: ['buyer', 'scope', 'options', 'commitmentId', 'quoteId', 'jobId', 'workspace'],
   file: ['buyer', 'scope', 'options', 'commitmentId', 'quoteId', 'jobId', 'file', 'workspace'],
+  // T-501: the artifacts call names the job and its account only, so nothing else can steer where it goes.
+  merge: ['jobId', 'workspace'],
 } as const;
 type Use = keyof typeof NAMES;
 
@@ -318,7 +351,7 @@ export function sellerApiClient(api: J, env: Readonly<Record<string, string | un
     const parent = parentIn((api.quote as J).path as string);
     if (parent !== parentIn((api.start as J).path as string)) throw new Error('sellerApi.quote.path and sellerApi.start.path name the account under different segments: both write <collection>/{{workspace}}');
     if (parent !== undefined && parent !== '' && !parent.includes('{{')) {
-      const all = [api.quote, api.start, api.result, rmap.reportCall, rmap.files].map((cl: J) => (typeof cl === 'string' ? cl : isRecord(cl) ? cl.path : undefined)).filter((x): x is string => typeof x === 'string');
+      const all = [api.quote, api.start, api.result, rmap.reportCall, rmap.files, rmap.merge].map((cl: J) => (typeof cl === 'string' ? cl : isRecord(cl) ? cl.path : undefined)).filter((x): x is string => typeof x === 'string');
       for (const path of all) {
         const segs = segmentsOf(path);
         segs.forEach((seg, i) => {
@@ -328,7 +361,7 @@ export function sellerApiClient(api: J, env: Readonly<Record<string, string | un
     }
     for (const k of ['quote', 'start', 'result'] as const) {
       const call = api[k];
-      const paths = [typeof call === 'string' ? call : isRecord(call) ? call.path : undefined, isRecord(call) && isRecord(call.reportCall) ? call.reportCall.path : undefined, isRecord(call) && isRecord(call.files) ? call.files.path : undefined];
+      const paths = [typeof call === 'string' ? call : isRecord(call) ? call.path : undefined, isRecord(call) && isRecord(call.reportCall) ? call.reportCall.path : undefined, isRecord(call) && isRecord(call.files) ? call.files.path : undefined, isRecord(call) && isRecord(call.merge) ? call.merge.path : undefined];
       for (const path of paths) {
         if (typeof path === 'string' && path.split(/[/?#]/).some((seg: string) => seg === w.id || seg === encodeURIComponent(w.id))) {
           throw new Error(`sellerApi.${k}: a path names the workspace as text; write {{workspace}}, so the paths and sellerApi.workspace.id can never differ`);
@@ -369,7 +402,7 @@ export function sellerApiClient(api: J, env: Readonly<Record<string, string | un
     auth = { header: a.header.toLowerCase(), value: `${a.prefix ?? ''}${value}`, env: a.env };
   }
 
-  const LABELS: Record<string, string> = { 'sellerApi.quote': 'the quote', 'sellerApi.start': 'the start', 'sellerApi.result': 'the result', 'sellerApi.result.reportCall': 'the report call', 'sellerApi.result.files': 'a file' };
+  const LABELS: Record<string, string> = { 'sellerApi.quote': 'the quote', 'sellerApi.start': 'the start', 'sellerApi.result': 'the result', 'sellerApi.result.reportCall': 'the report call', 'sellerApi.result.files': 'a file', 'sellerApi.result.merge': 'the artifacts call' };
   const prepare = (at: string, c: J, use: Use, defaults: { method: Method; body: J }, extraKeys: string[], reserved: string[]): Prepared => {
     if (typeof c === 'string') {
       // Today's form: a whole address, with `{jobId}` where the job's ID goes.
@@ -444,7 +477,7 @@ export function sellerApiClient(api: J, env: Readonly<Record<string, string | un
 
   // ---- The result ----
   const r = api.result;
-  const result = prepare('sellerApi.result', r, 'result', { method: 'GET', body: undefined }, ['status', 'report', 'reportCall', 'files'], []);
+  const result = prepare('sellerApi.result', r, 'result', { method: 'GET', body: undefined }, ['status', 'report', 'reportCall', 'files', 'merge', 'jobScope'], []);
   const rm: J = isRecord(r) ? r : {};
   let status: { by: 'http'; running: number[]; done: number[]; failed: number[] } | { by: 'field'; pointer: string[]; running: string[]; done: string[]; failed: string[] } = { by: 'http', running: [202], done: [200], failed: [] };
   if (rm.status !== undefined) {
@@ -494,13 +527,50 @@ export function sellerApiClient(api: J, env: Readonly<Record<string, string | un
     const call = prepare('sellerApi.result.files', { path: f.path }, 'file', { method: 'GET', body: undefined }, [], []);
     files = { list: pointerParts('sellerApi.result.files.list', f.list), into, same: f.list === f.into, call, maxCount: f.maxCount, maxTotalBytes: f.maxTotalBytes, encoding: f.encoding ?? 'utf8' };
   }
+  // ---- T-501: the artifacts call, and the job's own request ----
+  let merge: { call: Prepared; into: string[]; carries: boolean } | undefined;
+  if (rm.merge !== undefined) {
+    const m = rm.merge;
+    if (!isRecord(m)) throw new Error('sellerApi.result.merge must be an object: path and into');
+    for (const k of Object.keys(m)) if (!['path', 'into'].includes(k)) throw new Error(`sellerApi.result.merge has a field the adapter does not take: ${short(k)}`);
+    if (rm.reportCall !== undefined) throw new Error('sellerApi.result.merge and sellerApi.result.reportCall cannot both be set: the artifacts call adds to the result call\'s answer, which a report call replaces');
+    if (typeof m.path !== 'string' || !m.path.split(/[/?#]/).includes('{{jobId}}')) throw new Error('sellerApi.result.merge.path must be a path under sellerApi.baseUrl with {{jobId}} as one whole segment');
+    const into = pointerParts('sellerApi.result.merge.into', m.into);
+    if (into.length === 0) throw new Error('sellerApi.result.merge.into must name a field inside the result, not the whole result');
+    const carries = m.path.split(/[?#]/)[0]!.split('/').includes('{{workspace}}');
+    // The call goes out with the credential: it must follow a result whose account was read, or name the account itself.
+    if (workspace && !carries && !workspace.resultAt) throw new Error('sellerApi.result.merge needs sellerApi.workspace.resultPointer, or {{workspace}} in its path: the call runs only after the job is known to be in the pinned workspace');
+    merge = { call: prepare('sellerApi.result.merge', { path: m.path }, 'merge', { method: 'GET', body: undefined }, [], []), into, carries };
+  }
+  let jobScope: Array<[string, string[]]> | undefined;
+  if (rm.jobScope !== undefined) {
+    const s = rm.jobScope;
+    if (!isRecord(s) || Object.keys(s).length === 0) throw new Error('sellerApi.result.jobScope must name one or more scope fields, each with a JSON pointer into the result answer');
+    jobScope = Object.entries(s).map(([k, p]) => {
+      if (!fields.scope.includes(k)) throw new Error(`sellerApi.result.jobScope names ${short(k)}, which the scope rules do not define`);
+      return [k, pointerParts(`sellerApi.result.jobScope.${k}`, p)];
+    });
+  }
+  // T-501 red team: an existing job stands in for the start, so jobScope must cover every scope field the start sends,
+  // and the start may send no options, which no pointer compares. `{{scope}}` whole sends every field.
+  const startText = JSON.stringify({ url: start.url, headers: start.headers, body: start.body ?? null });
+  const startScope = new Set<string>();
+  let startOptions = false;
+  for (const [, n, f] of startText.matchAll(PLACEHOLDER)) {
+    if (n === 'scope') for (const x of f === undefined ? fields.scope : [f]) startScope.add(x);
+    if (n === 'options') startOptions = true;
+  }
+  const uncovered = [...startScope].filter((k) => !jobScope?.some(([j]) => j === k));
+  const checksJob = jobScope !== undefined && uncovered.length === 0 && !startOptions && (!workspace || workspace.resultAt !== undefined);
+  const checksJobNot = jobScope === undefined ? 'set sellerApi.result.jobScope' : uncovered.length ? `sellerApi.result.jobScope must also name ${uncovered.map(short).join(', ')}, which the start sends` : startOptions ? 'the start sends options, which jobScope cannot compare' : 'set sellerApi.workspace.resultPointer with a pinned workspace';
 
   const strict = base !== undefined; // a mapping or a credential: no redirects, and answers capped
   const send = async (p: Prepared, given: Values, extra: Record<string, string> = {}, cap: number | undefined = strict ? DELIVERY_CAP_BYTES : undefined): Promise<{ status: number; bytes: Uint8Array }> => {
     // The workspace comes from the configuration only: whatever a caller passed under that name is replaced.
     const v: Values = { ...given, workspace: workspace?.id };
     const url = urlFor(p.what, p.url, v, base);
-    if (workspace && ['sellerApi.quote', 'sellerApi.start', 'sellerApi.result.reportCall', 'sellerApi.result.files'].includes(p.what) && !url.pathname.split('/').includes(workspace.segment)) {
+    const named = ['sellerApi.quote', 'sellerApi.start', 'sellerApi.result.reportCall', 'sellerApi.result.files', ...(merge?.carries ? ['sellerApi.result.merge'] : [])];
+    if (workspace && named.includes(p.what) && !url.pathname.split('/').includes(workspace.segment)) {
       throw new Error(`${p.label} would go to ${url.pathname}, which does not name the pinned workspace: nothing was sent`);
     }
     const headers: Record<string, string> = Object.create(null);
@@ -537,8 +607,10 @@ export function sellerApiClient(api: J, env: Readonly<Record<string, string | un
   return {
     readsToken,
     startRepeatable,
+    checksJob,
+    checksJobNot,
     ...(startOneShotBecause ? { startOneShotBecause } : {}),
-    describe: `The seller API is ${base ? `under ${base.href}` : 'at the three configured addresses'}, with ${auth ? `a credential from ${auth.env} in header ${auth.header}` : 'no credential'}${unitsAt !== undefined ? `; a quote prices ${plain(unitsAt)} units at ${unitPrice} base units each` : ''}; its job state is read by ${status.by === 'http' ? 'HTTP status' : 'a status field'}${files ? `, and a result's further files are added at ${plain(rm.files.into)}` : ''}${workspace ? `; every quote and start runs in the pinned workspace${workspace.resultAt ? ', and a result from another is not delivered' : ''}` : ''}.`,
+    describe: `The seller API is ${base ? `under ${base.href}` : 'at the three configured addresses'}, with ${auth ? `a credential from ${auth.env} in header ${auth.header}` : 'no credential'}${unitsAt !== undefined ? `; a quote prices ${plain(unitsAt)} units at ${unitPrice} base units each` : ''}; its job state is read by ${status.by === 'http' ? 'HTTP status' : 'a status field'}${files ? `, and a result's further files are added at ${plain(rm.files.into)}` : ''}${merge ? `; once the job is done, the artifacts call adds its answer at ${plain(rm.merge.into)}` : ''}${jobScope ? `; a job whose request names another ${jobScope.map(([k]) => plain(k)).join(', ')} than the deal's is not delivered` : ''}${workspace ? `; every quote and start runs in the pinned workspace${workspace.resultAt ? ', and a result from another is not delivered' : ''}` : ''}.`,
 
     async quote(v) {
       const { status: code, bytes } = await send(quote, v);
@@ -596,6 +668,46 @@ export function sellerApiClient(api: J, env: Readonly<Record<string, string | un
         if (w === undefined || !status.done.includes(w)) throw new Error(`the seller API's job status ${w === undefined ? 'is missing' : `"${short(w)}" is none of the configured values`}`);
       }
       pinned();
+      if (jobScope) {
+        // T-501: the job's own request, read from the same answer, must be the deal's scope, field by field.
+        let doc: J;
+        try {
+          doc = JSON.parse(new TextDecoder('utf-8', { fatal: true }).decode(bytes));
+        } catch {
+          throw new WrongScope('the result answer is not JSON, so the job\'s request cannot be read');
+        }
+        for (const [field, at] of jobScope) {
+          const got = pick(doc, at);
+          const want = isRecord(v.scope) && Object.hasOwn(v.scope, field) ? v.scope[field] : undefined;
+          if (!sameValue(got, want)) throw new WrongScope(`the job asked for ${plain(field)} ${short(JSON.stringify(got) ?? 'nothing')}, not the deal's ${short(JSON.stringify(want) ?? 'nothing')}`);
+        }
+      }
+      if (merge) {
+        // T-501: after the workspace check, never before. The path is the configuration's, filled with the job's ID
+        // only; the answer is capped, must be 2xx and JSON, and goes into a field the result does not have.
+        let got: { status: number; bytes: Uint8Array };
+        try {
+          got = await send(merge.call, { jobId: v.jobId });
+        } catch (e) {
+          throw new FilesNotAdded(`the artifacts call: ${plain((e as Error).message)}`);
+        }
+        if (got.status < 200 || got.status > 299) throw new FilesNotAdded(`the seller API answered ${got.status} to the artifacts call`);
+        let doc: J;
+        let added: J;
+        try {
+          doc = JSON.parse(new TextDecoder('utf-8', { fatal: true }).decode(bytes));
+          added = JSON.parse(new TextDecoder('utf-8', { fatal: true }).decode(got.bytes));
+        } catch {
+          throw new FilesNotAdded('the result or the artifacts call\'s answer is not JSON');
+        }
+        const parent = pick(doc, merge.into.slice(0, -1));
+        const last = merge.into[merge.into.length - 1]!;
+        if (!isRecord(parent)) throw new FilesNotAdded(`the result has no object at ${plain(rm.merge.into)}'s parent, to add the artifacts to`);
+        if (Object.hasOwn(parent, last)) throw new FilesNotAdded(`the result already has a field at ${plain(rm.merge.into)}`);
+        Object.defineProperty(parent, last, { value: added, enumerable: true, writable: true, configurable: true });
+        done = new TextEncoder().encode(JSON.stringify(doc));
+        if (done.length > DELIVERY_CAP_BYTES) throw new FilesNotAdded(`the result with its artifacts is ${done.length} bytes, more than the delivery cap of ${DELIVERY_CAP_BYTES}`);
+      }
       if (reportCall) {
         const second = await send(reportCall, v);
         ok2xx('the report call', second.status);

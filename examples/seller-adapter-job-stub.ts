@@ -8,6 +8,7 @@
 //   POST runs                 {estimate, reference, input}      -> 201 {run: {id}}; the same X-Request-Key gives the same run
 //   GET  runs/<id>                                              -> {run: {id, state}, output?}; state queued, running, complete or error
 //   GET  runs/<id>/files/<path>                                 -> the file's bytes
+//   GET  runs/<id>/notes                                        -> a list of notes on a finished run, [] before (T-501)
 // The price is made up for the tests: 100.00 tUSD plus 50.00 tUSD per depth, one day per depth. Test data only.
 import { createServer } from 'node:http';
 import type { AddressInfo } from 'node:net';
@@ -39,6 +40,11 @@ export interface JobStubOptions {
    */
   workspaces?: boolean;
   reportsWorkspace?: string;
+  /** Runs that exist before any start, such as a job that finished for an earlier deal (T-501). */
+  seedRuns?: Array<{ id: J; input: J; workspace?: string; state?: 'complete' | 'running' | 'error' }>;
+  /** The status and body the notes route answers; default 200 and one note per run. */
+  notesStatus?: number;
+  notesBody?: J;
 }
 
 export interface JobStub {
@@ -61,7 +67,8 @@ export const DEFAULT_FILES: Record<string, string> = {
 
 export async function startJobStub(o: JobStubOptions): Promise<JobStub> {
   const requests: JobStub['requests'] = [];
-  const runs = new Map<string, { id: J; key: string; reference: string; input: J; reads: number; workspace?: string }>();
+  const runs = new Map<string, { id: J; key: string; reference: string; input: J; reads: number; workspace?: string; state?: 'complete' | 'running' | 'error' }>();
+  for (const r of o.seedRuns ?? []) runs.set(`seed-${String(r.id)}`, { id: r.id, key: `seed-${String(r.id)}`, reference: 'seeded', input: r.input, reads: 0, ...(r.workspace === undefined ? {} : { workspace: r.workspace }), state: r.state ?? 'complete' });
   const workspacesNamed: string[] = [];
   let broken = new Set(o.brokenFiles ?? []);
   let startsSeen = 0;
@@ -113,17 +120,26 @@ export async function startJobStub(o: JobStubOptions): Promise<JobStub> {
         if (content === undefined) return send(404, { detail: 'no such file' });
         return res.writeHead(200, { 'content-type': 'application/octet-stream' }).end(content);
       }
+      const notes = /^runs\/([^/]+)\/notes$/.exec(route);
+      if (req.method === 'GET' && notes) {
+        const run = [...runs.values()].find((r) => String(r.id) === decodeURIComponent(notes[1]!));
+        if (!run) return send(404, { detail: 'no such run' });
+        if (o.notesStatus !== undefined) return send(o.notesStatus, o.notesBody ?? { detail: 'the notes store is down' });
+        return send(200, o.notesBody ?? [{ kind: 'note', run: run.id, text: `notes on ${run.input?.target}` }]);
+      }
       const read = /^runs\/([^/]+)$/.exec(route);
       if (req.method === 'GET' && read) {
         const run = [...runs.values()].find((r) => String(r.id) === decodeURIComponent(read[1]!));
         if (!run) return send(404, { detail: 'no such run' });
         const n = run.reads++;
         const until = o.readsUntilComplete ?? 2;
-        if (n < until) return send(200, { run: { id: run.id, state: n === 0 ? 'queued' : 'running' } });
-        if (o.fail) return send(200, { run: { id: run.id, state: 'error' }, detail: 'the job ran out of memory' });
-        const output = { summary: `Reviewed ${run.input?.target} to depth ${run.input?.depth}.`, target: run.input?.target, proofs: o.fileList ?? Object.keys(DEFAULT_FILES) };
         const named = o.reportsWorkspace ?? run.workspace;
-        return send(200, { run: { id: run.id, state: 'complete', ...(named === undefined ? {} : { workspace: named }) }, output });
+        const where = named === undefined ? {} : { workspace: named };
+        // The run's own request, as the job's answer names it: what jobScope reads (T-501).
+        if (run.state === 'running' || (run.state === undefined && n < until)) return send(200, { run: { id: run.id, state: run.state ?? (n === 0 ? 'queued' : 'running'), input: run.input, ...where } });
+        if (run.state === 'error' || o.fail) return send(200, { run: { id: run.id, state: 'error', input: run.input, ...where }, detail: 'the job ran out of memory' });
+        const output = { summary: `Reviewed ${run.input?.target} to depth ${run.input?.depth}.`, target: run.input?.target, proofs: o.fileList ?? Object.keys(DEFAULT_FILES) };
+        return send(200, { run: { id: run.id, state: 'complete', input: run.input, ...where }, output });
       }
       return send(404, { detail: 'not found' });
     })().catch((e: Error) => send(400, { detail: e.message }));
