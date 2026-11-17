@@ -6,7 +6,7 @@
 - **Depends on:** T-427 (the three endings), T-239 (Crow's test buyer), T-391 (the two-agent replay)
 - **Paths this task may touch:** `site/demo/index.html`, `tools/duet/` (new `review.ts`, `review-deals.ts`, `review-job-api.ts`, `review/`; changes to `scenarios.ts`, `world.ts`, `scripted.ts`, `replay.ts`, `endings.ts`, `endings.json`, `duet.test.ts`, `README.md`), this file. Never: `apps/test-agents`, `apps/hosted-sellers`, `examples/` (the stub is bundled into `buy.mjs` and `setup.mjs`), `packages/`, `contracts/src/`, the guides, `site/try.mjs`, `site/buy.mjs`, `site/setup.mjs` or any other pinned bundle.
 - **Human gate:** the site deploy is Rafa's.
-- **Status:** in progress
+- **Status:** review (PR 610); the site deploy waits for Rafa
 - **Agent/session:** the T-500 session, 2026-11-17, branch `t-500-demo-security-review`
 - **Roadmap row:** N102
 
@@ -38,12 +38,12 @@ Rafa decided on 2026-11-17 that the demo page at crow.direct/demo should show th
 
 ## Acceptance criteria
 
-- [ ] Three live deals on Sepolia, one per ending, with their records and transactions in `tools/duet/endings.json`.
-- [ ] The replay re-run on the new scope and published; the endings section rebuilt from the new data.
-- [ ] The page names no pilot party, links no pilot deal, and states what the checks do not prove; a test fails the page without those sentences.
-- [ ] No private name in the diff (`roadmap/deny.txt`); no refused word on the page.
-- [ ] `node site/build.mjs && node site/check.mjs` and `pnpm exec vitest run tools/duet` pass; pinned bundles unchanged.
-- [ ] One `reviewer` pass; findings fixed or recorded.
+- [x] Three live deals on Sepolia, one per ending, with their records and transactions in `tools/duet/endings.json`.
+- [x] The replay re-run on the new scope and published; the endings section rebuilt from the new data.
+- [x] The page names no pilot party, links no pilot deal, and states what the checks do not prove; a test fails the page without those sentences.
+- [x] No private name in the diff (`roadmap/deny.txt`); no refused word on the page.
+- [x] `node site/build.mjs && node site/check.mjs` and `pnpm exec vitest run tools/duet` pass; pinned bundles unchanged.
+- [x] One `reviewer` pass; findings fixed or recorded.
 - [ ] Merged by hand when every check passes; deploy commands handed to the coordinator.
 
 ## Evidence
@@ -68,3 +68,16 @@ All measured on 2026-11-17 in this branch's worktree unless marked otherwise.
 - **Full suite:** `pnpm exec vitest run tools/duet` 46 of 46, twice in a row; one earlier run had one scripted scenario fail while the Mac's load average stood at 80 to 127 (other sessions), and it did not repeat alone or in the full suite. The reviewer's own run: 46 of 46 in 84 s. After the review's fixes (two brief sentences, no code path), two more full runs at a load average of 124 to 136 failed 2 and 3 tests, each a different set: a `--help` test that timed out at 30 s, and scripted deals that ran out of time. Each passed when run alone. Inferred: the machine's load, not this change; CI, on an unloaded runner, is the gate.
 
 ## Handoff
+
+**Built and reviewed; the site deploy waits for Rafa.** No Worker changed, so the site is the only deploy.
+
+- **Pull request:** 610, branch `t-500-demo-security-review`. One `reviewer` pass: PASS, four Low findings, all fixed in commit `cb3e4551` (the briefs say two files; this file's replay ID, severity and evidence).
+- **Deploy, after the merge, in a fresh detached checkout of `origin/main`** (the deploy refuses a checkout that differs from its commit):
+  1. `git -C /Users/rafa/Documents/escrow fetch origin main`
+  2. `git -C /Users/rafa/Documents/escrow worktree add --detach /Users/rafa/Documents/escrow/.worktrees/site-deploy-t500 origin/main`
+  3. `pnpm --dir /Users/rafa/Documents/escrow/.worktrees/site-deploy-t500 install --frozen-lockfile`
+  4. `pnpm --dir /Users/rafa/Documents/escrow/.worktrees/site-deploy-t500 build` (the site's build bundles from `packages/*/dist`)
+  5. `pnpm --dir /Users/rafa/Documents/escrow/.worktrees/site-deploy-t500 site:deploy`
+- **What Rafa should see:** step 5 ends with a record line naming the new crow-site version and its rollback target. Then https://crow.direct/demo/ shows "Three ways a deal ends" with the box "What the buyer asked for" naming Damn Vulnerable DeFi v4, and cards reading 41 s and 40 test dollars, 51 s and 40 test dollars, 5 min 21 s and 41 test dollars. The record and Sepolia links on each card open the deals in the Evidence table. `https://crow.direct/try.mjs` keeps SHA-256 `fd7d9a4a…`.
+- **To refresh the deals later:** run `node tools/duet/review-deals.ts --outcome release`, `refund` and `reclaim`; put each deal's IDs and times into `tools/duet/endings.json`; run `node tools/duet/duet.ts publish <run>`; then put the section back exactly as `endings.ts` writes it, since the publisher shortens long hex IDs (the test fails until then). This session's script for that step is `reports/scratch/t500/insert-endings.ts` in the main checkout, not committed.
+- **Not done:** the browser check covered 375 px and the pane's own width of about 400 px, not a 1,280 px desktop.
