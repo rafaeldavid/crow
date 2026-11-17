@@ -5,7 +5,7 @@
 - **Depends on:** T-316 (the preflight), T-323 (the report mapping), T-329 (refused results), T-501 (the artifacts call)
 - **Paths this task may touch:** `examples/seller-adapter-core.ts`, `examples/seller-adapter-api.ts`, `examples/report-converter.ts`, `examples/seller-refusal.ts` (new), `examples/seller-refusal.test.ts` (new), `examples/seller-adapter.ts` (the Node shell passes `refusals` on), `examples/seller-adapter-job-stub.ts` (a report per scope target), `examples/seller-adapter-keys.test.ts` (the per-deal gate), `apps/hosted-sellers/src/worker.ts`, `apps/hosted-sellers/src/check-report.ts` (new), `apps/hosted-sellers/src/refusal.test.ts` (new), `apps/hosted-sellers/scripts/check-report.ts` (new), `apps/hosted-sellers/package.json` (the script), `site/ref/seller-adapter.txt` (one paragraph), `site/setup.mjs` (rebuilt: it bundles the adapter core), this file.
 - **Human gate:** yes for the deploy of `pilot-scan-2` only (Rafa's word, 2026-11-17: "Yes continue, help me push and get this working"). The code is confined to the repository.
-- **Status:** review
+- **Status:** done
 - **Agent/session:** the N179 build session, 2026-11-17, branch `t-502-refusal-reason`.
 - **Roadmap row:** N179
 - **Change kind:** 5 by risk (the seller's delivery path and a public page): the examples' and the hosted sellers' tests, one review pass and one red-team pass.
@@ -74,5 +74,5 @@ Why none of it leaks the report. Every value in an entry is built from the terms
 ## Handoff
 
 - **Done:** the reason on `/health` and the deal route, the log on each change, the `check-report` command and its paragraph, the tests, both review passes and their fixes, and the verdicts on the real export.
-- **Next:** merge, then deploy `pilot-scan-2` with Crow's corrected folder (Rafa's word, 2026-11-17), and record it in `docs/operations.md`.
+- **Merged and deployed** [measured]: pull request 621 merged as `67da35bf` with all 17 checks passing (pull request 620, the same change, was closed because gitleaks flagged made-up test values in its first commit). `pilot-scan-2` was deployed at 19:16 UTC from a clean worktree at `67da35bf`, with Crow's corrected folder (record in `docs/operations.md`). At 19:17 UTC its `/health` read `operational`, `configSha256` `39d9d34a…5f75` and `"refused": []`, and the deal route answered 404 for a deal it does not hold. `pilot-scan-1` was not deployed: it still serves `042fd6b9…8308` on its earlier code.
 - **Left open (Low):** the command does not fetch the further files a result names (`result.files`); it says so and gives no verdict. The salt is taken from `--salt`, `--no-salt` or today's configuration, not from the deal's journal.
