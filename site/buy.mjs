@@ -1483,7 +1483,7 @@ var init_verify = __esmMin((() => {
 }));
 
 // examples/agent.ts
-var b64, bytes, refusal, sha, Agent;
+var b64, bytes, refusal, sha, CALL_ATTEMPTS, CALL_BACKOFF_MS, NEVER_SENT, neverSent, networkError, Agent;
 var init_agent = __esmMin((() => {
 	init_verify();
 	b64 = (b) => Buffer.from(b).toString("base64url");
@@ -1492,6 +1492,17 @@ var init_agent = __esmMin((() => {
 		throw new Refusal(`refusing to submit: ${why}`);
 	};
 	sha = async (b) => `sha256:${Buffer.from(await crypto.subtle.digest("SHA-256", bytes(b))).toString("hex")}`;
+	CALL_ATTEMPTS = 3;
+	CALL_BACKOFF_MS = 1e3;
+	NEVER_SENT = /* @__PURE__ */ new Set(["ECONNREFUSED", "ENOTFOUND"]);
+	neverSent = (e) => {
+		const cause = e?.cause;
+		return NEVER_SENT.has(cause?.code ?? "") || cause?.message === "bad port";
+	};
+	networkError = (e) => {
+		const cause = e?.cause;
+		return `${e?.message ?? String(e)}${cause?.message ? `: ${cause.message}${cause.code ? ` (${cause.code})` : ""}` : ""}`;
+	};
 	Agent = class Agent {
 		account;
 		/** Operator base URLs. The first relays; trusted reads must agree on at least two. */
@@ -1518,11 +1529,18 @@ var init_agent = __esmMin((() => {
 				...extra
 			};
 			if (method === "POST" && !path.startsWith("/v1/prepare/")) headers["idempotency-key"] = crypto.randomUUID();
-			const res = await fetch(`${api}${path}`, {
+			const init = {
 				method,
 				headers,
 				...body === void 0 ? {} : { body: body instanceof Uint8Array ? body : JSON.stringify(body) }
-			});
+			};
+			let res;
+			for (let attempt = 1; !res; attempt++) try {
+				res = await fetch(`${api}${path}`, init);
+			} catch (e) {
+				if (attempt >= 3 || neverSent(e)) throw new TypeError(`${method} ${path} at ${new URL(String(api)).host}: no answer after ${attempt} tries (${networkError(e)})`, { cause: e });
+				await new Promise((r) => setTimeout(r, CALL_BACKOFF_MS * attempt));
+			}
 			const out = await res.json();
 			if (!res.ok) throw new Error(`${method} ${path}: ${out.type}: ${out.detail}`);
 			return out;
