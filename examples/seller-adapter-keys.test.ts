@@ -40,7 +40,7 @@ afterAll(async () => {
   await served.close();
 });
 
-async function start(o: { key: Hex; journal?: string; events?: string; urls?: string[]; over?: Partial<SellerAdapterConfig>; api?: StubSellerApi }) {
+async function start(o: { key: Hex; journal?: string; events?: string; urls?: string[]; over?: Partial<SellerAdapterConfig>; api?: StubSellerApi; env?: Record<string, string> }) {
   const lines: string[] = [];
   const r = await startSellerAdapter(
     {
@@ -54,7 +54,7 @@ async function start(o: { key: Hex; journal?: string; events?: string; urls?: st
       signingKey: 'per-deal',
       ...o.over,
     },
-    { HOLDBACK_KEY: o.key, HOLDBACK_OPERATORS: (o.urls ?? served.urls).join(',') },
+    { HOLDBACK_KEY: o.key, HOLDBACK_OPERATORS: (o.urls ?? served.urls).join(','), ...o.env },
   );
   running.push(r);
   return { r, lines };
@@ -225,5 +225,25 @@ describe('seller adapter: a fresh key for each deal (T-432)', () => {
     expect(signerFor(key, served.urls, pin, { seller: deal, nonce }).address).toBe(deal.toLowerCase());
     expect(() => signerFor(key, served.urls, pin, { seller: privateKeyToAccount(generatePrivateKey()).address, nonce })).toThrow(/neither HOLDBACK_KEY's address nor the deal key their nonce derives/);
     expect(dealKeyOf(key, nonce)).not.toBe(dealKeyOf(key, `0x${'34'.repeat(32)}`));
+  });
+  it('with a key per deal, GET /deals/<id> answers only with the ready credential, and 404 otherwise (T-502)', async () => {
+    const READY = 'per-deal-test-ready-value';
+    const withReady = await start({ key: generatePrivateKey(), over: { redelivery: { readyAuth: { kind: 'bearer', env: 'READY_CREDENTIALS' } } } as J, env: { READY_CREDENTIALS: READY } });
+    const q = await quote(withReady.r, buyerAgent());
+    expect(q.status, JSON.stringify(q.body)).toBe(200);
+    const id = q.body.commitmentId as string;
+    const ask = (r: RunningAdapter, credential?: string) => fetch(`${r.url}/deals/${id}`, { headers: credential === undefined ? {} : { authorization: `Bearer ${credential}` } });
+    // An answer would link the deal to this seller: without the credential, the same 404 as for a deal it does not hold.
+    const none = await ask(withReady.r);
+    expect(none.status).toBe(404);
+    expect(await none.json()).toEqual((await (await fetch(`${withReady.r.url}/deals/0x${'cd'.repeat(32)}`)).json()) as J);
+    expect((await ask(withReady.r, 'not-it')).status).toBe(404);
+    const shown = await ask(withReady.r, READY);
+    expect(shown.status).toBe(200);
+    expect(await shown.json()).toEqual({ commitmentId: id.toLowerCase(), stage: 'offered' });
+    // With no ready credential configured, nobody can read a deal.
+    const bare = await start({ key: generatePrivateKey() });
+    const q2 = await quote(bare.r, buyerAgent());
+    expect((await fetch(`${bare.r.url}/deals/${q2.body.commitmentId}`)).status).toBe(404);
   });
 });

@@ -93,7 +93,14 @@ export interface WorkspacePin {
 /** A result whose job ran in another account than `sellerApi.workspace` names (T-435): never delivered. */
 export class WrongWorkspace extends Error {}
 /** A result whose job asked for another scope than the deal's, by `sellerApi.result.jobScope` (T-501): never delivered. */
-export class WrongScope extends Error {}
+export class WrongScope extends Error {
+  /** The scope field that differs, a name from the configuration (T-502); absent when the request cannot be read. */
+  readonly field: string | undefined;
+  constructor(message: string, field?: string) {
+    super(message);
+    this.field = field;
+  }
+}
 
 export interface SellerApiConfig {
   /** Every request goes under this address. Required with a mapping or a credential. */
@@ -320,7 +327,11 @@ const CALL_KEYS = ['method', 'path', 'headers', 'body'];
  * an unknown field, a placeholder this call cannot fill, a path or header that could leave the base URL, an unset
  * credential. Nothing is sent here.
  */
-export function sellerApiClient(api: J, env: Readonly<Record<string, string | undefined>>, fields: Fields): SellerApi {
+/**
+ * `fetcher`: how requests are sent; the global fetch, read at each call, unless a caller gives another. The local report check
+ * (apps/hosted-sellers/scripts/check-report.ts, T-502) answers from files with it, so it runs this same code.
+ */
+export function sellerApiClient(api: J, env: Readonly<Record<string, string | undefined>>, fields: Fields, fetcher?: typeof fetch): SellerApi {
   if (!isRecord(api)) throw new Error('sellerApi must be an object: your API\'s quote, start and result calls');
   for (const k of Object.keys(api)) if (!['baseUrl', 'auth', 'quote', 'start', 'result', 'workspace'].includes(k)) throw new Error(`sellerApi has a field the adapter does not take: ${short(k)}`);
   // ---- The account the jobs run in (T-435): named once, carried by the quote and start paths ----
@@ -589,7 +600,7 @@ export function sellerApiClient(api: J, env: Readonly<Record<string, string | un
     if (auth) headers[auth.header] = auth.value;
     // Redirects are refused under a base URL: a redirect could carry the credential elsewhere. `manual` returns the 3xx
     // unfollowed and the adapter refuses it here, because the Workers runtime does not implement `error` (T-433).
-    const res = await fetch(url, { method: p.method, headers, ...(payload === undefined ? {} : { body: payload }), redirect: strict ? 'manual' : 'follow', signal: AbortSignal.timeout(30_000) });
+    const res = await (fetcher ?? fetch)(url, { method: p.method, headers, ...(payload === undefined ? {} : { body: payload }), redirect: strict ? 'manual' : 'follow', signal: AbortSignal.timeout(30_000) });
     if (strict && isRedirect(res)) {
       await res.body?.cancel().catch(() => {}); // the redirect is the error to report, not a failed cancel
       throw new Error(`the seller API answered ${res.status} to ${p.label}, a redirect, which the adapter never follows: it could carry the credential elsewhere`);
@@ -679,7 +690,7 @@ export function sellerApiClient(api: J, env: Readonly<Record<string, string | un
         for (const [field, at] of jobScope) {
           const got = pick(doc, at);
           const want = isRecord(v.scope) && Object.hasOwn(v.scope, field) ? v.scope[field] : undefined;
-          if (!sameValue(got, want)) throw new WrongScope(`the job asked for ${plain(field)} ${short(JSON.stringify(got) ?? 'nothing')}, not the deal's ${short(JSON.stringify(want) ?? 'nothing')}`);
+          if (!sameValue(got, want)) throw new WrongScope(`the job asked for ${plain(field)} ${short(JSON.stringify(got) ?? 'nothing')}, not the deal's ${short(JSON.stringify(want) ?? 'nothing')}`, field);
         }
       }
       if (merge) {
