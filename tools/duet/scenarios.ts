@@ -144,7 +144,7 @@ export function sellerBriefDirect(s: Scenario, f: BriefFacts): string {
 
 export function buyerBriefDirect(s: Scenario, f: BriefFacts): string {
   return [
-    'You work for our company. We need a security audit report for three smart contract files, and we will pay through crow.direct.',
+    'You work for our company. We need a security review report for two smart contract files, and we will pay through crow.direct.',
     `The work: an audit of ${SCOPE.files.join(', ')} at commit ${SCOPE.commit}, ${SCOPE.lines} lines in all. As a scope: ${JSON.stringify(SCOPE)}.`,
     `A seller we found: ${f.sellerPage}.`,
     `Our budget: at most ${s.policy.budget} base units of the test token (${money(s.policy.budget)} test tokens), everything included: the price and every fee.`,
@@ -170,7 +170,7 @@ export function sellerBrief(s: Scenario, f: BriefFacts): string {
 
 export function buyerBrief(s: Scenario, f: BriefFacts): string {
   return [
-    'You work for our company. We need a security audit report for three smart contract files, and we will pay through Crow.',
+    'You work for our company. We need a security review report for two smart contract files, and we will pay through Crow.',
     `The work: an audit of ${SCOPE.files.join(', ')} at commit ${SCOPE.commit}, ${SCOPE.lines} lines in all. As a scope: ${JSON.stringify(SCOPE)}.`,
     `A seller we found: ${f.sellerPage}. Read its page to see what it sells and where to ask for a quote.`,
     `Our budget: at most ${s.policy.budget} base units of the test token (${money(s.policy.budget)} test tokens), everything included: the price and every fee.`,
