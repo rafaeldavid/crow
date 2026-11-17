@@ -5,7 +5,7 @@
 - **Depends on:** T-469 (the goal commands and their bundles), T-496 (the bundle import pins in `tests/site-bundles.test.ts`)
 - **Paths this task may touch:** `examples/try-sell.ts`, `examples/robot-episode.ts` (new), `examples/robot-episode.test.ts` (new), `apps/test-agents/src/try-goals.test.ts` (the robot-episode cases), `site/llms.txt` (one sentence in the sell goal), `site/sell.txt` (one line), `site/ref/checks.txt` (one recipe section), the files `node site/build.mjs` writes from them (`site/try-sell.mjs` and the filled `llms.txt`), this file.
 - **Human gate:** the site deploy that publishes the new `try-sell.mjs` and its hash, Rafa's. The one live run on Sepolia comes after it.
-- **Status:** in review. Built on 2026-11-17, branch `t-498-robot-episode-build`. The site deploy and the live run on Sepolia wait for Rafa.
+- **Status:** merged on 2026-11-17 (PR 606); not done. The site deploy and the one live run on Sepolia wait for Rafa.
 - **Agent/session:** planned by the robot-data research session, 2026-11-17, branch `t-498-robot-episode-sample` (this file only); built by a build session the same day, branch `t-498-robot-episode-build`.
 - **Roadmap row:** T-240
 - **Change kind:** 1 (copy and agent docs: the published command and its guides), with the examples' own tests for the code
