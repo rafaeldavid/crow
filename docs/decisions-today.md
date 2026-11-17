@@ -1450,3 +1450,16 @@ Today a seller with its own API reads 13 files of 98,462 bytes and runs 22 comma
   - **Whether the step is part of the default path.** The alternative: the setup mentions the list once and sends only when the person asks for it.
   - **Where the entries live:** beside the email sign-ups today, under their own prefix. They share that store's write quota, so a flood of listings could make sign-ups fail (inferred). The alternatives: a store of its own on the Cloudflare account, or the private repository.
 - **Litmus tests.** Neutrality: no valid commitment waits for the list, reads it, or settles differently by it. T-486's tests end a first deal `Released` with the listing skipped, with the listing refused, and with the receiver unreachable, and find the list named in no operator, test agent or package source. Crow can refuse or lose a listing and stop nothing. The hold: not affected. Defended judgment: not affected.
+
+## D77. The outside audit reads the phase-one contracts as deployed; our own findings go to the auditor as known issues, and every fix lands in the next build (T-499)
+
+**Status:** decided, 2026-11-17.
+
+**Decided 2026-11-17 by Rafa,** after T-499 found the phase-one contracts ready for an outside auditor ([PR 613](https://github.com/rafaeldavid/holdback/pull/613)). His words: "Lets plan to audit current version then we can fold in these improvements alongside the auditor findings in the following build, but I assume we submit these findings as part of the audit", and, on recording it, "Yes, record it".
+
+- **What the auditor reads.** `contracts/src/` at the tag `contracts-phase-one-1`, the code deployed on Sepolia and verified on Sourcify. No source change comes before the audit: a change would need a new freeze and a redeploy under the live pilot, and would put unreviewed code in front of the auditor.
+- **Our findings go with the audit, as known issues.** `docs/audit/known-issues.md` lists them: RR-1 to RR-5 in section 10, and the accepted limits before it. The auditor does not report a listed issue as new. [`docs/audit/engagement.md`](audit/engagement.md) is the note the deal's terms point to: the code, the docs, what is excluded and what comes back.
+- **The audit is a Crow deal.** Crow is the buyer and pays through its own escrow, in test tokens on Sepolia (D72, the partner test).
+- **The next build.** RR-1 to RR-5 and the auditor's findings land together on the contract lane `contracts-audit-ready`, as reviewed pull requests, starting with one that brings `main` into the lane. `main`'s `contracts/src/` and the live deployment stay frozen meanwhile. The lane's tip then becomes the next frozen commit, and `docs/redeploy-contracts.md` takes it through the deploy and the switchover on a `cutover-<tag>` branch (roadmap rows N24 and N152).
+- **Open, for Rafa before the fixes start:** whether the next build is the phase-one lane plus the fixes, or the rebuilt contracts that roadmap row N26 names with the fixes folded in. The answer does not change the current audit.
+- **Litmus tests.** Neutrality, the hold and defended judgment: unchanged. This orders the work and changes no code.

@@ -8,7 +8,7 @@ Labels: **measured** (produced by the named command), **documented** (stated in 
 
 ## Reading order
 
-1. This page: the system on one page, how to build and test, and the dated figures.
+1. This page: the system on one page, how to build and test, and the dated figures. The engagement's terms (what to audit, what is excluded, what comes back) are in [`engagement.md`](engagement.md).
 2. [`scope.md`](scope.md): what is in scope and out, the cuts phase one made, the dependencies, the trust assumptions and the prior reviews.
 3. [`threat-model.md`](threat-model.md): actors, assets, trust boundaries and attack classes.
 4. [`state-model.md`](state-model.md): every state a deal can be in on chain, and the signed-field register.
