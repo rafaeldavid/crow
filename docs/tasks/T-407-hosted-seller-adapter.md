@@ -59,11 +59,17 @@ Fill this in before review. Label each item measured, inferred or guessed.
 
 ## Handoff
 
-**State: review.** ADR-0037 is Proposed and waits for Rafa's pick (its section 12). Nothing is built.
+**State: done.** Closed on 2026-11-17.
 
-- **High, fixed by T-408 (PR 501):** the adapter sent the partner's start again at every poll while a deal was at `starting` with no recorded job ID. Measured on 2026-11-14 with PR 500's key-ignoring stub, at `a0a70dc`: a lost start answer, then the end of the first job, gave 2 runs, a second charged scan. On `main` since `f6b30a8`, a start with no `idempotencyHeader` (or with `"repeatable": false`) goes out at most once. The deal holds at `start-unknown`, and a person names the job with `POST /deals/<id>/job`.
-- **Optional follow-up, from closed PR 500 (branch `t-407-one-shot-start`):**
-  - `{"startAgain": true}` on the job route, for a start the partner's API never received; today such a deal closes at `deliverBy`.
-  - A key-ignoring mode in `examples/seller-adapter-job-stub.ts` that reproduces the double charge.
-  - Neither is needed for the pilot's scans.
-- **To resume after Rafa picks:** build in this order: the `redirect: 'manual'` change in the current file with tests; the core split (section 7) with every existing adapter test unchanged; `apps/hosted-sellers/` with the Worker-shell tests of section 11; the deploy and secret scripts; then the red-team review.
+- **The design:** ADR-0037 (PR 499).
+- **The build:**
+  - T-433 (PR 551, `bd29e77`): the adapter follows no redirect, in a way Workers accept.
+  - T-434 (PR 553, `6efc9c7`): the core split.
+  - T-435 (PR 556, `6eb7b9f`): the Worker.
+  - T-436 (PR 557, `896e53d8`): the deploy and secret scripts.
+- **The start fix** (a start sent at most once) is T-408 (PR 501).
+- **Live:** Rafa deployed two hosted sellers for the pilot's design partner on 2026-11-15 and set their secrets on 2026-11-16: `crow.direct/agents/pilot-scan-1` and `pilot-scan-2`. The record is in `docs/operations.md` (PR 592). Their seller folders were written by the pilot's session (T-470) outside this repository.
+- **Follow-ups:** roadmap row N154, "Finish the seller adapter's follow-ups after the pilot". It waits until the pilot's scans are Released, because no path the hosted sellers deploy from may change before then. It covers:
+  - the quote route's rate limit, which lives in memory;
+  - `{"startAgain": true}`, from closed PR 500;
+  - the per-deal key's false alert after a failed journal write.
