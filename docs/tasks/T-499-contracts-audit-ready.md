@@ -50,6 +50,7 @@ Wall times ran on a shared, loaded machine and are upper bounds: `forge build` 1
 ## Decisions
 
 - The figures that change with a redeploy (hashes, addresses, line counts, coverage) sit in one dated section of `docs/audit/README.md`; the standing pages keep pointing at the deployment record.
+- Rafa decided the plan on 2026-11-17 (D77): the audit reads the phase-one contracts as deployed, Crow's own findings go to the auditor as known issues, and every fix lands in the next build on the contract lane. `docs/audit/engagement.md` is the note the audit deal's terms point to.
 - The runtime size is the build artifact's and the chain's, 20,502 bytes. A `forge build --sizes --skip test --skip script` run reported 24,313 bytes; it does not match the artifact or the chain, so no page quotes it.
 
 ## Handoff
