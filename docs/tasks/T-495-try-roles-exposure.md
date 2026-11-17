@@ -5,7 +5,7 @@
 - **Depends on:** T-469 (the goal commands), T-491 (the report route and the preflight)
 - **Paths this task may touch:** `site/build.mjs` (the prompt and the command lines, not the bundles), `site/llms.txt`, `site/ref/intake.txt`, `site/trust.mjs`, `site/check.mjs`, the files `node site/build.mjs` writes from them (`site/index.html`, `site/trust.html`, `site/trust.txt`), this file. Two tests that pin the command and fill `llms.txt` themselves, outside the site lane: one line in `examples/try.test.ts` and two in `tools/duet/world.ts`.
 - **Human gate:** the site deploy, Rafa's.
-- **Status:** review
+- **Status:** done (pull request 600, merged 2026-11-16 as `bd440f9f`; live by the site deploy of 2026-11-17 05:51 UTC)
 - **Agent/session:** a session started from the first-outside-run triage, 2026-11-16, branch `t-495-try-roles-exposure`.
 - **Roadmap row:** N168
 - **Change kind:** 1 (copy and agent docs), with the four goal commands' run line changed. No bundle changes.

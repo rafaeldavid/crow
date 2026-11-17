@@ -5,7 +5,7 @@
 - **Depends on:** T-333 (the deal record)
 - **Paths this task may touch:** `examples/deal-record.ts`, `examples/deal-record.test.ts`, `examples/record-seller.test.ts` (one wait), `site/buy.mjs` and `site/setup.mjs` (regenerated), this file.
 - **Human gate:** yes, for the site deploy that publishes the new `buy.mjs` and `setup.mjs`, which is Rafa's. He chose to change the pinned files on 2026-11-16 ("Fix it first").
-- **Status:** review
+- **Status:** done (pull request 595, merged 2026-11-16 as `32cf4fe9`; live on crow.direct since the site deploy of 07:43 UTC)
 - **Agent/session:** the expo/exact review session, 2026-11-16, branch `t-492-record-refused-reads`.
 - **Roadmap row:** N164
 - **Change kind:** 4 is the nearest (code that agents run); one `reviewer` pass, since the record is a party's evidence of where the money went.

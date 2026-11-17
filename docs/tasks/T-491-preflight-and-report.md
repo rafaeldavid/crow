@@ -10,7 +10,7 @@
   - This file.
   - It changes no pinned bundle (`site/try.mjs`, `site/buy.mjs`, `site/setup.mjs` and the three goal files keep their SHA-256), nothing under `apps/`, `packages/`, `contracts/` or `spec/schemas/`.
 - **Human gate:** yes, for the site deploy, which is Rafa's. Reports reach anyone only after a second gate, also Rafa's: a `FEEDBACK` KV namespace bound on operator 1 and an operator deploy (`docs/operations.md`, "Feedback triage"). The merge has no gate.
-- **Status:** review
+- **Status:** done (pull requests 593 and 594, merged 2026-11-16 as `39b2d1c8` and `52d4f19e`; live since the site deploy of 06:32 UTC and the operators' deploy of 07:55 UTC)
 - **Agent/session:** the expo/exact review session, 2026-11-16, on Rafa's word ("Let's do" lessons 1 and 2), branch `t-491-preflight-report`.
 - **Roadmap row:** N164
 - **Change kind:** 1 (copy and agent docs), with a new read-only command in `examples/`. One `reviewer` pass on the command, since it reads the shell's environment.
