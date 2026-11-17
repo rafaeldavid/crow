@@ -5,7 +5,7 @@
 - **Depends on:** T-496 (the try bundle and its live run)
 - **Paths this task may touch:** `examples/agent.ts` (`Agent.call` only), `examples/agent-call.test.ts` (new), the rebuilt bundles `site/try.mjs`, `site/buy.mjs`, `site/setup.mjs`, `site/try-sell.mjs`, `site/try-judged.mjs`, `site/try-reclaim.mjs`, and `site/index.html`, this file.
 - **Human gate:** the site deploy, Rafa's. Rafa accepted on 2026-11-17 that `buy.mjs`'s hash changes while the pilot's buyer depends on it ("Fix it now", through the session that started this one).
-- **Status:** review
+- **Status:** done
 - **Agent/session:** the try-bundle session, 2026-11-17, branch `t-497-retry-lost-answer`.
 - **Roadmap row:** N172
 - **Change kind:** 1 (the published commands and their pages), with the examples' own tests for the code
@@ -60,4 +60,6 @@ All measured on 2026-11-17, on branch `t-497-retry-lost-answer`.
 
 - **The pilot's buyer:** `buy.mjs` changes from `a9a18edc…74b9e` to `ce610626…1311d`. After the deploy, the pilot buyer's install line in the live `buy.txt` carries the new hash, and an install line copied before the deploy fails its hash check, which is the safe way to fail. The pilot session updates any copy it handed out.
 - **The hosted sellers** import `agent.ts` through `examples/seller-adapter-core.ts`. Their deployed Workers do not change until their next deploy; the frozen files are not edited here.
-- **After the deploy:** the live checks and one live try run.
+- **Deployed 2026-11-17 05:51 UTC** by `pnpm site:deploy` from `7a75f7d8`: pass, crow-site `388eb4be-2f72-4401-a6d4-738d93a47e9d` (rollback target `ce62448c-7bbe-42c9-86e4-0bec01bd85cc`).
+- **Live checks after the deploy [measured]:** all seven bundles on crow.direct hash as on main; `llms.txt`, `buy.txt`, `setup.txt` and the home page carry the new hashes; `version.json` names `7a75f7d8`. One run of the try command copied from the live `llms.txt`, in an empty folder: exit 0, Released in 45 s, commitment `0x32f53797…24e8`, 3 transactions (funded `0xb786964b…`, delivered `0x4885974b…`, decided `0x75cf792e…`), the report route last.
+- Nothing is left on this task.
