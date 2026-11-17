@@ -52,6 +52,8 @@ describe('Agent.call when the answer is lost (T-497)', () => {
     const { url, seen } = await serve(() => true);
     const err = await agent(url).call('POST', '/v1/faucet', { address: '0x1' }).catch((e: Error) => e);
     expect(seen).toHaveLength(CALL_ATTEMPTS);
+    // Still a TypeError, as fetch's own failure: callers that fail over to the next operator on one keep doing so.
+    expect(err).toBeInstanceOf(TypeError);
     expect(new Set(seen.map((s) => s.key)).size).toBe(1);
     expect((err as Error).message).toMatch(new RegExp(`^POST /v1/faucet at 127\\.0\\.0\\.1:\\d+: no answer after ${CALL_ATTEMPTS} tries \\(fetch failed: .+\\)$`));
     expect((err as Error).message).toMatch(/other side closed|socket hang up|ECONNRESET|terminated/i);

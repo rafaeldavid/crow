@@ -75,13 +75,14 @@ export class Agent {
     const init = { method, headers, ...(body === undefined ? {} : { body: body instanceof Uint8Array ? body : JSON.stringify(body) }) };
     // T-497: an answer lost on the network is retried as the same request, under the same Idempotency-Key, so the
     // operator replays what it did instead of doing it twice. An answer that arrived, a refusal too, is never retried.
+    // It stays a TypeError, as fetch's own failure is, so a caller that fails over on one still does.
     let res: Response | undefined;
     for (let attempt = 1; !res; attempt++) {
       try {
         res = await fetch(`${api}${path}`, init);
       } catch (e) {
         // A refused or unresolved connection never reached the operator: nothing to replay, so the caller moves on at once.
-        if (attempt >= CALL_ATTEMPTS || neverSent(e)) throw new Error(`${method} ${path} at ${new URL(String(api)).host}: no answer after ${attempt} tries (${networkError(e)})`);
+        if (attempt >= CALL_ATTEMPTS || neverSent(e)) throw new TypeError(`${method} ${path} at ${new URL(String(api)).host}: no answer after ${attempt} tries (${networkError(e)})`, { cause: e });
         await new Promise((r) => setTimeout(r, CALL_BACKOFF_MS * attempt));
       }
     }
