@@ -14,6 +14,7 @@ import type { Event } from './record.ts';
 import type { Over } from './tickets.ts';
 import { AGENT_NAME } from './scenarios.ts';
 import { ENDINGS_CSS, ENDINGS_SCRIPT, endingsSection } from './endings.ts';
+import { CHECK_WORDS } from './review.ts';
 
 type J = any; // eslint-disable-line @typescript-eslint/no-explicit-any
 type Lane = 'buyer' | 'crow' | 'seller';
@@ -196,11 +197,7 @@ const usd = (micro: number | null) => (micro === null ? '' : `USD ${(micro / 1_0
 
 /** The agreed checks, one sentence each, by the IDs the audit-report terms use. */
 const CHECKS: Record<string, string> = {
-  report: 'The report follows the agreed format: the version reviewed, the files reviewed, and each finding with its place in the code and a fix.',
-  proof: 'Every finding rated Medium or higher comes with files that prove it.',
-  scope: 'Every finding points at a file in scope, at the agreed version of the code.',
-  coverage: 'Every file in scope was reviewed, none left out.',
-  hidden: 'The report holds no hidden characters.',
+  ...CHECK_WORDS,
   'proof-all': 'Every finding comes with files that prove it.',
 };
 
@@ -323,11 +320,13 @@ function page(events: readonly Event[], s: Summary, extras: PageExtras): string 
   const fee = held !== null && price !== null && held > price ? held - price : null;
   const paidSeller = chain.some((e) => e.type === 'settlement.released');
   const refunded = chain.some((e) => e.type === 'settlement.refunded');
-  const scope = start?.scope as { files?: string[]; lines?: number } | undefined;
+  const scope = start?.scope as { commit?: string; files?: string[]; lines?: number } | undefined;
   // How the run ended, for the proof beat: settled either way, a refused offer, a held payment, or stopped earlier.
   const ending: Ending = s.notStarted ? 'notstarted' : paidSeller ? 'paid' : refunded ? 'refunded' : held !== null ? 'held' : events.some((e) => e.kind === 'signer.stop') && (events.find((e) => e.kind === 'agent.end' && e.role === 'buyer') as J)?.status === 'finished' ? 'declined' : 'stopped';
-  const boughtItem = String(start?.item ?? (scope?.files?.length ? 'a software security audit' : 'a piece of work'));
+  const boughtItem = String(start?.item ?? (scope?.files?.length ? 'a security review' : 'a piece of work'));
   const bought = `A security review of ${scope?.files?.length ?? 'several'} smart-contract files (${n(Number(scope?.lines ?? 0))} lines), written as a report`;
+  // The code reviewed, when the run's record names its repository (T-500): a training repository, so no real project is judged.
+  const code = start?.repository ? `${String(start.repository)}, a public training repository written to be broken for practice, at commit ${String(scope?.commit ?? '').slice(0, 12)}: ${(scope?.files ?? []).join(' and ')}. The report's findings are demo findings.` : null;
   const outcome = paidSeller ? 'The work passed. The seller was paid and the buyer received the report.' : refunded ? 'The work failed a required check. The buyer got the price back and the report stayed locked.' : 'No order was placed. Nothing was signed and nothing was paid.';
   const ok = s.decisionRight;
   const policy = start?.policy ?? {};
@@ -587,6 +586,7 @@ ${fact(paidSeller ? 'Seller paid' : refunded ? 'Buyer refunded' : 'No order', 'H
 </div>
 <dl class="specs">
 ${spec('What was bought', bought)}
+${code ? spec('The code reviewed', code) : ''}
 ${spec('How it ended', outcome)}
 ${spec(AGENT_NAME.buyer, `Acting for the buyer. ${model('buyer')}.`)}
 ${spec(AGENT_NAME.seller, `Acting for the seller. ${model('seller')}.`)}

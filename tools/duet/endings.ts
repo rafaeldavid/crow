@@ -1,11 +1,14 @@
 // The section "Three ways a deal ends" under the demo's player (T-427, Rafa 2026-11-14: "Yes, build it"): three live
-// test deals on Sepolia, one per ending, each with its rule, its measured time, its amount and its public record. The
-// deals and their numbers live in endings.json, so a refresh is a data change and one publish. The seconds are computed
-// from the record's own times, so a reader can check them against the linked record.
+// test deals on Sepolia, one per ending, each with its rule, its measured time, its amount and its public record. Since
+// T-500 (Rafa, 2026-11-17) the three are one security-review deal of the kind Crow's first pilot runs, on a public
+// training repository (review.ts): the section first says what was asked for, the price, the five checks and what they
+// do not prove. The deals and their numbers live in endings.json, so a refresh is a data change and one publish. The
+// seconds are computed from the record's own times, so a reader can check them against the linked record.
 //
 // Without scripts the three cards stack, all readable. With scripts a three-way switch shows one card at a time; arrow
 // keys move between its tabs. Nothing animates.
 import { readFileSync } from 'node:fs';
+import { CHECK_WORDS, REPOSITORY, REVIEW_CHECK_IDS, REVIEW_PRICE_UNITS, REVIEW_SCOPE } from './review.ts';
 
 export interface Ending {
   key: string;
@@ -86,9 +89,16 @@ export const ENDINGS_CSS = `/* Three ways a deal ends (T-427): stacked cards wit
 .ending-how{font-size:15px;color:var(--ink-2);margin:0 0 14px;max-width:640px}
 .ending-links{display:flex;flex-wrap:wrap;gap:6px 24px;margin:0;padding:0;list-style:none;font-size:15px}
 .ending-links a{color:var(--ink);font-weight:500}
+.deal{display:grid;gap:14px;margin:0 0 24px;padding:20px 24px;border:1px solid var(--line);border-radius:var(--r-card);background:var(--band)}
+.deal div{display:grid;gap:4px}
+.deal dt{font-size:13px;font-weight:600;color:var(--ink-2)}
+.deal dd{margin:0;font-size:15px;line-height:1.5;max-width:680px;overflow-wrap:anywhere}
+.deal a{color:var(--ink);font-weight:500}
+.deal a:focus-visible{outline:2px solid var(--accent);outline-offset:2px}
+.deal-checks{margin:0;padding-left:20px}
 .endings-try{font-size:15px;color:var(--ink-2);margin:20px 0 0}
 .endings-try a{color:var(--ink);font-weight:500}
-@media (max-width:600px){.endings{margin-top:40px;padding-top:28px}.endings h2{font-size:26px}.endings-switch{display:grid;grid-template-columns:repeat(3,1fr);width:100%;border-radius:var(--r-card)}.endings-switch button{border-radius:calc(var(--r-card) - 3px);font-size:13px;line-height:1.25;padding:8px 6px}.ending{padding:18px}.ending-facts dd{font-size:22px}}`;
+@media (max-width:600px){.endings{margin-top:40px;padding-top:28px}.endings h2{font-size:26px}.endings-switch{display:grid;grid-template-columns:repeat(3,1fr);width:100%;border-radius:var(--r-card)}.endings-switch button{border-radius:calc(var(--r-card) - 3px);font-size:13px;line-height:1.25;padding:8px 6px}.ending{padding:18px}.deal{padding:16px 18px}.ending-facts dd{font-size:22px}}`;
 
 /** The section's HTML. Its switch starts hidden and its cards all show: the script below turns the switch on. */
 export function endingsSection(e: Endings = ENDINGS): string {
@@ -99,15 +109,25 @@ export function endingsSection(e: Endings = ENDINGS): string {
 <p class="ending-how">${esc(x.how)}</p>
 <ul class="ending-links"><li><a href="${esc(e.record + x.commitment)}" rel="noopener" target="_blank">The deal's record on the live service ›</a></li><li><a href="${esc(e.explorer + x.tx)}" rel="noopener" target="_blank" aria-label="The final transaction on the Sepolia test network, ${short(x.tx)}">The final transaction on Sepolia ›</a></li></ul>
 </article>`;
+  const at = `${REPOSITORY.url}/tree/${REVIEW_SCOPE.commit}`;
+  const file = (f: string) => `<a href="${esc(`${REPOSITORY.url}/blob/${REVIEW_SCOPE.commit}/${f}`)}" rel="noopener" target="_blank"><code>${esc(f)}</code></a>`;
   return `<section class="endings" id="endings" aria-labelledby="endings-title">
 <p class="eyebrow">Live on the public test network</p>
 <h2 id="endings-title">Three ways a deal ends</h2>
-<p class="endings-lead">The demo above is a sample deal on a local test setup. These three ran on Crow's live service on ${day(e.date)}, between a test buyer and Crow's test seller, in test dollars. Each number is from that one deal, and each deal's record is public.</p>
+<p class="endings-lead">The demo above is a sample deal on a local test setup. The three below ran on Crow's live service on ${day(e.date)}: Crow's test buyer bought the same security review from a test seller Crow ran for this page, in test dollars. Each number is from that one deal, and each deal's record is public.</p>
+<p class="endings-lead">This is the kind of deal Crow's first pilot runs: an agent buys a security review of a smart-contract repository, and agreed checks decide whether the seller is paid.</p>
+<dl class="deal">
+<div><dt>What the buyer asked for</dt><dd>A security review of two files of <a href="${esc(at)}" rel="noopener" target="_blank">${esc(REPOSITORY.name)}</a>, a public training repository (${esc(REPOSITORY.license)} license) written to be broken for practice, at commit <code>${esc(REVIEW_SCOPE.commit.slice(0, 12))}</code>: ${REVIEW_SCOPE.files.map(file).join(' and ')}. The report is one JSON file.</dd></div>
+<div><dt>Price</dt><dd>${testDollars(REVIEW_PRICE_UNITS)}, quoted by the seller for this scope. The buyer pays the reviewer's fee on top.</dd></div>
+<div><dt>The five checks</dt><dd><ol class="deal-checks">${REVIEW_CHECK_IDS.map((id) => `<li>${esc(CHECK_WORDS[id])}</li>`).join('')}</ol></dd></div>
+<div><dt>What the checks prove</dt><dd>The checks test the report's shape and scope, not how good the review is: a report with no findings passes them. The report's findings are demo findings written for this page; they describe the flaws the exercises were built to hold, not any real project.</dd></div>
+<div><dt>Funding and delivery</dt><dd>The buyer funds the payment hold before any work starts. The seller delivers the report locked, and the reviewer both sides chose runs the five checks on it. To end in minutes, these deals give the seller an hour to deliver, and the silent one 5 minutes.</dd></div>
+</dl>
 <div class="endings-switch" role="tablist" aria-label="How the deal ended" hidden>${e.endings.map((x, i) => `<button type="button" role="tab" id="ending-tab-${esc(x.key)}" aria-controls="ending-${esc(x.key)}" aria-selected="${i === 0}" tabindex="${i === 0 ? 0 : -1}">${esc(x.title)}</button>`).join('')}</div>
 <div class="endings-cards">
 ${e.endings.map(card).join('\n')}
 </div>
-<p class="endings-try">Try one yourself: one command buys from the same test seller, in test dollars. <a href="https://crow.direct/llms.txt" rel="noopener" target="_blank">The front page for agents ›</a></p>
+<p class="endings-try">Try one yourself: one command buys test work from Crow's test seller, in test dollars. <a href="https://crow.direct/llms.txt" rel="noopener" target="_blank">The front page for agents ›</a></p>
 </section>`;
 }
 
