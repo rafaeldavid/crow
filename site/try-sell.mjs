@@ -10122,7 +10122,7 @@ const bytes = (b) => new Uint8Array(b);
 const refusal = (why) => {
 	throw new Refusal(`refusing to submit: ${why}`);
 };
-const sha = async (b) => `sha256:${Buffer.from(await crypto.subtle.digest("SHA-256", bytes(b))).toString("hex")}`;
+const sha$1 = async (b) => `sha256:${Buffer.from(await crypto.subtle.digest("SHA-256", bytes(b))).toString("hex")}`;
 /** How many times Agent.call sends a request whose answer is lost on the network, and the wait before each retry (1 s, then 2 s). */
 const CALL_ATTEMPTS = 3;
 const CALL_BACKOFF_MS = 1e3;
@@ -10448,7 +10448,7 @@ var Agent = class Agent {
 			iv
 		}, aes, bytes(plaintext)))]);
 		const stored = await this.call("POST", "/v1/ciphertext", ciphertext);
-		if (stored.id !== await sha(ciphertext)) throw new Error("the store answered another hash");
+		if (stored.id !== await sha$1(ciphertext)) throw new Error("the store answered another hash");
 		const encryptedKeys = recipients.map((r) => {
 			const eph = import_nacl_fast.default.box.keyPair();
 			const nonce = import_nacl_fast.default.randomBytes(24);
@@ -10471,7 +10471,7 @@ var Agent = class Agent {
 				sha256: stored.id,
 				bytes: ciphertext.length
 			},
-			plaintextSha256: await sha(plaintext),
+			plaintextSha256: await sha$1(plaintext),
 			encryptedKeys
 		};
 		return {
@@ -10536,7 +10536,7 @@ var Agent = class Agent {
 			name: "AES-GCM",
 			iv: ct.slice(0, 12)
 		}, aes, ct.slice(12)));
-		if (await sha(plain) !== d.plaintextSha256 || await sha(ct) !== d.ciphertext.sha256) throw new Error("hash mismatch");
+		if (await sha$1(plain) !== d.plaintextSha256 || await sha$1(ct) !== d.ciphertext.sha256) throw new Error("hash mismatch");
 		return new TextDecoder().decode(plain);
 	}
 	/**
@@ -10696,6 +10696,7 @@ const units = (base) => {
 	const frac = (v % 1000000n).toString().padStart(6, "0").replace(/0+$/, "");
 	return `${v / 1000000n}${frac ? `.${frac}` : ""}`;
 };
+const sha256hex = async (b) => Buffer.from(await crypto.subtle.digest("SHA-256", new Uint8Array(b))).toString("hex");
 /** JSON with every 0x-hex string lowercased: addresses compare ignoring case. */
 const lowerHex = (v) => JSON.parse(JSON.stringify(v ?? null), (_k, x) => typeof x === "string" && /^0x[0-9a-fA-F]+$/.test(x) ? x.toLowerCase() : x);
 const same = (a, b) => jcs(lowerHex(a)) === jcs(lowerHex(b));
@@ -10828,10 +10829,570 @@ async function run(main) {
 	}
 }
 
+// examples/robot-episode.ts
+/** Frames per second: the arm's controller reports its state every 8 ms. */
+const FPS = 125;
+const ROBOT = "dobot_cr3a";
+const FORMAT = "lerobot-v3-json/0.1";
+const JOINTS$1 = [
+	"j1",
+	"j2",
+	"j3",
+	"j4",
+	"j5",
+	"j6"
+];
+const names = (k) => JOINTS$1.map((j) => `${j}.${k}`);
+const FEATURES = {
+	"observation.state": {
+		dtype: "float32",
+		shape: [6],
+		names: names("pos"),
+		fps: 125
+	},
+	"observation.velocity": {
+		dtype: "float32",
+		shape: [6],
+		names: names("vel"),
+		fps: 125
+	},
+	"observation.effort": {
+		dtype: "float32",
+		shape: [6],
+		names: names("current"),
+		fps: 125
+	},
+	action: {
+		dtype: "float32",
+		shape: [6],
+		names: names("pos"),
+		fps: 125
+	},
+	timestamp: {
+		dtype: "float32",
+		shape: [1],
+		names: null,
+		fps: 125
+	},
+	frame_index: {
+		dtype: "int64",
+		shape: [1],
+		names: null,
+		fps: 125
+	},
+	episode_index: {
+		dtype: "int64",
+		shape: [1],
+		names: null,
+		fps: 125
+	},
+	index: {
+		dtype: "int64",
+		shape: [1],
+		names: null,
+		fps: 125
+	},
+	task_index: {
+		dtype: "int64",
+		shape: [1],
+		names: null,
+		fps: 125
+	}
+};
+/** The field names of LeRobot v3's meta/info.json, in its order. */
+const INFO_FIELDS = [
+	"codebase_version",
+	"robot_type",
+	"total_episodes",
+	"total_frames",
+	"total_tasks",
+	"chunks_size",
+	"data_files_size_in_mb",
+	"video_files_size_in_mb",
+	"fps",
+	"splits",
+	"data_path",
+	"video_path",
+	"features"
+];
+const DATA_PATH = "data/chunk-{chunk_index:03d}/file-{file_index:03d}.parquet";
+const TASK = "Move from home through waypoints w1, w2 and w3 in order at 30% speed, then return home.";
+/** How close, in whole degrees, each measured arrival must be to its waypoint. */
+const TOLERANCE = 1;
+const hex = (b) => Buffer.from(b).toString("hex");
+const sha = (s) => sha256hex(new TextEncoder().encode(s));
+const unit = () => import_nacl_fast.default.randomBytes(1)[0] / 255;
+function newOrder() {
+	const wp = () => [
+		Math.round(-60 + 120 * unit()),
+		Math.round(-40 + 30 * unit()),
+		Math.round(50 + 50 * unit()),
+		Math.round(-60 + 40 * unit()),
+		-90,
+		Math.round(-90 + 180 * unit())
+	];
+	return {
+		nonce: hex(import_nacl_fast.default.randomBytes(16)),
+		waypoints: {
+			w1: wp(),
+			w2: wp(),
+			w3: wp()
+		}
+	};
+}
+async function newLab() {
+	const keys = import_nacl_fast.default.sign.keyPair();
+	return {
+		serialSha256: await sha(`CR3A-SIM-${hex(import_nacl_fast.default.randomBytes(3))}`),
+		secretKey: keys.secretKey,
+		publicKey: hex(keys.publicKey)
+	};
+}
+const r3 = (x) => Math.round(x * 1e3) / 1e3;
+/** A minimum-jerk move: position and speed as fractions of the leg. */
+const mj = (s) => 10 * s ** 3 - 15 * s ** 4 + 6 * s ** 5;
+const mjd = (s) => 30 * s ** 2 - 60 * s ** 3 + 30 * s ** 4;
+/** The seller records the ordered run, home through w1, w2 and w3 and home, and packs it as one JSON document. */
+async function recordEpisode(lab, order, o = {}) {
+	const n = Math.round((o.seconds ?? 10) * 125);
+	const home = [
+		0,
+		0,
+		90,
+		0,
+		-90,
+		0
+	];
+	const legs = [
+		home,
+		order.waypoints.w1,
+		order.waypoints.w2,
+		order.waypoints.w3,
+		home
+	];
+	const seg = n / (legs.length - 1);
+	const cols = {
+		"observation.state": [],
+		"observation.velocity": [],
+		"observation.effort": [],
+		action: [],
+		timestamp: [],
+		frame_index: [],
+		episode_index: [],
+		index: [],
+		task_index: []
+	};
+	const arrivals = {};
+	const legOf = (k) => Math.min(Math.floor(k / seg), legs.length - 2);
+	for (let k = 0; k < n; k++) {
+		const leg = legOf(k);
+		const s = (k - leg * seg) / seg;
+		const a = legs[leg], b = legs[leg + 1];
+		const pos = a.map((x, i) => r3(x + (b[i] - x) * mj(s) + .002 * Math.sin(k / 9 + i)));
+		const vel = a.map((x, i) => r3((b[i] - x) * mjd(s) / (seg / 125)));
+		const cur = vel.map((v, i) => r3(.3 + .004 * Math.abs(v) + .12 * Math.cos(pos[i] * Math.PI / 180)));
+		const next = Math.min(k + 1, n - 1), nl = legOf(next), ns = (next - nl * seg) / seg;
+		const act = legs[nl].map((x, i) => r3(x + (legs[nl + 1][i] - x) * mj(ns)));
+		cols["observation.state"].push(pos);
+		cols["observation.velocity"].push(vel);
+		cols["observation.effort"].push(cur);
+		cols["action"].push(act);
+		cols["timestamp"].push(r3(k / 125));
+		cols["frame_index"].push(k);
+		cols["episode_index"].push(0);
+		cols["index"].push(k);
+		cols["task_index"].push(0);
+		if (k === Math.round((leg + 1) * seg) - 1 && leg < 3) arrivals[`w${leg + 1}`] = {
+			frame_index: k,
+			...Object.fromEntries(JOINTS$1.map((j, i) => [j, pos[i]]))
+		};
+	}
+	if (o.faults?.offWaypoint) arrivals["w2"]["j1"] += 5;
+	if (o.faults?.pastLimit) cols["observation.state"][Math.floor(n / 2)][0] = 400;
+	const stats = Object.fromEntries(Object.entries(cols).map(([f, v]) => {
+		const rows = v.map((x) => Array.isArray(x) ? x : [x]);
+		const at = (i) => rows.map((r) => r[i]);
+		const mean = (xs) => xs.reduce((p, q) => p + q, 0) / xs.length;
+		const std = (xs) => {
+			const m = mean(xs);
+			return Math.sqrt(mean(xs.map((x) => (x - m) ** 2)));
+		};
+		const per = (fn) => Array.from({ length: rows[0].length }, (_, i) => r3(fn(at(i))));
+		return [f, {
+			min: per((xs) => xs.reduce((p, q) => Math.min(p, q))),
+			max: per((xs) => xs.reduce((p, q) => Math.max(p, q))),
+			mean: per(mean),
+			std: per(std),
+			count: [n]
+		}];
+	}));
+	const nonce = o.faults?.nonce ?? order.nonce;
+	const dataSha = await sha(JSON.stringify(cols));
+	const recordingSha = await sha(`simulated-recording|${dataSha}`);
+	const message = `${FORMAT}|${nonce}|${dataSha}|${recordingSha}`;
+	const doc = {
+		format: FORMAT,
+		meta: {
+			info: {
+				codebase_version: "v3.0",
+				robot_type: ROBOT,
+				total_episodes: 1,
+				total_frames: n,
+				total_tasks: 1,
+				chunks_size: 1e3,
+				data_files_size_in_mb: 100,
+				video_files_size_in_mb: 500,
+				fps: 125,
+				splits: { train: "0:1" },
+				data_path: DATA_PATH,
+				video_path: null,
+				features: FEATURES
+			},
+			tasks: [{
+				task_index: 0,
+				task: TASK
+			}],
+			episodes: [{
+				episode_index: 0,
+				tasks: [TASK],
+				length: n,
+				dataset_from_index: 0,
+				dataset_to_index: n
+			}],
+			stats
+		},
+		data: cols,
+		provenance: {
+			serial_sha256: lab.serialSha256,
+			controller_firmware: "simulated",
+			clock: "ptp",
+			start_utc: (/* @__PURE__ */ new Date()).toISOString().replace(/\.\d{3}Z$/, "Z"),
+			calibration_sha256: await sha("simulated-calibration"),
+			order: {
+				nonce,
+				waypoints_deg: order.waypoints,
+				speed_pct: 30
+			},
+			arrivals,
+			data_sha256: dataSha,
+			recording_sha256: recordingSha,
+			device: {
+				alg: "ed25519",
+				public_key: lab.publicKey,
+				message,
+				signature: hex(import_nacl_fast.default.sign.detached(new TextEncoder().encode(message), lab.secretKey))
+			}
+		}
+	};
+	return new TextEncoder().encode(JSON.stringify(doc));
+}
+/** The ten checks: every one a kind Crow has, all required, every bound a whole number. */
+function checksFor(lab, order, o = {}) {
+	const maxSeconds = o.maxSeconds ?? 15;
+	const minN = (o.minSeconds ?? 8) * 125, maxN = maxSeconds * 125;
+	const col = (items) => ({
+		type: "array",
+		minItems: minN,
+		maxItems: maxN,
+		items
+	});
+	const vec = (lo, hi) => col({
+		type: "array",
+		minItems: 6,
+		maxItems: 6,
+		items: {
+			type: "number",
+			minimum: lo,
+			maximum: hi
+		}
+	});
+	const data = (props) => ({
+		type: "object",
+		required: ["data"],
+		properties: { data: {
+			type: "object",
+			required: Object.keys(props),
+			properties: props
+		} }
+	});
+	const provenance = (required, properties) => ({
+		type: "object",
+		required: ["provenance"],
+		properties: { provenance: {
+			type: "object",
+			required,
+			properties
+		} }
+	});
+	const frames = {
+		type: "integer",
+		minimum: minN,
+		maximum: maxN
+	};
+	const arrival = (wp) => ({
+		type: "object",
+		required: ["frame_index", ...JOINTS$1],
+		properties: {
+			frame_index: {
+				type: "integer",
+				minimum: 0,
+				maximum: maxN
+			},
+			...Object.fromEntries(JOINTS$1.map((j, i) => [j, {
+				type: "number",
+				minimum: wp[i] - TOLERANCE,
+				maximum: wp[i] + TOLERANCE
+			}]))
+		}
+	});
+	return [
+		{
+			id: "lerobot-info",
+			type: "json_schema",
+			required: true,
+			schema: {
+				type: "object",
+				required: [
+					"format",
+					"meta",
+					"data",
+					"provenance"
+				],
+				additionalProperties: false,
+				properties: {
+					format: { const: FORMAT },
+					data: { type: "object" },
+					provenance: { type: "object" },
+					meta: {
+						type: "object",
+						required: [
+							"info",
+							"tasks",
+							"episodes",
+							"stats"
+						],
+						properties: { info: {
+							type: "object",
+							required: INFO_FIELDS.filter((f) => f !== "video_path"),
+							properties: {
+								codebase_version: { const: "v3.0" },
+								robot_type: { const: ROBOT },
+								total_episodes: { const: 1 },
+								total_tasks: { const: 1 },
+								fps: { const: 125 },
+								total_frames: frames,
+								splits: { const: { train: "0:1" } },
+								data_path: { const: DATA_PATH },
+								features: { const: FEATURES }
+							}
+						} }
+					}
+				}
+			}
+		},
+		{
+			id: "lerobot-meta",
+			type: "json_schema",
+			required: true,
+			schema: {
+				type: "object",
+				required: ["meta"],
+				properties: { meta: {
+					type: "object",
+					properties: {
+						tasks: {
+							type: "array",
+							minItems: 1,
+							maxItems: 1,
+							items: {
+								type: "object",
+								required: ["task_index", "task"],
+								properties: {
+									task_index: { const: 0 },
+									task: { const: TASK }
+								}
+							}
+						},
+						episodes: {
+							type: "array",
+							minItems: 1,
+							maxItems: 1,
+							items: {
+								type: "object",
+								required: [
+									"episode_index",
+									"length",
+									"dataset_from_index",
+									"dataset_to_index"
+								],
+								properties: {
+									episode_index: { const: 0 },
+									dataset_from_index: { const: 0 },
+									length: frames,
+									dataset_to_index: frames
+								}
+							}
+						},
+						stats: {
+							type: "object",
+							required: Object.keys(FEATURES),
+							properties: Object.fromEntries(Object.keys(FEATURES).map((f) => [f, {
+								type: "object",
+								required: [
+									"min",
+									"max",
+									"mean",
+									"std",
+									"count"
+								]
+							}]))
+						}
+					}
+				} }
+			}
+		},
+		{
+			id: "frames",
+			type: "json_schema",
+			required: true,
+			schema: data({
+				timestamp: col({
+					type: "number",
+					minimum: 0,
+					maximum: maxSeconds
+				}),
+				frame_index: col({
+					type: "integer",
+					minimum: 0,
+					maximum: maxN
+				}),
+				index: col({
+					type: "integer",
+					minimum: 0,
+					maximum: maxN
+				}),
+				episode_index: col({ const: 0 }),
+				task_index: col({ const: 0 })
+			})
+		},
+		{
+			id: "joint-positions",
+			type: "json_schema",
+			required: true,
+			schema: data({
+				"observation.state": vec(-360, 360),
+				action: vec(-360, 360)
+			})
+		},
+		{
+			id: "joint-speeds",
+			type: "json_schema",
+			required: true,
+			schema: data({ "observation.velocity": vec(-223, 223) })
+		},
+		{
+			id: "joint-currents",
+			type: "json_schema",
+			required: true,
+			schema: data({ "observation.effort": vec(-10, 10) })
+		},
+		{
+			id: "fresh-order",
+			type: "json_schema",
+			required: true,
+			schema: provenance([
+				"serial_sha256",
+				"order",
+				"recording_sha256",
+				"calibration_sha256",
+				"clock"
+			], {
+				serial_sha256: { const: lab.serialSha256 },
+				order: {
+					type: "object",
+					required: ["nonce", "waypoints_deg"],
+					properties: {
+						nonce: { const: order.nonce },
+						waypoints_deg: { const: order.waypoints }
+					}
+				},
+				recording_sha256: {
+					type: "string",
+					pattern: "^[0-9a-f]{64}$"
+				},
+				calibration_sha256: {
+					type: "string",
+					pattern: "^[0-9a-f]{64}$"
+				},
+				clock: { enum: [
+					"ptp",
+					"chrony",
+					"ntp"
+				] }
+			})
+		},
+		{
+			id: "arrivals",
+			type: "json_schema",
+			required: true,
+			schema: provenance(["arrivals"], { arrivals: {
+				type: "object",
+				required: [
+					"w1",
+					"w2",
+					"w3"
+				],
+				properties: {
+					w1: arrival(order.waypoints.w1),
+					w2: arrival(order.waypoints.w2),
+					w3: arrival(order.waypoints.w3)
+				}
+			} })
+		},
+		{
+			id: "device-key",
+			type: "json_schema",
+			required: true,
+			schema: provenance(["device"], { device: {
+				type: "object",
+				required: [
+					"alg",
+					"public_key",
+					"message",
+					"signature"
+				],
+				properties: {
+					alg: { const: "ed25519" },
+					public_key: { const: lab.publicKey },
+					message: {
+						type: "string",
+						pattern: `^lerobot-v3-json/0\\.1\\|${order.nonce}\\|[0-9a-f]{64}\\|[0-9a-f]{64}$`
+					},
+					signature: {
+						type: "string",
+						pattern: "^[0-9a-f]{128}$"
+					}
+				}
+			} })
+		},
+		{
+			id: "hidden",
+			type: "hidden_characters_max",
+			required: true,
+			max: { total: 0 }
+		}
+	];
+}
+const DELIVERABLE = {
+	kind: "dataset",
+	format: "application/json",
+	description: `One robot arm episode (${ROBOT}), recorded after the order: home, then waypoints w1, w2 and w3 in order at 30% speed, then home, at ${125} Hz for 8 to 15 s. One JSON document in the ${FORMAT} layout: LeRobot v3 meta/info.json, tasks, episodes and stats; the frame table as columns (joint positions, speeds and currents in degrees, degrees per second and amperes; the next commanded position as action); and provenance: the serial hash, the order's nonce and waypoints, the measured arrival at each waypoint, the full recording's hash, and the recording host's Ed25519 signature over the nonce and the hashes.`
+};
+
 // examples/try-sell.ts
 const option = flags([
-	"try-sell: sells work to Crow's test buyer under deterministic checks, with fresh keys and test tokens only. --sample robot-log sells a robot's joint log; --work and --terms sell your own; --outcome refund delivers work that fails a check.",
-	"usage: node try-sell.mjs [--buyer <test buyer URL>] [--sample customers|robot-log] [--work <file> --terms <file>] [--outcome release|refund]",
+	"try-sell: sells work to Crow's test buyer under deterministic checks, with fresh keys and test tokens only. --sample robot-log sells a robot's joint log, --sample robot-episode a robot arm episode in the LeRobot v3 layout; --work and --terms sell your own; --outcome refund delivers work that fails a check.",
+	"usage: node try-sell.mjs [--buyer <test buyer URL>] [--sample customers|robot-log|robot-episode] [--work <file> --terms <file>] [--outcome release|refund]",
 	"example: node try-sell.mjs --sample robot-log"
 ], [
 	"--buyer",
@@ -10855,7 +11416,7 @@ const ROBOT_COLUMNS = [
 	"torque_nm"
 ];
 const robotRows = (times) => [ROBOT_COLUMNS.join(","), ...times.flatMap((t) => JOINTS.map((j, i) => `${t},${j},${((t + i) / 100).toFixed(3)},${(1.5 + i / 10).toFixed(2)}`))].join("\n") + "\n";
-/** The two samples: what is sold, under which checks, and the work that passes them and the work that fails one. */
+/** The samples. One built at run time draws fresh keys and a fresh order, so it is built only when chosen. */
 const SAMPLES = {
 	customers: {
 		price: "25000000",
@@ -10939,6 +11500,24 @@ const SAMPLES = {
 		]),
 		bad: robotRows([0]),
 		says: "one robot run's data log, 12 joint readings"
+	},
+	"robot-episode": async () => {
+		const lab = await newLab();
+		const order = newOrder();
+		const seconds = 10;
+		const wp = (w) => w.join(",");
+		return {
+			price: "20000000",
+			deliverable: DELIVERABLE,
+			checks: checksFor(lab, order),
+			good: await recordEpisode(lab, order, { seconds }),
+			bad: await recordEpisode(lab, order, {
+				seconds,
+				faults: { nonce: newOrder().nonce }
+			}),
+			says: `one robot arm episode in the LeRobot v3 layout, ${seconds * 125} frames (${seconds} s at ${125} Hz)`,
+			note: `the seller drew the order itself, because the test buyer issues no orders yet: nonce ${order.nonce}; waypoints in degrees w1 ${wp(order.waypoints.w1)}, w2 ${wp(order.waypoints.w2)}, w3 ${wp(order.waypoints.w3)}`
+		};
 	}
 };
 /** The windows it offers: 10 minutes to agree, 15 to fund, the work due within the hour, one minute per judging window. */
@@ -10954,7 +11533,7 @@ const TIMING = {
 /** The largest file it reads with --work or --terms: 1 MiB. */
 const MAX_FILE = 1 << 20;
 /** The sample or your own files: price, deliverable, checks and the bytes to deliver. */
-function whatToSell() {
+async function whatToSell() {
 	const work = option("--work"), termsFile = option("--terms"), sample = option("--sample");
 	if (work === void 0 !== (termsFile === void 0)) throw new Error("--work and --terms go together: the work to deliver and the JSON file with its price, deliverable and checks");
 	if (work !== void 0) {
@@ -10976,22 +11555,25 @@ function whatToSell() {
 			says: `${plain(work, 80)} (${bytes.length} bytes)`
 		};
 	}
-	const s = SAMPLES[sample ?? "customers"];
-	if (!s) throw new Error(`--sample is customers or robot-log, not ${plain(sample)}`);
+	const entry = Object.hasOwn(SAMPLES, sample ?? "customers") ? SAMPLES[sample ?? "customers"] : void 0;
+	if (!entry) throw new Error(`--sample is customers, robot-log or robot-episode, not ${plain(sample)}`);
 	if (OUTCOME !== "release" && OUTCOME !== "refund") throw new Error(`--outcome is release or refund, not ${plain(OUTCOME)}`);
+	const s = typeof entry === "function" ? await entry() : entry;
+	const bytes = OUTCOME === "refund" ? s.bad : s.good;
 	return {
 		price: s.price,
 		deliverable: s.deliverable,
 		checks: s.checks,
-		work: new TextEncoder().encode(OUTCOME === "refund" ? s.bad : s.good),
-		says: s.says
+		work: typeof bytes === "string" ? new TextEncoder().encode(bytes) : bytes,
+		says: s.says,
+		...s.note ? { note: s.note } : {}
 	};
 }
 await run(async () => {
 	const started = Date.now();
 	console.log("Crow seller deal with Crow's test buyer: test tokens only, nothing here is real money");
 	if (!/^https?:\/\/\S+$/.test(BUYER)) throw new Error("--buyer takes the test buyer URL, such as https://crow.direct/agents/test-buyer");
-	const sale = whatToSell();
+	const sale = await whatToSell();
 	at("keys");
 	const w = await connect();
 	const seller = w.fresh();
@@ -11005,6 +11587,7 @@ await run(async () => {
 	const buyer = String(card.buyer).toLowerCase();
 	say(`Crow's test buyer at ${plain(BUYER)}: it buys from ${short(buyer)}`);
 	at("offer");
+	if (sale.note) say(sale.note);
 	const { id, terms } = await seller.offer({
 		template: "checks-only",
 		clubId: w.clubId,

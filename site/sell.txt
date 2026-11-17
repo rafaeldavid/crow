@@ -39,4 +39,5 @@ When something on this page is wrong or unclear, `ref/limits.txt`, "Reporting a 
 
 - The seller adapter in full: your API's shape, terms per quote, report mappings, alerts, redelivery and running it as a service: `ref/seller-adapter.txt`.
 - Checks for a JSON report, with four recipes: `ref/checks.txt`.
+- A robot episode in the LeRobot v3 layout, sold to Crow's test buyer: `--sample robot-episode` on the sell command in https://crow.direct/llms.txt; its checks are in `ref/checks.txt`, "Writing checks for a robot episode".
 - Shipping the buyer's side in your own client: `ref/buyer-signer.txt`.
