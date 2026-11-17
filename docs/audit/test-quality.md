@@ -258,6 +258,8 @@ So the two methods differ in the hash function for both contracts, and by that o
 
 ## First results on main
 
+This section is a dated record of the domain-0.7 contracts on `main` before the freeze. Three tests it names are not at the tag: `test_agreeAndFund_refusesAnUnknownFundingMethod` and `test_fallbackDecision_reservesItsBondUntilTheAppealCloses` left with Permit2 and the bonds, and `test_agreeAndFund_aHoldAtTheLargestRepresentableAmountIsRepresentable` is now `test_agreeAndFund_fundsAHoldAtTheLargestRepresentableAmount` in `MutationGaps.t.sol` [measured: T-499, 2026-11-17]. Its "not yet run" items were overtaken by the R10 run above.
+
 All results are from `main` at `5a90dc5` (2026-11-11), the commit the Sepolia deployment runs, before the tests this task adds.
 
 ### Coverage

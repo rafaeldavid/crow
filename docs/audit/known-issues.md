@@ -1,6 +1,6 @@
 # Known issues
 
-One list of the weaknesses and limits that Crow's own docs record, for an auditor. It gathers; it adds no new finding. Crow runs on Ethereum Sepolia with test tokens only, so no row puts real money at risk today. Scope is in [`scope.md`](scope.md).
+One list of the weaknesses and limits that Crow's own docs record, for an auditor. Sections 1 to 9 gather; section 10 holds what the audit-readiness review (T-499) read at the tag. Crow runs on Ethereum Sepolia with test tokens only, so no row puts real money at risk today. Scope is in [`scope.md`](scope.md).
 
 This page describes the phase-one contracts at the frozen commit, the annotated tag `contracts-phase-one-1`, whose `contracts/src` equals the deployment record's `commit` ([`scope.md`](scope.md)). They are deployed on Sepolia since 2026-11-13, and they are the code an external audit reads. Phase one has no party appeals and no bonds (D57). The rows about them are in section 9, "Not in phase one": SimChain keeps both as the full protocol's reference, and the contracts deployed on 2026-11-04 (domain 0.7) keep them for the deals opened on them.
 
@@ -55,6 +55,11 @@ Source: [`docs/reviews/2026-11-03-contract-review.md`](../reviews/2026-11-03-con
 | An accept whose key does not decrypt the work has no remedy on chain (threat T19) | The same bound. The buyer checks the key it receives |
 | A party must trust all three adjudicators it names, because the other party can steer which one decides | The parties choose all three in the signed terms |
 | The settlement for late work releases a key with no posted delivery, by design (SC-5b) | Both parties sign it |
+| Escalation is free, final and steerable: a primary that is also the appeal adjudicator gets a second panel draw, and a primary alone forces a refund by escalating to a silent appeal adjudicator (ADR-0031 red team M-1). Nothing checks that the addresses differ ([`threat-model.md`](threat-model.md) TA-4) | The parties name all three adjudicators and read the terms before they sign; the loss is one deal's price and fee |
+| An adjudicator earns the fee for an accept or a reject and nothing for an escalation, and no bond weighs against a careless decision (ADR-0031 red team M-3, SC-7) | The same bound, and the parties' choice of adjudicators |
+| A contract signer (ERC-1271) or a key that takes delegated code (EIP-7702) can change its answer after it signed; a signature is checked when it is relayed (ADR-0031 red team M-4, SC-4; [`threat-model.md`](threat-model.md) TA-7) | A party that changes its answer harms only its own pending messages; the timeouts still settle the deal |
+| Three checks recorded for the outside audit are not built: the dispute fields are not refused (`test_r11_issue_disputeFieldsAreSignedAndNotRefused`), an escalation decision's appeal ground is unchecked (`test_issue_escalationDecisionAcceptsAnyAppealGround`), and a primary's beacon fields are unproven (`test_r11_issue_primaryDecisionMayCarryUnprovenBeaconFields`) ([`state-model.md`](state-model.md) §8.3) | No money moves outside the terms; a reader must not take the unread fields as proven |
+| A deal with price 0 and fee 0 cannot be funded: the escrow refuses to hold nothing (`AuthCaptureEscrow.sol:179`) | Core's phase-one profile refuses such terms at the offer (`ZERO_HOLD_PROBLEM`) |
 | An escalation window shorter than the chain's floor cannot be decided. ADR-0032 §5 derives the floor from the beacon margin (`BEACON_MARGIN()`, the deployment record's `beaconMarginSec`) and the chain's block time | The operator's prepare route warns below it; the case defaults to a refund (`state-model.md` F-2) |
 
 ## 3. Changes the 2026-11-13 deployment brought
@@ -120,6 +125,16 @@ Six places where Crow's own sources disagreed are settled. Each was settled by t
 
 ## 9. Not in phase one
 
+**The scope cuts** (ADR-0031; each with what leaves, what stays and what a party loses there; [`state-model.md`](state-model.md), Appendix A):
+
+| Cut | What a phase-one deployment does instead |
+| --- | --- |
+| SC-7: party appeals and bonds (D57) | The first decision by the primary or the fallback is final, and so is the appeal adjudicator's after an escalation. No adjudicator posts a bond. The rows below are the issues that left with them |
+| SC-1: any token per deal | One token per deployment, the immutable `TOKEN`; terms that name another token do not fund |
+| SC-2: Permit2 funding | One ERC-3009 authorization through CPP's ERC-3009 collector |
+| SC-3: payouts to third addresses in a mutual settlement (D58) | It pays the buyer's payment address and the seller's payout address only |
+| SC-6: the on-chain record of an unfunded offer's expiry (D58) | The operators mark an unfunded offer expired by their own clock; no `Expired` stage |
+
 These rows describe party appeals and bonds, which phase one does not have. SimChain keeps both as the full protocol's reference, and the 2026-11-04 contracts (domain 0.7) keep them for the deals opened on them. Each row's status is "not in phase one (ADR-0031, SC-7)" unless it says otherwise.
 
 | ID | Issue | Recorded in | Phase one |
@@ -132,3 +147,16 @@ These rows describe party appeals and bonds, which phase one does not have. SimC
 | A-1 | A sham deal priced at a fallback's whole free bond still holds that bond once the fallback decides | T-211 Handoff, "What remains of the sham-deal lock (T-206 M-3)" | Not in phase one. A fallback's decision reserves nothing, so a sham deal holds no bond |
 | A-2 | Sham offers that a service accepts as primary drain the free bond its fallback turns need, which can force the default on another deal | T-211 Handoff, Follow-up 2 | Not in phase one. No free bond exists to drain |
 | A-3 | The service trusts its settlement port for the first outcome of an appealed deal | T-211 Handoff, Follow-up 5 | Not in phase one. No deal is appealed on the EVM path, so the service reads no first outcome of an appealed deal |
+
+## 10. Read by the audit-readiness review (T-499)
+
+The review read every external and public function at the tag on 2026-11-17, with Slither 0.11.6 and Aderyn 0.6.8 ([`functions.md`](functions.md)). It found no Critical, High or Medium defect [inferred]. The source is frozen, so each fix is for the next contract version. Line numbers are at the tag.
+
+| ID | Issue | Where | Severity | Status | Smallest fix for the next version |
+| --- | --- | --- | --- | --- | --- |
+| RR-1 | The gas forwarded to the pairing precompile is a constant 250,000. Two pairs cost 102,900 today; a repricing above the cap would fail every proof, so no fallback or appeal adjudicator could decide on that deployment and its deals would default to a refund. This is the review's I-12, rated here | `DrandQuicknetBeacon.sol:65`, `:88` | low | accepted for phase one; a redeploy replaces the beacon | Take the cap as a constructor argument with a floor, or forward all gas and bound the relayer's cost off chain |
+| RR-2 | The constructor refuses zero addresses but checks no code at the escrow, the collector, the beacon or the token | `HoldbackRules.sol:90-93` | info | accepted: `deploy-sepolia.sh --check` reads each address's code against the record | Refuse an address with no code |
+| RR-3 | Funding checks no signer, money address or adjudicator for zero. A zero fallback or appeal adjudicator makes that path always default | `agreeAndFund`, `HoldbackRules.sol:146-192` | info | accepted: the parties sign the addresses, and D31 leaves the values to them | Refuse `address(0)` for the five signers and the two money addresses, as self-contradictory terms |
+| RR-4 | Solady's ECDSA path accepts high-`s` and 64-byte (EIP-2098) signatures, so one message has more than one valid encoding. No replay follows: the stage, not the signature bytes, makes each step single-use | Solady `SignatureCheckerLib`, called from `_requireSigned` (`HoldbackRules.sol:567`) | info | accepted; an off-chain index must not key on signature bytes | Document for integrators, or refuse high-`s` |
+| RR-5 | `triggerFallback` has no upper bound: called after `fallbackBy`, it opens a fallback turn with no time left and emits a round no one can use. The default follows at once | `HoldbackRules.sol:434-442` | info | accepted | Refund at once when the time is at or past `fallbackBy`, or document |
+`MUTUAL_FEE_SHARE_BPS` (`HoldbackRules.sol:37`) is read by no contract code on purpose: it records the rulebook's default of 0 in the ABI, and `Postings.fuzz.t.sol` fails if it leaves 0 (I-2, section 2).
