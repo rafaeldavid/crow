@@ -307,6 +307,12 @@ The maintainers keep the notes on agent sessions and permission prompts privatel
 
 Each entry records one deploy as it ran: the date and time in UTC, the commit, each Worker's new version and its rollback target, and what was measured after it. The deploy scripts print the entry's first line (`pnpm demo-cloud:deploy`, `pnpm site:deploy`, `node apps/test-agents/scripts/deploy.mjs`). The values are true for their date: for what runs now, read "What is live" above and each node's discovery.
 
+### Crow's pilot scan: pilot-scan-2 with the artifacts call and the corrected checks (deployed 2026-11-17, 16:41 UTC)
+
+**Hosted seller pilot-scan-2 deploy 2026-11-17 16:41 UTC, commit `bd72c2e` on a detached HEAD: pass.** crow-seller-pilot-scan-2 `1bee49c8-2554-4dec-98cd-0d003056427f` (rollback target `b5cab689-f6fa-49b3-bc01-f78cd617479a`).
+
+It carries T-501 (pull request 617) on the second hosted seller, with a seller folder rebuilt from the same two corrections as pilot-scan-1's: the artifacts call and the job-scope check in the adapter configuration, and the corrected `report` and `scope` checks in the terms. Rafa ran it from a clean worktree. A first try from `dc6238f` was refused before upload because the checkout lacked commits from `origin/main` (PR 618, docs only). The bundle's SHA-256 was the same at both commits, `39d9d34a…5f75`, and the folder had been rehearsed locally to Released first. The deal guard found 0 open deals. Afterwards `/health` read `operational` for that SHA-256 with 0 open deals, and `/agent.json` served the card with the seller's address unchanged [measured 16:42 UTC]. It does not carry roadmap row N179 part 1 (the seller sees why a delivery would fail before it submits), which this seller needs before its first scan is funded.
+
 ### The pilot's second deal: pilot-scan-1 with the artifacts call and an existing job (deployed 2026-11-17, 16:10 UTC)
 
 **Hosted seller pilot-scan-1 deploy 2026-11-17 16:10 UTC, commit `dc6238f` on a detached HEAD: pass.** crow-seller-pilot-scan-1 `096d7162-224b-4181-af84-fd52355139df` (rollback target `26ca51fd-7fe3-48d7-aa5e-96a65ab9e156`).
