@@ -11,6 +11,9 @@
 //   --sample robot-log   one robot run's data log for 10 tUSDC, a CSV with one row per joint reading, under five
 //                        checks that state its format: the four columns, 6 to 600 rows, one reading per joint and
 //                        time, no empty position, and a joint name from base, shoulder, elbow and wrist
+//   --sample robot-episode   one robot arm episode in the LeRobot v3 layout (10 s at 125 Hz, one JSON document) for
+//                        20 tUSDC, under ten checks (robot-episode.ts); the seller draws the order's nonce and
+//                        waypoints itself, because the test buyer issues no orders yet
 //   --work <file> --terms <file>   your own work, and a JSON file {"price": "<base units>", "deliverable":
 //                        {"kind", "description", "format"}, "checks": [...]}; the test buyer takes 1 to 10 checks,
 //                        at least one required, and a price of at most 50 tUSDC
@@ -20,15 +23,16 @@
 // Exit 0 when the deal ends as asked (Released, or Refunded with --outcome refund), 3 when it refuses to sign, 1
 // otherwise.
 //
-//   node try-sell.mjs [--buyer <url>] [--sample customers|robot-log] [--work <file> --terms <file>] [--outcome refund]
+//   node try-sell.mjs [--buyer <url>] [--sample customers|robot-log|robot-episode] [--work <file> --terms <file>] [--outcome refund]
 //   node examples/try-sell.ts ...   from the repository
 import { readFileSync, statSync } from 'node:fs';
 import type { Hex } from 'viem';
+import { checksFor, DELIVERABLE, FPS, newLab, newOrder, recordEpisode } from './robot-episode.ts';
 import { at, chainLines, connect, faucet, flags, fromParty, plain, run, say, short, sleep, TEST_BUYER, until, Unavailable, type J } from './goal-kit.ts';
 
 const option = flags([
-  "try-sell: sells work to Crow's test buyer under deterministic checks, with fresh keys and test tokens only. --sample robot-log sells a robot's joint log; --work and --terms sell your own; --outcome refund delivers work that fails a check.",
-  'usage: node try-sell.mjs [--buyer <test buyer URL>] [--sample customers|robot-log] [--work <file> --terms <file>] [--outcome release|refund]',
+  "try-sell: sells work to Crow's test buyer under deterministic checks, with fresh keys and test tokens only. --sample robot-log sells a robot's joint log, --sample robot-episode a robot arm episode in the LeRobot v3 layout; --work and --terms sell your own; --outcome refund delivers work that fails a check.",
+  'usage: node try-sell.mjs [--buyer <test buyer URL>] [--sample customers|robot-log|robot-episode] [--work <file> --terms <file>] [--outcome release|refund]',
   'example: node try-sell.mjs --sample robot-log',
 ], ['--buyer', '--sample', '--work', '--terms', '--outcome']);
 const BUYER = (option('--buyer') ?? TEST_BUYER).replace(/\/+$/, '');
@@ -37,8 +41,10 @@ const OUTCOME = option('--outcome') ?? 'release';
 const JOINTS = ['base', 'shoulder', 'elbow', 'wrist'];
 const ROBOT_COLUMNS = ['t_ms', 'joint', 'position_rad', 'torque_nm'];
 const robotRows = (times: number[]) => [ROBOT_COLUMNS.join(','), ...times.flatMap((t) => JOINTS.map((j, i) => `${t},${j},${((t + i) / 100).toFixed(3)},${(1.5 + i / 10).toFixed(2)}`))].join('\n') + '\n';
-/** The two samples: what is sold, under which checks, and the work that passes them and the work that fails one. */
-const SAMPLES: Record<string, { price: string; deliverable: J; checks: J[]; good: string; bad: string; says: string }> = {
+/** A sample: what is sold, under which checks, the work that passes them and the work that fails one, and a note it prints before the offer. */
+type Sample = { price: string; deliverable: J; checks: J[]; good: string | Uint8Array; bad: string | Uint8Array; says: string; note?: string };
+/** The samples. One built at run time draws fresh keys and a fresh order, so it is built only when chosen. */
+const SAMPLES: Record<string, Sample | (() => Promise<Sample>)> = {
   customers: {
     price: '25000000',
     deliverable: { kind: 'dataset', description: 'customers.csv, one row per customer', format: 'text/csv' },
@@ -65,6 +71,21 @@ const SAMPLES: Record<string, { price: string; deliverable: J; checks: J[]; good
     bad: robotRows([0]), // 4 readings: the rows check (6 to 600) fails
     says: "one robot run's data log, 12 joint readings",
   },
+  'robot-episode': async () => {
+    const lab = await newLab();
+    const order = newOrder();
+    const seconds = 10;
+    const wp = (w: number[]) => w.join(',');
+    return {
+      price: '20000000',
+      deliverable: DELIVERABLE,
+      checks: checksFor(lab, order),
+      good: await recordEpisode(lab, order, { seconds }),
+      bad: await recordEpisode(lab, order, { seconds, faults: { nonce: newOrder().nonce } }), // another order's run: fresh-order and device-key fail
+      says: `one robot arm episode in the LeRobot v3 layout, ${seconds * FPS} frames (${seconds} s at ${FPS} Hz)`,
+      note: `the seller drew the order itself, because the test buyer issues no orders yet: nonce ${order.nonce}; waypoints in degrees w1 ${wp(order.waypoints.w1)}, w2 ${wp(order.waypoints.w2)}, w3 ${wp(order.waypoints.w3)}`,
+    };
+  },
 };
 /** The windows it offers: 10 minutes to agree, 15 to fund, the work due within the hour, one minute per judging window. */
 const TIMING = { offerExpiresInSec: 600, fundWithinSec: 900, deliverWithinSec: 3600, judgeWithinSec: 60, fallbackWithinSec: 60, appealWindowSec: 0, appealDecideSec: 60 };
@@ -72,7 +93,7 @@ const TIMING = { offerExpiresInSec: 600, fundWithinSec: 900, deliverWithinSec: 3
 const MAX_FILE = 1 << 20;
 
 /** The sample or your own files: price, deliverable, checks and the bytes to deliver. */
-function whatToSell(): { price: string; deliverable: J; checks: J[]; work: Uint8Array; says: string } {
+async function whatToSell(): Promise<{ price: string; deliverable: J; checks: J[]; work: Uint8Array; says: string; note?: string }> {
   const work = option('--work'), termsFile = option('--terms'), sample = option('--sample');
   if ((work === undefined) !== (termsFile === undefined)) throw new Error('--work and --terms go together: the work to deliver and the JSON file with its price, deliverable and checks');
   if (work !== undefined) {
@@ -89,17 +110,19 @@ function whatToSell(): { price: string; deliverable: J; checks: J[]; work: Uint8
     if (!/^[0-9]{1,30}$/.test(String(t?.price)) || typeof t?.deliverable?.kind !== 'string' || typeof t?.deliverable?.format !== 'string' || !Array.isArray(t?.checks)) throw new Error(`${plain(termsFile)} must be {"price": "<base units>", "deliverable": {"kind", "description", "format"}, "checks": [...]}`);
     return { price: String(t.price), deliverable: t.deliverable, checks: t.checks, work: new Uint8Array(bytes), says: `${plain(work, 80)} (${bytes.length} bytes)` };
   }
-  const s = SAMPLES[sample ?? 'customers'];
-  if (!s) throw new Error(`--sample is customers or robot-log, not ${plain(sample)}`);
+  const entry = Object.hasOwn(SAMPLES, sample ?? 'customers') ? SAMPLES[sample ?? 'customers'] : undefined;
+  if (!entry) throw new Error(`--sample is customers, robot-log or robot-episode, not ${plain(sample)}`);
   if (OUTCOME !== 'release' && OUTCOME !== 'refund') throw new Error(`--outcome is release or refund, not ${plain(OUTCOME)}`);
-  return { price: s.price, deliverable: s.deliverable, checks: s.checks, work: new TextEncoder().encode(OUTCOME === 'refund' ? s.bad : s.good), says: s.says };
+  const s = typeof entry === 'function' ? await entry() : entry;
+  const bytes = OUTCOME === 'refund' ? s.bad : s.good;
+  return { price: s.price, deliverable: s.deliverable, checks: s.checks, work: typeof bytes === 'string' ? new TextEncoder().encode(bytes) : bytes, says: s.says, ...(s.note ? { note: s.note } : {}) };
 }
 
 await run(async () => {
   const started = Date.now();
   console.log("Crow seller deal with Crow's test buyer: test tokens only, nothing here is real money");
   if (!/^https?:\/\/\S+$/.test(BUYER)) throw new Error('--buyer takes the test buyer URL, such as https://crow.direct/agents/test-buyer');
-  const sale = whatToSell();
+  const sale = await whatToSell();
   at('keys');
   const w = await connect();
   const seller = w.fresh();
@@ -115,6 +138,7 @@ await run(async () => {
   say(`Crow's test buyer at ${plain(BUYER)}: it buys from ${short(buyer)}`);
 
   at('offer'); // the operator fills the terms; the seller rebuilds them from its request before signing (verify.ts)
+  if (sale.note) say(sale.note);
   const { id, terms } = await seller.offer({
     template: 'checks-only', clubId: w.clubId, seller: seller.address,
     buyer: { address: buyer, encryptionPublicKey: card.buyerEncryptionPublicKey },

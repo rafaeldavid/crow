@@ -197,6 +197,24 @@ describe('try-sell.mjs (scenarios s3 and s6)', () => {
     expect(r.out).toMatch(/rows FAIL/);
   }, 90_000);
 
+  const ROBOT_CHECKS = ['lerobot-info', 'lerobot-meta', 'frames', 'joint-positions', 'joint-speeds', 'joint-currents', 'fresh-order', 'arrivals', 'device-key', 'hidden'];
+  it('sells a robot arm episode in the LeRobot v3 layout under ten checks, saying first that it drew the order itself (T-498)', async () => {
+    const r = await node([bundle('try-sell'), '--buyer', b.url, '--sample', 'robot-episode'], world.urls);
+    expectDone(r, 'Released');
+    const lines = r.out.split('\n');
+    const note = lines.findIndex((l) => /^offer +the seller drew the order itself, because the test buyer issues no orders yet: nonce [0-9a-f]{32}; waypoints in degrees w1 /.test(l));
+    const offered = lines.findIndex((l) => /^offer +0x[0-9a-f]{6}\.\.\.[0-9a-f]{4} offered: one robot arm episode in the LeRobot v3 layout, 1250 frames \(10 s at 125 Hz\) for 20 tUSD, checks /.test(l));
+    expect(note, r.out).toBeGreaterThanOrEqual(0);
+    expect(offered, r.out).toBeGreaterThan(note);
+    expect(r.out).toMatch(new RegExp(`^outcome +Released: checks ${ROBOT_CHECKS.map((c) => `${c} pass`).join(', ')}; decision accept$`, 'm'));
+  }, 90_000);
+
+  it('delivers another order\'s episode with --outcome refund, and fresh-order and device-key fail (T-498)', async () => {
+    const r = await node([bundle('try-sell'), '--buyer', b.url, '--sample', 'robot-episode', '--outcome', 'refund'], world.urls);
+    expectDone(r, 'Refunded');
+    expect(r.out).toMatch(/^outcome +Refunded: checks .*fresh-order FAIL, arrivals pass, device-key FAIL, hidden pass; decision reject$/m);
+  }, 90_000);
+
   it('sells your own work under your own checks with --work and --terms', async () => {
     const dir = mkdtempSync(join(tmpdir(), 'crow-try-sell-'));
     writeFileSync(join(dir, 'work.csv'), 'sku,qty\nA1,3\nB2,5\n');

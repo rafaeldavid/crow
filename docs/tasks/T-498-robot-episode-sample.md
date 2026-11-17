@@ -5,8 +5,8 @@
 - **Depends on:** T-469 (the goal commands and their bundles), T-496 (the bundle import pins in `tests/site-bundles.test.ts`)
 - **Paths this task may touch:** `examples/try-sell.ts`, `examples/robot-episode.ts` (new), `examples/robot-episode.test.ts` (new), `apps/test-agents/src/try-goals.test.ts` (the robot-episode cases), `site/llms.txt` (one sentence in the sell goal), `site/sell.txt` (one line), `site/ref/checks.txt` (one recipe section), the files `node site/build.mjs` writes from them (`site/try-sell.mjs` and the filled `llms.txt`), this file.
 - **Human gate:** the site deploy that publishes the new `try-sell.mjs` and its hash, Rafa's. The one live run on Sepolia comes after it.
-- **Status:** todo. Planned on 2026-11-17 at Rafa's word ("Yes, plan it"). The first pilot stays first (D72): a session picks this up when Rafa schedules it.
-- **Agent/session:** planned by the robot-data research session, 2026-11-17, branch `t-498-robot-episode-sample` (this file only).
+- **Status:** in review. Built on 2026-11-17, branch `t-498-robot-episode-build`. The site deploy and the live run on Sepolia wait for Rafa.
+- **Agent/session:** planned by the robot-data research session, 2026-11-17, branch `t-498-robot-episode-sample` (this file only); built by a build session the same day, branch `t-498-robot-episode-build`.
 - **Roadmap row:** T-240
 - **Change kind:** 1 (copy and agent docs: the published command and its guides), with the examples' own tests for the code
 
@@ -41,13 +41,13 @@ Non-goals: Parquet or MP4 output; a buyer that issues the order (Out of scope); 
 
 ## Acceptance criteria
 
-- [ ] `node examples/try-sell.ts --sample robot-episode` against the in-process world ends Released with all ten checks passing; with `--outcome refund` it ends Refunded and names the failed checks (`apps/test-agents/src/try-goals.test.ts`).
-- [ ] `examples/robot-episode.test.ts` runs `examples/check-delivery.ts`'s code on the good episode (accept) and on at least three broken copies (another nonce, an arrival off its waypoint, a value past a joint limit), each rejected by its own check.
-- [ ] The `meta.info` section uses exactly the LeRobot v3 `info.json` field names; a test pins them.
-- [ ] The run prints, before it offers, that the seller drew the nonce and waypoints itself because the test buyer issues no orders yet.
-- [ ] `--sample robot-log` and benchmark scenario 6 behave as before.
-- [ ] `tests/site-bundles.test.ts` passes with no new package or host; `node site/build.mjs && node site/check.mjs` pass.
-- [ ] `site/llms.txt` names `--sample robot-episode` in one sentence; `site/ref/checks.txt` gains a short "Writing checks for a robot episode" section with the whole-number bounds and the `prefixItems` limit.
+- [x] `node examples/try-sell.ts --sample robot-episode` against the in-process world ends Released with all ten checks passing; with `--outcome refund` it ends Refunded and names the failed checks (`apps/test-agents/src/try-goals.test.ts`).
+- [x] `examples/robot-episode.test.ts` runs `examples/check-delivery.ts`'s code on the good episode (accept) and on at least three broken copies (another nonce, an arrival off its waypoint, a value past a joint limit), each rejected by its own check.
+- [x] The `meta.info` section uses exactly the LeRobot v3 `info.json` field names; a test pins them.
+- [x] The run prints, before it offers, that the seller drew the nonce and waypoints itself because the test buyer issues no orders yet.
+- [x] `--sample robot-log` and benchmark scenario 6 behave as before.
+- [x] `tests/site-bundles.test.ts` passes with no new package or host; `node site/build.mjs && node site/check.mjs` pass.
+- [x] `site/llms.txt` names `--sample robot-episode` in one sentence; `site/ref/checks.txt` gains a short "Writing checks for a robot episode" section with the whole-number bounds and the `prefixItems` limit.
 - [ ] After Rafa's site deploy: one run of the published command on Sepolia, recorded in Evidence with its commitment ID and outcome (change kind 9).
 
 ## Out of scope
@@ -61,9 +61,16 @@ Non-goals: Parquet or MP4 output; a buyer that issues the order (Out of scope); 
 
 Fill this in before review. Label each item measured, inferred or guessed.
 
-- Commands run and results:
-- Snapshot diffs:
-- Metrics:
+- Commands run and results, all on this branch, 2026-11-17 [measured]:
+  - `pnpm vitest run examples/robot-episode.test.ts`: 6 of 6 pass. The good episode is accepted by `checkDelivery`. Another order's nonce fails `fresh-order` and `device-key`; an arrival 5 degrees off w2 fails `arrivals`; a position of 400 degrees fails `joint-positions`. Each broken copy fails only those checks. One test pins the 13 `meta.info` field names of LeRobot v3 `info.json`, and one checks that every `minimum`, `maximum`, `minItems` and `maxItems` in the ten checks is an integer.
+  - `pnpm vitest run src/try-goals.test.ts` in `apps/test-agents`: 13 of 13 pass in 56 s. Two are new. `--sample robot-episode` ends Released with all ten checks passing and decision accept. Its `offer` step prints the seller-drawn order (nonce and waypoints) before the offered line. `--outcome refund` ends Refunded with `fresh-order FAIL` and `device-key FAIL`. The s3, s6 (`robot-log`), refund, `--work`/`--terms` and wrong-call cases pass unchanged.
+  - `node site/build.mjs && node site/check.mjs`: PASS. The seller's first-deal path (llms.txt + sell.txt) is 4,312 of 5,000 tokens (estimate). `pnpm vitest run tests/site-bundles.test.ts`: 10 of 10 pass, so `try-sell.mjs` has the same imports, requires, process members and hosts as before.
+  - `pnpm typecheck`: exit 0. `pnpm exec eslint` on the four changed code files: exit 0.
+- Snapshot diffs: none. No scenario fixture changed.
+- Metrics [measured]:
+  - The 10 s episode is 228,464 bytes (1,250 frames at 125 Hz), built in 20 ms. The ten checks are 8,585 bytes of JSON.
+  - `site/try-sell.mjs` grew from 362,902 to 377,547 bytes.
+- Not yet run: the published command on Sepolia (the last criterion), after Rafa's site deploy.
 
 ## Decisions
 
@@ -72,4 +79,8 @@ Fill this in before review. Label each item measured, inferred or guessed.
 
 ## Handoff
 
-Planned only. Nothing is built. Start from the prototype the brief carries; move its episode builder into `examples/robot-episode.ts` with tweetnacl in place of `node:crypto`, and add the sample to `try-sell.ts`'s `SAMPLES`.
+Built; in review. `examples/robot-episode.ts` builds the order, the lab (serial hash and Ed25519 device key from tweetnacl), the episode and the ten checks; hashes use `goal-kit.ts`'s `sha256hex`. `try-sell.ts` builds the sample only when it is chosen, so `customers` and `robot-log` are unchanged. With `--outcome refund` it delivers the same run under another order's nonce.
+
+The full recording's hash field is `provenance.recording_sha256`. It is simulated from the frame table.
+
+Next, after merge: Rafa deploys the site (`docs/operations.md`), so `try-sell.mjs` and its hash in llms.txt go live together. Then one run: `--sample robot-episode` from the published command on Sepolia. Record its commitment ID and end state in Evidence (change kind 9). `site/ref/intake.txt` names only `--sample robot-log`; it is outside this task's paths, so it is left for a later docs batch.

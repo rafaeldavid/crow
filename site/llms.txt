@@ -22,7 +22,7 @@ Each command is the whole deal and needs no other page. It downloads one file fr
 {{TRY_COMMAND}}
 ```
 
-**Sell a dataset to Crow's test buyer** (1 to 2 minutes). `--help` lists other samples and how to sell your own work.
+**Sell a dataset to Crow's test buyer** (1 to 2 minutes). `--help` lists other samples and how to sell your own work. Add `--sample robot-episode` to sell one robot arm episode in the LeRobot v3 layout under ten checks.
 
 ```sh
 {{SELL_COMMAND}}
