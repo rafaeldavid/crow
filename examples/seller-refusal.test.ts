@@ -8,23 +8,39 @@ import { reasonLine, reasonOf, safeCheckMessage, safeSchemaMessage, schemaNames 
 
 type J = any; // eslint-disable-line @typescript-eslint/no-explicit-any
 const MARK = 'zqmark';
+/** A report key of digits, such as an account or ticket number: it must never show either (review and red team, H1). */
+const DIGITS = '482913377';
 
 describe('the reason for a refusal (T-502): messages', () => {
-  const names = new Set(['artifacts', 'kind', 'data', 'title']);
+  const schema = {
+    type: 'object',
+    required: ['artifacts'],
+    properties: {
+      title: { type: 'string' },
+      byId: { type: 'object', additionalProperties: { type: 'string' } },
+      artifacts: { type: 'array', items: { type: 'object', additionalProperties: false, properties: { kind: { enum: ['a'] }, data: { type: 'object', required: ['title'] } } } },
+    },
+  };
   it.each([
     ['schema: /artifacts: /9: anyOf not satisfied', { pointer: '/artifacts/9', message: 'anyOf not satisfied' }],
     ['schema: /artifacts: /0: /data: missing title', { pointer: '/artifacts/0/data', message: 'missing title' }],
     ['schema: missing artifacts', { message: 'missing artifacts' }],
     ['schema: missing zqmark', { message: 'missing a required property' }],
-    ['schema: /artifacts: /2: /zqmark: additional property false schema', { pointer: '/artifacts/2/*', message: 'additional property: false schema' }],
+    ['schema: /artifacts: /2: /zqmark: additional property false schema', { pointer: '/artifacts/*', message: 'additional property: false schema' }],
     ['schema: /kind: additional property not in enum', { pointer: '/*', message: 'additional property: not in enum' }],
     ['schema: /artifacts: /1: /kind: not in enum', { pointer: '/artifacts/1/kind', message: 'not in enum' }],
     ['schema: /artifacts: fewer than 3 items', { pointer: '/artifacts', message: 'fewer than 3 items' }],
-    ['schema: /zq: mark: expected string', { message: 'the value does not match the schema' }],
+    ['schema: /zq: mark: expected string', { pointer: '/*', message: 'expected string' }],
     ['schema: /title: zqmark', { pointer: '/title', message: 'the value does not match the schema' }],
+    // A report key of digits, under a map: never shown as an index (review and red team, H1).
+    ['schema: /byId: /411111111: additional property expected string', { pointer: '/byId/*', message: 'additional property: expected string' }],
+    // A key that imitates segments: digits and declared names inside it never reach the pointer.
+    ['schema: /artifacts: /0: /4111: /1111: /1111: additional property false schema', { pointer: '/artifacts/*', message: 'additional property: false schema' }],
+    ['schema: /byId: /title: /artifacts: /7: additional property expected string', { pointer: '/byId/*', message: 'additional property: expected string' }],
+    ['schema: /title: /123: expected string', { pointer: '/title/*', message: 'expected string' }],
     ['deliverable is not valid JSON', { message: 'the report is not valid JSON' }],
   ])('%s', (detail, want) => {
-    expect(safeSchemaMessage(detail, names)).toEqual(want);
+    expect(safeSchemaMessage(detail, schema)).toEqual(want);
   });
 
   it('keeps the numbers of a table check and replaces what names the report', () => {
@@ -34,6 +50,9 @@ describe('the reason for a refusal (T-502): messages', () => {
     expect(safeCheckMessage({ type: 'null_rate_max', column: 'a' }, 'column zqmark not found')).toEqual({ message: 'a column the check names is not found' });
     expect(safeCheckMessage({ type: 'hidden_characters_max' }, 'over the limit for total (tag 0, bidi 0, variationSelector 0, otherIgnorable 2, total 2)').message).toContain('otherIgnorable 2');
     expect(safeCheckMessage({ type: 'regex_match_rate_min', column: 'a' }, 'zqmark')).toEqual({ message: 'the check fails on this report' });
+    // The judgment's own number formats (red team, L3): a count of a total, a limit in basis points.
+    expect(safeCheckMessage({ type: 'null_rate_max', column: 'a' }, 'null 1/2 exceeds 100 bps')).toEqual({ message: 'null 1/2 exceeds 100 bps' });
+    expect(safeCheckMessage({ type: 'regex_match_rate_min', column: 'a' }, 'match 0/2 below 10000 bps')).toEqual({ message: 'match 0/2 below 10000 bps' });
   });
 
   it('names each stage, and a check the terms do not hold is "unknown"', () => {
@@ -66,6 +85,7 @@ describe('the reason for a refusal (T-502): nothing from the report, on random r
       additionalProperties: false,
       properties: {
         summary: { type: 'string', maxLength: 40 },
+        byId: { type: 'object', additionalProperties: { type: 'integer' } },
         artifacts: {
           type: 'array',
           minItems: 1,
@@ -80,7 +100,7 @@ describe('the reason for a refusal (T-502): nothing from the report, on random r
     };
     const acceptance = { deterministicChecks: [{ id: 'report', type: 'json_schema', required: true, schema }, { id: 'hidden', type: 'hidden_characters_max', required: true, max: { total: 0 } }] };
     const words = [MARK, `${MARK}: x`, `/${MARK}`, `${MARK}: additional property ${MARK}`, 'finding', 'Title', '', `a​${MARK}`];
-    const keys = ['summary', 'artifacts', 'kind', 'data', 'title', 'lines', MARK, `${MARK}: additional property `, `kind: ${MARK}`];
+    const keys = ['summary', 'artifacts', 'kind', 'data', 'title', 'lines', 'byId', MARK, `${MARK}: additional property `, `kind: ${MARK}`, DIGITS, `4111: /${DIGITS}: /${DIGITS}`, `title: /0: /${DIGITS}`, `artifacts: /3: /${DIGITS}: additional property `];
     for (let seed = 1; seed <= 400; seed++) {
       const r = rng(seed);
       const pick = <T,>(a: T[]): T => a[Math.floor(r() * a.length)]!;
@@ -91,12 +111,13 @@ describe('the reason for a refusal (T-502): nothing from the report, on random r
         if (x < 0.65) return Array.from({ length: Math.floor(r() * 3) }, () => value(depth + 1));
         return Object.fromEntries(Array.from({ length: 1 + Math.floor(r() * 3) }, () => [pick(keys), value(depth + 1)]));
       };
-      const report = { summary: pick(words), artifacts: Array.from({ length: Math.floor(r() * 3) }, () => ({ kind: pick(['finding', 'scope', MARK]), data: value(1) })), ...(r() < 0.5 ? { [pick(keys)]: value(1) } : {}) };
+      const report = { summary: pick(words), artifacts: Array.from({ length: Math.floor(r() * 3) }, () => ({ kind: pick(['finding', 'scope', MARK]), data: value(1) })), ...(r() < 0.5 ? { [pick(keys)]: value(1) } : {}), ...(r() < 0.5 ? { byId: { [pick(keys)]: value(2) } } : {}) };
       const pre = preflightDelivery({ plaintext: new TextEncoder().encode(JSON.stringify(report)), mime: 'application/json', format: 'application/json', acceptance: acceptance as J });
       const failed = pre.deterministic.filter((o) => !o.passed).map((o) => ({ checkId: o.checkId, required: o.required, outcome: 'fail' as const, ...(o.detail === undefined ? {} : { detail: o.detail }) }));
       const reason = reasonOf({ result: pre.result, checks: failed }, acceptance);
       expect(JSON.stringify(reason), `seed ${seed}`).not.toContain(MARK);
       expect(reasonLine(reason), `seed ${seed}`).not.toContain(MARK);
+      expect(JSON.stringify(reason), `seed ${seed}`).not.toContain(DIGITS);
     }
   });
 

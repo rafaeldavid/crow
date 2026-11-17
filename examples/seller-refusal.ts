@@ -89,42 +89,53 @@ const SCHEMA_PHRASES: RegExp[] = [
 ];
 
 /**
- * A JSON-schema check's message (`schema: /a: /0: missing b`) as a pointer and a phrase. A segment is kept when it is
- * an array index or a name the schema declares; a property the report added (`additional property`) is `*`.
+ * A JSON-schema check's message (`schema: /a: /0: missing b`) as a pointer and a phrase, read against the check's own
+ * schema. The validator writes each path segment as `/<name>: `, and a property the report added as
+ * `/<key>: additional property ...` with the key unescaped, so a key can hold `: `, `/` and digits that look like
+ * segments (T-502 review and red team). So a segment is kept only where the schema at that point declares it: a name
+ * under `properties`, or an index under an array schema's `items`. Anything else is `*`, and the pointer stops there.
+ * When the message holds an added property anywhere, no index is kept at all, since the key may imitate one, and the
+ * phrase is read from the message's end, which is always the validator's own.
  */
-export function safeSchemaMessage(detail: string, names: ReadonlySet<string>): { pointer?: string; message: string } {
+export function safeSchemaMessage(detail: string, schema: J): { pointer?: string; message: string } {
   if (detail === 'deliverable is not valid JSON') return { message: 'the report is not valid JSON' };
   if (!detail.startsWith('schema: ')) return { message: GENERIC_SCHEMA };
+  const names = schemaNames(schema);
+  const added = detail.includes(': additional property ');
   let rest = detail.slice('schema: '.length);
   const segs: string[] = [];
-  const known = [...names].filter((n) => n !== '').sort((a, b) => b.length - a.length);
-  let extra = false;
+  let node: J = schema;
+  let stopped = false;
   for (let guard = 0; rest.startsWith('/') && guard < 256; guard++) {
-    const index = /^\/(\d{1,9}): /.exec(rest);
-    if (index) {
-      segs.push(index[1]!);
-      rest = rest.slice(index[0].length);
-      continue;
-    }
-    const name = known.find((n) => rest.startsWith(`/${n}: `));
-    // A declared name is kept unless the report put it there as an extra property: that one shows as `*` too.
-    if (name !== undefined && !rest.startsWith(`/${name}: additional property `)) {
+    const props = isRecord(node) && isRecord(node.properties) ? Object.keys(node.properties).sort((x, y) => y.length - x.length) : [];
+    const name = props.find((n) => rest.startsWith(`/${n}: `) && !rest.startsWith(`/${n}: additional property `));
+    if (name !== undefined) {
       segs.push(seg(name));
       rest = rest.slice(name.length + 3);
+      node = node.properties[name];
       continue;
     }
-    const at = rest.indexOf(': additional property ');
-    if (at < 1) return { ...(segs.length ? { pointer: `/${segs.join('/')}` } : {}), message: GENERIC_SCHEMA };
+    const index = /^\/(\d{1,9}): /.exec(rest);
+    const isArray = isRecord(node) && node.items !== undefined && node.properties === undefined && node.additionalProperties === undefined;
+    if (index && isArray && !added) {
+      segs.push(index[1]!);
+      rest = rest.slice(index[0].length);
+      node = node.items;
+      continue;
+    }
     segs.push('*');
-    extra = true;
-    rest = rest.slice(at + ': additional property '.length);
+    stopped = true;
+    break;
   }
   const pointer = segs.length ? { pointer: `/${segs.join('/')}` } : {};
-  const missing = /^missing (.+)$/.exec(rest);
+  // The phrase: what follows the walk, or, past a segment the schema does not declare, what follows the last `: `.
+  let tail = stopped || added ? detail.slice(detail.lastIndexOf(': ') + 2) : rest;
+  while (tail.startsWith('additional property ')) tail = tail.slice('additional property '.length);
+  const missing = /^missing (.+)$/.exec(tail);
   let phrase: string;
   if (missing) phrase = names.has(missing[1]!) && NAME.test(missing[1]!) ? `missing ${missing[1]}` : 'missing a required property';
-  else phrase = SCHEMA_PHRASES.some((p) => p.test(rest)) ? rest : GENERIC_SCHEMA;
-  return { ...pointer, message: extra ? `additional property: ${phrase}` : phrase };
+  else phrase = SCHEMA_PHRASES.some((p) => p.test(tail)) ? tail : GENERIC_SCHEMA;
+  return { ...pointer, message: added ? `additional property: ${phrase}` : phrase };
 }
 
 /** The columns a table check names in the terms. */
@@ -135,10 +146,12 @@ function checkColumns(check: J): Set<string> {
   return out;
 }
 const HIDDEN = /^over the limit for [a-zA-Z]+(?:, [a-zA-Z]+)* \([a-zA-Z]+ \d+(?:, [a-zA-Z]+ \d+)*\)$/;
-const PCT = '\\d+(?:\\.\\d+)?%';
+/** The judgment writes a share as a count of a total (`3/40`) and a limit in basis points (`500 bps`). */
+const PCT = '\\d+/\\d+';
+const BPS = '\\d+ bps';
 const TABLE_PHRASES: RegExp[] = [
   /^\d+ rows; expected \d+ to \d+$/, /^duplicate key at row \d+$/, /^row \d+ is not an ISO 8601 date$/,
-  new RegExp(`^null ${PCT} exceeds ${PCT}$`), new RegExp(`^match ${PCT} below ${PCT}$`), new RegExp(`^reference match ${PCT} below ${PCT}$`),
+  new RegExp(`^null ${PCT} exceeds ${BPS}$`), new RegExp(`^match ${PCT} below ${BPS}$`), new RegExp(`^reference match ${PCT} below ${BPS}$`),
   /^reference not available$/, /^reference bytes do not match the committed hash$/, /^reference is not valid UTF-8$/, /^reference contains Unicode tag characters$/,
   /^reference is \d+ bytes; the cap is \d+$/, /^csv_columns_exact needs a text\/csv deliverable, not [a-z]+\/[a-z0-9.+-]+$/,
   /^inconclusive: the check work budget for this delivery ran out$/, /^check could not be evaluated on this input$/,
@@ -150,7 +163,7 @@ export function safeCheckMessage(check: J, detail: string | undefined): { pointe
   if (detail === undefined) return { message: GENERIC_CHECK };
   if (detail === 'inconclusive: the check work budget for this delivery ran out' || detail === 'check could not be evaluated on this input') return { message: detail };
   if (detail.startsWith('check invalid: ')) return { message: 'the check itself is invalid' };
-  if (check?.type === 'json_schema') return safeSchemaMessage(detail, schemaNames(check.schema));
+  if (check?.type === 'json_schema') return safeSchemaMessage(detail, check.schema);
   if (check?.type === 'csv_columns_exact' && !detail.startsWith('csv_columns_exact needs')) return { message: 'the columns are not the agreed columns' };
   if (check?.type === 'hidden_characters_max') return { message: HIDDEN.test(detail) ? detail : GENERIC_CHECK };
   const notFound = /^column (.+) not found$/.exec(detail);

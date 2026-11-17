@@ -33,6 +33,11 @@ export interface CheckReportInput {
   options?: J;
   /** The signed terms (GET /v1/commitments/<id>/terms). Left out, the acceptance a quote for the scope would sign. */
   terms?: J;
+  /**
+   * Whether the deal's report carries a salt. The live seller follows the deal, which keeps the salt it was offered
+   * with (red team, M2); left out, the configuration's `reportSalt` decides, as for a deal offered under it today.
+   */
+  salt?: boolean;
 }
 
 export interface CheckVerdict {
@@ -80,23 +85,27 @@ export async function checkReport(input: CheckReportInput): Promise<CheckVerdict
   if (!isRecord(api)) throw new Error("adapter.json has no sellerApi mapping: this check runs a seller API's answer");
   const template = JSON.parse(seller.files[c.template]!);
   const reportMapping = c.reportMapping === undefined ? undefined : parseReportMapping(JSON.parse(seller.files[c.reportMapping]!));
-  const built = acceptanceFor(c, template, input.scope, input.options);
-  const terms = input.terms ?? { deliverable: built.deliverable, acceptance: built.acceptance };
+  // The signed terms when given; only then are the template and its rules skipped (red team, L2).
+  const terms = input.terms ?? acceptanceFor(c, template, input.scope, input.options);
   if (!isRecord(terms?.deliverable) || !isRecord(terms?.acceptance)) throw new Error('the terms need deliverable and acceptance');
 
+  const result: J = isRecord(api.result) ? api.result : {};
+  // The command answers the result call and one second call, never the further files a result names: rather than a
+  // verdict the live seller would not give, it gives none (review 6, red team M1).
+  if (result.files !== undefined) throw new Error('this seller\'s result names further files (sellerApi.result.files), which the local check does not fetch: it cannot give the live verdict');
+  const takesSecond = isRecord(result.merge) || isRecord(result.reportCall);
+  if (input.second !== undefined && !takesSecond) throw new Error('an artifacts file is given, and this seller\'s configuration makes no artifacts or report call');
   let job = input.job;
   let second = input.second;
-  const merge = isRecord(api.result) ? api.result.merge : undefined;
-  if (second === undefined && isRecord(merge)) ({ job, second } = splitExport(job, merge.into));
+  if (second === undefined && isRecord(result.merge)) ({ job, second } = splitExport(job, result.merge.into));
 
-  // Every request is answered from the files: the first by the job's answer, the second by the artifacts or report
-  // call's answer. A further file the result names (`sellerApi.result.files`) is not given here, and answers 404.
-  const answers = [job, ...(second === undefined ? [] : [second])];
-  const asked: string[] = [];
-  const local = (async (url: string | URL | Request) => {
-    asked.push(String(url));
+  // Every request is answered from the files, in the client's own order: the job's answer, then the artifacts or the
+  // report call's answer. A job read by HTTP status answers with the first status the configuration counts as done.
+  const done = isRecord(result.status) && result.status.by === 'http' ? (Array.isArray(result.status.done) ? result.status.done[0] : undefined) ?? 200 : 200;
+  const answers: Array<{ body: Uint8Array; status: number }> = [{ body: job, status: done }, ...(second === undefined ? [] : [{ body: second, status: 200 }])];
+  const local = (async () => {
     const next = answers.shift();
-    return next === undefined ? new Response(JSON.stringify({ detail: 'the local check has no answer for this request' }), { status: 404 }) : new Response(next, { status: 200, headers: { 'content-type': 'application/json' } });
+    return next === undefined ? new Response(JSON.stringify({ detail: 'the local check has no answer for this request' }), { status: 404 }) : new Response(next.body, { status: next.status, headers: { 'content-type': 'application/json' } });
   }) as typeof fetch;
   const env: Record<string, string> = {};
   for (const v of seller.credentialVars) env[v] = 'local-check-placeholder';
@@ -115,7 +124,7 @@ export async function checkReport(input: CheckReportInput): Promise<CheckVerdict
   }
   if (answer.state !== 'done') return { verdict: 'not_finished', checks: notRun(), steps: [], detail: `the job is ${answer.state}${answer.status ? ` (${answer.status})` : ''}` };
 
-  const checked = await checkResult(client, answer.bytes, values, { reportMapping, salt: c.reportSalt ? LOCAL_SALT : undefined, terms });
+  const checked = await checkResult(client, answer.bytes, values, { reportMapping, salt: (input.salt ?? c.reportSalt === true) ? LOCAL_SALT : undefined, terms });
   const failedOf = (list: FailedCheck[]) => new Map(list.map((f) => [f.checkId, f]));
   if (checked.refused) {
     const d = checked.detail;

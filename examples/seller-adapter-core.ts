@@ -983,11 +983,14 @@ export interface SellerAdapterCore {
 }
 
 /**
- * T-502: one refused deal as /health and GET /deals/<commitmentId> show it: the reason (seller-refusal.ts), how many
- * distinct results were refused, and when the deal was first refused by the seller's clock. Nothing from the report.
+ * T-502: one deal waiting for a fixed report, as /health and GET /deals/<commitmentId> show it: the reason
+ * (seller-refusal.ts) and how many distinct results were refused. The deal route also says when the deal was first
+ * refused, by the seller's clock; /health does not, since a time could help link a per-deal key's deal to this seller
+ * (red team, L5). Nothing from the report. A deal that moved on (delivered or closed) shows no refusal.
  */
 export type PublicRefusal = RefusalReason & { refusals: number; since?: string };
-const publicRefusal = (d: Deal): PublicRefusal | undefined => (d.reason === undefined ? undefined : { ...d.reason, refusals: d.refusals ?? 0, ...(d.times?.refused === undefined ? {} : { since: d.times.refused }) });
+const publicRefusal = (d: Deal, withTime: boolean): PublicRefusal | undefined =>
+  d.stage !== 'refused' || d.reason === undefined ? undefined : { ...d.reason, refusals: d.refusals ?? 0, ...(withTime && d.times?.refused !== undefined ? { since: d.times.refused } : {}) };
 
 /** Reads and checks a report mapping by its path, as report-converter.ts's loadReportMapping does, through `readText`. */
 function readMapping(file: string, readText: (path: string) => string): ReportMapping {
@@ -1856,7 +1859,7 @@ export async function createSellerAdapter(c: SellerAdapterConfig, env: Readonly<
     const id = commitmentId.toLowerCase();
     const deal = Object.hasOwn(journal.deals, id) ? journal.deals[id]! : undefined;
     if (!deal) return none();
-    const why = publicRefusal(deal);
+    const why = publicRefusal(deal, true);
     return send(200, { commitmentId: id, stage: deal.stage, ...(why === undefined ? {} : { refusal: why }) });
   }
 
@@ -1899,7 +1902,12 @@ export async function createSellerAdapter(c: SellerAdapterConfig, env: Readonly<
     },
     hasOpen: () => Object.values(journal.deals).some((d) => OPEN_STAGES.includes(d.stage)),
     deals: () => structuredClone(Object.values(journal.deals)),
-    refusals: () => Object.values(journal.deals).filter((d) => d.stage === 'refused').map(publicRefusal).filter((r): r is PublicRefusal => r !== undefined),
+    // Sorted by their text, not by the commitment IDs the journal keys them by (red team, L5).
+    refusals: () =>
+      Object.values(journal.deals)
+        .map((d) => publicRefusal(d, false))
+        .filter((r): r is PublicRefusal => r !== undefined)
+        .sort((a, b) => (JSON.stringify(a) < JSON.stringify(b) ? -1 : JSON.stringify(a) > JSON.stringify(b) ? 1 : 0)),
     pollMs: c.pollMs,
     address: seller.address,
     perDealKeys: perDeal,

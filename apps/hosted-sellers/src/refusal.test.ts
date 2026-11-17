@@ -2,6 +2,7 @@
 // report the job stub returns; the hosted seller runs it as a live deal on the in-process world (quote, funding, the
 // object's alarm), and check-report runs the same answer from files. Every string the reports carry holds a marker,
 // and the marker never reaches /health or the deal route.
+import { spawnSync } from 'node:child_process';
 import { mkdtempSync, readFileSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
@@ -191,7 +192,9 @@ describe('a refused result on /health and the deal route (T-502)', () => {
       delete reason.refusals;
       delete reason.since;
       expect(local.reason).toEqual(reason);
-      expect(health.refused).toContainEqual(route.refusal);
+      // /health lists the same entry without its time (red team, L5).
+      expect(health.refused).toContainEqual({ ...reason, refusals: route.refusal.refusals });
+      expect(JSON.stringify(health.refused)).not.toContain('since');
       expect(logs.join('\n')).toContain(`${d.id} REASON refused at`);
     }
     // Nothing from the reports, no commitment ID and no secret reaches the public page; the deal route shows none of the report either.
@@ -219,4 +222,123 @@ describe('a refused result on /health and the deal route (T-502)', () => {
     expect((await get(object, `/deals/0x${'ab'.repeat(32)}`)).status).toBe(404);
     expect((await object.fetch(new Request(`${BASE}/deals/0x${'ab'.repeat(32)}`, { method: 'POST' }))).status).toBe(405);
   }, 30_000);
+});
+
+/** A seller with the artifacts call (T-501) and a salt in each report (T-431): the template needs both. */
+const MERGE_TEMPLATE = {
+  deliverable: { kind: 'document', description: 'A review of {{target}} to depth {{depth}}.', format: 'application/json' },
+  checks: [{ id: 'report', type: 'json_schema', required: true, schema: { type: 'object', required: ['summary', 'notes', 'salt'], properties: { notes: { type: 'array', minItems: 1 } } } }],
+};
+function mergeBundle(stubBase: string): HostedBundle {
+  const b = bundleFor(stubBase);
+  const config = b.config as J;
+  config.sellerApi.result.merge = { path: 'runs/{{jobId}}/notes', into: '/output/notes' };
+  delete config.reportMapping;
+  config.reportSalt = true;
+  return { ...b, config, files: { 'template.json': JSON.stringify(MERGE_TEMPLATE) } };
+}
+function writeFolder(b: HostedBundle): string {
+  const dir = mkdtempSync(join(tmpdir(), 't502-cli-'));
+  writeFileSync(join(dir, 'hosted.json'), JSON.stringify({ slug: b.slug, card: b.card }));
+  writeFileSync(join(dir, 'adapter.json'), JSON.stringify(b.config));
+  for (const [name, text] of Object.entries(b.files)) writeFileSync(join(dir, name), text);
+  return dir;
+}
+const readerOf = (dir: string) => (name: string) => {
+  try {
+    return readFileSync(join(dir, name), 'utf8');
+  } catch {
+    return undefined;
+  }
+};
+const enc = (v: J) => new TextEncoder().encode(JSON.stringify(v));
+
+describe('the local report check agrees with the live seller on the artifacts call, the salt and the workspace (T-502 review)', () => {
+  /** One live deal on a seller that merges the stub's notes, and what the deal route then says. */
+  async function liveDeal(o: { notesBody?: J; reportsWorkspace?: string }, target: string): Promise<J> {
+    stub = await startJobStub({ key: SECRETS.JOBS_API_KEY, readsUntilComplete: 0, workspaces: true, ...o });
+    vi.spyOn(console, 'log').mockImplementation(() => {});
+    const storage = new FakeStorage();
+    const object = new HostedSellerObject({ storage }, envFor(), setupOf(mergeBundle(stub.base)));
+    const buyer = agent('buyer-1');
+    const id = await quote(object, buyer, { target, depth: 2 });
+    await fund(buyer, id);
+    await alarmsUntil(object, storage, 'the deal to be refused or delivered', async () => ['refused', 'delivered'].includes((await stageOf(storage, id)) ?? ''));
+    return (await get(object, `/deals/${id}`)).json();
+  }
+  const output = (target: string) => ({ summary: `Reviewed ${target} to depth 2.`, target, proofs: ['poc/overflow.t.sol', 'poc/reentry.t.sol'] });
+  const job = (target: string, workspace = WS, notes?: J) => enc({ run: { id: 41, state: 'complete', input: { target, depth: 2 }, workspace }, output: { ...output(target), ...(notes === undefined ? {} : { notes }) } });
+  const scope = (target: string) => ({ target, depth: 2 });
+  const note = (target: string) => [{ kind: 'note', run: 41, text: `notes on ${target}` }];
+
+  it('the artifacts call and the salt: the live seller delivers, and so does the check, from two files or from one export', async () => {
+    const live = await liveDeal({}, 'merged');
+    expect(live.stage).toBe('delivered');
+    const read = readerOf(writeFolder(mergeBundle('http://127.0.0.1:9/api/v2/')));
+    expect((await checkReport({ read, job: job('merged'), second: enc(note('merged')), scope: scope('merged') })).verdict).toBe('pass');
+    expect((await checkReport({ read, job: job('merged', WS, note('merged')), scope: scope('merged') })).verdict).toBe('pass');
+    // A deal offered without a salt: its report has none, and this template needs one.
+    const unsalted = await checkReport({ read, job: job('merged'), second: enc(note('merged')), scope: scope('merged'), salt: false });
+    expect(unsalted.reason).toMatchObject({ stage: 'checks', checks: [{ checkId: 'report', message: 'missing salt' }] });
+  }, 60_000);
+
+  it('artifacts that fail a check, and a job from another workspace: the same refusal from both', async () => {
+    const read = readerOf(writeFolder(mergeBundle('http://127.0.0.1:9/api/v2/')));
+    const empty = await liveDeal({ notesBody: [] }, 'no-notes');
+    const local = await checkReport({ read, job: job('no-notes'), second: enc([]), scope: scope('no-notes') });
+    expect(empty.refusal).toMatchObject({ stage: 'checks', checks: [{ checkId: 'report', pointer: '/notes', message: 'fewer than 1 items' }] });
+    expect(local.reason).toEqual({ stage: empty.refusal.stage, message: empty.refusal.message, checks: empty.refusal.checks });
+    await stub!.close();
+    stub = undefined;
+    const elsewhere = await liveDeal({ reportsWorkspace: 'ws-other' }, 'elsewhere');
+    const away = await checkReport({ read, job: job('elsewhere', 'ws-other'), second: enc(note('elsewhere')), scope: scope('elsewhere') });
+    expect(elsewhere.refusal).toMatchObject({ stage: 'wrong_workspace' });
+    expect(away.reason).toEqual({ stage: 'wrong_workspace', message: elsewhere.refusal.message, checks: [] });
+  }, 90_000);
+});
+
+describe('the local report check: what it refuses to judge, and the command (T-502 review and red team)', () => {
+  const folder = (over: (config: J) => void) => {
+    const b = mergeBundle('http://127.0.0.1:9/api/v2/');
+    over(b.config as J);
+    return writeFolder(b);
+  };
+  const answer = enc({ run: { id: 41, state: 'complete', input: { target: 'cli', depth: 2 }, workspace: WS }, output: { summary: 's', target: 'cli', notes: [{ text: 'n' }] } });
+
+  it('gives no verdict for a result with further files, or an artifacts file the configuration makes no call for', async () => {
+    const files = readerOf(folder((c) => (c.sellerApi.result.files = { list: '/proofs', path: 'runs/{{jobId}}/files/{{file}}', into: '/proofs', maxCount: 5, maxTotalBytes: 65_536 })));
+    await expect(checkReport({ read: files, job: answer, scope: { target: 'cli', depth: 2 } })).rejects.toThrow(/further files/);
+    const noMerge = readerOf(folder((c) => delete c.sellerApi.result.merge));
+    await expect(checkReport({ read: noMerge, job: answer, second: enc([]), scope: { target: 'cli', depth: 2 } })).rejects.toThrow(/makes no artifacts or report call/);
+  });
+
+  it('reads a job by HTTP status, and takes signed terms past a rule that now refuses the scope', async () => {
+    const http = readerOf(folder((c) => (c.sellerApi.result.status = { by: 'http', running: [202], done: [201] })));
+    expect((await checkReport({ read: http, job: answer, scope: { target: 'cli', depth: 2 } })).verdict).toBe('pass');
+    const rule = readerOf(folder((c) => (c.termsRules = [{ when: [{ field: 'scope.depth', atLeast: 1 }], refuse: 'no longer offered' }])));
+    await expect(checkReport({ read: rule, job: answer, scope: { target: 'cli', depth: 2 } })).rejects.toThrow(/no longer offered/);
+    const terms = { deliverable: MERGE_TEMPLATE.deliverable, acceptance: { deterministicChecks: MERGE_TEMPLATE.checks, rubric: { criteria: [], passThreshold: 0 } } };
+    expect((await checkReport({ read: rule, job: answer, scope: { target: 'cli', depth: 2 }, terms })).verdict).toBe('pass');
+  });
+
+  it('the command: exit 0 on a pass, 1 on a refusal with no check message unless --detail, 2 on bad usage', () => {
+    const dir = folder(() => {});
+    const tmp = mkdtempSync(join(tmpdir(), 't502-cli-in-'));
+    writeFileSync(join(tmp, 'scope.json'), JSON.stringify({ target: 'cli', depth: 2 }));
+    writeFileSync(join(tmp, 'pass.json'), Buffer.from(answer));
+    writeFileSync(join(tmp, 'fail.json'), JSON.stringify({ run: { id: 41, state: 'complete', input: { target: 'cli', depth: 2 }, workspace: WS }, output: { summary: 's', target: 'cli', notes: [] } }));
+    const script = join(import.meta.dirname, '..', 'scripts', 'check-report.ts');
+    const run = (...args: string[]) => spawnSync(process.execPath, [script, ...args], { encoding: 'utf8' });
+    const pass = run(dir, join(tmp, 'pass.json'), '--scope', join(tmp, 'scope.json'));
+    expect(pass.status, pass.stderr).toBe(0);
+    expect(pass.stdout).toMatch(/^PASS: the seller would deliver this report/);
+    const fail = run(dir, join(tmp, 'fail.json'), '--scope', join(tmp, 'scope.json'), '--json');
+    expect(fail.status, fail.stderr).toBe(1);
+    const verdict = JSON.parse(fail.stdout);
+    expect(verdict.reason.checks).toEqual([{ checkId: 'report', required: true, outcome: 'fail', pointer: '/notes', message: 'fewer than 1 items' }]);
+    expect(fail.stdout).not.toContain('schema:');
+    expect(run(dir, join(tmp, 'fail.json'), '--scope', join(tmp, 'scope.json'), '--detail').stdout).toContain("the check's own message: schema: /notes: fewer than 1 items");
+    expect(run(dir, join(tmp, 'pass.json')).status).toBe(2);
+    expect(run(dir, join(tmp, 'pass.json'), '--scope', join(tmp, 'scope.json'), '--salt', '--no-salt').status).toBe(2);
+  });
 });

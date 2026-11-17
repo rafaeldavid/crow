@@ -56,13 +56,14 @@ export interface ReportMapping {
 
 /**
  * A report the mapping cannot convert. `field` is the template field, such as `findings[1].severity`. `safe` and
- * `safeField` say the same without any value or key taken from the report (T-502): the seller's public health page shows them.
+ * `safeField` say the same without any value or key taken from the report (T-502): the seller's public health page shows
+ * them. Each throw writes its own safe text from the mapping's paths and type names only; there is no default.
  */
 export class ReportNotConverted extends Error {
   readonly field: string;
   readonly safe: string;
   readonly safeField: string;
-  constructor(field: string, detail: string, safe: string = detail, safeField: string = field) {
+  constructor(field: string, detail: string, safe: string, safeField: string = field) {
     super(field ? `${field}: ${detail}` : detail);
     this.field = field;
     this.safe = safe;
@@ -229,7 +230,7 @@ function wholeNumbers(v: J, field: string, top: string = field): J {
 function onMissing(missing: Missing, field: string, where: string): J {
   if (missing.kind === 'default') return missing.value;
   if (missing.kind === 'omit') return OMIT;
-  throw new ReportNotConverted(field, `the report has no ${where}`);
+  throw new ReportNotConverted(field, `the report has no ${where}`, `the report has no ${where}`);
 }
 
 function evaluate(node: Node, ctx: Ctx, field: string, offset = 0): J {
@@ -260,7 +261,7 @@ function evaluate(node: Node, ctx: Ctx, field: string, offset = 0): J {
       for (const part of node.parts) {
         const v = evaluate(part, ctx, field, offset + out.length);
         if (v === OMIT) continue;
-        if (!Array.isArray(v)) throw new ReportNotConverted(field, `a part of $concat gives ${kindOf(v)}, not a list`);
+        if (!Array.isArray(v)) throw new ReportNotConverted(field, `a part of $concat gives ${kindOf(v)}, not a list`, `a part of $concat gives ${kindOf(v)}, not a list`);
         out.push(...v);
       }
       return out;
@@ -268,7 +269,7 @@ function evaluate(node: Node, ctx: Ctx, field: string, offset = 0): J {
     case 'each': {
       const { value, where } = resolve(node.path, ctx);
       if (isMissing(value)) return onMissing(node.missing, field, where);
-      if (!Array.isArray(value)) throw new ReportNotConverted(field, `${where} is ${kindOf(value)}, not a list`);
+      if (!Array.isArray(value)) throw new ReportNotConverted(field, `${where} is ${kindOf(value)}, not a list`, `${where} is ${kindOf(value)}, not a list`);
       const out: J[] = [];
       value.forEach((item, i) => {
         const v = evaluate(node.item, { root: ctx.root, item, where: `${where === 'the report' ? '' : where}[${i}]` }, `${field}[${offset + out.length}]`);
@@ -285,10 +286,10 @@ function evaluate(node: Node, ctx: Ctx, field: string, offset = 0): J {
         else if (!(typeof v === 'number' && Number.isSafeInteger(v))) throw new ReportNotConverted(field, `${where} is ${show(v)}, not a whole number`, `${where} is not a whole number`);
       } else if (node.as === 'string') {
         if (typeof v === 'number' && Number.isSafeInteger(v)) v = String(v);
-        else if (typeof v !== 'string') throw new ReportNotConverted(field, `${where} is ${kindOf(v)}, not text or a whole number`);
+        else if (typeof v !== 'string') throw new ReportNotConverted(field, `${where} is ${kindOf(v)}, not text or a whole number`, `${where} is ${kindOf(v)}, not text or a whole number`);
       }
       if (node.map) {
-        if (typeof v !== 'string') throw new ReportNotConverted(field, `${where} is ${kindOf(v)}, and the value map takes text`);
+        if (typeof v !== 'string') throw new ReportNotConverted(field, `${where} is ${kindOf(v)}, and the value map takes text`, `${where} is ${kindOf(v)}, and the value map takes text`);
         if (!Object.hasOwn(node.map, v)) {
           const listed = Object.keys(node.map);
           throw new ReportNotConverted(field, `${where} is ${show(v)}, which the mapping does not list (it lists ${listed.slice(0, 20).map((x) => show(x)).join(', ')}${listed.length > 20 ? ', ...' : ''})`, `${where} is not one of the values the mapping lists`);
@@ -310,16 +311,16 @@ export function convertReport(mapping: ReportMapping, bytes: Uint8Array): Uint8A
   try {
     text = new TextDecoder('utf-8', { fatal: true }).decode(bytes);
   } catch {
-    throw new ReportNotConverted('', 'the report is not UTF-8 text');
+    throw new ReportNotConverted('', 'the report is not UTF-8 text', 'the report is not UTF-8 text');
   }
   let report: J;
   try {
     report = JSON.parse(text);
   } catch {
-    throw new ReportNotConverted('', 'the report is not JSON');
+    throw new ReportNotConverted('', 'the report is not JSON', 'the report is not JSON');
   }
   const out = evaluate(mapping.root, { root: report, item: report, where: '' }, '');
-  if (out === OMIT) throw new ReportNotConverted('', 'the mapping gives no report');
+  if (out === OMIT) throw new ReportNotConverted('', 'the mapping gives no report', 'the mapping gives no report');
   return new TextEncoder().encode(`${JSON.stringify(out, null, 2)}\n`);
 }
 

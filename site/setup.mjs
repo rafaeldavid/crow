@@ -55591,13 +55591,14 @@ const MAX_SCOPE = tusd("1000000000000000");
 // examples/report-converter.ts
 /**
 * A report the mapping cannot convert. `field` is the template field, such as `findings[1].severity`. `safe` and
-* `safeField` say the same without any value or key taken from the report (T-502): the seller's public health page shows them.
+* `safeField` say the same without any value or key taken from the report (T-502): the seller's public health page shows
+* them. Each throw writes its own safe text from the mapping's paths and type names only; there is no default.
 */
 var ReportNotConverted = class extends Error {
 	field;
 	safe;
 	safeField;
-	constructor(field, detail, safe = detail, safeField = field) {
+	constructor(field, detail, safe, safeField = field) {
 		super(field ? `${field}: ${detail}` : detail);
 		this.field = field;
 		this.safe = safe;
@@ -55795,7 +55796,7 @@ function wholeNumbers(v, field, top = field) {
 function onMissing(missing, field, where) {
 	if (missing.kind === "default") return missing.value;
 	if (missing.kind === "omit") return OMIT$1;
-	throw new ReportNotConverted(field, `the report has no ${where}`);
+	throw new ReportNotConverted(field, `the report has no ${where}`, `the report has no ${where}`);
 }
 function evaluate(node, ctx, field, offset = 0) {
 	if ("when" in node && node.when && isMissing(resolve$1(node.when, ctx).value)) return OMIT$1;
@@ -55823,7 +55824,7 @@ function evaluate(node, ctx, field, offset = 0) {
 			for (const part of node.parts) {
 				const v = evaluate(part, ctx, field, offset + out.length);
 				if (v === OMIT$1) continue;
-				if (!Array.isArray(v)) throw new ReportNotConverted(field, `a part of $concat gives ${kindOf(v)}, not a list`);
+				if (!Array.isArray(v)) throw new ReportNotConverted(field, `a part of $concat gives ${kindOf(v)}, not a list`, `a part of $concat gives ${kindOf(v)}, not a list`);
 				out.push(...v);
 			}
 			return out;
@@ -55831,7 +55832,7 @@ function evaluate(node, ctx, field, offset = 0) {
 		case "each": {
 			const { value, where } = resolve$1(node.path, ctx);
 			if (isMissing(value)) return onMissing(node.missing, field, where);
-			if (!Array.isArray(value)) throw new ReportNotConverted(field, `${where} is ${kindOf(value)}, not a list`);
+			if (!Array.isArray(value)) throw new ReportNotConverted(field, `${where} is ${kindOf(value)}, not a list`, `${where} is ${kindOf(value)}, not a list`);
 			const out = [];
 			value.forEach((item, i) => {
 				const v = evaluate(node.item, {
@@ -55852,10 +55853,10 @@ function evaluate(node, ctx, field, offset = 0) {
 				else if (!(typeof v === "number" && Number.isSafeInteger(v))) throw new ReportNotConverted(field, `${where} is ${show(v)}, not a whole number`, `${where} is not a whole number`);
 			} else if (node.as === "string") {
 				if (typeof v === "number" && Number.isSafeInteger(v)) v = String(v);
-				else if (typeof v !== "string") throw new ReportNotConverted(field, `${where} is ${kindOf(v)}, not text or a whole number`);
+				else if (typeof v !== "string") throw new ReportNotConverted(field, `${where} is ${kindOf(v)}, not text or a whole number`, `${where} is ${kindOf(v)}, not text or a whole number`);
 			}
 			if (node.map) {
-				if (typeof v !== "string") throw new ReportNotConverted(field, `${where} is ${kindOf(v)}, and the value map takes text`);
+				if (typeof v !== "string") throw new ReportNotConverted(field, `${where} is ${kindOf(v)}, and the value map takes text`, `${where} is ${kindOf(v)}, and the value map takes text`);
 				if (!Object.hasOwn(node.map, v)) {
 					const listed = Object.keys(node.map);
 					throw new ReportNotConverted(field, `${where} is ${show(v)}, which the mapping does not list (it lists ${listed.slice(0, 20).map((x) => show(x)).join(", ")}${listed.length > 20 ? ", ..." : ""})`, `${where} is not one of the values the mapping lists`);
@@ -55876,20 +55877,20 @@ function convertReport(mapping, bytes) {
 	try {
 		text = new TextDecoder("utf-8", { fatal: true }).decode(bytes);
 	} catch {
-		throw new ReportNotConverted("", "the report is not UTF-8 text");
+		throw new ReportNotConverted("", "the report is not UTF-8 text", "the report is not UTF-8 text");
 	}
 	let report;
 	try {
 		report = JSON.parse(text);
 	} catch {
-		throw new ReportNotConverted("", "the report is not JSON");
+		throw new ReportNotConverted("", "the report is not JSON", "the report is not JSON");
 	}
 	const out = evaluate(mapping.root, {
 		root: report,
 		item: report,
 		where: ""
 	}, "");
-	if (out === OMIT$1) throw new ReportNotConverted("", "the mapping gives no report");
+	if (out === OMIT$1) throw new ReportNotConverted("", "the mapping gives no report", "the mapping gives no report");
 	return new TextEncoder().encode(`${JSON.stringify(out, null, 2)}\n`);
 }
 
@@ -56768,46 +56769,53 @@ const SCHEMA_PHRASES = [
 	new RegExp(`^(?:below|above|not above|not below) ${NUMBER}$`)
 ];
 /**
-* A JSON-schema check's message (`schema: /a: /0: missing b`) as a pointer and a phrase. A segment is kept when it is
-* an array index or a name the schema declares; a property the report added (`additional property`) is `*`.
+* A JSON-schema check's message (`schema: /a: /0: missing b`) as a pointer and a phrase, read against the check's own
+* schema. The validator writes each path segment as `/<name>: `, and a property the report added as
+* `/<key>: additional property ...` with the key unescaped, so a key can hold `: `, `/` and digits that look like
+* segments (T-502 review and red team). So a segment is kept only where the schema at that point declares it: a name
+* under `properties`, or an index under an array schema's `items`. Anything else is `*`, and the pointer stops there.
+* When the message holds an added property anywhere, no index is kept at all, since the key may imitate one, and the
+* phrase is read from the message's end, which is always the validator's own.
 */
-function safeSchemaMessage(detail, names) {
+function safeSchemaMessage(detail, schema) {
 	if (detail === "deliverable is not valid JSON") return { message: "the report is not valid JSON" };
 	if (!detail.startsWith("schema: ")) return { message: GENERIC_SCHEMA };
+	const names = schemaNames(schema);
+	const added = detail.includes(": additional property ");
 	let rest = detail.slice(8);
 	const segs = [];
-	const known = [...names].filter((n) => n !== "").sort((a, b) => b.length - a.length);
-	let extra = false;
+	let node = schema;
+	let stopped = false;
 	for (let guard = 0; rest.startsWith("/") && guard < 256; guard++) {
-		const index = /^\/(\d{1,9}): /.exec(rest);
-		if (index) {
-			segs.push(index[1]);
-			rest = rest.slice(index[0].length);
-			continue;
-		}
-		const name = known.find((n) => rest.startsWith(`/${n}: `));
-		if (name !== void 0 && !rest.startsWith(`/${name}: additional property `)) {
+		const name = (isRecord$2(node) && isRecord$2(node.properties) ? Object.keys(node.properties).sort((x, y) => y.length - x.length) : []).find((n) => rest.startsWith(`/${n}: `) && !rest.startsWith(`/${n}: additional property `));
+		if (name !== void 0) {
 			segs.push(seg(name));
 			rest = rest.slice(name.length + 3);
+			node = node.properties[name];
 			continue;
 		}
-		const at = rest.indexOf(": additional property ");
-		if (at < 1) return {
-			...segs.length ? { pointer: `/${segs.join("/")}` } : {},
-			message: GENERIC_SCHEMA
-		};
+		const index = /^\/(\d{1,9}): /.exec(rest);
+		const isArray = isRecord$2(node) && node.items !== void 0 && node.properties === void 0 && node.additionalProperties === void 0;
+		if (index && isArray && !added) {
+			segs.push(index[1]);
+			rest = rest.slice(index[0].length);
+			node = node.items;
+			continue;
+		}
 		segs.push("*");
-		extra = true;
-		rest = rest.slice(at + 22);
+		stopped = true;
+		break;
 	}
 	const pointer = segs.length ? { pointer: `/${segs.join("/")}` } : {};
-	const missing = /^missing (.+)$/.exec(rest);
+	let tail = stopped || added ? detail.slice(detail.lastIndexOf(": ") + 2) : rest;
+	while (tail.startsWith("additional property ")) tail = tail.slice(20);
+	const missing = /^missing (.+)$/.exec(tail);
 	let phrase;
 	if (missing) phrase = names.has(missing[1]) && NAME.test(missing[1]) ? `missing ${missing[1]}` : "missing a required property";
-	else phrase = SCHEMA_PHRASES.some((p) => p.test(rest)) ? rest : GENERIC_SCHEMA;
+	else phrase = SCHEMA_PHRASES.some((p) => p.test(tail)) ? tail : GENERIC_SCHEMA;
 	return {
 		...pointer,
-		message: extra ? `additional property: ${phrase}` : phrase
+		message: added ? `additional property: ${phrase}` : phrase
 	};
 }
 /** The columns a table check names in the terms. */
@@ -56820,14 +56828,16 @@ function checkColumns(check) {
 	return out;
 }
 const HIDDEN = /^over the limit for [a-zA-Z]+(?:, [a-zA-Z]+)* \([a-zA-Z]+ \d+(?:, [a-zA-Z]+ \d+)*\)$/;
-const PCT = "\\d+(?:\\.\\d+)?%";
+/** The judgment writes a share as a count of a total (`3/40`) and a limit in basis points (`500 bps`). */
+const PCT = "\\d+/\\d+";
+const BPS = "\\d+ bps";
 const TABLE_PHRASES = [
 	/^\d+ rows; expected \d+ to \d+$/,
 	/^duplicate key at row \d+$/,
 	/^row \d+ is not an ISO 8601 date$/,
-	new RegExp(`^null ${PCT} exceeds ${PCT}$`),
-	new RegExp(`^match ${PCT} below ${PCT}$`),
-	new RegExp(`^reference match ${PCT} below ${PCT}$`),
+	new RegExp(`^null ${PCT} exceeds ${BPS}$`),
+	new RegExp(`^match ${PCT} below ${BPS}$`),
+	new RegExp(`^reference match ${PCT} below ${BPS}$`),
 	/^reference not available$/,
 	/^reference bytes do not match the committed hash$/,
 	/^reference is not valid UTF-8$/,
@@ -56843,7 +56853,7 @@ function safeCheckMessage(check, detail) {
 	if (detail === void 0) return { message: GENERIC_CHECK };
 	if (detail === "inconclusive: the check work budget for this delivery ran out" || detail === "check could not be evaluated on this input") return { message: detail };
 	if (detail.startsWith("check invalid: ")) return { message: "the check itself is invalid" };
-	if (check?.type === "json_schema") return safeSchemaMessage(detail, schemaNames(check.schema));
+	if (check?.type === "json_schema") return safeSchemaMessage(detail, check.schema);
 	if (check?.type === "csv_columns_exact" && !detail.startsWith("csv_columns_exact needs")) return { message: "the columns are not the agreed columns" };
 	if (check?.type === "hidden_characters_max") return { message: HIDDEN.test(detail) ? detail : GENERIC_CHECK };
 	const notFound = /^column (.+) not found$/.exec(detail);
@@ -57760,10 +57770,10 @@ const base64 = (b) => {
 	for (let i = 0; i < b.length; i += 32768) out += String.fromCharCode(...b.subarray(i, i + 32768));
 	return btoa(out);
 };
-const publicRefusal = (d) => d.reason === void 0 ? void 0 : {
+const publicRefusal = (d, withTime) => d.stage !== "refused" || d.reason === void 0 ? void 0 : {
 	...d.reason,
 	refusals: d.refusals ?? 0,
-	...d.times?.refused === void 0 ? {} : { since: d.times.refused }
+	...withTime && d.times?.refused !== void 0 ? { since: d.times.refused } : {}
 };
 /** Reads and checks a report mapping by its path, as report-converter.ts's loadReportMapping does, through `readText`. */
 function readMapping(file, readText) {
@@ -58990,7 +59000,7 @@ async function createSellerAdapter(c, env, io) {
 		const id = commitmentId.toLowerCase();
 		const deal = Object.hasOwn(journal.deals, id) ? journal.deals[id] : void 0;
 		if (!deal) return none();
-		const why = publicRefusal(deal);
+		const why = publicRefusal(deal, true);
 		return send(200, {
 			commitmentId: id,
 			stage: deal.stage,
@@ -59070,7 +59080,7 @@ async function createSellerAdapter(c, env, io) {
 		},
 		hasOpen: () => Object.values(journal.deals).some((d) => OPEN_STAGES$1.includes(d.stage)),
 		deals: () => structuredClone(Object.values(journal.deals)),
-		refusals: () => Object.values(journal.deals).filter((d) => d.stage === "refused").map(publicRefusal).filter((r) => r !== void 0),
+		refusals: () => Object.values(journal.deals).map((d) => publicRefusal(d, false)).filter((r) => r !== void 0).sort((a, b) => JSON.stringify(a) < JSON.stringify(b) ? -1 : JSON.stringify(a) > JSON.stringify(b) ? 1 : 0),
 		pollMs: c.pollMs,
 		address: seller.address,
 		perDealKeys: perDeal,
