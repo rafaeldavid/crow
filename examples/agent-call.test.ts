@@ -57,6 +57,20 @@ describe('Agent.call when the answer is lost (T-497)', () => {
     expect((err as Error).message).toMatch(/other side closed|socket hang up|ECONNRESET|terminated/i);
   }, 20_000);
 
+  it('does not retry a connection the operator refused: the request never reached it, so the caller moves on at once', async () => {
+    // A port nothing listens on: the one a closed server held.
+    const { url } = await serve(() => false);
+    await new Promise<void>((r) => server!.close(() => r()));
+    server = undefined;
+    for (const [to, cause] of [[url, /ECONNREFUSED/], ['http://127.0.0.1:9', /bad port/]] as const) {
+      const started = Date.now();
+      const err = await agent(to).call('GET', '/v1/commitments/0xabc').catch((e: Error) => e);
+      expect((err as Error).message).toMatch(/^GET \/v1\/commitments\/0xabc at 127\.0\.0\.1:\d+: no answer after 1 tries \(fetch failed: /);
+      expect((err as Error).message).toMatch(cause);
+      expect(Date.now() - started).toBeLessThan(900);
+    }
+  });
+
   it('does not retry an answer that arrived, even a refusal', async () => {
     const seen: Seen[] = [];
     server = createServer((req, res) => {

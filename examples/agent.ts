@@ -37,6 +37,12 @@ const sha = async (b: Uint8Array) => `sha256:${Buffer.from(await crypto.subtle.d
 /** How many times Agent.call sends a request whose answer is lost on the network, and the wait before each retry (1 s, then 2 s). */
 export const CALL_ATTEMPTS = 3;
 const CALL_BACKOFF_MS = 1000;
+/** Network errors that mean the request never reached the operator, so no answer was lost: they are not retried. */
+const NEVER_SENT = new Set(['ECONNREFUSED', 'ENOTFOUND']);
+const neverSent = (e: unknown) => {
+  const cause = (e as { cause?: { code?: string; message?: string } })?.cause;
+  return NEVER_SENT.has(cause?.code ?? '') || cause?.message === 'bad port'; // a port fetch refuses to call, such as 9
+};
 /** A fetch failure with its cause, which fetch keeps out of the message: "fetch failed: other side closed (UND_ERR_SOCKET)". */
 const networkError = (e: unknown): string => {
   const cause = (e as { cause?: { message?: string; code?: string } })?.cause;
@@ -74,7 +80,8 @@ export class Agent {
       try {
         res = await fetch(`${api}${path}`, init);
       } catch (e) {
-        if (attempt >= CALL_ATTEMPTS) throw new Error(`${method} ${path} at ${new URL(String(api)).host}: no answer after ${attempt} tries (${networkError(e)})`);
+        // A refused or unresolved connection never reached the operator: nothing to replay, so the caller moves on at once.
+        if (attempt >= CALL_ATTEMPTS || neverSent(e)) throw new Error(`${method} ${path} at ${new URL(String(api)).host}: no answer after ${attempt} tries (${networkError(e)})`);
         await new Promise((r) => setTimeout(r, CALL_BACKOFF_MS * attempt));
       }
     }
