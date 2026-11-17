@@ -206,6 +206,7 @@ export async function startSellerAdapter(c: SellerAdapterConfig, env: Readonly<R
   return {
     url,
     deals: core.deals,
+    refusals: core.refusals,
     close: async () => {
       clearInterval(timer);
       const closing = core.close(); // no pass starts after this; the one running finishes

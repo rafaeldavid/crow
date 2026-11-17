@@ -7,8 +7,10 @@
 //
 //   GET  <base>             the seller's page: a <script id="crow-agent"> card with the quote and defaults addresses
 //   GET  <base>/agent.json  the same card as JSON
-//   GET  <base>/health      operational or degraded, the open deals by stage, and the bundle's SHA-256
-//   POST <base>/quote, GET <base>/defaults, POST <base>/deals/<id>/ready and /job: the adapter's own routes
+//   GET  <base>/health      operational or degraded, the open deals by stage, why each refused deal was refused
+//                           (T-502, no report content and no commitment ID), and the bundle's SHA-256
+//   POST <base>/quote, GET <base>/defaults, GET <base>/deals/<id>, POST <base>/deals/<id>/ready and /job: the
+//                           adapter's own routes
 //
 // The seller's bundle (bundle.ts) is built at deploy and holds no secret. The secrets are Worker secrets: HOLDBACK_KEY,
 // the seller's signing key, and the variables its configuration names for its credentials. The core gets those and
@@ -224,8 +226,10 @@ export class HostedSellerObject {
       const open = (core?.deals() ?? []).filter((d) => !['delivered', 'closed'].includes(d.stage));
       for (const d of open) stages[d.stage] = (stages[d.stage] ?? 0) + 1;
       if (core?.hasOpen()) await this.schedule(Date.now() + core.pollMs);
-      // Why it did not start stays in the log: the public answer says only that it did not.
-      return json(core ? 200 : 503, { status: core ? 'operational' : 'degraded', seller: seller.slug, configSha256: seller.configSha256, ...(core ? { open: open.length, stages } : { reason: 'the seller could not start; its log says why' }) });
+      // Why it did not start stays in the log: the public answer says only that it did not. Why a deal's result was
+      // refused is shown (T-502): the stage, the check, the pointer and the message, rebuilt without the report's
+      // content, and without the deal's commitment ID, which would link a per-deal key's deal to this seller.
+      return json(core ? 200 : 503, { status: core ? 'operational' : 'degraded', seller: seller.slug, configSha256: seller.configSha256, ...(core ? { open: open.length, stages, refused: core.refusals() } : { reason: 'the seller could not start; its log says why' }) });
     }
     let core: SellerAdapterCore;
     try {

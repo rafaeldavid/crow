@@ -54,12 +54,19 @@ export interface ReportMapping {
   readonly root: Node;
 }
 
-/** A report the mapping cannot convert. `field` is the template field, such as `findings[1].severity`. */
+/**
+ * A report the mapping cannot convert. `field` is the template field, such as `findings[1].severity`. `safe` and
+ * `safeField` say the same without any value or key taken from the report (T-502): the seller's public health page shows them.
+ */
 export class ReportNotConverted extends Error {
   readonly field: string;
-  constructor(field: string, detail: string) {
+  readonly safe: string;
+  readonly safeField: string;
+  constructor(field: string, detail: string, safe: string = detail, safeField: string = field) {
     super(field ? `${field}: ${detail}` : detail);
     this.field = field;
+    this.safe = safe;
+    this.safeField = safeField;
   }
 }
 
@@ -211,10 +218,11 @@ function resolve(path: Path, ctx: Ctx): { value: J; where: string } {
 const isMissing = (v: J) => v === undefined || v === null;
 
 /** A value copied from the report holds whole numbers only. */
-function wholeNumbers(v: J, field: string): J {
-  if (typeof v === 'number' && !Number.isSafeInteger(v)) throw new ReportNotConverted(field, `the converted report would hold ${v}, a number that is not a whole number`);
-  if (Array.isArray(v)) v.forEach((x, i) => wholeNumbers(x, `${field}[${i}]`));
-  else if (isObject(v)) for (const [k, x] of Object.entries(v)) wholeNumbers(x, key(field, k));
+function wholeNumbers(v: J, field: string, top: string = field): J {
+  // Below `top` the field names keys the report holds: the safe field stops at the mapping's own (T-502).
+  if (typeof v === 'number' && !Number.isSafeInteger(v)) throw new ReportNotConverted(field, `the converted report would hold ${v}, a number that is not a whole number`, 'the converted report would hold a number that is not a whole number', top);
+  if (Array.isArray(v)) v.forEach((x, i) => wholeNumbers(x, `${field}[${i}]`, top));
+  else if (isObject(v)) for (const [k, x] of Object.entries(v)) wholeNumbers(x, key(field, k), top);
   return v;
 }
 
@@ -274,7 +282,7 @@ function evaluate(node: Node, ctx: Ctx, field: string, offset = 0): J {
       let v: J = value;
       if (node.as === 'integer') {
         if (typeof v === 'string' && WHOLE_TEXT.test(v) && Number.isSafeInteger(Number(v))) v = Number(v);
-        else if (!(typeof v === 'number' && Number.isSafeInteger(v))) throw new ReportNotConverted(field, `${where} is ${show(v)}, not a whole number`);
+        else if (!(typeof v === 'number' && Number.isSafeInteger(v))) throw new ReportNotConverted(field, `${where} is ${show(v)}, not a whole number`, `${where} is not a whole number`);
       } else if (node.as === 'string') {
         if (typeof v === 'number' && Number.isSafeInteger(v)) v = String(v);
         else if (typeof v !== 'string') throw new ReportNotConverted(field, `${where} is ${kindOf(v)}, not text or a whole number`);
@@ -283,7 +291,7 @@ function evaluate(node: Node, ctx: Ctx, field: string, offset = 0): J {
         if (typeof v !== 'string') throw new ReportNotConverted(field, `${where} is ${kindOf(v)}, and the value map takes text`);
         if (!Object.hasOwn(node.map, v)) {
           const listed = Object.keys(node.map);
-          throw new ReportNotConverted(field, `${where} is ${show(v)}, which the mapping does not list (it lists ${listed.slice(0, 20).map((x) => show(x)).join(', ')}${listed.length > 20 ? ', ...' : ''})`);
+          throw new ReportNotConverted(field, `${where} is ${show(v)}, which the mapping does not list (it lists ${listed.slice(0, 20).map((x) => show(x)).join(', ')}${listed.length > 20 ? ', ...' : ''})`, `${where} is not one of the values the mapping lists`);
         }
         return node.map[v];
       }

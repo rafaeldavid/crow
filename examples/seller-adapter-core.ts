@@ -12,7 +12,8 @@ import { preflightDelivery } from '@holdback/judgment';
 import { plain } from './plain.ts';
 import { Agent } from './agent.ts';
 import { convertReport, parseReportMapping, ReportNotConverted, type ReportMapping } from './report-converter.ts';
-import { FilesNotAdded, isRedirect, sellerApiClient, WrongScope, WrongWorkspace, type SellerApiConfig } from './seller-adapter-api.ts';
+import { FilesNotAdded, isRedirect, sellerApiClient, WrongScope, WrongWorkspace, type SellerApi, type SellerApiConfig, type Values } from './seller-adapter-api.ts';
+import { reasonLine, reasonOf, type RefusalDetail, type RefusalReason } from './seller-refusal.ts';
 import { commitmentIdOf, freshNonce, isAddressText, jcs, knownPins, moneyAddressWarnings, operatorFeeOf, publicOfferTerms, typedDataFile, typedOf, verifyPrepared } from './verify.ts';
 
 type J = any; // eslint-disable-line @typescript-eslint/no-explicit-any
@@ -389,6 +390,8 @@ export interface Deal {
   existingJob?: { jobId: string; from?: Hex; at: string };
   /** T-501: this deal's job was moved to that deal, which delivers it; this one delivers nothing. */
   jobMovedTo?: Hex;
+  /** T-502: why the last result was refused, safe to show anyone: the stage, the check, the pointer and the message. */
+  reason?: RefusalReason;
 }
 export interface Journal {
   deals: Record<string, Deal>;
@@ -406,6 +409,8 @@ export interface RunningAdapter {
   url: string;
   /** A copy of the journal's deals. */
   deals(): Deal[];
+  /** T-502: why each deal waiting for a fixed report was refused, without its commitment ID, for the public /health. */
+  refusals(): PublicRefusal[];
   close(): Promise<void>;
 }
 
@@ -732,8 +737,107 @@ function refusalSettings(c: SellerAdapterConfig, env: Readonly<Record<string, st
 }
 
 /** A check run's failed and undecided checks, for an alert: the check, whether it is required, and why. */
-type FailedCheck = { checkId: string; required: boolean; outcome: 'fail' | 'open'; detail?: string };
+export type FailedCheck = { checkId: string; required: boolean; outcome: 'fail' | 'open'; detail?: string };
 const checkLine = (f: FailedCheck) => `${f.outcome === 'open' ? 'OPEN' : 'FAIL'} ${plain(f.checkId)} (${f.required ? 'required' : 'optional'})${f.detail === undefined ? '' : `: ${plain(f.detail)}`}`;
+
+/** A refused result: what the adapter records and alerts, and why, in one sentence. */
+export interface Refusal {
+  refused: true;
+  /** One line per step that changed the bytes before the refusal, for the log. */
+  steps: string[];
+  /** The SHA-256 the adapter keys the refusal by: the same refusal again raises no second alert. */
+  sha256: string;
+  detail: RefusalDetail;
+  why: string;
+}
+
+/**
+ * The result call's own refusals (T-435, T-501): a job from another account, one that asked for another scope, or
+ * artifacts that could not be added. Undefined for any other error, which the deal loop retries.
+ */
+export function resultRefusal(e: unknown): Refusal | undefined {
+  const hash = (text: string) => createHash('sha256').update(text, 'utf8').digest('hex');
+  if (e instanceof WrongScope) return { refused: true, steps: [], sha256: hash(`wrong-scope ${e.message}`), detail: { result: 'wrong_scope', scope: e.message, ...(e.field === undefined ? {} : { scopeField: e.field }), checks: [] }, why: `the job's request is not the deal's scope: ${e.message}` };
+  if (e instanceof FilesNotAdded) return { refused: true, steps: [], sha256: hash(`files-not-added ${e.message}`), detail: { result: 'files_not_added', files: e.message, checks: [] }, why: `its artifacts could not be added: ${e.message}` };
+  if (e instanceof WrongWorkspace) return { refused: true, steps: [], sha256: hash(`wrong-workspace ${e.message}`), detail: { result: 'wrong_workspace', workspace: e.message, checks: [] }, why: `the job did not run in the pinned workspace: ${e.message}` };
+  return undefined;
+}
+
+/** A result that passes every step: the bytes to deliver and the preflight's run on them. */
+export interface Deliverable {
+  refused: false;
+  bytes: Uint8Array;
+  pre: ReturnType<typeof preflightDelivery>;
+  /** Checks that fail or are open; a passing result may still list an optional one. */
+  failed: FailedCheck[];
+  /** One line per step that changed the bytes, for the log. */
+  steps: string[];
+}
+
+/**
+ * The steps from a finished job's result to the bytes the adapter delivers, each one able to refuse it (T-502): the
+ * result's further files (T-366), the report mapping (T-323), the deal's salt (T-431), then the adjudicator's intake
+ * and stage 1 on the exact bytes (T-316). The deal loop and the local report check (check-report) both call this, so
+ * the two cannot disagree. It sends nothing but the files' fetches the configuration names.
+ */
+export async function checkResult(api: Pick<SellerApi, 'withFiles'>, result: Uint8Array, values: Values, o: { reportMapping?: ReportMapping | undefined; salt?: string | undefined; terms: J }): Promise<Deliverable | Refusal> {
+  const resultSha256 = createHash('sha256').update(result).digest('hex');
+  const steps: string[] = [];
+  let bytes = result;
+  try {
+    // Further files the result names, added before the checks run (T-366). One that fails holds the delivery.
+    bytes = await api.withFiles(result, values);
+    if (bytes !== result) steps.push(`added the result's files: ${result.length} bytes to ${bytes.length} bytes`);
+  } catch (e) {
+    if (!(e instanceof FilesNotAdded)) throw e;
+    return { refused: true, steps, sha256: resultSha256, detail: { result: 'files_not_added', files: e.message, checks: [] }, why: `its files could not be added: ${e.message}` };
+  }
+  if (o.reportMapping) {
+    // Your report in the template's shape (T-323). A report the mapping cannot convert is never delivered.
+    try {
+      const before = bytes;
+      bytes = convertReport(o.reportMapping, before);
+      steps.push(`converted the result with the report mapping: ${before.length} bytes to ${bytes.length} bytes`);
+    } catch (e) {
+      if (!(e instanceof ReportNotConverted)) throw e;
+      return { refused: true, steps, sha256: resultSha256, detail: { result: 'not_converted', conversion: e.message, conversionField: e.safeField, conversionSafe: e.safe, checks: [] }, why: `the report mapping cannot convert it: ${e.message}` };
+    }
+  }
+  if (o.salt !== undefined) {
+    // The salt (T-431), drawn with the offer: every retry delivers the same bytes, and a deal offered without one
+    // (another template, or before the salt) gets none, whatever the configuration says now.
+    try {
+      const before = bytes.length;
+      bytes = addSalt(bytes, o.salt);
+      steps.push(`added the report's salt: ${before} bytes to ${bytes.length} bytes`);
+    } catch (e) {
+      if (!(e instanceof SaltNotAdded)) throw e;
+      return { refused: true, steps, sha256: resultSha256, detail: { result: 'not_salted', salt: e.message, checks: [] }, why: `the salt cannot be added: ${e.message}` };
+    }
+  }
+  // The adjudicator's intake rules and stage 1, on the exact bytes that would be delivered (T-316).
+  const format = o.terms.deliverable.format;
+  const pre = preflightDelivery({ plaintext: bytes, mime: format, format, acceptance: o.terms.acceptance });
+  const open = new Set(pre.inconclusive);
+  const failed: FailedCheck[] = pre.deterministic
+    .filter((x) => !x.passed || open.has(x.checkId))
+    .map((x) => ({ checkId: x.checkId, required: x.required, outcome: open.has(x.checkId) ? 'open' : 'fail', ...(x.detail === undefined ? {} : { detail: x.detail }) }));
+  if (pre.result !== 'accept' && pre.result !== 'panel') {
+    const why = pre.result === 'reject' ? 'the adjudicator would reject it and refund the buyer' : 'a check cannot be decided, so the deal would escalate';
+    return { refused: true, steps, sha256: resultSha256, detail: { result: pre.result, plaintextSha256: pre.plaintextSha256, bytes: pre.bytes, ...(pre.refused ? { refused: { code: pre.refused.code, detail: pre.refused.detail } } : {}), checks: failed }, why };
+  }
+  return { refused: false, bytes, pre, failed, steps };
+}
+
+/**
+ * The acceptance and format a quote for this scope and these options would sign, from the template and the rules
+ * (termsFor), as verify.ts writes them into the offer: for the local report check, given no signed terms (T-502).
+ */
+export function acceptanceFor(c: SellerAdapterConfig, template: J, scope: J, options: J): { deliverable: J; acceptance: J } {
+  const built = termsFor(c, template, scope, options, undefined);
+  const panel = Array.isArray(built.rubric?.criteria) && built.rubric.criteria.length > 0;
+  return { deliverable: built.deliverable, acceptance: { deterministicChecks: built.checks ?? [], rubric: panel ? built.rubric : { criteria: [], passThreshold: 0 } } };
+}
 
 /** What the operators' discovery document says of the test demo, when they run one: its club, adjudicators and faucet. */
 export interface Discovered {
@@ -862,6 +966,8 @@ export interface SellerAdapterCore {
   hasOpen(): boolean;
   /** A copy of the journal's deals. */
   deals(): Deal[];
+  /** T-502: why each deal waiting for a fixed report was refused, without its commitment ID, for the public /health. */
+  refusals(): PublicRefusal[];
   /** Logs the start-up lines: `where` says where the adapter serves, as "serves POST <url>/quote; journal <path>". */
   announce(where: string): void;
   /** Stops: no further pass starts, the one running finishes, and alerts still in flight are dropped. */
@@ -875,6 +981,13 @@ export interface SellerAdapterCore {
   /** The chain the pinned settlement layer is on, as the operators serve it: 11155111 for Sepolia, 31337 for SimChain. */
   chainId: number;
 }
+
+/**
+ * T-502: one refused deal as /health and GET /deals/<commitmentId> show it: the reason (seller-refusal.ts), how many
+ * distinct results were refused, and when the deal was first refused by the seller's clock. Nothing from the report.
+ */
+export type PublicRefusal = RefusalReason & { refusals: number; since?: string };
+const publicRefusal = (d: Deal): PublicRefusal | undefined => (d.reason === undefined ? undefined : { ...d.reason, refusals: d.refusals ?? 0, ...(d.times?.refused === undefined ? {} : { since: d.times.refused }) });
 
 /** Reads and checks a report mapping by its path, as report-converter.ts's loadReportMapping does, through `readText`. */
 function readMapping(file: string, readText: (path: string) => string): ReportMapping {
@@ -1445,17 +1558,11 @@ export async function createSellerAdapter(c: SellerAdapterConfig, env: Readonly<
       try {
         job = await sellerApi.result(values);
       } catch (e) {
-        if (e instanceof WrongScope) {
-          // T-501: a job that asked for another scope is never delivered: the deal holds, and the seller hears of it once.
-          return refuse(deal, now, createHash('sha256').update(`wrong-scope ${e.message}`, 'utf8').digest('hex'), { result: 'wrong_scope', scope: e.message, checks: [] }, `the job's request is not the deal's scope: ${e.message}`);
-        }
-        if (e instanceof FilesNotAdded) {
-          // T-501: the artifacts call failed: the delivery waits, as for a file that cannot be added.
-          return refuse(deal, now, createHash('sha256').update(`files-not-added ${e.message}`, 'utf8').digest('hex'), { result: 'files_not_added', files: e.message, checks: [] }, `its artifacts could not be added: ${e.message}`);
-        }
-        if (!(e instanceof WrongWorkspace)) throw e;
-        // A job from another account is never delivered (T-435): the deal holds, and the seller hears of it once.
-        return refuse(deal, now, createHash('sha256').update(`wrong-workspace ${e.message}`, 'utf8').digest('hex'), { result: 'wrong_workspace', workspace: e.message, checks: [] }, `the job did not run in the pinned workspace: ${e.message}`);
+        // T-435, T-501: a job from another account, one that asked for another scope, or artifacts that could not be
+        // added is never delivered: the deal holds, and the seller hears of it once.
+        const r = resultRefusal(e);
+        if (!r) throw e;
+        return refuse(deal, now, r.sha256, r.detail, r.why);
       }
       if (job.state === 'running') {
         // The job still runs. A new status value (`queued`, then `running`) is an event: the queue's time shows.
@@ -1480,55 +1587,21 @@ export async function createSellerAdapter(c: SellerAdapterConfig, env: Readonly<
         save();
         emit('job.done', { commitmentId: id, secSinceStarted: secBetween(deal.times?.started, now), bytes: result.length });
       }
-      const resultSha256 = createHash('sha256').update(result).digest('hex');
-      let bytes = result;
-      try {
-        // Further files the result names, added before the checks run (T-366). One that fails holds the delivery.
-        bytes = await sellerApi.withFiles(result, values);
-        if (bytes !== result) log(`${id} added the result's files: ${result.length} bytes to ${bytes.length} bytes.`);
-      } catch (e) {
-        if (!(e instanceof FilesNotAdded)) throw e;
-        return refuse(deal, now, resultSha256, { result: 'files_not_added', files: e.message, checks: [] }, `its files could not be added: ${e.message}`);
-      }
-      if (reportMapping) {
-        // Your report in the template's shape (T-323). A report the mapping cannot convert is never delivered.
-        try {
-          // The result with its files, so the mapping can place them (T-366).
-          const before = bytes;
-          bytes = convertReport(reportMapping, before);
-          log(`${id} converted the result with the report mapping: ${before.length} bytes to ${bytes.length} bytes.`);
-        } catch (e) {
-          if (!(e instanceof ReportNotConverted)) throw e;
-          return refuse(deal, now, resultSha256, { result: 'not_converted', conversion: e.message, checks: [] }, `the report mapping cannot convert it: ${e.message}`);
+      // The same steps the local report check runs (T-502): files, the report mapping, the salt, then the preflight.
+      const checked = await checkResult(sellerApi, result, values, { reportMapping, salt: deal.salt, terms: deal.terms });
+      for (const step of checked.steps) log(`${id} ${step}.`);
+      if (checked.refused) {
+        const d = checked.detail;
+        if (d['plaintextSha256'] !== undefined) {
+          log(`${id} preflight: ${d.result}, ${String(d['bytes'])} bytes, ${String(d['plaintextSha256'])}.`);
+          if (d.refused) log(`  REFUSED ${plain(d.refused.code)}: ${plain(String(d.refused.detail))}`);
+          for (const f of d.checks) log(`  ${checkLine(f)}`);
         }
+        return refuse(deal, now, checked.sha256, d, checked.why);
       }
-      if (deal.salt !== undefined) {
-        // The salt (T-431), drawn with the offer: every retry delivers the same bytes, and a deal offered without one
-        // (another template, or before the salt) gets none, whatever the configuration says now.
-        try {
-          const before = bytes.length;
-          bytes = addSalt(bytes, deal.salt);
-          log(`${id} added the report's salt: ${before} bytes to ${bytes.length} bytes.`);
-        } catch (e) {
-          if (!(e instanceof SaltNotAdded)) throw e;
-          return refuse(deal, now, resultSha256, { result: 'not_salted', salt: e.message, checks: [] }, `the salt cannot be added: ${e.message}`);
-        }
-      }
-      // The adjudicator's intake rules and stage 1, on the exact bytes that would be delivered (T-316).
-      const format = deal.terms.deliverable.format;
-      const pre = preflightDelivery({ plaintext: bytes, mime: format, format, acceptance: deal.terms.acceptance });
-      const open = new Set(pre.inconclusive);
-      const failed: FailedCheck[] = pre.deterministic
-        .filter((o) => !o.passed || open.has(o.checkId))
-        .map((o) => ({ checkId: o.checkId, required: o.required, outcome: open.has(o.checkId) ? 'open' : 'fail', ...(o.detail === undefined ? {} : { detail: o.detail }) }));
+      const { bytes, pre } = checked;
       log(`${id} preflight: ${pre.result}, ${pre.bytes} bytes, ${pre.plaintextSha256}.`);
-      if (pre.refused) log(`  REFUSED ${pre.refused.code}: ${plain(pre.refused.detail)}`);
-      for (const f of failed) log(`  ${checkLine(f)}`);
-      if (pre.result !== 'accept' && pre.result !== 'panel') {
-        const why = pre.result === 'reject' ? 'the adjudicator would reject it and refund the buyer' : 'a check cannot be decided, so the deal would escalate';
-        const detail = { result: pre.result, plaintextSha256: pre.plaintextSha256, bytes: pre.bytes, ...(pre.refused ? { refused: { code: pre.refused.code, detail: pre.refused.detail } } : {}), checks: failed };
-        return refuse(deal, now, resultSha256, detail, why);
-      }
+      for (const f of checked.failed) log(`  ${checkLine(f)}`);
       // Recorded before the call: a crash between the call and its record makes the next start read the
       // settlement layer first, so the adapter never delivers twice.
       const attempt = (deal.refusals ?? 0) + 1;
@@ -1571,8 +1644,12 @@ export async function createSellerAdapter(c: SellerAdapterConfig, env: Readonly<
   }
 
   /** Records a refused result and alerts the seller once for each distinct result. The delivery waits. */
-  function refuse(deal: Deal, now: number, resultSha256: string, detail: { result: string; checks: FailedCheck[] } & Record<string, unknown>, why: string): void {
+  function refuse(deal: Deal, now: number, resultSha256: string, detail: RefusalDetail, why: string): void {
     if (deal.jobMovedTo !== undefined) return; // T-501 review: a deal whose job moved stays closed
+    // T-502: the reason, safe to show on /health and the deal route, logged whenever it changes, whatever the bytes.
+    const reason = reasonOf(detail, deal.terms.acceptance);
+    const changed = JSON.stringify(reason) !== JSON.stringify(deal.reason);
+    log(changed ? `${deal.id} REASON refused at ${reasonLine(reason)}` : `${deal.id} still refused, for the same reason (${reason.stage}).`);
     const deliverBy: string = deal.terms.timing.deliverBy;
     const every = refusal.refetchEverySec;
     const nextFetchAt = every === undefined ? undefined : new Date(now + every * 1000).toISOString();
@@ -1584,12 +1661,12 @@ export async function createSellerAdapter(c: SellerAdapterConfig, env: Readonly<
         : `The adapter holds the delivery until ${deliverBy}; set redelivery to have it fetch a fixed report, or deliver a fixed file by hand: node examples/check-delivery.ts <terms.json> <file>, then node examples/seal.ts ${io.journalPath} <file> ${deal.id}`;
     if (deal.refusedSha256 === resultSha256) {
       // The same bytes as last time: the seller has been told. Wait for the next fetch.
-      Object.assign(deal, { stage: 'refused', ready: false, nextFetchAt });
+      Object.assign(deal, { stage: 'refused', ready: false, nextFetchAt, reason });
       save();
       return;
     }
     const attempt = (deal.refusals ?? 0) + 1;
-    record(deal, { stage: 'refused', refusals: attempt, refusedSha256: resultSha256, ready: false, nextFetchAt, note: `the result is not delivered: ${why}. ${waits}` });
+    record(deal, { stage: 'refused', refusals: attempt, refusedSha256: resultSha256, ready: false, nextFetchAt, reason, note: `the result is not delivered: ${why}. ${waits}` });
     const reasons = [
       ...(typeof detail['refused'] === 'object' && detail['refused'] ? [`REFUSED ${plain(String((detail['refused'] as J).code))}: ${plain(String((detail['refused'] as J).detail))}`] : []),
       ...detail.checks.map(checkLine),
@@ -1766,6 +1843,23 @@ export async function createSellerAdapter(c: SellerAdapterConfig, env: Readonly<
     return send(202, { commitmentId: id, stage: deal.stage, jobId, ...(holder ? { from: holder.id } : {}) });
   }
 
+  /**
+   * GET /deals/<commitmentId> (T-502): the deal's stage and, once a result was refused, why: the stage that refused it,
+   * the check, the pointer and the message, never the report. With a standing key the card names the seller's address,
+   * so its deals are linked to it on chain already, and anyone may ask. With a key per deal, an answer would link the
+   * deal to this seller: the route then takes the ready credential, and answers 404 without it.
+   */
+  function dealState(req: Request, commitmentId: string): Response {
+    if (req.method !== 'GET') return send(405, { type: 'method_not_allowed', detail: 'this route takes GET' });
+    const none = () => send(404, { type: 'not_found', detail: 'this adapter holds no such deal' });
+    if (perDeal && !(refusal.ready && bearerOk(req, refusal.ready))) return none();
+    const id = commitmentId.toLowerCase();
+    const deal = Object.hasOwn(journal.deals, id) ? journal.deals[id]! : undefined;
+    if (!deal) return none();
+    const why = publicRefusal(deal);
+    return send(200, { commitmentId: id, stage: deal.stage, ...(why === undefined ? {} : { refusal: why }) });
+  }
+
   /** One request, by its path under the adapter's address: the same routes the Node server served before T-434. */
   async function handle(req: Request, path: string = new URL(req.url).pathname): Promise<Response> {
     // The published defaults are public: no credential, and they make the adapter sign nothing.
@@ -1774,7 +1868,9 @@ export async function createSellerAdapter(c: SellerAdapterConfig, env: Readonly<
     if (readyFor) return readySignal(req, readyFor);
     const jobFor = refusal.ready ? /^\/deals\/(0x[0-9a-fA-F]{64})\/job$/.exec(path)?.[1] : undefined;
     if (jobFor) return jobNamed(req, jobFor).catch(() => send(400, { type: 'invalid_body', detail: 'the body could not be read' }));
-    if (path !== '/quote') return send(404, { type: 'not_found', detail: 'this adapter serves POST /quote and GET /defaults' });
+    const dealFor = /^\/deals\/(0x[0-9a-fA-F]{64})$/.exec(path)?.[1];
+    if (dealFor) return dealState(req, dealFor);
+    if (path !== '/quote') return send(404, { type: 'not_found', detail: 'this adapter serves POST /quote, GET /defaults and GET /deals/<commitmentId>' });
     if (req.method !== 'POST') return send(405, { type: 'method_not_allowed', detail: 'this adapter serves POST /quote' });
     const refused = admit(req); // the rate limit and the credential, before the body is read
     if (refused) {
@@ -1803,6 +1899,7 @@ export async function createSellerAdapter(c: SellerAdapterConfig, env: Readonly<
     },
     hasOpen: () => Object.values(journal.deals).some((d) => OPEN_STAGES.includes(d.stage)),
     deals: () => structuredClone(Object.values(journal.deals)),
+    refusals: () => Object.values(journal.deals).filter((d) => d.stage === 'refused').map(publicRefusal).filter((r): r is PublicRefusal => r !== undefined),
     pollMs: c.pollMs,
     address: seller.address,
     perDealKeys: perDeal,

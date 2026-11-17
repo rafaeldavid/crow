@@ -4,7 +4,8 @@
   "private": true,
   "type": "module",
   "scripts": {
-    "build": "tsc -b"
+    "build": "tsc -b",
+    "check-report": "node scripts/check-report.ts"
   },
   "dependencies": {
     "tweetnacl": "^1.0.3",
