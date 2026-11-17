@@ -16,7 +16,7 @@ Restated in my own words.
 
 On 2026-11-16 at about 22:32 UTC, one live run of the published try command printed "stopped at fund: fetch failed" and exited 1. Its deal still funded and released on both operators. The operator did the work, and its answer never reached the buyer. `Agent.call` sent each POST once with a fresh Idempotency-Key and threw away the error's cause.
 
-The fix: when the answer is lost on the network, `Agent.call` sends the same request again, with the same Idempotency-Key and body. It tries 3 times in all, waiting 1 s, then 2 s. The operator replays the answer it stored, so nothing runs twice. A request that never reached the operator (a refused connection, a name that does not resolve, a port fetch refuses) is not retried, so a caller fails over to the other operator at once. When the call gives up, it names the request, the host and the network error's cause. The error stays a `TypeError`, as fetch's own failure is, because callers fail over on that type.
+The fix: when the answer is lost on the network, `Agent.call` sends the same request again, with the same Idempotency-Key and body. It tries 3 times in all, waiting 1 s, then 2 s. The operator replays the answer it stored, so nothing runs twice. A request that never reached the operator (a refused or timed-out connection, a host or network out of reach, a name that does not resolve, a TLS failure, a port fetch refuses) is not retried, nor is a headers timeout, where the operator held the request for minutes. Those are, so a caller fails over to the other operator at once. When the call gives up, it names the request, the host and the network error's cause. The error stays a `TypeError`, as fetch's own failure is, because callers fail over on that type.
 
 Non-goals: retrying an answer that arrived, a refusal or a 5xx included; changing any caller.
 
@@ -38,15 +38,17 @@ All measured on 2026-11-17, on branch `t-497-retry-lost-answer`.
 
 | File | Before | After |
 |---|---|---|
-| `try.mjs` | `ec018e6a9ffc005ca59898e12e8d137ab61779202efce0ee4d22639db519dead` | `0513f1ae635ad3c3352abbde50f9fbcb22a4657113b0b76f1da1282d7064f3f9` |
-| `buy.mjs` | `a9a18edcb12693aec65e02d172fb920bdc3707b126ea370315e9d159f7974b9e` | `c73bd23efc887e5d9085b5e9aba27b610cb27c342cace9aaa24bb47b4a400597` |
-| `setup.mjs` | `f3b405fb93ffa64b125ce1c4ed9921eff4a6b89f2ca97ffa422cf27360def768` | `179ac50d29eca6c026fbde8b68470b91f78716aefd0e1853a94514b3f199fd60` |
-| `try-sell.mjs` | `b4b3bdac8cc3f305ac2980d721a8e1041747066edfe237c5b4ac8f9cf622895b` | `4925fe942bad2e2d65fa76eefe25574666897510bcb7ce9eea614e15e1db1fdc` |
-| `try-judged.mjs` | `65f54147f1351610de1788ff3f19e91d434acf6b4d22db1ad50923d4178fb6e9` | `3bcd2360f42a4ec1ef5dc8f2df015bbdae6a594c723001a0efc777f3a18828c2` |
-| `try-reclaim.mjs` | `463909aeefcacc7f22f44f757b7acf80973cfb65605a1f0f604f21da09ddbf3a` | `ed9455d3d87ef26859292b1e09f842b7283869251dfc831927dc858784e12075` |
+| `try.mjs` | `ec018e6a9ffc005ca59898e12e8d137ab61779202efce0ee4d22639db519dead` | `fd7d9a4ad98d0cd16c0a392d47f97a18c4cb8d1762213e92a6d6e78790326af6` |
+| `buy.mjs` | `a9a18edcb12693aec65e02d172fb920bdc3707b126ea370315e9d159f7974b9e` | `ce61062649214357f4c552445f3d25c756999279769a7d3d2c62f5f14ad1311d` |
+| `setup.mjs` | `f3b405fb93ffa64b125ce1c4ed9921eff4a6b89f2ca97ffa422cf27360def768` | `260d1660a9e44fd7c1b4fc06432a7c7ccef2cc1dd7ea2e1154c7308997cc3fcd` |
+| `try-sell.mjs` | `b4b3bdac8cc3f305ac2980d721a8e1041747066edfe237c5b4ac8f9cf622895b` | `6c3a609f5d33678350ecb8defeff93a74e58c07a671807b3855d2aaf27023bf8` |
+| `try-judged.mjs` | `65f54147f1351610de1788ff3f19e91d434acf6b4d22db1ad50923d4178fb6e9` | `2b8945ad4b9dc30fbc857bcf09d039cc5a48ec30d5370f694e2cc74abd6e7525` |
+| `try-reclaim.mjs` | `463909aeefcacc7f22f44f757b7acf80973cfb65605a1f0f604f21da09ddbf3a` | `d55ff65337a3858afa591ce7252f4dcabc41add782ad56683cb07d36f99faae0` |
 | `preflight.mjs` | unchanged, `4ddd3da8…3faa` (it does not carry `agent.ts`) | |
 
 - **The published copies:** the build fills every command's hash into `llms.txt`, `buy.txt` and `setup.txt` at publish, and into `site/index.html` now. `git grep` finds none of the old hashes in a standing file.
+
+- **Review (reviewer agent, PASS, no blocking finding).** Fixed from its notes: no retry on a connect timeout, an unreachable host or network, a TLS failure or a headers timeout; the message says "1 try". Left: a body cut off while `res.json()` reads it is not retried (the live failure came before the headers).
 
 ## Decisions
 
@@ -56,6 +58,6 @@ All measured on 2026-11-17, on branch `t-497-retry-lost-answer`.
 
 ## Handoff
 
-- **The pilot's buyer:** `buy.mjs` changes from `a9a18edc…74b9e` to `c73bd23e…00597`. After the deploy, the pilot buyer's install line in the live `buy.txt` carries the new hash, and an install line copied before the deploy fails its hash check, which is the safe way to fail. The pilot session updates any copy it handed out.
+- **The pilot's buyer:** `buy.mjs` changes from `a9a18edc…74b9e` to `ce610626…1311d`. After the deploy, the pilot buyer's install line in the live `buy.txt` carries the new hash, and an install line copied before the deploy fails its hash check, which is the safe way to fail. The pilot session updates any copy it handed out.
 - **The hosted sellers** import `agent.ts` through `examples/seller-adapter-core.ts`. Their deployed Workers do not change until their next deploy; the frozen files are not edited here.
 - **After the deploy:** the live checks and one live try run.

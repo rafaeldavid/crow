@@ -1483,7 +1483,7 @@ var init_verify = __esmMin((() => {
 }));
 
 // examples/agent.ts
-var b64, bytes, refusal, sha, CALL_ATTEMPTS, CALL_BACKOFF_MS, NEVER_SENT, neverSent, networkError, Agent;
+var b64, bytes, refusal, sha, CALL_ATTEMPTS, CALL_BACKOFF_MS, NOT_RETRIED, neverSent, networkError, Agent;
 var init_agent = __esmMin((() => {
 	init_verify();
 	b64 = (b) => Buffer.from(b).toString("base64url");
@@ -1494,10 +1494,18 @@ var init_agent = __esmMin((() => {
 	sha = async (b) => `sha256:${Buffer.from(await crypto.subtle.digest("SHA-256", bytes(b))).toString("hex")}`;
 	CALL_ATTEMPTS = 3;
 	CALL_BACKOFF_MS = 1e3;
-	NEVER_SENT = /* @__PURE__ */ new Set(["ECONNREFUSED", "ENOTFOUND"]);
+	NOT_RETRIED = /* @__PURE__ */ new Set([
+		"ECONNREFUSED",
+		"ENOTFOUND",
+		"EHOSTUNREACH",
+		"ENETUNREACH",
+		"UND_ERR_CONNECT_TIMEOUT",
+		"UND_ERR_HEADERS_TIMEOUT"
+	]);
 	neverSent = (e) => {
 		const cause = e?.cause;
-		return NEVER_SENT.has(cause?.code ?? "") || cause?.message === "bad port";
+		const code = cause?.code ?? "";
+		return NOT_RETRIED.has(code) || /^(ERR_TLS_|ERR_SSL_|UNABLE_TO_|SELF_SIGNED|DEPTH_ZERO)|CERT/.test(code) || cause?.message === "bad port";
 	};
 	networkError = (e) => {
 		const cause = e?.cause;
@@ -1538,7 +1546,7 @@ var init_agent = __esmMin((() => {
 			for (let attempt = 1; !res; attempt++) try {
 				res = await fetch(`${api}${path}`, init);
 			} catch (e) {
-				if (attempt >= 3 || neverSent(e)) throw new TypeError(`${method} ${path} at ${new URL(String(api)).host}: no answer after ${attempt} tries (${networkError(e)})`, { cause: e });
+				if (attempt >= 3 || neverSent(e)) throw new TypeError(`${method} ${path} at ${new URL(String(api)).host}: no answer after ${attempt} ${attempt === 1 ? "try" : "tries"} (${networkError(e)})`, { cause: e });
 				await new Promise((r) => setTimeout(r, CALL_BACKOFF_MS * attempt));
 			}
 			const out = await res.json();
