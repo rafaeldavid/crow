@@ -82,7 +82,7 @@ Each assumption names what the contracts rely on, where, and what happens if it 
 
 ## 5. Attack classes and where each is handled
 
-Each row names what an attacker tries, the code that refuses it and the test that covers it. The tests are named from the files in `contracts/test/` at the frozen commit (the tag `contracts-phase-one-1`; [`scope.md`](scope.md)) [measured at the tag on 2026-11-13 with `git ls-tree` and `git grep`: the files and the invariant names exist; their bodies were not read for this page].
+Each row names what an attacker tries, the code that refuses it and the test that covers it. The tests are named from the files in `contracts/test/` at the frozen commit (the tag `contracts-phase-one-1`; [`scope.md`](scope.md)) [measured at the tag on 2026-11-13 with `git ls-tree` and `git grep`: the files and the invariant names exist]. T-499 read the invariant bodies and the handler on 2026-11-17: each invariant asserts its property through the handler's counters or real balances ([`invariants.md`](invariants.md)).
 
 | Class | What the attacker tries | Refused at | Test |
 | --- | --- | --- | --- |
@@ -106,7 +106,7 @@ Each row names what an attacker tries, the code that refuses it and the test tha
 | A decision on a closed deal | Decide again, or with another role, after the deal closed | `_turn` | `unit/PhaseOneNoBonds.t.sol`, `attack/PhaseOneRedTeam.t.sol` |
 | An admin path | Upgrade, pause, destroy or drain | None exists | `fuzz/NoAdmin.fuzz.t.sol`; `invariant_noAdminPath` |
 
-`invariant_escrowMatchesState` holds only while no deal passes the escrow's expiry with its hold reclaimed; TA-1 is the state it does not cover [inferred from the invariant's name and `state-model.md` 5.2].
+`invariant_escrowMatchesState` covers TA-1: the campaign targets the payment address's own reclaim on the escrow (`cppReclaim` in `RulesInvariants.t.sol`), and the handler's mirror of the hold is 0 after it (`heldMirror` in `RulesHandler.sol`) [measured: T-499 read both, 2026-11-17].
 
 ## 6. What the contracts do not defend against
 
@@ -133,5 +133,5 @@ Each is accepted or tracked elsewhere; this list points to it.
 ## Where this page did not look
 
 - **Not read in full:** the ERC-3009 collector, `TokenStore.sol`, and Solady's signature library. The claims about them come from [`scope.md`](scope.md) and the reviews it cites.
-- **Not run for this page:** no invariant campaign and no model check. The unit tests passed on the lane at `ba941e0` on 2026-11-12, before the freeze ([`scope.md`](scope.md)).
+- **Runs:** the unit tests passed on the lane at `ba941e0` on 2026-11-12, before the freeze ([`scope.md`](scope.md)). At the tag, the invariant campaign and the full model check passed; [`invariants.md`](invariants.md), "Recorded runs at the tag", gives the commands and dates.
 - **Not covered:** the off-chain components (the operators, the reference adjudicator, the judgment pipeline). [`scope.md`](scope.md) lists what each may and may not do.

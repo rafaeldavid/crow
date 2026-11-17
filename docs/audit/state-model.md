@@ -438,7 +438,7 @@ Other documents:
 
 - [`docs/architecture.md`](../architecture.md), the transition table, says early accept needs the state Delivered. The contract also takes it in Held with the delivery (`earlyAccept`). The plan's IS-8.
 - [`docs/neutrality.md`](../neutrality.md) describes the full protocol, where defaulting adjudicators' bonds compensate the seller. That is not in phase one: a default refunds the buyer's payment address and pays nobody from a bond (`triggerDefault`).
-- The comment on `Deal.t1` calls it "decidedAt, escalatedAt or fallbackSince". After an escalation decision (P10, P11), `t1` is still the escalation's time, and the decision's time is in no field.
+- The comment on `Deal.t1` (`IHoldbackRules.sol`) says the last of `triggerFallback`, an escalation or a first-instance decision sets it. After an escalation decision (P10, P11), `t1` is still the escalation's time, and the decision's time is in no field.
 - Core and ADR-0019 took the contract's rule for a settlement in Held that names an unposted delivery (T-357), so finding F-1 is closed.
 - **The funding deadline.** ADR-0031 §6 settled it: on the contract an offer funds until `offerExpiresAt`, and `fundBy` bounds only the ERC-3009 authorization (`_paymentInfo` sets it as `preApprovalExpiry`). Core and SimChain keep two steps: agree before `offerExpiresAt`, then fund before `fundBy` (`packages/core/src/state.ts`, `agree` and `fund`). The formal model's phase-one profile funds by `offerExpiresAt`.
 
@@ -498,7 +498,7 @@ What a cut costs: a wrong final decision has no remedy on chain in phase one. Th
 
 ## Where this page did not look
 
-- **Run for this pass (T-385, 2026-11-12):** `forge test --match-path 'test/unit/*'` in `contracts/` at `ba941e0`: every unit test passed [measured]. No TLC run and no invariant campaign ran for this pass. Every "unreachable" is from reading each write to the word.
+- **Run for this pass (T-385, 2026-11-12):** `forge test --match-path 'test/unit/*'` in `contracts/` at `ba941e0`: every unit test passed [measured]. No TLC run and no invariant campaign ran for this pass; both passed later at the tag ([`invariants.md`](invariants.md), "Recorded runs at the tag"). Every "unreachable" is from reading each write to the word.
 - **Not checked by a red team on the phase-one rows:** this page's sections 3 to 12. The 0.7 model's sections 1 to 6 had that read on 2026-11-11.
 - **Not read in full:** the ERC-3009 collector, `TokenStore.sol`, Solady's signature library beyond the plan's note that a zero signer fails, and the test handler.
 - **Assumed:** a token that moves exactly the amount asked and lets every transfer through; block time between 1 and 2^40 − 1; no delivery or seed that hashes to zero.

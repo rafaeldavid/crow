@@ -82,7 +82,7 @@ The state machine and the settlement interface are in [`docs/architecture.md`](.
 
 ## The frozen commit and how to confirm it
 
-- **Commit:** the `commit` field of `sepolia.json`, which the tag `contracts-phase-one-1` names too. The compiler settings are in the same record, under `compiler` [measured: the record's fields; `contracts/foundry.toml` sets them].
+- **Commit:** the tag `contracts-phase-one-1` and the record's `commit` name two commits with the same build inputs. The record's `commit` is the commit the deploy built from; the tag points at the later merge commit, which adds only the deployment record under `contracts/deployments/`. `git diff --stat <record's commit> contracts-phase-one-1 -- contracts/src contracts/lib contracts/foundry.toml contracts/remappings.txt contracts/script/TestUSDC.sol` prints nothing [measured: T-499, 2026-11-17]. [`README.md`](README.md) gives both hashes as of that date. The compiler settings are in the same record, under `compiler` [measured: the record's fields; `contracts/foundry.toml` sets them].
 - **Confirm:** run [`contracts/script/deploy-sepolia.sh`](../../contracts/script/deploy-sepolia.sh) `--check <rpc-url>` from a checkout whose build inputs equal the frozen commit. It deploys nothing and only reads. It fails unless all of these hold [measured: read from the script on `main` after the cutover]:
   1. the RPC serves chain ID 11155111;
   2. `src`, `lib`, `foundry.toml`, `remappings.txt` and `script/TestUSDC.sol` equal the recorded commit, with no uncommitted change;
@@ -102,8 +102,8 @@ The state machine and the settlement interface are in [`docs/architecture.md`](.
 | Commerce Payments Protocol: `AuthCaptureEscrow` v1.1.0 and `ERC3009PaymentCollector` (with its ERC-6492 handler) | git submodule `contracts/lib/commerce-payments` (`https://github.com/base/commerce-payments`, from `.gitmodules` [measured]) | `6b0a5ef3f0df973857f558e2d6b5dd645b5e97f9` [measured: `git ls-tree HEAD contracts/lib/commerce-payments`; the same commit is in `docs/tasks/T-201-cpp-spike.md` and both reviews] | Holds the buyer's funds. The deployment's copies: `escrow` and `erc3009Collector` in `sepolia.json` |
 | Solady (`EIP712`, `SignatureCheckerLib`, `LibString`) | `lib/commerce-payments/lib/solady` | 0.1.1, `5ea5d9f` [documented: public-audit cross-check §2.1] | Imported by `HoldbackRules.sol` and `HoldbackTypes.sol` [measured: their import lines] |
 | Permit2 | `lib/commerce-payments/lib/permit2` | source at `cc56ad0` [documented: cross-check §2.1] | Not in phase one: the phase-one contracts fund by ERC-3009 only. `forge test` still imports it for test helpers (`contracts/test/unit/Base.sol`) |
-| OpenZeppelin Contracts | `lib/commerce-payments/lib/spend-permissions/lib/openzeppelin-contracts` | not recorded in the files read | Used by CPP [inferred] |
-| forge-std | `lib/commerce-payments/lib/forge-std` | not recorded in the files read | Tests only |
+| OpenZeppelin Contracts | `lib/commerce-payments/lib/spend-permissions/lib/openzeppelin-contracts` | 5.0.2, `1edc2ae` [measured: its `package.json` and `git submodule status --recursive`, T-499] | Used by CPP (`IERC20`, `SafeERC20`) [measured: CPP's imports] |
+| forge-std | `lib/commerce-payments/lib/forge-std` | 1.9.6, `8ba9031` [measured, T-499] | Tests only |
 | Multicall3 | the canonical deployment, the record's `multicall` | code hash checked by `--check` (the record's `checks.multicallCodeHash`) | The ERC-3009 collector's ERC-6492 path and the operators' bundles. Unaudited per its README [documented: cross-check §2.1] |
 | drand quicknet | external network | chain hash and public key are constants in `DrandQuicknetBeacon.sol` | Panel seeds for fallback and escalation decisions |
 
@@ -169,6 +169,7 @@ The reviews before T-388 read earlier contracts (the 2026-11-03 and 2026-11-04 d
 ## Where to start reading
 
 The audit pages, in reading order:
+1. [`README.md`](README.md): the start page, with the system on one page, build and test steps, and the dated figures;
 1. this page: what is in scope, the frozen commit and the trust assumptions;
 2. [`threat-model.md`](threat-model.md) (added by T-340): the actors, assets, trust boundaries and attack classes;
 3. [`invariants.md`](invariants.md): the properties the code is checked against, keyed to the `invariant_*` tests, the state machine and the formal model;
