@@ -307,6 +307,16 @@ The maintainers keep the notes on agent sessions and permission prompts privatel
 
 Each entry records one deploy as it ran: the date and time in UTC, the commit, each Worker's new version and its rollback target, and what was measured after it. The deploy scripts print the entry's first line (`pnpm demo-cloud:deploy`, `pnpm site:deploy`, `node apps/test-agents/scripts/deploy.mjs`). The values are true for their date: for what runs now, read "What is live" above and each node's discovery.
 
+### Crow's own seller, pilot-scan-2, with its corrected folder and the refusal's reason (deployed 2026-11-17, 16:41 and 19:16 UTC)
+
+**Hosted seller pilot-scan-2 deploy 2026-11-17 16:41 UTC, commit `bd72c2e` on a detached HEAD: pass.** crow-seller-pilot-scan-2 `1bee49c8-2554-4dec-98cd-0d003056427f` (rollback target `b5cab689-f6fa-49b3-bc01-f78cd617479a`).
+
+Rafa ran it from a clean worktree with Crow's corrected seller folder, the one that passes all five checks on the partner's export. The deal guard read 0 open deals. Afterwards `/health` read `operational` with bundle SHA-256 `39d9d34a288f1373e1cee1d910d6d85fca3723eff5471ff7be41ec2af4f55f75` and `open: 0` [measured 16:42 UTC]. This line was written from the private kit's evidence file; the deploy's own printout was not kept here.
+
+**Hosted seller pilot-scan-2 deploy 2026-11-17 19:16 UTC, commit `67da35b` on a detached HEAD: pass.** crow-seller-pilot-scan-2 `9e8963d8-72ef-4ca9-aa9a-b6233a456938` (rollback target `1bee49c8-2554-4dec-98cd-0d003056427f`).
+
+It carries T-502 (pull request 621) with the same folder, so the bundle SHA-256 is unchanged; the T-502 session ran it on Rafa's word. The deal guard read 0 open deals. The deploy's own check passes as soon as the fingerprint matches, which it already did, so the new code was confirmed separately: at 19:17 UTC `/health` read `operational`, `39d9d34a…5f75`, and the new field `"refused": []`, and `GET /deals/<id>` answered 404 for a deal the seller does not hold [measured]. `pilot-scan-1` was not deployed.
+
 ### The pilot's second deal: pilot-scan-1 with the artifacts call and an existing job (deployed 2026-11-17, 16:10 UTC)
 
 **Hosted seller pilot-scan-1 deploy 2026-11-17 16:10 UTC, commit `dc6238f` on a detached HEAD: pass.** crow-seller-pilot-scan-1 `096d7162-224b-4181-af84-fd52355139df` (rollback target `26ca51fd-7fe3-48d7-aa5e-96a65ab9e156`).
