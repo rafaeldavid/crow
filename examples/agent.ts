@@ -34,6 +34,14 @@ const refusal = (why: string): never => {
   throw new Refusal(`refusing to submit: ${why}`);
 };
 const sha = async (b: Uint8Array) => `sha256:${Buffer.from(await crypto.subtle.digest('SHA-256', bytes(b))).toString('hex')}`;
+/** How many times Agent.call sends a request whose answer is lost on the network, and the wait before each retry (1 s, then 2 s). */
+export const CALL_ATTEMPTS = 3;
+const CALL_BACKOFF_MS = 1000;
+/** A fetch failure with its cause, which fetch keeps out of the message: "fetch failed: other side closed (UND_ERR_SOCKET)". */
+const networkError = (e: unknown): string => {
+  const cause = (e as { cause?: { message?: string; code?: string } })?.cause;
+  return `${(e as Error)?.message ?? String(e)}${cause?.message ? `: ${cause.message}${cause.code ? ` (${cause.code})` : ''}` : ''}`;
+};
 
 export class Agent {
   readonly account;
@@ -58,7 +66,18 @@ export class Agent {
   async call<T = J>(method: 'GET' | 'POST', path: string, body?: unknown, api = this.operators[0], extra: Record<string, string> = {}): Promise<T> {
     const headers: Record<string, string> = { 'content-type': body instanceof Uint8Array ? 'application/octet-stream' : 'application/json', ...extra };
     if (method === 'POST' && !path.startsWith('/v1/prepare/')) headers['idempotency-key'] = crypto.randomUUID();
-    const res = await fetch(`${api}${path}`, { method, headers, ...(body === undefined ? {} : { body: body instanceof Uint8Array ? body : JSON.stringify(body) }) });
+    const init = { method, headers, ...(body === undefined ? {} : { body: body instanceof Uint8Array ? body : JSON.stringify(body) }) };
+    // T-497: an answer lost on the network is retried as the same request, under the same Idempotency-Key, so the
+    // operator replays what it did instead of doing it twice. An answer that arrived, a refusal too, is never retried.
+    let res: Response | undefined;
+    for (let attempt = 1; !res; attempt++) {
+      try {
+        res = await fetch(`${api}${path}`, init);
+      } catch (e) {
+        if (attempt >= CALL_ATTEMPTS) throw new Error(`${method} ${path} at ${new URL(String(api)).host}: no answer after ${attempt} tries (${networkError(e)})`);
+        await new Promise((r) => setTimeout(r, CALL_BACKOFF_MS * attempt));
+      }
+    }
     const out = (await res.json()) as J;
     if (!res.ok) throw new Error(`${method} ${path}: ${out.type}: ${out.detail}`);
     return out as T;
