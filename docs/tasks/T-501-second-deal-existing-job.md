@@ -5,7 +5,7 @@
 - **Depends on:** T-435 (the workspace guard), T-408 (naming a job), T-366 (the seller API mapping)
 - **Paths this task may touch:** `examples/seller-adapter-api.ts`, `examples/seller-adapter-core.ts`, `examples/seller-adapter-job-stub.ts`, `examples/seller-adapter-existing-job.test.ts` (new), `site/ref/seller-adapter.txt` (the two fields and the route), `site/setup.mjs` (rebuilt: it bundles the adapter core), this file.
 - **Human gate:** yes. Every live step waits for Rafa: the redeploy of `pilot-scan-1`, the new quote and funding on the buyer's machine, naming the job, and the record.
-- **Status:** review
+- **Status:** done
 - **Agent/session:** the second-deal session, 2026-11-17, branch `t-501-second-deal`.
 - **Roadmap row:** N88
 - **Change kind:** 5 by risk (the seller's workspace guard and its start logic move money and spend the partner's credits): the examples' tests, one review pass and one red-team pass.
@@ -63,5 +63,5 @@ A configuration that cannot run both checks, with no `jobScope` or a pinned work
 ## Handoff
 
 - **Done:** the code, its tests, the reference page and the rebuilt `site/setup.mjs`; the corrected terms and seller folder in the private kit; the local proof.
-- **Waits for Rafa:** every live step: the redeploy of `pilot-scan-1` with the corrected folder, a new quote and funding on the buyer's machine, naming the finished job before funding, and the deal's record. The private kit's run sheet holds them.
+- **Live, 2026-11-17** [measured]: Rafa redeployed `pilot-scan-1` at 16:10 UTC (deploy record in `docs/operations.md`). He named the finished job for the new deal at 16:20 UTC, and the seller answered 202. The deal was funded at 16:22:00 and Released at 16:22:36 UTC, with no new start at the partner. The first deal is still Held, with nothing delivered, and refunds after its `deliverBy`. The transactions and the record are in the private kit's evidence file.
 - **Left open (Low, red team):** the route answers `holder_busy` while the deal loop works on the holder; the caller sends the request again. The holder record is per journal: a job named in another adapter's journal is not seen. Crow's own seller (`pilot-scan-2`) can take the same two fields when its folder is next rebuilt.
