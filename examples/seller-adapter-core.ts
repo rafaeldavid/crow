@@ -1018,6 +1018,8 @@ export async function createSellerAdapter(c: SellerAdapterConfig, env: Readonly<
   const save = () => io.saveJournal(journal);
   /** T-501: deals whose named existing job the job route is reading now. Their start waits until the read ends. */
   const attaching = new Set<string>();
+  /** T-501 review: deals the deal loop is working on now. The job route moves no job out of one of them. */
+  const advancing = new Set<string>();
   // ---- Events (T-417): one JSON line each, for the seller's product metrics; never content, keys or identities ----
   let eventsBroken = false;
   const emit = (type: string, fields: Record<string, unknown>) => {
@@ -1530,6 +1532,8 @@ export async function createSellerAdapter(c: SellerAdapterConfig, env: Readonly<
       // Recorded before the call: a crash between the call and its record makes the next start read the
       // settlement layer first, so the adapter never delivers twice.
       const attempt = (deal.refusals ?? 0) + 1;
+      // T-501 review: a deal whose job moved to another deal delivers nothing, whatever this pass read before.
+      if (deal.jobMovedTo !== undefined || deal.stage === 'closed') return;
       record(deal, { stage: 'delivering', ready: false, note: `delivering ${pre.bytes} bytes, ${pre.plaintextSha256}` });
       await (remote ? remoteDeliver(deal, bytes) : signerOf(deal).deliver(deal.terms, bytes));
       record(deal, { stage: 'delivered', note: `${pre.bytes} bytes, ${pre.plaintextSha256}` });
@@ -1568,6 +1572,7 @@ export async function createSellerAdapter(c: SellerAdapterConfig, env: Readonly<
 
   /** Records a refused result and alerts the seller once for each distinct result. The delivery waits. */
   function refuse(deal: Deal, now: number, resultSha256: string, detail: { result: string; checks: FailedCheck[] } & Record<string, unknown>, why: string): void {
+    if (deal.jobMovedTo !== undefined) return; // T-501 review: a deal whose job moved stays closed
     const deliverBy: string = deal.terms.timing.deliverBy;
     const every = refusal.refetchEverySec;
     const nextFetchAt = every === undefined ? undefined : new Date(now + every * 1000).toISOString();
@@ -1621,6 +1626,7 @@ export async function createSellerAdapter(c: SellerAdapterConfig, env: Readonly<
     for (const deal of Object.values(journal.deals)) {
       if (closed) return;
       if (!['offered', 'starting', 'start-unknown', 'started', 'refused', 'delivering'].includes(deal.stage)) continue;
+      advancing.add(deal.id);
       try {
         await advance(deal, passNow, full);
         lastError.delete(deal.id);
@@ -1628,6 +1634,8 @@ export async function createSellerAdapter(c: SellerAdapterConfig, env: Readonly<
         const message = plain((e as Error).message);
         if (!closed && lastError.get(deal.id) !== message) log(`${deal.id} waits at ${deal.stage}: ${message}. The adapter tries again at the next poll.`);
         lastError.set(deal.id, message);
+      } finally {
+        advancing.delete(deal.id);
       }
     }
   }
@@ -1691,7 +1699,8 @@ export async function createSellerAdapter(c: SellerAdapterConfig, env: Readonly<
     const deal = Object.hasOwn(journal.deals, id) ? journal.deals[id]! : undefined;
     if (!deal) return send(404, { type: 'not_found', detail: 'this adapter holds no such deal' });
     /** The other deal that holds the job, by its started job or its named existing one. */
-    const holderOf = (job: string) => Object.values(journal.deals).find((d) => d.id !== deal.id && (d.jobId === job || d.existingJob?.jobId === job));
+    // A deal whose job moved on (`jobMovedTo`) holds it no more: the deal it moved to does (T-501 review).
+    const holderOf = (job: string) => Object.values(journal.deals).find((d) => d.id !== deal.id && d.jobMovedTo === undefined && (d.jobId === job || d.existingJob?.jobId === job));
     if (existing === true) return existingJobNamed(deal, jobId, fromRaw === undefined ? undefined : (fromRaw.toLowerCase() as Hex), holderOf);
     if (deal.stage !== 'start-unknown') return send(409, { type: 'not_waiting', detail: `the deal is ${deal.stage}, not waiting for its job's ID` });
     const holder = holderOf(jobId);
@@ -1719,6 +1728,8 @@ export async function createSellerAdapter(c: SellerAdapterConfig, env: Readonly<
       if (!holder) return from === undefined ? undefined : send(409, { type: 'not_holder', detail: `deal ${from} does not hold job ${jobId} in this journal` });
       if (from !== holder.id) return send(409, { type: 'job_taken', detail: `job ${jobId} belongs to deal ${holder.id}; name it as "from" to move the job from that deal` });
       if (holder.stage !== 'refused' && holder.stage !== 'closed') return send(409, { type: 'job_taken', detail: `job ${jobId} belongs to deal ${holder.id}, which is ${holder.stage}: a job moves only from a refused or closed deal` });
+      // The deal loop may be part-way through that deal's pass, fetching or delivering its result (T-501 review).
+      if (advancing.has(holder.id)) return send(409, { type: 'holder_busy', detail: `deal ${holder.id} is being worked on now; send the request again in a few seconds` });
       return undefined;
     };
     const before = taken();

@@ -120,6 +120,15 @@ describe('the artifacts call (T-501): deals', () => {
     expect(lines.join('\n')).toMatch(/FILES NOT ADDED the seller API answered 500 to the artifacts call/);
     expect(await deliveries(buyer, id)).toEqual([]);
   }, 45_000);
+
+  it('holds the delivery when the result with its artifacts is over the delivery cap', async () => {
+    const { running, lines } = await adapter({ notesBody: [{ kind: 'note', text: 'x'.repeat(1_100_000) }] });
+    const { buyer, id } = await quote(running, 'buyer-1');
+    await fund(buyer, id);
+    await until('the refusal', () => dealOf(running, id)?.stage === 'refused');
+    expect(lines.join('\n')).toMatch(/FILES NOT ADDED the artifacts call: the seller API's answer to the artifacts call is larger than 1048576 bytes/);
+    expect(await deliveries(buyer, id)).toEqual([]);
+  }, 45_000);
 });
 
 describe('the artifacts call (T-501): the mapping', () => {
@@ -254,7 +263,13 @@ describe('an existing job for a new deal (T-501)', () => {
     expect(stub!.requests.filter((r) => r.path === '/api/v2/runs/done-7').length).toBe(reads);
     expect(await deliveries(first.buyer, first.id)).toEqual([]);
     expect(starts()).toBe(0);
-  }, 60_000);
+    // T-501 review: the closed deal no longer holds the job, so naming it as "from" again moves nothing.
+    const third = await quote(running, 'buyer-1');
+    const again = await name(running, third.id, { jobId: 'done-7', existing: true, from: first.id });
+    expect([again.status, ((await again.json()) as J).type]).toEqual([409, 'job_taken']);
+    expect(dealOf(running, third.id)?.existingJob).toBeUndefined();
+    expect(dealOf(running, first.id)?.jobMovedTo).toBe(second.id);
+  }, 90_000);
 
   it('never moves a job out of a delivered deal', async () => {
     const { running } = await adapter({ seedRuns: seeded });
