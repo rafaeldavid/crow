@@ -6,7 +6,7 @@ This page is a dated record: the audit-readiness review (T-499) read the code on
 
 ## The fixed build
 
-On the lane `contracts-audit-ready` the contracts carry an outside scan's fixes (T-527 to T-529). The tables below stay the record of the tag; on the fixed build these rows differ [measured: `git diff contracts-phase-one-1 contracts-audit-ready -- contracts/src`]:
+On the lane `contracts-audit-ready` the contracts carry an outside scan's fixes (T-527, T-528 and T-529). The tables below stay the record of the tag; on the fixed build these rows differ [measured: `git diff contracts-phase-one-1 contracts-audit-ready -- contracts/src`]:
 
 - **`HoldbackRules` constructor:** it also refuses a beacon that does not answer `roundAt` (no code, or the call reverts or returns no round) with `BadBeacon` (T-527).
 - **`agreeAndFund`:** it also refuses terms whose `disputeBy`, `disputeJudgeSec` or `disputeFallbackSec` is not 0 (`InvalidMessage`; T-529).

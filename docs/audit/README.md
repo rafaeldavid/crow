@@ -4,7 +4,7 @@ This page is where an outside auditor of Crow's phase-one contracts starts. Crow
 
 The code to audit is `contracts/src/` at the git tag `contracts-phase-one-1`. Read these pages from `main`, which corrects them after the tag; `contracts/src/` and `contracts/test/` on `main` equal the tag's.
 
-**The fixed build.** D80 (2026-11-18) has the outside audit read the next build, which carries an outside scan's contract fixes (T-527 to T-529) on the lane `contracts-audit-ready`. Its tag will be `contracts-phase-one-2`. On the lane, [`state-model.md`](state-model.md), [`threat-model.md`](threat-model.md) TA-11 and the deployer's row, and [`functions.md`](functions.md), "The fixed build", describe it; the dated sections stay records of the tag.
+**The fixed build.** D80 (2026-11-18) has the outside audit read the next build, which carries an outside scan's contract fixes (T-527, T-528 and T-529) on the lane `contracts-audit-ready`. Its tag will be `contracts-phase-one-2`. On the lane, [`state-model.md`](state-model.md), [`threat-model.md`](threat-model.md) TA-11 and the deployer's row, and [`functions.md`](functions.md), "The fixed build", describe it; the dated sections stay records of the tag.
 
 Labels: **measured** (produced by the named command), **documented** (stated in the doc cited), **inferred** (concluded from reading).
 
