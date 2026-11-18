@@ -24,7 +24,7 @@ In five ways set by the deal's signed terms, plus one backstop. The rules contra
 - the buyer signs an early accept;
 - both parties sign a settlement;
 - the seller misses its delivery deadline, which refunds the buyer;
-- no adjudicator decides in time, and the default outcome applies, which on the live service refunds the buyer.
+- no adjudicator decides in time, and the default outcome applies, which on the live service refunds the buyer the price and the adjudication fee. The seller's compensation from adjudicators' bonds in docs/architecture.md applies only to the full protocol on SimChain.
 The backstop: if funds are still held 24 hours after the deal's last decision deadline, the buyer's payment address can take them back directly from the escrow.
 Source: docs/neutrality.md, "The test", https://github.com/rafaeldavid/holdback/blob/main/docs/neutrality.md#the-test; docs/audit/scope.md, "In scope", https://github.com/rafaeldavid/holdback/blob/main/docs/audit/scope.md#in-scope; The rules contract on Etherscan, https://sepolia.etherscan.io/address/0x3BE45128565ABBc35DbD4660716b703Ff489f1b4; contracts/src/HoldbackRules.sol, "_escrowExpiry", https://github.com/rafaeldavid/holdback/blob/main/contracts/src/HoldbackRules.sol
 

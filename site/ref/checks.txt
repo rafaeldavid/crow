@@ -4,7 +4,7 @@ How to write the deterministic checks a buyer binds, for a CSV and for a JSON re
 
 ## Writing checks that protect a buyer
 
-On a checks-only deal the checks are the whole contract. Write each as if the seller will deliver the least that passes. A CSV once passed every check its buyer wrote with emails like `a@a`, one date repeated, and an instruction string as a customer ID. These checks would have refused it:
+On a checks-only deal the checks are the whole contract. Write each as if the seller will deliver the least that passes. The checks and the judges read the delivered file only: a file it only links to is not fetched or checked, so put what you need in the delivery. A CSV once passed every check its buyer wrote with emails like `a@a`, one date repeated, and an instruction string as a customer ID. These checks would have refused it:
 
 ```json
 [

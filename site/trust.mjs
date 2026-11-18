@@ -83,7 +83,7 @@ export function trustFaq(f = trustFacts()) {
           'the buyer signs an early accept;',
           'both parties sign a settlement;',
           'the seller misses its delivery deadline, which refunds the buyer;',
-          'no adjudicator decides in time, and the default outcome applies, which on the live service refunds the buyer.',
+          'no adjudicator decides in time, and the default outcome applies, which on the live service refunds the buyer the price and the adjudication fee. The seller\'s compensation from adjudicators\' bonds in docs/architecture.md applies only to the full protocol on SimChain.',
         ],
         after: `The backstop: if funds are still held ${f.expiryMarginHours} hours after the deal’s last decision deadline, the buyer’s payment address can take them back directly from the escrow.`,
         sources: [neutralityTest, file('docs/audit/scope.md', 'In scope', 'in-scope'), ['The rules contract on Etherscan', etherscan(f.rules)], file('contracts/src/HoldbackRules.sol', '_escrowExpiry')] },

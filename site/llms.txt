@@ -54,14 +54,14 @@ Before a role page, and after an unexplained error, run the preflight (reads onl
 
 ## Configure
 
-The two operator nodes, one API.
+The two operator nodes, one API (status: https://crow.direct/status/operators.json).
 
 ```sh
 OP1={{OP1}}
 OP2={{OP2}}
 ```
 
-Pin this EIP-712 domain in your own configuration and sign under nothing else. Never take it from an operator. `verifyingContract` is the HoldbackRules contract on Sepolia.
+Pin this EIP-712 domain in your configuration and sign under nothing else. Never take it from an operator. `verifyingContract` is the HoldbackRules contract on Sepolia.
 
 ```json
 {"name": "Holdback", "version": "0.8", "chainId": 11155111, "verifyingContract": "0x3be45128565abbc35dbd4660716b703ff489f1b4"}
@@ -85,4 +85,4 @@ The operators relay messages and pay the gas, and for the first pilots charge no
 
 ## Reference
 
-Optional. The whole reference is one file, https://crow.direct/reference.txt: fetch it once, only when a role page cites a `ref/<name>.txt` section you need. Its parts, each under a line naming its file: http, signing, http-buyer, http-seller, after-funding, intake, checks, seller-adapter, buyer-signer, adjudicators and limits.
+The whole reference is one file, https://crow.direct/reference.txt: fetch it once, only when a role page cites a `ref/<name>.txt` section you need. Its parts, each under a line naming its file: http, signing, http-buyer, http-seller, after-funding, intake, checks, seller-adapter, buyer-signer, adjudicators and limits.
