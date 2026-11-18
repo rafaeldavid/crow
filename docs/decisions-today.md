@@ -1463,3 +1463,25 @@ Today a seller with its own API reads 13 files of 98,462 bytes and runs 22 comma
 - **The next build.** RR-1 to RR-5 and the auditor's findings land together on the contract lane `contracts-audit-ready`, as reviewed pull requests, starting with one that brings `main` into the lane. `main`'s `contracts/src/` and the live deployment stay frozen meanwhile. The lane's tip then becomes the next frozen commit, and `docs/redeploy-contracts.md` takes it through the deploy and the switchover on a `cutover-<tag>` branch (roadmap rows N24 and N152).
 - **The next build is the phase-one lane plus the fixes** (Rafa, 2026-11-17, choosing between that and the rebuilt contracts that roadmap row N26 names: "Phase-one lane plus fixes"). It keeps phase one's design and scope, with RR-1 to RR-5 and the auditor's findings applied, so the change an audit of the fixes reads stays small. The rebuilt contracts come after it.
 - **Litmus tests.** Neutrality, the hold and defended judgment: unchanged. This orders the work and changes no code.
+
+## D78. Both parties change a funded deal's terms by replacing it in one transaction, with no contract change (ADR-0039, T-524)
+
+**Status:** needs Rafa, 2026-11-18.
+
+**Why now.** Both pilot deals so far had a finished report refused by the deal's signed checks while the deal was `Held`. Each fix took four moves: new terms, a seller redeploy, a second deal that takes over the job (T-501), and a full refund both parties sign (T-503) [measured, the private record]. Rafa, 2026-11-18: amendments both parties agree to "need to be a normal path of trade". The gate before signing (the checks run on one real delivery first) would have caught the first case. It would not have caught the second, whose report had shapes the first real report lacked [inferred].
+
+**Recommendation** (ADR-0039; research in `docs/research/2026-11-18-amending-a-funded-deal.md`):
+- **Replace in one transaction.** One Multicall3 transaction refunds the old deal by the settlement both parties sign, then funds a new deal on the new terms from that refund. If any part fails, nothing moves. On a local chain the frozen phase-one contracts did this, and reverted whole when the new funding failed (4 of 4 cases passed) [measured]. Multicall3 is already on Sepolia [measured].
+- **Any term can change,** since the new deal is a new offer: the checks, the deadlines, the price up to what the wallet holds, the adjudicators. The tools offer it while the old deal is `Held` with no delivery posted. After a delivery, the parties settle by agreement, as today.
+- **No new signed type, no contract change.** New surface: `POST /v1/prepare/replacement`, `POST /v1/commitments/{id}/replacement`, the hosted seller's `POST /deals/{id}/replace`, and one buyer command. T-503's refund and T-501's takeover become steps inside it.
+- **The in-place amendment** (one commitment ID, a `TermsAmendment` message, a contract `amend`) is designed in ADR-0039 section 8, and is not built until replacements measure a cost.
+
+**Decided by Rafa, 2026-11-18, the tie between the two deals:** "Let's do the default as transaction data which is signed by both buyer and seller original keys. So that reputation public is easier to calculate, both for buyer and seller. They will care if someone reading the data can trace they do complete commitments". The refund's `nonce`, signed by both original keys, carries the new commitment ID. A party may opt out with a random nonce. This discloses more than D35's general default of minimal disclosure; D35 is not reopened, and each party keeps the choice.
+
+**Open points for Rafa:**
+1. The path: recommended, replace in one transaction now; or the in-place amendment, off chain first and on chain later.
+2. The in-place amendment in the rebuilt contracts: recommended, not until replacements measure a cost; or design it into the build after the fixes build (D77) anyway.
+3. After a posted delivery: recommended, no replacement from the tools; or offer it, at the risk that the batch reverts when the adjudicator decides first.
+4. The buyer's stop: recommended, the principal's yes on every replacement; or skip it when the new checks are only stricter.
+
+**Litmus tests.** Neutrality: no single actor replaces a deal, and an operator that refuses is bypassed through Multicall3. The hold: the old hold pays only the buyer's payment address, on both signatures; if the batch fails, it stays as it was [measured]. Defended judgment: no replacement after a delivery, so none after a verdict.
