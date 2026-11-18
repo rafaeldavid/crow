@@ -118,9 +118,79 @@
       "droppedSectionChars": {},
       "locationsOutOfScope": 0
     },
+    "layout-2": {
+      "reports": 6,
+      "reportsWithNoBlocker": 6,
+      "reportsWithBlocker": {},
+      "passIfOnlyThisBlockerRemoved": {},
+      "relaxedWhatIfAccepted": 6,
+      "relaxedWhatIfAcceptedAmongMappable": 6,
+      "findings": 67,
+      "mapWithNoFindingLost": 6,
+      "ofThoseAcceptedDefaultTerms": 6,
+      "ofThoseAcceptedNoProofTerm": 6,
+      "allAcceptedDefaultTerms": 6,
+      "allAcceptedNoProofTerm": 6,
+      "allAcceptedDefaultTermsStripped": 6,
+      "acceptedOneCommit": 6,
+      "acceptedOneCommitStripped": 6,
+      "reportsNotMappingByCause": {},
+      "failingChecksAmongMappedDefault": {},
+      "failingChecksAmongMappedNoProof": {},
+      "failingChecksAllDefault": {},
+      "findingsOverAFieldLimit": {},
+      "findingsMediumOrHigher": 16,
+      "reportsWithHiddenCharacters": 0,
+      "reportsOverJudgeRead": 0,
+      "sourceChars": 318182,
+      "carriedChars": 152483,
+      "outsideFindingsChars": 53954,
+      "droppedSectionChars": {
+        "severity": 836,
+        "location of affected code": 74503,
+        "proof of concept": 27402,
+        "team response": 462
+      },
+      "locationsOutOfScope": 235
+    },
+    "heldout-2": {
+      "reports": 6,
+      "reportsWithNoBlocker": 6,
+      "reportsWithBlocker": {},
+      "passIfOnlyThisBlockerRemoved": {},
+      "relaxedWhatIfAccepted": 6,
+      "relaxedWhatIfAcceptedAmongMappable": 6,
+      "findings": 81,
+      "mapWithNoFindingLost": 6,
+      "ofThoseAcceptedDefaultTerms": 6,
+      "ofThoseAcceptedNoProofTerm": 6,
+      "allAcceptedDefaultTerms": 6,
+      "allAcceptedNoProofTerm": 6,
+      "allAcceptedDefaultTermsStripped": 6,
+      "acceptedOneCommit": 6,
+      "acceptedOneCommitStripped": 6,
+      "reportsNotMappingByCause": {},
+      "failingChecksAmongMappedDefault": {},
+      "failingChecksAmongMappedNoProof": {},
+      "failingChecksAllDefault": {},
+      "findingsOverAFieldLimit": {},
+      "findingsMediumOrHigher": 11,
+      "reportsWithHiddenCharacters": 0,
+      "reportsOverJudgeRead": 0,
+      "sourceChars": 473023,
+      "carriedChars": 161951,
+      "outsideFindingsChars": 53075,
+      "droppedSectionChars": {
+        "severity": 1091,
+        "location of affected code": 66051,
+        "proof of concept": 179588,
+        "team response": 703
+      },
+      "locationsOutOfScope": 348
+    },
     "all": {
-      "reports": 24,
-      "reportsWithNoBlocker": 9,
+      "reports": 36,
+      "reportsWithNoBlocker": 21,
       "reportsWithBlocker": {
         "commit (not 40 characters)": 6,
         "commit (several)": 4,
@@ -130,24 +200,24 @@
         "severity": 1
       },
       "passIfOnlyThisBlockerRemoved": {
-        "commit (not 40 characters)": 9,
-        "commit (several)": 12,
-        "findings": 9,
-        "hidden characters": 12,
-        "scope": 10,
-        "severity": 9
+        "commit (not 40 characters)": 21,
+        "commit (several)": 24,
+        "findings": 21,
+        "hidden characters": 24,
+        "scope": 22,
+        "severity": 21
       },
-      "relaxedWhatIfAccepted": 15,
-      "relaxedWhatIfAcceptedAmongMappable": 12,
-      "findings": 182,
-      "mapWithNoFindingLost": 12,
-      "ofThoseAcceptedDefaultTerms": 9,
-      "ofThoseAcceptedNoProofTerm": 9,
-      "allAcceptedDefaultTerms": 12,
-      "allAcceptedNoProofTerm": 12,
-      "allAcceptedDefaultTermsStripped": 15,
-      "acceptedOneCommit": 9,
-      "acceptedOneCommitStripped": 12,
+      "relaxedWhatIfAccepted": 27,
+      "relaxedWhatIfAcceptedAmongMappable": 24,
+      "findings": 330,
+      "mapWithNoFindingLost": 24,
+      "ofThoseAcceptedDefaultTerms": 21,
+      "ofThoseAcceptedNoProofTerm": 21,
+      "allAcceptedDefaultTerms": 24,
+      "allAcceptedNoProofTerm": 24,
+      "allAcceptedDefaultTermsStripped": 27,
+      "acceptedOneCommit": 21,
+      "acceptedOneCommitStripped": 24,
       "reportsNotMappingByCause": {
         "commit: the report reviews more than one commit or repository; the form holds one": 4,
         "findings: the rules find no finding and the report does not say it has none": 7,
@@ -168,14 +238,14 @@
         "scope": 6
       },
       "findingsOverAFieldLimit": {},
-      "findingsMediumOrHigher": 50,
+      "findingsMediumOrHigher": 77,
       "reportsWithHiddenCharacters": 4,
       "reportsOverJudgeRead": 2,
-      "sourceChars": 791253,
-      "carriedChars": 471677,
-      "outsideFindingsChars": 226732,
+      "sourceChars": 1582458,
+      "carriedChars": 786111,
+      "outsideFindingsChars": 333761,
       "droppedSectionChars": {
-        "severity": 691,
+        "severity": 2618,
         "fix implemented": 3805,
         "client commentary": 1010,
         "affected files": 6217,
@@ -183,9 +253,12 @@
         "source": 7815,
         "code snippet": 22055,
         "tool used": 823,
-        "discussion": 28295
+        "discussion": 28295,
+        "location of affected code": 140554,
+        "proof of concept": 206990,
+        "team response": 1165
       },
-      "locationsOutOfScope": 70
+      "locationsOutOfScope": 653
     }
   },
   "reports": [
@@ -2121,6 +2194,1006 @@
           "report": "FAIL: schema: /commit: does not match pattern",
           "scope": "FAIL: schema: /commit: not equal to const",
           "coverage": "FAIL: schema: /filesReviewed: fewer than 1 items",
+          "hidden": "pass"
+        }
+      }
+    },
+    {
+      "id": "shieldify-l1",
+      "set": "layout-2",
+      "maps": true,
+      "notes": [],
+      "format": "Markdown",
+      "sourceChars": 90700,
+      "findingsChars": 79975,
+      "carriedChars": 55091,
+      "outsideFindingsChars": 10725,
+      "findings": 19,
+      "bySeverity": {
+        "Critical": 2,
+        "High": 1,
+        "Medium": 6,
+        "Low": 8,
+        "Info": 2
+      },
+      "locations": 8,
+      "scope": "stated, 16 files",
+      "commits": 1,
+      "fieldsOverLimit": {},
+      "longestField": {
+        "title": 114,
+        "rootCause": 3735,
+        "impact": 2017,
+        "recommendedFix": 616
+      },
+      "mediumOrHigher": 9,
+      "hiddenCharacters": 0,
+      "hiddenByCodePoint": {},
+      "blockers": [],
+      "jsonChars": 59872,
+      "lost": {
+        "findingsNotParsed": 0,
+        "sectionsDropped": {
+          "severity": 201,
+          "location of affected code": 16959,
+          "proof of concept": 5194,
+          "team response": 121
+        },
+        "preambleChars": 0,
+        "locationsOutOfScope": 220,
+        "statusWordsUnmapped": 0
+      },
+      "defaultTerms": {
+        "result": "accept",
+        "exitCode": 0,
+        "checks": {
+          "report": "pass",
+          "scope": "pass",
+          "coverage": "pass",
+          "hidden": "pass"
+        }
+      },
+      "noProofTerm": {
+        "result": "accept",
+        "exitCode": 0,
+        "checks": {
+          "report": "pass",
+          "scope": "pass",
+          "coverage": "pass",
+          "hidden": "pass"
+        }
+      },
+      "strippedDefaultTerms": {
+        "result": "accept",
+        "exitCode": 0,
+        "checks": {
+          "report": "pass",
+          "scope": "pass",
+          "coverage": "pass",
+          "hidden": "pass"
+        }
+      },
+      "relaxedWhatIf": {
+        "result": "accept",
+        "exitCode": 0,
+        "checks": {
+          "report": "pass",
+          "scope": "pass",
+          "coverage": "pass",
+          "hidden": "pass"
+        }
+      }
+    },
+    {
+      "id": "shieldify-l2",
+      "set": "layout-2",
+      "maps": true,
+      "notes": [],
+      "format": "Markdown",
+      "sourceChars": 58015,
+      "findingsChars": 49950,
+      "carriedChars": 30247,
+      "outsideFindingsChars": 8065,
+      "findings": 11,
+      "bySeverity": {
+        "Medium": 2,
+        "Low": 4,
+        "Info": 5
+      },
+      "locations": 34,
+      "scope": "stated, 7 files",
+      "commits": 1,
+      "fieldsOverLimit": {},
+      "longestField": {
+        "title": 89,
+        "rootCause": 5705,
+        "impact": 1298,
+        "recommendedFix": 1354
+      },
+      "mediumOrHigher": 2,
+      "hiddenCharacters": 0,
+      "hiddenByCodePoint": {},
+      "blockers": [],
+      "jsonChars": 37286,
+      "lost": {
+        "findingsNotParsed": 0,
+        "sectionsDropped": {
+          "severity": 144,
+          "location of affected code": 13140,
+          "proof of concept": 4955,
+          "team response": 66
+        },
+        "preambleChars": 0,
+        "locationsOutOfScope": 1,
+        "statusWordsUnmapped": 0
+      },
+      "defaultTerms": {
+        "result": "accept",
+        "exitCode": 0,
+        "checks": {
+          "report": "pass",
+          "scope": "pass",
+          "coverage": "pass",
+          "hidden": "pass"
+        }
+      },
+      "noProofTerm": {
+        "result": "accept",
+        "exitCode": 0,
+        "checks": {
+          "report": "pass",
+          "scope": "pass",
+          "coverage": "pass",
+          "hidden": "pass"
+        }
+      },
+      "strippedDefaultTerms": {
+        "result": "accept",
+        "exitCode": 0,
+        "checks": {
+          "report": "pass",
+          "scope": "pass",
+          "coverage": "pass",
+          "hidden": "pass"
+        }
+      },
+      "relaxedWhatIf": {
+        "result": "accept",
+        "exitCode": 0,
+        "checks": {
+          "report": "pass",
+          "scope": "pass",
+          "coverage": "pass",
+          "hidden": "pass"
+        }
+      }
+    },
+    {
+      "id": "shieldify-l3",
+      "set": "layout-2",
+      "maps": true,
+      "notes": [],
+      "format": "Markdown",
+      "sourceChars": 47334,
+      "findingsChars": 37838,
+      "carriedChars": 19302,
+      "outsideFindingsChars": 9496,
+      "findings": 13,
+      "bySeverity": {
+        "Medium": 3,
+        "Low": 4,
+        "Info": 6
+      },
+      "locations": 34,
+      "scope": "stated, 10 files",
+      "commits": 1,
+      "fieldsOverLimit": {},
+      "longestField": {
+        "title": 119,
+        "rootCause": 1250,
+        "impact": 647,
+        "recommendedFix": 1031
+      },
+      "mediumOrHigher": 3,
+      "hiddenCharacters": 0,
+      "hiddenByCodePoint": {},
+      "blockers": [],
+      "jsonChars": 26127,
+      "lost": {
+        "findingsNotParsed": 0,
+        "sectionsDropped": {
+          "severity": 173,
+          "location of affected code": 16725,
+          "team response": 92
+        },
+        "preambleChars": 0,
+        "locationsOutOfScope": 2,
+        "statusWordsUnmapped": 0
+      },
+      "defaultTerms": {
+        "result": "accept",
+        "exitCode": 0,
+        "checks": {
+          "report": "pass",
+          "scope": "pass",
+          "coverage": "pass",
+          "hidden": "pass"
+        }
+      },
+      "noProofTerm": {
+        "result": "accept",
+        "exitCode": 0,
+        "checks": {
+          "report": "pass",
+          "scope": "pass",
+          "coverage": "pass",
+          "hidden": "pass"
+        }
+      },
+      "strippedDefaultTerms": {
+        "result": "accept",
+        "exitCode": 0,
+        "checks": {
+          "report": "pass",
+          "scope": "pass",
+          "coverage": "pass",
+          "hidden": "pass"
+        }
+      },
+      "relaxedWhatIf": {
+        "result": "accept",
+        "exitCode": 0,
+        "checks": {
+          "report": "pass",
+          "scope": "pass",
+          "coverage": "pass",
+          "hidden": "pass"
+        }
+      }
+    },
+    {
+      "id": "shieldify-l4",
+      "set": "layout-2",
+      "maps": true,
+      "notes": [],
+      "format": "Markdown",
+      "sourceChars": 25877,
+      "findingsChars": 16327,
+      "carriedChars": 7616,
+      "outsideFindingsChars": 9550,
+      "findings": 6,
+      "bySeverity": {
+        "Medium": 1,
+        "Low": 5
+      },
+      "locations": 10,
+      "scope": "stated, 7 files",
+      "commits": 1,
+      "fieldsOverLimit": {},
+      "longestField": {
+        "title": 129,
+        "rootCause": 996,
+        "impact": 486,
+        "recommendedFix": 1019
+      },
+      "mediumOrHigher": 1,
+      "hiddenCharacters": 0,
+      "hiddenByCodePoint": {},
+      "blockers": [],
+      "jsonChars": 10744,
+      "lost": {
+        "findingsNotParsed": 0,
+        "sectionsDropped": {
+          "severity": 51,
+          "location of affected code": 6659,
+          "team response": 64,
+          "proof of concept": 1167
+        },
+        "preambleChars": 0,
+        "locationsOutOfScope": 2,
+        "statusWordsUnmapped": 0
+      },
+      "defaultTerms": {
+        "result": "accept",
+        "exitCode": 0,
+        "checks": {
+          "report": "pass",
+          "scope": "pass",
+          "coverage": "pass",
+          "hidden": "pass"
+        }
+      },
+      "noProofTerm": {
+        "result": "accept",
+        "exitCode": 0,
+        "checks": {
+          "report": "pass",
+          "scope": "pass",
+          "coverage": "pass",
+          "hidden": "pass"
+        }
+      },
+      "strippedDefaultTerms": {
+        "result": "accept",
+        "exitCode": 0,
+        "checks": {
+          "report": "pass",
+          "scope": "pass",
+          "coverage": "pass",
+          "hidden": "pass"
+        }
+      },
+      "relaxedWhatIf": {
+        "result": "accept",
+        "exitCode": 0,
+        "checks": {
+          "report": "pass",
+          "scope": "pass",
+          "coverage": "pass",
+          "hidden": "pass"
+        }
+      }
+    },
+    {
+      "id": "shieldify-l5",
+      "set": "layout-2",
+      "maps": true,
+      "notes": [],
+      "format": "Markdown",
+      "sourceChars": 10619,
+      "findingsChars": 3402,
+      "carriedChars": 2022,
+      "outsideFindingsChars": 7217,
+      "findings": 2,
+      "bySeverity": {
+        "Low": 2
+      },
+      "locations": 3,
+      "scope": "stated, 4 files",
+      "commits": 1,
+      "fieldsOverLimit": {},
+      "longestField": {
+        "title": 106,
+        "rootCause": 787,
+        "impact": 182,
+        "recommendedFix": 250
+      },
+      "mediumOrHigher": 0,
+      "hiddenCharacters": 0,
+      "hiddenByCodePoint": {},
+      "blockers": [],
+      "jsonChars": 3046,
+      "lost": {
+        "findingsNotParsed": 0,
+        "sectionsDropped": {
+          "severity": 16,
+          "location of affected code": 1107,
+          "team response": 12
+        },
+        "preambleChars": 0,
+        "locationsOutOfScope": 0,
+        "statusWordsUnmapped": 0
+      },
+      "defaultTerms": {
+        "result": "accept",
+        "exitCode": 0,
+        "checks": {
+          "report": "pass",
+          "scope": "pass",
+          "coverage": "pass",
+          "hidden": "pass"
+        }
+      },
+      "noProofTerm": {
+        "result": "accept",
+        "exitCode": 0,
+        "checks": {
+          "report": "pass",
+          "scope": "pass",
+          "coverage": "pass",
+          "hidden": "pass"
+        }
+      },
+      "strippedDefaultTerms": {
+        "result": "accept",
+        "exitCode": 0,
+        "checks": {
+          "report": "pass",
+          "scope": "pass",
+          "coverage": "pass",
+          "hidden": "pass"
+        }
+      },
+      "relaxedWhatIf": {
+        "result": "accept",
+        "exitCode": 0,
+        "checks": {
+          "report": "pass",
+          "scope": "pass",
+          "coverage": "pass",
+          "hidden": "pass"
+        }
+      }
+    },
+    {
+      "id": "shieldify-l6",
+      "set": "layout-2",
+      "maps": true,
+      "notes": [],
+      "format": "Markdown",
+      "sourceChars": 85637,
+      "findingsChars": 76736,
+      "carriedChars": 38205,
+      "outsideFindingsChars": 8901,
+      "findings": 16,
+      "bySeverity": {
+        "Medium": 1,
+        "Low": 3,
+        "Info": 12
+      },
+      "locations": 37,
+      "scope": "stated, 3 files",
+      "commits": 1,
+      "fieldsOverLimit": {},
+      "longestField": {
+        "title": 103,
+        "rootCause": 2228,
+        "impact": 1168,
+        "recommendedFix": 1270
+      },
+      "mediumOrHigher": 1,
+      "hiddenCharacters": 0,
+      "hiddenByCodePoint": {},
+      "blockers": [],
+      "jsonChars": 46843,
+      "lost": {
+        "findingsNotParsed": 0,
+        "sectionsDropped": {
+          "severity": 251,
+          "location of affected code": 19913,
+          "proof of concept": 16086,
+          "team response": 107
+        },
+        "preambleChars": 0,
+        "locationsOutOfScope": 10,
+        "statusWordsUnmapped": 0
+      },
+      "defaultTerms": {
+        "result": "accept",
+        "exitCode": 0,
+        "checks": {
+          "report": "pass",
+          "scope": "pass",
+          "coverage": "pass",
+          "hidden": "pass"
+        }
+      },
+      "noProofTerm": {
+        "result": "accept",
+        "exitCode": 0,
+        "checks": {
+          "report": "pass",
+          "scope": "pass",
+          "coverage": "pass",
+          "hidden": "pass"
+        }
+      },
+      "strippedDefaultTerms": {
+        "result": "accept",
+        "exitCode": 0,
+        "checks": {
+          "report": "pass",
+          "scope": "pass",
+          "coverage": "pass",
+          "hidden": "pass"
+        }
+      },
+      "relaxedWhatIf": {
+        "result": "accept",
+        "exitCode": 0,
+        "checks": {
+          "report": "pass",
+          "scope": "pass",
+          "coverage": "pass",
+          "hidden": "pass"
+        }
+      }
+    },
+    {
+      "id": "shieldify-1",
+      "set": "heldout-2",
+      "maps": true,
+      "notes": [],
+      "format": "Markdown",
+      "sourceChars": 202593,
+      "findingsChars": 188955,
+      "carriedChars": 61421,
+      "outsideFindingsChars": 13638,
+      "findings": 32,
+      "bySeverity": {
+        "Medium": 5,
+        "Low": 18,
+        "Info": 9
+      },
+      "locations": 31,
+      "scope": "stated, 10 files",
+      "commits": 1,
+      "fieldsOverLimit": {},
+      "longestField": {
+        "title": 108,
+        "rootCause": 2743,
+        "impact": 1374,
+        "recommendedFix": 1277
+      },
+      "mediumOrHigher": 5,
+      "hiddenCharacters": 0,
+      "hiddenByCodePoint": {},
+      "blockers": [],
+      "jsonChars": 69390,
+      "lost": {
+        "findingsNotParsed": 0,
+        "sectionsDropped": {
+          "severity": 361,
+          "location of affected code": 25138,
+          "proof of concept": 97427,
+          "team response": 213
+        },
+        "preambleChars": 0,
+        "locationsOutOfScope": 223,
+        "statusWordsUnmapped": 0
+      },
+      "defaultTerms": {
+        "result": "accept",
+        "exitCode": 0,
+        "checks": {
+          "report": "pass",
+          "scope": "pass",
+          "coverage": "pass",
+          "hidden": "pass"
+        }
+      },
+      "noProofTerm": {
+        "result": "accept",
+        "exitCode": 0,
+        "checks": {
+          "report": "pass",
+          "scope": "pass",
+          "coverage": "pass",
+          "hidden": "pass"
+        }
+      },
+      "strippedDefaultTerms": {
+        "result": "accept",
+        "exitCode": 0,
+        "checks": {
+          "report": "pass",
+          "scope": "pass",
+          "coverage": "pass",
+          "hidden": "pass"
+        }
+      },
+      "relaxedWhatIf": {
+        "result": "accept",
+        "exitCode": 0,
+        "checks": {
+          "report": "pass",
+          "scope": "pass",
+          "coverage": "pass",
+          "hidden": "pass"
+        }
+      }
+    },
+    {
+      "id": "shieldify-2",
+      "set": "heldout-2",
+      "maps": true,
+      "notes": [],
+      "format": "Markdown",
+      "sourceChars": 31932,
+      "findingsChars": 24393,
+      "carriedChars": 9760,
+      "outsideFindingsChars": 7539,
+      "findings": 9,
+      "bySeverity": {
+        "Info": 9
+      },
+      "locations": 13,
+      "scope": "stated, 2 files",
+      "commits": 1,
+      "fieldsOverLimit": {},
+      "longestField": {
+        "title": 109,
+        "rootCause": 830,
+        "impact": 461,
+        "recommendedFix": 507
+      },
+      "mediumOrHigher": 0,
+      "hiddenCharacters": 0,
+      "hiddenByCodePoint": {},
+      "blockers": [],
+      "jsonChars": 13168,
+      "lost": {
+        "findingsNotParsed": 0,
+        "sectionsDropped": {
+          "severity": 162,
+          "location of affected code": 6332,
+          "proof of concept": 6853,
+          "team response": 117
+        },
+        "preambleChars": 0,
+        "locationsOutOfScope": 30,
+        "statusWordsUnmapped": 0
+      },
+      "defaultTerms": {
+        "result": "accept",
+        "exitCode": 0,
+        "checks": {
+          "report": "pass",
+          "scope": "pass",
+          "coverage": "pass",
+          "hidden": "pass"
+        }
+      },
+      "noProofTerm": {
+        "result": "accept",
+        "exitCode": 0,
+        "checks": {
+          "report": "pass",
+          "scope": "pass",
+          "coverage": "pass",
+          "hidden": "pass"
+        }
+      },
+      "strippedDefaultTerms": {
+        "result": "accept",
+        "exitCode": 0,
+        "checks": {
+          "report": "pass",
+          "scope": "pass",
+          "coverage": "pass",
+          "hidden": "pass"
+        }
+      },
+      "relaxedWhatIf": {
+        "result": "accept",
+        "exitCode": 0,
+        "checks": {
+          "report": "pass",
+          "scope": "pass",
+          "coverage": "pass",
+          "hidden": "pass"
+        }
+      }
+    },
+    {
+      "id": "shieldify-3",
+      "set": "heldout-2",
+      "maps": true,
+      "notes": [],
+      "format": "Markdown",
+      "sourceChars": 44783,
+      "findingsChars": 36332,
+      "carriedChars": 26122,
+      "outsideFindingsChars": 8451,
+      "findings": 12,
+      "bySeverity": {
+        "Low": 4,
+        "Info": 8
+      },
+      "locations": 18,
+      "scope": "stated, 4 files",
+      "commits": 1,
+      "fieldsOverLimit": {},
+      "longestField": {
+        "title": 143,
+        "rootCause": 3476,
+        "impact": 522,
+        "recommendedFix": 886
+      },
+      "mediumOrHigher": 0,
+      "hiddenCharacters": 0,
+      "hiddenByCodePoint": {},
+      "blockers": [],
+      "jsonChars": 31133,
+      "lost": {
+        "findingsNotParsed": 0,
+        "sectionsDropped": {
+          "severity": 176,
+          "location of affected code": 8424,
+          "team response": 135
+        },
+        "preambleChars": 0,
+        "locationsOutOfScope": 12,
+        "statusWordsUnmapped": 0
+      },
+      "defaultTerms": {
+        "result": "accept",
+        "exitCode": 0,
+        "checks": {
+          "report": "pass",
+          "scope": "pass",
+          "coverage": "pass",
+          "hidden": "pass"
+        }
+      },
+      "noProofTerm": {
+        "result": "accept",
+        "exitCode": 0,
+        "checks": {
+          "report": "pass",
+          "scope": "pass",
+          "coverage": "pass",
+          "hidden": "pass"
+        }
+      },
+      "strippedDefaultTerms": {
+        "result": "accept",
+        "exitCode": 0,
+        "checks": {
+          "report": "pass",
+          "scope": "pass",
+          "coverage": "pass",
+          "hidden": "pass"
+        }
+      },
+      "relaxedWhatIf": {
+        "result": "accept",
+        "exitCode": 0,
+        "checks": {
+          "report": "pass",
+          "scope": "pass",
+          "coverage": "pass",
+          "hidden": "pass"
+        }
+      }
+    },
+    {
+      "id": "shieldify-4",
+      "set": "heldout-2",
+      "maps": true,
+      "notes": [],
+      "format": "Markdown",
+      "sourceChars": 78879,
+      "findingsChars": 70040,
+      "carriedChars": 32220,
+      "outsideFindingsChars": 8839,
+      "findings": 15,
+      "bySeverity": {
+        "Medium": 2,
+        "Low": 1,
+        "Info": 12
+      },
+      "locations": 33,
+      "scope": "stated, 5 files",
+      "commits": 1,
+      "fieldsOverLimit": {},
+      "longestField": {
+        "title": 108,
+        "rootCause": 2387,
+        "impact": 909,
+        "recommendedFix": 686
+      },
+      "mediumOrHigher": 2,
+      "hiddenCharacters": 0,
+      "hiddenByCodePoint": {},
+      "blockers": [],
+      "jsonChars": 39861,
+      "lost": {
+        "findingsNotParsed": 0,
+        "sectionsDropped": {
+          "severity": 246,
+          "location of affected code": 14928,
+          "proof of concept": 20632,
+          "team response": 153
+        },
+        "preambleChars": 0,
+        "locationsOutOfScope": 48,
+        "statusWordsUnmapped": 0
+      },
+      "defaultTerms": {
+        "result": "accept",
+        "exitCode": 0,
+        "checks": {
+          "report": "pass",
+          "scope": "pass",
+          "coverage": "pass",
+          "hidden": "pass"
+        }
+      },
+      "noProofTerm": {
+        "result": "accept",
+        "exitCode": 0,
+        "checks": {
+          "report": "pass",
+          "scope": "pass",
+          "coverage": "pass",
+          "hidden": "pass"
+        }
+      },
+      "strippedDefaultTerms": {
+        "result": "accept",
+        "exitCode": 0,
+        "checks": {
+          "report": "pass",
+          "scope": "pass",
+          "coverage": "pass",
+          "hidden": "pass"
+        }
+      },
+      "relaxedWhatIf": {
+        "result": "accept",
+        "exitCode": 0,
+        "checks": {
+          "report": "pass",
+          "scope": "pass",
+          "coverage": "pass",
+          "hidden": "pass"
+        }
+      }
+    },
+    {
+      "id": "shieldify-5",
+      "set": "heldout-2",
+      "maps": true,
+      "notes": [],
+      "format": "Markdown",
+      "sourceChars": 31341,
+      "findingsChars": 23723,
+      "carriedChars": 13898,
+      "outsideFindingsChars": 7618,
+      "findings": 4,
+      "bySeverity": {
+        "Medium": 1,
+        "Low": 1,
+        "Info": 2
+      },
+      "locations": 14,
+      "scope": "stated, 7 files",
+      "commits": 1,
+      "fieldsOverLimit": {},
+      "longestField": {
+        "title": 149,
+        "rootCause": 3097,
+        "impact": 804,
+        "recommendedFix": 836
+      },
+      "mediumOrHigher": 1,
+      "hiddenCharacters": 0,
+      "hiddenByCodePoint": {},
+      "blockers": [],
+      "jsonChars": 16965,
+      "lost": {
+        "findingsNotParsed": 0,
+        "sectionsDropped": {
+          "severity": 55,
+          "location of affected code": 7611,
+          "proof of concept": 1614,
+          "team response": 31
+        },
+        "preambleChars": 0,
+        "locationsOutOfScope": 9,
+        "statusWordsUnmapped": 0
+      },
+      "defaultTerms": {
+        "result": "accept",
+        "exitCode": 0,
+        "checks": {
+          "report": "pass",
+          "scope": "pass",
+          "coverage": "pass",
+          "hidden": "pass"
+        }
+      },
+      "noProofTerm": {
+        "result": "accept",
+        "exitCode": 0,
+        "checks": {
+          "report": "pass",
+          "scope": "pass",
+          "coverage": "pass",
+          "hidden": "pass"
+        }
+      },
+      "strippedDefaultTerms": {
+        "result": "accept",
+        "exitCode": 0,
+        "checks": {
+          "report": "pass",
+          "scope": "pass",
+          "coverage": "pass",
+          "hidden": "pass"
+        }
+      },
+      "relaxedWhatIf": {
+        "result": "accept",
+        "exitCode": 0,
+        "checks": {
+          "report": "pass",
+          "scope": "pass",
+          "coverage": "pass",
+          "hidden": "pass"
+        }
+      }
+    },
+    {
+      "id": "shieldify-6",
+      "set": "heldout-2",
+      "maps": true,
+      "notes": [],
+      "format": "Markdown",
+      "sourceChars": 83495,
+      "findingsChars": 76505,
+      "carriedChars": 18530,
+      "outsideFindingsChars": 6990,
+      "findings": 9,
+      "bySeverity": {
+        "Medium": 3,
+        "Low": 5,
+        "Info": 1
+      },
+      "locations": 21,
+      "scope": "stated, 2 files",
+      "commits": 1,
+      "fieldsOverLimit": {},
+      "longestField": {
+        "title": 97,
+        "rootCause": 2027,
+        "recommendedFix": 658
+      },
+      "mediumOrHigher": 3,
+      "hiddenCharacters": 0,
+      "hiddenByCodePoint": {},
+      "blockers": [],
+      "jsonChars": 23288,
+      "lost": {
+        "findingsNotParsed": 0,
+        "sectionsDropped": {
+          "severity": 91,
+          "location of affected code": 3618,
+          "proof of concept": 53062,
+          "team response": 54
+        },
+        "preambleChars": 0,
+        "locationsOutOfScope": 26,
+        "statusWordsUnmapped": 0
+      },
+      "defaultTerms": {
+        "result": "accept",
+        "exitCode": 0,
+        "checks": {
+          "report": "pass",
+          "scope": "pass",
+          "coverage": "pass",
+          "hidden": "pass"
+        }
+      },
+      "noProofTerm": {
+        "result": "accept",
+        "exitCode": 0,
+        "checks": {
+          "report": "pass",
+          "scope": "pass",
+          "coverage": "pass",
+          "hidden": "pass"
+        }
+      },
+      "strippedDefaultTerms": {
+        "result": "accept",
+        "exitCode": 0,
+        "checks": {
+          "report": "pass",
+          "scope": "pass",
+          "coverage": "pass",
+          "hidden": "pass"
+        }
+      },
+      "relaxedWhatIf": {
+        "result": "accept",
+        "exitCode": 0,
+        "checks": {
+          "report": "pass",
+          "scope": "pass",
+          "coverage": "pass",
           "hidden": "pass"
         }
       }

@@ -34,14 +34,19 @@ describe('the security-review form is measured as it is', () => {
   });
 
   it("the reference page records this version's measured rates, and the version before it", () => {
-    // A row: | <version> | <date> | <design> of <n> | <design, zero-width stripped> of <n> | <held-out> of <n> | ...
-    // Each count is the reports accepted on the form's default terms, a review of several repositories not counted.
-    const rows = [...page.matchAll(/^\| (\d+) \| (\d{4}-\d{2}-\d{2}) \| (\d+) of (\d+) \| (\d+) of (\d+) \| (\d+) of (\d+) \|/gm)].map((m) => m.slice(1).map(Number));
-    const row = rows.find((r) => r[0] === template.form.version);
+    // A row of the Versions table: | <version> | `<template SHA-256>` | <date> | <design> | <design, stripped> |
+    // <held-out> | <second held-out> | <what changed> |. A count is "<n> of <m>": the reports accepted on the form's
+    // default terms, a review of several repositories not counted; or "not measured".
+    const rows = page.split('\n').filter((l) => /^\| \d+ \| `[0-9a-f]{64}` \|/.test(l)).map((l) => l.split('|').slice(1, -1).map((c) => c.trim()));
+    const sha = createHash('sha256').update(templateBytes).digest('hex');
+    const row = rows.find((r) => Number(r[0]) === template.form.version);
     expect(row, `examples/security-review-form.md has no row for version ${template.form.version}: ${RERUN}`).toBeDefined();
-    const { design, heldout } = results.summary;
-    expect(row!.slice(2)).toEqual([design.acceptedOneCommit, design.reports, design.acceptedOneCommitStripped, design.reports, heldout.acceptedOneCommit, heldout.reports]);
-    if (template.form.version > 1) expect(rows.some((r) => r[0] === template.form.version - 1), 'the row before this version (the "before")').toBe(true);
+    expect(row![1], 'the row names the template it measured').toBe(`\`${sha}\``);
+    for (const r of rows.filter((x) => x !== row)) expect(r[1], `the row for version ${r[0]} names an earlier template, not this one: raise form.version`).not.toBe(`\`${sha}\``);
+    const count = (s: { acceptedOneCommit: number; acceptedOneCommitStripped: number; reports: number }, stripped = false) => `${stripped ? s.acceptedOneCommitStripped : s.acceptedOneCommit} of ${s.reports}`;
+    const sets = results.summary;
+    expect(row!.slice(3, 7)).toEqual([count(sets.design), count(sets.design, true), count(sets.heldout), count(sets['heldout-2'])]);
+    if (template.form.version > 1) expect(rows.some((r) => Number(r[0]) === template.form.version - 1), 'the row before this version (the "before")').toBe(true);
   });
 });
 
@@ -87,6 +92,18 @@ describe("the form's checks do what its reference page says", () => {
     expect(failed(report(finding({ locations: [{ file: 'src/Vault.sol' }, { file: 'lib/Math.sol' }] })))).toEqual([]);
     expect(failed(report(finding({ locations: [{ file: 'lib/Math.sol' }] })))).toEqual(['scope']);
     expect(failed(report(finding({ status: 'fixed', locations: [{ file: 'test/Vault.t.sol' }] })))).toEqual(['scope']);
+  });
+
+  it("the reference page's check keeps set-aside findings to Low and Info", () => {
+    const block = /\*\*Keep set-aside findings to Low and Info\.\*\*[\s\S]*?```json\n([\s\S]*?)\n```/.exec(page);
+    expect(block, 'examples/security-review-form.md shows the check').not.toBeNull();
+    const extra = JSON.parse(block![1]!) as JudgmentCheck;
+    expect(validateCheck(extra)).toBeUndefined();
+    const withExtra = [...checks, extra];
+    const run = (f: unknown) => runChecks(withExtra, { data: UntrustedData.wrap(JSON.stringify(report(f))), mime: 'application/json' }).outcomes.filter((o) => !o.passed).map((o) => o.checkId);
+    expect(run({ id: 'F-01', severity: 'Critical', title: 'Set aside', status: 'known' })).toEqual(['set-aside-low']);
+    expect(run({ id: 'F-01', severity: 'Low', title: 'Set aside', status: 'known' })).toEqual([]);
+    expect(run(finding({ severity: 'Critical', status: 'fixed' }))).toEqual([]);
   });
 
   it('keeps one commit, the file list and no hidden characters', () => {

@@ -476,9 +476,12 @@ export class Toolbox {
     if (typeof journal !== 'string') throw new Refused('journal must be a file path inside your folder');
     c.journal = this.inside(journal);
     // The demo's form, version 1 (review.ts, TEMPLATE), with what the shipped template brings by default: the scope
-    // rules and the salt (T-534).
+    // rules, the buyer's options and the rules that act on them, and the salt (T-534). A template of one's own would
+    // otherwise drop the default options, and a quote asking for a panel would be refused.
     c.template = fileURLToPath(TEMPLATE);
     c.scope ??= DEFAULTS.scope;
+    c.options ??= DEFAULTS.options;
+    c.termsRules ??= DEFAULTS.termsRules;
     c.reportSalt = true;
     const copy = join(this.o.owner, `adapter-config-${Date.now()}.json`);
     writeFileSync(copy, JSON.stringify(c, null, 2));

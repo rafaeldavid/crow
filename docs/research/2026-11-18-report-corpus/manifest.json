@@ -264,6 +264,138 @@
       "format": "PDF",
       "bytes": 168994,
       "sha256": "789960f09e94e49ff6cbd155964aba23f6e8aae181963aeab6ff138337546e4d"
+    },
+    {
+      "id": "shieldify-l1",
+      "firm": "Shieldify Security",
+      "set": "layout-2",
+      "date": "2026-09-16T20:07:38Z",
+      "address": "https://github.com/shieldify-security/audits-portfolio-md/blob/dba76abe24b9e6132b92a8b94d497868b16c6a34/PearProtocol-Vault-Offchain-Security-Review.md",
+      "licence": "No licence file in the repository; published for public reading. Reuse here: links, hashes and counts only; no copy is committed.",
+      "format": "Markdown",
+      "bytes": 90953,
+      "sha256": "ff8690818ac4112b0fe4ee7eae7a9c9348bb9fb4a493bf207dbbcda691bb0de4"
+    },
+    {
+      "id": "shieldify-l2",
+      "firm": "Shieldify Security",
+      "set": "layout-2",
+      "date": "2026-09-16T20:07:38Z",
+      "address": "https://github.com/shieldify-security/audits-portfolio-md/blob/dba76abe24b9e6132b92a8b94d497868b16c6a34/PearProtocol-Vault-V2-Security-Review.md",
+      "licence": "No licence file in the repository; published for public reading. Reuse here: links, hashes and counts only; no copy is committed.",
+      "format": "Markdown",
+      "bytes": 58029,
+      "sha256": "79d74202c79cf9785ddef0a72de467ad4a2cd6e1f633343eff92c1b0e62a4faf"
+    },
+    {
+      "id": "shieldify-l3",
+      "firm": "Shieldify Security",
+      "set": "layout-2",
+      "date": "2026-10-05T13:41:38Z",
+      "address": "https://github.com/shieldify-security/audits-portfolio-md/blob/dba76abe24b9e6132b92a8b94d497868b16c6a34/ColbFinance-Liquids-Security-Review.md",
+      "licence": "No licence file in the repository; published for public reading. Reuse here: links, hashes and counts only; no copy is committed.",
+      "format": "Markdown",
+      "bytes": 47366,
+      "sha256": "fdc7451bf2f166753fd1f878e2cb3025c0d41596d0a11e88e03791e3f19f1c3b"
+    },
+    {
+      "id": "shieldify-l4",
+      "firm": "Shieldify Security",
+      "set": "layout-2",
+      "date": "2026-10-05T13:41:38Z",
+      "address": "https://github.com/shieldify-security/audits-portfolio-md/blob/dba76abe24b9e6132b92a8b94d497868b16c6a34/ColbFinance-Multicall-Security-Review.md",
+      "licence": "No licence file in the repository; published for public reading. Reuse here: links, hashes and counts only; no copy is committed.",
+      "format": "Markdown",
+      "bytes": 25928,
+      "sha256": "434668e0f2b813306c6413fe3aaa87e9e07d42723b98876f576fd74fdc5a9772"
+    },
+    {
+      "id": "shieldify-l5",
+      "firm": "Shieldify Security",
+      "set": "layout-2",
+      "date": "2026-10-05T14:12:09Z",
+      "address": "https://github.com/shieldify-security/audits-portfolio-md/blob/dba76abe24b9e6132b92a8b94d497868b16c6a34/PearProtocol-Vault-Extended-Security-Review.md",
+      "licence": "No licence file in the repository; published for public reading. Reuse here: links, hashes and counts only; no copy is committed.",
+      "format": "Markdown",
+      "bytes": 10625,
+      "sha256": "ee2ba68de21cfc44e57f61751d416d92687bc2ed81c083e542833d5f30660be4"
+    },
+    {
+      "id": "shieldify-l6",
+      "firm": "Shieldify Security",
+      "set": "layout-2",
+      "date": "2026-10-06T21:06:39Z",
+      "address": "https://github.com/shieldify-security/audits-portfolio-md/blob/dba76abe24b9e6132b92a8b94d497868b16c6a34/ShroomsFun-Security-Review.md",
+      "licence": "No licence file in the repository; published for public reading. Reuse here: links, hashes and counts only; no copy is committed.",
+      "format": "Markdown",
+      "bytes": 85648,
+      "sha256": "6779be647a8fe7d6e542ff790df078efea9a65296942e0dee71aac130b67c8df"
+    },
+    {
+      "id": "shieldify-1",
+      "firm": "Shieldify Security",
+      "set": "heldout-2",
+      "date": "2026-10-12T12:28:33Z",
+      "address": "https://github.com/shieldify-security/audits-portfolio-md/blob/dba76abe24b9e6132b92a8b94d497868b16c6a34/Rini-Security-Review.md",
+      "licence": "No licence file in the repository; published for public reading. Reuse here: links, hashes and counts only; no copy is committed.",
+      "format": "Markdown",
+      "bytes": 202904,
+      "sha256": "af6c8ca719f29198b39ddfd20949f3a03f47b3adb074966fe85d9135c1721b06"
+    },
+    {
+      "id": "shieldify-2",
+      "firm": "Shieldify Security",
+      "set": "heldout-2",
+      "date": "2026-10-20T18:08:31Z",
+      "address": "https://github.com/shieldify-security/audits-portfolio-md/blob/dba76abe24b9e6132b92a8b94d497868b16c6a34/DarkWallet-Security-Review.md",
+      "licence": "No licence file in the repository; published for public reading. Reuse here: links, hashes and counts only; no copy is committed.",
+      "format": "Markdown",
+      "bytes": 31955,
+      "sha256": "7337d67c4dba1ab177e8134dc107adc3e6e19c56ca92d9e5bebeba46d89411ae"
+    },
+    {
+      "id": "shieldify-3",
+      "firm": "Shieldify Security",
+      "set": "heldout-2",
+      "date": "2026-10-22T19:20:31Z",
+      "address": "https://github.com/shieldify-security/audits-portfolio-md/blob/dba76abe24b9e6132b92a8b94d497868b16c6a34/Rabtools-Security-Review.md",
+      "licence": "No licence file in the repository; published for public reading. Reuse here: links, hashes and counts only; no copy is committed.",
+      "format": "Markdown",
+      "bytes": 44791,
+      "sha256": "c5baddcc9f733ae5c7220140719050ff390ef6ad2be318f8429b8b915181708e"
+    },
+    {
+      "id": "shieldify-4",
+      "firm": "Shieldify Security",
+      "set": "heldout-2",
+      "date": "2026-10-22T19:20:35Z",
+      "address": "https://github.com/shieldify-security/audits-portfolio-md/blob/dba76abe24b9e6132b92a8b94d497868b16c6a34/PearProtocol-Rate-Splitter-Security-Review.md",
+      "licence": "No licence file in the repository; published for public reading. Reuse here: links, hashes and counts only; no copy is committed.",
+      "format": "Markdown",
+      "bytes": 78894,
+      "sha256": "c9a3c92173e059a5476314e72a7f3307a96446b2d40538cbe036e1da929d99ca"
+    },
+    {
+      "id": "shieldify-5",
+      "firm": "Shieldify Security",
+      "set": "heldout-2",
+      "date": "2026-11-02T11:17:12Z",
+      "address": "https://github.com/shieldify-security/audits-portfolio-md/blob/dba76abe24b9e6132b92a8b94d497868b16c6a34/PearProtocol-Vault-V2-Upgrade-Security-Review.md",
+      "licence": "No licence file in the repository; published for public reading. Reuse here: links, hashes and counts only; no copy is committed.",
+      "format": "Markdown",
+      "bytes": 31369,
+      "sha256": "e260c817337f5e723581ecf733739991d05073c76edc47a58dd839020e815c3c"
+    },
+    {
+      "id": "shieldify-6",
+      "firm": "Shieldify Security",
+      "set": "heldout-2",
+      "date": "2026-11-17T16:57:48Z",
+      "address": "https://github.com/shieldify-security/audits-portfolio-md/blob/dba76abe24b9e6132b92a8b94d497868b16c6a34/SnarksPad-Security-Review.md",
+      "licence": "No licence file in the repository; published for public reading. Reuse here: links, hashes and counts only; no copy is committed.",
+      "format": "Markdown",
+      "bytes": 83499,
+      "sha256": "dd71cd7d4884a5957f42d5b4faf56957d827fc09d6144f2d598f702ec67b6636"
     }
   ]
 }

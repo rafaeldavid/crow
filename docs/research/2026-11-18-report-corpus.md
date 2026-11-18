@@ -1,6 +1,6 @@
 # Published security reviews against today's form: 1 of 18 passes as published (T-509)
 
-Research pass for T-509, roadmap row N180, run on 2026-11-18. Every number below comes from `docs/research/2026-11-18-report-corpus/measure.mjs` on the reports listed in `manifest.json` beside it, unless the line says otherwise.
+Research pass for T-509, roadmap row N180, run on 2026-11-18. Every number below comes from `docs/research/2026-11-18-report-corpus/measure.mjs` on the reports listed in `manifest.json` beside it, unless the line says otherwise. That run's `results.json` is the file at `origin/main` commit `557560c9`: T-534 has since rerun the script on version 2 of the form and on a second held-out firm, and the file beside this note now holds that run (`examples/security-review-form.md`).
 
 ## Summary
 
