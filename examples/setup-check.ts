@@ -10,6 +10,11 @@
 //   sample          a result the sample API gives passes the deal's checks, through the adjudicator's first stage
 //   required-field  the same result with a field removed fails them: the checks are not empty
 //   secrets         no key's value is in a file outside keys/, in the folder or in the card's folder
+//
+// A folder that sells the party's own work from a template (T-543) has `work` in place of `sample`: the deal's checks
+// run on a sample of the work, which is `check --work <file>` or the finished work `seller --file` named. With
+// neither, the result is one advisory line that the checks have never run on real work, and it fails nothing: what a
+// party's own checks hold is the party's to decide (D31, D32). `required-field` is advisory there too.
 import { randomBytes } from 'node:crypto';
 import { existsSync, mkdirSync, readdirSync, readFileSync, renameSync, statSync, writeFileSync } from 'node:fs';
 import { join } from 'node:path';
@@ -20,6 +25,7 @@ import type { Hex } from 'viem';
 import { dealKeyOf, fill, holdingKeyOf, loadConfig, type SellerAdapterConfig } from './seller-adapter.ts';
 import { SAMPLE, SAMPLE_PRICE_UNITS, sampleAddresses, startSampleApi } from './setup-sample-api.ts';
 import { FILES, formsOf, modeProblem, readKey, readState, type J } from './setup-seller.ts';
+import { FORMATS, readWorkFile, readyPath, refuseEnvFile, workAddresses } from './setup-work-api.ts';
 
 /** The largest file the secrets check reads: 16 MiB. A key file is 67 bytes; a larger file is named, not read. */
 const MAX_SCANNED_BYTES = 16 * 1024 * 1024;
@@ -28,7 +34,11 @@ export interface CheckResult {
   check: string;
   ok: boolean;
   detail: string;
+  /** A result that fails nothing: what it names is the party's own to decide (D31). */
+  advisory?: true;
 }
+/** A check's result that is advice, not a pass: thrown by a check's body and recorded with `ok: true`. */
+class Advice extends Error {}
 
 const plain = (s: unknown, max = 600) => plainLine(String(s ?? '')).slice(0, max);
 /** A stand-in for the settlement layer's token: the check posts nothing, so no operator names the real one. */
@@ -172,17 +182,21 @@ function dealKeysOf(folder: string, key: Hex): Hex[] {
   return deals.map((d) => d?.terms?.nonce).filter((n): n is Hex => typeof n === 'string' && /^0x[0-9a-f]{64}$/.test(n)).map((n) => dealKeyOf(key, n));
 }
 
-/** Runs every check on the folder and returns the results in order. Writes only under the folder's sample/. */
-export async function runChecks(folder: string): Promise<CheckResult[]> {
+/**
+ * Runs every check on the folder and returns the results in order. Writes only under the folder's sample/. `work`
+ * names a sample of the party's own work, for a folder that sells from a template.
+ */
+export async function runChecks(folder: string, options: { work?: string | undefined } = {}): Promise<CheckResult[]> {
   const results: CheckResult[] = [];
   const run = async (check: string, body: () => string | Promise<string>) => {
     try {
       results.push({ check, ok: true, detail: await body() });
     } catch (e) {
-      results.push({ check, ok: false, detail: plain((e as Error).message) });
+      results.push(e instanceof Advice ? { check, ok: true, advisory: true, detail: plain(e.message) } : { check, ok: false, detail: plain((e as Error).message) });
     }
   };
   const state = readState(folder);
+  const own = state?.sells === 'template';
 
   await run('folder', () => {
     if (!state) throw new Error(`${folder} has no ${FILES.state}: run the seller command first`);
@@ -210,28 +224,69 @@ export async function runChecks(folder: string): Promise<CheckResult[]> {
       if (!(port > 0) || Object.keys(api ?? {}).sort().join() !== 'quote,result,start' || api.quote !== own.quote || api.start !== own.start || api.result !== own.result) throw new Error(`${FILES.configuration} does not name the sample API at one port on the loopback address for all three calls, as the seller command wrote it: a job would start somewhere else`);
       for (const field of ['alerts', 'quoteAuth', 'redelivery', 'reportMapping', 'mandate', 'clubId', 'adjudicators']) if (written[field] !== undefined) throw new Error(`${FILES.configuration} sets ${field}, which a folder that sells the sample does not use: remove it`);
     }
+    if (own) {
+      // A folder that sells from a template calls nothing but the work API on the loopback address, at its one port,
+      // with the run's credential, and takes no scope.
+      const api = written.sellerApi as J;
+      const port = typeof api?.quote === 'string' && URL.canParse(api.quote) ? Number(new URL(api.quote).port) : 0;
+      if (!(port > 0) || JSON.stringify(api) !== JSON.stringify(workAddresses(port))) throw new Error(`${FILES.configuration} does not name the work API at one port on the loopback address for all three calls, as the seller command wrote it: a job would start somewhere else`);
+      if (JSON.stringify(written.scope) !== '{}') throw new Error(`${FILES.configuration} sets a scope, and a folder that sells from a template takes none: run the seller command with --template again`);
+      if (!state?.work || !Object.hasOwn(FORMATS, state.work.format)) throw new Error(`${FILES.state} names no price and format for the work: run the seller command with --template again`);
+      for (const field of ['alerts', 'quoteAuth', 'reportMapping', 'reportSalt', 'options', 'termsRules', 'mandate', 'clubId', 'adjudicators', 'events']) if (written[field] !== undefined) throw new Error(`${FILES.configuration} sets ${field}, which a folder that sells from a template does not use: remove it`);
+    }
     config = loaded;
     return `the adapter's own loader takes ${FILES.configuration}, which pays ${state.payout.address}`;
   });
 
-  const scope = SAMPLE.firstScope;
+  const scope = own ? {} : SAMPLE.firstScope;
   await run('template', () => {
     if (!config) throw new Error(NOT_RUN);
     const t = filledTerms(config, scope);
     const money = (amount: string) => ({ token: STAND_IN_TOKEN, amount });
     const terms = {
-      schemaVersion: '0.8', clubId: 'stand-in-club', deliverable: t.deliverable, acceptance: t.acceptance, price: money(SAMPLE_PRICE_UNITS),
+      schemaVersion: '0.8', clubId: 'stand-in-club', deliverable: t.deliverable, acceptance: t.acceptance, price: money(own ? state!.work!.price : SAMPLE_PRICE_UNITS),
       adjudication: { policyId: 'stand-in-policy', fee: money(typeof t.fee?.amount === 'string' ? t.fee.amount : '1000000') },
       timing: { ...config.timing, maxSubmissions: 1 }, settlement: { mode: 'guaranteed_on_decision', token: STAND_IN_TOKEN }, remedy: { onReject: 'full_refund' }, disclosure: { level: 'public' },
     };
     // JSON is YAML: the testkit's loader builds a whole commitment from it with stand-in parties and runs the bundled schema.
     parseTermsYaml(JSON.stringify(terms), FILES.template);
-    return 'the template, filled with the sample scope, passes the bundled commitment schema';
+    return own ? 'the template passes the bundled commitment schema' : 'the template, filled with the sample scope, passes the bundled commitment schema';
   });
 
   let result: Uint8Array | undefined;
   let format = '';
-  await run('sample', async () => {
+  if (own) {
+    // The party's own work: a sample the person named, or the finished work the folder holds.
+    const ready = state?.work && Object.hasOwn(FORMATS, state.work.format) ? readyPath(folder, state.work.format) : undefined;
+    const named = options.work ?? (ready !== undefined && existsSync(ready) ? ready : undefined);
+    await run('work', () => {
+      if (!config) throw new Error(NOT_RUN);
+      if (named === undefined) throw new Advice('The checks have never run on real work. To run them on a sample of it, run check --work <file>; nothing depends on it, and the adapter runs them on the finished work before it delivers.');
+      refuseEnvFile(named, '--work');
+      const t = filledTerms(config, scope);
+      format = String(t.deliverable?.format);
+      const read = readWorkFile(named, options.work !== undefined);
+      if (!read?.bytes) throw new Error(`${plain(named, 300)} ${read?.problem ?? 'is not there'}`);
+      mkdirSync(join(folder, 'sample'), { recursive: true });
+      writeWhole(join(folder, FILES.sampleTerms), `${JSON.stringify({ deliverable: t.deliverable, acceptance: t.acceptance }, null, 2)}\n`);
+      const r = checkDelivery({ terms: join(folder, FILES.sampleTerms), file: named });
+      if (r.exitCode !== 0) throw new Error(`the checks refuse ${plain(named, 300)}: the adapter would not deliver it. ${r.lines.filter((l) => /^Result|^ {2}FAIL|^ {2}OPEN/.test(l)).join(' ')}`);
+      result = read.bytes;
+      return `${read.bytes.length} bytes in ${plain(named, 300)}. ${r.lines[0] ?? ''}`;
+    });
+    // With no sample of the work there is one advisory line, above, and no second.
+    if (named !== undefined) await run('required-field', () => {
+      if (!result) throw new Error('not run: there is no sample of the work that passes');
+      const cut = withoutAField(result, format);
+      if (!cut) throw new Advice(`not run: a ${plain(format, 60)} file has no field this check can remove`);
+      const file = join(folder, 'sample', `work-with-a-field-removed.${FORMATS[format] ?? 'txt'}`);
+      writeWhole(file, cut.bytes);
+      const r = checkDelivery({ terms: join(folder, FILES.sampleTerms), file });
+      if (r.exitCode === 0) throw new Advice(`The work with ${cut.what} removed still passes the checks: they do not check that it is there. That is yours to decide; a buyer reads the checks before it agrees.`);
+      return `the work with ${cut.what} removed fails the checks`;
+    });
+  }
+  if (!own) await run('sample', async () => {
     if (!config) throw new Error(NOT_RUN);
     const t = filledTerms(config, scope);
     format = String(t.deliverable?.format);
@@ -245,7 +300,7 @@ export async function runChecks(folder: string): Promise<CheckResult[]> {
     return `${bytes.length} bytes from the sample API. ${r.lines[0] ?? ''}`;
   });
 
-  await run('required-field', () => {
+  if (!own) await run('required-field', () => {
     if (!result) throw new Error('not run: there is no sample result that passes');
     const cut = withoutAField(result, format);
     if (!cut) throw new Error(`a ${plain(format, 60)} result has no field this check can remove`);

@@ -1,12 +1,16 @@
 // `node setup.mjs seller --sample --payout <address or this-key>` (T-472): the party's folder, made step by step.
 // Each step looks before it writes, so the command run again after a stop makes no second key and keeps what is there.
+// `seller --template <file> [--file <path>]` in place of `--sample` (T-543) makes a folder that sells the party's own
+// work: the template says what is sold, the fixed price, the checks and when the work is due.
 //
 // The folder (default ~/.crow/<name>):
 //   crow.json        the state: the role, the steps done, the addresses, the first deal. No secret.
 //   .gitignore       covers keys/
 //   keys/            mode 0700; keys/signing.key, mode 0600, is the only secret, and the command never prints it
 //   adapter.json     the seller adapter's configuration: a fresh key for each deal, windows Crow's test buyer takes
-//   template.json    the sample's deal template
+//   template.json    the deal template: the sample's, or the deliverable and the checks of the party's own
+//   work/            a folder that sells from a template: each deal's work, as work/<commitment ID>.<csv|json|txt|md>,
+//                    and work/ready.<ext>, the finished work `--file` named, which every deal of the folder delivers
 //   journal.json     the adapter's journal, once a deal starts
 // The card goes to a folder of its own (default ~/.crow/<name>-card), so a folder that is served never holds keys/.
 //
@@ -24,6 +28,7 @@ import { getAddress, type Hex } from 'viem';
 import { generatePrivateKey, privateKeyToAccount } from 'viem/accounts';
 import { holdingKeyOf } from './seller-adapter.ts';
 import { freePort, SAMPLE, SAMPLE_PRICE_UNITS, sampleAddresses } from './setup-sample-api.ts';
+import { DELIVERY_LIMITS, readWorkFile, readWorkTemplate, readyPath, refuseEnvFile, TEMPLATE_EXAMPLE, WORK_DIR, workAddresses } from './setup-work-api.ts';
 
 export type J = any; // eslint-disable-line @typescript-eslint/no-explicit-any
 
@@ -69,7 +74,10 @@ export interface FirstDeal {
 export interface State {
   crow: 'setup/1';
   role: 'seller';
-  sells: 'sample';
+  /** What the folder sells: Crow's sample, or the party's own work from a template (T-543). */
+  sells: 'sample' | 'template';
+  /** A folder that sells from a template: the fixed price in base units, the delivery's format, and the seconds from an offer to its delivery deadline. */
+  work?: { price: string; format: string; deliverWithinSec: number };
   name: string;
   createdAt: string;
   /** Set before the key is written, so a run that stopped in between knows the key file is its own. */
@@ -249,7 +257,7 @@ export async function locked<T>(folder: string, waitMs: number, body: () => T | 
 }
 
 const QUESTIONS = {
-  '--sample': "This version sells Crow's sample product only: pass --sample to sell it. Your own API comes with a later version.",
+  '--sample': `What do you sell? Pass --sample for Crow's sample product. For your own work pass --template <file>, a JSON file such as ${TEMPLATE_EXAMPLE}: price is base units of the test token (5000000 is 5.00 tUSDC), checks are the declarative checks of the commitment schema, ${DELIVERY_LIMITS}, and deliverWithinSec, the seconds from the offer to the delivery deadline, may be left out. Add --file <path> when the work is finished: every deal then delivers it once it is funded.`,
   '--payout': 'Where are you paid? Give an address whose key is not on this machine (--payout 0x...), or answer this-key (--payout this-key) to be paid at this folder\'s own standing address.',
 };
 
@@ -264,11 +272,16 @@ export async function seller(c: Call): Promise<number> {
   // payout address and no key step was not written by a run that got that far.
   const kept = before !== undefined && before.steps['payout'] !== undefined && before.steps['key'] !== undefined && before.address !== undefined && before.payout !== undefined && at(join(folder, FILES.key))?.isFile() === true;
   const name = c.flags.get('--name') ?? (kept ? before.name : undefined) ?? 'seller';
+  // What the folder sells: asked once, like the payout address. A folder sells one kind for good.
+  const templateGiven = c.flags.get('--template'), fileGiven = c.flags.get('--file');
+  if (templateGiven !== undefined && c.flags.has('--sample')) throw new Error('give --sample or --template, not both. Nothing was made or sent');
+  const sells: State['sells'] | undefined = templateGiven !== undefined ? 'template' : c.flags.has('--sample') ? 'sample' : kept ? before.sells : undefined;
+  if (fileGiven !== undefined && sells !== 'template') throw new Error('--file names finished work for a folder that sells from a template: give --template <file> with it. Nothing was made or sent');
   const card = realPath(c.flags.get('--card') ?? (kept ? before.card : undefined) ?? `${folder}-card`);
 
   // The answers: asked once, kept in crow.json, and never given a default.
   const payoutGiven = c.flags.get('--payout');
-  const missing = [...(c.flags.has('--sample') || kept ? [] : ['--sample' as const]), ...(payoutGiven !== undefined || kept ? [] : ['--payout' as const])];
+  const missing = [...(sells !== undefined ? [] : ['--sample' as const]), ...(payoutGiven !== undefined || kept ? [] : ['--payout' as const])];
   if (missing.length) {
     c.say({ step: 'seller', ok: false, exit: 3, missing: missing.map((flag) => ({ flag, question: QUESTIONS[flag] })), next: 'Ask the person each question, then run the same command again with each flag. Nothing was made or sent.' });
     return 3;
@@ -284,6 +297,19 @@ export async function seller(c: Call): Promise<number> {
     }
     if (!ok) throw new Error('--payout takes this-key, or an address: 0x and 40 hex characters, with a valid checksum if in mixed case');
     if (payoutGiven.toLowerCase() === ZERO_ADDRESS) throw new Error(`--payout ${ZERO_ADDRESS} is the zero address, which nobody holds: a payment there is lost. Give an address whose key the person holds, or this-key`);
+  }
+
+  // The template and the finished work, read before anything is made: a file the setup cannot take makes no folder.
+  const template = templateGiven === undefined ? undefined : readWorkTemplate(templateGiven);
+  const format = template?.deliverable.format ?? (kept ? before.work?.format : undefined);
+  let finished: Uint8Array | undefined;
+  if (fileGiven !== undefined) {
+    refuseEnvFile(fileGiven, '--file');
+    if (inside(realPath(fileGiven), join(folder, FILES.keys))) throw new Error(`--file names a file under ${FILES.keys}/: a key is never work. Nothing was made or sent`);
+    const read = readWorkFile(fileGiven, true); // the person named this path, so a link there is followed
+    if (!read?.bytes) throw new Error(`--file: ${realPath(fileGiven)} ${read?.problem ?? 'is not there'}. Nothing was made or sent`);
+    if (format === undefined) throw new Error('--file needs the template that says what format the work has: give --template <file> with it. Nothing was made or sent');
+    finished = read.bytes;
   }
 
   const problems = placeProblems(folder, card).filter((p) => !c.flags.has(p.flag));
@@ -302,7 +328,9 @@ export async function seller(c: Call): Promise<number> {
       const linked = keyPlaceProblem(folder);
       if (linked) throw new Refused(linked);
       chmodSync(folder, 0o700);
-      state ??= { crow: 'setup/1', role: 'seller', sells: 'sample', name, createdAt: new Date().toISOString(), steps: {} };
+      if (state && state.sells !== sells) throw new Refused(`${folder} sells ${state.sells === 'sample' ? "Crow's sample" : 'work from a template'}, and a folder sells one kind for good. Make another folder for ${sells === 'sample' ? 'the sample' : 'your own work'} with --folder or --name`);
+      if (template && state?.firstDeal?.commitmentId !== undefined && state.firstDeal.state === undefined) throw new Refused(`this folder's open deal ${state.firstDeal.commitmentId} was offered from the template it has: run first-deal to finish it, then give a new template`);
+      state ??= { crow: 'setup/1', role: 'seller', sells: sells!, name, createdAt: new Date().toISOString(), steps: {} };
       state.card = card;
       const done = (step: string) => {
         state.steps[step] ??= new Date().toISOString();
@@ -342,19 +370,39 @@ export async function seller(c: Call): Promise<number> {
       state.payout = payout;
       done('payout');
 
-      // Step 4: the sample's deal template, and the adapter's configuration. The setup keeps a configuration only when
-      // the file is the one it wrote: its SHA-256 is in crow.json.
-      if (!existsSync(join(folder, FILES.template))) writeWhole(join(folder, FILES.template), `${JSON.stringify(SAMPLE.template, null, 2)}\n`);
+      // Step 4: the deal template, and the adapter's configuration. The setup keeps a configuration only when the
+      // file is the one it wrote: its SHA-256 is in crow.json. A folder that sells from a template keeps the template's
+      // deliverable and checks as the adapter's deal template, and its price, format and window in crow.json; the same
+      // command with another --template replaces them while no deal is open.
+      if (sells === 'sample') {
+        if (!existsSync(join(folder, FILES.template))) writeWhole(join(folder, FILES.template), `${JSON.stringify(SAMPLE.template, null, 2)}\n`);
+      } else if (template) {
+        writeWhole(join(folder, FILES.template), `${JSON.stringify({ deliverable: template.deliverable, checks: template.checks }, null, 2)}\n`);
+        state.work = { price: template.price, format: template.deliverable.format, deliverWithinSec: template.deliverWithinSec };
+        writeState(folder, state);
+      } else if (!state.work || !existsSync(join(folder, FILES.template))) {
+        throw new Refused(`${folder} sells from a template, and ${FILES.template} or its price in ${FILES.state} is gone: run the seller command with --template <file> again`);
+      }
       done('template');
+      if (finished) {
+        // The finished work, copied into the folder: every deal delivers it once it is funded, after the checks pass.
+        const dir = join(folder, WORK_DIR);
+        if (at(dir)?.isSymbolicLink() || (at(dir) && !at(dir)!.isDirectory())) throw new Refused(`${WORK_DIR}/ is not a plain folder: the setup writes no work through a link. Remove it; the setup makes ${WORK_DIR}/ itself`);
+        mkdirSync(dir, { recursive: true, mode: 0o700 });
+        writeWhole(readyPath(folder, state.work!.format), finished);
+      }
       const configFile = join(folder, FILES.configuration);
       const there = existsSync(configFile) ? readFileSync(configFile) : undefined;
       if (there && sha256(there) !== state.files?.configuration) throw new Refused(`${FILES.configuration} is not the file this setup wrote: it was changed, or another program put it there. The seller command keeps no configuration it did not write. Move that file away, then run the same command again to have it written anew`);
-      if (!there || changed) {
+      if (!there || changed || template) {
         // The sample API keeps one port on the loopback address, free now and written here: the adapter starts a job
         // only at the address its offer was priced at, so a run that continues a deal must serve the API where the
         // first did. The adapter's own port is 0: the system picks one each run, and only this command asks it for a quote.
         const port = there ? Number(new URL((JSON.parse(there.toString('utf8')) as J).sellerApi.quote).port) : await freePort();
-        const text = `${JSON.stringify({ port: 0, sellerApi: sampleAddresses(port), template: FILES.template, scope: SAMPLE.scope, signingKey: 'per-deal', payoutAddress: payout.address, timing: TIMING, pollMs: 3000 }, null, 2)}\n`;
+        // A folder that sells from a template takes no scope, has the work due when its template says, and looks at a
+        // refused work file again at every poll, so a corrected file is delivered by the next run.
+        const own = sells === 'template' ? { sellerApi: workAddresses(port), scope: {}, timing: { ...TIMING, deliverWithinSec: state.work!.deliverWithinSec }, redelivery: { refetchEverySec: 0 } } : { sellerApi: sampleAddresses(port), scope: SAMPLE.scope, timing: TIMING };
+        const text = `${JSON.stringify({ port: 0, sellerApi: own.sellerApi, template: FILES.template, scope: own.scope, signingKey: 'per-deal', payoutAddress: payout.address, timing: own.timing, pollMs: 3000, ...('redelivery' in own ? { redelivery: own.redelivery } : {}) }, null, 2)}\n`;
         state.files = { ...state.files, configuration: sha256(text) };
         writeState(folder, state); // the hash first: a stop before the file is written leaves no file to refuse
         writeWhole(configFile, text);
@@ -363,8 +411,17 @@ export async function seller(c: Call): Promise<number> {
 
       // Step 5: the card, in a folder of its own. A draft: it names no address and no quote address until the party publishes one.
       mkdirSync(card, { recursive: true });
-      if (!existsSync(join(card, CARD_FILE))) {
-        writeWhole(join(card, CARD_FILE), `${JSON.stringify({ type: 'crow-agent', status: 'draft: not published, and no quote address yet', name, sells: [{ deliverable: SAMPLE.template.deliverable, price: { amount: SAMPLE_PRICE_UNITS, unit: "base units of the settlement layer's test token" }, scope: SAMPLE.scope }] }, null, 2)}\n`, 0o644);
+      const draft = (): boolean => {
+        try {
+          return String((JSON.parse(readFileSync(join(card, CARD_FILE), 'utf8')) as J).status).startsWith('draft');
+        } catch {
+          return false;
+        }
+      };
+      // A new template rewrites the card only while it is still the setup's own draft.
+      if (!existsSync(join(card, CARD_FILE)) || (template && draft())) {
+        const sold = sells === 'template' ? { deliverable: (JSON.parse(readFileSync(join(folder, FILES.template), 'utf8')) as J).deliverable, amount: state.work!.price, scope: {} } : { deliverable: SAMPLE.template.deliverable, amount: SAMPLE_PRICE_UNITS, scope: SAMPLE.scope };
+        writeWhole(join(card, CARD_FILE), `${JSON.stringify({ type: 'crow-agent', status: 'draft: not published, and no quote address yet', name, sells: [{ deliverable: sold.deliverable, price: { amount: sold.amount, unit: "base units of the settlement layer's test token" }, scope: sold.scope }] }, null, 2)}\n`, 0o644);
       }
       done('card');
 
@@ -372,6 +429,7 @@ export async function seller(c: Call): Promise<number> {
         step: 'seller', ok: true, folder, card, address, payout: payout.address,
         keys: `${FILES.key} holds the signing key, mode 0600, on this machine only. Never read, print or copy it.`,
         ...(payout.thisKey ? { payoutNote: `Every deal names this folder's standing address ${address} as its payout address in its public terms, which links this folder's deals to one another. Its key is on this machine, in ${FILES.key}.` } : { payoutNote: `Every deal names ${payout.address} as its payout address in its public terms, which links this folder's deals to one another.` }),
+        ...(sells === 'template' ? { sells: 'template', work: { ...state.work!, ready: existsSync(readyPath(folder, state.work!.format)) ? readyPath(folder, state.work!.format) : null }, workNote: existsSync(readyPath(folder, state.work!.format)) ? `Every deal of this folder delivers ${readyPath(folder, state.work!.format)} once it is funded and the file passes the deal's checks.` : `No work is finished yet: first-deal stops once the deal is funded and prints where the work goes and when it is due. To test the checks first, run check --work <a sample of the work>.` } : {}),
         sent: 'nothing',
         next: "Next, the listing step: list --website <https URL> sends your website to Crow's list of who uses it, and list --skip declines. No deal depends on it. Then first-deal.",
       });
