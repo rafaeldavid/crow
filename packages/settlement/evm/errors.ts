@@ -1,7 +1,7 @@
 // Contract reverts as the problem types SimChain returns (docs/api.md). The mapping is by error name, so a revert
 // from HoldbackRules, CPP or the token reads the same to an agent on either backend.
 import { problem, type Problem, type ProblemType } from '@holdback/core';
-import { decodeErrorResult, type Abi, type Hex } from 'viem';
+import { decodeErrorResult, parseAbi, type Abi, type Hex } from 'viem';
 
 const BY_NAME: Record<string, ProblemType> = {
   // HoldbackRules
@@ -22,7 +22,19 @@ const BY_NAME: Record<string, ProblemType> = {
   AfterAuthorizationExpiry: 'deadline_passed',
   PaymentAlreadyCollected: 'nonce_reused',
   InvalidSignature: 'invalid_signature',
+  // DrandQuicknetBeacon (BEACON_ERRORS below). The relay sent too little gas for the pairing; the signed message stays
+  // valid, and the same message with more gas goes through. Not relay_refused, which is the relayer's own budget or cap.
+  NotEnoughGas: 'invalid_state',
+  PairingGasBelowFloor: 'invalid_state', // the beacon's constructor only: it never answers a deal's call
 };
+
+/**
+ * The beacon's errors, decoded with every ABI the caller passes. HoldbackRules calls the beacon and its revert reaches
+ * the relay unchanged, but abis.json carries no beacon. The first build's beacon has `InvalidSignature` only; the fixed
+ * build adds the other two (T-528), so on the first build they never match. errors.test.ts checks this list against
+ * the built beacon.
+ */
+export const BEACON_ERRORS = parseAbi(['error InvalidSignature()', 'error NotEnoughGas()', 'error PairingGasBelowFloor()']);
 
 const BY_MESSAGE: Array<[RegExp, ProblemType]> = [
   [/invalid signature/i, 'invalid_signature'],
@@ -37,7 +49,7 @@ export function problemFromRevert(abi: Abi, data: Hex | undefined): Problem {
   let name: string;
   let args: readonly unknown[] = [];
   try {
-    const r = decodeErrorResult({ abi, data });
+    const r = decodeErrorResult({ abi: [...abi, ...BEACON_ERRORS], data });
     name = r.errorName;
     args = r.args ?? [];
   } catch {
@@ -56,7 +68,7 @@ export function problemFromRevert(abi: Abi, data: Hex | undefined): Problem {
 export function revertName(abi: Abi, data: Hex | undefined): string | undefined {
   if (!data || data === '0x') return undefined;
   try {
-    return decodeErrorResult({ abi, data }).errorName;
+    return decodeErrorResult({ abi: [...abi, ...BEACON_ERRORS], data }).errorName;
   } catch {
     return undefined;
   }
