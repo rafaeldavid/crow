@@ -3,9 +3,10 @@ name: dependency-scan
 # T-518 (roadmap row N181): a pull request that changes a lockfile or a manifest is scanned for known
 # vulnerabilities and known-malicious packages before it merges. OSV-Scanner reads every lockfile in the checkout
 # (pnpm-lock.yaml and tools/one-click/package-lock.json) against the OSV database, which carries GitHub's advisories
-# and the OpenSSF malicious-packages records (MAL-… IDs). It needs no account and no token. The scanner's Action
-# pulls its image by tag, so this step names the same image by digest: osv-scanner-action v2.7.0, published
-# 2026-10-12. Move it only to a release public for 14 days or more.
+# and the OpenSSF malicious-packages records (MAL-… IDs). It needs no account and no token. The repository allows
+# only selected Actions, so the job downloads the scanner's release binary and refuses it unless its SHA-256 matches
+# the one pinned here: osv-scanner v2.7.0, published 2026-10-12, hash from the release's own SHA256SUMS and the
+# GitHub release asset digest, which agree. Move it only to a release public for 14 days or more.
 #
 # A finding fails the job. A known finding that does not apply gets an entry in osv-scanner.toml at the root
 # ([[IgnoredVulns]] with id, ignoreUntil and reason), reviewed in its pull request.
@@ -31,7 +32,10 @@ jobs:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
           persist-credentials: false
+      - name: Fetch OSV-Scanner v2.7.0 and check its SHA-256
+        run: |
+          curl -fsSL --proto '=https' -o "$RUNNER_TEMP/osv-scanner" https://github.com/google/osv-scanner/releases/download/v2.7.0/osv-scanner_linux_amd64
+          echo "160c6253e2922e9e0a6a9771c5c4c40a4b3c6090b34a3cdd5e80c96cc2e4218b  $RUNNER_TEMP/osv-scanner" | sha256sum -c -
+          chmod +x "$RUNNER_TEMP/osv-scanner"
       - name: Scan every lockfile for known vulnerabilities and malicious packages
-        uses: docker://ghcr.io/google/osv-scanner-action@sha256:d54770fe0b09493894e76a02aaed9f51a0513fa57c5186452a755d257b0068a6 # v2.7.0
-        with:
-          args: scan source --recursive ./
+        run: '"$RUNNER_TEMP/osv-scanner" scan source --recursive ./'
