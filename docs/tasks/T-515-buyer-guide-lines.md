@@ -8,6 +8,7 @@
 - **Human gate:** the site deploy is Rafa's.
 - **Status:** done with the merge of this task's pull request
 - **Agent/session:** the T-513 simplicity session, 2026-11-18, branch `t-515-buyer-guide-lines`
+- **Roadmap row:** N38
 
 ## Intent
 
