@@ -18,8 +18,9 @@ concurrency:
 
 jobs:
   # A pull request that changes only docs/ or root Markdown files skips the heavy jobs (Rafa, 2026-11-07: the
-  # change recipes in docs/team.md). Push to main always runs everything, and so does a pull request whose file
-  # list can't be read.
+  # change recipes in docs/team.md). Since T-504 a push to main that merges only such files skips the model check,
+  # forge test and the anvil suites, and keeps the static job and the test shards. Every other push to main runs
+  # everything, and so does a pull request or push whose file list can't be read.
   changes:
     runs-on: ubuntu-latest
     permissions:
@@ -49,10 +50,16 @@ jobs:
           # from GitHub's compare of the push's two commits; a list that can't be read, or that may be cut off (the
           # compare lists at most 300 files), runs the check. A renamed file counts under its old path too, so moving
           # a file out of formal/ runs the check.
+          # T-504: a push to main whose commits touch only docs/ or root Markdown files (a merged docs or task-file
+          # pull request) also skips forge test and the anvil suites. It still runs the static job and the test
+          # shards at full counts, because tests there read docs (the phase-one cut scan, the decisions' status
+          # lines, the design map, the task-number check, the guides).
           if [ "$EVENT" = push ] && [ -n "$BEFORE" ] && [ "$BEFORE" != 0000000000000000000000000000000000000000 ] \
             && pushed=$(gh api "repos/$REPO/compare/$BEFORE...$SHA" --jq '.files[] | .filename, (.previous_filename // empty)') \
             && [ -n "$pushed" ] && [ "$(printf '%s\n' "$pushed" | wc -l)" -lt 300 ]; then
             if [ -z "$(printf '%s\n' "$pushed" | grep -E '^(formal/|\.github/workflows/ci\.yml$)')" ]; then formal=false; fi
+            if [ -z "$(printf '%s\n' "$pushed" | grep -Ev '^(docs/.+|[^/]+\.md)$')" ]; then chain=false; fi
+            echo "push: $(printf '%s\n' "$pushed" | wc -l) changed files"
           fi
           # A pull request's files with each rename's old path, from the pull request's file list (up to 3,000 files).
           if [ "$EVENT" = pull_request ] \
