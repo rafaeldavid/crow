@@ -41,7 +41,7 @@ async function run({ args = [] as string[], gitStatus = '', live = [BEFORE] as (
     log: (s: string) => out.push(s),
     error: (s: string) => err.push(s),
   });
-  const wrangler = commands.filter((c) => c.startsWith('npx ')).map((c) => c.replace('npx -y wrangler@4 ', ''));
+  const wrangler = commands.filter((c) => c.startsWith('npx ')).map((c) => c.replace('npx -y wrangler@4.151.3 ', ''));
   return { code, wrangler, probes, err: err.join('\n'), record: out.join('\n').split('\n').find((l) => l.startsWith('**Early access deploy')) };
 }
 const STATUS = 'deployments status --name crow-early-access --json';

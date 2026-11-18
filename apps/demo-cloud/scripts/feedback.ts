@@ -34,7 +34,7 @@ const RETENTION_SEC = 90 * 86_400;
 const config = fileURLToPath(new URL('../wrangler.op1.jsonc', import.meta.url));
 
 function kv(args: string[]): string {
-  const r = spawnSync('npx', ['-y', 'wrangler@4', 'kv', 'key', ...args, '--binding', 'FEEDBACK', '--config', config, '--remote'], { encoding: 'utf8' });
+  const r = spawnSync('npx', ['-y', 'wrangler@4.151.3', 'kv', 'key', ...args, '--binding', 'FEEDBACK', '--config', config, '--remote'], { encoding: 'utf8' });
   if (r.status !== 0) throw new Error(`wrangler kv key ${args[0]} failed: ${r.stderr.trim().split('\n').at(-1)}`);
   return r.stdout;
 }

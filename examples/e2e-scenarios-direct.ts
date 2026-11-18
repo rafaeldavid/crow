@@ -347,7 +347,7 @@ export const DIRECT: Scenario[] = [
         r.step = 'PAUSED';
         r.say(`holdback-op1 broadcast the delivery from lane ${lane} at nonce ${nonce} and has not answered yet.`);
         r.say('Now redeploy holdback-op1 with the same code, from the holdback checkout at the commit it runs (docs/operations.md, the latest deploy):');
-        r.say(`  npx -y wrangler@4 deploy -c ${CHECKOUT}/apps/demo-cloud/wrangler.op1.jsonc`);
+        r.say(`  npx -y wrangler@4.151.3 deploy -c ${CHECKOUT}/apps/demo-cloud/wrangler.op1.jsonc`);
         r.say('Then type deployed and press Enter here; any other line is ignored, so an Enter typed earlier cannot end the pause. The driver then checks that holdback-op1 restarted, and that the delivery\'s events and the buyer\'s key are served.');
         const pausedAt = Date.now();
         await typed('deployed', process.stdin, () => r.say('ignored a line that is not "deployed"; type deployed and press Enter once holdback-op1 is redeployed'));

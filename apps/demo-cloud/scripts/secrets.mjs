@@ -19,7 +19,7 @@ if (!process.env.HOLDBACK_OPENAI_COMPATIBLE_BASE_URL.startsWith('https://')) {
   process.exit(2);
 }
 
-const child = spawn('npx', ['-y', 'wrangler@4', 'secret', 'bulk', '--name', WORKER], { stdio: ['pipe', 'inherit', 'inherit'] });
+const child = spawn('npx', ['-y', 'wrangler@4.151.3', 'secret', 'bulk', '--name', WORKER], { stdio: ['pipe', 'inherit', 'inherit'] });
 child.stdin.end(JSON.stringify(Object.fromEntries(NAMES.map((n) => [n, process.env[n]]))));
 child.on('exit', (code) => {
   console.log(code === 0 ? `Set ${NAMES.join(', ')} on ${WORKER}.` : `wrangler secret bulk exited with ${code}`);
