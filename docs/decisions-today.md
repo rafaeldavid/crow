@@ -1479,6 +1479,12 @@ Today a seller with its own API reads 13 files of 98,462 bytes and runs 22 comma
 
 **Decided by Rafa, 2026-11-18, the tie between a replaced deal and its successor:** "Let's do the default as transaction data which is signed by both buyer and seller original keys. So that reputation public is easier to calculate, both for buyer and seller. They will care if someone reading the data can trace they do complete commitments". It stands. The note's hash in the refund's `nonce` carries it, signed by the old deal's keys (per-deal keys in a private deal). Either party can refuse a tied settlement, and then both sign a random nonce instead. This discloses more than D35's general default of minimal disclosure; D35 is not reopened.
 
+**Decided by Rafa, 2026-11-18, the note's carrier** ("Yes, all six", on the coordinator's summary): a hash in the settlement's existing `nonce` for now, with no contract change. A named field and an event come later, in a contract version of their own, so the next build (D77's fixes) stays a pure fix. Verified [measured]:
+- `prepare/settlement` takes the caller's 32-byte nonce (`apps/operator/src/prepare.ts:255-259`, `:835`);
+- the reuse check covers offers only (`packages/core/src/state.ts:233`);
+- the contract reads the nonce only inside the signed hash;
+- a reader recovers it from the call data.
+
 **Open points for Rafa:**
 1. The order: recommended, waiver first, then replacement, with the variation only if measured; or the replacement as the one path.
 2. The hosted seller's waiver: recommended, offer it on every refused check and sign on the ready credential; or sign at once, so the buyer's yes is the only step.

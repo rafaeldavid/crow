@@ -1,6 +1,6 @@
 # ADR-0039: Changing a funded deal by agreement: a waiver first, a replacement for new terms, one signed note for both
 
-- **Status:** Proposed, 2026-11-18 (D78). Needs Rafa, except the default tie between a replaced deal and its successor, which Rafa decided on 2026-11-18 (section 4). Nothing here is built.
+- **Status:** Proposed, 2026-11-18 (D78). Needs Rafa, except two points he decided on 2026-11-18 (section 4): the default tie between a replaced deal and its successor, and the note's carrier, a hash in the settlement's existing `nonce` for now, with a named field and an event later in a contract version of its own. Nothing here is built.
 - **Raised by:** T-524, roadmap row N188. Rafa, 2026-11-18: "contracts / API need to allow for mutually agreed contract amendments seamlessly. It needs to be a normal path of trade". The same day, through the coordinator, he asked to:
   - weigh "the API help sign an atomic transaction that refunds, creates new escrow, and sends money from first contract back to buyer to new contract atomically";
   - decide the tie: "Let's do the default as transaction data which is signed by both buyer and seller original keys";
@@ -23,7 +23,12 @@ Labels: **measured** (read at the cited line: `contracts/src/` at the tag `contr
 4. **An in-place variation,** which keeps one commitment ID, is designed (section 9) and not built until measurements ask for it.
 5. **No wrapper for today's four moves.** T-503's refund and T-501's job takeover become steps inside the replacement.
 
-**What Rafa decides:** section "Open points for Rafa", four questions. **What stands of his decisions:** the atomic replacement, and the default public link signed by both original keys. One part changes: the link is the hash of a note in the settlement's `nonce`, not the bare successor ID, so the same field also records a waiver (section 4).
+**What Rafa decides:** section "Open points for Rafa", four questions. **What stands of his decisions:**
+- the atomic replacement;
+- the default public link signed by both original keys;
+- the note as a hash in the settlement's `nonce` for now, with a named field and an event later in a contract version of their own [the carrier verified, measured].
+
+One part changes: the replacement is not the first answer. The waiver is (section 7).
 
 ## Context
 
@@ -71,8 +76,8 @@ The frozen contracts force the replacement wherever a variation would otherwise 
 **What it is, step by step:**
 
 1. **The seller's own check lists the defects.** The hosted seller runs the signed checks before it delivers (`site/ref/seller-adapter.txt:12`). On a failure it signs the delivery without posting it, and offers the buyer a waiver: the failing checks, each with its pointer (for example `report` at `/artifacts/44`), the delivery's hash and the seller-signed settlement.
-2. **The buyer sees the defects, not the content.** The work stays encrypted until the key is released (ADR-0012). The buyer's tools show each failing check and where it fails, and stop for the principal's yes. This is how a bank examines a letter of credit: it reads the documents, never the goods.
-3. **Both sign one `MutualSettlement`:** `hasDelivery` true, the delivery's hash, the price to the seller (or any split the parties agree), `releaseKey` true, and `nonce` the hash of the waiver's note (section 4). The seller signs first, since that only lets the buyer pay. The buyer countersigns and submits.
+2. **The buyer sees the defects, not the content.** The buyer gets the signed delivery's fields with the list of envelope hashes, enough to recompute the delivery's hash, and never its own envelope's ciphertext. Whoever holds that envelope can open the work, so a buyer holding it could read the work, decline, and take its refund at `deliverBy`: the free look ADR-0012 exists to prevent [inferred; the review of 2026-11-18]. The buyer's tools show each failing check and where it fails, and stop for the principal's yes. This is how a bank examines a letter of credit: it reads the documents, never the goods.
+3. **Both sign one `MutualSettlement`:** `hasDelivery` true, the delivery's hash, the price to the seller (or any split the parties agree), `releaseKey` true, and `nonce` the hash of the waiver's note (section 4). The buyer countersigns and hands its signature back. **The seller submits**, with the delivery and the key proof that carries the buyer's envelope (`HoldbackRules.sol:379-381`). So the payment and the key's release land in one call. A buyer that never countersigns changes nothing.
 4. **On chain** the deal ends `Settled`, with `KeyReleased` on path `KEY_MUTUAL`. A reader of the chain sees a release by agreement. A reader of the note sees which checks were waived. The receipt carries the note's text.
 
 **Why neither pilot used it.** The money path existed ("settling late work", `site/ref/after-funding.txt`), and the kit's case 9 ran it to `Settled` with the key released [measured, private record]. The hosted seller never offered it. On a failed check it holds the work, alerts and fetches the result again every 600 s until `deliverBy` [measured, private record]. No route hands the signed delivery to the buyer [measured, above]. So nothing was held for the buyer to accept.
@@ -80,7 +85,7 @@ The frozen contracts force the replacement wherever a variation would otherwise 
 **The smallest change that makes it the first offer:**
 - The hosted seller, on a refused check, keeps the signed delivery. It serves the waiver offer at `GET /deals/{commitmentId}/waiver`, as public as `/health`, which already lists each refused deal's failing checks and pointers with no report content (`site/ref/seller-adapter.txt:44`).
 - It signs the settlement on `POST /deals/{commitmentId}/waiver`, behind the ready credential, or at once when its configuration says so.
-- A buyer command shows the offer, stops for the principal's yes, countersigns and submits.
+- A buyer command shows the offer, stops for the principal's yes, and countersigns. `POST /deals/{commitmentId}/waiver/accept` takes the buyer's signature, and the seller submits with the envelope.
 
 No new deal, no new contract code, and nothing to tie.
 
@@ -149,7 +154,13 @@ SettlementNote(string kind, bytes32 deliveryHash, string[] waivedChecks, bytes32
   `examples/evidence.ts check` reports "replaced by", "replaces" or "settled under waiver of checks …".
 - **How the parties opt out:** both sign one nonce, so either party can refuse a tied settlement. The tools then offer a random nonce, with no note, which both sign instead. A party that insists on no tie cannot be made to sign one; it can only decline the settlement. A link only the parties hold is also possible: they sign the note's hash and keep its text private, and show it to whom they choose.
 - **The tension, recorded without reopening it:** D35 makes minimal disclosure the general default. This one link is public by default, by Rafa's choice, because both deals and their settlements are already public, and the parties gain from a traceable completion.
-- **The cost in clarity:** a field named `nonce` carries meaning. The guides call it "the settlement's note hash, in the `nonce` field". A later contract build that changes `MutualSettlement` anyway should name the field `noteHash` and emit it in `MutuallySettled`. No build should change the struct for this alone.
+- **Decided by Rafa on 2026-11-18, the carrier** ("Yes, all six", accepting the coordinator's summary): for now the note rides as a hash in the settlement's existing `nonce`, with no contract change. A named field and an event come later, in a contract version of their own, so the next build (the outside scan's fixes, D77) stays a pure fix with nothing new mixed in.
+- **Why the carrier holds** [measured]:
+  - The API takes the caller's nonce: `prepare/settlement` accepts any 32 bytes of hex (`apps/operator/src/prepare.ts:255-259`, `:835`). The operator derives no nonce (D39).
+  - The reuse check covers only an offer's terms (`packages/core/src/state.ts:233`), and a salted note never repeats.
+  - The contract reads the nonce only inside the signed hash (`HoldbackTypes.sol:439-458`), and replay is stopped by the deal's stage.
+  - A reader recovers it from the call data of `mutualSettle`.
+- **The cost in clarity:** a field named `nonce` carries meaning. The guides call it "the settlement's note hash, in the `nonce` field". The later contract version names it `noteHash` and emits it in `MutuallySettled`.
 - **What one transaction cannot hide:** whatever the parties choose, anyone reading a replacement's transaction sees both deals in it. The parties can avoid that only by sending the refund and the new funding apart, which gives up the atomic guarantee.
 
 ### 5. Work already done
@@ -176,6 +187,7 @@ SettlementNote(string kind, bytes32 deliveryHash, string[] waivedChecks, bytes32
 | The refund replayed without the new deal | It applies once, since the deal leaves `Held`; alone, it is today's agreed refund | forge test, case 4 |
 | A delivery or a timeout lands first | The refund needs `Held` with no posted delivery, so the batch reverts whole | `attack.replace-after-delivery`, `attack.replace-after-reclaim` |
 | A false note | Only a note whose hash both original keys signed counts | `attack.note-forged` in the deal record's tests |
+| A buyer opens the held work before a waiver, then declines | The buyer gets the envelope hashes, never its envelope; the seller submits the waiver with the envelope, so the key and the payment move together (ADR-0012) | `attack.waiver-free-look`: the waiver offer carries no buyer envelope |
 | The buyer waives under pressure, or the seller presses for looser checks | Allowed: the buyer carries the burden of acceptance (D28, D32). The buyer's tools show each failing or loosened check and stop for the principal's yes, enforced in the signer | `attack.waiver-pressure`, `attack.replace-pressure` |
 | Privacy | The note is public by default and optional; per-deal keys reveal no owner | — |
 
@@ -197,8 +209,8 @@ Rafa asked for his recommendation to be argued against. Each challenge, with its
 5. **Who pays for the restart.** Banks charge a fee on a discrepant presentation, which pays for clean documents [recalled]. **Verdict: no default fee.** A waiver's split can lower the price, and the settlement already allows any split. A fee is machinery the parties can write themselves (D32).
 
 **What stands, changes or goes in Rafa's decisions:**
-- **Stands:** the atomic replacement, and a default public link signed by both original keys, in transaction data.
-- **Changes:** the replacement is not the first answer. The waiver is. The link is a note's hash, so the same field records a waiver too.
+- **Stands:** the atomic replacement; a default public link signed by both original keys, in transaction data; the note's hash in the existing `nonce` until a contract version of its own names the field.
+- **Changes:** the replacement is not the first answer. The waiver is. The same note records both.
 - **Goes:** nothing.
 
 ### 8. What it removes
