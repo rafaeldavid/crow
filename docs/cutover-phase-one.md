@@ -90,16 +90,16 @@ Rafa accepted four choices for this redeploy ("Yes, all four", relayed by the co
 
    **On 2026-11-13** these lines were not enough. A fresh worktree also needs `pnpm -C <worktree> build` after the install, or step 2.1's test cannot resolve `@holdback/core` [measured]. The `--recursive` submodule line mattered later too: Sourcify's exact match in step 3.3 needs the remappings of a recursive checkout [measured by T-383].
 4. **It holds `main`.** `git -C /Users/rafa/Documents/escrow/.worktrees/cutover-phase-one merge-base --is-ancestor origin/main HEAD; echo $?` prints 0. **On 2026-11-13** `origin/main` was `e29d387`, an ancestor [measured].
-5. **The tools answer:** `forge --version`, `cast --version`, `jq --version`, `node --version` (22), `npx wrangler@4 whoami` (Rafa's Cloudflare login). **On 2026-11-13:** forge and cast 1.0.0, jq 1.7.1, node 22.22.2 [measured].
+5. **The tools answer:** `forge --version`, `cast --version`, `jq --version`, `node --version` (22), `npx wrangler@4.151.3 whoami` (Rafa's Cloudflare login). **On 2026-11-13:** forge and cast 1.0.0, jq 1.7.1, node 22.22.2 [measured].
 6. **The deployer has test ETH.** The deployment of 2026-11-03 used 75,443,236 gas for the larger, old set of contracts [measured, `docs/tasks/T-206-contract-review.md:126`]. At 20 gwei that is 1.51 Sepolia ETH. The phase-one set used 8,674,078 gas for its five creations on anvil (Prague) [measured, T-383's rehearsal], 0.17 ETH at 20 gwei; Sepolia's figure may differ [inferred]. Keep at least 0.5 Sepolia ETH, which also covers a whole rerun. Read the balance: `cast balance <deployer-address> --ether --rpc-url https://ethereum-sepolia-rpc.publicnode.com`. The deployer of the live record is `0x1A4435488eaF1A37d2327d44Fe67e97d83203B64`; reusing it is Rafa's call. It held 0.1074 Sepolia ETH on 2026-11-12 at 19:59 UTC [measured by the coordinator from a public endpoint]. **On 2026-11-13** Rafa had topped it up, and it held 1.1749 Sepolia ETH; he reused it [measured].
 7. **The relayer's funding lane has test ETH:** `cast balance 0x601137a8DE7E195E1426f57C053aFa49B20Ef555 --ether --rpc-url https://ethereum-sepolia-rpc.publicnode.com`. The new world uses the same relayer key and the same four lanes, and tops each deal lane up by 0.03 ETH when it falls below 0.01 ETH (`apps/demo-cloud/src/world.ts:210-211`) [measured]. Do not run `apps/demo-cloud/scripts/relayer.mjs` or `apps/test-agents/scripts/seed.mjs`: both secrets stay as they are. **On 2026-11-13** the funding lane held 2.7886 Sepolia ETH [measured].
 8. **Write down each Worker's live version,** the rollback target for the whole run:
 
    ```sh
-   npx wrangler@4 deployments status --name holdback-op1 --json
-   npx wrangler@4 deployments status --name holdback-op2 --json
-   npx wrangler@4 deployments status --name crow-test-agents --json
-   npx wrangler@4 deployments status --name crow-site --json
+   npx wrangler@4.151.3 deployments status --name holdback-op1 --json
+   npx wrangler@4.151.3 deployments status --name holdback-op2 --json
+   npx wrangler@4.151.3 deployments status --name crow-test-agents --json
+   npx wrangler@4.151.3 deployments status --name crow-site --json
    ```
 
    The deploy scripts read these themselves, but each later deploy replaces them, and step 9's rollback needs the versions from before step 6. **On 2026-11-13** the four rollback targets were written down; [`operations.md`](operations.md) lists them in the cutover's table [measured].
@@ -332,7 +332,7 @@ AL-1 deleted the third suite of the first pass, `predeploy-fork.test.ts`, which 
    pnpm -C /Users/rafa/Documents/escrow/.worktrees/cutover-phase-one demo-cloud:deploy
    ```
 
-   In a second terminal, watch the first requests: `npx wrangler@4 tail holdback-op1 --format json`.
+   In a second terminal, watch the first requests: `npx wrangler@4.151.3 tail holdback-op1 --format json`.
 3. Save the record line it prints. **On 2026-11-13** it printed a pass at 06:46 UTC from `3cb9428`; [`operations.md`](operations.md) holds the line. The deal guard counted 0 open deals [measured].
 4. Read both nodes and compare with the baseline of step 0.9:
    - `/v1/status`: `settlement.chainId` is `"11155111"`; `domain.verifyingContract` is the new rules address; `schemaVersion` reads 0.11 and the domain's version 0.8.
@@ -350,8 +350,8 @@ AL-1 deleted the third suite of the first pass, `predeploy-fork.test.ts`, which 
 **Rollback:** the script rolls back by itself on a failed check. By hand, both operators together, with the versions from step 0.8:
 
 ```sh
-npx wrangler@4 rollback <holdback-op1 version from step 0.8> --name holdback-op1
-npx wrangler@4 rollback <holdback-op2 version from step 0.8> --name holdback-op2
+npx wrangler@4.151.3 rollback <holdback-op1 version from step 0.8> --name holdback-op1
+npx wrangler@4.151.3 rollback <holdback-op2 version from step 0.8> --name holdback-op2
 ```
 
 The old world then serves again, with its deals as they were.
@@ -420,7 +420,7 @@ A measurement before the deploy, as the plan orders it, needs a tool that does n
 
 **It must show:** the script's line says `pass`; the first deal of step 8.3 ends `Released` and the second `Refunded`; step 8.4 ends `released`. Save each deal's ID and transactions. **On 2026-11-13** the deploy passed at 06:49 UTC; the two buys ended `Released` in 110 s and `Refunded` in 89 s, and the sale to the test buyer ended `released` [measured].
 **Time:** the health wait is at most 120 s [measured by reading].
-**Rollback:** `npx wrangler@4 rollback <crow-test-agents version from step 0.8> --name crow-test-agents`, and only together with the operators [documented, the pairing rule of T-312]. **Stopping here:** as step 6.
+**Rollback:** `npx wrangler@4.151.3 rollback <crow-test-agents version from step 0.8> --name crow-test-agents`, and only together with the operators [documented, the pairing rule of T-312]. **Stopping here:** as step 6.
 
 ## Step 9. The site and its one command (plan step 8)
 
@@ -488,7 +488,7 @@ A measurement before the deploy, as the plan orders it, needs a tool that does n
 
 **It must show:** the script's line says `pass`; the stranger's deal ends `Released` with its Etherscan links; the five checks of step 9.5 give their answers.
 **Time:** the live check is at most 120 s [measured by reading].
-**Rollback:** `npx wrangler@4 rollback <crow-site version from step 0.8> --name crow-site`, and only together with the operators and the test agents: the old command works only against the old world.
+**Rollback:** `npx wrangler@4.151.3 rollback <crow-site version from step 0.8> --name crow-site`, and only together with the operators and the test agents: the old command works only against the old world.
 
 **Point of no return 1.** This step publishes the new one command and the new pins. From here strangers and the pilot partner open deals on the new world, and a rollback would leave each such deal without an operator. Anyone who kept the old command must fetch the new one. After this step, fix forward.
 

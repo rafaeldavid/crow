@@ -11,7 +11,7 @@ import { generatePrivateKey, privateKeyToAccount } from 'viem/accounts';
 const WORKER = 'holdback-op1';
 const NAME = 'SEPOLIA_RELAYER_KEY';
 
-const list = spawnSync('npx', ['-y', 'wrangler@4', 'secret', 'list', '--name', WORKER, '--format', 'json'], { encoding: 'utf8' });
+const list = spawnSync('npx', ['-y', 'wrangler@4.151.3', 'secret', 'list', '--name', WORKER, '--format', 'json'], { encoding: 'utf8' });
 if (list.status !== 0) {
   console.error(`wrangler secret list failed (exit ${list.status}); log in with wrangler first`);
   process.exit(1);
@@ -24,7 +24,7 @@ if (names.includes(NAME) && !process.argv.includes('--replace')) {
 
 const key = generatePrivateKey();
 const lanes = [key, ...Array.from({ length: DEAL_LANES }, (_, i) => laneKey(key, i + 1))].map((k) => privateKeyToAccount(k).address);
-const child = spawn('npx', ['-y', 'wrangler@4', 'secret', 'bulk', '--name', WORKER], { stdio: ['pipe', 'inherit', 'inherit'] });
+const child = spawn('npx', ['-y', 'wrangler@4.151.3', 'secret', 'bulk', '--name', WORKER], { stdio: ['pipe', 'inherit', 'inherit'] });
 child.stdin.end(JSON.stringify({ [NAME]: key }));
 child.on('exit', (code) => {
   if (code !== 0) {

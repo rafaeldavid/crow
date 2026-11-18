@@ -11,7 +11,7 @@ import { publicOf, SEED_VAR } from '../src/keys.ts';
 const WORKER = 'crow-test-agents';
 const NAME = SEED_VAR;
 
-const list = spawnSync('npx', ['-y', 'wrangler@4', 'secret', 'list', '--name', WORKER, '--format', 'json'], { encoding: 'utf8' });
+const list = spawnSync('npx', ['-y', 'wrangler@4.151.3', 'secret', 'list', '--name', WORKER, '--format', 'json'], { encoding: 'utf8' });
 if (list.status !== 0) {
   console.error(`wrangler secret list failed (exit ${list.status}); log in with wrangler first, and deploy ${WORKER} once`);
   process.exit(1);
@@ -25,7 +25,7 @@ if (names.includes(NAME) && !process.argv.includes('--replace')) {
 const seed = generatePrivateKey();
 // The seller's own derivation (src/keys.ts, loaded by Node as TypeScript): the key its intake page will serve.
 const publicKey = publicOf(seed, 'seller/intake').encryptionPublicKey;
-const child = spawn('npx', ['-y', 'wrangler@4', 'secret', 'bulk', '--name', WORKER], { stdio: ['pipe', 'inherit', 'inherit'] });
+const child = spawn('npx', ['-y', 'wrangler@4.151.3', 'secret', 'bulk', '--name', WORKER], { stdio: ['pipe', 'inherit', 'inherit'] });
 child.stdin.end(JSON.stringify({ [NAME]: seed }));
 child.on('exit', (code) => {
   if (code !== 0) {

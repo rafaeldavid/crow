@@ -1,6 +1,6 @@
 // crow-early-access: stores early-access email sign-ups from the ’crow site (crow.direct; served at join.crow.direct).
 // One KV entry per address: the email (lowercased), when, and which page. No IP addresses, no cookies, no tracking.
-// List sign-ups: npx wrangler@4 kv key list --binding EMAILS --config apps/early-access/wrangler.jsonc --remote
+// List sign-ups: npx wrangler@4.151.3 kv key list --binding EMAILS --config apps/early-access/wrangler.jsonc --remote
 // The old hostname join.escrow.stream forwards to join.crow.direct (T-312): a 301 for GET and a 308 for any other
 // method, which keeps a POST's method and body. A browser sign-up from a page still open on escrow.stream is served in
 // place instead, into the same KV namespace: a browser sends a redirected cross-origin POST with Origin null, which

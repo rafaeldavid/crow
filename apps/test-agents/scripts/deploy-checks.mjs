@@ -103,7 +103,7 @@ export async function deploy({ args, config, sh, probe, sleep, now, log, error }
     return 2;
   }
   if (args.includes('--dry-run')) {
-    const r = await sh('npx', ['-y', 'wrangler@4', 'deploy', '-c', config, ...args]);
+    const r = await sh('npx', ['-y', 'wrangler@4.151.3', 'deploy', '-c', config, ...args]);
     return r.code === 0 ? 0 : (r.code ?? 1);
   }
   const { refused, commit } = await checkout(COMMAND, sh);
@@ -112,7 +112,7 @@ export async function deploy({ args, config, sh, probe, sleep, now, log, error }
     return 2;
   }
   // T-413: the Worker answers /version.json with the commit it was built from, for Crow Control.
-  const upload = ['npx', ['-y', 'wrangler@4', 'deploy', '-c', config, ...(/^[0-9a-f]{40}$/.test(commit) ? ['--var', `BUILD_COMMIT:${commit}`] : [])]];
+  const upload = ['npx', ['-y', 'wrangler@4.151.3', 'deploy', '-c', config, ...(/^[0-9a-f]{40}$/.test(commit) ? ['--var', `BUILD_COMMIT:${commit}`] : [])]];
   const live = () => liveVersion(WORKER, sh);
   const fail = (why) => {
     throw new Error(why);
@@ -158,7 +158,7 @@ export async function deploy({ args, config, sh, probe, sleep, now, log, error }
     if (shouldRollBack({ uploaded, before, now: current })) {
       version ??= current ?? 'unknown';
       rolledBack = await rollback(WORKER, before, 'apps/test-agents/scripts/deploy.mjs failed a check', sh);
-      if (!rolledBack) error(`ROLLBACK FAILED for ${WORKER}. Run: npx wrangler@4 rollback ${before} --name ${WORKER}`);
+      if (!rolledBack) error(`ROLLBACK FAILED for ${WORKER}. Run: npx wrangler@4.151.3 rollback ${before} --name ${WORKER}`);
     }
   }
 

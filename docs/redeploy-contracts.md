@@ -86,7 +86,7 @@ Steps 0 to 6, then 8, then 7, then 11.1, 9, 10 and the rest of 11. The site depl
    ```
 
 5. **It holds `main`:** `git -C $W merge-base --is-ancestor origin/main HEAD; echo $?` prints `0`. A `1` means `main` has commits the lane lacks: bring `main` into the lane by a pull request first. That moves the lane's tip, so then repeat step 0 from 0.1.
-6. **The tools answer:** `forge --version`, `cast --version`, `jq --version`, `node --version`, `npx wrangler@4 whoami` (Rafa's Cloudflare login).
+6. **The tools answer:** `forge --version`, `cast --version`, `jq --version`, `node --version`, `npx wrangler@4.151.3 whoami` (Rafa's Cloudflare login).
 7. **The deployer has test ETH.** Reusing the live record's deployer (`jq -r .deployer $W/contracts/deployments/sepolia.json`) or a new throwaway key is Rafa's call. Size the budget from the live deployment's own creations, then the gas price:
 
    ```sh
@@ -100,10 +100,10 @@ Steps 0 to 6, then 8, then 7, then 11.1, 9, 10 and the rest of 11. The site depl
 9. **The rollback targets,** each Worker's live version. Write each version ID down; later deploys replace them:
 
    ```sh
-   npx wrangler@4 deployments status --name holdback-op1 --json
-   npx wrangler@4 deployments status --name holdback-op2 --json
-   npx wrangler@4 deployments status --name crow-test-agents --json
-   npx wrangler@4 deployments status --name crow-site --json
+   npx wrangler@4.151.3 deployments status --name holdback-op1 --json
+   npx wrangler@4.151.3 deployments status --name holdback-op2 --json
+   npx wrangler@4.151.3 deployments status --name crow-test-agents --json
+   npx wrangler@4.151.3 deployments status --name crow-site --json
    ```
 
 10. **The baseline reads** of both nodes, `https://api.crow.direct` and `https://api2.crow.direct`: save `/v1/status`, `/.well-known/holdback.json`, `/v1/clubs/demo-club` and `/v1/adjudicators` to the results folder.
@@ -272,7 +272,7 @@ A stranger can still open a deal between this check and step 6; step 6.4 looks f
 
 **Who:** Rafa, or a session on his word for this step.
 
-1. **Deploy:** `pnpm -C $W demo-cloud:deploy`. In a second terminal, `npx wrangler@4 tail holdback-op1 --format json`. The script runs its pre-flight, the deal guard, both uploads, waits until both nodes' discovery names the deployed commit, then runs one smoke deal; on a failure after an upload it rolls both operators back by itself.
+1. **Deploy:** `pnpm -C $W demo-cloud:deploy`. In a second terminal, `npx wrangler@4.151.3 tail holdback-op1 --format json`. The script runs its pre-flight, the deal guard, both uploads, waits until both nodes' discovery names the deployed commit, then runs one smoke deal; on a failure after an upload it rolls both operators back by itself.
    - **The deal guard's count** must equal the deals left behind in step 1, normally 0. Its pass is not the quiet's proof: it checks policies, not worlds. A refusal means an open deal binds a policy the new build dropped: go back to step 1 for that deal; never set `HOLDBACK_DEPLOY_WITHDRAWN` for a world change.
    - Save the record line it prints.
 2. **Compare discovery with the record,** on both nodes:
@@ -291,8 +291,8 @@ A stranger can still open a deal between this check and step 6; step 6.4 looks f
 **Rollback,** both operators together, with step 0.9's versions:
 
 ```sh
-npx wrangler@4 rollback <holdback-op1 version from step 0.9> --name holdback-op1
-npx wrangler@4 rollback <holdback-op2 version from step 0.9> --name holdback-op2
+npx wrangler@4.151.3 rollback <holdback-op1 version from step 0.9> --name holdback-op1
+npx wrangler@4.151.3 rollback <holdback-op2 version from step 0.9> --name holdback-op2
 ```
 
 The old world's storage stays: never delete it, because a rollback serves it again. **Stopping here is safe only while no outside party has opened a deal on the new world.** From this step until step 9 the site's one command fails, because its bundle pins the old contracts; until step 8 the live test agents refuse to sign. Run steps 8, 7 and 9 without a pause.
@@ -315,7 +315,7 @@ The old world's storage stays: never delete it, because a rollback serves it aga
 3. **Sell to the test buyer:** `node $W/apps/test-agents/scripts/sell-to-test-buyer.mjs`.
 
 **It must show:** the deploy says `pass`; the two buys end `Released` and `Refunded`; the sale ends `released`. Save each deal's ID and transactions.
-**Rollback:** `npx wrangler@4 rollback <crow-test-agents version from step 0.9> --name crow-test-agents`, only together with the operators.
+**Rollback:** `npx wrangler@4.151.3 rollback <crow-test-agents version from step 0.9> --name crow-test-agents`, only together with the operators.
 
 ## Step 7. The live rounds
 
@@ -355,7 +355,7 @@ Each prints `results: … pass`. The escalation proves the operators' gas estima
 
    Both scripts print `same`, and each hash count is at least `1`; every demo link starts with `200`; the missing page prints `404`; the home page's size is within `HOME_MAX_BYTES` in `site/check.mjs`, and its head, the first `POINTER_WITHIN` bytes there (the `head -c` value above), names `/llms.txt`; the three guides print `same`.
 
-**Rollback:** the script rolls the site back by itself on a failed live check. By hand, only together with the operators and the test agents, because the old command works only against the old world: `npx wrangler@4 rollback <crow-site version from step 0.9> --name crow-site`. Once the step passes, strangers open deals on the new world, and a rollback would leave each without an operator: fix forward.
+**Rollback:** the script rolls the site back by itself on a failed live check. By hand, only together with the operators and the test agents, because the old command works only against the old world: `npx wrangler@4.151.3 rollback <crow-site version from step 0.9> --name crow-site`. Once the step passes, strangers open deals on the new world, and a rollback would leave each without an operator: fix forward.
 
 ## Step 10. The founder console
 

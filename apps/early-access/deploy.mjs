@@ -74,7 +74,7 @@ export async function deploy({ args, sh, probe, sleep, now, log, error }) {
     before = (await liveVersion(WORKER, sh)) ?? fail(`wrangler cannot read ${WORKER}'s live version (is it logged in?), so nothing was uploaded`);
     log(`${WORKER} serves \`${before}\` now: the rollback target. Uploading.`);
     uploaded = true;
-    const r = await sh('npx', ['-y', 'wrangler@4', 'deploy', '--config', CONFIG, '--var', `BUILD_COMMIT:${commit}`]);
+    const r = await sh('npx', ['-y', 'wrangler@4.151.3', 'deploy', '--config', CONFIG, '--var', `BUILD_COMMIT:${commit}`]);
     version = /Current Version ID:\s*([0-9a-f-]{36})/.exec(r.out)?.[1] ?? null;
     if (r.code !== 0 || !version) fail(`${WORKER}'s upload was refused`);
 
@@ -95,7 +95,7 @@ export async function deploy({ args, sh, probe, sleep, now, log, error }) {
     if (uploaded && before !== null && current !== before) {
       version ??= current ?? 'unknown';
       rolledBack = await rollback(WORKER, before, `${COMMAND} failed a check`, sh);
-      if (!rolledBack) error(`ROLLBACK FAILED for ${WORKER}. Run: npx wrangler@4 rollback ${before} --name ${WORKER}`);
+      if (!rolledBack) error(`ROLLBACK FAILED for ${WORKER}. Run: npx wrangler@4.151.3 rollback ${before} --name ${WORKER}`);
     }
   }
   log(`\nThe record line for docs/operations.md:\n\n${recordLine({ title: 'Early access deploy', startedAt, commit, branch, failure, workers: [{ name: WORKER, version, before, rolledBack }] })}\n`);

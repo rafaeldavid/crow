@@ -91,7 +91,7 @@ export async function deploy({ args, sh, probe, clean, built, sleep, now, log, e
     before = (await liveVersion(WORKER, sh)) ?? fail(`wrangler cannot read ${WORKER}'s live version (is it logged in?), so nothing was uploaded`);
     log(`${WORKER} serves \`${before}\` now: the rollback target. Uploading.`);
     uploaded = true;
-    const r = await sh('npx', ['-y', 'wrangler@4', 'deploy', '--config', 'apps/site/wrangler.jsonc']);
+    const r = await sh('npx', ['-y', 'wrangler@4.151.3', 'deploy', '--config', 'apps/site/wrangler.jsonc']);
     version = /Current Version ID:\s*([0-9a-f-]{36})/.exec(r.out)?.[1] ?? null;
     if (r.code !== 0 || !version) fail(`${WORKER}'s upload was refused`);
 
@@ -113,7 +113,7 @@ export async function deploy({ args, sh, probe, clean, built, sleep, now, log, e
     if (uploaded && current !== before) {
       version ??= current ?? 'unknown';
       rolledBack = await rollback(WORKER, before, `${COMMAND} failed a check`, sh);
-      if (!rolledBack) error(`ROLLBACK FAILED for ${WORKER}. Run: npx wrangler@4 rollback ${before} --name ${WORKER}`);
+      if (!rolledBack) error(`ROLLBACK FAILED for ${WORKER}. Run: npx wrangler@4.151.3 rollback ${before} --name ${WORKER}`);
     }
   }
 

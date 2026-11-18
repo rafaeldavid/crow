@@ -29,7 +29,7 @@ for (const n of nodes) {
   // --local-upstream: without it wrangler dev hands the Worker the route's host (api.crow.direct), so each node
   // would publish production URLs (apiBaseUrl, ciphertext URIs, llms.txt links) while serving locally.
   const local = ['--local-upstream', `127.0.0.1:${n.port}`, '--local-protocol', 'http'];
-  const child = spawn('npx', ['-y', 'wrangler@4', 'dev', '-c', n.config, '--ip', '127.0.0.1', '--port', String(n.port), '--inspector-port', String(n.inspector), ...local, '--show-interactive-dev-session=false', ...n.vars], { cwd: root, stdio: ['ignore', 'pipe', 'pipe'] });
+  const child = spawn('npx', ['-y', 'wrangler@4.151.3', 'dev', '-c', n.config, '--ip', '127.0.0.1', '--port', String(n.port), '--inspector-port', String(n.inspector), ...local, '--show-interactive-dev-session=false', ...n.vars], { cwd: root, stdio: ['ignore', 'pipe', 'pipe'] });
   children.push(child);
   ready.push(
     new Promise((resolve, reject) => {
