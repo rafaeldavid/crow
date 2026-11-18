@@ -1,6 +1,6 @@
 # Redeploying the phase-one contracts on Sepolia
 
-This runbook moves Crow's live test service to a new deployment of the phase-one contracts, from a frozen commit to a pushed tag. It serves the next tag, `contracts-phase-one-2` (the version with the audit's fixes), and every later one: the audit loop redeploys after each round of fixes. It is drawn from the cutover of 2026-11-13, whose dated record is [`cutover-phase-one.md`](cutover-phase-one.md). The steps keep that record's numbers, so each can be read beside what happened there; the items inside a step are numbered for this page.
+This runbook moves Crow's live test service to a new deployment of the phase-one contracts, from a frozen commit to a pushed tag. It serves the next tag, `contracts-phase-one-2` (the version with an outside scan's fixes, which the outside audit then reads: D80), and every later one: the audit loop redeploys after each round of fixes. It is drawn from the cutover of 2026-11-13, whose dated record is [`cutover-phase-one.md`](cutover-phase-one.md). The steps keep that record's numbers, so each can be read beside what happened there; the items inside a step are numbered for this page.
 
 **Every value comes from its source on the day:** the record (`contracts/deployments/sepolia.json`), discovery (`/.well-known/holdback.json` and `/v1/status` on each node), the scripts' own output, and the chain. This page copies no address, hash, contract or schema version, or gas figure from a deployment. The few fixed values in its commands (a page size, a byte window, a fork balance, a tool version) each name their source beside them. A dated record of each run goes into [`operations.md`](operations.md) at step 11.4.
 
@@ -22,7 +22,7 @@ This runbook moves Crow's live test service to a new deployment of the phase-one
 **The four decisions of 2026-11-12 still bind** ("Yes, all four"):
 
 1. **No switch pauses new deals.** The quiet of steps 1 and 5 is a wait and two checks, with a race that remains.
-2. **The tags:** `contracts-phase-one-1` named the frozen version; `contracts-phase-one-2` names the version with the audit's fixes. Rafa names any later tag and pushes each.
+2. **The tags:** `contracts-phase-one-1` named the frozen version; `contracts-phase-one-2` names the version with the audit's fixes. Rafa names any later tag and pushes each. (D80, 2026-11-18: that version carries an outside scan's fixes, and the outside audit reads it.)
 3. **One cutover branch,** cut from the frozen commit and merged to `main` at the end, with the coordinator holding every other merge to `main` and to the lane from step 0 to step 11. The branch of 2026-11-13, `cutover-phase-one`, is spent; name this run's after its tag, `cutover-<tag>` [inferred].
 4. **No separate rehearsal copy of the operators** on Sepolia. Steps 6 to 8 run before the first point of no return, with a rollback.
 
@@ -62,7 +62,7 @@ Steps 0 to 6, then 8, then 7, then 11.1, 9, 10 and the rest of 11. The site depl
 
 ## Step 0. Freeze and baseline
 
-1. **The frozen commit** is the lane's tip once the audit's fixes and their review have merged into it. Nothing merges to the lane after it until step 11.2. Name two commits and write both down:
+1. **The frozen commit** is the lane's tip once the fixes and the review of them have merged into it. Nothing merges to the lane after it until step 11.2. Name two commits and write both down:
    - the frozen commit itself;
    - the last commit that changed `contracts/src`: `git -C /Users/rafa/Documents/escrow log -1 --format='%H %s' <frozen commit> -- contracts/src`. The audit's scope names it.
 
@@ -114,7 +114,7 @@ Steps 0 to 6, then 8, then 7, then 11.1, 9, 10 and the rest of 11. The site depl
 
 **Rehearse, before the day.**
 
-1. **On anvil,** no RPC and no key of anyone's: `node $W/scripts/deploy-rehearsal.mjs` runs steps 2.1 to 3.3 against its own local chain, on a copy of the checkout's tracked files, with a throwaway key it makes and removes. It prints one line per step, `pass` or `FAIL`, each with the Sepolia command it stands for, then what a local chain cannot show. It must end `deploy-rehearsal: pass: …` [measured on 2026-11-14: 8 steps in about 66 s]. `pnpm -C $W exec vitest run packages/settlement/evm/deploy-script.test.ts` runs it twice, and the script's refusals beside it; it must pass too.
+1. **On anvil,** no RPC and no key of anyone's: `node $W/scripts/deploy-rehearsal.mjs` runs steps 2.1 to 3.3 against its own local chain, on a copy of the checkout's tracked files, with a throwaway key it makes and removes. It prints one line per step, `pass` or `FAIL`, each with the Sepolia command it stands for, then what a local chain cannot show. It must end `deploy-rehearsal: pass: …` [measured on 2026-11-14: 8 steps in about 66 s; again on 2026-11-18 on the fixed build, T-540]. Its stand-in for the live world is a first local deployment made by this checkout's own script, so it never moves from a record of an older build, such as the first build's, whose beacon took no constructor argument; step 1.2's fork does, from the real record. `pnpm -C $W exec vitest run packages/settlement/evm/deploy-script.test.ts` runs it twice, and the script's refusals beside it; it must pass too.
 2. **On a fork of Sepolia, with the full checks.** On 2026-11-13 the anvil rehearsal missed three breaks that CI found at the record's commit: the record's type in `examples/deployments.ts`, `tests/record-copies.test.ts`, and a test that named a cut contract. `pnpm typecheck` and `pnpm test` on a rehearsal's record catch that kind [measured: they failed on CI]. A fork keeps chain ID 11155111, but the script knows a development node by its client name (anvil, Hardhat, Ganache) and treats it as a rehearsal: it writes only the file `DEPLOY_RECORD` names, never a record in `contracts/deployments/`, and the source tool sends nothing from it. anvil mines a block only for a transaction, so the rehearsal takes the latest block in place of the finalized one (`DEPLOY_FINALITY=latest`). In a scratch worktree `F` at the frozen commit, made as in step 0.3, with anvil running in its own terminal (`anvil --fork-url $R --hardfork prague`):
 
    ```sh
@@ -174,7 +174,7 @@ Steps 0 to 6, then 8, then 7, then 11.1, 9, 10 and the rest of 11. The site depl
    - then rerun step 2.3 whole. Each rerun creates all five anew.
 4. **Read the domain** the new rules contract signs under: `cast call $(jq -r .rules $W/contracts/deployments/sepolia.json) 'eip712Domain()(bytes1,string,string,uint256,address,bytes32,uint256[])' --rpc-url $R`. It reads "Holdback" and the version in `packages/core/src/eip712.ts` at the frozen commit. A change of domain or schema version lands on the lane before the freeze, never in the record's commit.
 
-**It must show:** the record's `commit` equals `git -C $W rev-parse HEAD`; it has `beaconMarginSec` and `deployedAt`.
+**It must show:** the record's `commit` equals `git -C $W rev-parse HEAD`; it has `beaconMarginSec` and `deployedAt`. On the fixed build and later, the beacon takes one constructor argument, its pairing gas: the script sets it (`PAIRING_GAS` in `contracts/script/deploy-sepolia.sh`), passes it, reads it back on chain (its `beacon PAIRING_GAS` check, which stops the run on a difference) and writes it into the record. `jq -c .contracts.DrandQuicknetBeacon.args $W/contracts/deployments/sepolia.json` prints that value, and `cast call $(jq -r .beacon $W/contracts/deployments/sepolia.json) 'PAIRING_GAS()(uint256)' --rpc-url $R` prints the same.
 **Rollback:** `git -C $W checkout -- contracts/deployments/sepolia.json` and delete the dated copy. The cost is test ETH.
 
 ## Step 3. The record and every pin, in one commit; Sourcify
@@ -370,7 +370,7 @@ Each prints `results: … pass`. The escalation proves the operators' gas estima
    ```sh
    git -C $W fetch origin main
    git -C $W log -1 --format='%H %s' origin/main
-   git -C $W tag -a $T origin/main -m "Holdback phase-one contracts with the audit's fixes, deployed on Sepolia"
+   git -C $W tag -a $T origin/main -m "Holdback phase-one contracts with an outside scan's fixes, deployed on Sepolia"
    git -C $W push origin $T
    ```
 
