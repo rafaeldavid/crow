@@ -911,6 +911,7 @@ describe('a judged result survives a restart (A-4)', () => {
     box.s = s;
     s.at('2026-11-01T10:02:00Z');
     const first = await b.adj.runOnce();
+    // SimChain only: party appeals and bonds stay in the full protocol (ADR-0031 §8).
     expect(first.refused.map((r) => r.problem.type)).toEqual(['coverage_exceeded']);
     expect(b.calls.length).toBeGreaterThan(0);
     expect([kept.rows.size, s.records.size]).toEqual([1, 0]);
