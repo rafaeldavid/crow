@@ -148,6 +148,25 @@ export interface AdjudicatorConfig {
    * more than a timer can wait, means no limit. Unset: DEFAULT_STORE_READ_TIMEOUT_MS.
    */
   storeReadTimeoutMs?: number;
+  /**
+   * Where a judged result is kept from the moment the panel returns until the service stops (A-4, T-530), so a restart
+   * signs the same decision and never runs the panel again for that (commitment, role, attempt). It holds the record,
+   * which is published anyway, and the outcome; never a key. Unset: memory only, and a restart before the decision lands
+   * runs the panel again, with nothing of the first verdict published or signed.
+   */
+  judgedStore?: JudgedStore;
+}
+
+/** A judged result as `judgedStore` keeps it: no content key, which the service opens again from its own envelope. */
+export interface KeptJudgment {
+  record: Judgment;
+  outcome: DecisionOutcome | null;
+  published: boolean;
+}
+
+export interface JudgedStore {
+  get(key: string): Promise<KeptJudgment | null | undefined>;
+  put(key: string, value: KeptJudgment): Promise<void>;
 }
 
 /** A registry a build carries, with the provider that reaches its models. */
@@ -193,6 +212,8 @@ interface Judged {
   outcome: DecisionOutcome | null;
   contentKey?: ContentKey;
   published: boolean;
+  /** True once `judgedStore` holds this result as it is now (always true without a store). */
+  kept?: boolean;
 }
 
 /** keccak256 of the RFC 8785 JSON of the record without recordHash, signature and recordUri. */
@@ -724,9 +745,15 @@ export class Adjudicator {
     if (!pre.ok) return pre;
     let judged = this.#judged.get(key);
     if (!judged) {
+      // A-4 (T-530): a result kept before a restart is this attempt's result; the panel does not run again.
+      const kept = await this.#restore(key, pre.value);
+      if (!kept.ok) return kept;
+      if (kept.value) this.#judged.set(key, (judged = kept.value));
+    }
+    if (!judged) {
       const r = await this.#judge(task, pre.value);
       if (!r.ok) return r;
-      judged = r.value;
+      judged = { ...r.value, kept: !this.#cfg.judgedStore };
       this.#judged.set(key, judged);
     } else if (judged.record.deliveryHash !== deliveryHash(task.delivery)) {
       // ADR-0029: the record, the key and the decision name the delivery judged. A retry handed another seller-signed
@@ -734,6 +761,10 @@ export class Adjudicator {
       // the record does not cover.
       return err(problem('invalid_state', `this adjudicator judged delivery ${judged.record.deliveryHash} for this commitment, role and attempt; the task now carries ${deliveryHash(task.delivery)}, and it never judges an attempt twice`));
     }
+    // A-4 (T-530): kept the moment it exists, before any other read or anything published or signed, so no later
+    // failure and no restart runs the panel again or signs another verdict.
+    const keptFirst = await this.#keep(key, judged);
+    if (keptFirst) return err(keptFirst);
     // T-211: the bond may have moved while the panel ran; read it again before publishing and signing (kept, no re-roll).
     // An escalation reserves no bond on either chain, so it needs no cover.
     if (task.role === 'fallback' && judged.outcome !== 'escalate') {
@@ -748,10 +779,53 @@ export class Adjudicator {
         return err(problem('adjudicator_unavailable', `judgment record publication failed (${errorClass(e)}); retrying without re-judging`));
       }
       judged.published = true;
+      // Best effort: if this write fails, a restart only publishes the same record again.
+      judged.kept = false;
+      await this.#keep(key, judged);
+      judged.kept = true;
     }
     // Signing is deterministic (RFC 6979), so a retry signs the identical Decision.
     if (judged.outcome === null) return ok({ decision: null, record: judged.record });
     return ok({ decision: await this.#sign(task, pre.value, judged), record: judged.record });
+  }
+
+  /**
+   * The result `judgedStore` kept for this task before a restart (A-4), or null. An accept or an escalation needs the
+   * content key again: it is opened from this service's own envelope, never stored. A store that cannot be read refuses
+   * the turn before any judge is called, so a store failure never runs the panel twice.
+   */
+  async #restore(key: string, pre: Preflight): Promise<Result<Judged | null, Problem>> {
+    const store = this.#cfg.judgedStore;
+    if (!store) return ok(null);
+    let kept: KeptJudgment | null | undefined;
+    try {
+      kept = await this.#read('the store of judged results', () => store.get(key));
+    } catch (e) {
+      return err(problem('adjudicator_unavailable', `the store of judged results did not answer (${errorClass(e)}); not judged, retrying (no record)`));
+    }
+    if (!kept) return ok(null);
+    const judged: Judged = { record: kept.record, outcome: kept.outcome, published: kept.published, kept: true };
+    if (kept.outcome === 'accept' || kept.outcome === 'escalate') {
+      try {
+        judged.contentKey = unwrapKey(pre.envelope, this.#cfg.encryptionSecretKey);
+      } catch (e) {
+        return err(problem('invalid_state', `the kept ${kept.outcome} needs the content key, and this adjudicator's envelope does not open (${errorClass(e)}); nothing signed`));
+      }
+    }
+    return ok(judged);
+  }
+
+  /** Writes `judged` to `judgedStore` unless it is kept as it is; a problem when the write fails. */
+  async #keep(key: string, judged: Judged): Promise<Problem | null> {
+    const store = this.#cfg.judgedStore;
+    if (!store || judged.kept) return null;
+    try {
+      await store.put(key, { record: judged.record, outcome: judged.outcome, published: judged.published });
+      judged.kept = true;
+      return null;
+    } catch (e) {
+      return problem('adjudicator_unavailable', `the judged result could not be kept (${errorClass(e)}); nothing published or signed, retrying without re-judging`);
+    }
   }
 
   /** Every check that can refuse the task, before any judge is called or anything is published. */
