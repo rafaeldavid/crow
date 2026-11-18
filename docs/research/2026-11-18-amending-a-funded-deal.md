@@ -92,7 +92,25 @@ The first run's two assertions were wrong: one prank and one expected revert wer
 
 **On Sepolia.** Multicall3 has code at `0xcA11bde05977b3631167028862bE2a173976CA11` [measured: `eth_getCode` through `ethereum-sepolia-rpc.publicnode.com`, 2026-11-18]. Gas for one replacement is about 840,000: a settlement measured at 272,170 plus a funding measured at 569,768 to 572,680 on Sepolia [inferred from the private record's measured figures].
 
-**The tie.** Rafa decided the default on 2026-11-18: transaction data signed by both the buyer's and the seller's original keys. The refund's `nonce` is a free 32-byte value both parties sign (`T:164-168`), which no check reads, so it can carry the new commitment ID with no change. The commitment schema has no field that names an earlier deal and allows no extra fields [measured by the coordinator], so the new terms cannot carry the tie without a schema change.
+**The tie.** Rafa decided the default on 2026-11-18: transaction data signed by both the buyer's and the seller's original keys. The refund's `nonce` is a free 32-byte value both parties sign (`T:164-168`). It enters only the settlement's struct hash (`T:439-458`), and no line of `R` names it, so it can carry a hash with no contract change. The test used the new commitment ID as the nonce. ADR-0039 uses the hash of a `SettlementNote` instead, so the same field also records a waiver. The commitment schema has no field that names an earlier deal and allows no extra fields [measured by the coordinator], so the new terms cannot carry the tie without a schema change.
+
+## 2b. The waiver, and why neither pilot used it
+
+- **The money path exists.** In `Held`, the settlement both parties sign can name a delivery the buyer holds and release its key ("settling late work", `site/ref/after-funding.txt`). The kit's case 9 ran it to `Settled` with the key released [measured, private record]. The page says it "also serves a seller that holds back work that fails a check and shows the failures, then settles with the buyer" [documented].
+- **The hosted seller never offers it.** On a failed check it "delivers nothing, alerts you with each failed check, and waits for your fixed report until `deliverBy`" (`site/ref/seller-adapter.txt:12`). Its routes are `ready`, `job` and `refund` (`examples/seller-adapter-core.ts:1974-1981`). None hands the signed work to the buyer. In Crow's case it fetched the result again every 600 s with the same refusal [measured, private record].
+- **What the buyer can see before a waiver.** `/health` lists each refused deal's failing checks, with `checkId`, `pointer` and a message rebuilt from fixed phrases, and no report content (`site/ref/seller-adapter.txt:44`). The content stays encrypted until the key is released (ADR-0012).
+- **What a reader can already tell.** `MutuallySettled` and `KeyReleased`'s `path` (`KEY_MUTUAL` 2 against `KEY_DECISION` 0) tell a release by agreement from a release on the checks (`contracts/src/IHoldbackRules.sol:205-224`, `:287-293`). No field says which checks were waived; the note in ADR-0039 section 4 adds that.
+- **Would a waiver have served the pilots?** Crow's case: yes. The refused bytes later passed the corrected checks unchanged [measured, private]. The first case: only after the seller fixed its conversion, which first read no artifacts at all [measured, private].
+
+## 2c. Trade theory against the recommendation
+
+Rafa asked on 2026-11-18 for his recommendation to be challenged from strategy and trade theory. The ADR's section 7 gives the verdicts. The sources:
+
+- **Waivers in letters of credit.** Mann's 500 bank files: the documents met the terms 27% of the time, the buyer waived the defects in every file but one, 59% of defective presentations showed no failure by the seller, and over half the waivers came within one business day [documented: Mann (2000), read for the reading list on 2026-11-18, `2026-11-18-reading-list.md`; the figures as Crow's private reading notes record them].
+- **Hold-up after sunk cost.** When one side has made an investment specific to the deal, the other can renegotiate for part of its value [recalled: Klein, Crawford and Alchian, "Vertical Integration, Appropriable Rents, and the Competitive Contracting Process" (1978); Williamson, *The Economic Institutions of Capitalism* (1985)]. Contracts that cannot say everything in advance are renegotiated, and the rules for renegotiation shape what is signed first [recalled: Hart and Moore, "Incomplete Contracts and Renegotiation" (1988)].
+- **Unravelling of optional disclosure.** When a party can disclose verifiable information for free, silence is read as bad news, so most disclose [recalled: Grossman, "The Informational Role of Warranties and Private Disclosure about Product Quality" (1981); Milgrom, "Good News and Bad News" (1981)].
+- **Discrepancy fees.** Banks charge the beneficiary a fee on a presentation with discrepancies [recalled: common documentary-credit practice; no tariff was opened on the day].
+- **Substituted contract.** The parties may agree to discharge a contract and take a new one in its place [recalled: Restatement (Second) of Contracts § 279].
 
 ## 3. How others do it
 
@@ -132,7 +150,7 @@ Each source with the plain lesson for Crow.
 
 - **ERC-8183, agentic commerce (draft, 2026).** A job's budget changes only while it is Open, before funding, by `setBudget`; the evaluator and the expiry are set at creation and never change; the core has no amendment or mutual-change function [checked: eips.ethereum.org/EIPS/eip-8183].
 - **Commerce Payments' `AuthCaptureEscrow`.** A payment is the hash of `PaymentInfo`; it cannot be raised or extended after `authorize` [checked, as above].
-- **Kleros-style escrow.** Funds wait for one party's release or a ruling. This pass found no amendment path in the sources it read [search].
+- **Kleros-style escrow.** Funds wait for one party's release or a ruling. This pass saw no amendment path in the search results it got [search].
 
 **Lesson:** on-chain escrows fix terms at funding and treat any change as cancel and recreate. Today's four moves do that in four separate steps. Doing it in one atomic transaction keeps the cancel-and-recreate model, which the audited code already handles, and removes the gap between the steps.
 
@@ -144,7 +162,8 @@ Contract law has a name for this: a **substituted contract**, where the parties 
 2. The new terms are agreed whole, and the old terms govern until the change is complete. [3.3]
 3. A funded hold never changes: no higher amount, no new payer or receiver, no later expiry. A change that needs any of these needs a new hold. [2, 3.5]
 4. The frozen contracts can already discharge a deal and fund its substitute in one transaction, for any change of terms. [2a]
-5. Fairness stays with the parties and the law, and the buyer's tools stop for the principal's yes. [3.1]
+5. Before any change of terms comes the trade's lightest tool: the buyer waives the defects on the same deal, which the contracts already pay. [2b, 2c]
+6. Fairness stays with the parties and the law, and the buyer's tools stop for the principal's yes. [3.1]
 
 ## Sources
 
@@ -162,5 +181,10 @@ Seen in search results on 2026-11-18, not opened:
 - UCP 600 Article 10, a practitioner summary: https://tradefinanceexpertise.blogspot.com/2022/12/article-10-ucp-600-amendments.html
 - AP2: https://ap2-protocol.org/
 - Agentic Commerce Protocol, checkout: https://developers.openai.com/commerce/specs/checkout and https://docs.stripe.com/agentic-commerce/protocol/specification
+
+Read for the reading list on 2026-11-18 (`2026-11-18-reading-list.md`):
+- Ronald J. Mann, "The Role of Letters of Credit in Payment Transactions", 98 Mich. L. Rev. 2494 (2000): https://academiccommons.columbia.edu/doi/10.7916/D8SF2VKC
+
+Recalled, not opened on the day: Klein, Crawford and Alchian (1978); Williamson (1985); Hart and Moore (1988); Grossman (1981); Milgrom (1981); Restatement (Second) of Contracts § 279; the identity precompile at address `0x04`.
 
 Refused the fetch: Nordea's note on amendments to documentary credits (HTTP 403).
