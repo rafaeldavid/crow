@@ -1464,6 +1464,35 @@ Today a seller with its own API reads 13 files of 98,462 bytes and runs 22 comma
 - **The next build is the phase-one lane plus the fixes** (Rafa, 2026-11-17, choosing between that and the rebuilt contracts that roadmap row N26 names: "Phase-one lane plus fixes"). It keeps phase one's design and scope, with RR-1 to RR-5 and the auditor's findings applied, so the change an audit of the fixes reads stays small. The rebuilt contracts come after it.
 - **Litmus tests.** Neutrality, the hold and defended judgment: unchanged. This orders the work and changes no code.
 
+## D78. Changing a funded deal by agreement: a waiver first, a replacement in one transaction for new terms, one signed note for both, no contract change (ADR-0039, T-524)
+
+**Status:** needs Rafa, 2026-11-18.
+
+**Why now.** Both pilot deals so far had a finished report refused by the deal's signed checks while the deal was `Held`. Each fix took four moves: new terms, a seller redeploy, a second deal that takes over the job (T-501), and a full refund both parties sign (T-503) [measured, the private record]. Rafa, 2026-11-18: amendments both parties agree to "need to be a normal path of trade". The gate before signing (the checks run on one real delivery first) would have caught the first case. It would not have caught the second, whose report had shapes the first real report lacked [inferred].
+
+**Recommendation** (ADR-0039; research in `docs/research/2026-11-18-amending-a-funded-deal.md`):
+- **A waiver first.** When work fails a check and the buyer still wants it, both sign the settlement that names the held work and releases its key. The contracts already pay it. The hosted seller must hold the failing work and offer the waiver, instead of only waiting for a fix. It would have closed Crow's own scan in one step, and the first case once the seller had fixed its own conversion [inferred].
+- **A replacement in one transaction for a real change of terms.** One Multicall3 call refunds the old deal by agreement and funds a new deal from the refund, or does nothing. The frozen contracts did this on a local chain, 4 of 4 cases [measured], and Multicall3 is on Sepolia [measured]. The seller signs first; the buyer's tool signs the funding only once it holds that refund, and submits the batch itself.
+- **One signed note for both.** The settlement's `nonce`, which both original keys sign and no contract reads, is the hash of a `SettlementNote`: the waived checks, or the successor deal. Its text goes in the same transaction and in the receipt.
+- **The in-place variation** (one commitment ID, a contract `amend`) is designed in ADR-0039 section 9, and is not built until measurements ask for it.
+- **Challenged from trade practice and theory** (ADR-0039 section 7). Mann's letter-of-credit files put the waiver first. The hold-up hazard is bounded by the signed terms running on, and its health measure is the share of deals that pass at first presentation. Unravelling of the optional public link is accepted, with the receipt, not the link, as the record of truth. No default fee for a restart.
+
+**Decided by Rafa, 2026-11-18, the tie between a replaced deal and its successor:** "Let's do the default as transaction data which is signed by both buyer and seller original keys. So that reputation public is easier to calculate, both for buyer and seller. They will care if someone reading the data can trace they do complete commitments". It stands. The note's hash in the refund's `nonce` carries it, signed by the old deal's keys (per-deal keys in a private deal). Either party can refuse a tied settlement, and then both sign a random nonce instead. This discloses more than D35's general default of minimal disclosure; D35 is not reopened.
+
+**Decided by Rafa, 2026-11-18, the note's carrier** ("Yes, all six", on the coordinator's summary): a hash in the settlement's existing `nonce` for now, with no contract change. A named field and an event come later, in a contract version of their own, so the next build (D77's fixes) stays a pure fix. Verified [measured]:
+- `prepare/settlement` takes the caller's 32-byte nonce (`apps/operator/src/prepare.ts:255-259`, `:835`);
+- the reuse check covers offers only (`packages/core/src/state.ts:233`);
+- the contract reads the nonce only inside the signed hash;
+- a reader recovers it from the call data.
+
+**Open points for Rafa:**
+1. The order: recommended, waiver first, then replacement, with the variation only if measured; or the replacement as the one path.
+2. The hosted seller's waiver: recommended, offer it on every refused check and sign on the ready credential; or sign at once, so the buyer's yes is the only step.
+3. The note's text on chain: recommended, in the same transaction by default; or the hash on chain and the text only in the receipt.
+4. The buyer's stop: recommended, the principal's yes on every waiver and replacement; or skip it for a replacement whose checks are only stricter.
+
+**Litmus tests.** Neutrality: no single actor waives or replaces, and an operator that refuses is bypassed. The hold: a waiver or a refund needs both signatures and pays only the two money addresses; if a replacement's batch fails, the old hold stays as it was [measured]. Defended judgment: the checks run first and their failures are what a buyer waives; no replacement after a delivery is posted.
+
 ## D79. A carried delivery travels only with an accept; a reject or an escalation waits for the posted delivery (T-526)
 
 **Status:** the agent's call, 2026-11-18. Rafa may overrule it.
