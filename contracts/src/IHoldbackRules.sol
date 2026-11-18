@@ -278,7 +278,8 @@ interface IHoldbackRules {
     error NoBeaconMargin();
 
     /// @notice The beacon does not answer `roundAt`: the address has no code, or the call reverts or returns no
-    ///         round. A deploy-time check on the deployer: `triggerFallback`, the only exit from Delivered, asks it.
+    ///         round. A deploy-time check on the deployer: `triggerFallback`, the only timeout exit from Delivered,
+    ///         asks it.
     error BadBeacon();
 
     /// @notice A constructor address of zero: the escrow, the collector, the beacon or the token. A deploy-time

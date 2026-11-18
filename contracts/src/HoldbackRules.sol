@@ -94,8 +94,8 @@ contract HoldbackRules is EIP712, IHoldbackRules {
                 || token == address(0)
         ) revert ZeroAddress();
         if (beaconMargin == 0 && block.chainid != LOCAL_CHAIN_ID) revert NoBeaconMargin();
-        // `triggerFallback`, the only exit from Delivered, asks the beacon for a round; one that cannot answer would
-        // block that exit for the deployment's life, so the constructor asks once.
+        // `triggerFallback`, the only timeout exit from Delivered, asks the beacon for a round; one that cannot answer
+        // would block that exit for the deployment's life, so the constructor asks once.
         (bool answered, bytes memory round) =
             address(beacon).staticcall(abi.encodeCall(IHoldbackBeacon.roundAt, (block.timestamp)));
         if (!answered || round.length < 32) revert BadBeacon();
