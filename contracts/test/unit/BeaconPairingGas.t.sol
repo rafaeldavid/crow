@@ -40,14 +40,15 @@ contract BeaconPairingGasTest is Test {
         assertEq(abi.decode(ret, (uint256)), 400_000);
     }
 
-    /// A valid proof sent with any gas either verifies, reverts `NotEnoughGas`, or runs out of gas before the pairing
-    /// (an empty revert); it never reverts `InvalidSignature`. Some gas in the range reaches the pairing short.
+    /// A valid proof sent with any gas from 1 either verifies, reverts `NotEnoughGas`, or runs out of gas with too little
+    /// left to revert with data (an empty revert); it never reverts `InvalidSignature`. Steps of 1 gas up to 40,000
+    /// cover the precompile calls before the pairing; steps of 1,000 above cover the pairing.
     function test_validProofWithTooLittleGas_neverRevertsInvalidSignature() public {
         address b = _create(250_000);
         bytes memory call = abi.encodeCall(DrandQuicknetBeacon.beaconValue, (1000, SIG_1000));
         uint256 short;
         uint256 verified;
-        for (uint256 g = 20_000; g <= 420_000; g += 1_000) {
+        for (uint256 g = 1; g <= 420_000; g += g < 40_000 ? 1 : 1_000) {
             (bool ok, bytes memory ret) = b.staticcall{gas: g}(call);
             if (ok) {
                 assertEq(abi.decode(ret, (bytes32)), RAND_1000);

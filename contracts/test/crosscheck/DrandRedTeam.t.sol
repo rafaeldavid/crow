@@ -500,7 +500,7 @@ contract DrandRedTeamTest is Base {
         uint256 saidInvalid;
         uint256 saidShort;
         uint256 firstSettled;
-        for (uint256 g = 60_000; g <= 600_000; g += 5_000) {
+        for (uint256 g = 1; g <= 600_000; g += g < 60_000 ? 3 : 5_000) {
             (bool ok, bytes memory ret) = address(rules).call{gas: g}(callData);
             if (ok) {
                 firstSettled = g;
@@ -514,7 +514,7 @@ contract DrandRedTeamTest is Base {
         assertEq(uint8(_stage(id)), uint8(IHoldbackRules.Stage.Released));
         assertEq(saidInvalid, 0, "a gas limit made the valid proof say InvalidSignature");
         assertGt(saidShort, 0, "no gas limit produced NotEnoughGas for the valid proof");
-        emit log_named_uint("gas limits, 5,000 gas apart, where the valid proof says NotEnoughGas", saidShort);
+        emit log_named_uint("gas limits (3 gas apart below 60,000, then 5,000) where the valid proof says NotEnoughGas", saidShort);
         emit log_named_uint("least gas limit at which the valid fallback decision settles", firstSettled);
     }
 

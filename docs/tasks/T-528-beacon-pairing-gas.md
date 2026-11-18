@@ -48,6 +48,25 @@ An outside scan's findings in group G3 repeat two known issues of the beacon. Th
   - `NoAdmin.fuzz.t.sol`'s reviewed ABI allowlist for the beacon gains `MIN_PAIRING_GAS()` and `PAIRING_GAS()`, both read-only.
   - `DrandRedTeam.t.sol`'s `test_attack_break_validDecisionWithTooLittleGas_revertsAndSettlesOnRetry` pinned R-9: it required some gas limit to make a valid proof say `InvalidSignature`. It now requires the opposite, through the rules contract's `decide`: no gas limit makes the valid proof say `InvalidSignature`, and some say `NotEnoughGas`. Measured from 60,000 to 600,000 gas in steps of 5,000: 19 limits said `NotEnoughGas`, none said `InvalidSignature`, and the decision first settled at 275,000 gas [measured, `-vv`].
 
+**Review (kind 7, one reviewer, 2026-11-18): PASS, no blocking finding.**
+- **The reviewer's own measurements:**
+  - Run against the lane's beacon, the tests failed the same way as recorded above.
+  - The full suite passed 516 of 516 tests on the branch.
+  - The vector suites change only by the argument.
+  - No other code deploys the beacon without the argument.
+  - `--check` round-trips the record it wrote.
+- **Non-blocking, fixed:**
+  - **The precompile calls before the pairing.** A valid proof still said `InvalidSignature` when the gas ran out there: at 9,469 to 10,811 gas directly, and at 24,114 to 25,476 gas through `decide` [the review's measurement]. The test's claim, "never `InvalidSignature`", was therefore false below its first gas value.
+    - `_call` now applies the same 1/63 rule as the pairing: a failed MODEXP, MAP_FP_TO_G1 or G1ADD call that leaves 1/63 of the gas before it or less reverts `NotEnoughGas`. Any other failure stays `InvalidSignature`, including a precompile that reverts and returns its gas, which `test_attack_fork_mapOrAddAnswerOfAnotherLength_refused` covers. A missing precompile's empty answer also stays `InvalidSignature`.
+    - Both sweeps now start at 1 gas: steps of 1 up to 40,000 directly, and steps of 3 up to 60,000 through `decide`.
+    - After the fix, no gas limit in either sweep makes a valid proof say `InvalidSignature`. Through `decide`, 683 limits said `NotEnoughGas`, and the decision first settled at 275,001 gas [measured].
+  - **The comments:** the NatSpec of `NotEnoughGas` and `beaconValue` now say when the error comes, and `PAIRING_GAS` notes what a very large value does.
+  - **`deploy-script.test.ts`** now asserts the beacon's record args, `['250000']`.
+- **Non-blocking, left as they are:**
+  - The EVM adapter does not name the beacon's errors (T-529's Handoff, item 3).
+  - On `--check`, a pairing-gas mismatch fails with the generic "creation input differs" message, but it still fails closed.
+  - Under Fusaka's MODEXP prices, the gas band before the pairing is wider. The fix covers it by the same rule, but forge 1.0.0 on Prague cannot measure it [inferred].
+
 **Full suite:** see the pull request. The anvil suites that run the deploy script run in CI only; they were not run locally (no `node_modules` in the worktree).
 
 ## Handoff

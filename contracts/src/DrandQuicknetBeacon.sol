@@ -64,15 +64,18 @@ contract DrandQuicknetBeacon is IHoldbackBeacon {
     uint256 public constant MIN_PAIRING_GAS = 102_900;
     /// @notice Gas forwarded to PAIRING_CHECK, fixed at deploy at or above `MIN_PAIRING_GAS`, so a repricing is met by
     ///         a new beacon instead of failing every proof. A failing precompile burns all the gas it was given (a point
-    ///         outside G1 makes it fail), so the value also bounds what a bad proof costs its relayer.
+    ///         outside G1 makes it fail), so the value also bounds what a bad proof costs its relayer. A value above what
+    ///         a transaction can forward makes every failed pairing read as `NotEnoughGas`; the deployer chooses it, and
+    ///         the parties can read it here.
     uint256 public immutable PAIRING_GAS;
 
     /// @notice The proof does not verify: not 48 bytes, not a valid compressed G1 point, not in the subgroup, not the
     ///         signature of the round, or a precompile missing or failing.
     error InvalidSignature();
 
-    /// @notice The pairing failed with 1/63 of `PAIRING_GAS` or less left: the call reached PAIRING_CHECK with less
-    ///         than `PAIRING_GAS`, or with almost nothing to spare. The same call with more gas is judged.
+    /// @notice The call ran short of gas before the proof was judged: a precompile before the pairing failed, or the
+    ///         pairing failed with 1/63 of `PAIRING_GAS` or less left (it got less than `PAIRING_GAS`, or that with almost
+    ///         nothing to spare). The same call with more gas is judged.
     error NotEnoughGas();
 
     /// @notice A constructor's pairing gas below `MIN_PAIRING_GAS`, two pairs' price under EIP-2537: a deploy-time
@@ -93,8 +96,8 @@ contract DrandQuicknetBeacon is IHoldbackBeacon {
 
     /// @inheritdoc IHoldbackBeacon
     /// @dev Verifies the 48-byte compressed signature of `round` with one pairing check and returns sha256 of the
-    ///      signature bytes. Reverts `InvalidSignature` when it does not verify, and `NotEnoughGas` when the pairing
-    ///      was given less than `PAIRING_GAS`.
+    ///      signature bytes. Reverts `InvalidSignature` when it does not verify, and `NotEnoughGas` when the call ran
+    ///      short of gas before the proof was judged (see the error).
     function beaconValue(uint64 round, bytes calldata signature) external view returns (bytes32) {
         if (signature.length != 48) revert InvalidSignature();
         bytes memory sig = _decompress(signature);
@@ -177,9 +180,15 @@ contract DrandQuicknetBeacon is IHoldbackBeacon {
         return _call(MODEXP, abi.encodePacked(uint256(64), e.length, uint256(64), hi, lo, e, P_HI, P_LO), 64);
     }
 
+    /// @dev MODEXP, MAP_FP_TO_G1 and G1ADD get only well-formed input here (field elements reduced mod p, x below p,
+    ///      mapped points). A call that fails and leaves 1/63 of the gas before it or less ran out of gas (EIP-150, as
+    ///      for the pairing): `NotEnoughGas`. Any other failure, and a missing precompile's empty answer, are refused
+    ///      with `InvalidSignature`.
     function _call(address precompile, bytes memory input, uint256 outLen) internal view returns (bytes memory out) {
         bool ok;
+        uint256 before = gasleft();
         (ok, out) = precompile.staticcall(input);
+        if (!ok && gasleft() <= before / 63) revert NotEnoughGas();
         if (!ok || out.length != outLen) revert InvalidSignature();
     }
 
