@@ -261,10 +261,10 @@ export function buildCiReport({ runs, jobs, prs, sinceMs, untilMs }) {
   // What-ifs for the proposals: skip a job on the runs whose change touches none of its inputs. A run with no known
   // file list counts as touching them. The new wall time is the last remaining job's end plus check's own time; it
   // leaves out the shorter queues fewer jobs would bring, so it understates the saving.
-  const whatIfSkip = (jobRe, inputs) => {
+  const whatIfSkip = (jobRe, inputs, skips = (r) => r.files && !r.files.some((f) => inputs.test(f))) => {
     const out = {};
     for (const [label, list] of [['pullRequest', prRuns], ['push', pushRuns]]) {
-      const hit = list.filter((r) => r.files && !r.files.some((f) => inputs.test(f)) && r.first.some((j) => jobRe.test(j.name) && j.conclusion !== 'skipped'));
+      const hit = list.filter((r) => skips(r) && r.first.some((j) => jobRe.test(j.name) && j.conclusion !== 'skipped'));
       const before = [];
       const after = [];
       let saved = 0;
@@ -332,6 +332,8 @@ export function buildCiReport({ runs, jobs, prs, sinceMs, untilMs }) {
       whatIf: {
         formalOnItsInputs: whatIfSkip(/^formal \(TLC\)$/, FORMAL_INPUTS),
         contractsOnItsInputs: whatIfSkip(/^contracts \(forge test\)$/, CONTRACTS_INPUTS),
+        // a merged docs or task-file pull request skips the model check, forge test and anvil; static and tests stay
+        docsOnlySkipsChainAndFormal: whatIfSkip(/^(formal \(TLC\)|contracts \(forge test\)|anvil tests, )/, null, (r) => r.kind === 'docs' || r.kind === 'tasks'),
       },
     },
     pullRequests: {
@@ -379,7 +381,7 @@ export function toMarkdown(rep) {
   for (const [name, where, v] of [['forge build', 'anvil legs, pull requests', st.forgeBuildPr], ['forge build', 'anvil legs, push to main', st.forgeBuildPush], ['pnpm install', 'every job, pull requests', st.installPr], ['pnpm build', 'every job, pull requests', st.buildPr], ['submodules', 'every job, pull requests', st.submodulesPr]])
     out.push(`| ${name} | ${where} | ${v.steps} | ${fmtS(v.medianS)} | ${fmtS(v.p90S)} | ${v.minutes} |`);
   out.push('', 'What if a job ran only when its inputs changed (runs whose change touches none of them):', '', '| Job | Where | Runs | Skipping | Runner minutes saved | Median wall before → after | p90 wall before → after |', '| --- | --- | --- | --- | --- | --- | --- |');
-  for (const [name, w] of [['formal (TLC)', rep.ci.whatIf.formalOnItsInputs], ['contracts (forge test)', rep.ci.whatIf.contractsOnItsInputs]])
+  for (const [name, w] of [['formal (TLC)', rep.ci.whatIf.formalOnItsInputs], ['contracts (forge test)', rep.ci.whatIf.contractsOnItsInputs], ['formal, contracts, anvil on docs or task files only', rep.ci.whatIf.docsOnlySkipsChainAndFormal]])
     for (const [where, v] of Object.entries(w)) out.push(`| ${name} | ${where} | ${v.runsOf} | ${v.runsSkipping} | ${v.runnerMinutesSaved} | ${fmtS(v.wallMedianS.before)} → ${fmtS(v.wallMedianS.after)} | ${fmtS(v.wallP90S.before)} → ${fmtS(v.wallP90S.after)} |`);
   out.push('');
   const pr = rep.pullRequests;

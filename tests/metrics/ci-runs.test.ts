@@ -131,6 +131,8 @@ describe('ci-runs', () => {
     expect(rep.ci.whatIf.formalOnItsInputs.push).toEqual({ runsOf: 1, runsSkipping: 1, runnerMinutesSaved: 16.5, wallMedianS: { before: 1010, after: 20 }, wallP90S: { before: 1010, after: 20 } });
     // No pull-request run here has a formal job, so none skips one.
     expect(rep.ci.whatIf.formalOnItsInputs.pullRequest).toMatchObject({ runsOf: 4, runsSkipping: 0, runnerMinutesSaved: 0 });
+    // The same push merged only a task file, so the docs-only rule skips its formal job too.
+    expect(rep.ci.whatIf.docsOnlySkipsChainAndFormal.push).toMatchObject({ runsSkipping: 1, runnerMinutesSaved: 16.5, wallMedianS: { before: 1010, after: 20 } });
     expect(rep.ci.pushByKind).toEqual({ tasks: { runs: 1, runnerMinutes: 16.8, wallMedianS: 1010 } });
     expect(rep.ci.steps.installPr).toEqual({ steps: 1, medianS: 28, p90S: 28, minutes: 0.5 });
   });
