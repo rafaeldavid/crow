@@ -5,7 +5,7 @@
 - **Depends on:** T-501 (a finished job delivered into a new deal), T-503 (a full refund both parties sign): the two workarounds the decision folds into one step
 - **Paths this task may touch:** `docs/decisions/ADR-0039-amend-a-funded-deal.md` (new), `docs/research/2026-11-18-amending-a-funded-deal.md` and its folder (new), `docs/research/README.md` (one row), `docs/decisions-today.md` (D78), this file. Private: `strategy/2026-11-18-amendment-cases.md` in crow-private.
 - **Human gate:** yes: ADR-0039's four open points are Rafa's. The record changes no code.
-- **Status:** review
+- **Status:** done (merged as `aafc3011`, PR 650; the decision waits on Rafa, D78)
 - **Agent/session:** the T-524 session (`amend-decision`), 2026-11-18, branch `t-524-amend-decision`.
 - **Roadmap row:** N188
 - **Change kind:** 10, research and decisions.
@@ -33,7 +33,7 @@ This task decides what a change may touch, how it is signed, where it is enforce
 - [x] What the gate before signing removes, and what remains (ADR-0039, Context; the note, section 1).
 - [x] D78 in `docs/decisions-today.md`, Status `needs Rafa`.
 - [x] No partner, customer or deal ID in the public repository; those are in the private note.
-- [ ] The pull request merged after CI and one review.
+- [x] The pull request merged after CI and two review passes (PR 650, `aafc3011`).
 
 ## The build that follows
 
