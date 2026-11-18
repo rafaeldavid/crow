@@ -15,7 +15,12 @@ On 2026-11-18 Crow bought a security review for itself through its own buyer age
 
 ## The six changes
 
-1. **One approval, not three** (`buy.txt` step 1): the install asks for approval only when the principal has not already approved it. The yes that counts stays at the stop, after the agent has shown the offer.
+1. **One question at the start, not a yes at each step** (`buy.txt` steps 1 and 5 and the closing paragraph; Rafa, 2026-11-18: "So like multiple choice approve all or whatever"). The agent asks its principal once:
+   - (a) approve all: install, fund an offer that matches every term the principal gave (step 4's check still runs), and send the first-deal report at the end;
+   - (b) approve the install and the report, and stop at the offer for its yes;
+   - (c) ask at each step.
+
+   No answer means (c), today's behaviour. With (a), `buy.mjs` still refuses an offer over the most the principal pays (exit 1), and any field that does not match stops the agent. The report stays opt-in, and its contents are unchanged: it never carries the scope.
 2. **The faucet already funded the wallet** (`buy.txt` step 6): on a test network, the approve run has had the faucet send the total to the payment address. The agent had grepped `buy.mjs` to find this out.
 3. **A wallet with no digest display is enough** (`ref/buyer-signer.txt`): `fund` recovers the signature over its own copy of the message and refuses a file changed after it was written, so a wallet that signs the checked file itself needs no digest display. The agent had written a `viem` script to compute the digest, the most code in its run.
 4. **Three `cast` lines** (`ref/buyer-signer.txt`): `cast wallet new`, `cast wallet sign --data --from-file`, `cast wallet verify`, as the agent ran them; "any wallet" stays the rule.
@@ -29,7 +34,7 @@ On 2026-11-18 Crow bought a security review for itself through its own buyer age
   - The quote credential is sent only as `Authorization: Bearer` to the quote URL.
   - `fund` recovers each signature over the signer's own message and refuses a file whose digest changed.
 - **The `cast` lines [measured, the buyer agent's transcript, 2026-11-18]:** `cast wallet sign --data --from-file` and `cast wallet verify --address … --data --from-file …` ran on the funding file; the verify printed "Validation succeeded".
-- **Token budget [measured, `node site/check.mjs`]:** the buyer's first-deal path (`llms.txt` + `buy.txt`) went from 4,612 to 4,769 of 5,000 tokens (bytes divided by four; no key set). The seller's path is unchanged at 4,302.
+- **Token budget [measured, `node site/check.mjs`]:** the buyer's first-deal path (`llms.txt` + `buy.txt`) went from 4,612 to 4,855 of 5,000 tokens (bytes divided by four; no key set). The seller's path is unchanged at 4,302.
 - **Checks [measured]:**
   - `node site/check.mjs`: PASS.
   - `pnpm exec vitest run tests/site-guides.test.ts tests/guide-budget.test.ts tests/site-bundles.test.ts tests/design-map.test.ts`: 65 of 65 pass.
@@ -37,4 +42,5 @@ On 2026-11-18 Crow bought a security review for itself through its own buyer age
 ## Handoff
 
 - **Deploy:** the lines reach crow.direct only with a site deploy (`pnpm site:deploy` from a fresh detached checkout of `origin/main`, `docs/operations.md`), which is Rafa's.
-- **Measure after:** the next buyer run, on the same path, counts its approvals and its commands. The target is 1 approval and no command spent reading `buy.mjs` for facts the guide states.
+- **Measure after:** the next buyer run, on the same path, counts its approvals and its commands. The target is 1 approval with (b), and none after the start with (a). No command should go to reading `buy.mjs` for facts the guide states.
+- **Budget:** the buyer's path has 145 tokens of headroom left. The next line added to `buy.txt` should replace one.
