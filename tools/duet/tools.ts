@@ -16,6 +16,8 @@ import { dirname, join, relative, resolve, sep } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import type { ToolSpec } from './providers.ts';
 import type { Recorder, Role, Secrets } from './record.ts';
+import { DEFAULTS } from '../../examples/seller-adapter-core.ts';
+import { TEMPLATE } from './review.ts';
 
 type J = any; // eslint-disable-line @typescript-eslint/no-explicit-any
 
@@ -473,6 +475,11 @@ export class Toolbox {
     const journal = c.journal === undefined ? 'seller-adapter.journal.json' : c.journal;
     if (typeof journal !== 'string') throw new Refused('journal must be a file path inside your folder');
     c.journal = this.inside(journal);
+    // The demo's form, version 1 (review.ts, TEMPLATE), with what the shipped template brings by default: the scope
+    // rules and the salt (T-534).
+    c.template = fileURLToPath(TEMPLATE);
+    c.scope ??= DEFAULTS.scope;
+    c.reportSalt = true;
     const copy = join(this.o.owner, `adapter-config-${Date.now()}.json`);
     writeFileSync(copy, JSON.stringify(c, null, 2));
     return copy;

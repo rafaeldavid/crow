@@ -12,6 +12,7 @@
 //
 // The rules were written from the design set (three firms). The held-out firm (heldout.json) only runs through
 // the same rules; a rule that fails on it is a finding, not a bug to fix here.
+import { createHash } from 'node:crypto';
 import { spawnSync } from 'node:child_process';
 import { mkdirSync, readFileSync, writeFileSync, existsSync } from 'node:fs';
 import { dirname, join, resolve } from 'node:path';
@@ -30,6 +31,10 @@ const template = JSON.parse(readFileSync(join(root, 'examples/seller-adapter.tem
 // The form's limits, read from the template so the script follows it if it changes.
 const findingSchema = template.checks.find((c) => c.id === 'report').schema.properties.findings.items;
 const LIMIT = Object.fromEntries(['title', 'rootCause', 'impact', 'recommendedFix'].map((k) => [k, findingSchema.properties[k].maxLength]));
+// T-534: what the form requires of a finding, and whether it holds a proof check by default (version 2 does not).
+const REQUIRED = new Set(findingSchema.required);
+const PROOF_BY_DEFAULT = template.checks.some((c) => c.id === 'proof');
+const templateSha256 = createHash('sha256').update(readFileSync(join(root, 'examples/seller-adapter.template.json'))).digest('hex');
 const MEDIUM_UP = new Set(['Critical', 'High', 'Medium']);
 // packages/judgment/src/hidden.ts, HIDDEN_GLOBAL: the classes the `hidden` check counts.
 const HIDDEN = /[\u{E0000}-\u{E007F}؜‎‏‪-‮⁦-⁩︀-️\u{E0100}-\u{E01EF}᠋-᠍᠏­͏ᅟᅠ឴឵᠎​-‍⁠-⁤⁪-⁯ㅤ﻿ﾠ\u{1D173}-\u{1D17A}]/gu;
@@ -326,9 +331,10 @@ function convert(r) {
   const add = (k) => (perFinding[k] = (perFinding[k] ?? 0) + 1);
   for (const { f, severityWord } of findings) {
     if (!f.severity) add(`severity: "${severityWord}" has no place on the form's scale`);
-    if (!f.locations.length) add('location: the finding names no file in scope');
+    // A field the form does not require is no cause (T-534: version 2 requires neither a location nor a fix).
+    if (!f.locations.length && REQUIRED.has('locations')) add('location: the finding names no file in scope');
     if (!f.rootCause) add('root cause: no description text found');
-    if (!f.recommendedFix) add('recommended fix: no separate recommendation section (a model would have to cut it out of the prose)');
+    if (!f.recommendedFix && REQUIRED.has('recommendedFix')) add('recommended fix: no separate recommendation section (a model would have to cut it out of the prose)');
   }
   if (lost.findingsNotParsed) notes.push(`findings: ${lost.findingsNotParsed} finding identifiers in the text match no finding header the rules know`);
   if (!heads.length && ids.size === 0 && !/no (security )?(issues|findings|vulnerabilities)/i.test(text)) notes.push('findings: the rules find no finding and the report does not say it has none');
@@ -349,7 +355,7 @@ function convert(r) {
   const blockers = new Set();
   for (const n of notes) blockers.add(n.split(':')[0] + (n.startsWith('commit') ? (n.includes('more than one') ? ' (several)' : n.includes('tag') ? ' (not 40 characters)' : ' (none)') : ''));
   if (Object.keys(over).length) blockers.add('text over a field limit');
-  if (proofNeeded) blockers.add('proof files');
+  if (proofNeeded && PROOF_BY_DEFAULT) blockers.add('proof files');
   if (hidden) blockers.add('hidden characters');
 
   // Characters: the source, the part inside findings, and what the JSON fields carry.
@@ -394,8 +400,10 @@ function relaxed(checks) {
   for (const k of Object.keys(LIMIT)) delete f.properties[k].maxLength;
   f.required = f.required.filter((k) => k !== 'locations' && k !== 'recommendedFix');
   delete f.properties.locations.minItems;
-  delete c.find((x) => x.id === 'scope').schema.properties.findings.items.properties.locations.minItems;
-  c.find((x) => x.id === 'scope').schema.properties.findings.items.required = [];
+  // Version 1's scope rule (every finding has a location, each in scope); version 2's already allows none.
+  const scopeItems = c.find((x) => x.id === 'scope').schema.properties.findings.items;
+  if (scopeItems.properties?.locations) delete scopeItems.properties.locations.minItems;
+  if (scopeItems.required) scopeItems.required = [];
   return c.filter((x) => x.id !== 'proof');
 }
 
@@ -416,12 +424,13 @@ function termsFor(report, proof, relax = false) {
   return { deliverable: fill(template.deliverable), acceptance: { deterministicChecks: checks, rubric: { criteria: [], passThreshold: 0 } } };
 }
 
-function runChecks(dir, name, report, proof, relax = false) {
+function runChecks(dir, name, report, proof, relax = false, strip = relax) {
   const termsPath = join(dir, `terms-${name}.json`);
   writeFileSync(termsPath, JSON.stringify(termsFor(report, proof, relax), null, 2));
   let file = join(dir, 'report.json');
-  if (relax) {
-    file = join(dir, 'report-relaxed.json');
+  if (strip) {
+    // The seller's step before it delivers (T-534, decision 2): zero-width characters out, every other one kept.
+    file = join(dir, `report-${name}.json`);
     writeFileSync(file, JSON.stringify(report, null, 2).replace(/[​-‍⁠﻿]/g, ''));
   }
   const res = spawnSync(process.execPath, [join(root, 'examples/check-delivery.ts'), termsPath, file, '--json'], { cwd: root, encoding: 'utf8' });
@@ -446,8 +455,9 @@ for (const r of sources.reports) {
   const withProof = runChecks(dir, 'default', c.report, true);
   const noProof = runChecks(dir, 'no-proof', c.report, false);
   const relaxedRun = runChecks(dir, 'relaxed', c.report, false, true);
-  rows.push({ id: r.id, set: heldout.has(r.id) ? 'heldout' : 'design', maps: c.notes.length === 0, notes: c.notes, ...c.stats, defaultTerms: withProof, noProofTerm: noProof, relaxedWhatIf: relaxedRun });
-  console.log(`${r.id.padEnd(11)} ${heldout.has(r.id) ? 'held-out' : 'design  '} findings ${String(c.stats.findings).padStart(3)}  maps ${c.notes.length === 0 ? 'yes' : 'no '}  default ${withProof.result.padEnd(6)}  no-proof ${noProof.result}`);
+  const stripped = runChecks(dir, 'stripped', c.report, true, false, true);
+  rows.push({ id: r.id, set: heldout.has(r.id) ? 'heldout' : 'design', maps: c.notes.length === 0, notes: c.notes, ...c.stats, defaultTerms: withProof, noProofTerm: noProof, strippedDefaultTerms: stripped, relaxedWhatIf: relaxedRun });
+  console.log(`${r.id.padEnd(11)} ${heldout.has(r.id) ? 'held-out' : 'design  '} findings ${String(c.stats.findings).padStart(3)}  maps ${c.notes.length === 0 ? 'yes' : 'no '}  default ${withProof.result.padEnd(6)}  no-proof ${noProof.result.padEnd(6)}  stripped ${stripped.result}`);
 }
 
 const summary = {};
@@ -478,6 +488,11 @@ for (const set of ['design', 'heldout', 'all']) {
     ofThoseAcceptedNoProofTerm: mapped.filter((x) => x.noProofTerm.result === 'accept').length,
     allAcceptedDefaultTerms: rs.filter((x) => x.defaultTerms.result === 'accept').length,
     allAcceptedNoProofTerm: rs.filter((x) => x.noProofTerm.result === 'accept').length,
+    allAcceptedDefaultTermsStripped: rs.filter((x) => x.strippedDefaultTerms.result === 'accept').length,
+    // The form's headline (T-534): a review of several repositories is several deals, so a report that passes only
+    // because the converter kept its first commit and dropped the others is not counted.
+    acceptedOneCommit: rs.filter((x) => x.defaultTerms.result === 'accept' && x.commits <= 1).length,
+    acceptedOneCommitStripped: rs.filter((x) => x.strippedDefaultTerms.result === 'accept' && x.commits <= 1).length,
     reportsNotMappingByCause: causes,
     failingChecksAmongMappedDefault: checkFails('defaultTerms', mapped),
     failingChecksAmongMappedNoProof: checkFails('noProofTerm', mapped),
@@ -493,5 +508,7 @@ for (const set of ['design', 'heldout', 'all']) {
     locationsOutOfScope: rs.reduce((n, x) => n + x.lost.locationsOutOfScope, 0),
   };
 }
-writeFileSync(join(here, 'results.json'), JSON.stringify({ template: 'examples/seller-adapter.template.json', summary, reports: rows }, null, 2) + '\n');
+// The form measured, by version and hash: tests/security-review-form.test.ts fails when the template changes and
+// this file was not rewritten by a new run (T-534).
+writeFileSync(join(here, 'results.json'), JSON.stringify({ template: 'examples/seller-adapter.template.json', form: template.form ?? { name: 'security-review', version: 1 }, templateSha256, summary, reports: rows }, null, 2) + '\n');
 console.log(JSON.stringify(summary, null, 2));
