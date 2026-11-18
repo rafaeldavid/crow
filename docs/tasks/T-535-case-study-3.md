@@ -103,7 +103,7 @@ All measured on 2026-11-18 on Sepolia (chain 11155111) through `https://api.crow
   - decision `0x40abe267a15da04661a32e1cd42ac82385f6ebc604fd3032dce4c8f9c0d55635`.
 - Reader: `examples/evidence.ts check`: PASSED, 54 offline checks, naming "the price 0.00 tUSDC and the adjudicator's fee".
 
-**A waiver attempt that stopped after funding.** Deal `0x04aa0bb5d0aa80b34f76d8382aabe072e6653affa17b8b8954e67a5053e5c85a`, funded with 41.00 tUSDC at 18:21:24 UTC (`0x7685825602fd69f3109b9850f92daaacc0713faced96f04cf01ff37a1b7eef8b`). The buyer refused, correctly, to sign a prepared settlement whose body carried the delivery and its envelope, and the script stopped. Nothing was delivered. The deal stays Held until `deliverBy`, 19:21:16 UTC, and the operators then reclaim it to the buyer, as they did deal 2 (inferred).
+**A waiver attempt that stopped after funding.** Deal `0x04aa0bb5d0aa80b34f76d8382aabe072e6653affa17b8b8954e67a5053e5c85a`, funded with 41.00 tUSDC at 18:21:24 UTC (`0x7685825602fd69f3109b9850f92daaacc0713faced96f04cf01ff37a1b7eef8b`). The buyer refused, correctly, to sign a prepared settlement whose body carried the delivery and its envelope, and the script stopped. Nothing was delivered. It stayed Held until `deliverBy`, 19:21:16 UTC; the operators reclaimed it at 19:22:24 UTC (`0xfda5b5759a5f4dfcbd1591deac201cc86c7a7ca7c7d55c997bee9ba8ac350998`), and all 41.00 tUSDC went back to the buyer: Refunded (measured).
 
 **Starts that failed before any money moved.** Each was caused by this task's input, and none by the protocol:
 - `audit-deal` refused a terms file that named the local token symbol, before any deal opened.
