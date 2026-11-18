@@ -1,0 +1,16 @@
+{
+  "firm": "shieldify",
+  "about": "T-534: Shieldify Security's report layout, written from its six layout-set reports only (sources.json, set layout-2), never from the held-out set (heldout-2). measure.mjs applies it to this firm's reports alone, beside the rules written from the design set. The reports are Markdown as published, so no text is extracted first. Their finding headings ('# [M-01] Title'), their 'Review Commit Hash' row and their section labels Description, Impact, Proof of Concept and Recommendation are ones the design-set rules already read. This file adds only what those rules miss.",
+  "sections": {
+    "locations": ["location of affected code"],
+    "dropped": ["team response"]
+  },
+  "scope": {
+    "heading": "^#{1,3}\\s+(?:[0-9]+(?:\\.[0-9]+)*\\s+)?Scope\\s*$",
+    "table": {
+      "headerCells": ["file", "folder"],
+      "skipCells": ["total"],
+      "trimTrailing": "."
+    }
+  }
+}

@@ -14,6 +14,7 @@ import { loadTermsFile } from '@holdback/testkit';
 import { generatePrivateKey } from 'viem/accounts';
 import { afterAll, beforeAll, beforeEach, describe, expect, it } from 'vitest';
 import { makeKeys } from './buyer-signer.ts';
+import { fill } from './seller-adapter-core.ts';
 import { CASES, DELIVERY_WINDOW_SEC, parseArgs, PRICE_UNITS, rehearse, runAuditDeal, SCOPE, shown, startLocalWorld, startSeller, type AuditDealOptions, type CaseName, type LocalWorld, type RehearsalOptions } from './audit-deal.ts';
 import { Refusal } from './verify.ts';
 
@@ -86,8 +87,10 @@ describe('examples/audit-deal.ts', () => {
     expect(r.offer.price).toEqual({ token: 'tUSD', amount: PRICE_UNITS });
     const terms = await get(1, `/v1/commitments/${r.commitmentId}/terms`);
     expect((Date.parse(terms.timing.deliverBy) - Date.parse(terms.createdAt)) / 1000).toBe(DELIVERY_WINDOW_SEC);
-    const template = loadTermsFile(new URL('../fixtures/terms/audit-report.yaml', import.meta.url).pathname);
-    expect(terms.acceptance).toEqual(template.acceptance);
+    // The shipped form, filled with the buyer's scope (T-534: fixtures/terms/audit-report.yaml stays the stricter
+    // worked example of site/ref/checks.txt, version 1 of the form).
+    const template = JSON.parse(readFileSync(new URL('./seller-adapter.template.json', import.meta.url), 'utf8'));
+    expect(terms.acceptance).toEqual({ deterministicChecks: fill(template.checks, SCOPE), rubric: { criteria: [], passThreshold: 0 } });
     expect(terms.deliverable.description).toContain(`commit ${SCOPE.commit}. Scope: ${SCOPE.files.join(', ')}.`);
     expect(terms.buyer).toBe(r.buyer);
     expect(terms.seller).toBe(r.seller);
@@ -102,7 +105,7 @@ describe('examples/audit-deal.ts', () => {
     expect(r.report).toMatchObject({ checks: 'accept', findings: 3 });
     const report = JSON.parse(r.delivery!.work!);
     expect(report).toMatchObject({ commit: SCOPE.commit, filesReviewed: SCOPE.files });
-    const pre = preflightDelivery({ plaintext: new TextEncoder().encode(r.delivery!.work!), mime: 'application/json', format: 'application/json', acceptance: template.acceptance });
+    const pre = preflightDelivery({ plaintext: new TextEncoder().encode(r.delivery!.work!), mime: 'application/json', format: 'application/json', acceptance: terms.acceptance });
     expect(pre.result).toBe('accept');
     expect(r.report!.plaintextSha256).toBe(pre.plaintextSha256);
 
@@ -120,7 +123,7 @@ describe('examples/audit-deal.ts', () => {
     ]);
     for (const [i, name] of names.entries()) expect(out).toContain(`${String(i + 1).padStart(2)}. ${name} (`);
     expect(out).toContain('price 2,000.00 tUSD, adjudication fee 1.00 tUSD, operator fee 0.20 tUSD, total 2,001.20 tUSD');
-    expect(out).toContain('5 checks: report, proof, scope, coverage, hidden');
+    expect(out).toContain('4 checks: report, scope, coverage, hidden'); // version 2 of the form: no proof check by default
     expect(out).toContain('Paid: 2,001.20 tUSD (hold 2,001.00 tUSD, operator fee 0.20 tUSD).');
     expect(out).toContain(`Receipt: {"commitmentId":"${r.commitmentId}","outcome":"Released"`);
     expect(out).toMatch(/seller adapter: \S+ 0x[0-9a-f]{64} preflight: accept, /);

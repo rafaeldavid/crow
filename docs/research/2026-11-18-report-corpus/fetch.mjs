@@ -36,7 +36,7 @@ for (const r of sources.reports) {
   manifest.push({
     id: r.id,
     firm: firm.name,
-    set: firm.set,
+    set: r.set ?? firm.set, // T-534: a report may name its own set (layout-2 beside heldout-2)
     date: r.date,
     address: `https://github.com/${firm.repo}/blob/${firm.commit}/${r.path.split('/').map(encodeURIComponent).join('/')}`,
     licence: firm.licence,
