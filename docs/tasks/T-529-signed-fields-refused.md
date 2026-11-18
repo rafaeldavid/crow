@@ -4,7 +4,7 @@
 - **Phase:** 2
 - **Kind:** 7, smart contracts, with a red team (new refusals in the funding and decision paths)
 - **Depends on:** T-527 (merged into the lane), T-523's plan, group G4 (L-1, I-1, RR-5)
-- **Paths this task may touch:** `contracts/src/HoldbackRules.sol`, `contracts/src/IHoldbackRules.sol`, `contracts/test/unit/SignedFieldsRefused.t.sol`, `contracts/test/attack/CarriedDeliveryRevert.t.sol` (G1's documenting test), the two test files that pinned the old behaviour (`contracts/test/crosscheck/R11Review.t.sol`, `contracts/test/attack/PhaseOneRedTeam.t.sol`), this file
+- **Paths this task may touch:** `contracts/src/HoldbackRules.sol`, `contracts/src/IHoldbackRules.sol`, `contracts/test/unit/SignedFieldsRefused.t.sol`, `contracts/test/attack/CarriedDeliveryRevert.t.sol` (G1's documenting test), `contracts/test/unit/ZeroAddressOutcomes.t.sol` (RR-3's documenting tests), the two test files that pinned the old behaviour (`contracts/test/crosscheck/R11Review.t.sol`, `contracts/test/attack/PhaseOneRedTeam.t.sol`), this file
 - **Human gate:** no for the lane; every deploy of the next build is Rafa's (Handoff)
 - **Status:** in review
 - **Agent/session:** the scan-fixes contract lane session (T-525)
@@ -21,7 +21,11 @@ RR-5 (`triggerFallback` after `fallbackBy`) gets the doc line the plan recommend
 
 **Left out:**
 - **A settlement naming its signers** (the plan's D-1). Rafa decided on 2026-11-18 that it waits for the rebuilt contracts. `MutualSettlement` is unchanged, and the session on `main` documents the limit.
-- **RR-3 (zero addresses at funding):** pending the coordinator's answer (Handoff). ADR-0033 §2 says the contract compares neither money address with anything, the zero address included (D31). The operators only warn.
+- **RR-3 (zero addresses at funding): decided by ADR-0033 and D31, no refusal added.** ADR-0033 §2 says the contract compares neither money address with anything, the zero address included. D31's reason applies: the operators warn, and the party may still choose. Rafa answered that ADR's open points himself (D62). A review's suggestion does not amend an accepted decision; the coordinator confirmed this on 2026-11-18, and Rafa may overrule. What each zero does today:
+  - A zero buyer, seller or primary adjudicator can never fund: Solady's signature checker returns false for a zero signer [inferred from reading].
+  - A zero `buyerPaymentAddress` can never fund: no ERC-3009 signature comes from the zero address [inferred from reading].
+  - A zero `sellerPayoutAddress` funds. An accept on the test token sends the price to the zero address, and the decider gets its fee [measured: `test_zeroPayoutAddress_funds_andAnAcceptSendsThePriceToTheZeroAddress`]. The demo's TestUSDC uses the same Solady transfer [inferred from reading].
+  - A zero fallback adjudicator funds. No fallback decision verifies, and the path ends in the default refund of price + fee [measured: `test_zeroFallbackAdjudicator_funds_andTheFallbackPathEndsInTheDefaultRefund`]. A zero appeal adjudicator behaves the same way after an escalation [inferred].
 
 **Also here: G1's documenting test.** G1's fix is off chain, in the operators. `CarriedDeliveryRevert.t.sol` records the contract's side of it, which the next build keeps.
 
@@ -79,7 +83,7 @@ Each new refusal could stop live deals on the next deployment if a sender filled
 
 ## Handoff
 
-**Open with the coordinator: RR-3.** I recommended leaving it out. If the answer is to refuse all seven addresses, that amends ADR-0033 §2 and the operators' warnings in `apps/operator/src/prepare.ts`, and it becomes its own task.
+**RR-3** is settled by ADR-0033 and D31 (Intent). Refusing zero addresses later would amend ADR-0033 §2 and the operators' warnings in `apps/operator/src/prepare.ts`, and would be its own task.
 
 **For Rafa: what a redeploy of the next build needs.** I deploy nothing. The lane's tip after this task carries T-527, T-528 and T-529. The steps are `docs/redeploy-contracts.md`'s, each with its go-ahead.
 1. **Bring `main` into the lane again before the freeze.** The session on `main` is landing G1's relay rule, the G8 fixes and the docs batch. Then tag the lane's tip `contracts-phase-one-2` (point of no return 2 is Rafa's).
@@ -95,4 +99,4 @@ Each new refusal could stop live deals on the next deployment if a sender filled
    - `state-model.md` §8.3, and the drand rows that quote 250,000 gas as a constant.
    - `contracts/README.md`.
 6. **Verification.** `scripts/sourcify-verify.mjs` zeroes immutables and compares the creation code as a prefix, so the beacon's argument needs no change there [inferred from reading].
-7. **Not in this build:** D-1 (the settlement's signer binding, with the rebuilt contracts), RR-3 (pending), and RR-4 (high-`s` signatures, accepted and documented).
+7. **Not in this build:** D-1 (the settlement's signer binding, with the rebuilt contracts), RR-3 (decided by ADR-0033 and D31; documented by tests), and RR-4 (high-`s` signatures, accepted and documented).
