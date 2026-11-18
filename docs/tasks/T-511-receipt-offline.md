@@ -79,7 +79,39 @@ Measured by reading the live API for the T-500 Released deal `0x341562cc…2e9b`
 
 ## Evidence
 
-Filled in before review.
+All measured on 2026-11-18 in this branch's worktree unless marked otherwise.
+
+- **The bundles.** `node examples/evidence.ts fetch <id> --out …` against `https://api.crow.direct` and `ethereum-sepolia-rpc.publicnode.com` wrote both T-500 deals: the Released one `0x341562cc…2e9b` (9 events, 3 transactions) and the Refunded one `0x9908966e…4272` (8 events, 3 transactions). The chain reads, fetched with the command the check prints, are beside them. They are kept gzipped in `fixtures/evidence/` because the repository's secret scanner flags the public test-token address keyed `token` (gitleaks `generic-api-key`, 20 findings on the plain JSON, none on the gzipped files), and this task may not edit `.gitleaksignore`.
+- **The Released deal checks offline.** `node examples/evidence.ts check released.json`, exit 0:
+
+```
+PASSED  47 offline checks on commitment 0x341562ccb28591a4df09a0cfbabfeffec1fff011631585e0a020a177ec192e9b, chain 11155111, rules contract 0x3be45128565abbc35dbd4660716b703ff489f1b4.
+
+What this file proves, with no network:
+- The seller 0xfb9e32622dd4fe894a5d7e790a304387acd1ac98 signed these terms. They hash to the commitment ID, so no term can differ from what was signed.
+- The buyer 0xd0a29422c5515a0ee31586a379a649803821dc29 signed its agreement to them, and its payment address 0xd0a29422c5515a0ee31586a379a649803821dc29 signed the transfer of 41.00 tUSDC into the escrow: the price 40.00 tUSDC and the adjudicator's fee.
+- The primary adjudicator 0xa909f87a64fbe6982c838c1c1bf2973cda7823ed signed its acceptance of the case.
+- The seller signed delivery 0x4714ce86…a27d; its encrypted work (6123 bytes, sha256:9cf…a2fa) is in this file.
+- The primary adjudicator 0xa909f87a64fbe6982c838c1c1bf2973cda7823ed signed the decision "accept" on that delivery, citing judgment record 0xbdd591ce…55ea, which it also signed.
+- That record ran exactly the terms' 5 deterministic checks: report passed, proof passed, scope passed, coverage passed, hidden passed, all required. No judge panel ran: the terms have no rubric criteria. Its reasons: all deterministic checks passed and the rubric is empty.
+- These signed messages are in transactions 0xa4b544b5…01cd, 0x10d513b8…17f3, 0xe47168fa…ae96, whose bytes are in this file and hash to those transaction hashes.
+- Operator 0x7BA5D158b503688E2c490aE62102e30685DdA526 signed a receipt for each of the 9 events it recorded. That is this operator's own account: compare the address with GET /v1/status of an operator you trust.
+
+What it does not prove:
+- That the transactions were mined and succeeded, so that the money moved. One chain read proves it: the receipt of the decide transaction 0xe47168fad7058cb2b164c7bceb297510cb3e2582a4ded02c6ffc88946194ae96. From a node you trust:
+    curl -s -X POST -H 'content-type: application/json' --data '{"jsonrpc":"2.0","id":1,"method":"eth_getTransactionReceipt","params":["0xe47168fad7058cb2b164c7bceb297510cb3e2582a4ded02c6ffc88946194ae96"]}' https://ethereum-sepolia-rpc.publicnode.com > receipt.json
+  then run this check again with --receipt receipt.json.
+- That the work itself passes the checks. The work is encrypted to the buyer and the adjudicators; a key holder can open it and rerun the checks with examples/check-delivery.ts.
+```
+
+- **With the chain read.** `check released.json --receipt released.receipt.json`: exit 0, 50 checks, "Transaction 0xe47168fa…ae96 succeeded in block 12153293 on the chain the node serves: the rules contract recorded the decision "accept" and paid the price 40.00 tUSDC to the seller." The Refunded deal: 46 offline checks, 49 with its receipt, decision "reject", the `proof` check FAILED, "returned the price 40.00 tUSDC to the buyer".
+- **Attack tests** (`examples/evidence.test.ts`, 9 tests, all pass in about 6 s; `fetch` is stubbed to throw, so any network call on the check path fails them):
+  - one changed value anywhere: every leaf and every key of the Released bundle (more than 300 positions) is changed one at a time, and the check fails on each. Its first run found one position the test did not change (a `null`), not a verifier gap; the test now changes `null` too;
+  - a signature from the wrong key: the judgment record signed by another key, a receipt signed by another key, and the buyer's agreement in the funding calldata signed by another key inside a transaction the attacker built and its own operator recorded (fails at "buyer's agreement");
+  - a receipt from another deal: a genuine receipt of the Refunded deal, as it is and renumbered to this deal's event;
+  - a decision that does not match the terms' hash: the Refunded deal's genuine decide transaction (fails at "judgment.decided transaction is for these terms"); its signed decision inside a call with this deal's terms (fails at "adjudicator's signature on the decision"); this deal's decision with the outcome flipped; the Refunded deal's genuine judgment record;
+  - the chain read: the other deal's receipt and a reverted receipt are refused.
+- **Local checks** (kind 4 and kind 1): `pnpm exec vitest run examples/evidence.test.ts examples/deployments.test.ts tests/design-map.test.ts tests/site-*.test.ts tests/guide-budget.test.ts`: 107 of 107 passed. `pnpm exec eslint examples/evidence.ts examples/evidence.test.ts` and `pnpm exec tsc -b examples`: clean. `node site/build.mjs && node site/check.mjs`: PASS; `site/try.mjs` keeps SHA-256 `fd7d9a4a…`, and no pinned bundle changed (`git status` shows only `site/ref/after-funding.txt` under `site/`).
 
 ## Decisions
 
