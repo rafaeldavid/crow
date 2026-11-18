@@ -249,7 +249,7 @@ export class EvmDeal {
     return { kind: 'early_accept', message: await this.sign(this.cast.buyer, { type: 'EarlyAccept', commitmentId: this.id, buyer: this.cast.buyer.address, attempt: 1, deliveryHash: this.named(over.deliveryHash), nonce: this.nonce(), expiresAt: plusSeconds(this.chain.now(), 86400) } as const) };
   }
 
-  async decide(role: 'primary' | 'fallback' | 'appeal', outcome: Decision['outcome'], round?: number, over: { deliveryHash?: Hex32 } = {}): Promise<Submission> {
+  async decide(role: 'primary' | 'fallback' | 'appeal', outcome: Decision['outcome'], round?: number, over: { deliveryHash?: Hex32; appealGround?: Decision['appealGround'] } = {}): Promise<Submission> {
     const actor = role === 'primary' ? this.cast.primary : role === 'fallback' ? this.cast.fallback : this.cast.appeal;
     const value = round === undefined ? null : this.chain.beacon(round);
     const seed = role === 'primary' ? this.seed : panelSeed(this.id, role, 1, value!);
@@ -268,6 +268,7 @@ export class EvmDeal {
       nonce: this.nonce(),
       expiresAt: plusSeconds(this.chain.now(), 86400),
       ...(round !== undefined ? { beacon: { source: 'sim' as const, round, value: value! } } : {}),
+      ...(over.appealGround ? { appealGround: over.appealGround } : {}),
       ...(outcome === 'accept' ? { keyForBuyer: { scheme: 'x25519-xsalsa20poly1305' as const, ciphertext: this.envelope(this.terms.buyer).ciphertext } } : {}),
       ...(outcome === 'escalate' ? { encryptedKeys: [this.envelope(this.terms.adjudication.appealAdjudicator)] } : {}),
     } as UnsignedMessage);
