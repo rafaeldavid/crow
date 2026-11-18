@@ -1255,11 +1255,14 @@ export class Operator {
     const bytes = await this.countedIfRefused(known, `w:${this.client(ctx)}`, this.o.rateLimit?.writes ?? 0, async () => {
       const chunks: Buffer[] = [];
       let size = 0;
+      // Past the limit the loop reads on and keeps nothing, and refuses at the end of the body. Leaving the loop early
+      // destroys the request's socket, which reset the client's upload or its next request on that socket (T-547,
+      // measured with a 2 MiB upload followed by any call).
       for await (const chunk of ctx.req as AsyncIterable<Buffer>) {
         size += chunk.length;
-        if (size > this.maxCiphertextBytes) fail('payload_too_large', `this node stores a ciphertext of at most ${this.maxCiphertextBytes} bytes (limits.maxCiphertextBytes in discovery)`, { maxBytes: this.maxCiphertextBytes });
-        chunks.push(chunk);
+        if (size <= this.maxCiphertextBytes) chunks.push(chunk);
       }
+      if (size > this.maxCiphertextBytes) fail('payload_too_large', `this node stores a ciphertext of at most ${this.maxCiphertextBytes} bytes (limits.maxCiphertextBytes in discovery)`, { maxBytes: this.maxCiphertextBytes });
       const read = new Uint8Array(Buffer.concat(chunks));
       if (read.length === 0) fail('invalid_terms', 'POST the ciphertext bytes as the body (application/octet-stream)');
       return read;

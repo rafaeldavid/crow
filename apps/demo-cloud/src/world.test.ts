@@ -11,7 +11,7 @@ import { LIVE_REGISTRY_URI, liveRegistry, markerFake, placeholderRegistry } from
 import { APPEAL_WINDOW_PROBLEM, canonicalKeccak, DRAND_QUICKNET_CHAIN_HASH, holdbackDomain, verifyRegistration, type AdjudicatorRegistration, type RegisteredAdjudicator } from '@holdback/core';
 import { LiveChain, type DeploymentFile } from '@holdback/settlement/live';
 import { encodePublicKey, generateEncryptionKeyPair } from '@holdback/core/crypto';
-import { MemoryFeedbackStore, signRegistration, testAccount, type StoredRegistration, type TestAccount } from '@holdback/operator';
+import { MemoryFeedbackStore, SIM_MAX_CIPHERTEXT_BYTES, signRegistration, testAccount, type StoredRegistration, type TestAccount } from '@holdback/operator';
 import { MemoryStorage, PublicWorld, type PublicWorldOptions } from './index.js';
 import { checkExchange } from '../../../tests/contract/openapi-check.ts';
 import { JudgeBudget } from './judges.js';
@@ -258,6 +258,8 @@ describe('public mode', () => {
   it('publishes the largest ciphertext it stores, refuses a larger one by that number, and the docs state the same (T-315)', async () => {
     const { urls } = await serve();
     const cap = DEMO_MAX_CIPHERTEXT_BYTES;
+    // T-547: `pnpm sim`'s world stores the same at most, so a rehearsal refuses what these nodes refuse.
+    expect(SIM_MAX_CIPHERTEXT_BYTES).toBe(cap);
     // Discovery, on both nodes.
     for (const u of urls) expect(((await (await fetch(`${u}/.well-known/holdback.json`)).json()) as J).limits.maxCiphertextBytes).toBe(cap);
     const upload = (bytes: Uint8Array, key: string) => fetch(`${urls[0]}/v1/ciphertext`, { method: 'POST', headers: { 'content-type': 'application/octet-stream', 'idempotency-key': key }, body: bytes });

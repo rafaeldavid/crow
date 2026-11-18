@@ -189,8 +189,8 @@ describe('one faucet (Simplify 3)', () => {
 describe('one discovery document (Simplify 1, F8, F9)', () => {
   it('carries the limits, idempotency retention and the demo facts, and GET / serves it too', async () => {
     const d = (await http('GET', `${api}/.well-known/holdback.json`)).body;
-    // T-315: a node that stores ciphertext states the largest it stores; without the option, the protocol's 10 MiB.
-    expect(d.limits).toEqual({ maxCiphertextBytes: 10_485_760, idempotency: { replays: 'success-only', retention: 'process' } });
+    // T-315: a node that stores ciphertext states the largest it stores; a sim world's, the test service's 1 MiB (T-547).
+    expect(d.limits).toEqual({ maxCiphertextBytes: 1_048_576, idempotency: { replays: 'success-only', retention: 'process' } });
     expect(d.demo).toMatchObject({ clubId: world.info.clubId, token: { id: 'tUSD', decimals: 6 }, faucet: { path: '/v1/faucet' } });
     expect(d.demo.adjudicators.map((a: J) => [a.role, a.address])).toEqual(world.info.adjudicators.map((a) => [a.role, a.address]));
     const root = (await http('GET', `${api}/`)).body;
