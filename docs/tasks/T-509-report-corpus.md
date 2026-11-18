@@ -6,7 +6,7 @@
 - **Depends on:** none
 - **Paths this task may touch:** `docs/research/2026-11-18-report-corpus.md`, `docs/research/2026-11-18-report-corpus/` (scripts, sources, manifest, results), `docs/research/README.md` (one row), this file
 - **Human gate:** no
-- **Status:** review
+- **Status:** done with the merge of pull request 635 on 2026-11-18, after CI passed and the review's 6 findings were fixed
 - **Agent/session:** the T-509 session, 2026-11-18, branch `t-509-report-corpus`
 - **Roadmap row:** N180
 
