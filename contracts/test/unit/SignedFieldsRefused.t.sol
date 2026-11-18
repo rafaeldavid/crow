@@ -44,7 +44,8 @@ contract SignedFieldsRefusedTest is Base {
     }
 
     function test_termsWithZeroDisputeFields_fund() public {
-        (, bytes32 id) = _funded();
+        (H.Terms memory t, bytes32 id) = _funded();
+        assertEq(t.timing.disputeBy + t.timing.disputeJudgeSec + t.timing.disputeFallbackSec, 0);
         assertEq(uint8(_stage(id)), uint8(IHoldbackRules.Stage.Held));
     }
 
@@ -118,13 +119,17 @@ contract SignedFieldsRefusedTest is Base {
     // ------------------------------------------------------------ a late fallback (documented, not refused)
 
     /// `triggerFallback` has no upper bound in time: sent at or after `fallbackBy`, it opens the fallback's turn with no
-    /// time left, and the default is due at once. The deal ends as it would have without the call.
+    /// time left (a fallback decision is past its deadline), and the default is due at once.
     function test_triggerFallbackAtFallbackBy_leadsStraightToTheDefault() public {
         (H.Terms memory t, bytes32 id) = _funded();
         _deliver(t, id);
         vm.warp(t.timing.fallbackBy);
         rules.triggerFallback(t);
         assertEq(uint8(_stage(id)), uint8(IHoldbackRules.Stage.FallbackJudging));
+        H.Decision memory m = _beaconDecision(id, H.ROLE_FALLBACK, H.OUTCOME_ACCEPT, uint64(t.timing.judgeBy));
+        m = _signDecision(t, id, m, fallbackAdj, FB_PK);
+        vm.expectRevert(IHoldbackRules.DeadlinePassed.selector);
+        rules.decide(t, m, _noDelivery(), "");
         rules.triggerDefault(t);
         assertEq(uint8(_stage(id)), uint8(IHoldbackRules.Stage.Refunded));
     }

@@ -4,7 +4,7 @@
 - **Phase:** 2
 - **Kind:** 7, smart contracts, with a red team (new refusals in the funding and decision paths)
 - **Depends on:** T-527 (merged into the lane), T-523's plan, group G4 (L-1, I-1, RR-5)
-- **Paths this task may touch:** `contracts/src/HoldbackRules.sol`, `contracts/src/IHoldbackRules.sol`, `contracts/test/unit/SignedFieldsRefused.t.sol`, `contracts/test/attack/CarriedDeliveryRevert.t.sol` (G1's documenting test), `contracts/test/unit/ZeroAddressOutcomes.t.sol` (RR-3's documenting tests), the two test files that pinned the old behaviour (`contracts/test/crosscheck/R11Review.t.sol`, `contracts/test/attack/PhaseOneRedTeam.t.sol`), this file
+- **Paths this task may touch:** `contracts/src/HoldbackRules.sol`, `contracts/src/IHoldbackRules.sol`, `contracts/src/HoldbackTypes.sol` (two NatSpec blocks, comments only), `contracts/scripts/mutants-lane.json` (the mutants of the changed lines), `contracts/test/unit/SignedFieldsRefused.t.sol`, `contracts/test/attack/CarriedDeliveryRevert.t.sol` (G1's documenting test), `contracts/test/unit/ZeroAddressOutcomes.t.sol` (RR-3's documenting tests), the two test files that pinned the old behaviour (`contracts/test/crosscheck/R11Review.t.sol`, `contracts/test/attack/PhaseOneRedTeam.t.sol`), this file
 - **Human gate:** no for the lane; every deploy of the next build is Rafa's (Handoff)
 - **Status:** in review
 - **Agent/session:** the scan-fixes contract lane session (T-525)
@@ -79,7 +79,23 @@ Each new refusal could stop live deals on the next deployment if a sender filled
 - `IHoldbackRules.sol`: the refusal lists of `agreeAndFund` and `decide`, and RR-5's line on `triggerFallback`.
 - No event, function, signed type or admin path changes.
 
-**Full suite, review and red team:** see the pull request.
+**Review (kind 7, one reviewer, 2026-11-18): ISSUES, one blocking finding, fixed.**
+- **Blocking, fixed:** `HoldbackTypes.sol`'s NatSpec for `Timing` and `Decision` still called the dispute fields, the escalation's appeal ground and the primary's beacon fields "signed only". The two blocks now state the new rules; the change is comments only.
+- **Checks that held:**
+  - The reviewer ran the new tests against the parent's sources: all 8 refusal tests failed and the 4 positive tests and G1's test passed, which reproduces the table above.
+  - Exactly the three old tests were removed.
+  - The compiled rules ABI equals `abis.json`'s.
+  - The differential and invariant suites pass, and their handlers never fill the refused fields [measured by the review].
+- **Non-blocking, fixed:**
+  - The lane's mutant list: M047 is retargeted, because its line now also stands in `_escalationDecision`; L008 is retargeted; and L042 to L044 cover the three new comparisons. Each `find` now matches exactly once [measured]. The mutants were not run.
+  - The doc spots listed in the Handoff.
+  - The late-fallback test now shows that a fallback decision is past its deadline.
+  - The zero-dispute test asserts its fields.
+- **Non-blocking, left as they are:**
+  - The invariant handler does not fuzz the refused fields.
+  - `PinnedSource.t.sol` reads the default `out/` folder, so it fails under a separate `--out`. That comes from how the suite is run, not from this change.
+
+**Full suite and red team:** see the pull request.
 
 ## Handoff
 
@@ -96,7 +112,8 @@ Each new refusal could stop live deals on the next deployment if a sender filled
 5. **Docs that change with this build** (the `docs/audit/` owner's, after the merge):
    - `known-issues.md` §10: RR-1 is fixed, RR-2 is fixed for the beacon (the other three addresses stay with the deploy script, Rafa 2026-11-12 and 2026-11-18), and RR-5 is documented.
    - `known-issues.md` §2: the "three checks not built" row is now built, and it cites the three replaced test names.
-   - `state-model.md` §8.3, and the drand rows that quote 250,000 gas as a constant.
+   - `state-model.md` §8.1 (the dispute fields "never read"), §8.2 (the escalation ground and the primary's beacon "not checked") and §8.3, and the drand rows that quote 250,000 gas as a constant.
+   - `functions.md:86` and `:88` (the dispute fields and the primary's beacon fields "signed only"), and `threat-model.md` TA-11 ("It does not refuse the dispute fields").
    - `contracts/README.md`.
 6. **Verification.** `scripts/sourcify-verify.mjs` zeroes immutables and compares the creation code as a prefix, so the beacon's argument needs no change there [inferred from reading].
 7. **Not in this build:** D-1 (the settlement's signer binding, with the rebuilt contracts), RR-3 (decided by ADR-0033 and D31; documented by tests), and RR-4 (high-`s` signatures, accepted and documented).
