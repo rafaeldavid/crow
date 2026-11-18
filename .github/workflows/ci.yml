@@ -28,6 +28,8 @@ jobs:
     outputs:
       code: ${{ steps.files.outputs.code }}
       chain: ${{ steps.files.outputs.chain }}
+      formal: ${{ steps.files.outputs.formal }}
+      contracts: ${{ steps.files.outputs.contracts }}
     steps:
       - id: files
         env:
@@ -35,9 +37,33 @@ jobs:
           EVENT: ${{ github.event_name }}
           PR: ${{ github.event.pull_request.number }}
           REPO: ${{ github.repository }}
+          BEFORE: ${{ github.event.before }}
+          SHA: ${{ github.sha }}
         run: |
           code=true
           chain=true
+          formal=true
+          contracts=true
+          # T-504: the model check reads formal/ alone (formal/check.sh), so its answer changes only when formal/ or
+          # this workflow does. A pull request and a push to main that touch neither skip it. A push's file list comes
+          # from GitHub's compare of the push's two commits; a list that can't be read, or that may be cut off (the
+          # compare lists at most 300 files), runs the check. A renamed file counts under its old path too, so moving
+          # a file out of formal/ runs the check.
+          if [ "$EVENT" = push ] && [ -n "$BEFORE" ] && [ "$BEFORE" != 0000000000000000000000000000000000000000 ] \
+            && pushed=$(gh api "repos/$REPO/compare/$BEFORE...$SHA" --jq '.files[] | .filename, (.previous_filename // empty)') \
+            && [ -n "$pushed" ] && [ "$(printf '%s\n' "$pushed" | wc -l)" -lt 300 ]; then
+            if [ -z "$(printf '%s\n' "$pushed" | grep -E '^(formal/|\.github/workflows/ci\.yml$)')" ]; then formal=false; fi
+          fi
+          # A pull request's files with each rename's old path, from the pull request's file list (up to 3,000 files).
+          if [ "$EVENT" = pull_request ] \
+            && named=$(gh api "repos/$REPO/pulls/$PR/files?per_page=100" --paginate --jq '.[] | .filename, (.previous_filename // empty)') \
+            && [ -n "$named" ]; then
+            if [ -z "$(printf '%s\n' "$named" | grep -E '^(formal/|\.github/workflows/ci\.yml$)')" ]; then formal=false; fi
+            # T-504: forge test reads contracts/ (its sources, tests, scripts and submodules) and fixtures/beacon/
+            # (contracts/foundry.toml, fs_permissions). A pull request that touches none of them skips the contracts
+            # job; the anvil job still runs on the chain side. Push to main always runs it.
+            if [ -z "$(printf '%s\n' "$named" | grep -E '^(contracts/|fixtures/beacon/|\.gitmodules$|\.github/workflows/ci\.yml$)')" ]; then contracts=false; fi
+          fi
           if [ "$EVENT" = pull_request ] && files=$(gh pr diff "$PR" --repo "$REPO" --name-only) && [ -n "$files" ]; then
             if [ -z "$(printf '%s\n' "$files" | grep -Ev '^(docs/.+|[^/]+\.md)$')" ]; then code=false; fi
             # The contracts and anvil jobs test the chain side: the contracts, and every package, app and example
@@ -51,6 +77,8 @@ jobs:
           fi
           echo "code=$code" | tee -a "$GITHUB_OUTPUT"
           echo "chain=$chain" | tee -a "$GITHUB_OUTPUT"
+          echo "formal=$formal" | tee -a "$GITHUB_OUTPUT"
+          echo "contracts=$contracts" | tee -a "$GITHUB_OUTPUT"
 
   static:
     name: typecheck, lint, spec, snap
@@ -103,7 +131,7 @@ jobs:
   contracts:
     name: contracts (forge test)
     needs: changes
-    if: needs.changes.outputs.code == 'true' && needs.changes.outputs.chain == 'true'
+    if: needs.changes.outputs.code == 'true' && needs.changes.outputs.chain == 'true' && needs.changes.outputs.contracts == 'true'
     runs-on: ubuntu-latest
     # A healthy run takes about 3 minutes; a hang fails here instead of at GitHub's 6-hour default (T-035).
     timeout-minutes: 30
@@ -208,11 +236,12 @@ jobs:
           if grep -Eq "[0-9]+ skipped" anvil-tests.log; then echo "anvil tests skipped: Foundry or contracts/out missing" >&2; exit 1; fi
 
   # T-204's model check, when formal/check.sh exists. Pull requests run the safety config and the broken
-  # variants (each must still bite); push to main also runs the seven liveness configs.
+  # variants (each must still bite); push to main also runs the seven liveness configs. Since T-504, only when
+  # formal/ or this workflow changed: the check reads nothing else, so any other change cannot move its answer.
   formal:
     name: formal (TLC)
     needs: changes
-    if: needs.changes.outputs.code == 'true'
+    if: needs.changes.outputs.code == 'true' && needs.changes.outputs.formal == 'true'
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
@@ -248,15 +277,16 @@ jobs:
     steps:
       - name: all jobs passed
         run: |
-          echo "changes=${{ needs.changes.result }} code=${{ needs.changes.outputs.code }} chain=${{ needs.changes.outputs.chain }}"
+          echo "changes=${{ needs.changes.result }} code=${{ needs.changes.outputs.code }} chain=${{ needs.changes.outputs.chain }} formal=${{ needs.changes.outputs.formal }} contracts=${{ needs.changes.outputs.contracts }}"
           test "${{ needs.changes.result }}" = success
           if [ "${{ needs.changes.outputs.code }}" = false ]; then echo "docs only: the heavy jobs were skipped"; exit 0; fi
           echo "static=${{ needs.static.result }} test=${{ needs.test.result }} contracts=${{ needs.contracts.result }} anvil=${{ needs.anvil.result }} formal=${{ needs.formal.result }}"
           test "${{ needs.static.result }}" = success
           test "${{ needs.test.result }}" = success
-          test "${{ needs.formal.result }}" = success
+          # skipped only when the changes job said formal/ and this workflow are untouched (T-504)
+          if [ "${{ needs.changes.outputs.formal }}" = false ]; then echo "formal/ untouched: the model check was skipped"; else test "${{ needs.formal.result }}" = success; fi
           if [ "${{ needs.changes.outputs.chain }}" = false ]; then echo "chain side untouched: the contracts and anvil jobs were skipped"; exit 0; fi
-          test "${{ needs.contracts.result }}" = success
+          if [ "${{ needs.changes.outputs.contracts }}" = false ]; then echo "contracts/ and fixtures/beacon/ untouched: forge test was skipped"; else test "${{ needs.contracts.result }}" = success; fi
           test "${{ needs.anvil.result }}" = success
 
   gitleaks:
