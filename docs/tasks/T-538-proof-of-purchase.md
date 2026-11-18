@@ -40,7 +40,7 @@ Rafa had to find each proof of payment by hand when he entered Crow's purchases 
 
 ## Acceptance criteria
 
-- [x] One new command, `examples/proof-of-purchase.ts <evidence file> --as buyer|seller`, runs `checkBundle` from `examples/evidence.ts` first and writes nothing when it fails (exit 1).
+- [x] One new command, `examples/proof-of-purchase.ts <evidence file> --as buyer|seller --receipt <file>`, runs `checkBundle` from `examples/evidence.ts` with the chain read first and writes nothing when it fails (exit 1) or the chain read is missing (exit 2).
 - [x] The ledger row (`crow-ledger-row/1`) holds the deal ID, the settlement time and date, the deliverable's description, the counterparty's addresses, the price, the adjudication fee, the operator fee, what the party paid and received, each in base units and decimals, the outcome, the funding and settlement transactions, and the evidence file's SHA-256.
 - [x] The row's `stated` fields (name, counterparty name, reference, fiat value and currency, rate, rate source, rate time) are null unless the party gives them, by flag or `--facts <file>`; the page prints "not stated".
 - [x] The page shows the order with the commitment ID, the acceptance with the delivery and judgment record hashes, the payment with the transactions and amounts, who signed what by address, the file's SHA-256 and the commands that check it again, and one line that it is a record of a settled deal on a test network, not an invoice and not tax or legal advice.
@@ -57,7 +57,8 @@ Rafa had to find each proof of payment by hand when he entered Crow's purchases 
 
 ## Evidence
 
-- **Tests (measured, 2026-11-18):** `pnpm exec vitest run examples/proof-of-purchase.test.ts`: 10 passed. `examples/evidence.test.ts`: 13 passed after the two exports. `pnpm typecheck` and `eslint` on the changed files: clean.
+- **Tests (measured, 2026-11-18):** `pnpm exec vitest run examples/proof-of-purchase.test.ts`: 13 passed, after the review's fixes. `examples/evidence.test.ts`: 13 passed. `pnpm typecheck` and `eslint` on the changed files: clean.
+- **Review (2026-11-18):** one reviewer pass found 2 High, 3 Medium and 5 Low. Fixed: both High (the chain read required; an operator fee refused), the three Medium (the unpinned-deployment warning carried, the block taken from the checked receipt only, autolinks broken) and three Low (fiat value without a currency, the settlement time checked as a UTC time and labelled the operator's, the "nothing was written" message after a partial write). Left: the test's network stub does not reach inside `evidence.ts`'s own offline replay, which swaps `fetch` for its run; that is `evidence.ts`'s design.
 - **Real use (measured, 2026-11-18 19:12 UTC):** for Crow's Released scan deal `0xb00e30e4…56ce`, `evidence.ts fetch` wrote 9 events and 3 transactions; the chain read of `0x08373b2f…5e83` came from `ethereum-sepolia-rpc.publicnode.com`; the command passed the check with the receipt and wrote a row reading paid 1523.00 tUSDC (1523000000 base units), price 1473.00, fee 50.00, settled 2026-11-18T16:24:00Z in block 12162606. Those match the run notes in crow-private.
 - **The other scan deal (measured):** `0x4e11ea5f…5ee6` was refunded by an agreement both parties signed. `evidence.ts fetch` stopped at `/judgment` answering 404, so the new command cannot run on it, by design of the check it reuses.
 
@@ -65,8 +66,10 @@ Rafa had to find each proof of payment by hand when he entered Crow's purchases 
 
 - **The row's unstated facts are JSON null, the page's are "not stated".** A null keeps the row's types plain for a spreadsheet import; the page is for people.
 - **Amounts are the party's view:** `paid` and `received` each in base units, so a refund reads paid 41, received 40 instead of a signed net figure.
-- **The page escapes Markdown** in every text it did not write (the seller's description, the party's own words), so a description cannot add links or table cells to the page.
-- **`evidence.ts` gains two exports only:** `decimalOf`, the formatter it already used, and the pinned deployment on a passing result. No check is copied.
+- **The page escapes Markdown** in every text it did not write (the seller's description, the party's own words), and breaks autolinks, so a description cannot add links, images or table cells to the page.
+- **The chain read is required** (the review's first High finding). Without it the file proves the signed messages, not that the money moved, and a proof of payment must not say it did.
+- **A file with an operator fee is refused** (the review's second High finding). The operator alone writes `fee.operator` and the evidence check does not check it; the fee is 0 on the pilots, so no such deal exists yet.
+- **`evidence.ts` gains three exports only:** `decimalOf`, the formatter it already used, and on a passing result the deployment it used and whether it pinned it. No check is copied or changed. The page carries the check's warning when the deployment came from `HOLDBACK_DEPLOYMENT`.
 
 ## Handoff
 
