@@ -16,7 +16,7 @@ export const REVIEW_SCOPE = {
   files: ['src/truster/TrusterLenderPool.sol', 'src/side-entrance/SideEntranceLenderPool.sol'],
   lines: 80,
 } as const;
-/** The quoted price: 40.00 test tokens in base units (6 decimals), within the 50 Crow's test buyer pays at most. */
+/** The quoted price: 40.00 test tokens in base units (6 decimals), within the 1,000 Crow's test buyer pays at most. */
 export const REVIEW_PRICE_UNITS = '40000000';
 /** The five checks, in the template's order. */
 export const REVIEW_CHECK_IDS = ['report', 'proof', 'scope', 'coverage', 'hidden'] as const;

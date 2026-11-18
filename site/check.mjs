@@ -311,14 +311,14 @@ const TEST_BUYER_URL = 'https://crow.direct/agents/test-buyer';
 const rules = await import(here('../apps/test-agents/src/buyer-rules.ts'));
 const start = intake.indexOf("## Sell to Crow's test buyer");
 const testBuyer = start < 0 ? '' : intake.slice(start, intake.indexOf('\n## ', start + 3) < 0 ? undefined : intake.indexOf('\n## ', start + 3));
-const tusdc = (u) => `${Number(BigInt(u) / 1_000_000n)} tUSDC`;
+const tusdc = (u) => `${Number(BigInt(u) / 1_000_000n).toLocaleString('en-US')} tUSDC`;
 const bl = rules.BUYER_LIMITS, w = rules.WINDOWS, cr = rules.CHECKS_RULE;
 // Whole sentences, matched as text: the URL is the buyer's address in the guide, not a value being sanitized.
 expect(/beside the test seller, at https:\/\/crow\.direct\/agents\/test-buyer, so /.test(testBuyer) && /\*\*The card\.\*\* https:\/\/crow\.direct\/agents\/test-buyer\/agent\.json is a `crow-buyer` card/.test(testBuyer), `llms.txt has no "Sell to Crow's test buyer" section describing ${TEST_BUYER_URL} and its card`);
 expect(testBuyer.includes(`A price of at most ${tusdc(rules.MAX_PRICE_UNITS)} and an adjudication fee of at most ${tusdc(rules.MAX_ADJUDICATION_FEE_UNITS)}`), 'llms.txt states other price caps for the test buyer than apps/test-agents/src/buyer-rules.ts');
 expect(testBuyer.includes(`${cr.min} to ${cr.max} deterministic checks`) && testBuyer.includes(`at least ${cr.requiredAtLeast} of them \`"required": true\``), 'llms.txt states other check rules for the test buyer than apps/test-agents/src/buyer-rules.ts');
-expect(testBuyer.includes(`at most ${w.maxDeliverWithinSec.toLocaleString('en-US')} s (a day) after the offer`) && testBuyer.includes(`at most ${w.maxJudgingSec.toLocaleString('en-US')} s`) && testBuyer.includes(`at least ${w.minFundingLeftSec} s left to agree and fund`), 'llms.txt states other windows for the test buyer than apps/test-agents/src/buyer-rules.ts');
-expect(testBuyer.includes(`${bl.perSellerPerHour} deals per seller address an hour and ${bl.perSellerPerDay} a day; ${bl.perDay} a day in all; ${bl.open} in progress at once`), 'llms.txt states other limits for the test buyer than apps/test-agents/src/buyer-rules.ts');
+expect(testBuyer.includes(`at most ${w.maxDeliverWithinSec.toLocaleString('en-US')} s (${w.maxDeliverWithinSec / 86_400} days) after the offer`) && testBuyer.includes(`at most ${w.maxJudgingSec.toLocaleString('en-US')} s`) && testBuyer.includes(`at least ${w.minFundingLeftSec} s left to agree and fund`), 'llms.txt states other windows for the test buyer than apps/test-agents/src/buyer-rules.ts');
+expect(testBuyer.includes(`${bl.perSellerPerHour} deals per seller address an hour and ${bl.perSellerPerDay} a day; ${bl.perDay} a day in all; ${bl.open} in progress at once, ${bl.perSellerOpen} of them from one seller address`), 'llms.txt states other limits for the test buyer than apps/test-agents/src/buyer-rules.ts');
 
 // 10. The role pages (T-359, T-393).
 const sections = (src) => [...src.matchAll(/^## (.+)$/gm)].map((m) => m[1]);
