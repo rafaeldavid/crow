@@ -946,9 +946,30 @@ describe('intake refusals publish nothing (review item 3)', () => {
     c.state = { ...(c.state as object), delivery: c.delivery } as typeof c.state;
     s.at('2026-11-01T10:00:30Z');
     const report = await a.adj.runOnce();
-    expect(report.refused[0]!.problem.detail).toMatch(/key_unwrap_failed/);
+    // T-537: retried, never rejected, and said as a turn the adjudicator cannot take yet, so the hosted world shows it.
+    expect(report.refused[0]!.problem.type).toBe('adjudicator_unavailable');
+    expect(report.refused[0]!.problem.detail).toMatch(/cannot open its envelope in the seller's delivery \(key_unwrap_failed\); not judged, nothing signed, retrying on each pass\. If nothing changes, this turn passes to the fallback or the default outcome by the terms/);
     expect(s.records.size).toBe(0);
     expect(s.decisions(id)).toHaveLength(0);
+    // The next pass tries again, and still signs nothing.
+    s.at('2026-11-01T10:01:00Z');
+    expect((await a.adj.runOnce()).refused.map((r) => r.problem.type)).toEqual(['adjudicator_unavailable']);
+    expect(s.decisions(id)).toHaveLength(0);
+    s.at('2026-11-01T10:02:00Z');
+    await b.adj.runOnce();
+    expect(s.state(id).kind).toBe('Released');
+  });
+
+  it('a delivery with no envelope for the primary is said the same way, retried and never decided (T-537)', async () => {
+    const { s, a, b, id } = await setup();
+    const c = s.cases.get(id)!;
+    const { signature: _s, ...unsigned } = { ...c.delivery!, encryptedKeys: c.delivery!.encryptedKeys.filter((k) => k.recipient !== A.address) }; // eslint-disable-line @typescript-eslint/no-unused-vars
+    c.delivery = { ...unsigned, signature: await signMessage(SELLER.key, DOMAIN, { ...unsigned, type: 'Delivery' }) };
+    c.state = { ...(c.state as object), delivery: c.delivery } as typeof c.state;
+    s.at('2026-11-01T10:00:30Z');
+    const report = await a.adj.runOnce();
+    expect(report.refused.map((r) => [r.problem.type, r.problem.detail])).toEqual([['adjudicator_unavailable', expect.stringMatching(/^the seller's delivery holds no envelope for this adjudicator; not judged, nothing signed, retrying on each pass/)]]);
+    expect([s.records.size, s.decisions(id).length, a.calls.length]).toEqual([0, 0, 0]);
     s.at('2026-11-01T10:02:00Z');
     await b.adj.runOnce();
     expect(s.state(id).kind).toBe('Released');
@@ -1037,6 +1058,19 @@ describe('review item 4: rules the mutation sweep found untested', () => {
     const r = await b.adj.decideTask({ commitment, role: 'fallback', attempt: 1, delivery: s.cases.get(id)!.delivery!, releasedKey: forC, roundFixedAt: commitment.timing.judgeBy, deadline: commitment.timing.fallbackBy });
     expect(!r.ok && r.error.detail).toMatch(/no key released/);
     expect(b.calls).toHaveLength(0);
+  });
+
+  // T-537 review: the notice serves every role; after the primary's turn nothing passes to a fallback.
+  it("a released key the fallback cannot open is retried, and says the default follows, not the fallback", async () => {
+    const { s, b, id, commitment } = await setup();
+    const delivery = s.cases.get(id)!.delivery!;
+    const mine = s.cases.get(id)!.held.get(B.address)!;
+    const unopenable = { ...mine, ciphertext: delivery.encryptedKeys.find((k) => k.recipient === BUYER.address)!.ciphertext };
+    s.at('2026-11-01T10:02:00Z');
+    const r = await b.adj.decideTask({ commitment, role: 'fallback', attempt: 1, delivery, releasedKey: unopenable, roundFixedAt: commitment.timing.judgeBy, deadline: commitment.timing.fallbackBy });
+    expect(!r.ok && r.error.type).toBe('adjudicator_unavailable');
+    expect(!r.ok && r.error.detail).toMatch(/\(key_unwrap_failed\); not judged, nothing signed, retrying on each pass\. If nothing changes, the default outcome follows by the terms$/);
+    expect(s.records.size).toBe(0);
   });
 
   it('refuses a bound policy whose appeal template hash is not this build', async () => {
