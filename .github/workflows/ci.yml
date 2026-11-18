@@ -107,6 +107,28 @@ jobs:
       - run: pnpm validate:spec
       - run: pnpm snap
 
+  # T-504's follow-up T-521 (Rafa, 2026-11-18: "OK"): a docs-only pull request skips the shards, but five test files
+  # read docs: the phase-one cut scan reads every tracked file, and the others read the decisions' status lines, the
+  # design map's sources, the task files and the guides. This job runs those five alone, so a docs change that breaks
+  # one fails before the merge instead of on main. Nothing heavier: no build, no other test.
+  docs-tests:
+    name: docs tests
+    needs: changes
+    if: needs.changes.outputs.code == 'false'
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - uses: pnpm/action-setup@73e46992e05b19abd31f2f3c20e0e7370d762115 # v6.1.1
+      - uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1 # v7.1.0
+        with:
+          node-version-file: .nvmrc
+          cache: pnpm
+      - run: pnpm install --frozen-lockfile
+      - run: pnpm vitest run tests/cut-feature-alignment.test.ts tests/decisions-status.test.ts tests/design-map.test.ts tests/id-check.test.ts tests/site-guides.test.ts
+
   test:
     name: test (${{ matrix.shard }}/4)
     needs: changes
@@ -275,10 +297,11 @@ jobs:
           fi
 
   # The one status to require: it fails unless the static job, every test shard, the contracts job, the anvil job
-  # and the formal job succeeded, or the changes job found a docs-only pull request and they were skipped. The
-  # contracts and anvil jobs may be skipped only when the changes job said the chain side is untouched.
+  # and the formal job succeeded, or the changes job found a docs-only pull request and they were skipped, in which
+  # case the docs tests must succeed. The contracts and anvil jobs may be skipped only when the changes job said the
+  # chain side is untouched.
   check:
-    needs: [changes, static, test, contracts, anvil, formal]
+    needs: [changes, static, docs-tests, test, contracts, anvil, formal]
     if: always()
     runs-on: ubuntu-latest
     steps:
@@ -286,7 +309,7 @@ jobs:
         run: |
           echo "changes=${{ needs.changes.result }} code=${{ needs.changes.outputs.code }} chain=${{ needs.changes.outputs.chain }} formal=${{ needs.changes.outputs.formal }} contracts=${{ needs.changes.outputs.contracts }}"
           test "${{ needs.changes.result }}" = success
-          if [ "${{ needs.changes.outputs.code }}" = false ]; then echo "docs only: the heavy jobs were skipped"; exit 0; fi
+          if [ "${{ needs.changes.outputs.code }}" = false ]; then echo "docs only: the heavy jobs were skipped; docs-tests=${{ needs.docs-tests.result }}"; test "${{ needs.docs-tests.result }}" = success; exit 0; fi
           echo "static=${{ needs.static.result }} test=${{ needs.test.result }} contracts=${{ needs.contracts.result }} anvil=${{ needs.anvil.result }} formal=${{ needs.formal.result }}"
           test "${{ needs.static.result }}" = success
           test "${{ needs.test.result }}" = success
