@@ -5,7 +5,7 @@
 - **Depends on:** none
 - **Paths this task may touch:** `pnpm-workspace.yaml`, `tests/install-rules.test.ts`, the scripts and standing docs that run `npx wrangler`, `docs/team.md` (one Rules and checks row), this file; part 2 only: `.github/workflows/` in its own pull request
 - **Human gate:** part 1 no; part 2 yes (a `.github/` change, Rafa's word per change)
-- **Status:** in progress
+- **Status:** done
 - **Agent/session:** T-518 side session of the 2026-11-18 coordinator
 - **Roadmap row:** N181
 
