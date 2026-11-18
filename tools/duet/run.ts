@@ -92,16 +92,28 @@ export function ephemeralFirst(): number {
   return 49152;
 }
 
-/** The port the seller adapter must listen on: free now, bound by the adapter seconds later. */
-export const pickAdapterPort = (): Promise<number> =>
-  new Promise((ok, fail) => {
+const bindable = (port: number): Promise<boolean> =>
+  new Promise((ok) => {
     const s = createServer();
-    s.once('error', fail);
-    s.listen(0, '127.0.0.1', () => {
-      const p = (s.address() as { port: number }).port;
-      s.close(() => ok(p));
-    });
+    s.once('error', () => ok(false));
+    s.listen(port, '127.0.0.1', () => s.close(() => ok(true)));
   });
+
+/**
+ * The port the seller adapter must listen on: free now, bound by the adapter seconds later. It is drawn below the
+ * operating system's own range (T-536): a port from that range, picked with listen(0) and closed, can go to any other
+ * socket on the machine before the adapter binds it, and the adapter then stops with EADDRINUSE and no buyer gets an offer.
+ */
+export async function pickAdapterPort(): Promise<number> {
+  const first = ephemeralFirst();
+  const low = first > 11_000 ? 10_000 : 1024;
+  if (first - low < 100) throw new Error(`the operating system hands out ports from ${first} up, which leaves no room below it for the seller adapter's port`);
+  for (let i = 0; i < 100; i++) {
+    const port = low + Math.floor(Math.random() * (first - low));
+    if (await bindable(port)) return port;
+  }
+  throw new Error(`no free port for the seller adapter between ${low} and ${first - 1} after 100 tries`);
+}
 
 const originOf = (u: string) => new URL(u).origin;
 
