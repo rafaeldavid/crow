@@ -71,6 +71,7 @@ import { trustFacts } from './trust.mjs';
 import { ICON_FILES } from './brand/kit.mjs';
 import { GOALS, goalBundle, goalCommand, goalSha256, goalUrl, NODE_MIN, NODE_PERMISSION, PREFLIGHT, preflightCommand, REFERENCE_PATH, referenceText, SETUP_MJS_URL, setupBundle, setupCommand, setupSha256 } from './build.mjs';
 import { ASSETS, BASE, BUY_COMMANDS, CARD_SCHEMA, HOME_CSS, HOME_JS, notFoundPage, visualdemoPage, BUY_MJS_URL, BUY_URL, buyBundle, buyInstall, buySha256, filled, page, pins, problemPages, publishedGuides, SELL_URL, SITE_URL, sourceCommitOf, strip, TEST_SELLER_URL, tryBundle, tryCommand, trySha256, TRY_URL } from './build.mjs';
+import { STATUS_PATH } from '../apps/site/status.js';
 import { apiRoutes, citedSections, duplicateSentences, hasSection, FIRST_DEAL_BUDGET, guideFiles, guideSource, measurePaths, namedCalls, namedReferences, referenceFiles, nonAscii, routeKnown, SETUP_MAX_BYTES } from './guides.mjs';
 
 const here = (p) => new URL(p, import.meta.url);
@@ -294,6 +295,12 @@ for (const f of tryFacts) expect(filledTryIt.includes(f), `"Try it" does not say
 expect(filledTryIt.indexOf('wait for one yes') < filledTryIt.indexOf('```'), '"Try it" must ask for the principal\'s yes before its first command');
 for (const f of ['wait for their one yes', 'this prompt is not that yes', 'Crow runs the seller, the three adjudicators and both operators', 'the deal is public on Sepolia', `request lines without it for ${days} days`, 'see your IP address', 'can read environment variables and use the network', "Crow's adjudicators can read the work, and the operators cannot", 'first-deal report', `Node ${NODE_MIN} or later`]) expect(prompt.includes(f), `the home page's prompt does not say: ${f}`);
 expect(prompt.indexOf('wait for their one yes') < prompt.indexOf(command), "the home page's prompt must ask for the yes before the command");
+// T-547: sell.txt's fallback for a Node without corepack installs the pnpm package.json names.
+{
+  const pm = JSON.parse(read('../package.json')).packageManager;
+  const named = [...read('sell.txt').matchAll(/pnpm@[0-9.]+/g)].map((m) => m[0]);
+  expect(named.length > 0 && named.every((n) => n === pm), `sell.txt names ${named.join(', ') || 'no pnpm@<version>'} for a Node without corepack, not ${pm}, the packageManager in package.json`);
+}
 expect(!/Node 20\b/.test(sampleTxt) && !/Node 20\b/.test(prompt), `llms.txt or the home page's prompt still says Node 20: the goal commands run under the permission flag on Node ${NODE_MIN} or later`);
 for (const line of [command, ...Object.keys(GOALS).map((n) => goalCommand(n))]) expect(line.includes(` node ${NODE_PERMISSION} `), `a goal command runs without ${NODE_PERMISSION}: ${line}`);
 const intake = ref('intake.txt');
@@ -357,9 +364,10 @@ for (const [p, text] of guides) {
   for (const u of links(text)) {
     if (u.host !== new URL(SITE_URL).host) continue;
     const path = u.pathname.slice(BASE.length);
-    // What a publish build writes, and the two test agents, which apps/test-agents serves on routes of this host.
-    const ok = guides.has(path) || published.has(path) || ['', 'problems/', 'visualdemo/'].includes(path) || problems.has(`${path.replace(/\.html$/, '')}.html`) || /^agents\/test-(seller|buyer)(\/agent\.json)?$/.test(path);
-    expect(ok, `${p} links ${u.href}, which neither the publish build nor the test agents serve`);
+    // What a publish build writes, the two test agents, which apps/test-agents serves on routes of this host, and the
+    // operators' live state, which the site's Worker serves (apps/site/status.js).
+    const ok = guides.has(path) || published.has(path) || ['', 'problems/', 'visualdemo/'].includes(path) || problems.has(`${path.replace(/\.html$/, '')}.html`) || /^agents\/test-(seller|buyer)(\/agent\.json)?$/.test(path) || `/${path}` === STATUS_PATH;
+    expect(ok, `${p} links ${u.href}, which neither the publish build, the test agents nor the site's Worker serve`);
   }
   for (const [, f] of text.matchAll(/`((?:examples|fixtures|spec)\/[A-Za-z0-9_./-]+\.[a-z]+)`/g)) expect(existsSync(here(`../${f}`)), `${p} names ${f}, which is not in the repository`);
   for (const [, f] of text.matchAll(/\bnode (examples\/[A-Za-z0-9_-]+\.ts)\b/g)) expect(existsSync(here(`../${f}`)), `${p} runs ${f}, which is not in the repository`);
