@@ -102,8 +102,20 @@ async function until(what: string, ok: () => boolean | Promise<boolean>, timeout
   throw new Error(`timed out waiting for ${what}`);
 }
 const dealOf = (a: RunningAdapter, id: Hex) => a.deals().find((d) => d.id === id);
-const refund = (a: RunningAdapter, id: Hex, o: { credential?: string | null; method?: string } = {}) =>
-  fetch(`${a.url}/deals/${id}/refund`, { method: o.method ?? 'POST', headers: o.credential === null ? {} : { authorization: `Bearer ${o.credential ?? READY}` } });
+/**
+ * The refund route as a client calls it. A 409 `deal_busy` means the deal loop holds the deal for a moment (it still
+ * works on the deal just after it records the refusal), and its detail says to send again; so does this, up to 5 s.
+ * Every other answer comes back as it is (T-516).
+ */
+async function refund(a: RunningAdapter, id: Hex, o: { credential?: string | null; method?: string } = {}): Promise<Response> {
+  for (let tries = 0; ; tries++) {
+    const res = await fetch(`${a.url}/deals/${id}/refund`, { method: o.method ?? 'POST', headers: o.credential === null ? {} : { authorization: `Bearer ${o.credential ?? READY}` } });
+    if (res.status !== 409 || tries === 50) return res;
+    const body = (await res.clone().json().catch(() => null)) as J;
+    if (body?.type !== 'deal_busy') return res;
+    await new Promise((r) => setTimeout(r, 100));
+  }
+}
 /** A funded deal the seller refused: Held, with nothing delivered. */
 async function heldAndRefused(label = 'buyer-1', operators?: string[]) {
   const made = await adapter({ notesStatus: 500 }, true, operators);
