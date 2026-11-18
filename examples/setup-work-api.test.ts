@@ -119,7 +119,10 @@ describe('the work API (T-543)', () => {
     expect(workFor(folder, ID, 'text/csv').bytes).toBeUndefined();
     expect(workFor(folder, ID, 'text/csv').problem).toMatch(/signing key|second hard link/);
     // A path the person names may be a link, and is still never the key, in any letter case.
-    expect(readWorkFile(join(folder, 'KEYS', 'signing.key'), true, keyFileOf(folder))?.problem).toMatch(/is the folder's signing key|is not there/);
+    // On a disk where letter case matters (Linux) that path is not there; where it does not (macOS) it is the key.
+    const upper = readWorkFile(join(folder, 'KEYS', 'signing.key'), true, keyFileOf(folder));
+    expect(upper?.bytes).toBeUndefined();
+    if (upper !== undefined) expect(upper.problem).toMatch(/is the folder's signing key/);
     const link = join(folder, 'innocent.csv');
     symlinkSync(keyFileOf(folder), link);
     expect(readWorkFile(link, true, keyFileOf(folder))?.problem).toMatch(/is the folder's signing key/);

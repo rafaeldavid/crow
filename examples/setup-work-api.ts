@@ -224,7 +224,7 @@ export async function startWorkApi(o: { token: string; price: string; folder: st
         req.resume();
         return send(401, { detail: "this API answers only the setup's own adapter" });
       }
-      const path = new URL(req.url ?? '/', 'http://work').pathname;
+      const path = new URL(req.url ?? '/', 'http://127.0.0.1').pathname;
       if (req.method === 'POST' && path === '/quote') {
         const scope = (await json(req))?.scope;
         if (scope === null || typeof scope !== 'object' || Array.isArray(scope) || Object.keys(scope).length) return send(400, { detail: 'a template takes an empty scope' });
