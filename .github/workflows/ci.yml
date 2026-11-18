@@ -41,18 +41,24 @@ jobs:
           # T-504: the model check reads formal/ alone (formal/check.sh), so its answer changes only when formal/ or
           # this workflow does. A pull request and a push to main that touch neither skip it. A push's file list comes
           # from GitHub's compare of the push's two commits; a list that can't be read, or that may be cut off (the
-          # compare lists at most 300 files), runs the check.
+          # compare lists at most 300 files), runs the check. A renamed file counts under its old path too, so moving
+          # a file out of formal/ runs the check.
           if [ "$EVENT" = push ] && [ -n "$BEFORE" ] && [ "$BEFORE" != 0000000000000000000000000000000000000000 ] \
-            && pushed=$(gh api "repos/$REPO/compare/$BEFORE...$SHA" --jq '.files[].filename') && [ -n "$pushed" ] \
-            && [ "$(printf '%s\n' "$pushed" | wc -l)" -lt 300 ]; then
+            && pushed=$(gh api "repos/$REPO/compare/$BEFORE...$SHA" --jq '.files[] | .filename, (.previous_filename // empty)') \
+            && [ -n "$pushed" ] && [ "$(printf '%s\n' "$pushed" | wc -l)" -lt 300 ]; then
             if [ -z "$(printf '%s\n' "$pushed" | grep -E '^(formal/|\.github/workflows/ci\.yml$)')" ]; then formal=false; fi
           fi
-          if [ "$EVENT" = pull_request ] && files=$(gh pr diff "$PR" --repo "$REPO" --name-only) && [ -n "$files" ]; then
-            if [ -z "$(printf '%s\n' "$files" | grep -E '^(formal/|\.github/workflows/ci\.yml$)')" ]; then formal=false; fi
+          # A pull request's files with each rename's old path, from the pull request's file list (up to 3,000 files).
+          if [ "$EVENT" = pull_request ] \
+            && named=$(gh api "repos/$REPO/pulls/$PR/files?per_page=100" --paginate --jq '.[] | .filename, (.previous_filename // empty)') \
+            && [ -n "$named" ]; then
+            if [ -z "$(printf '%s\n' "$named" | grep -E '^(formal/|\.github/workflows/ci\.yml$)')" ]; then formal=false; fi
             # T-504: forge test reads contracts/ (its sources, tests, scripts and submodules) and fixtures/beacon/
             # (contracts/foundry.toml, fs_permissions). A pull request that touches none of them skips the contracts
             # job; the anvil job still runs on the chain side. Push to main always runs it.
-            if [ -z "$(printf '%s\n' "$files" | grep -E '^(contracts/|fixtures/beacon/|\.gitmodules$|\.github/workflows/ci\.yml$)')" ]; then contracts=false; fi
+            if [ -z "$(printf '%s\n' "$named" | grep -E '^(contracts/|fixtures/beacon/|\.gitmodules$|\.github/workflows/ci\.yml$)')" ]; then contracts=false; fi
+          fi
+          if [ "$EVENT" = pull_request ] && files=$(gh pr diff "$PR" --repo "$REPO" --name-only) && [ -n "$files" ]; then
             if [ -z "$(printf '%s\n' "$files" | grep -Ev '^(docs/.+|[^/]+\.md)$')" ]; then code=false; fi
             # The contracts and anvil jobs test the chain side: the contracts, and every package, app and example
             # the anvil suites import, with the fixtures, schemas and settings they read. A pull request that
