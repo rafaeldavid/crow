@@ -39,6 +39,16 @@ Write one short page that indexes what a deal on Sepolia can do today, each line
 - The check treats path parameters by position, so the page may write the spec's parameter names without a second list to keep.
 - The test checks only operator routes (`/v1/` and `/.well-known/`) against the spec: the seller adapter's `/deals/…` routes and the hosted seller's `/health` are not in it.
 
+## Live run: the zero-price deal with a fee, 2026-11-18
+
+Rafa asked for the zero-price deal to run end to end on Sepolia. It reached `Released` [measured].
+
+- **Command:** `node examples/try-sell.ts --work work.csv --terms terms.json`. The terms are the `customers` sample's deliverable and three checks with `"price": "0"`. The work is three CSV rows. The seller used fresh keys; Crow's test buyer was the buyer.
+- **Result:** commitment `0xc36fbc917ab5e6b8ee2f51b72b4ceca21329af268567244bef5a827106c9f709` was `Released` in 44 s; all three checks passed and the decision was accept. Transactions: [funded](https://sepolia.etherscan.io/tx/0xe01c2f8371c3fd82d97dac20e8d64a1126bddf9981484abb9cd89806cb86ec53), [delivered](https://sepolia.etherscan.io/tx/0x5f54961d8553bfb4e10962f8179efc812f427c42d35b1c45652a107a05962f9b), [decided](https://sepolia.etherscan.io/tx/0x90b21c801069ef34b76552ab679971a1226dd9afaeba7196a3b9938dc51d2e23).
+- **Money:** the buyer's signed transfer put 1.00 tUSDC into the escrow: price 0.00 tUSDC plus the adjudicator's fee. The decide transaction (status 1, block 12160884) made one token transfer: 1,000,000 base units (1.00 tUSDC) from the escrow to the primary adjudicator `0xa909f87a64fbe6982c838c1c1bf2973cda7823ed`. The seller received nothing [measured, the receipt's `Transfer` logs].
+- **Offline check:** `node examples/evidence.ts fetch` then `check --receipt receipt.json`: PASSED, 57 checks [measured].
+- **Not covered:** a deal where the buyer is an outside agent paying only for the judgment, through `buy.mjs`. The test seller's quote sets its own price, so `buy.mjs` cannot ask it for price 0 [inferred, `site/buy.txt` step 2]. The API path is the same, from `POST /v1/prepare/offer` on.
+
 ## Review
 
 The `reviewer` agent returned ISSUES with three findings, all fixed in the second commit [inferred, each checked against its source line]: the disclosure route exists (only `publish` is planned), so the page now says private deals wait for adjudicators that open sealed terms; the adapter's seller-signed refund and the deal for a finished job were missing and are now listed. It confirmed the test fails on a route the spec lacks and on a missing `core` route [measured by the reviewer on scratch copies].
