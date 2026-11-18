@@ -6,7 +6,7 @@
 - **Depends on:** T-534 (version 2 of the form, holdback pull request 661)
 - **Paths this task may touch:** `docs/research/2026-11-18-case-study-3.md`, `docs/research/2026-11-18-case-study-3/` (`terms.ts`, `waiver.ts`, `late-work.ts`, `note-check.ts`), `docs/research/README.md` (one row), this file
 - **Human gate:** no (test tokens only; no deploy)
-- **Status:** review
+- **Status:** done with the merge of pull request 665 on 2026-11-18, after CI passed and the review's findings were fixed
 - **Agent/session:** the T-534 session, 2026-11-18, branch `t-535-case-study-3`
 - **Roadmap row:** N40
 
@@ -40,8 +40,8 @@ Non-goals: any change to the product, the site, the contracts, the schemas or th
 - [x] Deal 4, price 0 and a fee above 0: Released.
 - [x] Before each deal, its checks ran on one real report of the firm.
 - [x] For each deal: ID, times, amounts, transactions, the reader's check, approvals and seconds from funding to final.
-- [ ] The pull request merged after CI and a review.
-- [ ] A private note, `strategy/2026-11-18-case-study-3.md`, in the private repository.
+- [x] The pull request merged after CI and a review (two passes: ISSUES, fixed, then PASS).
+- [x] A private note, `strategy/2026-11-18-case-study-3.md`, in the private repository.
 
 ## Evidence
 
@@ -139,3 +139,4 @@ Recorded as a follow-up: CI does not lint or type-check these scripts, and they 
   - `audit-deal` could keep the adapter up after a refusal, so its deal route can be read;
   - the waiver needs a script today, and ADR-0039 plans the hosted seller's offer of it. When it is built, the prepared settlement the buyer gets must not carry the delivery, as `waiver.ts` strips it; a second-family review of that build should check who sees the envelope before the buyer signs, who submits, and the key proof;
   - CI does not lint or type-check the scripts in this research folder.
+  - From the re-review (PASS on `0cecad94`), for the hosted waiver: before it countersigns, the buyer should fetch the public ciphertext and check its SHA-256 and byte count, and check the delivery's `plaintextMime` against the terms' format, its `attempt` and its `cipher`; `waiver.ts` compares hashes only. The buyer also cannot check before paying that its envelope opens: the contract checks only that the envelope is the one the delivery commits to, so the signed `plaintextSha256` is the evidence it keeps (D26). The planned second-family review should weigh both.
