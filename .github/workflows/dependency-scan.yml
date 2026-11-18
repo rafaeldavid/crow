@@ -1,0 +1,37 @@
+name: dependency-scan
+
+# T-518 (roadmap row N181): a pull request that changes a lockfile or a manifest is scanned for known
+# vulnerabilities and known-malicious packages before it merges. OSV-Scanner reads every lockfile in the checkout
+# (pnpm-lock.yaml and tools/one-click/package-lock.json) against the OSV database, which carries GitHub's advisories
+# and the OpenSSF malicious-packages records (MAL-… IDs). It needs no account and no token. The scanner's Action
+# pulls its image by tag, so this step names the same image by digest: osv-scanner-action v2.7.0, published
+# 2026-10-12. Move it only to a release public for 14 days or more.
+#
+# A finding fails the job. A known finding that does not apply gets an entry in osv-scanner.toml at the root
+# ([[IgnoredVulns]] with id, ignoreUntil and reason), reviewed in its pull request.
+on:
+  pull_request:
+    paths:
+      - '**/pnpm-lock.yaml'
+      - '**/package-lock.json'
+      - '**/package.json'
+      - pnpm-workspace.yaml
+      - osv-scanner.toml
+      - .github/workflows/dependency-scan.yml
+
+permissions:
+  contents: read
+
+jobs:
+  osv-scanner:
+    name: dependency scan
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - name: Scan every lockfile for known vulnerabilities and malicious packages
+        uses: docker://ghcr.io/google/osv-scanner-action@sha256:d54770fe0b09493894e76a02aaed9f51a0513fa57c5186452a755d257b0068a6 # v2.7.0
+        with:
+          args: scan source --recursive ./
