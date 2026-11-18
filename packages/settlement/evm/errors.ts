@@ -23,7 +23,7 @@ const BY_NAME: Record<string, ProblemType> = {
   PaymentAlreadyCollected: 'nonce_reused',
   InvalidSignature: 'invalid_signature',
   // DrandQuicknetBeacon (BEACON_ERRORS below). The relay sent too little gas for the pairing; the signed message stays
-  // valid, and the same message with more gas goes through. Not relay_refused: that pauses every timeout (timeouts.ts).
+  // valid, and the same message with more gas goes through. Not relay_refused, which is the relayer's own budget or cap.
   NotEnoughGas: 'invalid_state',
   PairingGasBelowFloor: 'invalid_state', // the beacon's constructor only: it never answers a deal's call
 };
