@@ -20,12 +20,17 @@
 
 Let a delivery leave out the buyer's envelope, so a fixed file's one delivery can serve every take (ADR-0040 section 2). The buyer's key then comes only with an adjudicator's accept, and core refuses an early accept or a key-releasing settlement on such a delivery before relaying it.
 
+## Context
+
+ADR-0040 sections 2 (delivery) and 9 (the fixtures this task owns); ADR-0012 (key release); D81 (an adjudicator that cannot open its envelope). Two open pull requests touch this ground on 2026-11-18: PR 670 edits `packages/core/src/state.ts`, so re-read the cited lines first; PR 669 (T-541) proves that the buyer's envelope opens the held work, which a standing delivery leaves out, so say how the two fit.
+
 ## Acceptance criteria
 
 - [ ] Core and the operator take a delivery with envelopes for the three adjudicators and none for the buyer.
 - [ ] On such a delivery, core refuses an early accept and a settlement that releases the key, with a stated reason, before they are relayed.
 - [ ] Fixtures: `neutrality.seller-offline-standing-take` (the seller is offline from setup on; the buyer posts the delivery; the primary accepts; the buyer opens the file) and `neutrality.store-drops-standing-ciphertext` (the deal ends in the buyer's refund).
 - [ ] `docs/architecture.md` states the rule.
+- [ ] The formal model is checked for any step that assumes a buyer envelope, and the result is recorded here.
 
 **Done when** a fixed file's standing delivery settles by the primary's accept and the buyer opens the file, and an early accept on it is refused by core and reverts on the local chain.
 

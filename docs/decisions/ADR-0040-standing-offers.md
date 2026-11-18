@@ -68,6 +68,8 @@ The same day he decided that a seller's default is work delivered after the hold
 
 **How the contract computes the ID.** It calls the rules contract's own library, `HoldbackTypes.commitmentId` and `HoldbackTypes.deliveryHash`, and asks the named deployment for the digest (`typedDataHash`, `HoldbackRules.sol:111`). So there is one encoding of the terms, the audited one [measured in the spike, which uses both].
 
+**Many offers, one seller.** One seller contract serves any number of templates: each is a signature of its key, and the contract stores nothing per template but a revocation. So a seller is one identity (key, contract address, payout address, card) with many offers. Each template carries a signed `offerId`, a stable string the seller chooses, equal to the card's `offers[].id` (`site/sell.txt`, step 9). A new price or new dates for the same offer are a new template with the same `offerId`; the seller's tool revokes the old one. The contract does not read `offerId`; it is there so a buyer, a catalog and a receipt name the offer the same way [the T-543 session's input, 2026-11-18; the card's ID measured there]. A feed of thousands of offers and a cart of several lines in one commitment are outside this decision: today a cart is several commitments.
+
 **What it never does.** It never trusts a commitment ID, terms or a digest from the caller; it rebuilds them. It holds no money: the payout address is a template field, and a test showed the contract holds 0 after two paid takes (`test_twoTakes_oneStandingDelivery_bothPaid`). The seller's tools name a payout address apart from the contract.
 
 ### 2. Delivery
@@ -77,12 +79,12 @@ The same day he decided that a seller's default is work delivered after the hold
 2. stores the ciphertext once, in an operator's store (up to 10 MiB, `apps/operator/src/server.ts:146-149`) or any content-addressed store (`docs/architecture.md:144`);
 3. puts the delivery's fields in the template: the ciphertext's hash, the plaintext's hash and type, the envelopes' hash and one `submittedAt`, which nothing reads (`HoldbackTypes.sol:97-98`).
 
-Then anyone posts the standing delivery for any funded take: the buyer, an operator, or the funding transaction itself in one Multicall3 call. Two takes were served by one delivery body in the scratch test, and a delivery of another file was refused [measured, `test_twoTakes_oneStandingDelivery_bothPaid`, `test_deliveryOfAnotherFile_refused`]. **The seller acts once, at setup.**
+Then anyone posts the standing delivery for any funded take: the buyer, an operator, or the funding transaction itself, with `deliver` after `agreeAndFund` in one Multicall3 call. Two takes were served by one delivery body in the scratch test, and a delivery of another file was refused [measured, `test_twoTakes_oneStandingDelivery_bothPaid`, `test_deliveryOfAnotherFile_refused`]. **The seller acts once, at setup.**
 
 **The one core change it needs.** Core and the operators require an envelope for the deal's own buyer in every delivery (`packages/core/src/state.ts:362-368`; `apps/operator/src/prepare.ts:723-726`) [measured]. Only a holder of the content key can make one, and the seller is offline. So a delivery may leave the buyer's envelope out. Then:
 - the buyer's key comes with an adjudicator's accept: the primary wraps the content key to the terms' encryption key (`apps/adjudicator/src/service.ts:1045`), and the contract refuses an accept without it (`HoldbackRules.sol:310`) [measured];
-- the buyer cannot accept early, and no settlement can release the key, because both need a key proof for the buyer's envelope (`HoldbackRules.sol:344`, `:380-381`). The call reverts, so the buyer is never left paid-out without the key [measured]. A settlement that pays the seller and releases nothing stays possible, signed by the buyer, as today;
-- the formal model needs no change: it models only whether the buyer holds the key, and the key still travels only with a release (`formal/Holdback.tla:824-828`) [measured].
+- the buyer cannot accept early, and no settlement can release the key, because both need a key proof for the buyer's envelope (`HoldbackRules.sol:344`, `:380-381`). The call reverts, so the seller is never paid by these paths unless the buyer gets the key [measured]. A settlement that pays the seller and releases nothing stays possible, signed by the buyer, as today;
+- the formal model needs no change: its invariant is about whether the buyer holds the key, and the key still travels only with a release (`formal/Holdback.tla:824-828`) [the invariant measured; that no step of the model assumes a buyer envelope inferred, for T-550 to confirm].
 
 **What one content key for every take means** [inferred]:
 - the three adjudicators the template names can read every copy; they are the same three in every take;
@@ -97,6 +99,8 @@ Then anyone posts the standing delivery for any funded take: the buyer, an opera
 
 Leaving the two hashes open would let a buyer order any work at the template's price. Filling them on chain would mean escaping JSON strings and keeping the canonical order inside the seller contract, for values the buyer chooses, and nothing would bound the size of the files a buyer names [inferred]. Both go against the smallest contract that can be reviewed with confidence.
 
+**Unit pricing is the same question in a smaller form.** A price per unit needs a quantity the buyer chooses, and the quantity changes both the price, an enforced field, and the deliverable. The contract could multiply a bounded quantity by a unit price, but the deliverable's hash would still change per buyer [inferred]. So it waits with the slots below.
+
 **So such sellers keep a per-buyer signer:** their own seller adapter, or the hosted one (ADR-0037). A standing seller can still make such an offer from the same address, signed with its key (section 1, first row). A later decision may add bounded slots that a buyer fills, if measured demand asks for it (open point 1).
 
 ### 4. Deployment for a seller with no ETH
@@ -106,8 +110,9 @@ Leaving the two hashes open would let a buyer order any work at the template's p
 - **The address proves the code.** A buyer that knows the key and the salt recomputes the address from the published creation code. If it matches, the contract is this code with this key, and no other check of the code is needed [inferred from CREATE2].
 - **Three ways to deploy, none needing a Crow-run host:**
   1. the seller sends one transaction to the deployer from any account with ETH, through any RPC;
-  2. the first buyer that funds directly bundles the deployment and `agreeAndFund` in one Multicall3 call (Multicall3 has code on Sepolia, measured);
-  3. the operators' funding relay does the same when the seller address has no code yet, at the operator's gas. It needs no new route: it is a step inside the existing `fund()` bundle (`packages/settlement/evm/evm-settlement.ts:1310-1319`). This is how Crow deploys for a seller "by default during setup": the deployment lands with the seller's first sale [inferred].
+  2. the first buyer that funds directly sends the deployment first, in its own transaction, then funds;
+  3. the operators' funding relay does the same when the seller address has no code yet, at the operator's gas. It needs no new route: it is one transaction before the existing `fund()` (`packages/settlement/evm/evm-settlement.ts:1266-1321`). This is how Crow deploys for a seller "by default during setup": the deployment lands with the seller's first sale [inferred].
+- **The deployment goes in its own transaction, never in the funding bundle.** A second deployment to an address that has code fails and burns the gas forwarded to it: the spike's second attempt used 1,040,431,767 gas of the test's limit [measured, `test_anyPayerDeploysTheSameAddress`]. In one Multicall3 bundle, a deployment that someone else made first, or two first takes in one block, would revert the funding [inferred]. So whoever deploys reads the address's code first and sends the deployment alone, skipped when the code is there; the funding follows. Two first takes close together then cost at most one failed deployment, never a failed funding.
 - **The operators relay and never author.** The deployment carries only public code and the seller's key address; the template and every approval are the seller's signatures. The operator signs no message for the seller.
 - **Before deployment, an offer can still be checked off chain:** the checker simulates the contract at its address (an `eth_call` with a code override) [inferred; the build tests it].
 - **No upgrade, by design.** A new version of the contract is new code at a new address. The seller publishes it and revokes the old templates, or lets them expire.
@@ -131,7 +136,7 @@ The operators (`evm-settlement.ts:936`, `:1092`, `:1138`), the reference adjudic
 4. it posts them, waits for the adjudicator's acceptance, agrees and funds, as `buy.mjs` does;
 5. for a fixed file, it posts the standing delivery itself; on the accept it opens the file with the key the adjudicator wrapped for it.
 
-**The card.** `site/card.schema.json` gains an optional `standing` entry. The card stays outside `spec/` (D74); the entry needs no trust in the card's host, since the template's signature and the address check stand on their own.
+**The card.** `site/card.schema.json` gains an optional `standing` entry on each offer, under the offer's `id`, which equals the template's `offerId`. The card stays outside `spec/` (D74); the entry needs no trust in the card's host, since the template's signature and the address check stand on their own.
 
 **The seller.** A setup step, after T-543 lands, builds a template from the terms the seller chose, shows one filled example, signs the template with the seller's key, prepares the fixed file's standing delivery when there is one, and writes the card entry. It needs no ETH.
 
@@ -154,6 +159,7 @@ What changes for it:
 
 - **Admission.** A mandate names its agent by address (`spec/schemas/mandate.schema.json:20`), so a principal's mandate can name the seller contract [measured]. The operators look it up by address and club (`evm-settlement.ts:905-911`) and apply its caps to every take: a template above the price cap is refused at each take, not at publication [measured lookup; the per-take effect inferred].
 - **A standing seller is one address across its takes.** The setup's default of a fresh key for each deal (D73) does not apply, so every take of a template links to one seller address in public. That is the seller's choice per template, and the guide says so (D35).
+- **Standing offers are public deals in this decision.** A `private` or `judgment` deal seals its terms to the buyer and the primary at the offer, with the commitment ID as associated data (`packages/core/src/private.ts:5-7`, `:47`), so once per take, which an offline seller cannot do [measured]. Its signer is also a per-deal key with a `Delegation` certificate (`CLAUDE.md`, signed messages; ADR-0024), and a standing seller is one address. Private deals stay deferred through the pilots anyway (D70). So the template fixes `disclosure.level` to `public`, the seller's tool refuses any other level, and the operators refuse a take whose disclosure is not public. A later decision, with T-207's sealed terms, may let an adjudicator or the buyer seal per take.
 - **A template ends three ways:**
   1. at its `expiresAt`, a required field with any value the encoding holds (D31); the seller's tool may warn about a far date, as advice;
   2. by `revoke(templateHash)`, sent by the key or relayed by anyone with the key's signature, at no cost to the seller [measured, `test_revokedTemplate_noNewTake_fundedDealStillDelivers`];
@@ -179,27 +185,31 @@ What changes for it:
 
 ### 9. The attacks, and the tests the build needs
 
-Contract-level tests go in `contracts/test/attack/StandingSeller.t.sol`, under the names below. Scenario fixtures run on SimChain through core's pure function (section 5).
+Each test has a place and an owning task. **Forge** tests go in `contracts/test/attack/StandingSeller.t.sol`, as functions named after the dotted name (`test_attack_takeReplayed` for `attack.take-replayed`). **Scenario** fixtures run on SimChain through core's pure function (section 5). **Local chain** tests run the operators and the adjudicator against anvil, as the EVM adapter's tests do.
 
-| Attack | Defense | Test or fixture |
-| --- | --- | --- |
-| A take changes a field the template fixes (price, payout address, an adjudicator, a check) | the contract rebuilds the terms itself, so any other field changes the digest | `attack.take-changes-a-fixed-field` (spike: `test_alteredTerms_refused`, measured) |
-| A template binds the seller to terms it did not mean | the seller's tool shows one filled example before the key signs; the template's EIP-712 type makes the fields readable in a wallet; the template names one rules deployment | the setup step's test that the example equals the contract's `termsOf`; `attack.take-under-another-deployment` |
-| A template signature reused for another seller contract with the same key | the template's domain names the seller contract | `attack.template-replayed-to-another-contract` |
-| A replayed take | one commitment ID funds once | `attack.take-replayed` (spike, measured) |
-| A take dated in the past, so the seller has no time to deliver | the rules contract's offer expiry bounds backdating to the offer window | `attack.take-backdated` (spike, measured) |
-| A take dated in the future, or offsets that overflow | `createdAt <= block.timestamp`; an offset sum above 64 bits is unrepresentable | `attack.take-dated-ahead` (spike, measured); `attack.take-offsets-overflow` |
-| Far-future dates in the template | the seller's own choice (D31); advice in its tool, no refusal | none needed |
-| A delivery of another file | the standing approval names one delivery's hashes | `attack.standing-delivery-other-file` (spike, measured) |
-| One template's standing delivery used for another template's take | the approval rebuilds the ID from the template it carries, so the digest differs | `attack.standing-delivery-crosses-templates` |
-| A deployer keeps a back door | one constructor argument; no function changes the key; the address follows from the code | `attack.deployer-keeps-a-back-door`, and a selector allowlist test like `contracts/test/fuzz/NoAdmin.fuzz.t.sol` |
-| A malformed blob, or one that burns gas | a failed decode fails the static call, which the rules contract reads as no (`Erc1271GasBurn.t.sol`) | `attack.standing-blob-malformed`, fuzzed |
-| A flood of unfunded takes spends the seller's write budget, since the operator charges an offer to `commitment.seller` (`apps/operator/src/server.ts:369-372`) [measured] | the operator charges a take to its buyer | `attack.take-flood-spends-seller-budget` |
-| The adjudicator takes the offer itself and rejects | as today: the self-dealing bound | the existing `attack.adjudicator-self-dealing` |
-| The seller is offline from setup on | the take funds, the buyer posts the standing delivery, the primary accepts, the buyer opens the file | `neutrality.seller-offline-standing-take` |
-| Every operator refuses the take | the buyer funds directly, with the deployment bundled | `neutrality.operator-refuses-standing-take` |
-| Crow's deployment never happens | the seller or the first buyer deploys | `neutrality.crow-deploys-nothing` |
-| The store drops the standing ciphertext | the adjudicator retries and never rejects for it (D81); the deal ends in the buyer's refund | `neutrality.store-drops-standing-ciphertext` |
+| Attack | Defense | Test or fixture | Where, owner |
+| --- | --- | --- | --- |
+| A take changes a field the template fixes (price, payout address, an adjudicator, a check) | the contract rebuilds the terms itself, so any other field changes the digest | `attack.take-changes-a-fixed-field` (spike: `test_alteredTerms_refused`, measured) | forge, T-548; scenario, T-549 |
+| A template binds the seller to terms it did not mean | the seller's tool shows one filled example before the key signs; the template's EIP-712 type makes the fields readable in a wallet; the template names one rules deployment | the setup step's test that the example equals `termsOf`; `attack.take-under-another-deployment` | local chain, T-552; forge, T-548 |
+| A template signature reused for another seller contract with the same key | the template's domain names the seller contract | `attack.template-replayed-to-another-contract` | forge, T-548 |
+| A replayed take | one commitment ID funds once | `attack.take-replayed` (spike, measured) | forge, T-548; scenario, T-549 |
+| A take dated in the past, so the seller has no time to deliver | the rules contract's offer expiry bounds backdating to the offer window | `attack.take-backdated` (spike, measured) | forge, T-548; scenario, T-549 |
+| A take dated in the future, or offsets that overflow | `createdAt <= block.timestamp`; an offset sum above 64 bits is unrepresentable | `attack.take-dated-ahead` (spike, measured); `attack.take-offsets-overflow` | forge, T-548 |
+| Far-future dates in the template | the seller's own choice (D31); advice in its tool, no refusal | none needed | |
+| A take with another disclosure level than public | the template fixes `public`; the operators refuse any other (section 7) | `attack.standing-take-not-public` | scenario, T-549 |
+| A delivery of another file | the standing approval names one delivery's hashes | `attack.standing-delivery-other-file` (spike, measured) | forge, T-548 |
+| One template's standing delivery used for another template's take | the approval rebuilds the ID from the template it carries, so the digest differs | `attack.standing-delivery-crosses-templates` | forge, T-548 |
+| A deployer keeps a back door | one constructor argument; no function changes the key; the address follows from the code | `attack.deployer-keeps-a-back-door`, and a selector allowlist test like `contracts/test/fuzz/NoAdmin.fuzz.t.sol` | forge, T-548 |
+| A malformed blob, or one that burns gas | a failed decode fails the static call, which the rules contract reads as no (`Erc1271GasBurn.t.sol`) | `attack.standing-blob-malformed`, fuzzed | forge, T-548 |
+| A flood of unfunded takes spends the seller's write budget, since the operator charges an offer to `commitment.seller` (`apps/operator/src/server.ts:369-372`) [measured] | an operator stores a take only with the buyer's Agree signature over its ID, and charges the take to that signer, so nobody can spend another address's budget | `attack.take-flood-spends-seller-budget`; `attack.take-posted-without-buyer-signature` | scenario, T-549 |
+| A deployment someone else made first, or two first takes close together | the deployment goes alone, after a read of the address's code, and is skipped when code is there; the funding never carries it (section 4) | `neutrality.first-takes-race-the-deployment` | local chain, T-549 |
+| The adjudicator takes the offer itself and rejects | as today: the self-dealing bound | the existing `attack.adjudicator-self-dealing` | |
+| The seller is offline from setup on | the take funds, the buyer posts the standing delivery, the primary accepts, the buyer opens the file | `neutrality.seller-offline-standing-take` | scenario, T-550 |
+| One operator refuses the take | another operator relays it, as for any offer (`neutrality.operator-refuses`) | `neutrality.operator-refuses-standing-take` | scenario, T-549 |
+| Crow's deployment never happens | the seller or the first buyer deploys | `neutrality.crow-deploys-nothing` | local chain, T-549 |
+| The store drops the standing ciphertext | the adjudicator retries and never rejects for it (D81); the deal ends in the buyer's refund | `neutrality.store-drops-standing-ciphertext` | scenario, T-550 |
+
+**A limit that is not new.** If every operator refuses, a buyer can still fund straight on the chain, but it needs the primary's acceptance first, and the reference adjudicator reads offers only through an operator (`apps/adjudicator/src/service.ts:442-446`) [measured]. Every offer has that limit today; a standing offer adds no new one. An adjudicator that takes terms from a party directly closes it.
 
 **What the auditors would need** [inferred]: the seller contract (the spike has 136 lines and 9,430 bytes of runtime, measured), with its descriptions in an interface file (the repository's rule for new contracts); the `StandingOffer` type with vectors generated in the repository, as `contracts/test/unit/Vectors.t.sol` does for the terms; the attack tests above; a fuzzed decoder; a statement that `git diff` of the rules contract's sources is empty; and the rules contract's known issues on contract signers (ADR-0031 section 5, the changing-answer tests). Telling the firm that works on the contracts with Crow is Rafa's.
 
@@ -228,7 +238,7 @@ The seller signs a template once with its ordinary key, and a new function in `H
   - it needs a new domain version, so every pinned command is re-pinned, and the formal model gains a step;
   - it puts template logic into the custody code every deal shares;
   - it still needs the schema change and the delivery rule change of this decision.
-- **Size is not the obstacle.** `HoldbackRules` measures 20,455 bytes of runtime, 4,121 bytes under the 24,576-byte limit (`forge build --sizes`, 2026-11-18) [measured]; T-499 records 20,502 bytes on chain (`docs/tasks/T-499-contracts-audit-ready.md:54`). The design study's guess that a function may not fit does not hold.
+- **Size is not the obstacle.** The phase-one build's runtime is 20,502 bytes on chain and in its artifact (`docs/tasks/T-499-contracts-audit-ready.md:54`), so 4,074 bytes of the 24,576-byte limit are free [measured there]. A scratch `forge build --sizes` gave 20,455 bytes, which T-499 warns does not match the artifact. The design study's guess that a function may not fit does not hold.
 - **Declined** as Rafa decided: the audit and the custody code weigh more than one deployment per seller, which anyone can pay.
 
 ### C. The seller's own address runs the template code (EIP-7702)
@@ -261,7 +271,7 @@ The seller adapter signs each buyer's offer in seconds (ADR-0037).
 
 ## Litmus tests
 
-- **Neutrality.** No single actor stops a valid take from settling. If the operators refuse, the buyer funds directly, with the deployment in the same call. If Crow deploys nothing, the seller or the first buyer deploys. If the seller is offline, a fixed file's standing delivery is posted by anyone. If an adjudicator fails, the fallback and the default apply as today. No actor can move held funds outside the terms: the rules contract is unchanged, and the seller contract approves only the exact terms its key signed as a template. The deployer and Crow's maintainers have no key in it. The fixtures in section 9 show each case.
+- **Neutrality.** No single actor stops a valid take from settling. If one operator refuses, another relays the take, and the buyer can fund straight on the chain once it holds the acceptance (the limit in section 9 is as for any offer). If Crow deploys nothing, the seller or the first buyer deploys. If the seller is offline, a fixed file's standing delivery is posted by anyone. If an adjudicator fails, the fallback and the default apply as today. No actor can move held funds outside the terms: the rules contract is unchanged, and the seller contract approves only the exact terms its key signed as a template. The deployer and Crow's maintainers have no key in it. The fixtures in section 9 show each case.
 - **The hold.** Funds are held, released and refunded by the unchanged rules contract. Each take is one commitment ID, funded once. Expiry, reclaim and the default work as today.
 - **Defended judgment.** The checks and the panel are unchanged. A standing delivery is judged in each deal on that deal's own seed, and no panel is re-rolled. Work whose scope the buyer fills stays outside templates, so the checks never judge a scope a template did not sign.
 

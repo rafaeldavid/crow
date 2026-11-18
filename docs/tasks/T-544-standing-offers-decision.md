@@ -33,7 +33,7 @@ Rafa wants a seller to publish one offer that any buyer can take, without a prog
 - [x] The research note's claims checked (the research note, section 1), with two corrections: the rules contract has about 4,000 bytes of headroom, and a standing delivery needs a core rule change.
 - [x] Alternatives considered: a new signed message in the rules contract, delegated account code (EIP-7702), and the hosted per-buyer signer (ADR-0040, Alternatives).
 - [x] One scratch test against the unchanged rules contract (the research note, section 2), kept as text in the research folder.
-- [x] A red-team pass and a reviewer pass, each given the ADR, `CLAUDE.md`, the threat model and the related ADRs, and their findings fixed (Evidence).
+- [ ] A red-team pass and a reviewer pass, each given the ADR, `CLAUDE.md`, the threat model and the related ADRs, and their findings fixed (Evidence).
 - [x] D82 in `docs/decisions-today.md`.
 - [x] The build's task files, T-548 to T-552, in build order with a testable done-when each.
 - [x] Every claim labelled measured, documented, inferred or guessed.

@@ -19,6 +19,10 @@
 
 Let a seller with no ETH publish a standing offer from the setup command, as ADR-0040 sections 4 and 5 describe: compute its contract's address, build the template, show one filled example, sign the template with its key, prepare a fixed file's standing delivery when there is one, and write the card entry. Crow deploys nothing at this step; the first take deploys the contract.
 
+## Context
+
+ADR-0040 sections 1 (many offers, one seller), 2 (a fixed file's delivery), 4 (deployment), 5 (the seller) and 7 (expiry, revocation, public deals only); D73 and D76 (what the setup sends).
+
 ## Acceptance criteria
 
 - [ ] The step needs no ETH and sends nothing that names the seller to a Crow-run host, beyond what D73 and D76 already allow.
