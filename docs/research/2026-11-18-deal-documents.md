@@ -224,7 +224,8 @@ Key: **present** (where), **derivable** (from present data by a rule), **missing
 | A refund before any invoice | none | | no invoice; the buyer's books show money out and back | |
 | A refund after an invoice | the seller | the buyer | a credit note quoting the invoice | the seller |
 | A replaced deal (ADR-0039) | the seller | the buyer | the invoice follows the deal that paid; the refunded first deal needs none if no invoice was issued for it | the seller |
-| The adjudication fee | the adjudicator | the party that paid it, the buyer today | the adjudicator's invoice or receipt | the adjudicator; Crow when Crow's adjudicators charge |
+| The adjudication fee, kept on a decision | the adjudicator | the party that paid it, the buyer today | the adjudicator's invoice or receipt | the adjudicator; Crow when Crow's adjudicators charge |
+| The adjudication fee, returned (early accept, a settlement both sign, a reclaim) | none | | no invoice; the fee comes back to the buyer's payment address | |
 | A price-0 deal (judgment only) | the adjudicator | the buyer | only the adjudicator's invoice | the adjudicator |
 | The operator fee | the operator that relayed | the buyer's payment address | the operator's invoice or receipt | that operator |
 
@@ -232,7 +233,8 @@ Key: **present** (where), **derivable** (from present data by a rule), **missing
 
 Three points follow [inferred]:
 - **Invoice on release, not on funding.** If the seller invoices only once the deal pays it, a refund needs no credit note in the usual case. Whether funding the hold counts as a payment on account, which would make an invoice due earlier, is an adviser's question (section 9).
-- **The fees' supplier is not Crow by default.** The adjudication fee's supplier is whichever adjudicator the parties named, and the operator fee's is the operator that relayed. Crow is the supplier only where its own adjudicators or operators charge. Both fees are 0 for the first pilots (`docs/api.md`, "Operator fee"), so this waits.
+- **The fees' supplier is not Crow by default.** The adjudication fee's supplier is whichever adjudicator the parties named, and the operator fee's is the operator that relayed. Crow is the supplier only where its own adjudicators or operators charge. The operator fee is 0 for the first pilots (`docs/api.md`, "Operator fee"). The adjudication fee is charged on every judged deal today, so the adjudicator's invoice is a live question now, for Crow's own adjudicators included [measured: `docs/api.md`, "Fees"; `docs/what-a-deal-can-do.md`, the price-0 deal].
+- **The adjudication fee is sometimes returned.** An early accept, a settlement both parties sign and a reclaim after the deadline return it to the buyer's payment address. Then no adjudicator invoice is due, and the buyer's ledger must not book the fee as an expense [measured: `docs/api.md`, "Fees"; `docs/what-a-deal-can-do.md`, "Other paths"].
 - **Who holds them:** each party keeps its own documents, as it keeps its own deal record today (`site/buy.txt`, step 11).
 
 ## 7. Encryption and custody
@@ -264,7 +266,7 @@ Each is small enough to build and test alone. Task numbers are the coordinator's
 ### Task 1. Write a deal's ledger row and proof of purchase
 
 - **Produces:** a command in `examples/` (a new command, since `buy.mjs` is pinned by hash) that reads a deal record or evidence file the party already has, runs `examples/evidence.ts check` over the evidence file first, and writes:
-  - one CSV row and the same as JSON: the deal's date of acceptance in UTC, the commitment ID as the reference, the counterparty's address, the description, the price, the adjudication fee and the operator fee in the token and in base units, the chain, the transaction hashes with an explorer address, the outcome, and the paid-to and refunded-to addresses;
+  - one CSV row and the same as JSON: the deal's date of acceptance in UTC, the commitment ID as the reference, the counterparty's address, the description, the price, the adjudication fee (marked kept or returned) and the operator fee in the token and in base units, the chain, the transaction hashes with an explorer address, the outcome, and the paid-to and refunded-to addresses;
   - optional fiat columns filled only from a rate file the party supplies (rate, currency, source, time), blank otherwise;
   - a one-page proof of purchase in Markdown: the order, the acceptance and the payment side by side, with the signatures, the evidence file's SHA-256 and the command that checks it.
 - **Needs:** no change to the protocol, the API or the schemas. No route, no storage.
@@ -274,7 +276,7 @@ Each is small enough to build and test alone. Task numbers are the coordinator's
 
 ### Task 2. Draft the seller's invoice from a deal
 
-- **Produces:** the same command's `invoice` mode for the seller. It reads the deal and a details file the seller keeps (its legal name, address and tax ID; the buyer's details as the buyer gave them; the next number in its series; the tax treatment it states, such as a rate or "Reverse charge"; an optional rate and source for any VAT in national currency). It writes an invoice in Markdown and as JSON keyed by EN 16931 business terms, quoting the commitment ID and the release transaction as the payment reference. It covers a split settlement (the seller's share) and a credit note that quotes an earlier invoice. The seller may sign the invoice's hash with its deal key, and a check mode recovers the signer and compares the amounts and dates with the deal.
+- **Produces:** the same command's `invoice` mode for the seller. It reads the deal and a details file the seller keeps (its legal name, address and tax ID; the buyer's details as the buyer gave them; the next number in its series; the tax treatment it states, such as a rate or "Reverse charge"; an optional rate and source for any VAT in national currency). It writes an invoice in Markdown and as JSON keyed by EN 16931 business terms, quoting the commitment ID and the release transaction as the payment reference. It covers a split settlement (the seller's share) and a credit note that quotes an earlier invoice. The seller may sign the invoice's hash with its deal key under its own EIP-712 type, separate from every protocol message, and a check mode recovers the signer and compares the amounts and dates with the deal.
 - **Needs:** a new command mode. No route, no storage, no schema field. The details file never leaves the seller's machine except as the invoice the seller sends.
 - **Done when:** for a released deal, a split settlement and a refund after an invoice, the output carries every field in the Article 226 and VAT Notice 700 lists that the seller supplied, prints "not supplied" for any it left out, refuses amounts that differ from the deal, and the buyer's check recovers the seller's address from the signature offline.
 - **Size:** M.
@@ -282,8 +284,9 @@ Each is small enough to build and test alone. Task numbers are the coordinator's
 
 ### Task 3. Carry the buyer's order number into the signed order
 
-- **Produces:** a buyer option that sends its own purchase order number with the quote request, and a seller adapter change that writes it into `deliverable.notes`, so it appears in the signed terms, the proof of purchase and the invoice.
-- **Needs:** no schema change: `deliverable.notes` is free text the terms' hash already binds [measured, `spec/schemas/commitment.schema.json`]. A new buyer command option and a seller adapter change.
+- **Produces:** an option in task 1's command in `examples/` (never in the pinned `buy.mjs`) that sends the buyer's own purchase order number with the quote request, and a seller adapter change that writes it into `deliverable.notes`, so it appears in the signed terms, the proof of purchase and the invoice.
+- **Needs:** no schema change: `deliverable.notes` is free text the terms' hash already binds [measured, `spec/schemas/commitment.schema.json`]. A new option in an `examples/` command and a seller adapter change.
+- **Disclosure:** on a public deal the operators serve `deliverable.notes` in the clear and the judges read it as untrusted text [measured, `spec/schemas/commitment.schema.json`, `x-holdback-untrusted`]. So the order number becomes public. A buyer that wants it private chooses a private deal, or keeps the mapping in its own books.
 - **Done when:** a test deal's terms carry the number, tasks 1 and 2 print it, and a deal without one is unchanged.
 - **Size:** S.
 - **Start only when:** a buyer's accounts payable says it cannot match an invoice without its own order number.
