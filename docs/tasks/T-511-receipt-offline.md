@@ -131,6 +131,13 @@ What it does not prove:
 
 **Done.** The command, its tests and the agent-docs paragraph are in PR 634; the PR's `Closes T-511` line marks the task done when it merges.
 
+**One way to prove a deal: kept apart for now, with the merge path.** On 2026-11-18 the T-513 simplicity review asked, with Rafa's approval, to make this check and the deal record (`examples/deal-record.ts`, T-333) one command. This task keeps them apart, for two reasons:
+
+1. **Merging changes a pinned bundle.** `deal-record.ts` is inlined into `site/buy.mjs` (and imported by `buyer-signer.ts`), and `site/check.mjs` fails a `buy.mjs` that is stale against `examples/` (measured: group 13). Making the record write the bundle therefore changes `buy.mjs` and its published SHA-256, which this task may not do.
+2. **They check different things today.** The record reads every operator and compares them, and runs the checks only a party can: the buyer opens its own envelope, the seller passes its own delivery and its late-work settlement. The bundle is what anyone can check later with no network, from one operator's answers plus the raw transactions. Neither replaces the other yet.
+
+**The merge path, when Rafa next re-pins `buy.mjs`:** the record writes `transactions` and `ciphertext` beside the operators' answers, in this file's `holdback-evidence/1` shape. `check` moves into the record as its offline mode, so buyers run `node buy.mjs record check <file>`. `fetch` then goes away, and the guides keep one name, "the deal record". Until then the guides name the record for a party's own copy and this check for proof to others (`site/ref/after-funding.txt`).
+
 - **Deploy:** none needed for the command, which runs from a clone. The paragraph in `site/ref/after-funding.txt` reaches crow.direct with the next site deploy (`pnpm site:deploy` from a fresh detached checkout of `origin/main`, as T-500's Handoff lists). That deploy is Rafa's.
 - **For each case study:** run `node examples/evidence.ts fetch <id> --out <file>` once the deal closes, and publish the file beside the case. Anyone can then run `check` on it.
 - **Not done, for the backlog** (none blocks this slice):
