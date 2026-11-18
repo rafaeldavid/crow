@@ -5,7 +5,7 @@
 - **Depends on:** none
 - **Paths this task may touch:** `config/secrets/`, `config/keys.template` (removed), `config/keys-dev-env.template`, `scripts/secrets/`, `tests/secrets-*.test.ts`, `docs/operations.md`, `docs/secrets-inventory.md`, `docs/demo.md`, `docs/api.md`, `docs/testing.md`, `docs/redeploy-contracts.md`, `package.json` (scripts), and the usage lines of `apps/demo/src/{bin,cli}.ts`, `apps/demo-cloud/scripts/feedback.ts`, `examples/e2e-{keys,round,settle}.ts`, `examples/send-timeout.ts`, `tools/duet/README.md`, `tools/duet/duet.ts`
 - **Human gate:** yes: Rafa installs `op`, signs in, runs the copy and the check, pushes the runtime secrets, runs one test deal and removes the file. No agent runs `op` or reads the file.
-- **Status:** in progress
+- **Status:** paused: the agent's part is merged (PR 579); the rest is Rafa's own run of the list, tracked as a waiting item
 - **Agent/session:** a sub-session of the coordinator, 2026-11-15
 - **Roadmap row:** N137
 

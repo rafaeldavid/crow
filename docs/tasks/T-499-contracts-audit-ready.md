@@ -5,7 +5,7 @@
 - **Depends on:** T-338, T-339, T-340, T-388 (the audit package and the phase-one reviews)
 - **Paths this task may touch:** `docs/audit/`, `contracts/test/` (added coverage only), read-only scripts, this task file
 - **Human gate:** no (engaging an auditor, and any source change, are Rafa's)
-- **Status:** in progress
+- **Status:** done
 - **Agent/session:** contracts audit-readiness review session, started by the coordinator on Rafa's request (2026-11-17)
 - **Roadmap row:** N26
 
