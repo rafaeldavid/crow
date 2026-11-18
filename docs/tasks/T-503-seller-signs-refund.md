@@ -5,7 +5,7 @@
 - **Depends on:** T-329 (the ready credential), T-434 (the adapter core), T-501 (deal 1 closed when its job moved to deal 2)
 - **Paths this task may touch:** `examples/seller-adapter-core.ts`, `examples/seller-adapter-refund.test.ts` (new), `apps/hosted-sellers/src/worker.ts` (its header comment), `site/ref/seller-adapter.txt` (one paragraph), `site/setup.mjs` (rebuilt: it bundles the adapter core), this file.
 - **Human gate:** yes, for the redeploy of `pilot-scan-1` only (Rafa). The code stays inside the repository.
-- **Status:** review
+- **Status:** done (merged as `9501b84c`, PR 627; the redeploy of `pilot-scan-1` waits for Rafa)
 - **Agent/session:** session zealous-jepsen, 2026-11-18, branch `t-503-seller-refund`.
 - **Roadmap row:** N134 (its leftover: the second buyer's deal 1)
 - **Change kind:** moves money: the examples' and the hosted sellers' tests, one red-team pass.
