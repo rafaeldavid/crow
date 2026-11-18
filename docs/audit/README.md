@@ -4,6 +4,8 @@ This page is where an outside auditor of Crow's phase-one contracts starts. Crow
 
 The code to audit is `contracts/src/` at the git tag `contracts-phase-one-1`. Read these pages from `main`, which corrects them after the tag; `contracts/src/` and `contracts/test/` on `main` equal the tag's.
 
+**The fixed build.** D80 (2026-11-18) has the outside audit read the next build, which carries an outside scan's contract fixes (T-527 to T-529) on the lane `contracts-audit-ready`. Its tag will be `contracts-phase-one-2`. On the lane, [`state-model.md`](state-model.md), [`threat-model.md`](threat-model.md) TA-11 and the deployer's row, and [`functions.md`](functions.md), "The fixed build", describe it; the dated sections stay records of the tag.
+
 Labels: **measured** (produced by the named command), **documented** (stated in the doc cited), **inferred** (concluded from reading).
 
 ## Reading order
@@ -84,7 +86,7 @@ The primary may also decide in Held when its call carries the delivery. [`invari
 Each is stated in full in [`scope.md`](scope.md), "Trust assumptions and privileged roles", and [`threat-model.md`](threat-model.md).
 
 - **No admin.** No owner, pause, freeze, blacklist, upgrade proxy, `selfdestruct`, `delegatecall`, `receive` or `fallback`. `contracts/test/fuzz/NoAdmin.fuzz.t.sol` enforces it.
-- **The deployer** fixes six constructor arguments once and has no authority afterwards.
+- **The deployer** fixes six constructor arguments of the rules contract once, and on the fixed build one of the beacon's (its pairing gas), and has no authority afterwards.
 - **Operators** relay signed messages and hold no role in any contract.
 - **Adjudicators** are named by the parties in the terms they both sign. Their decisions are final in phase one, and no adjudicator posts a bond.
 - **The token** must be a plain ERC-20 with ERC-3009: no fee on transfer, no rebasing, no hooks. What a token issuer can do to its own token (freeze, pause, blacklist) is out of scope as a finding ([`known-issues.md`](known-issues.md), R-1).

@@ -60,9 +60,9 @@ Every entry point of the rules contract is permissionless: the contract never re
 | --- | --- | --- | --- | --- |
 | `agreeAndFund` | P01 | P02 | stage None (`WrongStage`); `now < offerExpiresAt` and `now < fundBy` (`DeadlinePassed`); both message expiries (`MessageExpired`); `bondReserved = 0` and the terms' token is `TOKEN` (`InvalidMessage`); the deadlines strictly in order `offerExpiresAt < fundBy < deliverBy < judgeBy < fallbackBy`, `maxSubmissions = 1`, `D ≥ 1` and `appealWindowSec = 0` (`InvalidMessage`); `fallbackBy ≤ LAST_TIMESTAMP` and `D ≤ 2^32 − 1` (`Unrepresentable`); then the three signatures; then, in `_paymentInfo`, `H ≤ 2^120 − 1` and the escrow's expiry `≤ 2^48 − 1` (`Unrepresentable`). In the escrow: `H > 0` (`E:179`); `fundBy ≤` the escrow's expiry (`E:494`), which the order makes true; the token store receives exactly `H` (`E:424`) | the seller (the commitment ID), the primary (the acceptance, `H.acceptanceHash`), the buyer (the Agree, `H.agreeHash`), the buyer's payment address (the ERC-3009 authorization, checked by the collector `ERC3009_COLLECTOR` and the token) |
 | `deliver` | P02 | P03 | stage Held (`WrongStage`); in `_acceptDelivery`: `now < deliverBy` (`DeadlinePassed`), attempt 1 (`InvalidMessage`) | the seller (`_acceptDelivery`) |
-| `decide`, primary | P02 carrying a delivery (under `_acceptDelivery`'s guards), or P03 | accept: P06. reject: P07. escalate: P05 | the common guards, with deadline `judgeBy`; the revealed seed hashes, with the ID, to the stored `seedTag` (`BadSeed`); no appeal ground (`_firstInstance`, `InvalidMessage`); a key on an accept (`_settleDecision`, `InvalidMessage`) | the primary |
+| `decide`, primary | P02 carrying a delivery (under `_acceptDelivery`'s guards), or P03 | accept: P06. reject: P07. escalate: P05 | the common guards, with deadline `judgeBy`; the revealed seed hashes, with the ID, to the stored `seedTag` (`BadSeed`); no appeal ground (`_firstInstance`, `InvalidMessage`); no beacon field: an empty source, round 0, value 0 and no signature (`decide`, `InvalidMessage`); a key on an accept (`_settleDecision`, `InvalidMessage`) | the primary |
 | `decide`, fallback | P04 | accept: P08. reject: P09. escalate: P05 | the common guards, with deadline `fallbackBy`; the round is `_fallbackRound`, the first published after `judgeBy − 1 + BEACON_MARGIN`, its value is proven by `BEACON` and the seed is `H.panelSeed` of it (`BadSeed`); no appeal ground; a key on an accept | the fallback |
-| `decide`, escalation | P05 | accept: P10. reject: P11 | the common guards, with deadline `t1 + D` (`_escalationDecideBy`); accept or reject only; the round is `_escalationRound`, the first published after `t1 + BEACON_MARGIN`; a key on an accept. The appeal ground is not checked (`_escalationDecision`) | the appeal adjudicator |
+| `decide`, escalation | P05 | accept: P10. reject: P11 | the common guards, with deadline `t1 + D` (`_escalationDecideBy`); accept or reject only; the round is `_escalationRound`, the first published after `t1 + BEACON_MARGIN`; a key on an accept; no appeal ground (`_escalationDecision`, `InvalidMessage`) | the appeal adjudicator |
 | `earlyAccept` | P02 carrying a delivery (under `_acceptDelivery`'s guards), or P03 | P13 | stage Held or Delivered (`WrongStage`); message expiry (`MessageExpired`); the message names the carried and posted delivery and its attempt (`InvalidMessage`); the buyer's envelope is in the delivery's key list (`_requireKeyProof`, `BadKeyProof`). No deadline of its own | the buyer; the seller's delivery signature when carried |
 | `mutualSettle` | P02, P03, P04, P05 | P15 (from P02), P16 (from P03), P17 (from P04 or P05) | stage (`WrongStage`); message expiry (`MessageExpired`); without a delivery only in Held, with no key and no named hash (`InvalidMessage`); outside Held it names the posted delivery (`InvalidMessage`); with a key, the carried delivery hashes to the named one and holds the buyer's envelope (`BadKeyProof`); in `_payOut`, each payout is above zero and names the seller's payout address or the buyer's payment address, and the payouts sum to `P` (`InvalidMessage`). No deadline of its own | the buyer and the seller |
 | `reclaim` | P02 | P14 | stage Held (`WrongStage`); `now ≥ deliverBy` (`TooEarly`) | nobody |
@@ -174,9 +174,10 @@ The contract refuses, at funding, terms that settlement cannot process (`agreeAn
 - deadlines not strictly in the order `offerExpiresAt < fundBy < deliverBy < judgeBy < fallbackBy`, compared as core compares them (`packages/core/src/timing.ts`);
 - `maxSubmissions` other than 1;
 - an `appealDecideSec` of 0;
-- an `appealWindowSec` other than 0 (ADR-0033 §2b).
+- an `appealWindowSec` other than 0 (ADR-0033 §2b);
+- a `disputeBy`, `disputeJudgeSec` or `disputeFallbackSec` other than 0: the optimistic mode's fields, which phase one does not run (T-529).
 
-It also refuses with `Unrepresentable()` what core cannot represent, as core does: a `fallbackBy` after 9999-12-31T23:59:59-23:59, so every deadline after it; an escalation window above 2^32 − 1 s; and a hold above 2^120 − 1 base units [measured: `agreeAndFund`, `_paymentInfo`; `contracts/test/unit/Unrepresentable.t.sol`; core's `MAX_HOLD` and its parser]. It does not refuse the dispute fields (section 8.3, rows 2 to 4). This closes the plan's IS-5.
+It also refuses with `Unrepresentable()` what core cannot represent, as core does: a `fallbackBy` after 9999-12-31T23:59:59-23:59, so every deadline after it; an escalation window above 2^32 − 1 s; and a hold above 2^120 − 1 base units [measured: `agreeAndFund`, `_paymentInfo`; `contracts/test/unit/Unrepresentable.t.sol`; core's `MAX_HOLD` and its parser]. This closes the plan's IS-5.
 
 Two limits remain. Both are stated, and the contract does not refuse them (D31; ADR-0032 §5):
 
@@ -222,7 +223,7 @@ The seller signs the commitment ID (`agreeAndFund`). The buyer's Agree, the prim
 | `timing.offerExpiresAt`, `fundBy`, `deliverBy`, `judgeBy`, `fallbackBy`, `appealDecideSec` | yes | section 6.1; order and window at funding (`agreeAndFund`) |
 | `timing.appealWindowSec` | yes: must be 0 (ADR-0033 §2b) | `agreeAndFund` |
 | `timing.maxSubmissions` | yes: must be 1 | `agreeAndFund`; attempt 1 only (`_acceptDelivery`) |
-| `timing.disputeBy`, `disputeJudgeSec`, `disputeFallbackSec` | **no** | never read |
+| `timing.disputeBy`, `disputeJudgeSec`, `disputeFallbackSec` | yes: each must be 0 (T-529) | `agreeAndFund` |
 | `settlement.mode`, `settlement.token` | yes, by construction: the hash uses the constant `guaranteed_on_decision` and the price token | `H.commitmentId` |
 | `remedy` | **no**: an opaque hash. A reject always refunds the price in full | `H.commitmentId`, `_settleDecision` |
 | `createdAt` | **no** | `H.commitmentId` |
@@ -245,9 +246,9 @@ The seller signs the commitment ID (`agreeAndFund`). The buyer's Agree, the prim
 | | `seed` | yes | `decide` |
 | | `judgmentRecordHash` | no: emitted in `Decided` | `decide` |
 | | `keyForBuyer` | required on an accept (`_settleDecision`), refused on a reject or an escalation (`decide`). The contract cannot check the ciphertext | `decide`, `_settleDecision` |
-| | `appealGround` | empty for the primary and the fallback; **not checked** for the appeal adjudicator's decision after an escalation | `_firstInstance`; not read in `_escalationDecision` |
-| | `beacon.round`, `value`, `signature` | for the fallback and appeal roles; **not checked** for the primary | `decide` |
-| | `beacon.source` | **no** | `H.decisionHash` |
+| | `appealGround` | must be empty at every role: phase one has no party appeal (T-529) | `_firstInstance`, `_escalationDecision` |
+| | `beacon.round`, `value`, `signature` | for the fallback and appeal roles; must be empty (round 0, value 0, no signature) for the primary (T-529) | `decide` |
+| | `beacon.source` | must be empty for the primary (T-529); bound only for the fallback and appeal roles | `decide`, `H.decisionHash` |
 | | `encryptedKeys` | **no** | `H.decisionHash` |
 | | `expiresAt` | yes | `decide` |
 | | `nonce` | no | |
@@ -268,16 +269,16 @@ Verdicts: **enforce** (the contract refuses a value it cannot honour), **remove*
 | # | Field | Verdict | Reason |
 | --- | --- | --- | --- |
 | 1 | `timing.maxSubmissions` | **Enforced:** the contract refuses terms where it is not 1 (`agreeAndFund`) | The contract takes one attempt (`_acceptDelivery`). The schema allows 1 to 3 for the full protocol, which SimChain runs |
-| 2 | `timing.disputeBy` | **Enforce:** refuse nonzero. Not built in phase one: recorded for the outside audit (below) | An optimistic-mode field. The schema forbids it in `guaranteed_on_decision` (`spec/schemas/commitment.schema.json`), the only mode the contract settles; core encodes its absence as zero (`packages/core/src/eip712.ts`) |
-| 3 | `timing.disputeJudgeSec` | **Enforce:** refuse nonzero. Not built in phase one: recorded (below) | The same |
-| 4 | `timing.disputeFallbackSec` | **Enforce:** refuse nonzero. Not built in phase one: recorded (below) | The same |
+| 2 | `timing.disputeBy` | **Enforced:** the contract refuses terms where it is not 0 (`agreeAndFund`; T-529) | An optimistic-mode field. The schema forbids it in `guaranteed_on_decision` (`spec/schemas/commitment.schema.json`), the only mode the contract settles; core encodes its absence as zero (`packages/core/src/eip712.ts`) |
+| 3 | `timing.disputeJudgeSec` | **Enforced:** must be 0 (T-529) | The same |
+| 4 | `timing.disputeFallbackSec` | **Enforced:** must be 0 (T-529) | The same |
 | 5 | `createdAt` | **Assumption** | The seller's claim of when it wrote the terms. No deadline derives from it, and any value settles the same way. Refusing a future value would restrict a parameter the parties manage (D31) |
 | 6 | Delivery `submittedAt` | **Assumption** | The seller's claim. The delivery's time for every deadline is the block time of the call that lands it (`_acceptDelivery`) |
 | 7 | Appeal `filedAt` | Not in phase one: the contract takes no appeal. SimChain keeps it | — |
-| 8 | Decision `appealGround` | **Enforced empty** for the primary and the fallback (`_firstInstance`). **Not checked** for the appeal adjudicator's decision after an escalation (`_escalationDecision`): not built in phase one, recorded (below) | Phase one has no party appeal, so the field has no meaning on chain. The verdict is half built [measured: `PhaseOneRedTeam.t.sol`, `test_issue_escalationDecisionAcceptsAnyAppealGround`] |
+| 8 | Decision `appealGround` | **Enforced empty** at every role: the primary and the fallback (`_firstInstance`), and the appeal adjudicator's decision after an escalation (`_escalationDecision`; T-529) | Phase one has no party appeal, so the field has no meaning on chain [measured: `contracts/test/unit/SignedFieldsRefused.t.sol`] |
 | 9 | Decision `beacon.source` | **Assumption** | The contract proves the round against its immutable beacon, so the name is a label. The on-chain proof stays (SC-8 is not cut). If a later decision removes the proof, the name becomes the only link to a beacon, and the contract should then hash its deployment's source name the way it hashes the settlement mode |
 | 10 | Decision `encryptedKeys` | **Assumption** | The envelopes an escalating adjudicator hands to the next one (ADR-0020). The contract sees a hash and cannot check a ciphertext |
-| 11 | Decision `beacon.round`, `value`, `signature`, primary role | **Enforce empty.** Not built in phase one, recorded (below): the primary's path does not read them (`decide`) | A primary's seed is its own commit-reveal and uses no beacon. Unchecked, a primary can sign beacon data that a reader may take as proven |
+| 11 | Decision `beacon.source`, `round`, `value`, `signature`, primary role | **Enforced empty:** the contract refuses a primary's decision with any of them set (`decide`, `InvalidMessage`; T-529) | A primary's seed is its own commit-reveal and uses no beacon, so a primary cannot sign beacon data a reader may take as proven |
 | 12 | Acceptance `bondReserved` | **Enforced:** must be 0 (`agreeAndFund`); **remove** at a later schema version | Phase one has no bond (ADR-0031 §8). A nonzero value would be a signed statement that something is reserved |
 | 13 | Acceptance `seedCommitment`, high 112 bits | **Enforced:** the tag hashes the whole commitment with the commitment ID (PR 414; `H.seedTag`) | Known issue L-4. One residual stays: the primary knows the commitment ID before it signs, so about 2^72 hash attempts buy a two-way seed choice on that one deal. The primary already chooses its own seed (DS-1), so it gains nothing new |
 | 14 | MutualSettlement `deliveryHash` in Held | **Assumption** on chain when no key is released | Finding F-1, closed: core, ADR-0019 and the formal model follow the contract's rule (T-357). With a key, the contract checks that the carried delivery hashes to the named one (`mutualSettle`). Without a key, the named hash is signed for the record |
@@ -286,13 +287,7 @@ Verdicts: **enforce** (the contract refuses a value it cannot honour), **remove*
 | 17 | The primary's acceptance is named by no other signature | **Assumption;** binding it needs a change to a signed type | The buyer's Agree signs the ID, its own address, a nonce and an expiry (`H.agreeHash`), and the seller signs the ID. Neither names the acceptance, so whoever funds chooses which acceptance to carry. A primary that signed two fixes its seed commitment only at funding. This extends known issue DS-1: the primary already chooses its own panel seed |
 | 18 | `timing.appealWindowSec` | **Enforced:** must be 0 on a phase-one deployment (`agreeAndFund`; ADR-0033 §2b, schema v0.11) | Phase one has no party appeal. SimChain keeps each club's minimum window for the full protocol |
 
-**Three checks are recorded for the outside audit and not built in phase one** (the coordinator's default of 2026-11-12, put to Rafa; the whole-diff reviews, T-388, findings L-1 and I-1):
-
-- **The three dispute fields** (rows 2 to 4). The contract takes terms whose `disputeBy`, `disputeJudgeSec` or `disputeFallbackSec` is not 0 [measured by the review: `test_r11_issue_disputeFieldsAreSignedAndNotRefused`]. The schema forbids them in the one settlement mode the contract runs and core encodes them as 0, so only terms sent straight to the contract can carry them, and such a deal then falls behind the operators' view (residual 13). No money moves outside the terms.
-- **An escalation decision's appeal ground** (row 8). It is hashed into the decision's signature and into nothing else: never emitted, stored or read [measured by the red team: `test_issue_escalationDecisionAcceptsAnyAppealGround`].
-- **A primary's beacon fields** (row 11). The primary's path does not read them, so a primary's accept may carry beacon data no one proved [measured by the review: `test_r11_issue_primaryDecisionMayCarryUnprovenBeaconFields`]. A reader must not take them as proven.
-
-Building any of the three is one comparison in the contract, its proof and a redeploy; the review recommends leaving them recorded.
+**Three checks recorded for the outside audit at the first build are built in the fixed build** (T-529; the whole-diff reviews, T-388, findings L-1 and I-1; an outside scan's group G4): the three dispute fields (rows 2 to 4), an escalation decision's appeal ground (row 8) and a primary's beacon fields (row 11). Each is one comparison that refuses with `InvalidMessage` [measured: `contracts/test/unit/SignedFieldsRefused.t.sol`, which replaced the three tests that pinned the first build's behaviour]. Core's phase-one profile refuses the two decision fields too, with the reason, before a relay simulates the call (T-540). The deployed first build still takes all three; [`known-issues.md`](known-issues.md) gives each one's status.
 
 The nonces of the messages that carry one are assumptions too: the stage stops a replay. `rulebookHash` is bound only: a club's rules, its settlement rules among them, are not on chain, so a message sent straight to the contract is held to the terms and not to the rulebook.
 

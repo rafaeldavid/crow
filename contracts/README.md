@@ -81,6 +81,8 @@ node scripts/evm-abis.mjs
 
 The script reads the ABIs its `SOURCES` names (`HoldbackRules`, `TestUSDC`, `AuthCaptureEscrow`, `LocalMulticall3` and `ERC3009PaymentCollector`) from `contracts/out` and writes them to `abis.json`. `packages/settlement/evm/abis.test.ts` fails when `abis.json` differs from `contracts/out`. It skips without build output.
 
+The beacon is not in `abis.json`. Its errors reach the relay through `HoldbackRules.decide`, and `packages/settlement/evm/errors.ts` decodes them from a fixed list (`BEACON_ERRORS`), which `errors.test.ts` checks against the built beacon (T-540).
+
 ## Deployments
 
 | File | Commit | EIP-712 domain | Status |
@@ -88,6 +90,8 @@ The script reads the ABIs its `SOURCES` names (`HoldbackRules`, `TestUSDC`, `Aut
 | `deployments/sepolia.json` | The record's `commit` field; the annotated tag `contracts-phase-one-1` holds the same `contracts/src` | "Holdback", the version in `holdbackDomain` (`packages/core/src/eip712.ts`) | Live since the record's `deployedAt` (the phase-one contracts, ADR-0031). New deals settle here |
 | `deployments/sepolia-2026-11-04T0830Z-domain-0.7.json` | `64be1f1` | "Holdback" 0.7 | Superseded on 2026-11-13. Deals opened on it finish on it |
 | `deployments/sepolia-2026-11-03-domain-0.6.json` | `2342756` | "Holdback" 0.6 | Superseded on 2026-11-04. Deals opened on it finish on it |
+
+The lane `contracts-audit-ready` holds the next build, with an outside scan's fixes (T-527 to T-529), not deployed yet. Its beacon takes one constructor argument, the pairing gas: `script/deploy-sepolia.sh` sets it (`PAIRING_GAS`), checks it back on chain and writes it into the record (`contracts.DrandQuicknetBeacon.args`). [`docs/redeploy-contracts.md`](../docs/redeploy-contracts.md) takes it to Sepolia.
 
 Each record holds the addresses, creation transactions, blocks, constructor arguments, the commit and the compiler settings. The dated records keep their values as written. `docs/operations.md` ("Sepolia contracts") describes the deploy steps. Deploying is a gate: it waits for Rafa.
 
