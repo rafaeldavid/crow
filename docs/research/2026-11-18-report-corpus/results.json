@@ -1,0 +1,2022 @@
+{
+  "template": "examples/seller-adapter.template.json",
+  "summary": {
+    "design": {
+      "reports": 18,
+      "reportsWithNoBlocker": 1,
+      "reportsWithBlocker": {
+        "commit (several)": 4,
+        "findings": 1,
+        "hidden characters": 4,
+        "location": 9,
+        "proof files": 8,
+        "recommended fix": 7,
+        "scope": 2,
+        "severity": 1,
+        "text over a field limit": 11
+      },
+      "passIfOnlyThisBlockerRemoved": {
+        "commit (several)": 1,
+        "findings": 1,
+        "hidden characters": 2,
+        "location": 1,
+        "proof files": 1,
+        "recommended fix": 1,
+        "scope": 2,
+        "severity": 1,
+        "text over a field limit": 1
+      },
+      "relaxedWhatIfAccepted": 15,
+      "relaxedWhatIfAcceptedAmongMappable": 12,
+      "findings": 182,
+      "mapWithNoFindingLost": 5,
+      "ofThoseAcceptedDefaultTerms": 1,
+      "ofThoseAcceptedNoProofTerm": 1,
+      "allAcceptedDefaultTerms": 1,
+      "allAcceptedNoProofTerm": 1,
+      "reportsNotMappingByCause": {
+        "location: the finding names no file in scope": 9,
+        "recommended fix: no separate recommendation section (a model would have to cut it out of the prose)": 7,
+        "commit: the report reviews more than one commit or repository; the form holds one": 4,
+        "findings: the rules find no finding and the report does not say it has none": 1,
+        "scope: the report lists no files and its findings name none": 2,
+        "severity: \"Undetermined\" has no place on the form's scale": 1
+      },
+      "failingChecksAmongMappedDefault": {
+        "hidden": 3,
+        "report": 3,
+        "proof": 2
+      },
+      "failingChecksAmongMappedNoProof": {
+        "hidden": 3,
+        "report": 3
+      },
+      "failingChecksAllDefault": {
+        "report": 14,
+        "proof": 9,
+        "scope": 9,
+        "hidden": 4,
+        "coverage": 2
+      },
+      "findingsOverAFieldLimit": {
+        "rootCause": 55,
+        "recommendedFix": 1
+      },
+      "findingsMediumOrHigher": 50,
+      "reportsWithHiddenCharacters": 4,
+      "reportsOverJudgeRead": 2,
+      "sourceChars": 717660,
+      "carriedChars": 471677,
+      "outsideFindingsChars": 153139,
+      "droppedSectionChars": {
+        "severity": 691,
+        "fix implemented": 3805,
+        "client commentary": 1010,
+        "affected files": 6217,
+        "target": 426,
+        "source": 7815,
+        "code snippet": 22055,
+        "tool used": 823,
+        "discussion": 28295
+      },
+      "locationsOutOfScope": 70
+    },
+    "heldout": {
+      "reports": 6,
+      "reportsWithNoBlocker": 0,
+      "reportsWithBlocker": {
+        "commit (not 40 characters)": 6,
+        "findings": 6,
+        "scope": 6
+      },
+      "passIfOnlyThisBlockerRemoved": {
+        "commit (not 40 characters)": 0,
+        "findings": 0,
+        "scope": 0
+      },
+      "relaxedWhatIfAccepted": 0,
+      "relaxedWhatIfAcceptedAmongMappable": 0,
+      "findings": 0,
+      "mapWithNoFindingLost": 0,
+      "ofThoseAcceptedDefaultTerms": 0,
+      "ofThoseAcceptedNoProofTerm": 0,
+      "allAcceptedDefaultTerms": 0,
+      "allAcceptedNoProofTerm": 0,
+      "reportsNotMappingByCause": {
+        "commit: the report names a tag or a short hash, not a 40-character commit": 6,
+        "findings: the rules find no finding and the report does not say it has none": 6,
+        "scope: the report lists no files and its findings name none": 6
+      },
+      "failingChecksAmongMappedDefault": {},
+      "failingChecksAmongMappedNoProof": {},
+      "failingChecksAllDefault": {
+        "report": 6,
+        "scope": 6,
+        "coverage": 6
+      },
+      "findingsOverAFieldLimit": {},
+      "findingsMediumOrHigher": 0,
+      "reportsWithHiddenCharacters": 0,
+      "reportsOverJudgeRead": 0,
+      "sourceChars": 73593,
+      "carriedChars": 0,
+      "outsideFindingsChars": 73593,
+      "droppedSectionChars": {},
+      "locationsOutOfScope": 0
+    },
+    "all": {
+      "reports": 24,
+      "reportsWithNoBlocker": 1,
+      "reportsWithBlocker": {
+        "commit (not 40 characters)": 6,
+        "commit (several)": 4,
+        "findings": 7,
+        "hidden characters": 4,
+        "location": 9,
+        "proof files": 8,
+        "recommended fix": 7,
+        "scope": 8,
+        "severity": 1,
+        "text over a field limit": 11
+      },
+      "passIfOnlyThisBlockerRemoved": {
+        "commit (not 40 characters)": 1,
+        "commit (several)": 1,
+        "findings": 1,
+        "hidden characters": 2,
+        "location": 1,
+        "proof files": 1,
+        "recommended fix": 1,
+        "scope": 2,
+        "severity": 1,
+        "text over a field limit": 1
+      },
+      "relaxedWhatIfAccepted": 15,
+      "relaxedWhatIfAcceptedAmongMappable": 12,
+      "findings": 182,
+      "mapWithNoFindingLost": 5,
+      "ofThoseAcceptedDefaultTerms": 1,
+      "ofThoseAcceptedNoProofTerm": 1,
+      "allAcceptedDefaultTerms": 1,
+      "allAcceptedNoProofTerm": 1,
+      "reportsNotMappingByCause": {
+        "location: the finding names no file in scope": 9,
+        "recommended fix: no separate recommendation section (a model would have to cut it out of the prose)": 7,
+        "commit: the report reviews more than one commit or repository; the form holds one": 4,
+        "findings: the rules find no finding and the report does not say it has none": 7,
+        "scope: the report lists no files and its findings name none": 8,
+        "severity: \"Undetermined\" has no place on the form's scale": 1,
+        "commit: the report names a tag or a short hash, not a 40-character commit": 6
+      },
+      "failingChecksAmongMappedDefault": {
+        "hidden": 3,
+        "report": 3,
+        "proof": 2
+      },
+      "failingChecksAmongMappedNoProof": {
+        "hidden": 3,
+        "report": 3
+      },
+      "failingChecksAllDefault": {
+        "report": 20,
+        "proof": 9,
+        "scope": 15,
+        "hidden": 4,
+        "coverage": 8
+      },
+      "findingsOverAFieldLimit": {
+        "rootCause": 55,
+        "recommendedFix": 1
+      },
+      "findingsMediumOrHigher": 50,
+      "reportsWithHiddenCharacters": 4,
+      "reportsOverJudgeRead": 2,
+      "sourceChars": 791253,
+      "carriedChars": 471677,
+      "outsideFindingsChars": 226732,
+      "droppedSectionChars": {
+        "severity": 691,
+        "fix implemented": 3805,
+        "client commentary": 1010,
+        "affected files": 6217,
+        "target": 426,
+        "source": 7815,
+        "code snippet": 22055,
+        "tool used": 823,
+        "discussion": 28295
+      },
+      "locationsOutOfScope": 70
+    }
+  },
+  "reports": [
+    {
+      "id": "pashov-1",
+      "set": "design",
+      "maps": false,
+      "notes": [
+        "location: the finding names no file in scope (4 of 9 findings)",
+        "recommended fix: no separate recommendation section (a model would have to cut it out of the prose) (1 of 9 findings)"
+      ],
+      "format": "Markdown",
+      "sourceChars": 35847,
+      "findingsChars": 28366,
+      "carriedChars": 27663,
+      "outsideFindingsChars": 7481,
+      "findings": 9,
+      "bySeverity": {
+        "Medium": 3,
+        "Low": 6
+      },
+      "locations": 7,
+      "scope": "stated, 2 files",
+      "commits": 1,
+      "fieldsOverLimit": {
+        "rootCause": 5
+      },
+      "longestField": {
+        "title": 87,
+        "rootCause": 4089,
+        "recommendedFix": 1015,
+        "impact": 390
+      },
+      "mediumOrHigher": 3,
+      "hiddenCharacters": 0,
+      "hiddenByCodePoint": {},
+      "blockers": [
+        "location",
+        "proof files",
+        "recommended fix",
+        "text over a field limit"
+      ],
+      "jsonChars": 30678,
+      "lost": {
+        "findingsNotParsed": 0,
+        "sectionsDropped": {
+          "severity": 121
+        },
+        "preambleChars": 1706,
+        "locationsOutOfScope": 0,
+        "statusWordsUnmapped": 0
+      },
+      "defaultTerms": {
+        "result": "reject",
+        "exitCode": 1,
+        "checks": {
+          "report": "FAIL: schema: /findings: /0: /rootCause: longer than 2000",
+          "proof": "FAIL: schema: /findings: /0: anyOf not satisfied",
+          "scope": "FAIL: schema: /findings: /2: /locations: fewer than 1 items",
+          "coverage": "pass",
+          "hidden": "pass"
+        }
+      },
+      "noProofTerm": {
+        "result": "reject",
+        "exitCode": 1,
+        "checks": {
+          "report": "FAIL: schema: /findings: /0: /rootCause: longer than 2000",
+          "scope": "FAIL: schema: /findings: /2: /locations: fewer than 1 items",
+          "coverage": "pass",
+          "hidden": "pass"
+        }
+      },
+      "relaxedWhatIf": {
+        "result": "accept",
+        "exitCode": 0,
+        "checks": {
+          "report": "pass",
+          "scope": "pass",
+          "coverage": "pass",
+          "hidden": "pass"
+        }
+      }
+    },
+    {
+      "id": "pashov-2",
+      "set": "design",
+      "maps": false,
+      "notes": [
+        "location: the finding names no file in scope (1 of 15 findings)",
+        "recommended fix: no separate recommendation section (a model would have to cut it out of the prose) (2 of 15 findings)"
+      ],
+      "format": "Markdown",
+      "sourceChars": 48655,
+      "findingsChars": 46030,
+      "carriedChars": 40564,
+      "outsideFindingsChars": 2625,
+      "findings": 15,
+      "bySeverity": {
+        "High": 2,
+        "Medium": 3,
+        "Low": 10
+      },
+      "locations": 52,
+      "scope": "stated, 16 files",
+      "commits": 1,
+      "fieldsOverLimit": {
+        "rootCause": 2
+      },
+      "longestField": {
+        "title": 86,
+        "rootCause": 5822,
+        "impact": 1648,
+        "recommendedFix": 1787
+      },
+      "mediumOrHigher": 5,
+      "hiddenCharacters": 0,
+      "hiddenByCodePoint": {},
+      "blockers": [
+        "location",
+        "proof files",
+        "recommended fix",
+        "text over a field limit"
+      ],
+      "jsonChars": 49147,
+      "lost": {
+        "findingsNotParsed": 0,
+        "sectionsDropped": {
+          "severity": 201,
+          "fix implemented": 3805,
+          "client commentary": 162
+        },
+        "preambleChars": 0,
+        "locationsOutOfScope": 5,
+        "statusWordsUnmapped": 0
+      },
+      "defaultTerms": {
+        "result": "reject",
+        "exitCode": 1,
+        "checks": {
+          "report": "FAIL: schema: /findings: /2: /rootCause: longer than 2000",
+          "proof": "FAIL: schema: /findings: /0: anyOf not satisfied",
+          "scope": "FAIL: schema: /findings: /6: /locations: fewer than 1 items",
+          "coverage": "pass",
+          "hidden": "pass"
+        }
+      },
+      "noProofTerm": {
+        "result": "reject",
+        "exitCode": 1,
+        "checks": {
+          "report": "FAIL: schema: /findings: /2: /rootCause: longer than 2000",
+          "scope": "FAIL: schema: /findings: /6: /locations: fewer than 1 items",
+          "coverage": "pass",
+          "hidden": "pass"
+        }
+      },
+      "relaxedWhatIf": {
+        "result": "accept",
+        "exitCode": 0,
+        "checks": {
+          "report": "pass",
+          "scope": "pass",
+          "coverage": "pass",
+          "hidden": "pass"
+        }
+      }
+    },
+    {
+      "id": "pashov-3",
+      "set": "design",
+      "maps": false,
+      "notes": [
+        "recommended fix: no separate recommendation section (a model would have to cut it out of the prose) (4 of 31 findings)",
+        "location: the finding names no file in scope (1 of 31 findings)"
+      ],
+      "format": "Markdown",
+      "sourceChars": 124547,
+      "findingsChars": 121984,
+      "carriedChars": 112775,
+      "outsideFindingsChars": 2563,
+      "findings": 31,
+      "bySeverity": {
+        "High": 2,
+        "Medium": 7,
+        "Low": 22
+      },
+      "locations": 100,
+      "scope": "stated, 16 files",
+      "commits": 1,
+      "fieldsOverLimit": {
+        "rootCause": 16,
+        "recommendedFix": 1
+      },
+      "longestField": {
+        "title": 96,
+        "rootCause": 4504,
+        "impact": 1180,
+        "recommendedFix": 2372
+      },
+      "mediumOrHigher": 9,
+      "hiddenCharacters": 0,
+      "hiddenByCodePoint": {},
+      "blockers": [
+        "location",
+        "proof files",
+        "recommended fix",
+        "text over a field limit"
+      ],
+      "jsonChars": 131689,
+      "lost": {
+        "findingsNotParsed": 0,
+        "sectionsDropped": {
+          "severity": 369,
+          "affected files": 6217
+        },
+        "preambleChars": 0,
+        "locationsOutOfScope": 34,
+        "statusWordsUnmapped": 0
+      },
+      "defaultTerms": {
+        "result": "reject",
+        "exitCode": 1,
+        "checks": {
+          "report": "FAIL: schema: /findings: /0: /rootCause: longer than 2000",
+          "proof": "FAIL: schema: /findings: /0: anyOf not satisfied",
+          "scope": "FAIL: schema: /findings: /30: /locations: fewer than 1 items",
+          "coverage": "pass",
+          "hidden": "pass"
+        }
+      },
+      "noProofTerm": {
+        "result": "reject",
+        "exitCode": 1,
+        "checks": {
+          "report": "FAIL: schema: /findings: /0: /rootCause: longer than 2000",
+          "scope": "FAIL: schema: /findings: /30: /locations: fewer than 1 items",
+          "coverage": "pass",
+          "hidden": "pass"
+        }
+      },
+      "relaxedWhatIf": {
+        "result": "accept",
+        "exitCode": 0,
+        "checks": {
+          "report": "pass",
+          "scope": "pass",
+          "coverage": "pass",
+          "hidden": "pass"
+        }
+      }
+    },
+    {
+      "id": "pashov-4",
+      "set": "design",
+      "maps": false,
+      "notes": [
+        "location: the finding names no file in scope (2 of 5 findings)",
+        "recommended fix: no separate recommendation section (a model would have to cut it out of the prose) (3 of 5 findings)"
+      ],
+      "format": "Markdown",
+      "sourceChars": 12460,
+      "findingsChars": 8057,
+      "carriedChars": 6954,
+      "outsideFindingsChars": 4403,
+      "findings": 5,
+      "bySeverity": {
+        "Low": 5
+      },
+      "locations": 3,
+      "scope": "stated, 7 files",
+      "commits": 1,
+      "fieldsOverLimit": {},
+      "longestField": {
+        "title": 87,
+        "rootCause": 1424,
+        "recommendedFix": 724
+      },
+      "mediumOrHigher": 0,
+      "hiddenCharacters": 0,
+      "hiddenByCodePoint": {},
+      "blockers": [
+        "location",
+        "recommended fix"
+      ],
+      "jsonChars": 8427,
+      "lost": {
+        "findingsNotParsed": 0,
+        "sectionsDropped": {
+          "client commentary": 848
+        },
+        "preambleChars": 0,
+        "locationsOutOfScope": 0,
+        "statusWordsUnmapped": 0
+      },
+      "defaultTerms": {
+        "result": "reject",
+        "exitCode": 1,
+        "checks": {
+          "report": "FAIL: schema: /findings: /0: missing recommendedFix",
+          "proof": "pass",
+          "scope": "FAIL: schema: /findings: /0: /locations: fewer than 1 items",
+          "coverage": "pass",
+          "hidden": "pass"
+        }
+      },
+      "noProofTerm": {
+        "result": "reject",
+        "exitCode": 1,
+        "checks": {
+          "report": "FAIL: schema: /findings: /0: missing recommendedFix",
+          "scope": "FAIL: schema: /findings: /0: /locations: fewer than 1 items",
+          "coverage": "pass",
+          "hidden": "pass"
+        }
+      },
+      "relaxedWhatIf": {
+        "result": "accept",
+        "exitCode": 0,
+        "checks": {
+          "report": "pass",
+          "scope": "pass",
+          "coverage": "pass",
+          "hidden": "pass"
+        }
+      }
+    },
+    {
+      "id": "pashov-5",
+      "set": "design",
+      "maps": false,
+      "notes": [
+        "commit: the report reviews more than one commit or repository; the form holds one",
+        "location: the finding names no file in scope (4 of 7 findings)",
+        "recommended fix: no separate recommendation section (a model would have to cut it out of the prose) (6 of 7 findings)"
+      ],
+      "format": "Markdown",
+      "sourceChars": 19984,
+      "findingsChars": 13446,
+      "carriedChars": 13167,
+      "outsideFindingsChars": 6538,
+      "findings": 7,
+      "bySeverity": {
+        "Low": 7
+      },
+      "locations": 3,
+      "scope": "stated, 3 files",
+      "commits": 2,
+      "fieldsOverLimit": {
+        "rootCause": 2
+      },
+      "longestField": {
+        "title": 90,
+        "rootCause": 3349,
+        "recommendedFix": 219
+      },
+      "mediumOrHigher": 0,
+      "hiddenCharacters": 0,
+      "hiddenByCodePoint": {},
+      "blockers": [
+        "commit (several)",
+        "location",
+        "recommended fix",
+        "text over a field limit"
+      ],
+      "jsonChars": 14833,
+      "lost": {
+        "findingsNotParsed": 0,
+        "sectionsDropped": {},
+        "preambleChars": 0,
+        "locationsOutOfScope": 0,
+        "statusWordsUnmapped": 0
+      },
+      "defaultTerms": {
+        "result": "reject",
+        "exitCode": 1,
+        "checks": {
+          "report": "FAIL: schema: /findings: /0: missing recommendedFix",
+          "proof": "pass",
+          "scope": "FAIL: schema: /findings: /0: /locations: fewer than 1 items",
+          "coverage": "pass",
+          "hidden": "pass"
+        }
+      },
+      "noProofTerm": {
+        "result": "reject",
+        "exitCode": 1,
+        "checks": {
+          "report": "FAIL: schema: /findings: /0: missing recommendedFix",
+          "scope": "FAIL: schema: /findings: /0: /locations: fewer than 1 items",
+          "coverage": "pass",
+          "hidden": "pass"
+        }
+      },
+      "relaxedWhatIf": {
+        "result": "accept",
+        "exitCode": 0,
+        "checks": {
+          "report": "pass",
+          "scope": "pass",
+          "coverage": "pass",
+          "hidden": "pass"
+        }
+      }
+    },
+    {
+      "id": "pashov-6",
+      "set": "design",
+      "maps": false,
+      "notes": [
+        "recommended fix: no separate recommendation section (a model would have to cut it out of the prose) (3 of 3 findings)",
+        "location: the finding names no file in scope (1 of 3 findings)"
+      ],
+      "format": "Markdown",
+      "sourceChars": 6094,
+      "findingsChars": 2265,
+      "carriedChars": 2195,
+      "outsideFindingsChars": 3829,
+      "findings": 3,
+      "bySeverity": {
+        "Low": 3
+      },
+      "locations": 2,
+      "scope": "stated, 6 files",
+      "commits": 1,
+      "fieldsOverLimit": {},
+      "longestField": {
+        "title": 73,
+        "rootCause": 843
+      },
+      "mediumOrHigher": 0,
+      "hiddenCharacters": 0,
+      "hiddenByCodePoint": {},
+      "blockers": [
+        "location",
+        "recommended fix"
+      ],
+      "jsonChars": 3083,
+      "lost": {
+        "findingsNotParsed": 0,
+        "sectionsDropped": {},
+        "preambleChars": 2024,
+        "locationsOutOfScope": 2,
+        "statusWordsUnmapped": 0
+      },
+      "defaultTerms": {
+        "result": "reject",
+        "exitCode": 1,
+        "checks": {
+          "report": "FAIL: schema: /findings: /0: missing recommendedFix",
+          "proof": "pass",
+          "scope": "FAIL: schema: /findings: /1: /locations: fewer than 1 items",
+          "coverage": "pass",
+          "hidden": "pass"
+        }
+      },
+      "noProofTerm": {
+        "result": "reject",
+        "exitCode": 1,
+        "checks": {
+          "report": "FAIL: schema: /findings: /0: missing recommendedFix",
+          "scope": "FAIL: schema: /findings: /1: /locations: fewer than 1 items",
+          "coverage": "pass",
+          "hidden": "pass"
+        }
+      },
+      "relaxedWhatIf": {
+        "result": "accept",
+        "exitCode": 0,
+        "checks": {
+          "report": "pass",
+          "scope": "pass",
+          "coverage": "pass",
+          "hidden": "pass"
+        }
+      }
+    },
+    {
+      "id": "tob-1",
+      "set": "design",
+      "maps": true,
+      "notes": [],
+      "format": "PDF",
+      "sourceChars": 16855,
+      "findingsChars": 3973,
+      "carriedChars": 3505,
+      "outsideFindingsChars": 12882,
+      "findings": 2,
+      "bySeverity": {
+        "Info": 2
+      },
+      "locations": 5,
+      "scope": "derived from the findings, 4 files",
+      "commits": 1,
+      "fieldsOverLimit": {},
+      "longestField": {
+        "title": 73,
+        "rootCause": 1768,
+        "recommendedFix": 186
+      },
+      "mediumOrHigher": 0,
+      "hiddenCharacters": 5,
+      "hiddenByCodePoint": {
+        "U+200B": 5
+      },
+      "blockers": [
+        "hidden characters"
+      ],
+      "jsonChars": 4763,
+      "lost": {
+        "findingsNotParsed": 0,
+        "sectionsDropped": {},
+        "preambleChars": 0,
+        "locationsOutOfScope": 0,
+        "statusWordsUnmapped": 0
+      },
+      "defaultTerms": {
+        "result": "reject",
+        "exitCode": 1,
+        "checks": {
+          "report": "pass",
+          "proof": "pass",
+          "scope": "pass",
+          "coverage": "pass",
+          "hidden": "FAIL: over the limit for total (tag 0, bidi 0, variationSelector 0, otherIgnorable 5, total 5)"
+        }
+      },
+      "noProofTerm": {
+        "result": "reject",
+        "exitCode": 1,
+        "checks": {
+          "report": "pass",
+          "scope": "pass",
+          "coverage": "pass",
+          "hidden": "FAIL: over the limit for total (tag 0, bidi 0, variationSelector 0, otherIgnorable 5, total 5)"
+        }
+      },
+      "relaxedWhatIf": {
+        "result": "accept",
+        "exitCode": 0,
+        "checks": {
+          "report": "pass",
+          "scope": "pass",
+          "coverage": "pass",
+          "hidden": "pass"
+        }
+      }
+    },
+    {
+      "id": "tob-2",
+      "set": "design",
+      "maps": false,
+      "notes": [
+        "commit: the report reviews more than one commit or repository; the form holds one",
+        "findings: the rules find no finding and the report does not say it has none",
+        "scope: the report lists no files and its findings name none"
+      ],
+      "format": "PDF",
+      "sourceChars": 11976,
+      "findingsChars": 0,
+      "carriedChars": 0,
+      "outsideFindingsChars": 11976,
+      "findings": 0,
+      "bySeverity": {},
+      "locations": 0,
+      "scope": "derived from the findings, 0 files",
+      "commits": 2,
+      "fieldsOverLimit": {},
+      "longestField": {},
+      "mediumOrHigher": 0,
+      "hiddenCharacters": 0,
+      "hiddenByCodePoint": {},
+      "blockers": [
+        "commit (several)",
+        "findings",
+        "scope"
+      ],
+      "jsonChars": 99,
+      "lost": {
+        "findingsNotParsed": 0,
+        "sectionsDropped": {},
+        "preambleChars": 0,
+        "locationsOutOfScope": 0,
+        "statusWordsUnmapped": 0
+      },
+      "defaultTerms": {
+        "result": "reject",
+        "exitCode": 1,
+        "checks": {
+          "report": "pass",
+          "proof": "pass",
+          "scope": "pass",
+          "coverage": "FAIL: schema: /filesReviewed: fewer than 1 items",
+          "hidden": "pass"
+        }
+      },
+      "noProofTerm": {
+        "result": "reject",
+        "exitCode": 1,
+        "checks": {
+          "report": "pass",
+          "scope": "pass",
+          "coverage": "FAIL: schema: /filesReviewed: fewer than 1 items",
+          "hidden": "pass"
+        }
+      },
+      "relaxedWhatIf": {
+        "result": "reject",
+        "exitCode": 1,
+        "checks": {
+          "report": "pass",
+          "scope": "pass",
+          "coverage": "FAIL: schema: /filesReviewed: fewer than 1 items",
+          "hidden": "pass"
+        }
+      }
+    },
+    {
+      "id": "tob-3",
+      "set": "design",
+      "maps": false,
+      "notes": [
+        "severity: \"Undetermined\" has no place on the form's scale (2 of 9 findings)"
+      ],
+      "format": "PDF",
+      "sourceChars": 70265,
+      "findingsChars": 32805,
+      "carriedChars": 30261,
+      "outsideFindingsChars": 37460,
+      "findings": 9,
+      "bySeverity": {
+        "Low": 2,
+        "Info": 5,
+        "unmapped": 2
+      },
+      "locations": 19,
+      "scope": "derived from the findings, 14 files",
+      "commits": 1,
+      "fieldsOverLimit": {
+        "rootCause": 5
+      },
+      "longestField": {
+        "title": 87,
+        "rootCause": 6775,
+        "impact": 353,
+        "recommendedFix": 520
+      },
+      "mediumOrHigher": 0,
+      "hiddenCharacters": 216,
+      "hiddenByCodePoint": {
+        "U+200B": 216
+      },
+      "blockers": [
+        "hidden characters",
+        "severity",
+        "text over a field limit"
+      ],
+      "jsonChars": 36157,
+      "lost": {
+        "findingsNotParsed": 0,
+        "sectionsDropped": {
+          "target": 335
+        },
+        "preambleChars": 28,
+        "locationsOutOfScope": 2,
+        "statusWordsUnmapped": 0
+      },
+      "defaultTerms": {
+        "result": "reject",
+        "exitCode": 1,
+        "checks": {
+          "report": "FAIL: schema: /findings: /3: /rootCause: longer than 2000",
+          "proof": "FAIL: schema: /findings: /5: missing severity",
+          "scope": "pass",
+          "coverage": "pass",
+          "hidden": "FAIL: over the limit for total (tag 0, bidi 0, variationSelector 0, otherIgnorable 216, total 216)"
+        }
+      },
+      "noProofTerm": {
+        "result": "reject",
+        "exitCode": 1,
+        "checks": {
+          "report": "FAIL: schema: /findings: /3: /rootCause: longer than 2000",
+          "scope": "pass",
+          "coverage": "pass",
+          "hidden": "FAIL: over the limit for total (tag 0, bidi 0, variationSelector 0, otherIgnorable 216, total 216)"
+        }
+      },
+      "relaxedWhatIf": {
+        "result": "reject",
+        "exitCode": 1,
+        "checks": {
+          "report": "FAIL: schema: /findings: /5: missing severity",
+          "scope": "pass",
+          "coverage": "pass",
+          "hidden": "pass"
+        }
+      }
+    },
+    {
+      "id": "tob-4",
+      "set": "design",
+      "maps": false,
+      "notes": [
+        "scope: the report lists no files and its findings name none"
+      ],
+      "format": "PDF",
+      "sourceChars": 6132,
+      "findingsChars": 0,
+      "carriedChars": 0,
+      "outsideFindingsChars": 6132,
+      "findings": 0,
+      "bySeverity": {},
+      "locations": 0,
+      "scope": "derived from the findings, 0 files",
+      "commits": 1,
+      "fieldsOverLimit": {},
+      "longestField": {},
+      "mediumOrHigher": 0,
+      "hiddenCharacters": 0,
+      "hiddenByCodePoint": {},
+      "blockers": [
+        "scope"
+      ],
+      "jsonChars": 99,
+      "lost": {
+        "findingsNotParsed": 0,
+        "sectionsDropped": {},
+        "preambleChars": 0,
+        "locationsOutOfScope": 0,
+        "statusWordsUnmapped": 0
+      },
+      "defaultTerms": {
+        "result": "reject",
+        "exitCode": 1,
+        "checks": {
+          "report": "pass",
+          "proof": "pass",
+          "scope": "pass",
+          "coverage": "FAIL: schema: /filesReviewed: fewer than 1 items",
+          "hidden": "pass"
+        }
+      },
+      "noProofTerm": {
+        "result": "reject",
+        "exitCode": 1,
+        "checks": {
+          "report": "pass",
+          "scope": "pass",
+          "coverage": "FAIL: schema: /filesReviewed: fewer than 1 items",
+          "hidden": "pass"
+        }
+      },
+      "relaxedWhatIf": {
+        "result": "reject",
+        "exitCode": 1,
+        "checks": {
+          "report": "pass",
+          "scope": "pass",
+          "coverage": "FAIL: schema: /filesReviewed: fewer than 1 items",
+          "hidden": "pass"
+        }
+      }
+    },
+    {
+      "id": "tob-5",
+      "set": "design",
+      "maps": true,
+      "notes": [],
+      "format": "PDF",
+      "sourceChars": 65803,
+      "findingsChars": 42853,
+      "carriedChars": 39320,
+      "outsideFindingsChars": 22950,
+      "findings": 14,
+      "bySeverity": {
+        "Info": 8,
+        "Low": 2,
+        "Medium": 4
+      },
+      "locations": 29,
+      "scope": "derived from the findings, 17 files",
+      "commits": 1,
+      "fieldsOverLimit": {
+        "rootCause": 5
+      },
+      "longestField": {
+        "title": 92,
+        "rootCause": 3916,
+        "recommendedFix": 1510,
+        "impact": 896
+      },
+      "mediumOrHigher": 4,
+      "hiddenCharacters": 37,
+      "hiddenByCodePoint": {
+        "U+200B": 37
+      },
+      "blockers": [
+        "hidden characters",
+        "proof files",
+        "text over a field limit"
+      ],
+      "jsonChars": 48021,
+      "lost": {
+        "findingsNotParsed": 0,
+        "sectionsDropped": {
+          "target": 91
+        },
+        "preambleChars": 185,
+        "locationsOutOfScope": 8,
+        "statusWordsUnmapped": 0
+      },
+      "defaultTerms": {
+        "result": "reject",
+        "exitCode": 1,
+        "checks": {
+          "report": "FAIL: schema: /findings: /2: /rootCause: longer than 2000",
+          "proof": "FAIL: schema: /findings: /8: anyOf not satisfied",
+          "scope": "pass",
+          "coverage": "pass",
+          "hidden": "FAIL: over the limit for total (tag 0, bidi 0, variationSelector 0, otherIgnorable 37, total 37)"
+        }
+      },
+      "noProofTerm": {
+        "result": "reject",
+        "exitCode": 1,
+        "checks": {
+          "report": "FAIL: schema: /findings: /2: /rootCause: longer than 2000",
+          "scope": "pass",
+          "coverage": "pass",
+          "hidden": "FAIL: over the limit for total (tag 0, bidi 0, variationSelector 0, otherIgnorable 37, total 37)"
+        }
+      },
+      "relaxedWhatIf": {
+        "result": "accept",
+        "exitCode": 0,
+        "checks": {
+          "report": "pass",
+          "scope": "pass",
+          "coverage": "pass",
+          "hidden": "pass"
+        }
+      }
+    },
+    {
+      "id": "tob-6",
+      "set": "design",
+      "maps": true,
+      "notes": [],
+      "format": "PDF",
+      "sourceChars": 14475,
+      "findingsChars": 4259,
+      "carriedChars": 4011,
+      "outsideFindingsChars": 10216,
+      "findings": 1,
+      "bySeverity": {
+        "Info": 1
+      },
+      "locations": 2,
+      "scope": "derived from the findings, 1 files",
+      "commits": 1,
+      "fieldsOverLimit": {
+        "rootCause": 1
+      },
+      "longestField": {
+        "title": 67,
+        "rootCause": 3075,
+        "impact": 366,
+        "recommendedFix": 503
+      },
+      "mediumOrHigher": 0,
+      "hiddenCharacters": 2,
+      "hiddenByCodePoint": {
+        "U+200B": 2
+      },
+      "blockers": [
+        "hidden characters",
+        "text over a field limit"
+      ],
+      "jsonChars": 4745,
+      "lost": {
+        "findingsNotParsed": 0,
+        "sectionsDropped": {},
+        "preambleChars": 0,
+        "locationsOutOfScope": 0,
+        "statusWordsUnmapped": 0
+      },
+      "defaultTerms": {
+        "result": "reject",
+        "exitCode": 1,
+        "checks": {
+          "report": "FAIL: schema: /findings: /0: /rootCause: longer than 2000",
+          "proof": "pass",
+          "scope": "pass",
+          "coverage": "pass",
+          "hidden": "FAIL: over the limit for total (tag 0, bidi 0, variationSelector 0, otherIgnorable 2, total 2)"
+        }
+      },
+      "noProofTerm": {
+        "result": "reject",
+        "exitCode": 1,
+        "checks": {
+          "report": "FAIL: schema: /findings: /0: /rootCause: longer than 2000",
+          "scope": "pass",
+          "coverage": "pass",
+          "hidden": "FAIL: over the limit for total (tag 0, bidi 0, variationSelector 0, otherIgnorable 2, total 2)"
+        }
+      },
+      "relaxedWhatIf": {
+        "result": "accept",
+        "exitCode": 0,
+        "checks": {
+          "report": "pass",
+          "scope": "pass",
+          "coverage": "pass",
+          "hidden": "pass"
+        }
+      }
+    },
+    {
+      "id": "sherlock-1",
+      "set": "design",
+      "maps": false,
+      "notes": [
+        "location: the finding names no file in scope (11 of 44 findings)",
+        "recommended fix: no separate recommendation section (a model would have to cut it out of the prose) (1 of 44 findings)"
+      ],
+      "format": "PDF",
+      "sourceChars": 146243,
+      "findingsChars": 140644,
+      "carriedChars": 97209,
+      "outsideFindingsChars": 5599,
+      "findings": 44,
+      "bySeverity": {
+        "High": 3,
+        "Medium": 13,
+        "Low": 28
+      },
+      "locations": 77,
+      "scope": "stated, 73 files",
+      "commits": 1,
+      "fieldsOverLimit": {
+        "rootCause": 7
+      },
+      "longestField": {
+        "title": 168,
+        "rootCause": 4239,
+        "impact": 1388,
+        "recommendedFix": 1352
+      },
+      "mediumOrHigher": 16,
+      "hiddenCharacters": 0,
+      "hiddenByCodePoint": {},
+      "blockers": [
+        "location",
+        "proof files",
+        "recommended fix",
+        "text over a field limit"
+      ],
+      "jsonChars": 121258,
+      "lost": {
+        "findingsNotParsed": 0,
+        "sectionsDropped": {
+          "source": 3758,
+          "code snippet": 7663,
+          "tool used": 338,
+          "discussion": 26197
+        },
+        "preambleChars": 0,
+        "locationsOutOfScope": 5,
+        "statusWordsUnmapped": 0
+      },
+      "defaultTerms": {
+        "result": "reject",
+        "exitCode": 1,
+        "checks": {
+          "report": "FAIL: schema: /findings: /2: /locations: fewer than 1 items",
+          "proof": "FAIL: schema: /findings: /0: anyOf not satisfied",
+          "scope": "FAIL: schema: /findings: /2: /locations: fewer than 1 items",
+          "coverage": "pass",
+          "hidden": "pass"
+        }
+      },
+      "noProofTerm": {
+        "result": "reject",
+        "exitCode": 1,
+        "checks": {
+          "report": "FAIL: schema: /findings: /2: /locations: fewer than 1 items",
+          "scope": "FAIL: schema: /findings: /2: /locations: fewer than 1 items",
+          "coverage": "pass",
+          "hidden": "pass"
+        }
+      },
+      "relaxedWhatIf": {
+        "result": "accept",
+        "exitCode": 0,
+        "checks": {
+          "report": "pass",
+          "scope": "pass",
+          "coverage": "pass",
+          "hidden": "pass"
+        }
+      }
+    },
+    {
+      "id": "sherlock-2",
+      "set": "design",
+      "maps": false,
+      "notes": [
+        "commit: the report reviews more than one commit or repository; the form holds one",
+        "location: the finding names no file in scope (3 of 14 findings)"
+      ],
+      "format": "PDF",
+      "sourceChars": 28706,
+      "findingsChars": 25891,
+      "carriedChars": 21628,
+      "outsideFindingsChars": 2815,
+      "findings": 14,
+      "bySeverity": {
+        "Medium": 6,
+        "Low": 8
+      },
+      "locations": 17,
+      "scope": "stated, 7 files",
+      "commits": 2,
+      "fieldsOverLimit": {},
+      "longestField": {
+        "title": 120,
+        "rootCause": 1576,
+        "impact": 280,
+        "recommendedFix": 913
+      },
+      "mediumOrHigher": 6,
+      "hiddenCharacters": 0,
+      "hiddenByCodePoint": {},
+      "blockers": [
+        "commit (several)",
+        "location",
+        "proof files"
+      ],
+      "jsonChars": 27580,
+      "lost": {
+        "findingsNotParsed": 0,
+        "sectionsDropped": {
+          "source": 1566,
+          "tool used": 117,
+          "code snippet": 891,
+          "discussion": 253
+        },
+        "preambleChars": 0,
+        "locationsOutOfScope": 1,
+        "statusWordsUnmapped": 0
+      },
+      "defaultTerms": {
+        "result": "reject",
+        "exitCode": 1,
+        "checks": {
+          "report": "FAIL: schema: /findings: /0: /locations: fewer than 1 items",
+          "proof": "FAIL: schema: /findings: /0: anyOf not satisfied",
+          "scope": "FAIL: schema: /findings: /0: /locations: fewer than 1 items",
+          "coverage": "pass",
+          "hidden": "pass"
+        }
+      },
+      "noProofTerm": {
+        "result": "reject",
+        "exitCode": 1,
+        "checks": {
+          "report": "FAIL: schema: /findings: /0: /locations: fewer than 1 items",
+          "scope": "FAIL: schema: /findings: /0: /locations: fewer than 1 items",
+          "coverage": "pass",
+          "hidden": "pass"
+        }
+      },
+      "relaxedWhatIf": {
+        "result": "accept",
+        "exitCode": 0,
+        "checks": {
+          "report": "pass",
+          "scope": "pass",
+          "coverage": "pass",
+          "hidden": "pass"
+        }
+      }
+    },
+    {
+      "id": "sherlock-3",
+      "set": "design",
+      "maps": true,
+      "notes": [],
+      "format": "PDF",
+      "sourceChars": 26022,
+      "findingsChars": 22818,
+      "carriedChars": 19447,
+      "outsideFindingsChars": 3204,
+      "findings": 10,
+      "bySeverity": {
+        "High": 1,
+        "Medium": 2,
+        "Low": 7
+      },
+      "locations": 29,
+      "scope": "stated, 19 files",
+      "commits": 1,
+      "fieldsOverLimit": {
+        "rootCause": 3
+      },
+      "longestField": {
+        "title": 66,
+        "rootCause": 2729,
+        "impact": 337,
+        "recommendedFix": 899
+      },
+      "mediumOrHigher": 3,
+      "hiddenCharacters": 0,
+      "hiddenByCodePoint": {},
+      "blockers": [
+        "proof files",
+        "text over a field limit"
+      ],
+      "jsonChars": 25545,
+      "lost": {
+        "findingsNotParsed": 0,
+        "sectionsDropped": {
+          "source": 777,
+          "code snippet": 1340,
+          "tool used": 130
+        },
+        "preambleChars": 0,
+        "locationsOutOfScope": 1,
+        "statusWordsUnmapped": 0
+      },
+      "defaultTerms": {
+        "result": "reject",
+        "exitCode": 1,
+        "checks": {
+          "report": "FAIL: schema: /findings: /2: /rootCause: longer than 2000",
+          "proof": "FAIL: schema: /findings: /0: anyOf not satisfied",
+          "scope": "pass",
+          "coverage": "pass",
+          "hidden": "pass"
+        }
+      },
+      "noProofTerm": {
+        "result": "reject",
+        "exitCode": 1,
+        "checks": {
+          "report": "FAIL: schema: /findings: /2: /rootCause: longer than 2000",
+          "scope": "pass",
+          "coverage": "pass",
+          "hidden": "pass"
+        }
+      },
+      "relaxedWhatIf": {
+        "result": "accept",
+        "exitCode": 0,
+        "checks": {
+          "report": "pass",
+          "scope": "pass",
+          "coverage": "pass",
+          "hidden": "pass"
+        }
+      }
+    },
+    {
+      "id": "sherlock-4",
+      "set": "design",
+      "maps": true,
+      "notes": [],
+      "format": "PDF",
+      "sourceChars": 5304,
+      "findingsChars": 2966,
+      "carriedChars": 2230,
+      "outsideFindingsChars": 2338,
+      "findings": 2,
+      "bySeverity": {
+        "Low": 2
+      },
+      "locations": 2,
+      "scope": "stated, 2 files",
+      "commits": 1,
+      "fieldsOverLimit": {},
+      "longestField": {
+        "title": 83,
+        "rootCause": 789,
+        "impact": 101,
+        "recommendedFix": 443
+      },
+      "mediumOrHigher": 0,
+      "hiddenCharacters": 0,
+      "hiddenByCodePoint": {},
+      "blockers": [],
+      "jsonChars": 3112,
+      "lost": {
+        "findingsNotParsed": 0,
+        "sectionsDropped": {
+          "source": 239,
+          "code snippet": 246,
+          "tool used": 26
+        },
+        "preambleChars": 0,
+        "locationsOutOfScope": 0,
+        "statusWordsUnmapped": 0
+      },
+      "defaultTerms": {
+        "result": "accept",
+        "exitCode": 0,
+        "checks": {
+          "report": "pass",
+          "proof": "pass",
+          "scope": "pass",
+          "coverage": "pass",
+          "hidden": "pass"
+        }
+      },
+      "noProofTerm": {
+        "result": "accept",
+        "exitCode": 0,
+        "checks": {
+          "report": "pass",
+          "scope": "pass",
+          "coverage": "pass",
+          "hidden": "pass"
+        }
+      },
+      "relaxedWhatIf": {
+        "result": "accept",
+        "exitCode": 0,
+        "checks": {
+          "report": "pass",
+          "scope": "pass",
+          "coverage": "pass",
+          "hidden": "pass"
+        }
+      }
+    },
+    {
+      "id": "sherlock-5",
+      "set": "design",
+      "maps": false,
+      "notes": [
+        "commit: the report reviews more than one commit or repository; the form holds one"
+      ],
+      "format": "PDF",
+      "sourceChars": 20081,
+      "findingsChars": 13727,
+      "carriedChars": 9969,
+      "outsideFindingsChars": 6354,
+      "findings": 4,
+      "bySeverity": {
+        "Low": 4
+      },
+      "locations": 11,
+      "scope": "stated, 49 files",
+      "commits": 7,
+      "fieldsOverLimit": {
+        "rootCause": 2
+      },
+      "longestField": {
+        "title": 124,
+        "rootCause": 2652,
+        "impact": 555,
+        "recommendedFix": 1013
+      },
+      "mediumOrHigher": 0,
+      "hiddenCharacters": 0,
+      "hiddenByCodePoint": {},
+      "blockers": [
+        "commit (several)",
+        "text over a field limit"
+      ],
+      "jsonChars": 15115,
+      "lost": {
+        "findingsNotParsed": 0,
+        "sectionsDropped": {
+          "source": 284,
+          "code snippet": 1066,
+          "tool used": 52,
+          "discussion": 1845
+        },
+        "preambleChars": 0,
+        "locationsOutOfScope": 0,
+        "statusWordsUnmapped": 0
+      },
+      "defaultTerms": {
+        "result": "reject",
+        "exitCode": 1,
+        "checks": {
+          "report": "FAIL: schema: /findings: /1: /rootCause: longer than 2000",
+          "proof": "pass",
+          "scope": "pass",
+          "coverage": "pass",
+          "hidden": "pass"
+        }
+      },
+      "noProofTerm": {
+        "result": "reject",
+        "exitCode": 1,
+        "checks": {
+          "report": "FAIL: schema: /findings: /1: /rootCause: longer than 2000",
+          "scope": "pass",
+          "coverage": "pass",
+          "hidden": "pass"
+        }
+      },
+      "relaxedWhatIf": {
+        "result": "accept",
+        "exitCode": 0,
+        "checks": {
+          "report": "pass",
+          "scope": "pass",
+          "coverage": "pass",
+          "hidden": "pass"
+        }
+      }
+    },
+    {
+      "id": "sherlock-6",
+      "set": "design",
+      "maps": false,
+      "notes": [
+        "location: the finding names no file in scope (1 of 12 findings)"
+      ],
+      "format": "PDF",
+      "sourceChars": 58211,
+      "findingsChars": 54437,
+      "carriedChars": 40779,
+      "outsideFindingsChars": 3774,
+      "findings": 12,
+      "bySeverity": {
+        "High": 1,
+        "Medium": 3,
+        "Low": 8
+      },
+      "locations": 41,
+      "scope": "stated, 34 files",
+      "commits": 1,
+      "fieldsOverLimit": {
+        "rootCause": 7
+      },
+      "longestField": {
+        "title": 162,
+        "rootCause": 3382,
+        "impact": 813,
+        "recommendedFix": 1567
+      },
+      "mediumOrHigher": 4,
+      "hiddenCharacters": 0,
+      "hiddenByCodePoint": {},
+      "blockers": [
+        "location",
+        "proof files",
+        "text over a field limit"
+      ],
+      "jsonChars": 51007,
+      "lost": {
+        "findingsNotParsed": 0,
+        "sectionsDropped": {
+          "source": 1191,
+          "code snippet": 10849,
+          "tool used": 160
+        },
+        "preambleChars": 0,
+        "locationsOutOfScope": 12,
+        "statusWordsUnmapped": 0
+      },
+      "defaultTerms": {
+        "result": "reject",
+        "exitCode": 1,
+        "checks": {
+          "report": "FAIL: schema: /findings: /0: /locations: fewer than 1 items",
+          "proof": "FAIL: schema: /findings: /0: anyOf not satisfied",
+          "scope": "FAIL: schema: /findings: /0: /locations: fewer than 1 items",
+          "coverage": "pass",
+          "hidden": "pass"
+        }
+      },
+      "noProofTerm": {
+        "result": "reject",
+        "exitCode": 1,
+        "checks": {
+          "report": "FAIL: schema: /findings: /0: /locations: fewer than 1 items",
+          "scope": "FAIL: schema: /findings: /0: /locations: fewer than 1 items",
+          "coverage": "pass",
+          "hidden": "pass"
+        }
+      },
+      "relaxedWhatIf": {
+        "result": "accept",
+        "exitCode": 0,
+        "checks": {
+          "report": "pass",
+          "scope": "pass",
+          "coverage": "pass",
+          "hidden": "pass"
+        }
+      }
+    },
+    {
+      "id": "cyfrin-1",
+      "set": "heldout",
+      "maps": false,
+      "notes": [
+        "commit: the report names a tag or a short hash, not a 40-character commit",
+        "findings: the rules find no finding and the report does not say it has none",
+        "scope: the report lists no files and its findings name none"
+      ],
+      "format": "PDF",
+      "sourceChars": 7947,
+      "findingsChars": 0,
+      "carriedChars": 0,
+      "outsideFindingsChars": 7947,
+      "findings": 0,
+      "bySeverity": {},
+      "locations": 0,
+      "scope": "derived from the findings, 0 files",
+      "commits": 1,
+      "fieldsOverLimit": {},
+      "longestField": {},
+      "mediumOrHigher": 0,
+      "hiddenCharacters": 0,
+      "hiddenByCodePoint": {},
+      "blockers": [
+        "commit (not 40 characters)",
+        "findings",
+        "scope"
+      ],
+      "jsonChars": 92,
+      "lost": {
+        "findingsNotParsed": 0,
+        "sectionsDropped": {},
+        "preambleChars": 0,
+        "locationsOutOfScope": 0,
+        "statusWordsUnmapped": 0
+      },
+      "defaultTerms": {
+        "result": "reject",
+        "exitCode": 1,
+        "checks": {
+          "report": "FAIL: schema: /commit: does not match pattern",
+          "proof": "pass",
+          "scope": "FAIL: schema: /commit: not equal to const",
+          "coverage": "FAIL: schema: /filesReviewed: fewer than 1 items",
+          "hidden": "pass"
+        }
+      },
+      "noProofTerm": {
+        "result": "reject",
+        "exitCode": 1,
+        "checks": {
+          "report": "FAIL: schema: /commit: does not match pattern",
+          "scope": "FAIL: schema: /commit: not equal to const",
+          "coverage": "FAIL: schema: /filesReviewed: fewer than 1 items",
+          "hidden": "pass"
+        }
+      },
+      "relaxedWhatIf": {
+        "result": "reject",
+        "exitCode": 1,
+        "checks": {
+          "report": "FAIL: schema: /commit: does not match pattern",
+          "scope": "FAIL: schema: /commit: not equal to const",
+          "coverage": "FAIL: schema: /filesReviewed: fewer than 1 items",
+          "hidden": "pass"
+        }
+      }
+    },
+    {
+      "id": "cyfrin-2",
+      "set": "heldout",
+      "maps": false,
+      "notes": [
+        "commit: the report names a tag or a short hash, not a 40-character commit",
+        "findings: the rules find no finding and the report does not say it has none",
+        "scope: the report lists no files and its findings name none"
+      ],
+      "format": "PDF",
+      "sourceChars": 25550,
+      "findingsChars": 0,
+      "carriedChars": 0,
+      "outsideFindingsChars": 25550,
+      "findings": 0,
+      "bySeverity": {},
+      "locations": 0,
+      "scope": "derived from the findings, 0 files",
+      "commits": 1,
+      "fieldsOverLimit": {},
+      "longestField": {},
+      "mediumOrHigher": 0,
+      "hiddenCharacters": 0,
+      "hiddenByCodePoint": {},
+      "blockers": [
+        "commit (not 40 characters)",
+        "findings",
+        "scope"
+      ],
+      "jsonChars": 92,
+      "lost": {
+        "findingsNotParsed": 0,
+        "sectionsDropped": {},
+        "preambleChars": 0,
+        "locationsOutOfScope": 0,
+        "statusWordsUnmapped": 0
+      },
+      "defaultTerms": {
+        "result": "reject",
+        "exitCode": 1,
+        "checks": {
+          "report": "FAIL: schema: /commit: does not match pattern",
+          "proof": "pass",
+          "scope": "FAIL: schema: /commit: not equal to const",
+          "coverage": "FAIL: schema: /filesReviewed: fewer than 1 items",
+          "hidden": "pass"
+        }
+      },
+      "noProofTerm": {
+        "result": "reject",
+        "exitCode": 1,
+        "checks": {
+          "report": "FAIL: schema: /commit: does not match pattern",
+          "scope": "FAIL: schema: /commit: not equal to const",
+          "coverage": "FAIL: schema: /filesReviewed: fewer than 1 items",
+          "hidden": "pass"
+        }
+      },
+      "relaxedWhatIf": {
+        "result": "reject",
+        "exitCode": 1,
+        "checks": {
+          "report": "FAIL: schema: /commit: does not match pattern",
+          "scope": "FAIL: schema: /commit: not equal to const",
+          "coverage": "FAIL: schema: /filesReviewed: fewer than 1 items",
+          "hidden": "pass"
+        }
+      }
+    },
+    {
+      "id": "cyfrin-3",
+      "set": "heldout",
+      "maps": false,
+      "notes": [
+        "commit: the report names a tag or a short hash, not a 40-character commit",
+        "findings: the rules find no finding and the report does not say it has none",
+        "scope: the report lists no files and its findings name none"
+      ],
+      "format": "PDF",
+      "sourceChars": 10131,
+      "findingsChars": 0,
+      "carriedChars": 0,
+      "outsideFindingsChars": 10131,
+      "findings": 0,
+      "bySeverity": {},
+      "locations": 0,
+      "scope": "derived from the findings, 0 files",
+      "commits": 1,
+      "fieldsOverLimit": {},
+      "longestField": {},
+      "mediumOrHigher": 0,
+      "hiddenCharacters": 0,
+      "hiddenByCodePoint": {},
+      "blockers": [
+        "commit (not 40 characters)",
+        "findings",
+        "scope"
+      ],
+      "jsonChars": 92,
+      "lost": {
+        "findingsNotParsed": 0,
+        "sectionsDropped": {},
+        "preambleChars": 0,
+        "locationsOutOfScope": 0,
+        "statusWordsUnmapped": 0
+      },
+      "defaultTerms": {
+        "result": "reject",
+        "exitCode": 1,
+        "checks": {
+          "report": "FAIL: schema: /commit: does not match pattern",
+          "proof": "pass",
+          "scope": "FAIL: schema: /commit: not equal to const",
+          "coverage": "FAIL: schema: /filesReviewed: fewer than 1 items",
+          "hidden": "pass"
+        }
+      },
+      "noProofTerm": {
+        "result": "reject",
+        "exitCode": 1,
+        "checks": {
+          "report": "FAIL: schema: /commit: does not match pattern",
+          "scope": "FAIL: schema: /commit: not equal to const",
+          "coverage": "FAIL: schema: /filesReviewed: fewer than 1 items",
+          "hidden": "pass"
+        }
+      },
+      "relaxedWhatIf": {
+        "result": "reject",
+        "exitCode": 1,
+        "checks": {
+          "report": "FAIL: schema: /commit: does not match pattern",
+          "scope": "FAIL: schema: /commit: not equal to const",
+          "coverage": "FAIL: schema: /filesReviewed: fewer than 1 items",
+          "hidden": "pass"
+        }
+      }
+    },
+    {
+      "id": "cyfrin-4",
+      "set": "heldout",
+      "maps": false,
+      "notes": [
+        "commit: the report names a tag or a short hash, not a 40-character commit",
+        "findings: the rules find no finding and the report does not say it has none",
+        "scope: the report lists no files and its findings name none"
+      ],
+      "format": "PDF",
+      "sourceChars": 12310,
+      "findingsChars": 0,
+      "carriedChars": 0,
+      "outsideFindingsChars": 12310,
+      "findings": 0,
+      "bySeverity": {},
+      "locations": 0,
+      "scope": "derived from the findings, 0 files",
+      "commits": 1,
+      "fieldsOverLimit": {},
+      "longestField": {},
+      "mediumOrHigher": 0,
+      "hiddenCharacters": 0,
+      "hiddenByCodePoint": {},
+      "blockers": [
+        "commit (not 40 characters)",
+        "findings",
+        "scope"
+      ],
+      "jsonChars": 92,
+      "lost": {
+        "findingsNotParsed": 0,
+        "sectionsDropped": {},
+        "preambleChars": 0,
+        "locationsOutOfScope": 0,
+        "statusWordsUnmapped": 0
+      },
+      "defaultTerms": {
+        "result": "reject",
+        "exitCode": 1,
+        "checks": {
+          "report": "FAIL: schema: /commit: does not match pattern",
+          "proof": "pass",
+          "scope": "FAIL: schema: /commit: not equal to const",
+          "coverage": "FAIL: schema: /filesReviewed: fewer than 1 items",
+          "hidden": "pass"
+        }
+      },
+      "noProofTerm": {
+        "result": "reject",
+        "exitCode": 1,
+        "checks": {
+          "report": "FAIL: schema: /commit: does not match pattern",
+          "scope": "FAIL: schema: /commit: not equal to const",
+          "coverage": "FAIL: schema: /filesReviewed: fewer than 1 items",
+          "hidden": "pass"
+        }
+      },
+      "relaxedWhatIf": {
+        "result": "reject",
+        "exitCode": 1,
+        "checks": {
+          "report": "FAIL: schema: /commit: does not match pattern",
+          "scope": "FAIL: schema: /commit: not equal to const",
+          "coverage": "FAIL: schema: /filesReviewed: fewer than 1 items",
+          "hidden": "pass"
+        }
+      }
+    },
+    {
+      "id": "cyfrin-5",
+      "set": "heldout",
+      "maps": false,
+      "notes": [
+        "commit: the report names a tag or a short hash, not a 40-character commit",
+        "findings: the rules find no finding and the report does not say it has none",
+        "scope: the report lists no files and its findings name none"
+      ],
+      "format": "PDF",
+      "sourceChars": 8973,
+      "findingsChars": 0,
+      "carriedChars": 0,
+      "outsideFindingsChars": 8973,
+      "findings": 0,
+      "bySeverity": {},
+      "locations": 0,
+      "scope": "derived from the findings, 0 files",
+      "commits": 1,
+      "fieldsOverLimit": {},
+      "longestField": {},
+      "mediumOrHigher": 0,
+      "hiddenCharacters": 0,
+      "hiddenByCodePoint": {},
+      "blockers": [
+        "commit (not 40 characters)",
+        "findings",
+        "scope"
+      ],
+      "jsonChars": 92,
+      "lost": {
+        "findingsNotParsed": 0,
+        "sectionsDropped": {},
+        "preambleChars": 0,
+        "locationsOutOfScope": 0,
+        "statusWordsUnmapped": 0
+      },
+      "defaultTerms": {
+        "result": "reject",
+        "exitCode": 1,
+        "checks": {
+          "report": "FAIL: schema: /commit: does not match pattern",
+          "proof": "pass",
+          "scope": "FAIL: schema: /commit: not equal to const",
+          "coverage": "FAIL: schema: /filesReviewed: fewer than 1 items",
+          "hidden": "pass"
+        }
+      },
+      "noProofTerm": {
+        "result": "reject",
+        "exitCode": 1,
+        "checks": {
+          "report": "FAIL: schema: /commit: does not match pattern",
+          "scope": "FAIL: schema: /commit: not equal to const",
+          "coverage": "FAIL: schema: /filesReviewed: fewer than 1 items",
+          "hidden": "pass"
+        }
+      },
+      "relaxedWhatIf": {
+        "result": "reject",
+        "exitCode": 1,
+        "checks": {
+          "report": "FAIL: schema: /commit: does not match pattern",
+          "scope": "FAIL: schema: /commit: not equal to const",
+          "coverage": "FAIL: schema: /filesReviewed: fewer than 1 items",
+          "hidden": "pass"
+        }
+      }
+    },
+    {
+      "id": "cyfrin-6",
+      "set": "heldout",
+      "maps": false,
+      "notes": [
+        "commit: the report names a tag or a short hash, not a 40-character commit",
+        "findings: the rules find no finding and the report does not say it has none",
+        "scope: the report lists no files and its findings name none"
+      ],
+      "format": "PDF",
+      "sourceChars": 8682,
+      "findingsChars": 0,
+      "carriedChars": 0,
+      "outsideFindingsChars": 8682,
+      "findings": 0,
+      "bySeverity": {},
+      "locations": 0,
+      "scope": "derived from the findings, 0 files",
+      "commits": 1,
+      "fieldsOverLimit": {},
+      "longestField": {},
+      "mediumOrHigher": 0,
+      "hiddenCharacters": 0,
+      "hiddenByCodePoint": {},
+      "blockers": [
+        "commit (not 40 characters)",
+        "findings",
+        "scope"
+      ],
+      "jsonChars": 92,
+      "lost": {
+        "findingsNotParsed": 0,
+        "sectionsDropped": {},
+        "preambleChars": 0,
+        "locationsOutOfScope": 0,
+        "statusWordsUnmapped": 0
+      },
+      "defaultTerms": {
+        "result": "reject",
+        "exitCode": 1,
+        "checks": {
+          "report": "FAIL: schema: /commit: does not match pattern",
+          "proof": "pass",
+          "scope": "FAIL: schema: /commit: not equal to const",
+          "coverage": "FAIL: schema: /filesReviewed: fewer than 1 items",
+          "hidden": "pass"
+        }
+      },
+      "noProofTerm": {
+        "result": "reject",
+        "exitCode": 1,
+        "checks": {
+          "report": "FAIL: schema: /commit: does not match pattern",
+          "scope": "FAIL: schema: /commit: not equal to const",
+          "coverage": "FAIL: schema: /filesReviewed: fewer than 1 items",
+          "hidden": "pass"
+        }
+      },
+      "relaxedWhatIf": {
+        "result": "reject",
+        "exitCode": 1,
+        "checks": {
+          "report": "FAIL: schema: /commit: does not match pattern",
+          "scope": "FAIL: schema: /commit: not equal to const",
+          "coverage": "FAIL: schema: /filesReviewed: fewer than 1 items",
+          "hidden": "pass"
+        }
+      }
+    }
+  ]
+}

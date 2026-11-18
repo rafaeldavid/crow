@@ -1,0 +1,41 @@
+{
+  "about": "T-509 (row N180). Public security review reports, chosen by a rule fixed before any was read: per firm, the six newest reports in the firm's own public GitHub repository, by the date in the file name. Each source is pinned to the repository commit read on 2026-11-18. The held-out set is every report of one firm (Cyfrin); its list is also in heldout.json. fetch.mjs downloads each file into its own folder under reports/scratch/corpus/ and records its SHA-256 in manifest.json.",
+  "rule": {
+    "pashov": "team/md/*_<YYYY-MM-DD>.md, sorted by that date, last 6",
+    "trailofbits": "reviews/<YYYY>-<MM>-*securityreview.pdf, sorted by path, last 6",
+    "sherlock": "audits/<YYYY>.<MM>.<DD> *.pdf, sorted by path, last 6",
+    "cyfrin": "reports/20*.pdf, sorted by path, last 6"
+  },
+  "firms": {
+    "pashov": { "name": "Pashov Audit Group", "repo": "pashov/audits", "commit": "5550be96af284b3cf67b9d7dbbdbeb95c2502fe8", "licence": "No licence file in the repository; published for public reading. Reuse here: links, hashes and counts only; no copy is committed.", "set": "design" },
+    "trailofbits": { "name": "Trail of Bits", "repo": "trailofbits/publications", "commit": "e08944909b8fcb747aef40ee294d92b2a9663685", "licence": "CC-BY-SA-4.0 (the repository's licence). Reuse here: links, hashes and counts only; no copy is committed.", "set": "design" },
+    "sherlock": { "name": "Sherlock", "repo": "sherlock-protocol/sherlock-reports", "commit": "497f7158dcd99b7cc6512638e5da4465086832ad", "licence": "No licence file in the repository; published for public reading. Reuse here: links, hashes and counts only; no copy is committed.", "set": "design" },
+    "cyfrin": { "name": "Cyfrin", "repo": "Cyfrin/cyfrin-audit-reports", "commit": "dd2c1d0331f32e4e93f1ebba0b88262ec813a898", "licence": "No licence file in the repository; published for public reading. Reuse here: links, hashes and counts only; no copy is committed.", "set": "heldout" }
+  },
+  "reports": [
+    { "id": "pashov-1", "firm": "pashov", "path": "team/md/RegnumAurum-security-review_2026-03-26.md", "date": "2026-03-26" },
+    { "id": "pashov-2", "firm": "pashov", "path": "team/md/Spicenet-security-review_2026-04-06.md", "date": "2026-04-06" },
+    { "id": "pashov-3", "firm": "pashov", "path": "team/md/Polygun-security-review_2026-04-16.md", "date": "2026-04-16" },
+    { "id": "pashov-4", "firm": "pashov", "path": "team/md/BNBChain-security-review_2026-04-30.md", "date": "2026-04-30" },
+    { "id": "pashov-5", "firm": "pashov", "path": "team/md/Biconomy-security-review_2026-05-14.md", "date": "2026-05-14" },
+    { "id": "pashov-6", "firm": "pashov", "path": "team/md/DefiApp-security-review_2026-05-23.md", "date": "2026-05-23" },
+    { "id": "tob-1", "firm": "trailofbits", "path": "reviews/2026-09-offchain-osp-guard-securityreview.pdf", "date": "2026-09" },
+    { "id": "tob-2", "firm": "trailofbits", "path": "reviews/2026-09-openai-openclaw-securityreview.pdf", "date": "2026-09" },
+    { "id": "tob-3", "firm": "trailofbits", "path": "reviews/2026-10-bron-cggmp21-securityreview.pdf", "date": "2026-10" },
+    { "id": "tob-4", "firm": "trailofbits", "path": "reviews/2026-10-offchain-labs-glamsterdam-gas-parameters-securityreview.pdf", "date": "2026-10" },
+    { "id": "tob-5", "firm": "trailofbits", "path": "reviews/2026-10-sigstore-rust-securityreview.pdf", "date": "2026-10" },
+    { "id": "tob-6", "firm": "trailofbits", "path": "reviews/2026-11-offchain-stylus-permissioned-deployer-securityreview.pdf", "date": "2026-11" },
+    { "id": "sherlock-1", "firm": "sherlock", "path": "audits/2026.07.01 - Final - Delpho Collaborative Audit Report 1782919020.pdf", "date": "2026-07-01" },
+    { "id": "sherlock-2", "firm": "sherlock", "path": "audits/2026.07.21 - Final - Noon Capital Collaborative Audit Report 1784634533.pdf", "date": "2026-07-21" },
+    { "id": "sherlock-3", "firm": "sherlock", "path": "audits/2026.09.08 - Final - Mezzanine Collaborative Audit Report 1788868057.pdf", "date": "2026-09-08" },
+    { "id": "sherlock-4", "firm": "sherlock", "path": "audits/2026.09.08 - Final - Mezzanine Collaborative Audit Report 1788868086.pdf", "date": "2026-09-08" },
+    { "id": "sherlock-5", "firm": "sherlock", "path": "audits/2026.09.21 - Final - Maple Collaborative Audit Report 1789995803.pdf", "date": "2026-09-21" },
+    { "id": "sherlock-6", "firm": "sherlock", "path": "audits/2026.09.29 - Final - Delpho Collaborative Audit Report 1790693081.pdf", "date": "2026-09-29" },
+    { "id": "cyfrin-1", "firm": "cyfrin", "path": "reports/2026-11-12-cyfrin-ecoreal-v3-v2.0.pdf", "date": "2026-11-12" },
+    { "id": "cyfrin-2", "firm": "cyfrin", "path": "reports/2026-11-12-cyfrin-lotus-v2.0.pdf", "date": "2026-11-12" },
+    { "id": "cyfrin-3", "firm": "cyfrin", "path": "reports/2026-11-12-cyfrin-okumoney-v2.0.pdf", "date": "2026-11-12" },
+    { "id": "cyfrin-4", "firm": "cyfrin", "path": "reports/2026-11-12-cyfrin-yieldy-evm-contracts-v2.0.pdf", "date": "2026-11-12" },
+    { "id": "cyfrin-5", "firm": "cyfrin", "path": "reports/2026-11-13-cyfrin-securitize-evm-on-off-ramp-v2.0.pdf", "date": "2026-11-13" },
+    { "id": "cyfrin-6", "firm": "cyfrin", "path": "reports/2026-11-17-cyfrin-sandcastle-v2.0.pdf", "date": "2026-11-17" }
+  ]
+}
