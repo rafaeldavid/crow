@@ -54,6 +54,6 @@ Non-goals: no change to the required checks (`check`, `gitleaks`, `id-check`), t
 
 - **Done:** the signer's line (merged), the script and the report (this pull request), five workflow proposals (open, unmerged), crow-private's T-505.
 - **Waiting on Rafa:** PRs 625, 626, 628, 629 and 630; CodeQL's default setup (a setting); PR 616 on or after 2026-11-28.
-- **Follow-up, not started:** three flaky example tests went green only on a rerun between 2026-11-14 and 2026-11-16: `examples/signer.test.ts` (A7, a clock shift), `examples/setup-bundle.test.ts` (eight concurrent runs) and `examples/buyer-signer-addresses.test.ts` (a refund to the payment address). Each needs its root cause found.
+- **Follow-up, done (T-508, PR 633):** three example tests went green only on a rerun between 2026-11-14 and 2026-11-16. `examples/signer.test.ts` (T-442) and `examples/setup-bundle.test.ts` (T-486) were already fixed on main. PR 633 fixed `examples/buyer-signer-addresses.test.ts` at its cause.
 - **To measure again:** run the report's command with a later `--since`. After a proposal merges, the same window shows its effect.
 - **Out of date by one:** `docs/team.md`'s Rules and checks row for `tests/ci-gated.test.ts` counts the exempt files; this task removed one, and the row is another lane's doc.
