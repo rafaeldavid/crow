@@ -12,8 +12,8 @@ permissions:
 
 jobs:
   # A pull request that changes only docs/ or root Markdown files skips the heavy jobs (Rafa, 2026-11-07: the
-  # change recipes in docs/team.md). Push to main always runs everything, and so does a pull request whose file
-  # list can't be read.
+  # change recipes in docs/team.md). Since T-504 a push to main that merges only such files skips them too. Every
+  # other push to main runs everything, and so does a pull request or push whose file list can't be read.
   changes:
     runs-on: ubuntu-latest
     permissions:
@@ -29,9 +29,21 @@ jobs:
           EVENT: ${{ github.event_name }}
           PR: ${{ github.event.pull_request.number }}
           REPO: ${{ github.repository }}
+          BEFORE: ${{ github.event.before }}
+          SHA: ${{ github.sha }}
         run: |
           code=true
           chain=true
+          # T-504: a push to main whose commits touch only docs/ or root Markdown files (a merged docs or task-file
+          # pull request) skips the heavy jobs, as that pull request did. Its file list comes from GitHub's compare of
+          # the push's two commits; a list that can't be read, or that may be cut off (the compare lists at most 300
+          # files), runs everything.
+          if [ "$EVENT" = push ] && [ -n "$BEFORE" ] && [ "$BEFORE" != 0000000000000000000000000000000000000000 ] \
+            && pushed=$(gh api "repos/$REPO/compare/$BEFORE...$SHA" --jq '.files[].filename') && [ -n "$pushed" ] \
+            && [ "$(printf '%s\n' "$pushed" | wc -l)" -lt 300 ]; then
+            if [ -z "$(printf '%s\n' "$pushed" | grep -Ev '^(docs/.+|[^/]+\.md)$')" ]; then code=false; fi
+            echo "push: $(printf '%s\n' "$pushed" | wc -l) changed files"
+          fi
           if [ "$EVENT" = pull_request ] && files=$(gh pr diff "$PR" --repo "$REPO" --name-only) && [ -n "$files" ]; then
             if [ -z "$(printf '%s\n' "$files" | grep -Ev '^(docs/.+|[^/]+\.md)$')" ]; then code=false; fi
             # The contracts and anvil jobs test the chain side: the contracts, and every package, app and example
