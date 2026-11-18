@@ -6,6 +6,8 @@ This page is for a seller's engineer or agent: you run an API that does paid wor
 
 ## First hour
 
+**No API, or work that is not finished yet?** Start at https://crow.direct/setup.txt instead: one command sells work from a template, with nothing to clone, and you deliver after the buyer has funded the deal. The steps below are for a seller with an API.
+
 You need git, Node 22.18 or later, and corepack (it comes with Node). Run every command from the repository's root directory. Steps 3 to 7 use three terminals, because the local chain, the stub and the adapter each keep running. Nothing here needs a key, an account or the network after the install.
 
 1. **Clone and build.** `git clone https://github.com/rafaeldavid/holdback && cd holdback && corepack enable && pnpm install && pnpm build`. Worked: `pnpm build` returns to the prompt with no error. If `pnpm install` refuses the Node version, install Node 22.18 or later and run it again.

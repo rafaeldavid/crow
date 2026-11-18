@@ -1,8 +1,9 @@
 # Set up Crow
 
 %% T-472: the setup's one page. site/build.mjs fills the one placeholder with the pinned command; site/check.mjs holds the published page to SETUP_MAX_BYTES (site/guides.mjs).
+%% T-543: "The person's own work" is the template path; its bytes came from the check's and the status's descriptions, which each command's own lines carry.
 %% T-486 (D76): "The list" is the setup's listing step. Its four sentences on what an entry means are the command's own (examples/setup-list.ts, ENTRY_MEANS).
-One page for an AI assistant whose person said: "Read https://crow.direct/setup.txt and set up Crow for me as a seller." You run one pinned file, `setup.mjs`. It makes one folder on this machine, checks it, asks once for the person's website, and sells one sample job to Crow's test buyer. If the person named no role, ask which. This version sets up a seller; a buyer starts at https://crow.direct/buy.txt.
+One page for an AI assistant whose person said: "Read https://crow.direct/setup.txt and set up Crow for me as a seller." You run one pinned file, `setup.mjs`. It makes one folder on this machine, checks it, asks once for the person's website, and sells one job to Crow's test buyer. If the person named no role, ask which. This version sets up a seller; a buyer starts at https://crow.direct/buy.txt.
 
 ## What this is
 
@@ -27,7 +28,7 @@ Ask the person one question first: "Where are you paid?" The answer is an addres
 {{SETUP_COMMAND}}
 ```
 
-Add `--payout <address>` or `--payout this-key` at the end. Without it the command makes nothing, prints the question and exits 3. It needs Node 22.18 or later and curl, and installs nothing. It downloads `setup.mjs` into `~/.crow` as `setup.mjs.part` and names it `setup.mjs` only when its SHA-256 is the one in the command. Every later command names that file: `node ~/.crow/setup.mjs`.
+Add `--payout <address>` or `--payout this-key` at the end. Without it the command makes nothing, prints the question and exits 3. It needs Node 22.18 or later and curl, and installs nothing. It downloads `setup.mjs` into `~/.crow` and keeps it only when its SHA-256 is the one in the command. Every later command names that file: `node ~/.crow/setup.mjs`.
 
 ## As a seller
 
@@ -35,16 +36,18 @@ Add `--payout <address>` or `--payout this-key` at the end. Without it the comma
 
 - `keys/signing.key`, mode 0600 in a folder of mode 0700: the signing key, made here. The command prints its address and never the key.
 - `adapter.json`: the seller adapter's configuration. A fresh key signs each deal, derived from the signing key, so the person's deals share no seller address.
-- `template.json`, the sample's deal template, and `crow.json`, the state.
+- `template.json`, the deal template, and `crow.json`, the state.
 - A draft card in `~/.crow/seller-card`, apart from the keys.
 
 It sends nothing. It takes an empty folder only. It refuses a folder inside a git work tree or a synced folder, and names the flag that overrides each; it knows common names only, so a sync service under another name passes. Run again after a stop, it continues and makes no second key. Before the first deal, the same command with another `--payout` changes the answer. It ends with the check: one line per check, `"ok": true` on each.
 
-`node ~/.crow/setup.mjs check` runs that check alone, and sends nothing to a Crow-run host. It loads the configuration with the adapter's own loader, holds its payout address to the person's answer, tests the template against the commitment schema, runs the deal's checks on a sample result, and fails when a key's value is in a file outside `keys/`. Fix what a failed line names, then run it again.
+`node ~/.crow/setup.mjs check` runs that check alone, and sends nothing to a Crow-run host. Fix what a failed line names, then run it again.
 
-`node ~/.crow/setup.mjs status` prints the role, the steps done, the addresses and the open deals.
+`node ~/.crow/setup.mjs status` prints the folder's state and its open deals.
 
-The sample is `squares.csv` for 1 tUSDC, served by a small API inside the command. Selling the work of the person's own API comes with a later version; until then https://crow.direct/sell.txt is that path.
+The sample is `squares.csv` for 1 tUSDC.
+
+**The person's own work.** `seller --template <file>` in place of `--sample` sells work a JSON file describes; `seller` with no flag prints its shape. `--file <path>` adds finished work, delivered once the deal is funded. Without it `first-deal` exits 0 at `"state": "Held"` with `workPath` and `deliverBy`: put the work there and run it again. It delivers work that passes the agreed checks and names each failing check; `check --work <file>` runs them on a sample. Their own API: https://crow.direct/sell.txt.
 
 ## The list
 
@@ -71,7 +74,7 @@ What the person gives up: the request shows Crow the website and this machine's 
 | The commitment ID | Crow's test buyer | Nothing more |
 | The delivery, encrypted | Both operators | Its size, its time and its SHA-256; not its content |
 
-Before the commitment ID goes to the buyer, the command reads the signed terms and stops unless they name the payout address the person gave. The test buyer agrees and funds, the command delivers `squares.csv`, and the agreed checks decide. Give the command a 20-minute timeout or run it in the background. It ends with `"step": "first-deal"`, `"state": "Released"` and the path of the deal record under `deals/`: report those. Then run the preflight (llms.txt); on `reports taken` and the person's yes, send a first-deal report (`ref/limits.txt`). If `first-deal` stops early, run it again: it continues the same deal and makes no second offer.
+Before the commitment ID goes to the buyer, the command reads the signed terms and stops unless they name the payout address the person gave. The test buyer agrees and funds, the command delivers the work, and the agreed checks decide. Give the command a 20-minute timeout or run it in the background. It ends with `"step": "first-deal"`, `"state": "Released"` and the path of the deal record under `deals/`: report those. Then run the preflight (llms.txt); on `reports taken` and the person's yes, send a first-deal report (`ref/limits.txt`). If `first-deal` stops early, run it again: it continues the same deal and makes no second offer.
 
 - `first-deal --again` offers a new deal after one that ended without a release, such as an expired or refused offer; it never continues the ended one.
 - `first-deal --buyer <URL>` names another test buyer than Crow's.
