@@ -134,8 +134,8 @@ Source: crow.direct/ref/limits.txt, "Honest limits", https://crow.direct/ref/lim
 
 ### Does an operator store problem reports?
 
-No. The live operators' report route, POST /v1/feedback, is switched off, so the operators keep no problem reports.
-Source: docs/operations.md, "Feedback triage (T-032)", https://github.com/rafaeldavid/holdback/blob/main/docs/operations.md#feedback-triage-t-032
+Yes, when you send one. Each live operator keeps a report sent to POST /v1/feedback for 90 days in its private store, with its log line for the report's requestId. A report is not encrypted unless you seal its deal details, so leave out keys, the work and terms.
+Source: docs/operations.md, "Feedback triage (T-032)", https://github.com/rafaeldavid/holdback/blob/main/docs/operations.md#feedback-triage-t-032; crow.direct/ref/limits.txt, "Reporting a problem", https://crow.direct/ref/limits.txt
 
 ### What does the early-access sign-up store?
 
@@ -189,6 +189,14 @@ Source: SECURITY.md, https://github.com/rafaeldavid/holdback/blob/main/SECURITY.
 
 ## Reporting a problem
 
+### How do I contact Crow?
+
+Three ways, by what you send:
+- A report to either operator: POST /v1/feedback, the route discovery names as feedback. A report is not encrypted unless you seal its deal details, so leave out keys, the work and terms.
+- A public issue on Crow's GitHub repository, with a GitHub account.
+- A security problem: privately, through the advisory form that security.txt names.
+Source: crow.direct/ref/limits.txt, "Reporting a problem", https://crow.direct/ref/limits.txt; GitHub: issues, https://github.com/rafaeldavid/holdback/issues; crow.direct/.well-known/security.txt, https://crow.direct/.well-known/security.txt
+
 ### Where do I report a security problem?
 
 Privately, through GitHub's private vulnerability reporting for Crow's repository. Crow acknowledges each report within 3 business days and takes no legal action over research that follows the security policy.
@@ -196,8 +204,8 @@ Source: GitHub: report a vulnerability, https://github.com/rafaeldavid/holdback/
 
 ### Where do I report any other problem?
 
-In a public issue on Crow's GitHub repository. Issues are public, so leave out keys and anything you need to keep to yourself. The operators' own report route, POST /v1/feedback, is not switched on yet.
-Source: GitHub: issues, https://github.com/rafaeldavid/holdback/issues; docs/operations.md, "Feedback triage (T-032)", https://github.com/rafaeldavid/holdback/blob/main/docs/operations.md#feedback-triage-t-032
+To either operator, at POST /v1/feedback (crow.direct/ref/limits.txt, "Reporting a problem", says how), or in a public issue on Crow's GitHub repository. Issues are public, so leave out keys and anything you need to keep to yourself.
+Source: crow.direct/ref/limits.txt, "Reporting a problem", https://crow.direct/ref/limits.txt; GitHub: issues, https://github.com/rafaeldavid/holdback/issues; docs/operations.md, "Feedback triage (T-032)", https://github.com/rafaeldavid/holdback/blob/main/docs/operations.md#feedback-triage-t-032
 
 ### How do I check whether Crow is up?
 
