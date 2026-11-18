@@ -5,7 +5,7 @@
 - **Depends on:** none. It follows the private design study T-532 (roadmap row N196), where Rafa chose the direction on 2026-11-18.
 - **Paths this task may touch:** `docs/decisions/ADR-0040-standing-offers.md` (new), `docs/research/2026-11-18-standing-offers.md` and its folder (new), `docs/research/README.md` (one row), `docs/decisions-today.md` (D82), this file, and the build's task files T-548 to T-552 (new). Scratch only under `reports/scratch/t-544/`.
 - **Human gate:** yes: D82's two open points are Rafa's. The record changes no code.
-- **Status:** review
+- **Status:** done (PR 675; the decision waits on Rafa, D82)
 - **Agent/session:** the T-544 session (`standing-offers-adr`, started by `local_f8b8041f`), 2026-11-18, branch `t-544-standing-offers`.
 - **Roadmap row:** N196
 - **Change kind:** 10, research and decisions.
@@ -37,7 +37,7 @@ Rafa wants a seller to publish one offer that any buyer can take, without a prog
 - [x] D82 in `docs/decisions-today.md`.
 - [x] The build's task files, T-548 to T-552, in build order with a testable done-when each.
 - [x] Every claim labelled measured, documented, inferred or guessed.
-- [ ] The pull request merged after CI.
+- [x] The pull request merged after CI (PR 675; the first run's 9 checks passed and the heavy jobs skipped as for any docs-only change, measured).
 
 ## Out of scope
 
