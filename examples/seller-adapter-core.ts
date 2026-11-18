@@ -117,7 +117,8 @@ export interface SellerAdapterConfig {
    * `sellerApi.result` every `refetchEverySec` seconds of settlement-layer time (0: at every poll; omitted: only
    * when you say), and at once when you POST /deals/<commitmentId>/ready with `Authorization: Bearer <credential>`,
    * one of the credentials in the environment variable `readyAuth.env`, comma-separated. It delivers the first
-   * result its check run does not refuse, before `deliverBy`, and never delivers twice.
+   * result its check run does not refuse, before `deliverBy`, and never delivers twice. The same credential takes
+   * POST /deals/<commitmentId>/refund (T-503): the seller signs a full refund of a deal it delivered nothing into.
    */
   redelivery?: { refetchEverySec?: number; readyAuth?: { kind: 'bearer'; env: string } };
   /** The fields a scope must have, and no others. */
@@ -392,6 +393,11 @@ export interface Deal {
   jobMovedTo?: Hex;
   /** T-502: why the last result was refused, safe to show anyone: the stage, the check, the pointer and the message. */
   reason?: RefusalReason;
+  /**
+   * T-503: the full refund the seller signed, as POST /deals/<id>/refund answered it: the MutualSettlement with the
+   * seller's signature and an empty buyer slot, and where either party submits it once the buyer has signed.
+   */
+  refund?: { path: string; body: J; at: string };
 }
 export interface Journal {
   deals: Record<string, Deal>;
@@ -1136,6 +1142,8 @@ export async function createSellerAdapter(c: SellerAdapterConfig, env: Readonly<
   const attaching = new Set<string>();
   /** T-501 review: deals the deal loop is working on now. The job route moves no job out of one of them. */
   const advancing = new Set<string>();
+  /** T-503: deals whose refund the refund route is signing now. The deal loop leaves them alone meanwhile. */
+  const refunding = new Map<string, Promise<{ status: number; body: J }>>();
   // ---- Events (T-417): one JSON line each, for the seller's product metrics; never content, keys or identities ----
   let eventsBroken = false;
   const emit = (type: string, fields: Record<string, unknown>) => {
@@ -1706,6 +1714,7 @@ export async function createSellerAdapter(c: SellerAdapterConfig, env: Readonly<
     for (const deal of Object.values(journal.deals)) {
       if (closed) return;
       if (!['offered', 'starting', 'start-unknown', 'started', 'refused', 'delivering'].includes(deal.stage)) continue;
+      if (refunding.has(deal.id)) continue; // T-503: the refund route is signing this deal's refund; it delivers nothing
       advancing.add(deal.id);
       try {
         await advance(deal, passNow, full);
@@ -1863,6 +1872,104 @@ export async function createSellerAdapter(c: SellerAdapterConfig, env: Readonly<
     return send(200, { commitmentId: id, stage: deal.stage, ...(why === undefined ? {} : { refusal: why }) });
   }
 
+  /** T-503: a stored refund is answered again while it has at least this long left, in ms of settlement-layer time. */
+  const REFUND_REUSE_MS = 600_000;
+  /** T-503: how long a signed refund stays valid, in ms: 23 hours, inside the 24 hours verify.ts allows a settlement. */
+  const REFUND_VALID_MS = 23 * 3_600_000;
+  type Answer = { status: number; body: J };
+  const refundAnswer = (id: string, r: NonNullable<Deal['refund']>, replayed: boolean): J => ({
+    commitmentId: id,
+    settlement: r.body,
+    submit: r.path,
+    expiresAt: r.body.expiresAt,
+    replayed,
+    detail: `the seller signed this full refund. The buyer signs buyerSignature over the same MutualSettlement (POST /v1/prepare/settlement with this nonce, these payouts, releaseKey false and this expiresAt gives its typed data), then either party POSTs it with both signatures to ${r.path} before expiresAt`,
+  });
+
+  /**
+   * POST /deals/<commitmentId>/refund (T-503): the seller signs a full refund of a deal it delivered nothing into,
+   * behind the ready route's credential. It takes no body. The message comes from the deal's own terms in the journal,
+   * which must hash to the commitment ID: the whole price to the buyer's payment address, no delivery named, no key
+   * released. Every operator must read the deal Held. On chain the adjudication fee returns to the buyer too. The
+   * answer is the MutualSettlement with the seller's signature and an empty buyer slot: the buyer signs the same
+   * message and either party submits it. So a stolen credential can only give the buyer its money back.
+   * An open deal is closed: the seller delivers nothing into a deal it agreed to refund. Asked again while the signed
+   * refund has 10 minutes or more left and every operator still reads Held, it answers the same settlement.
+   */
+  function refundSigned(req: Request, commitmentId: string): Promise<Response> {
+    const now = (status: number, body: J, headers?: Record<string, string>) => Promise.resolve(send(status, body, headers));
+    if (req.method !== 'POST') return now(405, { type: 'method_not_allowed', detail: 'this route takes POST' });
+    if (!bearerOk(req, refusal.ready!)) return now(401, { type: 'unauthorized', detail: 'this route needs Authorization: Bearer <credential>' }, { 'www-authenticate': 'Bearer realm="refund"' });
+    const id = commitmentId.toLowerCase();
+    const deal = Object.hasOwn(journal.deals, id) ? journal.deals[id]! : undefined;
+    if (!deal) return now(404, { type: 'not_found', detail: 'this adapter holds no such deal' });
+    // One signing at a time per deal: a second request while one runs gets the same answer.
+    const running = refunding.get(id);
+    if (running) return running.then((a) => send(a.status, a.body));
+    if (remote) return now(409, { type: 'cannot_sign', detail: "this adapter's signer signs offers and deliveries only: sign the refund where the selling key is held" });
+    if (advancing.has(id)) return now(409, { type: 'deal_busy', detail: 'the deal is being worked on now; send the request again in a few seconds' });
+    if (deal.stage === 'delivering' || deal.stage === 'delivered' || deal.signedDelivery !== undefined) return now(409, { type: 'delivered', detail: `the deal is ${deal.stage}: the seller signs a refund only for a deal it delivered nothing into` });
+    const work = (async (): Promise<Answer> => {
+      try {
+        const t = deal.terms;
+        if (commitmentIdOf(t).toLowerCase() !== id) return { status: 409, body: { type: 'terms_mismatch', detail: "the journal's terms for this deal do not hash to its commitment ID; nothing was signed" } };
+        if (!/^[1-9][0-9]{0,77}$/.test(String(t.price?.amount))) return { status: 409, body: { type: 'nothing_to_refund', detail: 'the price is 0: a settlement needs a positive payout' } };
+        const to = String(t.buyerPaymentAddress).toLowerCase();
+        if (!isAddressText(to)) return { status: 409, body: { type: 'terms_mismatch', detail: "the terms name no buyer's payment address; nothing was signed" } };
+        const state = await seller.trusted<string>(`/v1/commitments/${id}`, (x) => x.escrowState);
+        if (state !== 'Held') return { status: 409, body: { type: 'not_held', detail: `every operator reads the deal ${plain(String(state))}: the seller signs a refund only while it is Held, with nothing delivered` } };
+        const settlementNow = await seller.settlementNow();
+        const kept = deal.refund;
+        if (kept && Date.parse(String(kept.body.expiresAt)) - settlementNow >= REFUND_REUSE_MS) return { status: 200, body: refundAnswer(id, kept, true) };
+        const signer = signerOf(deal);
+        if (signer.address !== String(t.seller).toLowerCase()) return { status: 409, body: { type: 'cannot_sign', detail: `the terms name the seller ${plain(String(t.seller))}, which this adapter's key does not sign for` } };
+        const nonce = freshNonce().toLowerCase() as Hex;
+        const expiresAt = new Date(Math.floor((settlementNow + REFUND_VALID_MS) / 1000) * 1000).toISOString().replace('.000Z', 'Z');
+        const payouts = [{ to, amount: { token: t.price.token, amount: t.price.amount } }];
+        // Any operator may prepare it; the seller rebuilds the message from its own terms and signs only that. An
+        // operator whose message differs, or names another expiry, is passed over for the next (red team, T-503).
+        let signed: { path: string; body: J } | undefined;
+        const why: string[] = [];
+        for (const api of signer.sources()) {
+          try {
+            const prepared = await signer.call('POST', '/v1/prepare/settlement', { commitmentId: id, nonce, payouts, releaseKey: false, expiresAt }, api);
+            const { path, body } = await signer.sign(prepared, { kind: 'settlement', terms: t, payouts, releaseKey: false, deliveryHash: null, nonce });
+            // Checked once more on what was signed: a full refund to the buyer's payment address, nothing else, valid
+            // for as long as the seller asked.
+            const message = { type: 'MutualSettlement', commitmentId: body.commitmentId, deliveryHash: body.deliveryHash, payouts: body.payouts, releaseKey: body.releaseKey, nonce: body.nonce, expiresAt: body.expiresAt };
+            const full = body.payouts?.length === 1 && String(body.payouts[0].to).toLowerCase() === to && body.payouts[0].amount?.token === t.price.token && body.payouts[0].amount?.amount === t.price.amount;
+            const by = typeof body.sellerSignature === 'string' ? await recoverTypedDataAddress({ ...typedOf('MutualSettlement', message, signer.domain), signature: body.sellerSignature as Hex }) : undefined;
+            if (!full || body.releaseKey !== false || body.deliveryHash !== null || body.buyerSignature !== null || String(body.commitmentId).toLowerCase() !== id || body.nonce !== nonce || body.expiresAt !== expiresAt || !by || !isAddressEqual(by, t.seller as Hex)) {
+              throw new Error(`the signed settlement is not the full refund to the buyer, valid until ${expiresAt}, that this seller asked for`);
+            }
+            signed = { path, body };
+            break;
+          } catch (e) {
+            why.push(`${new URL(api).host}: ${plain((e as Error).message)}`);
+          }
+        }
+        if (!signed) {
+          log(`${id} no refund was signed: ${why.join('; ')}.`);
+          return { status: 502, body: { type: 'not_signed', detail: `no operator prepared the refund this seller asks for, so nothing was kept or sent (${why.join('; ')})` } };
+        }
+        const { path, body } = signed;
+        deal.refund = { path, body, at: new Date().toISOString() };
+        log(`${id} the seller signed a full refund: ${t.price.amount} base units of ${plain(String(t.price.token))} to the buyer's payment address ${to}, no delivery named, no key released, nonce ${nonce}, valid until ${expiresAt}. The buyer signs buyerSignature over the same message, and either party submits it to ${path}. The signed settlement: ${jcs(body)}`);
+        emit('refund.signed', { commitmentId: id });
+        // The seller hears of every refund it signs, by the log and the callback (red team, T-503).
+        alert({ type: 'refund.signed', commitmentId: id, expiresAt }, `the seller signed a full refund of ${t.price.amount} base units to the buyer's payment address ${to}, valid until ${expiresAt}; the deal is closed and delivers nothing`);
+        if (OPEN_STAGES.includes(deal.stage)) record(deal, { stage: 'closed', ready: false, note: `the seller signed a full refund to the buyer, valid until ${expiresAt}; this deal delivers nothing, and if the refund is not submitted its buyer may reclaim the hold after deliverBy ${t.timing.deliverBy}` });
+        else save();
+        return { status: 200, body: refundAnswer(id, deal.refund, false) };
+      } catch (e) {
+        log(`${id} no refund was signed: ${plain((e as Error).message)}.`);
+        return { status: 502, body: { type: 'not_signed', detail: `no refund was signed: ${plain((e as Error).message)}` } };
+      }
+    })().finally(() => refunding.delete(id));
+    refunding.set(id, work);
+    return work.then((a) => send(a.status, a.body));
+  }
+
   /** One request, by its path under the adapter's address: the same routes the Node server served before T-434. */
   async function handle(req: Request, path: string = new URL(req.url).pathname): Promise<Response> {
     // The published defaults are public: no credential, and they make the adapter sign nothing.
@@ -1871,6 +1978,8 @@ export async function createSellerAdapter(c: SellerAdapterConfig, env: Readonly<
     if (readyFor) return readySignal(req, readyFor);
     const jobFor = refusal.ready ? /^\/deals\/(0x[0-9a-fA-F]{64})\/job$/.exec(path)?.[1] : undefined;
     if (jobFor) return jobNamed(req, jobFor).catch(() => send(400, { type: 'invalid_body', detail: 'the body could not be read' }));
+    const refundFor = refusal.ready ? /^\/deals\/(0x[0-9a-fA-F]{64})\/refund$/.exec(path)?.[1] : undefined;
+    if (refundFor) return refundSigned(req, refundFor);
     const dealFor = /^\/deals\/(0x[0-9a-fA-F]{64})$/.exec(path)?.[1];
     if (dealFor) return dealState(req, dealFor);
     if (path !== '/quote') return send(404, { type: 'not_found', detail: 'this adapter serves POST /quote, GET /defaults and GET /deals/<commitmentId>' });

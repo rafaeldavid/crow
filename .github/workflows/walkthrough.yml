@@ -33,6 +33,11 @@ on:
 permissions:
   contents: read
 
+# T-504: a newer push to a pull request cancels that pull request's walkthrough still going; pushes to main each finish.
+concurrency:
+  group: walkthrough-${{ github.event.pull_request.number || github.sha }}
+  cancel-in-progress: ${{ github.event_name == 'pull_request' }}
+
 jobs:
   walkthrough:
     runs-on: ubuntu-latest

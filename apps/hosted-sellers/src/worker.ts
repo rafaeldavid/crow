@@ -9,8 +9,8 @@
 //   GET  <base>/agent.json  the same card as JSON
 //   GET  <base>/health      operational or degraded, the open deals by stage, why each refused deal was refused
 //                           (T-502, no report content and no commitment ID), and the bundle's SHA-256
-//   POST <base>/quote, GET <base>/defaults, GET <base>/deals/<id>, POST <base>/deals/<id>/ready and /job: the
-//                           adapter's own routes
+//   POST <base>/quote, GET <base>/defaults, GET <base>/deals/<id>, POST <base>/deals/<id>/ready, /job and /refund
+//                           (T-503: the seller signs a full refund to the buyer): the adapter's own routes
 //
 // The seller's bundle (bundle.ts) is built at deploy and holds no secret. The secrets are Worker secrets: HOLDBACK_KEY,
 // the seller's signing key, and the variables its configuration names for its credentials. The core gets those and
