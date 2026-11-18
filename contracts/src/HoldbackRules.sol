@@ -168,12 +168,13 @@ contract HoldbackRules is EIP712, IHoldbackRules {
         // Terms settlement cannot process (ADR-0031 §6, SC-5), refused as packages/core refuses them: the five deadlines
         // strictly in order, compared as timing.ts compares them (an equal pair would give a step a window of zero);
         // one delivery attempt, the only one this contract takes; an escalation window of at least one second; and an
-        // appeal window of 0, because phase one has no party appeal (ADR-0033 §2b; core's APPEAL_WINDOW_PROBLEM).
+        // appeal window of 0, because phase one has no party appeal (ADR-0033 §2b; core's APPEAL_WINDOW_PROBLEM); and
+        // the three dispute fields at 0, because they belong to optimistic mode, which phase one does not run (T-529).
         H.Timing calldata tm = t.timing;
         if (
             tm.offerExpiresAt >= tm.fundBy || tm.fundBy >= tm.deliverBy || tm.deliverBy >= tm.judgeBy
                 || tm.judgeBy >= tm.fallbackBy || tm.maxSubmissions != ONLY_ATTEMPT || tm.appealDecideSec == 0
-                || tm.appealWindowSec != 0
+                || tm.appealWindowSec != 0 || tm.disputeBy != 0 || tm.disputeJudgeSec != 0 || tm.disputeFallbackSec != 0
         ) {
             revert InvalidMessage();
         }
@@ -242,6 +243,11 @@ contract HoldbackRules is EIP712, IHoldbackRules {
         if (bytes(m.keyCiphertext).length > 0 && m.outcome != H.OUTCOME_ACCEPT) revert InvalidMessage();
         if (block.timestamp >= deadline) revert DeadlinePassed();
         if (role == H.ROLE_PRIMARY) {
+            // The primary proves no beacon round, so its beacon fields are empty, as core encodes them (T-529).
+            if (
+                m.beaconSourceHash != H.EMPTY_HASH || m.beaconRound != 0 || m.beaconValue != bytes32(0)
+                    || m.beaconSignature.length != 0
+            ) revert InvalidMessage();
             // The primary reveals the preimage of its seedCommitment, checked through the deal's tag (L-4).
             if (H.seedTag(keccak256(abi.encodePacked(m.seed)), id) != d.seedTag) revert BadSeed();
         } else if (
@@ -303,6 +309,8 @@ contract HoldbackRules is EIP712, IHoldbackRules {
 
     /// @dev The appeal adjudicator's decision on an escalated case, final when written.
     function _escalationDecision(bytes32 id, H.Terms calldata t, Deal memory d, H.Decision calldata m) internal {
+        // Phase one has no party appeal, so no decision carries an appeal ground (T-529).
+        if (m.appealGroundHash != H.EMPTY_HASH) revert InvalidMessage();
         d.stage = m.outcome == H.OUTCOME_ACCEPT ? Stage.Released : Stage.Refunded;
         (d.reason, d.decider) = (Reason.Decided, Decider.Appeal);
         _deals[id] = d;
