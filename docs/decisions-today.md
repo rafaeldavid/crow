@@ -1455,6 +1455,8 @@ Today a seller with its own API reads 13 files of 98,462 bytes and runs 22 comma
 
 **Status:** decided, 2026-11-17.
 
+**Amended 2026-11-18 by D80:** the fixed build is checked again first, and the outside audit reads the fixed build, not the tag.
+
 **Decided 2026-11-17 by Rafa,** after T-499 found the phase-one contracts ready for an outside auditor ([PR 613](https://github.com/rafaeldavid/holdback/pull/613)). His words: "Lets plan to audit current version then we can fold in these improvements alongside the auditor findings in the following build, but I assume we submit these findings as part of the audit", and, on recording it, "Yes, record it".
 
 - **What the auditor reads.** `contracts/src/` at the tag `contracts-phase-one-1`, the code deployed on Sepolia and verified on Sourcify. No source change comes before the audit: a change would need a new freeze and a redeploy under the live pilot, and would put unreviewed code in front of the auditor.
@@ -1506,3 +1508,15 @@ Today a seller with its own API reads 13 files of 98,462 bytes and runs 22 comma
 - **What stays (the red team's finding, Medium).** The posted delivery tells a seller who watches the mempool that the coming decision is not an accept. The seller can then land another attempt-1 delivery first. The decision is refused with nothing sent and the seed stays secret, but the seller has had one free look at the verdict on its first delivery, once per deal (measured: `attack.t526-seller-frontruns-posted-delivery` in `packages/settlement/evm/t526-redteam.test.ts`). The reference primary does not judge a second delivery for the same attempt (`decideTask` in `apps/adjudicator/src/service.ts`), so the fallback then decides [inferred]. Before this rule, the same front-run published the seed as well.
 - **What Rafa may overrule.** The alternative closes the free look: no decision carries a delivery, so every decision on a carried delivery is posted first and the order tells nothing. An accept then takes three transactions too, and D4's two-transaction path survives only for the early accept.
 - **Litmus tests.** Neutrality: no party gains a way to stop a valid commitment; the seller loses one. The hold: unchanged. Defended judgment: the panel seed stays secret from the seller until the posted delivery fixes what is judged.
+
+## D80. The fixed build is checked again first, and the outside audit then reads the fixed build (amends D77; T-533)
+
+**Status:** decided, 2026-11-18.
+
+**Decided 2026-11-18 by Rafa,** answering the coordinator's summary of the triage of an outside scan (T-523), relayed to T-533: "Yes, all six".
+
+- **What changes in D77.** D77 had the outside audit read the phase-one contracts as deployed, at the tag `contracts-phase-one-1`, with every fix in the build after it. Now the fixes come first: the next build, on the lane `contracts-audit-ready`, carries the scan's contract fixes and RR-1 to RR-5.
+- **The fixed build is checked again.** A second scan reads the fixed version before the audit. Crow buys it through its own escrow, as a deal, when Rafa gives the go; it costs credits.
+- **The outside audit then reads the fixed build.** The first version's findings go with it, each with its status, so the auditor does not report them as new.
+- **What stays from D77.** The code under audit does not change during the audit. Our own findings go to the auditor as known issues (`docs/audit/known-issues.md`). The audit is a Crow deal. The deployed phase-one contracts stay as they are until the fixed build's cutover (`docs/redeploy-contracts.md`), and each deploy step waits for Rafa.
+- **Litmus tests.** Neutrality, the hold and defended judgment: unchanged. This orders the work and changes no code.

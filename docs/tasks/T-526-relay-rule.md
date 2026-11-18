@@ -6,7 +6,7 @@
 - **Depends on:** T-523 (the triage of an outside scan's findings), D4 (two transactions on the happy path)
 - **Paths this task may touch:** `packages/settlement/evm/evm-settlement.ts`, `packages/settlement/evm/evm-settlement.test.ts`, `docs/decisions-today.md` (one entry), this file
 - **Human gate:** no for the change; a deploy of the operators is Rafa's
-- **Status:** in review
+- **Status:** done (pull request 653, merged 2026-11-18)
 - **Agent/session:** scan-fixes-main, started by the coordinator on 2026-11-18
 - **Roadmap row:** N189
 
