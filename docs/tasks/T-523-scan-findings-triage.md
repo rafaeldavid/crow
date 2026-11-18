@@ -6,7 +6,7 @@
 - **Depends on:** T-499 (the audit package), D77 (fixes land in the next build)
 - **Paths this task may touch:** this file. The triage table, the plan and the scan's report live in the private repository only
 - **Human gate:** no for the triage and the plan; the decisions the plan names are Rafa's
-- **Status:** in progress
+- **Status:** done
 - **Agent/session:** the scan-findings triage session, started by the coordinator on 2026-11-18
 - **Roadmap row:** N187
 
@@ -32,15 +32,21 @@ Read on 2026-11-18 at about 14:50 UTC [measured unless marked].
 
 ## Acceptance criteria
 
-- [ ] Every finding of the scan has a row in the private triage table, with an outcome and a reason.
-- [ ] Critical, high and medium findings are confirmed or dismissed by reading the code, with a test where a doubt remained.
-- [ ] The private plan groups the findings by cause, orders the fixes, names the review each needs and the decisions that are Rafa's.
-- [ ] The plan proposes the roadmap rows and the fix sessions to the coordinator.
+- [x] Every finding of the scan has a row in the private triage table, with an outcome and a reason.
+- [x] Critical, high and medium findings are confirmed or dismissed by reading the code, with a test where a doubt remained.
+- [x] The private plan groups the findings by cause, orders the fixes, names the review each needs and the decisions that are Rafa's.
+- [x] The plan proposes the roadmap rows and the fix sessions to the coordinator.
 
 ## Evidence
 
-_Filled when the triage closes._
+Closed on 2026-11-18. The triage table and the plan are in the private repository (commit `941486d`).
+
+- A script generates the table from the scan's saved report, and it refuses to run unless every finding has a row [measured].
+- The findings the brief names were read against `contracts/src/` at the tag: every critical, high and medium finding, and every finding the scan reported as new. Reading the code settled each case, so no Foundry test was run in this task. Each fix the plan proposes starts with its failing test.
+- No file under `contracts/src/` changed, and no deployment or key was touched.
 
 ## Handoff
 
-_Filled when the triage closes._
+**Done:** the triage and the plan. The coordinator adds the roadmap rows and starts the fix sessions the plan proposes. The plan names one session on the contract lane and one on `main`, and the two touch no file in common.
+
+**Rafa's to decide:** three decisions, which the plan states with options and a recommendation.
