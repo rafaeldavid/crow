@@ -29,7 +29,10 @@ export const CHECK_WORDS: Record<(typeof REVIEW_CHECK_IDS)[number], string> = {
   hidden: 'The report holds no hidden characters.',
 };
 
-const TEMPLATE = new URL('../../examples/seller-adapter.template.json', import.meta.url);
+// The demo ran on version 1 of the security-review form, and its live deals and page are records of it, so the demo
+// keeps that version: a byte copy of examples/seller-adapter.template.json at origin/main 557560c9 (T-534). The seller
+// adapter of a duet run takes the same copy (tools.ts, adapterConfig).
+export const TEMPLATE = new URL('./review/form-v1.json', import.meta.url);
 const REPORT = new URL('./review/report.json', import.meta.url);
 
 /**

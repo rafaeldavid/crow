@@ -85,6 +85,35 @@ describe("the demo world's state read and refusals (T-372)", () => {
     expect(await notices(buyer, offer.id)).not.toMatch(/cannot judge/i);
   });
 
+  // T-537: an envelope the primary cannot open was refused in silence, so neither party saw the turn drift to the fallback
+  // (ADR-0031 red team H-2). It is retried, never rejected, and the state read says so.
+  it('says the primary cannot open its envelope when the seller signed a delivery whose envelope for it does not open', async () => {
+    const { world, urls, logged } = await serve(new MemoryStorage());
+    const [seller, buyer] = [agent(urls), agent(urls)];
+    for (const a of [seller, buyer]) await a.call('POST', '/v1/faucet', { address: a.address });
+    const offer = await offerFrom(urls, seller, buyer, [COLUMNS]);
+    await world.work();
+    await buyer.waitFor(offer.id, ['AcceptedByAdjudicator']);
+    await buyer.agreeAndFund(offer.terms, 40_000_000n);
+    const { intent } = await seller.prepareDelivery(offer.terms, new TextEncoder().encode('customer_id,email\n1,a@example.com\n'));
+    const primary = String(offer.terms.adjudication.adjudicator).toLowerCase();
+    const buyers = intent.encryptedKeys.find((k: J) => k.recipient.toLowerCase() === buyer.address.toLowerCase());
+    // The seller seals the primary's slot with the buyer's envelope: a well-formed entry the primary cannot open.
+    const encryptedKeys = intent.encryptedKeys.map((k: J) => (k.recipient.toLowerCase() === primary ? { ...k, ciphertext: buyers.ciphertext } : k));
+    const bad = { ...intent, encryptedKeys };
+    const prepared = await seller.call('POST', '/v1/prepare/delivery', { commitmentId: offer.id, ciphertext: bad.ciphertext, plaintextSha256: bad.plaintextSha256, plaintextMime: 'text/csv', encryptedKeys });
+    const { path, body } = await seller.sign(prepared, bad);
+    await seller.call('POST', path, body);
+    await world.work();
+    await world.work();
+    const said = await notices(buyer, offer.id);
+    expect(said).toMatch(/The primary adjudicator cannot judge this deal yet: this adjudicator cannot open its envelope in the seller's delivery \(key_unwrap_failed\); not judged, nothing signed, retrying on each pass\. If nothing changes, this turn passes to the fallback or the default outcome by the terms\. It tries again on each pass\./);
+    expect(await notices(seller, offer.id)).toBe(said);
+    expect((await buyer.call('GET', `/v1/commitments/${offer.id}`)).escrowState).toBe('Delivered');
+    // Logged once, not on every pass.
+    expect(logged.filter((l) => l.includes(offer.id) && l.includes('cannot open its envelope'))).toHaveLength(1);
+  });
+
   it('clears a decline the primary reverses: a reference uploaded after the offer, then the offer is accepted and reads accepted, not declined', async () => {
     const { world, urls } = await serve(new MemoryStorage());
     const [seller, buyer] = [agent(urls), agent(urls)];

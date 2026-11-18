@@ -1455,6 +1455,8 @@ Today a seller with its own API reads 13 files of 98,462 bytes and runs 22 comma
 
 **Status:** decided, 2026-11-17.
 
+**Amended 2026-11-18 by D80:** the fixed build is checked again first, and the outside audit reads the fixed build, not the tag.
+
 **Decided 2026-11-17 by Rafa,** after T-499 found the phase-one contracts ready for an outside auditor ([PR 613](https://github.com/rafaeldavid/holdback/pull/613)). His words: "Lets plan to audit current version then we can fold in these improvements alongside the auditor findings in the following build, but I assume we submit these findings as part of the audit", and, on recording it, "Yes, record it".
 
 - **What the auditor reads.** `contracts/src/` at the tag `contracts-phase-one-1`, the code deployed on Sepolia and verified on Sourcify. No source change comes before the audit: a change would need a new freeze and a redeploy under the live pilot, and would put unreviewed code in front of the auditor.
@@ -1463,3 +1465,71 @@ Today a seller with its own API reads 13 files of 98,462 bytes and runs 22 comma
 - **The next build.** RR-1 to RR-5 and the auditor's findings land together on the contract lane `contracts-audit-ready`, as reviewed pull requests, starting with one that brings `main` into the lane. `main`'s `contracts/src/` and the live deployment stay frozen meanwhile. The lane's tip then becomes the next frozen commit, and `docs/redeploy-contracts.md` takes it through the deploy and the switchover on a `cutover-<tag>` branch (roadmap rows N24 and N152).
 - **The next build is the phase-one lane plus the fixes** (Rafa, 2026-11-17, choosing between that and the rebuilt contracts that roadmap row N26 names: "Phase-one lane plus fixes"). It keeps phase one's design and scope, with RR-1 to RR-5 and the auditor's findings applied, so the change an audit of the fixes reads stays small. The rebuilt contracts come after it.
 - **Litmus tests.** Neutrality, the hold and defended judgment: unchanged. This orders the work and changes no code.
+
+## D78. Changing a funded deal by agreement: a waiver first, a replacement in one transaction for new terms, one signed note for both, no contract change (ADR-0039, T-524)
+
+**Status:** needs Rafa, 2026-11-18.
+
+**Why now.** Both pilot deals so far had a finished report refused by the deal's signed checks while the deal was `Held`. Each fix took four moves: new terms, a seller redeploy, a second deal that takes over the job (T-501), and a full refund both parties sign (T-503) [measured, the private record]. Rafa, 2026-11-18: amendments both parties agree to "need to be a normal path of trade". The gate before signing (the checks run on one real delivery first) would have caught the first case. It would not have caught the second, whose report had shapes the first real report lacked [inferred].
+
+**Recommendation** (ADR-0039; research in `docs/research/2026-11-18-amending-a-funded-deal.md`):
+- **A waiver first.** When work fails a check and the buyer still wants it, both sign the settlement that names the held work and releases its key. The contracts already pay it. The hosted seller must hold the failing work and offer the waiver, instead of only waiting for a fix. It would have closed Crow's own scan in one step, and the first case once the seller had fixed its own conversion [inferred].
+- **A replacement in one transaction for a real change of terms.** One Multicall3 call refunds the old deal by agreement and funds a new deal from the refund, or does nothing. The frozen contracts did this on a local chain, 4 of 4 cases [measured], and Multicall3 is on Sepolia [measured]. The seller signs first; the buyer's tool signs the funding only once it holds that refund, and submits the batch itself.
+- **One signed note for both.** The settlement's `nonce`, which both original keys sign and no contract reads, is the hash of a `SettlementNote`: the waived checks, or the successor deal. Its text goes in the same transaction and in the receipt.
+- **The in-place variation** (one commitment ID, a contract `amend`) is designed in ADR-0039 section 9, and is not built until measurements ask for it.
+- **Challenged from trade practice and theory** (ADR-0039 section 7). Mann's letter-of-credit files put the waiver first. The hold-up hazard is bounded by the signed terms running on, and its health measure is the share of deals that pass at first presentation. Unravelling of the optional public link is accepted, with the receipt, not the link, as the record of truth. No default fee for a restart.
+
+**Decided by Rafa, 2026-11-18, the tie between a replaced deal and its successor:** "Let's do the default as transaction data which is signed by both buyer and seller original keys. So that reputation public is easier to calculate, both for buyer and seller. They will care if someone reading the data can trace they do complete commitments". It stands. The note's hash in the refund's `nonce` carries it, signed by the old deal's keys (per-deal keys in a private deal). Either party can refuse a tied settlement, and then both sign a random nonce instead. This discloses more than D35's general default of minimal disclosure; D35 is not reopened.
+
+**Decided by Rafa, 2026-11-18, the note's carrier** ("Yes, all six", on the coordinator's summary): a hash in the settlement's existing `nonce` for now, with no contract change. A named field and an event come later, in a contract version of their own, so the next build (D77's fixes) stays a pure fix. Verified [measured]:
+- `prepare/settlement` takes the caller's 32-byte nonce (`apps/operator/src/prepare.ts:255-259`, `:835`);
+- the reuse check covers offers only (`packages/core/src/state.ts:233`);
+- the contract reads the nonce only inside the signed hash;
+- a reader recovers it from the call data.
+
+**Open points for Rafa:**
+1. The order: recommended, waiver first, then replacement, with the variation only if measured; or the replacement as the one path.
+2. The hosted seller's waiver: recommended, offer it on every refused check and sign on the ready credential; or sign at once, so the buyer's yes is the only step.
+3. The note's text on chain: recommended, in the same transaction by default; or the hash on chain and the text only in the receipt.
+4. The buyer's stop: recommended, the principal's yes on every waiver and replacement; or skip it for a replacement whose checks are only stricter.
+
+**Litmus tests.** Neutrality: no single actor waives or replaces, and an operator that refuses is bypassed. The hold: a waiver or a refund needs both signatures and pays only the two money addresses; if a replacement's batch fails, the old hold stays as it was [measured]. Defended judgment: the checks run first and their failures are what a buyer waives; no replacement after a delivery is posted.
+
+## D79. A carried delivery travels only with an accept; a reject or an escalation waits for the posted delivery (T-526)
+
+**Status:** adopted, 2026-11-18.
+
+**Adopted 2026-11-18 by T-526,** as the agent's call after a red-team pass. Rafa may overrule any line.
+
+- **Why.** An outside scan's finding (group G1, private triage T-523): a contract call that carries the seller's delivery re-checks the seller inside the caller's transaction, so the seller can make it revert after its calldata has made the primary's panel seed public, then deliver again knowing the seed. Only a decision other than an accept gives the seller a reason to.
+- **The rule.** The EVM adapter carries a held delivery only in an accept or an early accept. For a reject or an escalation on a carried delivery, it simulates the carried decision, relays `deliver`, and sends `decide` once the delivery is posted.
+- **The cost.** A primary's reject or escalation on a carried delivery takes three transactions where it took two. An accept keeps D4's two.
+- **What it does not change.** The contracts: anyone who relays directly can still send a carried reject. The live operators post every delivery the seller submits, so the carried path runs only where a caller asks the adapter to carry one (measured: `carryDelivery`'s callers in `packages/` and `apps/`).
+- **What stays (the red team's finding, Medium).** The posted delivery tells a seller who watches the mempool that the coming decision is not an accept. The seller can then land another attempt-1 delivery first. The decision is refused with nothing sent and the seed stays secret, but the seller has had one free look at the verdict on its first delivery, once per deal (measured: `attack.t526-seller-frontruns-posted-delivery` in `packages/settlement/evm/t526-redteam.test.ts`). The reference primary does not judge a second delivery for the same attempt (`decideTask` in `apps/adjudicator/src/service.ts`), so the fallback then decides [inferred]. Before this rule, the same front-run published the seed as well.
+- **What Rafa may overrule.** The alternative closes the free look: no decision carries a delivery, so every decision on a carried delivery is posted first and the order tells nothing. An accept then takes three transactions too, and D4's two-transaction path survives only for the early accept.
+- **Litmus tests.** Neutrality: no party gains a way to stop a valid commitment; the seller loses one. The hold: unchanged. Defended judgment: the panel seed stays secret from the seller until the posted delivery fixes what is judged.
+
+## D80. The fixed build is checked again first, and the outside audit then reads the fixed build (amends D77; T-533)
+
+**Status:** decided, 2026-11-18.
+
+**Decided 2026-11-18 by Rafa,** answering the coordinator's summary of the triage of an outside scan (T-523), relayed to T-533: "Yes, all six".
+
+- **What changes in D77.** D77 had the outside audit read the phase-one contracts as deployed, at the tag `contracts-phase-one-1`, with every fix in the build after it. Now the fixes come first: the next build, on the lane `contracts-audit-ready`, carries the scan's contract fixes and RR-1 to RR-5.
+- **The fixed build is checked again.** A second scan reads the fixed version before the audit. Crow buys it through its own escrow, as a deal, when Rafa gives the go; it costs credits.
+- **The outside audit then reads the fixed build.** The first version's findings go with it, each with its status, so the auditor does not report them as new.
+- **Where it stands (2026-11-18).** All four contract fixes are merged on the lane: pull requests 649 (main into the lane), 654 (T-527), 657 (T-528) and 659 (T-529), the last as `d621291e`. The second check waits: Rafa is asking the scanning partner whether a review of the fixes fits the credits that remain.
+- **What stays from D77.** The code under audit does not change during the audit. Our own findings go to the auditor as known issues (`docs/audit/known-issues.md`). The audit is a Crow deal. The deployed phase-one contracts stay as they are until the fixed build's cutover (`docs/redeploy-contracts.md`), and each deploy step waits for Rafa.
+- **Litmus tests.** Neutrality, the hold and defended judgment: unchanged. This orders the work and changes no code.
+
+## D81. An adjudicator that cannot open its envelope retries and says so; it never signs a reject for it (T-537)
+
+**Status:** decided, 2026-11-18.
+
+**Decided 2026-11-18 by Rafa,** on the follow-up ADR-0031's red team named for its finding H-2 (the reference primary could sign a reject when its own envelope is missing or does not open). His words: "the reject from the adjudicator is final so since this can be a mistake, I don't think it should reject as much as retry", and, on making the retry visible, "Let's implement this, but feels like in the next contract rebuild we probably want some sort of onchain signal to make this harder".
+
+- **No reject.** In phase one a reject is final, and an envelope can fail to open through the adjudicator's own fault: the signed terms bind no encryption key for it, and its registration's key can change. So the reference adjudicator refuses the turn, signs and publishes nothing, and tries again on each pass. If nothing changes, the fallback decides, or the default outcome follows by the terms.
+- **Said, not silent.** The refusal is a turn the adjudicator cannot take yet (`adjudicator_unavailable`), so the hosted world's state read tells both parties: "The primary adjudicator cannot judge this deal yet: this adjudicator cannot open its envelope in the seller's delivery … If nothing changes, this turn passes to the fallback or the default outcome by the terms." A seller can see its envelope is broken while there is time, and a buyer sees the turn drift to the fallback. A delivery that holds no envelope for the primary is said the same way.
+- **What stays.** ADR-0031 red team H-2 is still an accepted limit: a seller can still hand the case to the fallback by breaking the primary's envelope. The notice makes that visible; it does not stop it.
+- **For the rebuilt contracts (roadmap row N26), not now.** An on-chain signal that an adjudicator could not open its envelope would make the steer harder: a signed message the primary sends, which the contract records and the terms can give a consequence. It is a protocol step and a signed type, so it needs an ADR and a schema version, and it waits for the rebuild. Not decided here: its shape and what it changes.
+- **Litmus tests.** Neutrality: no party gains a way to stop a deal; the fallback and the default stay. The hold: unchanged. Defended judgment: no verdict is signed on work the adjudicator could not read.

@@ -10,16 +10,23 @@
 // The converter reads report text as data. It runs nothing from a report and changes no word of what it carries:
 // it only cuts text into sections and copies each section into a field.
 //
-// The rules were written from the design set (three firms). The held-out firm (heldout.json) only runs through
-// the same rules; a rule that fails on it is a finding, not a bug to fix here.
+// The rules were written from the design set (three firms). The held-out firms (heldout.json) only run through
+// the same rules; a rule that fails on them is a finding, not a bug to fix here. A firm's own layout file
+// (layouts/<firm>.json, T-534) is written from that firm's older reports only and applies to that firm alone. Each
+// report's set comes from sources.json.
+import { createHash } from 'node:crypto';
 import { spawnSync } from 'node:child_process';
-import { mkdirSync, readFileSync, writeFileSync, existsSync } from 'node:fs';
+import { mkdirSync, readdirSync, readFileSync, writeFileSync, existsSync } from 'node:fs';
 import { dirname, join, resolve } from 'node:path';
 import { fileURLToPath } from 'node:url';
 
 const here = dirname(fileURLToPath(import.meta.url));
 const root = resolve(here, '../../..');
 const [corpus, outDir] = process.argv.slice(2);
+// --only <set>: run one set and print it, writing no results.json (T-534: to check a layout on its layout set before
+// the held-out set is measured once).
+const onlyAt = process.argv.indexOf('--only');
+const only = onlyAt > 0 ? process.argv[onlyAt + 1] : undefined;
 if (!corpus || !outDir) {
   console.error('usage: node measure.mjs <corpus folder> <out folder>');
   process.exit(2);
@@ -30,6 +37,10 @@ const template = JSON.parse(readFileSync(join(root, 'examples/seller-adapter.tem
 // The form's limits, read from the template so the script follows it if it changes.
 const findingSchema = template.checks.find((c) => c.id === 'report').schema.properties.findings.items;
 const LIMIT = Object.fromEntries(['title', 'rootCause', 'impact', 'recommendedFix'].map((k) => [k, findingSchema.properties[k].maxLength]));
+// T-534: what the form requires of a finding, and whether it holds a proof check by default (version 2 does not).
+const REQUIRED = new Set(findingSchema.required);
+const PROOF_BY_DEFAULT = template.checks.some((c) => c.id === 'proof');
+const templateSha256 = createHash('sha256').update(readFileSync(join(root, 'examples/seller-adapter.template.json'))).digest('hex');
 const MEDIUM_UP = new Set(['Critical', 'High', 'Medium']);
 // packages/judgment/src/hidden.ts, HIDDEN_GLOBAL: the classes the `hidden` check counts.
 const HIDDEN = /[\u{E0000}-\u{E007F}؜‎‏‪-‮⁦-⁩︀-️\u{E0100}-\u{E01EF}᠋-᠍᠏­͏ᅟᅠ឴឵᠎​-‍⁠-⁤⁪-⁯ㅤ﻿ﾠ\u{1D173}-\u{1D17A}]/gu;
@@ -83,6 +94,17 @@ const SECTION = {
 };
 const LABEL = new Map(Object.entries(SECTION).flatMap(([field, names]) => names.map((n) => [n, field])));
 
+// A firm's own layout (T-534): layouts/<firm>.json, data written from that firm's layout-set reports only, applied
+// to that firm's reports alone. It adds section labels and a scope rule; it changes nothing for any other firm.
+const LAYOUTS = Object.fromEntries(
+  (existsSync(join(here, 'layouts')) ? readdirSync(join(here, 'layouts')) : [])
+    .filter((f) => f.endsWith('.json'))
+    .map((f) => JSON.parse(readFileSync(join(here, 'layouts', f), 'utf8')))
+    .map((l) => [l.firm, l]),
+);
+let labels = LABEL; // the labels of the report being converted: LABEL, plus its firm's layout labels
+const labelsFor = (layout) => new Map([...LABEL, ...Object.entries(layout?.sections ?? {}).flatMap(([field, names]) => names.map((n) => [n, field]))]);
+
 /** A section label at the start of a line: `## Description`, `Description`, `Recommendation:`, `**Impact:** Low`. */
 function labelOf(line, md) {
   let t = line.trim();
@@ -94,7 +116,7 @@ function labelOf(line, md) {
   const m = md ? /^\**([A-Za-z][A-Za-z ]{1,30}?)\**\s*(?::\s*\**\s*(.*)|$)/.exec(t) : /^([A-Za-z][A-Za-z ]{1,30}?)\s*(?::\s*(.*))?$/.exec(t);
   if (!m) return undefined;
   const name = m[1].toLowerCase().trim();
-  const field = LABEL.get(name);
+  const field = labels.get(name);
   if (!field) return undefined;
   return { field, name, rest: (m[2] ?? '').trim() };
 }
@@ -180,9 +202,23 @@ function inScope(path, scope) {
   return undefined;
 }
 
-function statedScope(lines, md, findingsStart) {
+function statedScope(lines, md, findingsStart, layout) {
   const files = [];
-  if (md) {
+  if (md && layout?.scope) {
+    // The firm's layout: a scope heading, then a table whose first cell in each row is a path (T-534).
+    const heading = new RegExp(layout.scope.heading, 'i');
+    const { headerCells = [], skipCells = [], trimTrailing = '' } = layout.scope.table ?? {};
+    const i = lines.findIndex((l, k) => k < findingsStart && heading.test(l));
+    if (i < 0) return undefined;
+    for (let j = i + 1; j < findingsStart && !/^#/.test(lines[j]); j++) {
+      const m = /^\|\s*([^|]*?)\s*\|/.exec(lines[j]);
+      if (!m) continue;
+      let cell = m[1].replace(/`/g, '').trim();
+      if (!cell || /^:?-+:?$/.test(cell) || headerCells.includes(cell.toLowerCase()) || skipCells.includes(cell.toLowerCase())) continue;
+      while (trimTrailing && cell.length && trimTrailing.includes(cell[cell.length - 1])) cell = cell.slice(0, -1);
+      files.push(cell);
+    }
+  } else if (md) {
     const i = lines.findIndex((l) => /^#\s+Scope\s*$/i.test(l));
     if (i < 0) return undefined;
     for (let j = i + 1; j < lines.length && !/^#\s/.test(lines[j]); j++) {
@@ -222,6 +258,8 @@ function commitsOf(lines, md, findingsStart) {
 // ---------- One report ----------
 
 function convert(r) {
+  const layout = LAYOUTS[r.firm];
+  labels = layout ? labelsFor(layout) : LABEL;
   const dir = join(corpus, r.id);
   const md = existsSync(join(dir, 'report.md'));
   const raw = readFileSync(join(dir, md ? 'report.md' : 'report.txt'), 'utf8');
@@ -245,7 +283,7 @@ function convert(r) {
   if (ids.size > heads.length) lost.findingsNotParsed = ids.size - heads.length;
 
   const commits = commitsOf(lines, md, findingsStart);
-  const stated = statedScope(lines, md, findingsStart);
+  const stated = statedScope(lines, md, findingsStart, layout);
   let commit;
   if (commits.length === 0) notes.push('commit: the report names no commit');
   else if (commits.length > 1) notes.push('commit: the report reviews more than one commit or repository; the form holds one');
@@ -326,9 +364,10 @@ function convert(r) {
   const add = (k) => (perFinding[k] = (perFinding[k] ?? 0) + 1);
   for (const { f, severityWord } of findings) {
     if (!f.severity) add(`severity: "${severityWord}" has no place on the form's scale`);
-    if (!f.locations.length) add('location: the finding names no file in scope');
+    // A field the form does not require is no cause (T-534: version 2 requires neither a location nor a fix).
+    if (!f.locations.length && REQUIRED.has('locations')) add('location: the finding names no file in scope');
     if (!f.rootCause) add('root cause: no description text found');
-    if (!f.recommendedFix) add('recommended fix: no separate recommendation section (a model would have to cut it out of the prose)');
+    if (!f.recommendedFix && REQUIRED.has('recommendedFix')) add('recommended fix: no separate recommendation section (a model would have to cut it out of the prose)');
   }
   if (lost.findingsNotParsed) notes.push(`findings: ${lost.findingsNotParsed} finding identifiers in the text match no finding header the rules know`);
   if (!heads.length && ids.size === 0 && !/no (security )?(issues|findings|vulnerabilities)/i.test(text)) notes.push('findings: the rules find no finding and the report does not say it has none');
@@ -349,7 +388,7 @@ function convert(r) {
   const blockers = new Set();
   for (const n of notes) blockers.add(n.split(':')[0] + (n.startsWith('commit') ? (n.includes('more than one') ? ' (several)' : n.includes('tag') ? ' (not 40 characters)' : ' (none)') : ''));
   if (Object.keys(over).length) blockers.add('text over a field limit');
-  if (proofNeeded) blockers.add('proof files');
+  if (proofNeeded && PROOF_BY_DEFAULT) blockers.add('proof files');
   if (hidden) blockers.add('hidden characters');
 
   // Characters: the source, the part inside findings, and what the JSON fields carry.
@@ -394,8 +433,10 @@ function relaxed(checks) {
   for (const k of Object.keys(LIMIT)) delete f.properties[k].maxLength;
   f.required = f.required.filter((k) => k !== 'locations' && k !== 'recommendedFix');
   delete f.properties.locations.minItems;
-  delete c.find((x) => x.id === 'scope').schema.properties.findings.items.properties.locations.minItems;
-  c.find((x) => x.id === 'scope').schema.properties.findings.items.required = [];
+  // Version 1's scope rule (every finding has a location, each in scope); version 2's already allows none.
+  const scopeItems = c.find((x) => x.id === 'scope').schema.properties.findings.items;
+  if (scopeItems.properties?.locations) delete scopeItems.properties.locations.minItems;
+  if (scopeItems.required) scopeItems.required = [];
   return c.filter((x) => x.id !== 'proof');
 }
 
@@ -416,12 +457,13 @@ function termsFor(report, proof, relax = false) {
   return { deliverable: fill(template.deliverable), acceptance: { deterministicChecks: checks, rubric: { criteria: [], passThreshold: 0 } } };
 }
 
-function runChecks(dir, name, report, proof, relax = false) {
+function runChecks(dir, name, report, proof, relax = false, strip = relax) {
   const termsPath = join(dir, `terms-${name}.json`);
   writeFileSync(termsPath, JSON.stringify(termsFor(report, proof, relax), null, 2));
   let file = join(dir, 'report.json');
-  if (relax) {
-    file = join(dir, 'report-relaxed.json');
+  if (strip) {
+    // The seller's step before it delivers (T-534, decision 2): zero-width characters out, every other one kept.
+    file = join(dir, `report-${name}.json`);
     writeFileSync(file, JSON.stringify(report, null, 2).replace(/[​-‍⁠﻿]/g, ''));
   }
   const res = spawnSync(process.execPath, [join(root, 'examples/check-delivery.ts'), termsPath, file, '--json'], { cwd: root, encoding: 'utf8' });
@@ -436,9 +478,10 @@ function runChecks(dir, name, report, proof, relax = false) {
 
 // ---------- All reports ----------
 
-const heldout = new Set(JSON.parse(readFileSync(join(here, 'heldout.json'), 'utf8')).reports);
+// Each report's set: its own `set` in sources.json, else its firm's (design, heldout, and T-534's heldout-2 and layout-2).
+const setOf = (r) => r.set ?? sources.firms[r.firm].set;
 const rows = [];
-for (const r of sources.reports) {
+for (const r of sources.reports.filter((x) => !only || setOf(x) === only)) {
   const c = convert(r);
   const dir = join(outDir, r.id);
   mkdirSync(dir, { recursive: true });
@@ -446,12 +489,13 @@ for (const r of sources.reports) {
   const withProof = runChecks(dir, 'default', c.report, true);
   const noProof = runChecks(dir, 'no-proof', c.report, false);
   const relaxedRun = runChecks(dir, 'relaxed', c.report, false, true);
-  rows.push({ id: r.id, set: heldout.has(r.id) ? 'heldout' : 'design', maps: c.notes.length === 0, notes: c.notes, ...c.stats, defaultTerms: withProof, noProofTerm: noProof, relaxedWhatIf: relaxedRun });
-  console.log(`${r.id.padEnd(11)} ${heldout.has(r.id) ? 'held-out' : 'design  '} findings ${String(c.stats.findings).padStart(3)}  maps ${c.notes.length === 0 ? 'yes' : 'no '}  default ${withProof.result.padEnd(6)}  no-proof ${noProof.result}`);
+  const stripped = runChecks(dir, 'stripped', c.report, true, false, true);
+  rows.push({ id: r.id, set: setOf(r), maps: c.notes.length === 0, notes: c.notes, ...c.stats, defaultTerms: withProof, noProofTerm: noProof, strippedDefaultTerms: stripped, relaxedWhatIf: relaxedRun });
+  console.log(`${r.id.padEnd(11)} ${setOf(r).padEnd(9)} findings ${String(c.stats.findings).padStart(3)}  maps ${c.notes.length === 0 ? 'yes' : 'no '}  default ${withProof.result.padEnd(6)}  no-proof ${noProof.result.padEnd(6)}  stripped ${stripped.result}`);
 }
 
 const summary = {};
-for (const set of ['design', 'heldout', 'all']) {
+for (const set of [...new Set(rows.map((x) => x.set)), 'all']) {
   const rs = rows.filter((x) => set === 'all' || x.set === set);
   const mapped = rs.filter((x) => x.maps);
   const causes = {};
@@ -478,6 +522,11 @@ for (const set of ['design', 'heldout', 'all']) {
     ofThoseAcceptedNoProofTerm: mapped.filter((x) => x.noProofTerm.result === 'accept').length,
     allAcceptedDefaultTerms: rs.filter((x) => x.defaultTerms.result === 'accept').length,
     allAcceptedNoProofTerm: rs.filter((x) => x.noProofTerm.result === 'accept').length,
+    allAcceptedDefaultTermsStripped: rs.filter((x) => x.strippedDefaultTerms.result === 'accept').length,
+    // The form's headline (T-534): a review of several repositories is several deals, so a report that passes only
+    // because the converter kept its first commit and dropped the others is not counted.
+    acceptedOneCommit: rs.filter((x) => x.defaultTerms.result === 'accept' && x.commits <= 1).length,
+    acceptedOneCommitStripped: rs.filter((x) => x.strippedDefaultTerms.result === 'accept' && x.commits <= 1).length,
     reportsNotMappingByCause: causes,
     failingChecksAmongMappedDefault: checkFails('defaultTerms', mapped),
     failingChecksAmongMappedNoProof: checkFails('noProofTerm', mapped),
@@ -493,5 +542,7 @@ for (const set of ['design', 'heldout', 'all']) {
     locationsOutOfScope: rs.reduce((n, x) => n + x.lost.locationsOutOfScope, 0),
   };
 }
-writeFileSync(join(here, 'results.json'), JSON.stringify({ template: 'examples/seller-adapter.template.json', summary, reports: rows }, null, 2) + '\n');
+// The form measured, by version and hash: tests/security-review-form.test.ts fails when the template changes and
+// this file was not rewritten by a new run (T-534).
+if (!only) writeFileSync(join(here, 'results.json'), JSON.stringify({ template: 'examples/seller-adapter.template.json', form: template.form ?? { name: 'security-review', version: 1 }, templateSha256, summary, reports: rows }, null, 2) + '\n');
 console.log(JSON.stringify(summary, null, 2));

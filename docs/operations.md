@@ -307,6 +307,26 @@ The maintainers keep the notes on agent sessions and permission prompts privatel
 
 Each entry records one deploy as it ran: the date and time in UTC, the commit, each Worker's new version and its rollback target, and what was measured after it. The deploy scripts print the entry's first line (`pnpm demo-cloud:deploy`, `pnpm site:deploy`, `node apps/test-agents/scripts/deploy.mjs`). The values are true for their date: for what runs now, read "What is live" above and each node's discovery.
 
+### The site, the sign-up Worker, the test agents and both operators at one commit (deployed 2026-11-18, 17:39 to 17:48 UTC)
+
+Rafa's word for these was "go ahead, merge all ready, deploy all ready". The coordinator ran each script from a clean worktree of `main`, one after the other. Before the operators' deploy, the two hosted sellers and the test seller each read `open: 0` [measured 17:41 UTC], and the judging screen's version had not changed since the operators' last build.
+
+**Site deploy 2026-11-18 17:39 UTC, commit `9c5bf8a` on a detached HEAD: pass.** crow-site `db0fbf7b-b0f7-48f3-924e-9855e18dfba9` (rollback target `dbca411c-76f1-4fc0-89d7-af0887cde1be`).
+
+A first run one minute earlier failed before any upload: the fresh worktree had not built the workspace packages, so the site's build could not resolve one and stopped on its own stale-file check. After `pnpm build` the same command passed. The live site served the built `llms.txt` and the pinned `try.mjs` 0 s after the upload [measured by the script].
+
+**Early access deploy 2026-11-18 17:40 UTC, commit `f48afab` on a detached HEAD: pass.** crow-early-access `d42c03c9-66e1-4bc2-8634-9fb2c8aefdb9` (rollback target `ddd45aa9-c8f8-4036-a41e-890e487eae59`).
+
+`join.crow.direct/version.json` named the commit 0 s after the upload [measured by the script]. The change it carries is in its deploy script and one comment; the Worker behaves as before.
+
+**Test seller deploy 2026-11-18 17:41 UTC, commit `f48afab`: pass.** crow-test-agents `bba72a2f-54aa-410d-a965-ffca3875aa47` (rollback target `1adabc54-953c-4b18-9c7a-ac2833f1ac1b`).
+
+The seller read `operational` and served its agent card, and the buyer read `operational`, both with `open: 0` [measured 17:41 UTC].
+
+**Deploy 2026-11-18 17:41 UTC, commit `f48afab` on a detached HEAD: pass.** holdback-op1 `2e88e9df-1999-4b9e-902c-f5b005ed7aa3` (rollback target `dc0373ee-f2b2-4c38-84de-98349e4c2dee`), holdback-op2 `15e6d48f-3544-4597-a942-b38fd9e4e22e` (rollback target `14f9d594-cde1-477f-9198-7f5102538eab`).
+
+The deploy's own test deal, `0xce923bfb1836b5732eb83065bf949a8b47cd19c90a86f1949bf4cb1da39d517c`, was Released in 41 s with all three checks passing [measured by the script]. The operators now carry T-530 (the adjudicator keeps a judged result across a restart), T-526 (a delivery travels inside a decision only for an accept, D79) and T-537 (the state read tells both parties when an adjudicator cannot open its envelope).
+
 ### Crow's own seller, pilot-scan-2, with its corrected folder and the refusal's reason (deployed 2026-11-17, 16:41 and 19:16 UTC)
 
 **Hosted seller pilot-scan-2 deploy 2026-11-17 16:41 UTC, commit `bd72c2e` on a detached HEAD: pass.** crow-seller-pilot-scan-2 `1bee49c8-2554-4dec-98cd-0d003056427f` (rollback target `b5cab689-f6fa-49b3-bc01-f78cd617479a`).

@@ -12,7 +12,7 @@ import { privateKeyToAccount } from 'viem/accounts';
 import { defaultPolicy, type KeptPolicies } from './policy.js';
 import type { RandomnessSource } from './randomness.js';
 import { loadRegistryFile } from './registry-file.js';
-import { Adjudicator, type KeptRegistry, type RunReport } from './service.js';
+import { Adjudicator, type JudgedStore, type KeptRegistry, type RunReport } from './service.js';
 import { SettlementAdapter, type ContentStore, type SettlementReads } from './simchain-adapter.js';
 
 export const FAKE_JUDGE_MARK = '[fake judge, no model ran]';
@@ -108,6 +108,8 @@ export interface TestAdjudicatorOptions {
    * T-217). Unset: it decides no such commitment's fallback or appeal turn, and the deal takes its default path.
    */
   drand?: RandomnessSource;
+  /** Where a judged result is kept across a restart (AdjudicatorConfig.judgedStore, A-4). Unset: memory only. */
+  judgedStore?: JudgedStore;
 }
 
 export interface TestAdjudicator {
@@ -159,6 +161,7 @@ export function testAdjudicator(o: TestAdjudicatorOptions): TestAdjudicator {
     settlement,
     ...(o.acceptSealedUnread ? { acceptSealedUnread: true } : {}),
     ...(o.trustedAdjudicators ? { trustedAdjudicators: o.trustedAdjudicators } : {}),
+    ...(o.judgedStore ? { judgedStore: o.judgedStore } : {}),
   });
   return { address, service, settlement, registration: () => service.registration(), runOnce: () => service.runOnce() };
 }

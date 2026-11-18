@@ -210,7 +210,7 @@ Two things to check on the first run:
 | `providers.ts` | Anthropic, OpenAI-compatible and scripted providers; the pinned registry |
 | `tools.ts` | The fenced tools and the company's approval policy |
 | `world.ts` | The local phase-one world, the docs and seller page, the job API (`review-job-api.ts`) |
-| `review.ts` | The demo security review (T-500): the scope (Damn Vulnerable DeFi v4, two files at one commit), the terms filled from `examples/seller-adapter.template.json`, and the demo report in `review/report.json` |
+| `review.ts` | The demo security review (T-500): the scope (Damn Vulnerable DeFi v4, two files at one commit), the terms filled from `review/form-v1.json`, version 1 of the security-review form that the demo's live deals ran on (a copy of `examples/seller-adapter.template.json` before T-534; the seller adapter of a run takes it too), and the demo report in `review/report.json` |
 | `review-job-api.ts` | The seller's job API in the local run, in the shape of `examples/seller-adapter-stub.ts`, answering with the demo report. The stub itself is bundled into `buy.mjs` and `setup.mjs`, so it stays as it is |
 | `review-deals.ts` | One live security-review deal with Crow's test buyer on Sepolia: `--outcome release`, `refund` or `reclaim`. It filled `endings.json` |
 | `scenarios.ts` | The three scenarios and the two companies' briefs |
