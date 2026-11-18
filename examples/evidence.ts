@@ -11,6 +11,9 @@
 // (the buyer's agreement and funding, the seller's delivery, the adjudicator's decision) are served by no API route:
 // they are in those transactions' calldata, and a raw transaction hashes to its transaction hash.
 //
+// One check logic: `check` runs the deal record's own checks (examples/deal-record.ts) offline over the file, then
+// checks what the record cannot see, the signed messages inside the transactions and the decision against the terms.
+//
 // What the check trusts: the EIP-712 domain and the deployment pinned in deployments.ts (never the bundle's), and the
 // keys the terms name, which hash to the commitment ID. Nothing else. The operator's receipt signer comes from the
 // bundle, so its receipts show only that operator's own account; the parties' signatures carry the deal. What one
@@ -19,17 +22,18 @@
 // Deals closed by an adjudicator's accept or reject only; public deals only (a private deal's terms need a ReadToken).
 import { readFileSync, writeFileSync } from 'node:fs';
 import { pathToFileURL } from 'node:url';
-import { concat, decodeEventLog, decodeFunctionData, encodeAbiParameters, keccak256, parseAbiParameters, parseTransaction, recoverAddress, recoverMessageAddress, recoverTypedDataAddress, stringToBytes, type Abi, type Hex } from 'viem';
+import { concat, decodeEventLog, decodeFunctionData, encodeAbiParameters, keccak256, parseAbiParameters, parseTransaction, recoverAddress, recoverTypedDataAddress, stringToBytes, type Abi, type Hex } from 'viem';
+import { dealRecord, type Check } from './deal-record.ts';
 import { SEPOLIA } from './deployments.ts';
 import { plain } from './plain.ts';
-import { commitmentIdOf, ERC3009_TYPES, fundingNonceOf, jcsHash, knownPins, type Pin } from './verify.ts';
+import { ERC3009_TYPES, fundingNonceOf, knownPins, type Pin } from './verify.ts';
 
 type J = any; // eslint-disable-line @typescript-eslint/no-explicit-any
 export const FORMAT = 'holdback-evidence/1';
 export type Bundle = {
   bundle: typeof FORMAT;
   commitmentId: Hex;
-  /** The operator's `GET /v1/status`: its receipt signer and the EIP-712 domain it serves. */
+  /** The operator's discovery (`/.well-known/holdback.json`): its receipt signer and the EIP-712 domain it serves. */
   operator: { receiptSigner: string; domain: J };
   /** `GET /v1/commitments/{id}/terms`, verbatim. */
   terms: J;
@@ -113,7 +117,6 @@ const decisionHashOf = (id: Hex, adjudicator: string, t: J, m: J): Hex => {
 /** The EIP-712 digest of a struct hash under the pinned Holdback domain. */
 const digestOf = (pin: Pin, structHash: Hex): Hex =>
   keccak256(concat(['0x1901', H('bytes32, bytes32, bytes32, uint256, address', [TH.domain, k(pin.domain.name), k(pin.domain.version), BigInt(pin.domain.chainId), pin.domain.verifyingContract]), structHash]));
-const RECEIPT_TYPES = { Receipt: [{ name: 'operator', type: 'address' }, { name: 'eventSeq', type: 'uint64' }, { name: 'eventHash', type: 'bytes32' }, { name: 'hasCommitment', type: 'bool' }, { name: 'commitmentId', type: 'bytes32' }] };
 
 /** A check that failed: its name and, in plain words, why. */
 export class Failed extends Error {
@@ -123,7 +126,47 @@ export class Failed extends Error {
     this.check = check;
   }
 }
-export type Result = { ok: true; passed: string[]; lines: string[]; decideTx: Hex; rpcCommand: string } | { ok: false; passed: string[]; failed: string; why: string; lines: string[] };
+/** The deal record's checks this file must pass: every one the operators' public answers allow. */
+const RECORD_MUST_PASS = ['domain is pinned', 'commitment ID', "seller's terms signature", 'termsHash in events', 'event hashes', 'operator receipts', 'ciphertext sha256', 'judgment recordHash', "adjudicator's record signature", 'judgment names the delivery', 'hold is price plus fee'];
+/** The record compares the operator fee with the schedule the operator publishes now, which a file cannot hold. */
+const RECORD_MAY_FAIL = new Set(['operator fee']);
+/** Where the replayed reads go: an address that resolves nowhere, so no answer can come from the network. */
+const REPLAY = 'https://evidence.invalid';
+
+/**
+ * Runs the deal record (examples/deal-record.ts) over the bundle with no network: for the length of the run, `fetch`
+ * answers the record's reads from the bundle and answers 404 to anything else. The operator's discovery and the
+ * commitment's state are rebuilt from the bundle's checked parts: its domain and receipt signer, and the closing event.
+ */
+async function recordOffline(b: J): Promise<Check[]> {
+  const id = b.commitmentId as Hex;
+  const sha = String(b.events.find((e: J) => e.type === 'delivery.submitted')?.payload?.ciphertext?.sha256);
+  const closing = b.events.filter((e: J) => e.type === 'settlement.released' || e.type === 'settlement.refunded').at(-1);
+  const state = { commitmentId: id, escrowState: closing?.type === 'settlement.released' ? 'Released' : closing ? 'Refunded' : null, appealState: 'none', settledAt: closing?.at ?? null, finalAt: closing?.at ?? null };
+  const json = (x: J) => () => new Response(JSON.stringify(x), { status: 200, headers: { 'content-type': 'application/json' } });
+  const routes = new Map<string, () => Response>([
+    ['/.well-known/holdback.json', json({ domain: b.operator.domain, receiptSigner: b.operator.receiptSigner })],
+    [`/v1/commitments/${id}`, json(state)],
+    [`/v1/commitments/${id}/terms`, json(b.terms)],
+    [`/v1/commitments/${id}/events`, json({ items: b.events })],
+    [`/v1/commitments/${id}/receipts`, json({ items: b.receipts })],
+    [`/v1/commitments/${id}/judgment`, json(b.judgment)],
+    [`/v1/ciphertext/${sha}`, () => new Response(Buffer.from(String(b.ciphertext).slice(2), 'hex'), { status: 200 })],
+  ]);
+  const network = globalThis.fetch;
+  globalThis.fetch = (async (input: string | URL | Request) => {
+    const u = new URL(input instanceof Request ? input.url : String(input));
+    const answer = u.origin === REPLAY ? routes.get(u.pathname) : undefined;
+    return answer ? answer() : new Response(null, { status: 404 });
+  }) as typeof fetch;
+  try {
+    return (await dealRecord(id, { operators: [REPLAY], party: 'seller' })).checks;
+  } finally {
+    globalThis.fetch = network;
+  }
+}
+
+export type Result ={ ok: true; passed: string[]; lines: string[]; decideTx: Hex; rpcCommand: string } | { ok: false; passed: string[]; failed: string; why: string; lines: string[] };
 
 const recover = async (hash: Hex, signature: unknown) => {
   try {
@@ -195,24 +238,14 @@ async function run(b: J, o: { receipt?: J }, must: Must, passed: string[]): Prom
   // 2. The terms: they hash to the commitment ID, and the seller signed that ID. Only signed fields may be present:
   // commitmentIdOf ignores any other key, so a key it ignores would be a term nobody signed.
   must('terms carry only signed fields', exact(b.terms, TERMS_SHAPE), 'the terms carry a field the commitment ID does not cover');
-  const { id: servedId, signatures, ...terms } = b.terms ?? {};
-  let fromJson: Hex | null = null;
-  try {
-    fromJson = commitmentIdOf(terms);
-  } catch {
-    fromJson = null;
-  }
-  must('terms hash to the commitment ID', fromJson === id && servedId === id, `the terms hash to ${fromJson ?? 'nothing (malformed)'}, not ${id}`);
-  must("seller's signature on the terms", keysOf(signatures) === 'seller' && (await recover(digestOf(pin!, id), signatures.seller)) === lc(terms.seller), 'it does not recover to the seller the terms name');
+  const { id: _servedId, signatures: _signatures, ...terms } = b.terms; // eslint-disable-line @typescript-eslint/no-unused-vars
   must('terms are a public deal', terms.disclosure?.level === 'public', 'this command checks public deals only');
 
-  // 3. The event log: each event hashes to its hash, consecutive events link, each has one receipt from the operator.
+  // 3. The event log's shape: this commitment's events in order, consecutive ones linked, one receipt each, nothing else.
   const events: J[] = b.events;
   must('events', events.length > 0 && events.every((e, i) => Number.isSafeInteger(e?.seq) && (i === 0 || e.seq > events[i - 1].seq)), 'the events are not in increasing sequence order');
   for (const [i, e] of events.entries()) {
-    const { hash, ...body } = e;
     must('events name this commitment', e.commitmentId === id, `event ${e.seq} names ${plain(String(e.commitmentId))}`);
-    must('event hashes', ID.test(String(hash)) && jcsHash(body) === hash, `event ${e.seq} does not hash to the hash it carries`);
     if (i > 0 && e.seq === events[i - 1].seq + 1) must('event chain', e.prevHash === events[i - 1].hash, `event ${e.seq}'s prevHash is not event ${e.seq - 1}'s hash`);
   }
   const signer = String(b.operator.receiptSigner);
@@ -222,10 +255,18 @@ async function run(b: J, o: { receipt?: J }, must: Must, passed: string[]): Prom
     const r = mine[0];
     must('operator receipts', mine.length === 1 && keysOf(r) === 'commitmentId,eventHash,eventSeq,operator,signature', `event ${e.seq} has ${mine.length} receipts, or a receipt with other fields`);
     must('receipts name this commitment', r.commitmentId === id && r.eventHash === e.hash && r.operator === signer, `the receipt for event ${e.seq} names another commitment, event or operator`);
-    const message = { operator: r.operator, eventSeq: BigInt(r.eventSeq), eventHash: r.eventHash, hasCommitment: true, commitmentId: r.commitmentId };
-    const got = await recoverTypedDataAddress({ domain: pin!.domain, types: RECEIPT_TYPES, primaryType: 'Receipt', message, signature: r.signature }).catch(() => '');
-    must('operator receipts', lc(got) === lc(signer), `the receipt for event ${e.seq} does not recover to the receipt signer ${signer}`);
   }
+
+  // The deal record's own checks (examples/deal-record.ts, T-333), run offline over this file's answers: the terms
+  // hash to the commitment ID and the seller signed it, each event hashes to its hash and carries a receipt that
+  // recovers to the receipt signer, the ciphertext hashes to its recorded SHA-256, the judgment record hashes to its
+  // recordHash and its adjudicator signed it. Each must pass; none may fail.
+  const record = await recordOffline(b);
+  for (const name of RECORD_MUST_PASS) {
+    const got = record.filter((x) => x.check === name);
+    must(`deal record: ${name}`, got.length > 0 && got.every((x) => x.ok === true), plain(got.map((x) => x.why ?? x.how ?? 'failed').join('; ') || 'the record did not run this check').slice(0, 300));
+  }
+  for (const x of record) if (x.ok === false && !RECORD_MAY_FAIL.has(x.check)) must(`deal record: ${x.check}`, false, plain(String(x.how ?? x.why ?? 'failed')).slice(0, 300));
 
   // 4. The transactions: each hashes to the hash the events name, is a call to the pinned rules contract on the pinned chain.
   const named = [...new Set(events.filter((e) => e.payload?.tx !== undefined).map((e) => e.payload.tx))];
@@ -288,9 +329,8 @@ async function run(b: J, o: { receipt?: J }, must: Must, passed: string[]): Prom
   const ct = p.ciphertext ?? {};
   const ctHash = H('bytes32, bytes32, bytes32, uint64, bytes32', [TH.ciphertext, k(String(ct.uri)), k(String(ct.sha256)), BigInt(Number.isSafeInteger(ct.bytes) ? ct.bytes : 0), k(String(ct.cipher))]);
   must('delivery names the ciphertext', ctHash === dv.ciphertextHash && k(String(p.plaintextSha256)) === dv.plaintextSha256Hash, 'the ciphertext or plaintext hash the event records is not the one the seller signed');
-  const bytes = Buffer.from(b.ciphertext.slice(2), 'hex');
-  const sha = `sha256:${Buffer.from(await crypto.subtle.digest('SHA-256', bytes)).toString('hex')}`;
-  must('ciphertext bytes', CIPHERTEXT_ID.test(String(ct.sha256)) && sha === ct.sha256 && bytes.length === ct.bytes, `the ${bytes.length} ciphertext bytes hash to ${sha}, not the signed ${plain(String(ct.sha256))}`);
+  const bytes = Buffer.from(b.ciphertext.slice(2), 'hex'); // the record checked that these bytes hash to ct.sha256
+  const sha = String(ct.sha256);
 
   // 7. The adjudicator's decision: decide's calldata.
   const decidedEvent = one('judgment.decided');
@@ -309,10 +349,9 @@ async function run(b: J, o: { receipt?: J }, must: Must, passed: string[]): Prom
 
   // 8. The judgment record: its hash, its signature, and its contents against the terms and the decision.
   const r = b.judgment ?? {};
-  const { recordHash, signature: recordSig, ...recordBody } = r;
-  must('judgment record hash', r.recordUri === undefined && jcsHash(recordBody) === recordHash && recordHash === m.judgmentRecordHash, `the record hashes to ${jcsHash(recordBody)}; the signed decision names ${m.judgmentRecordHash}`);
-  const recordSigner = await recoverMessageAddress({ message: { raw: recordHash }, signature: recordSig }).catch(() => '');
-  must("adjudicator's signature on the judgment record", lc(recordSigner) === decider, `it does not recover to the deciding adjudicator ${decider}`);
+  const { recordHash } = r;
+  // The record checked that the record hashes to recordHash and that its adjudicator signed it.
+  must('judgment record is the decision\'s', r.recordUri === undefined && recordHash === m.judgmentRecordHash, `the record's hash is ${plain(String(recordHash))}; the signed decision names ${m.judgmentRecordHash}`);
   must('judgment record names this deal', r.commitmentId === id && r.attempt === m.attempt && r.deliveryHash === deliveryHash && lc(r.adjudicator) === decider && r.role === role, 'the record is for another commitment, attempt, delivery, adjudicator or role');
   must('judgment record names the policy and seed', r.panel?.policyHash === terms.adjudication.policyHash && r.panel?.policyId === terms.adjudication.policyId && r.panel?.seed === m.seed && (role !== 'primary' || r.panel?.seedCommitment === acc.seedCommitment), "the record's policy or seed is not the terms' and the decision's");
   const want = (terms.acceptance?.deterministicChecks ?? []).map((x: J) => `${x.id}:${x.required}`).sort().join(',');
@@ -398,7 +437,7 @@ export async function fetchBundle(id: string, o: { operator: string; rpc: string
     }
     return items;
   };
-  const status = await json('/v1/status');
+  const discovery = await json('/.well-known/holdback.json');
   const terms = await json(`/v1/commitments/${id}/terms`);
   const events = (await page(`/v1/commitments/${id}/events`)).sort((a, b) => a.seq - b.seq);
   const receipts = (await page(`/v1/commitments/${id}/receipts`)).sort((a, b) => a.eventSeq - b.eventSeq);
@@ -415,7 +454,7 @@ export async function fetchBundle(id: string, o: { operator: string; rpc: string
     if (typeof raw !== 'string' || !HEX.test(raw)) throw new Error(`the node at ${new URL(o.rpc).origin} did not serve transaction ${tx}; set SEPOLIA_RPC_URL to a node that answers eth_getRawTransactionByHash`);
     transactions[tx] = raw as Hex;
   }
-  return { bundle: FORMAT, commitmentId: id as Hex, operator: { receiptSigner: status.receiptSigner, domain: status.domain }, terms, events, receipts, judgment, ciphertext, transactions };
+  return { bundle: FORMAT, commitmentId: id as Hex, operator: { receiptSigner: discovery.receiptSigner, domain: discovery.domain }, terms, events, receipts, judgment, ciphertext, transactions };
 }
 
 const USAGE = [

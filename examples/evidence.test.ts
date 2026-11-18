@@ -118,7 +118,7 @@ describe('the offline check on real deals', () => {
     const io = { out: (s: string) => out.push(s), err: (s: string) => out.push(s) };
     expect(await main(['check', good], io)).toBe(0);
     expect(await main(['check', bad], io)).toBe(1);
-    expect(out.at(-1)).toMatch(/^FAILED {2}terms hash to the commitment ID/);
+    expect(out.at(-1)).toMatch(/^FAILED {2}deal record: commitment ID/);
     expect(await main(['check'], io)).toBe(2);
     expect(await main(['check', good, '--receipts', good], io)).toBe(2);
     expect(await main(['--help'], io)).toBe(0);
@@ -174,11 +174,11 @@ describe('attacks the check must refuse', () => {
     // The judgment record signed by another key over the same record hash.
     const b1 = bundleOf(RELEASED);
     b1.judgment.signature = await thief.signMessage({ message: { raw: b1.judgment.recordHash } });
-    await failsAt(b1, "adjudicator's signature on the judgment record");
+    await failsAt(b1, "deal record: adjudicator's record signature");
     // An operator receipt signed by another key.
     const b2 = bundleOf(RELEASED);
     b2.receipts[0].signature = b1.judgment.signature;
-    await failsAt(b2, 'operator receipts');
+    await failsAt(b2, 'deal record: operator receipts');
     // The buyer's agreement signed by another key, in a transaction the attacker built and its own operator recorded.
     const b3 = bundleOf(RELEASED);
     const { tx, call } = callIn(b3, 'hold.funded');
@@ -224,7 +224,7 @@ describe('attacks the check must refuse', () => {
     // (d) Another deal's genuinely signed judgment record in place of this one's.
     const d = bundleOf(RELEASED);
     d.judgment = other.judgment;
-    await failsAt(d, 'judgment record hash');
+    await failsAt(d, 'deal record: judgment names the delivery');
   });
 
   // The red team's findings (T-511 review): each now fails.
