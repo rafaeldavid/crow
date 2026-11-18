@@ -29,10 +29,12 @@ ADR-0040 sections 4 (deployment), 5 (the off-chain check and schema v0.12), 6 (t
 - [ ] Schema v0.12: `PartySignature` (non-empty hex bytes) for `signatures.seller` and the seller's delivery `signature`; every other signature keeps `Signature`; `pnpm validate:spec` passes; the version is bumped from v0.11.
 - [ ] The seller's terms and delivery signatures are checked by ECDSA for a 65-byte signature from an address without code, and by ERC-1271 through `eth_call` otherwise, with a code override for an address the deterministic deployer has not deployed yet.
 - [ ] Core has a pure function that builds a take's terms from a template and a fill; a differential test on the local chain pins it to the contract's `termsOf`, and SimChain applies the same rule.
-- [ ] An operator stores a take only with the buyer's Agree signature over its ID, and charges the take's write budget to that signer (`attack.take-flood-spends-seller-budget`, `attack.take-posted-without-buyer-signature`).
+- [ ] An operator stores a take only with the buyer's Agree signature over its ID, and charges the take's write budget to that signer (`attack.take-flood-spends-seller-budget`, `attack.take-flood-names-a-victim-buyer`).
 - [ ] The operators refuse a take whose disclosure is not `public` (`attack.standing-take-not-public`).
-- [ ] When the seller address has no code, the funding relay reads the code, sends the deployment alone, skips it when code is there, then funds; the funding never carries the deployment (`neutrality.first-takes-race-the-deployment`, two first takes close together on the local chain).
-- [ ] The reference adjudicator checks a delivery's seller signature with the same check (`apps/adjudicator/src/service.ts:860`).
+- [ ] When the seller address has no code, the funding relay reads the code, sends the deployment alone, skips it when code is there, then funds; the funding never carries the deployment (`neutrality.deploy-front-run-take-still-funds`, two first takes close together on the local chain).
+- [ ] Every check of a `terms.seller` signature in the EVM node uses the rule: `evm-settlement.ts:936`, `:1058`, `:1092`, `:1138`, `:1212`, `:2065`, `:2326`, `:2529` at `21bb4e54` (re-read first), and SimChain's equivalents (`neutrality.standing-seller-refund-by-agreement`, `neutrality.standing-delivery-carried-by-decision`).
+- [ ] The reference adjudicator checks a delivery's seller signature with the same check (`apps/adjudicator/src/service.ts:860`), and checks that the buyer's encryption key decodes before it accepts (`attack.take-with-bad-buyer-key`).
+- [ ] An operator deploys a seller contract only for a seller it admits, under a budget it states (`attack.deployment-gas-drain`).
 - [ ] Scenario fixtures on SimChain: `attack.take-changes-a-fixed-field`, `attack.take-replayed`, `attack.take-backdated`, `neutrality.operator-refuses-standing-take`. On the local chain: `neutrality.crow-deploys-nothing`.
 - [ ] `docs/neutrality.md` residual 13 no longer lists a contract seller.
 

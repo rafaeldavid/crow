@@ -25,7 +25,8 @@ ADR-0040 sections 1 (what the contract approves), 2 (the standing delivery), 4 (
 
 ## Acceptance criteria
 
-- [ ] One constructor argument, the key; one mapping, `revoked`; `isValidSignature`, `revoke`, and view helpers only. A selector allowlist test, like `contracts/test/fuzz/NoAdmin.fuzz.t.sol`, fails on any other external function.
+- [ ] One constructor argument, the key; one mapping, `revoked`, and one one-way flag, `retired`; `isValidSignature`, `revoke`, `retire`, and view helpers only.
+- [ ] The terms' nonce is `keccak256(abi.encode(templateHash, seed))`; the template has no field the contract ignores; a payout address equal to the contract is refused. A selector allowlist test, like `contracts/test/fuzz/NoAdmin.fuzz.t.sol`, fails on any other external function.
 - [ ] The template is an EIP-712 struct, `StandingOffer`, under the contract's own domain, with a signed `offerId` the contract does not read, and vectors generated in the repository.
 - [ ] The commitment ID and the delivery hash come from `HoldbackTypes`, and the digest from the named rules deployment.
 - [ ] Every test ADR-0040 section 9 assigns to forge and T-548 passes in `contracts/test/attack/StandingSeller.t.sol`, as a function named after its fixture name; the blob decoder is fuzzed.

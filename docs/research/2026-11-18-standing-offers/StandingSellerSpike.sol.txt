@@ -78,8 +78,10 @@ contract StandingSellerSpike is EIP712 {
     function termsOf(Template memory tpl, Fill memory f) public view returns (H.Terms memory t) {
         t = tpl.base;
         t.seller = address(this);
-        (t.buyer, t.buyerPaymentAddress, t.buyerKeyHash, t.nonce, t.createdAt) =
-            (f.buyer, f.buyerPaymentAddress, f.buyerKeyHash, f.nonce, f.createdAt);
+        (t.buyer, t.buyerPaymentAddress, t.buyerKeyHash, t.createdAt) =
+            (f.buyer, f.buyerPaymentAddress, f.buyerKeyHash, f.createdAt);
+        // Red team finding 1: the take's nonce binds the template, so a take's ID differs per template.
+        t.nonce = keccak256(abi.encode(templateHash(tpl), f.nonce));
         H.Timing memory o = tpl.base.timing;
         t.timing.offerExpiresAt = _at(f.createdAt, o.offerExpiresAt);
         t.timing.fundBy = _at(f.createdAt, o.fundBy);

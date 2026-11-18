@@ -50,6 +50,8 @@ This note starts from the private design study of 2026-11-18 (T-532), which name
 
 **Gas.** One take's `agreeAndFund`, with the test's own signing helpers, used 318,865 gas on the local chain [measured; an upper bound, since the helpers are inside the figure]. The rules contract's plain funding is measured in `contracts/test/unit/GasPerDeal.t.sol`; the build measures the difference.
 
+**The red team's tests** [measured, 2026-11-18]. The red-team pass added 7 tests against the spike, kept as [`RedTeam.t.sol.txt`](2026-11-18-standing-offers/RedTeam.t.sol.txt). Against the first spike, two showed a High hole: a revoked template's standing delivery landed, and was paid, on a take of a new template with equal terms, because the commitment ID did not depend on the template. The spike kept here derives the terms' nonce from the template's hash (`termsOf`); rerun with it, the spike's 10 tests pass and those two attacks fail with `BadSignature` at the old file's delivery. The red team's other 5 tests pass and show what the record now handles in the build: a payout into the contract itself, a second template that differs only in a field the contract ignores, the key path approving another application's digest, the gas a failed second deployment burns (2,965,785 of 3,000,000 gas), and an early accept or key-releasing settlement reverting `BadKeyProof` when the buyer has no envelope.
+
 **Not covered by the spike:** fuzzing of the decoder, a malformed blob, a template whose offsets overflow 64 bits (the spike refuses with `Unrepresentable`, untested), a template naming another rules deployment, and a gas-burning answer (the rules contract already survives one: `contracts/test/crosscheck/Erc1271GasBurn.t.sol`).
 
 ## 3. Delivery and keys

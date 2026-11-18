@@ -98,11 +98,10 @@ contract StandingSellerSpikeTest is Base {
         (H.Terms memory t1, bytes32 id1) = _take(tpl, sig, f1);
         emit log_named_uint("gas, agreeAndFund by a take (incl. test helpers)", g - gasleft());
         vm.warp(block.timestamp + 1 hours);
-        (H.Terms memory t2, bytes32 id2) = _take(tpl, sig, _fill(2));
+        S.Fill memory f2 = _fill(2);
+        (H.Terms memory t2, bytes32 id2) = _take(tpl, sig, f2);
         assertTrue(id1 != id2, "one ID per take");
         bytes memory dblob1 = abi.encode(uint8(2), tpl, sig, f1);
-        // _fill(2) used block.timestamp at its take; rebuild it from the stored terms.
-        S.Fill memory f2 = S.Fill(t2.buyer, t2.buyerPaymentAddress, t2.buyerKeyHash, t2.nonce, t2.createdAt);
         bytes memory dblob2 = abi.encode(uint8(2), tpl, sig, f2);
         vm.prank(makeAddr("anyone"));
         rules.deliver(t1, _standingDelivery(tpl), dblob1);
