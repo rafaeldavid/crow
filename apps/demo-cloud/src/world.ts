@@ -42,7 +42,7 @@
 import { beaconClockOf, beaconRoundFor, canonicalKeccak, DRAND_QUICKNET_CHAIN_HASH, holdbackDomain, problem, registrationBodyHash, trimTrailingSlashes, wholeSecond, type AdjudicatorPolicy, type AdjudicatorRegistration, type AdjudicatorRole, type Address, type EscrowState, type HoldbackDomain, type Hex32, type Judgment, type Mandate, type OperatorFeeSchedule, type Problem, type RegisteredAdjudicator, type SettlementEvent, type Sha256, type Timestamp, type TokenAmount } from '@holdback/core';
 import { sha256 } from '@holdback/core/crypto';
 import { StoreError, type CiphertextStore } from '@holdback/core/store';
-import { declinesOf, drandQuicknet, testAdjudicator, type RandomnessSource, type RunReport, type KeptPolicies, type TestAdjudicator } from '@holdback/adjudicator';
+import { declinesOf, drandQuicknet, testAdjudicator, type KeptJudgment, type RandomnessSource, type RunReport, type KeptPolicies, type TestAdjudicator } from '@holdback/adjudicator';
 import {
   fetchHandler,
   nameToken,
@@ -1001,6 +1001,11 @@ export class PublicWorld {
         // fallback they also decline a turn under any other appeal adjudicator (T-221, ADR-0030 §6).
         trustedAdjudicators: adjKeys.map((k) => k.keys.address),
         ...(o.kept ? { kept: o.kept } : {}),
+        // A-4 (T-530): the judged result survives a restart of this Durable Object, so the panel never runs twice.
+        judgedStore: {
+          get: (k) => storage.get<KeptJudgment>(`jd:${a.keys.address.toLowerCase()}|${k}`),
+          put: (k, v) => storage.put({ [`jd:${a.keys.address.toLowerCase()}|${k}`]: v }),
+        },
       });
       await registerOwn(registrations, domain, a.keys.privateKey, { ...adj.registration(), pool: { terms: { ...POOL_TERMS } }, poolTermsHash: canonicalKeccak(POOL_TERMS), status: 'active' }, { label: a.label, start: meta.start, now: wholeSecond(now()) });
       adjudicators[a.role] = adj;

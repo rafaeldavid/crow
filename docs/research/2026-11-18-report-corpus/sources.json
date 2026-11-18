@@ -1,16 +1,18 @@
 {
-  "about": "T-509 (row N180). Public security review reports, chosen by a rule fixed before any was read: per firm, the six newest reports in the firm's own public GitHub repository, by the date in the file name. Each source is pinned to the repository commit read on 2026-11-18. The held-out set is every report of one firm (Cyfrin); its list is also in heldout.json. fetch.mjs downloads each file into its own folder under reports/scratch/corpus/ and records its SHA-256 in manifest.json.",
+  "about": "T-509 (row N180). Public security review reports, chosen by a rule fixed before any was read: per firm, the six newest reports in the firm's own public GitHub repository, by the date in the file name. Each source is pinned to the repository commit read on 2026-11-18. The held-out set is every report of one firm (Cyfrin); its list is also in heldout.json. fetch.mjs downloads each file into its own folder under reports/scratch/corpus/ and records its SHA-256 in manifest.json. T-534 added a second held-out firm (Shieldify Security), chosen by the rule in docs/tasks/T-534-form-revision.md after the first held-out firm turned out to publish summaries only: its six newest reports are the set heldout-2, never opened; the six before them are the set layout-2, read to write its layout (layouts/shieldify.json).",
   "rule": {
     "pashov": "team/md/*_<YYYY-MM-DD>.md, sorted by that date, last 6",
     "trailofbits": "reviews/<YYYY>-<MM>-*securityreview.pdf, sorted by path, last 6",
     "sherlock": "audits/<YYYY>.<MM>.<DD> *.pdf, sorted by path, last 6",
-    "cyfrin": "reports/20*.pdf, sorted by path, last 6"
+    "cyfrin": "reports/20*.pdf, sorted by path, last 6",
+    "shieldify": "*.md at the repository root; a report's date is the committer date of the commit that first added it (git log --follow --diff-filter=A), ties by path; the last 6 are heldout-2, the 6 before them layout-2"
   },
   "firms": {
     "pashov": { "name": "Pashov Audit Group", "repo": "pashov/audits", "commit": "5550be96af284b3cf67b9d7dbbdbeb95c2502fe8", "licence": "No licence file in the repository; published for public reading. Reuse here: links, hashes and counts only; no copy is committed.", "set": "design" },
     "trailofbits": { "name": "Trail of Bits", "repo": "trailofbits/publications", "commit": "e08944909b8fcb747aef40ee294d92b2a9663685", "licence": "CC-BY-SA-4.0 (the repository's licence). Reuse here: links, hashes and counts only; no copy is committed.", "set": "design" },
     "sherlock": { "name": "Sherlock", "repo": "sherlock-protocol/sherlock-reports", "commit": "497f7158dcd99b7cc6512638e5da4465086832ad", "licence": "No licence file in the repository; published for public reading. Reuse here: links, hashes and counts only; no copy is committed.", "set": "design" },
-    "cyfrin": { "name": "Cyfrin", "repo": "Cyfrin/cyfrin-audit-reports", "commit": "dd2c1d0331f32e4e93f1ebba0b88262ec813a898", "licence": "No licence file in the repository; published for public reading. Reuse here: links, hashes and counts only; no copy is committed.", "set": "heldout" }
+    "cyfrin": { "name": "Cyfrin", "repo": "Cyfrin/cyfrin-audit-reports", "commit": "dd2c1d0331f32e4e93f1ebba0b88262ec813a898", "licence": "No licence file in the repository; published for public reading. Reuse here: links, hashes and counts only; no copy is committed.", "set": "heldout" },
+    "shieldify": { "name": "Shieldify Security", "repo": "shieldify-security/audits-portfolio-md", "commit": "dba76abe24b9e6132b92a8b94d497868b16c6a34", "licence": "No licence file in the repository; published for public reading. Reuse here: links, hashes and counts only; no copy is committed.", "set": "heldout-2" }
   },
   "reports": [
     { "id": "pashov-1", "firm": "pashov", "path": "team/md/RegnumAurum-security-review_2026-03-26.md", "date": "2026-03-26" },
@@ -36,6 +38,18 @@
     { "id": "cyfrin-3", "firm": "cyfrin", "path": "reports/2026-11-12-cyfrin-okumoney-v2.0.pdf", "date": "2026-11-12" },
     { "id": "cyfrin-4", "firm": "cyfrin", "path": "reports/2026-11-12-cyfrin-yieldy-evm-contracts-v2.0.pdf", "date": "2026-11-12" },
     { "id": "cyfrin-5", "firm": "cyfrin", "path": "reports/2026-11-13-cyfrin-securitize-evm-on-off-ramp-v2.0.pdf", "date": "2026-11-13" },
-    { "id": "cyfrin-6", "firm": "cyfrin", "path": "reports/2026-11-17-cyfrin-sandcastle-v2.0.pdf", "date": "2026-11-17" }
+    { "id": "cyfrin-6", "firm": "cyfrin", "path": "reports/2026-11-17-cyfrin-sandcastle-v2.0.pdf", "date": "2026-11-17" },
+    { "id": "shieldify-l1", "firm": "shieldify", "set": "layout-2", "path": "PearProtocol-Vault-Offchain-Security-Review.md", "date": "2026-09-16T20:07:38Z" },
+    { "id": "shieldify-l2", "firm": "shieldify", "set": "layout-2", "path": "PearProtocol-Vault-V2-Security-Review.md", "date": "2026-09-16T20:07:38Z" },
+    { "id": "shieldify-l3", "firm": "shieldify", "set": "layout-2", "path": "ColbFinance-Liquids-Security-Review.md", "date": "2026-10-05T13:41:38Z" },
+    { "id": "shieldify-l4", "firm": "shieldify", "set": "layout-2", "path": "ColbFinance-Multicall-Security-Review.md", "date": "2026-10-05T13:41:38Z" },
+    { "id": "shieldify-l5", "firm": "shieldify", "set": "layout-2", "path": "PearProtocol-Vault-Extended-Security-Review.md", "date": "2026-10-05T14:12:09Z" },
+    { "id": "shieldify-l6", "firm": "shieldify", "set": "layout-2", "path": "ShroomsFun-Security-Review.md", "date": "2026-10-06T21:06:39Z" },
+    { "id": "shieldify-1", "firm": "shieldify", "set": "heldout-2", "path": "Rini-Security-Review.md", "date": "2026-10-12T12:28:33Z" },
+    { "id": "shieldify-2", "firm": "shieldify", "set": "heldout-2", "path": "DarkWallet-Security-Review.md", "date": "2026-10-20T18:08:31Z" },
+    { "id": "shieldify-3", "firm": "shieldify", "set": "heldout-2", "path": "Rabtools-Security-Review.md", "date": "2026-10-22T19:20:31Z" },
+    { "id": "shieldify-4", "firm": "shieldify", "set": "heldout-2", "path": "PearProtocol-Rate-Splitter-Security-Review.md", "date": "2026-10-22T19:20:35Z" },
+    { "id": "shieldify-5", "firm": "shieldify", "set": "heldout-2", "path": "PearProtocol-Vault-V2-Upgrade-Security-Review.md", "date": "2026-11-02T11:17:12Z" },
+    { "id": "shieldify-6", "firm": "shieldify", "set": "heldout-2", "path": "SnarksPad-Security-Review.md", "date": "2026-11-17T16:57:48Z" }
   ]
 }

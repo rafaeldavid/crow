@@ -1,6 +1,8 @@
+import { existsSync, readFileSync } from 'node:fs';
+import { join } from 'node:path';
 import { encodeErrorResult, parseAbi } from 'viem';
 import { describe, expect, it } from 'vitest';
-import { problemFromRevert, revertData, revertName } from './errors.js';
+import { BEACON_ERRORS, problemFromRevert, revertData, revertName } from './errors.js';
 
 const abi = parseAbi([
   'error WrongStage(uint8 current)',
@@ -50,5 +52,31 @@ describe('contract reverts as SimChain problem types', () => {
   it('finds revert data nested in a client error', () => {
     expect(revertData({ cause: { cause: { data: '0x1234' } } })).toBe('0x1234');
     expect(revertData({ error: { data: { data: '0xabcd' } } })).toBe('0xabcd');
+  });
+});
+
+// HoldbackRules calls the beacon, and the beacon's revert reaches the relay unchanged; the ABI the relay passes has
+// no beacon in it (T-540).
+describe("the beacon's errors through the rules contract's ABI", () => {
+  const beacon = (errorName: string) => encodeErrorResult({ abi: BEACON_ERRORS, errorName } as Parameters<typeof encodeErrorResult>[0]);
+
+  it.each([
+    ['NotEnoughGas', 'invalid_state'],
+    ['PairingGasBelowFloor', 'invalid_state'],
+    ['InvalidSignature', 'invalid_signature'],
+  ])('%s is named and maps to %s', (name, type) => {
+    const p = problemFromRevert(abi, beacon(name));
+    expect(p.type).toBe(type);
+    expect(p.detail).toBe(`contract revert ${name}()`);
+    expect(revertName(abi, beacon(name))).toBe(name);
+  });
+
+  const built = join(import.meta.dirname, '..', '..', '..', 'contracts', 'out', 'DrandQuicknetBeacon.sol', 'DrandQuicknetBeacon.json');
+  it.skipIf(!existsSync(built))(`names every error the built beacon declares${existsSync(built) ? '' : ' (SKIPPED: needs forge build output in contracts/out)'}`, () => {
+    type Item = { type: string; name?: string; inputs?: ReadonlyArray<{ type: string }> };
+    const sig = (e: Item) => `${e.name}(${(e.inputs ?? []).map((i) => i.type).join(',')})`;
+    const declared = (JSON.parse(readFileSync(built, 'utf8')).abi as Item[]).filter((x) => x.type === 'error').map(sig);
+    expect(declared.length).toBeGreaterThan(0);
+    expect((BEACON_ERRORS as readonly Item[]).map(sig)).toEqual(expect.arrayContaining(declared));
   });
 });
