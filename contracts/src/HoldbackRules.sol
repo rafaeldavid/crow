@@ -70,9 +70,11 @@ contract HoldbackRules is EIP712, IHoldbackRules {
 
     /// @notice Fixes the deployment's parameters; nothing can change them later.
     /// @dev Refuses with `ZeroAddress` when the escrow, the collector, the beacon or the token is the zero address,
-    ///      and with `NoBeaconMargin` when the beacon margin is 0 on a chain other than the local one (chain ID 31337).
-    ///      It takes any expiry margin, and any nonzero beacon margin on any chain: the deploy script holds the table
-    ///      of margins per chain (ADR-0032 §3.4). It does not check that the addresses hold code.
+    ///      with `NoBeaconMargin` when the beacon margin is 0 on a chain other than the local one (chain ID 31337), and
+    ///      with `BadBeacon` when the beacon does not answer `roundAt` (no code, or the call reverts). It checks no code
+    ///      at the escrow, the collector or the token: the deploy script does (T-380). It takes any expiry margin, and
+    ///      any nonzero beacon margin on any chain: a contract cannot know its chain's slot time (ADR-0032 §3.4, RT-6),
+    ///      so the deploy script sets the margin for the chain it deploys to.
     /// @param escrow The Commerce Payments AuthCaptureEscrow that holds every deal's funds.
     /// @param erc3009Collector CPP's ERC-3009 payment collector.
     /// @param expiryMargin Seconds from the last possible decision to the escrow's expiry.
@@ -92,6 +94,11 @@ contract HoldbackRules is EIP712, IHoldbackRules {
                 || token == address(0)
         ) revert ZeroAddress();
         if (beaconMargin == 0 && block.chainid != LOCAL_CHAIN_ID) revert NoBeaconMargin();
+        // `triggerFallback`, the only exit from Delivered, asks the beacon for a round; one that cannot answer would
+        // block that exit for the deployment's life, so the constructor asks once.
+        (bool answered, bytes memory round) =
+            address(beacon).staticcall(abi.encodeCall(IHoldbackBeacon.roundAt, (block.timestamp)));
+        if (!answered || round.length < 32) revert BadBeacon();
         ESCROW = escrow;
         ERC3009_COLLECTOR = erc3009Collector;
         EXPIRY_MARGIN = expiryMargin;
@@ -173,10 +180,11 @@ contract HoldbackRules is EIP712, IHoldbackRules {
         // Values core cannot represent, refused for that reason only (D31; T-380): a deadline after the last RFC 3339
         // instant (the deadlines are in order, so fallbackBy bounds them all) and an escalation window above 32 bits,
         // core's window type. With both, an escalation's `t1` and every decision's (block times before
-        // fallbackBy + appealDecideSec) fit the word's 40 bits, and the escrow's expiry fits 48 bits whenever
-        // EXPIRY_MARGIN does. `triggerFallback`'s `t1` has no upper bound in time (it may run long after fallbackBy) and
-        // wraps only from 2^40 s, about the year 36,812; nothing reads it but `dealOf`. A hold above 120 bits is
-        // refused in `_paymentInfo`, as before.
+        // fallbackBy + appealDecideSec) fit the word's 40 bits. The escrow's expiry fits 48 bits for every such deal
+        // only while EXPIRY_MARGIN is at most 2^48 - 1 - LAST_TIMESTAMP - (2^32 - 1) = 281,217,279,356,221 s; above it,
+        // `_paymentInfo` refuses a deal whose expiry does not fit, before any write. `triggerFallback`'s `t1` has no
+        // upper bound in time (it may run long after fallbackBy) and wraps only from 2^40 s, about the year 36,812;
+        // nothing reads it but `dealOf`. A hold above 120 bits is refused in `_paymentInfo`, as before.
         if (tm.fallbackBy > LAST_TIMESTAMP || tm.appealDecideSec > type(uint32).max) revert Unrepresentable();
         _requireSigned(t.seller, id, sellerSignature);
         _requireSigned(t.adjudicator, H.acceptanceHash(id, t, acc), acc.signature);
