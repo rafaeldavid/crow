@@ -26,7 +26,7 @@ import { demoCsv, DOMAIN, fakeRelays, makeCommitment, party, TestSettlement, tus
 import { drandQuicknet } from './drand.js';
 import { defaultPolicy, policyHashOf } from './policy.js';
 import { panelSeed, simRoundAt, type RandomnessSource } from './randomness.js';
-import { Adjudicator, DEFAULT_APPEAL_LIMITS, recordHashOf, type AdjudicatorConfig } from './service.js';
+import { Adjudicator, DEFAULT_APPEAL_LIMITS, recordHashOf, type AdjudicatorConfig, type JudgedStore, type KeptJudgment } from './service.js';
 
 const entry = (id: string, family: string, provider: 'anthropic' | 'openai-compatible') => ({ id, provider, family, model: `${id}-20260601`, status: 'active' as const });
 const REGISTRY: RegistryDoc = {
@@ -841,6 +841,73 @@ describe('never re-roll after a post-panel failure (review item 1)', () => {
     expect(r.ok).toBe(false);
     expect(a.calls).toHaveLength(0);
     expect(s.records.size).toBe(0);
+  });
+});
+
+// A-4 (T-530): the judged result lived in memory only, so a restart between the panel's answer and the decision's
+// landing ran the panel again, and could sign another verdict for the same attempt.
+describe('a judged result survives a restart (A-4)', () => {
+  /** A store as a Durable Object keeps it: values are copied in and out. */
+  const memory = (fail: { put?: number; get?: number } = {}) => {
+    const rows = new Map<string, KeptJudgment>();
+    const store: JudgedStore = {
+      get: async (k) => {
+        if (fail.get && fail.get-- > 0) throw new Error('store down');
+        return structuredClone(rows.get(k));
+      },
+      put: async (k, v) => {
+        if (fail.put && fail.put-- > 0) throw new Error('store down');
+        rows.set(k, structuredClone(v));
+      },
+    };
+    return { rows, store };
+  };
+  /** The same adjudicator after a restart: same keys, policy and store, nothing in memory. */
+  const restarted = (s: TestSettlement, store: JudgedStore) => bench(A, 'bench-a', s, {}, undefined, reg, undefined, { judgedStore: store });
+
+  it('a restart after the panel returned signs the kept decision and never calls the judges again', async () => {
+    const kept = memory();
+    const { s, a, id } = await setup({ overA: { judgedStore: kept.store } });
+    s.at('2026-11-01T10:00:30Z');
+    s.failNextDecisions = 1;
+    await a.adj.runOnce();
+    expect(s.state(id).kind).toBe('Delivered');
+    expect(a.calls).toHaveLength(3);
+    expect(kept.rows.size).toBe(1);
+    const again = restarted(s, kept.store);
+    await again.adj.runOnce();
+    expect(s.state(id).kind).toBe('Released');
+    expect(again.calls).toHaveLength(0);
+    const [d] = s.decisions(id) as [Decision];
+    expect(d.judgmentRecordHash).toBe([...kept.rows.values()][0]!.record.recordHash);
+    expect(s.records.size).toBe(1);
+    // The kept row holds the record and the outcome, never a key.
+    expect(Object.keys([...kept.rows.values()][0]!).sort()).toEqual(['outcome', 'published', 'record']);
+  });
+
+  it('a result that cannot be kept is neither published nor signed; the retry keeps it without judging again', async () => {
+    const kept = memory({ put: 1 });
+    const { s, a, id } = await setup({ overA: { judgedStore: kept.store } });
+    s.at('2026-11-01T10:00:30Z');
+    const first = await a.adj.runOnce();
+    expect(first.refused.map((r) => r.problem.type)).toEqual(['adjudicator_unavailable']);
+    expect(first.refused[0]!.problem.detail).toMatch(/could not be kept/);
+    expect([s.records.size, s.decisions(id).length, a.calls.length]).toEqual([0, 0, 3]);
+    await a.adj.runOnce();
+    expect(s.state(id).kind).toBe('Released');
+    expect([kept.rows.size, a.calls.length]).toEqual([1, 3]);
+  });
+
+  it('a store that does not answer refuses before any judge is called', async () => {
+    const kept = memory({ get: 1 });
+    const { s, a, id } = await setup({ overA: { judgedStore: kept.store } });
+    s.at('2026-11-01T10:00:30Z');
+    const first = await a.adj.runOnce();
+    expect(first.refused.map((r) => r.problem.type)).toEqual(['adjudicator_unavailable']);
+    expect([s.records.size, a.calls.length]).toEqual([0, 0]);
+    await a.adj.runOnce();
+    expect(s.state(id).kind).toBe('Released');
+    expect(a.calls).toHaveLength(3);
   });
 });
 
