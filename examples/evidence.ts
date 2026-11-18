@@ -166,8 +166,11 @@ async function recordOffline(b: J): Promise<Check[]> {
   }
 }
 
-/** On a pass, `pin` is the deployment the check pinned: its domain, its token and its chain. */
-export type Result ={ ok: true; passed: string[]; lines: string[]; decideTx: Hex; rpcCommand: string; pin: Pin } | { ok: false; passed: string[]; failed: string; why: string; lines: string[] };
+/**
+ * On a pass, `pin` is the deployment the check used: its domain, its token and its chain. `pinned` is false when that
+ * deployment came from the caller's HOLDBACK_DEPLOYMENT, which this command does not pin.
+ */
+export type Result ={ ok: true; passed: string[]; lines: string[]; decideTx: Hex; rpcCommand: string; pin: Pin; pinned: boolean } | { ok: false; passed: string[]; failed: string; why: string; lines: string[] };
 
 const recover = async (hash: Hex, signature: unknown) => {
   try {
@@ -223,7 +226,7 @@ export async function checkBundle(b: J, o: { receipt?: J } = {}): Promise<Result
 }
 
 type Must = (check: string, ok: unknown, why: string) => void;
-async function run(b: J, o: { receipt?: J }, must: Must, passed: string[]): Promise<{ lines: string[]; decideTx: Hex; rpcCommand: string; pin: Pin }> {
+async function run(b: J, o: { receipt?: J }, must: Must, passed: string[]): Promise<{ lines: string[]; decideTx: Hex; rpcCommand: string; pin: Pin; pinned: boolean }> {
   // 0. The shape: the format, every field, nothing else.
   must('bundle shape', keysOf(b) === 'bundle,ciphertext,commitmentId,events,judgment,operator,receipts,terms,transactions' && b.bundle === FORMAT, `not a ${FORMAT} file with exactly its fields`);
   const id = b.commitmentId as Hex;
@@ -415,7 +418,7 @@ async function run(b: J, o: { receipt?: J }, must: Must, passed: string[]): Prom
       'What it does not prove:');
     lines[0] = `PASSED  ${passed.length} checks on commitment ${id}, chain ${c.tokenDomain.chainId}, rules contract ${lc(c.rules)}: offline, and the chain read you gave.`;
   }
-  return { lines, decideTx, rpcCommand, pin: pin! };
+  return { lines, decideTx, rpcCommand, pin: pin!, pinned: !own };
 }
 
 /** Reads one deal's bundle from one operator and a Sepolia node: the only network step. */

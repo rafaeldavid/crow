@@ -35,13 +35,14 @@ const quiet = () => {
   const lines: string[] = [];
   return { lines, io: { out: (s: string) => lines.push(s), err: (s: string) => lines.push(s) } };
 };
-/** Writes the fixture beside a fresh directory and runs the command on it. */
+/** Writes the fixture into a fresh directory and runs the command on it, with the deal's chain read unless `--no-receipt`. */
 async function run(name: string, args: string[], text = raw(name)) {
   const dir = mkdtempSync(join(tmpdir(), 'proof-'));
   const file = join(dir, `${name}.json`);
   writeFileSync(file, text);
   const q = quiet();
-  const code = await main([file, ...args], q.io);
+  const withReceipt = args.includes('--no-receipt') ? args.filter((a) => a !== '--no-receipt') : [...args, '--receipt', here(`${name}.receipt.json`).pathname];
+  const code = await main([file, ...withReceipt], q.io);
   const ledger = join(dir, `${name}.ledger.json`);
   const proof = join(dir, `${name}.proof.md`);
   return {
@@ -80,7 +81,7 @@ describe('the ledger row on real deals', () => {
     expect(row.received).toEqual({ base: '0', decimal: '0.00' });
     expect(row.counterparty).toEqual({ role: 'seller', address: terms.seller, payoutAddress: terms.sellerPayoutAddress });
     expect(row.bought.description).toBe(terms.deliverable.description);
-    expect(row.transactions.settlement.hash).toBe('0xe47168fad7058cb2b164c7bceb297510cb3e2582a4ded02c6ffc88946194ae96');
+    expect(row.transactions.settlement).toMatchObject({ hash: '0xe47168fad7058cb2b164c7bceb297510cb3e2582a4ded02c6ffc88946194ae96', block: '12153293', confirmedByChainRead: true });
     expect(row.token.symbol).toBe('tUSDC');
     expect(Object.values(row.stated).every((v) => v === null)).toBe(true);
     // No float anywhere: every amount is a decimal string.
@@ -127,6 +128,8 @@ describe('the proof of purchase page', () => {
     expect(r.code, r.out).toBe(0);
     expect(r.row.stated).toEqual({ name: 'Example Buyer Ltd', counterpartyName: null, reference: 'PO-2', fiatValue: '36.80', fiatCurrency: 'EUR', rate: '0.8975', rateSource: 'ECB reference rate', rateTime: null });
     expect(r.page).toContain('| Fiat value | 36.80 EUR |');
+    const noCurrency = await run(RELEASED, ['--as', 'buyer', '--fiat-value', '36.80']);
+    expect(noCurrency.page).toContain('| Fiat value | 36.80, currency *not stated* |');
     expect(r.page).toContain('| Rate | 0.8975, source ECB reference rate, time *not stated* |');
   });
   it('refuses a fiat value that is not a decimal string, and an unknown fact', async () => {
@@ -137,19 +140,39 @@ describe('the proof of purchase page', () => {
     expect((await run(RELEASED, ['--as', 'buyer', '--facts', join(dir, 'f.json')])).code).toBe(2);
     expect((await run(RELEASED, [])).code).toBe(2); // no role
   });
-  it('escapes Markdown in text it did not write', async () => {
-    const r = await run(RELEASED, ['--as', 'buyer', '--name', 'A | B [x](http://e.invalid) `c`']);
-    expect(r.page).toContain('A \\| B \\[x\\](http://e.invalid) \\`c\\`');
+  it('escapes Markdown in text it did not write, and forms no autolink', async () => {
+    const r = await run(RELEASED, ['--as', 'buyer', '--name', 'A | B [x](http://e.invalid) `c` www.e.invalid']);
+    expect(r.page).toContain('A \\| B \\[x\\](http\\://e.invalid) \\`c\\` www\\.e.invalid');
+    // The seller's description carries a URL too.
+    expect(r.page).toContain('Repository: https\\://github.com/theredguild');
   });
-  it('with the chain read, says the settlement was confirmed in its block', async () => {
-    const r = await run(RELEASED, ['--as', 'buyer', '--receipt', here(`${RELEASED}.receipt.json`).pathname]);
-    expect(r.code, r.out).toBe(0);
-    expect(r.row.transactions.settlement).toMatchObject({ block: '12153293', confirmedByChainRead: true });
-    expect(r.page).toContain('succeeded in block 12153293');
+  it('says the settlement succeeded in its block, as the chain read shows', async () => {
+    const r = await run(RELEASED, ['--as', 'buyer']);
+    expect(r.page).toContain('succeeded in block 12153293, as the chain read shows');
   });
 });
 
 describe('refusals', () => {
+  it('without the chain read: exit 2, the command to get it, nothing written', async () => {
+    const r = await run(RELEASED, ['--as', 'buyer', '--no-receipt']);
+    expect(r.code).toBe(2);
+    expect(r.out).toContain('eth_getTransactionReceipt');
+    expect(r.row).toBeUndefined();
+    expect(r.page).toBeUndefined();
+  });
+  it("another transaction's chain read: exit 1", async () => {
+    const r = await run(RELEASED, ['--as', 'buyer', '--no-receipt', '--receipt', here(`${REFUNDED}.receipt.json`).pathname]);
+    expect(r.code).toBe(1);
+    expect(r.row).toBeUndefined();
+  });
+  it('an operator fee, which the evidence check does not cover: exit 2, nothing written', async () => {
+    const b = JSON.parse(raw(RELEASED));
+    b.events.push({ ...b.events.at(-1), seq: b.events.at(-1).seq + 1, type: 'fee.operator', payload: { amount: { token: b.terms.price.token, amount: '5' } } });
+    const r = await run(RELEASED, ['--as', 'buyer'], JSON.stringify(b));
+    expect(r.code).toBe(2);
+    expect(r.out).toContain('operator fee');
+    expect(r.row).toBeUndefined();
+  });
   it('one changed byte in the evidence file: exit 1 and nothing written', async () => {
     const text = raw(RELEASED);
     const i = text.indexOf('"amount": "40000000"') >= 0 ? text.indexOf('"amount": "40000000"') : text.indexOf('"amount":"40000000"');
