@@ -6,7 +6,7 @@
 - **Depends on:** none
 - **Paths this task may touch:** `docs/research/2026-11-18-reading-list.md`, `docs/research/README.md` (one row), this file
 - **Human gate:** no
-- **Status:** review. The pull request is open on branch `t-506-reading-list`
+- **Status:** done with the merge of pull request 624 on 2026-11-18, on Rafa's word ("Yes, merge 624")
 - **Agent/session:** the reading session, 2026-11-18, branch `t-506-reading-list`
 - **Roadmap row:** N171
 

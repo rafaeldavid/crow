@@ -3,7 +3,7 @@
 // ("network": "local"), so it signs the ERC-3009 ReceiveWithAuthorization the escrow's collector redeems. Rung 1 shown by
 // the token itself: a signature it made for one deal does not move money for another deal, a higher amount or another
 // payout address, and a signature by the agent's deal key does not move the float's money (A1, A2). Skipped, saying
-// why, without anvil and contracts/out; CI's anvil job lists its own files, so CI skips this one (the Handoff says so).
+// why, without anvil and contracts/out; CI's anvil job runs it in its world leg, where a skip fails the job (T-504).
 import { encodeFunctionData, parseAbi, type Hex } from 'viem';
 import { afterAll, beforeAll, describe, expect, it } from 'vitest';
 import { ANVIL_SKIP, anvilReady, anvilWorld, type AnvilWorld } from './e2e-world.ts';
