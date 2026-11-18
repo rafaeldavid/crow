@@ -42,7 +42,10 @@ describe('the security-review form is measured as it is', () => {
     const row = rows.find((r) => Number(r[0]) === template.form.version);
     expect(row, `examples/security-review-form.md has no row for version ${template.form.version}: ${RERUN}`).toBeDefined();
     expect(row![1], 'the row names the template it measured').toBe(`\`${sha}\``);
-    for (const r of rows.filter((x) => x !== row)) expect(r[1], `the row for version ${r[0]} names an earlier template, not this one: raise form.version`).not.toBe(`\`${sha}\``);
+    // Each version keeps a byte copy (forms/v<n>.json): the template is its version's copy, and every row names its own.
+    const copy = (v: string) => readFileSync(at(`docs/research/2026-11-18-report-corpus/forms/v${v}.json`));
+    expect(createHash('sha256').update(copy(String(template.form.version))).digest('hex'), `the template differs from forms/v${template.form.version}.json: raise form.version and keep a copy`).toBe(sha);
+    for (const r of rows) expect(r[1], `the row for version ${r[0]} names its own template`).toBe(`\`${createHash('sha256').update(copy(r[0]!)).digest('hex')}\``);
     const count = (s: { acceptedOneCommit: number; acceptedOneCommitStripped: number; reports: number }, stripped = false) => `${stripped ? s.acceptedOneCommitStripped : s.acceptedOneCommit} of ${s.reports}`;
     const sets = results.summary;
     expect(row!.slice(3, 7)).toEqual([count(sets.design), count(sets.design, true), count(sets.heldout), count(sets['heldout-2'])]);

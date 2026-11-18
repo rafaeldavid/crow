@@ -10,20 +10,21 @@ The form is `examples/seller-adapter.template.json`: the deliverable's descripti
 
 1. raises `form.version` in the template by one;
 2. reruns the corpus script (below) on the change, which rewrites `docs/research/2026-11-18-report-corpus/results.json` with the template's SHA-256;
-3. adds the new version's row to the table below, with the template's SHA-256 and the measured counts, and keeps the rows before it.
+3. keeps a byte copy of the template as `docs/research/2026-11-18-report-corpus/forms/v<version>.json`;
+4. adds the new version's row to the table below, with the template's SHA-256 and the measured counts, and keeps the rows before it.
 
 `tests/security-review-form.test.ts` fails in CI in four cases:
 
 - the template's SHA-256 differs from the one in `results.json`;
 - the table has no row for the template's version, or no row for the version before it;
-- an earlier row names the same template, so the version was not raised;
+- the template differs from its version's byte copy in `docs/research/2026-11-18-report-corpus/forms/v<version>.json`, or a row's SHA-256 differs from its version's copy, so a changed form must raise its version and keep the old copy;
 - the row's counts differ from `results.json`.
 
 The held-out reports stay unread. A change to the form or to the converter reports their numbers as they come and never tunes on them (`docs/research/2026-11-18-report-corpus/heldout.json`).
 
 ## Versions
 
-Each count is the reports the form accepts at first presentation on its default terms, by the adjudicator's own first stage (`examples/check-delivery.ts`). A review of several repositories is several deals, so a report that passes only because the converter kept its first commit is not counted. "Stripped" removes zero-width characters, the seller's step before it delivers; the converter otherwise changes no character. Each held-out set is measured once, on the form current when its firm was chosen.
+Each count is the reports the form accepts at first presentation on its default terms, by the adjudicator's own first stage (`examples/check-delivery.ts`). A review of several repositories is several deals, so a report that passes only because the converter kept its first commit is not counted. "Stripped" removes zero-width characters, the seller's step before it delivers; the converter otherwise changes no character. Each held-out set is measured once per form version, never read and never tuned on.
 
 | Version | Template SHA-256 | Measured | Design set | Design set, stripped | First held-out firm | Second held-out firm | What changed |
 | --- | --- | --- | --- | --- | --- | --- | --- |
@@ -75,4 +76,4 @@ node docs/research/2026-11-18-report-corpus/measure.mjs /Users/rafa/Documents/es
 pnpm vitest run tests/security-review-form.test.ts
 ```
 
-The first command downloads the 36 public reports at their pinned commits; the second rewrites `results.json`; the third checks this page against it. `measure.mjs … --only <set>` runs one set and writes nothing, for checking a layout on its layout set before a held-out set is measured. Reports are untrusted data: keep the copies under `reports/scratch/`, which git ignores.
+The first command downloads the 36 public reports at their pinned commits; the second rewrites `results.json`; the third checks this page against it. `measure.mjs … --only <set>` runs one set and leaves `results.json` as it is (it still writes the converted reports to the out folder), for checking a layout on its layout set before a held-out set is measured. Reports are untrusted data: keep the copies under `reports/scratch/`, which git ignores.
