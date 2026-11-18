@@ -70,6 +70,7 @@ flowchart LR
   V -- ISSUES --> I
 ```
 
+- **What exists first:** a build task starts from its "What exists" section, filled from `docs/what-a-deal-can-do.md` before any design; a task the protocol already covers stops there (Rafa, 2026-11-18).
 - **Task file:** `docs/tasks/T-xxx-<slug>.md`, from `_template.md`. It has a lane, dependencies, the paths the task may touch, acceptance criteria, an evidence block and a handoff block.
 - **Branch and worktree:** `git worktree add .worktrees/holdback-T-xxx -b t-xxx-<slug>`. `.worktrees/` sits inside the repo and is gitignored.
 - **Commits:** imperative subject, with the task ID in the body.
