@@ -1,5 +1,10 @@
 {
   "about": "T-509 held-out set. Every report of one firm, fixed on 2026-11-18 before any report was read. The converter and the numbers were built on the design set only; these reports were only run through the same script. A later task that changes the form or the converter must not read these reports or tune on their results; it reruns measure.mjs and reports the held-out numbers as they come.",
   "firm": "cyfrin",
-  "reports": ["cyfrin-1", "cyfrin-2", "cyfrin-3", "cyfrin-4", "cyfrin-5", "cyfrin-6"]
+  "reports": ["cyfrin-1", "cyfrin-2", "cyfrin-3", "cyfrin-4", "cyfrin-5", "cyfrin-6"],
+  "second": {
+    "about": "T-534 second held-out set (sources.json, set heldout-2), because the first firm's public reports are summaries with no findings. The firm was chosen by the rule in docs/tasks/T-534-form-revision.md, committed before any of its reports was opened; its layout (layouts/shieldify.json) was written from the set layout-2 only. These six were hashed and run through measure.mjs once, on version 2 of the form, and never read. The same rule as above binds every later task.",
+    "firm": "shieldify",
+    "reports": ["shieldify-1", "shieldify-2", "shieldify-3", "shieldify-4", "shieldify-5", "shieldify-6"]
+  }
 }

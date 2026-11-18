@@ -1,6 +1,6 @@
 # Published security reviews against today's form: 1 of 18 passes as published (T-509)
 
-Research pass for T-509, roadmap row N180, run on 2026-11-18. Every number below comes from `docs/research/2026-11-18-report-corpus/measure.mjs` on the reports listed in `manifest.json` beside it, unless the line says otherwise.
+Research pass for T-509, roadmap row N180, run on 2026-11-18. Every number below comes from `docs/research/2026-11-18-report-corpus/measure.mjs` on the reports listed in `manifest.json` beside it, unless the line says otherwise. That run's `results.json` is the file at `origin/main` commit `557560c9`: T-534 has since rerun the script on version 2 of the form and on a second held-out firm, and the file beside this note now holds that run (`examples/security-review-form.md`).
 
 ## Summary
 
@@ -188,6 +188,6 @@ node docs/research/2026-11-18-report-corpus/measure.mjs /Users/rafa/Documents/es
 
 ## Open questions
 
-1. **Rafa decides whether to revise the finding object as one change,** as above, and whether the revision keeps any cap. The owner of the revision is a later task; this one changes no product file.
+1. **Rafa decides whether to revise the finding object as one change,** as above, and whether the revision keeps any cap. The owner of the revision is a later task; this one changes no product file. Answered on 2026-11-18: Rafa said yes, and T-534 made the revision as version 2 of the form; `examples/security-review-form.md` holds its measured rates, and `results.json` here is now that version's run.
 2. **A proof of concept's real size is still unknown.** No public report has one. Owner: the design partner thread, through Rafa.
 3. **The held-out firm's layout.** A later converter task can add rules for a fourth layout only from that firm's other public reports, never from these six.

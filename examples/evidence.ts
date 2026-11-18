@@ -166,7 +166,11 @@ async function recordOffline(b: J): Promise<Check[]> {
   }
 }
 
-export type Result ={ ok: true; passed: string[]; lines: string[]; decideTx: Hex; rpcCommand: string } | { ok: false; passed: string[]; failed: string; why: string; lines: string[] };
+/**
+ * On a pass, `pin` is the deployment the check used: its domain, its token and its chain. `pinned` is false when that
+ * deployment came from the caller's HOLDBACK_DEPLOYMENT, which this command does not pin.
+ */
+export type Result ={ ok: true; passed: string[]; lines: string[]; decideTx: Hex; rpcCommand: string; pin: Pin; pinned: boolean } | { ok: false; passed: string[]; failed: string; why: string; lines: string[] };
 
 const recover = async (hash: Hex, signature: unknown) => {
   try {
@@ -175,13 +179,14 @@ const recover = async (hash: Hex, signature: unknown) => {
     return '';
   }
 };
-const money = (amount: bigint, token: string, pin: Pin) => {
-  if (lc(token) !== lc(pin.token.id)) return `${amount} base units of token ${lc(token)}`;
-  const d = pin.token.decimals;
-  const s = amount.toString().padStart(d + 1, '0');
-  const frac = s.slice(s.length - d).replace(/0+$/, '').padEnd(2, '0');
-  return `${s.slice(0, s.length - d)}.${frac} ${pin.token.symbol}`;
+/** A base-unit amount in the token's decimal form, exact, with at least two decimals: 40000000 at 6 decimals is "40.00". */
+export const decimalOf = (amount: bigint, decimals: number): string => {
+  const s = amount.toString().padStart(decimals + 1, '0');
+  const frac = s.slice(s.length - decimals).replace(/0+$/, '').padEnd(2, '0');
+  return `${s.slice(0, s.length - decimals)}.${frac}`;
 };
+const money = (amount: bigint, token: string, pin: Pin) =>
+  lc(token) !== lc(pin.token.id) ? `${amount} base units of token ${lc(token)}` : `${decimalOf(amount, pin.token.decimals)} ${pin.token.symbol}`;
 /**
  * The terms as the commitment ID covers them: `1` a string or number the EIP-712 struct hashes, `'hashed'` a body the
  * terms hash whole (keccak256 of its RFC 8785 JSON), an object the exact keys of a nested struct. Phase one's terms
@@ -221,7 +226,7 @@ export async function checkBundle(b: J, o: { receipt?: J } = {}): Promise<Result
 }
 
 type Must = (check: string, ok: unknown, why: string) => void;
-async function run(b: J, o: { receipt?: J }, must: Must, passed: string[]): Promise<{ lines: string[]; decideTx: Hex; rpcCommand: string }> {
+async function run(b: J, o: { receipt?: J }, must: Must, passed: string[]): Promise<{ lines: string[]; decideTx: Hex; rpcCommand: string; pin: Pin; pinned: boolean }> {
   // 0. The shape: the format, every field, nothing else.
   must('bundle shape', keysOf(b) === 'bundle,ciphertext,commitmentId,events,judgment,operator,receipts,terms,transactions' && b.bundle === FORMAT, `not a ${FORMAT} file with exactly its fields`);
   const id = b.commitmentId as Hex;
@@ -413,7 +418,7 @@ async function run(b: J, o: { receipt?: J }, must: Must, passed: string[]): Prom
       'What it does not prove:');
     lines[0] = `PASSED  ${passed.length} checks on commitment ${id}, chain ${c.tokenDomain.chainId}, rules contract ${lc(c.rules)}: offline, and the chain read you gave.`;
   }
-  return { lines, decideTx, rpcCommand };
+  return { lines, decideTx, rpcCommand, pin: pin!, pinned: !own };
 }
 
 /** Reads one deal's bundle from one operator and a Sepolia node: the only network step. */

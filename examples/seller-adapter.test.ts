@@ -13,10 +13,10 @@ import { getAddress, hashTypedData, verifyTypedData, type Hex } from 'viem';
 import { generatePrivateKey, privateKeyToAccount } from 'viem/accounts';
 import { MemoryStorage, PublicWorld } from '@holdback/demo-cloud';
 import { startSimWorld, type SimWorld } from '@holdback/operator';
-import { loadTermsFile } from '@holdback/testkit';
 import { afterAll, afterEach, beforeAll, describe, expect, it } from 'vitest';
 import { Agent } from './agent.ts';
 import { addSalt, config as shipped, loadConfig, SaltNotAdded, startSellerAdapter, type RunningAdapter, type SellerAdapterConfig } from './seller-adapter.ts';
+import { fill } from './seller-adapter-core.ts';
 import { startStubSellerApi, type StubSellerApi, type StubOptions } from './seller-adapter-stub.ts';
 import { serveTwoOrigins } from './two-origins.ts';
 import { commitmentIdOf, knownPins, typedOf } from './verify.ts';
@@ -117,9 +117,10 @@ describe('seller adapter: quote to offer', () => {
     expect((Date.parse(terms.timing.deliverBy) - Date.parse(terms.createdAt)) / 1000).toBe(FOUR_DAYS_SEC);
     expect(await verifyTypedData({ address: terms.seller, ...typedOf('CommitmentTerms', terms, buyer.domain), signature: signatures.seller })).toBe(true);
 
-    // The template filled with the sample scope is the audit-report deal of T-317.
-    const sample = loadTermsFile(here('../fixtures/terms/audit-report.yaml'));
-    expect(terms.acceptance).toEqual(sample.acceptance);
+    // The template filled with the sample scope (T-534: no longer the audit-report deal of T-317, which stays the
+    // stricter worked example of site/ref/checks.txt, version 1 of the form).
+    const template = JSON.parse(readFileSync(here('./seller-adapter.template.json'), 'utf8'));
+    expect(terms.acceptance).toEqual({ deterministicChecks: fill(template.checks, SCOPE), rubric: { criteria: [], passThreshold: 0 } });
     expect(terms.deliverable.format).toBe('application/json');
     expect(terms.deliverable.description).toContain(`commit ${SCOPE.commit}. Scope: ${SCOPE.files.join(', ')}.`);
     expect(stub!.calls.start).toBe(0); // no hold yet, so no work
