@@ -4,9 +4,9 @@
 - **Phase:** 2
 - **Kind:** 5, settlement and judgment code (`docs/team.md`, Change recipes): the packages' tests and one review. `apps/adjudicator` is the judgment service, and `apps/demo-cloud` (kind 4) only wires its store
 - **Depends on:** T-523 (the triage of an outside scan's findings, which lists A-4 among the off-chain items)
-- **Paths this task may touch:** `apps/adjudicator/src/service.ts`, `apps/adjudicator/src/service.test.ts`, `apps/adjudicator/src/test-adjudicator.ts`, `apps/demo-cloud/src/world.ts`, `apps/demo-cloud/src/world.test.ts` (the list of storage prefixes the world may hold), this file
+- **Paths this task may touch:** `apps/adjudicator/src/service.ts`, `apps/adjudicator/src/service.test.ts`, `apps/adjudicator/src/test-adjudicator.ts`, `apps/demo-cloud/src/world.ts`, `apps/demo-cloud/src/world.test.ts` (the list of storage prefixes the world may hold), `docs/audit/known-issues.md` (the A-4 row), this file
 - **Human gate:** no for the change; a deploy of the operators is Rafa's
-- **Status:** in review
+- **Status:** done (pull request 652, merged 2026-11-18)
 - **Agent/session:** scan-fixes-main, started by the coordinator on 2026-11-18
 - **Roadmap row:** N191
 
@@ -48,4 +48,4 @@ Measured on 2026-11-18 in the worktree `t-530-judged-restart`, unless marked.
 
 **Not changed, from the review:**
 - After a restart, the fallback's first check reads its cached outcome from memory, so a kept escalation needs cover again at that check. A restart behaved the same before this change; phase-one deployments need no cover.
-- `docs/audit/known-issues.md` still lists A-4 as open. The docs batch (row N192) marks it fixed with this task.
+- `docs/audit/known-issues.md` lists A-4 as fixed off chain with this pull request.
