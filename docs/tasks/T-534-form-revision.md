@@ -6,7 +6,7 @@
 - **Depends on:** T-509 (the corpus, holdback pull request 635)
 - **Paths this task may touch:** `examples/seller-adapter.template.json`, `examples/security-review-form.md` (new), `docs/research/2026-11-18-report-corpus/` (`measure.mjs`, `results.json`), `tests/security-review-form.test.ts` (new), the tests that read the template (`examples/seller-adapter.test.ts`, `examples/audit-deal.test.ts`), `tools/duet/` (`review.ts`, `tools.ts`, `README.md`, `review/form-v1.json`), this file
 - **Human gate:** no
-- **Status:** review
+- **Status:** done with the merge of pull request 661 on 2026-11-18, after CI passed and two reviews' findings were fixed
 - **Agent/session:** the T-534 session, 2026-11-18, branch `t-534-form-revision`
 - **Roadmap row:** N40
 
