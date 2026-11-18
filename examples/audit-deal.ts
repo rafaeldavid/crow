@@ -10,7 +10,8 @@
 // The operators relay. Each party signs its own messages.
 //
 // The terms: 2,000.00 of the test token, a 4-day delivery window, and the audit-report template (T-320), filled
-// with the buyer's scope. The buyer fills the same template itself and refuses an offer that differs from it.
+// with the buyer's scope. The 4 days are the stub's quote for 3,000 lines; a quote's window replaces the 7 days the
+// adapter's /defaults publish, so the buyer signer lists deliverWithinSec among the differences (T-547). The buyer fills the same template itself and refuses an offer that differs from it.
 //
 // Two outcomes:
 //   released   the report passes the checks; the adjudicator accepts; the seller is paid and the buyer opens the report.
@@ -842,10 +843,11 @@ export async function rehearse(o: RehearsalOptions): Promise<RehearsalResult> {
   // The faucet is the only source of funds here: its largest grant is the most one deal can cost on this service.
   const maxGrant = await reader.trusted<J>('/.well-known/holdback.json', (x) => x.demo?.faucet?.maxGrant ?? null);
   if (maxGrant && typeof maxGrant.amount === 'string') say(`${o.world ? "This world's" : "The test service's"} faucet grants at most ${money({ token: pin.token.id, amount: maxGrant.amount })} a deal: a price plus both fees above that cannot be funded here. This tool adds no limit of its own (D31).`);
-  say(`The seller's report: ${files.report ? `${plain(files.report.path)}, ${files.report.bytes.length} bytes` : "the stub's built-in sample, for the buyer's scope"}${o.mappingFile ? `, in the seller's own shape, converted by ${plain(o.mappingFile)}` : ''}. The terms: ${files.terms ? plain(files.terms.path) : 'the built-in template, examples/seller-adapter.template.json'}.`);
+  say(`The seller's report: ${files.report ? `${plain(files.report.path)}, ${files.report.bytes.length} bytes` : "the stub's built-in sample, for the buyer's scope"}${o.mappingFile ? `, in the seller's own shape, converted by ${plain(o.mappingFile)}` : ''}. The terms: ${files.terms ? plain(files.terms.path) : 'the built-in template, examples/seller-adapter.template.json'}.${ownTerms ? ` The club, the adjudicators and the adjudication fee come from discovery, not from the file's clubId ${plain(ownTerms.clubId)} and policyId ${plain(ownTerms.adjudication.policyId)}.` : ''}`);
   if (addedRubric) say(`The terms carry no rubric: this case adds the template's optional rubric of ${shipped.optionalRubric.criteria.length} criteria, as a buyer's panel option would.`);
   if (name === 'redelivered') say(`The first report: ${o.refusedReportFile !== undefined ? plain(o.refusedReportFile) : files.report ? `the seller's report cut to its first half, ${report!.refused.length} of ${report!.good.length} bytes` : "the stub's report with the last file in scope left out"}.`);
-  if (name === 'refunded') say("The judges: the local world's panel is a stand-in set to reject: no model runs, and each verdict reads \"fake judge: fail\".");
+  if (name === 'refunded') say("The judges: the local world's panel is a stand-in set to reject: no model runs, and each verdict reads \"fake judge: fail\", though the record names the policy's models.");
+  if (name === 'rubric' && o.world) say("The judges: the local world's panel is a stand-in set to accept: no model runs, and each verdict reads \"fake judge: pass\", though the record names the policy's models.");
 
   const initial = name === 'redelivered' ? 'refused' : name === 'missed-deadline' || name === 'resume' ? 'running' : 'good';
   let selling: CaseSeller | undefined;
@@ -926,7 +928,11 @@ export async function rehearse(o: RehearsalOptions): Promise<RehearsalResult> {
       // The buyer's own record, read from every operator by its signer, whose x25519 key opens its released envelope; the key never reaches the record.
       const record = await signer.record(o.operators);
       const path = join(o.dir, 'deal-record.json');
-      writeFileSync(path, `${JSON.stringify(record, null, 2)}\n`);
+      // T-547: the local world's panel is a stand-in, so a record that names the policy's models says no model judged.
+      const standIn = o.world && (record.judgment as J)?.panel?.ran === true;
+      const note = 'A local rehearsal: no model judged this deal. The panel names the models of the adjudicator\'s policy, but a stand-in gave each verdict, whose reason reads "fake judge: pass" or "fake judge: fail".';
+      const { record: kind, ...rest } = record;
+      writeFileSync(path, `${JSON.stringify(standIn ? { record: kind, note, ...rest } : record, null, 2)}\n`);
       const count = (ok: boolean | null) => record.checks.filter((c) => c.ok === ok).length;
       step('The buyer writes the deal record', `${path}: outcome ${plain(String(record.row.outcome))}, ${count(true)} checks passed, ${count(false)} failed, ${count(null)} not run${record.disagreements.length ? `; the operators differ on ${record.disagreements.map((d) => d.section).join(', ')}` : ''}.`);
       if (wallet) say(`    The payment address ${signer.paymentAddress} holds ${money(buyerHolds)}; the signing key's balance moved by ${signingKeyMoved} base units after the test funds.`);
@@ -1146,7 +1152,9 @@ if (process.argv[1] && import.meta.url === pathToFileURL(process.argv[1]).href) 
   globalThis.fetch = async (input, init) => {
     const res = await send(input, init);
     const url = new URL(input instanceof Request ? input.url : String(input));
-    if (res.status >= 400 && operators.some((op) => new URL(op).origin === url.origin)) refusedRequests.push(`${init?.method ?? 'GET'} ${url.pathname} answered ${res.status}, Request-Id ${plain(res.headers.get('request-id') ?? 'none')}`);
+    // T-547: the deal record asks every operator for a judgment, and a deal no adjudicator decided has none: that 404 is expected.
+    const why = res.status === 404 && /\/judgment$/.test(url.pathname) ? ' (no judgment: no adjudicator decided this deal)' : '';
+    if (res.status >= 400 && operators.some((op) => new URL(op).origin === url.origin)) refusedRequests.push(`${init?.method ?? 'GET'} ${url.pathname} answered ${res.status}${why}, Request-Id ${plain(res.headers.get('request-id') ?? 'none')}`);
     return res;
   };
   let code = 0;
