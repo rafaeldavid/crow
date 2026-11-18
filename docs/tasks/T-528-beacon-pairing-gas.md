@@ -43,7 +43,10 @@ An outside scan's findings in group G3 repeat two known issues of the beacon. Th
 - No change to the verification itself: the D04 mutant's line is untouched.
 - **The deploy script** (`deploy-sepolia.sh`) sets `PAIRING_GAS=250000` in one place. It passes the value at the create line and to the creation-code check, appends it to the init code for the runtime-hash check, reads `PAIRING_GAS()` back, and writes it into the record's `args` for the beacon. That is more than the one line the plan guessed: the runtime hash and the creation check both need the argument.
 - **Tests outside `contracts/`** that deploy the beacon pass the same value: `apps/adjudicator/src/drand-contract.redteam.test.ts` (`args: [250_000n]`), and the two creation shims of `packages/settlement/evm/deploy-script.test.ts`.
-- **The tests in `contracts/test/` that deploy the beacon** pass 250,000: ten files and two harnesses that inherit it. One harness getter turns from `pure` to `view`, because it reads the immutable.
+- **The tests in `contracts/test/` that deploy the beacon** pass 250,000: ten files and two harnesses that inherit it, plus T-527's `BeaconProbe.t.sol` after the lane merged in. One harness getter turns from `pure` to `view`, because it reads the immutable.
+- **Two existing tests changed with the behaviour:**
+  - `NoAdmin.fuzz.t.sol`'s reviewed ABI allowlist for the beacon gains `MIN_PAIRING_GAS()` and `PAIRING_GAS()`, both read-only.
+  - `DrandRedTeam.t.sol`'s `test_attack_break_validDecisionWithTooLittleGas_revertsAndSettlesOnRetry` pinned R-9: it required some gas limit to make a valid proof say `InvalidSignature`. It now requires the opposite, through the rules contract's `decide`: no gas limit makes the valid proof say `InvalidSignature`, and some say `NotEnoughGas`. Measured from 60,000 to 600,000 gas in steps of 5,000: 19 limits said `NotEnoughGas`, none said `InvalidSignature`, and the decision first settled at 275,000 gas [measured, `-vv`].
 
 **Full suite:** see the pull request. The anvil suites that run the deploy script run in CI only; they were not run locally (no `node_modules` in the worktree).
 
