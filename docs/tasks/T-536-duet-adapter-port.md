@@ -6,7 +6,7 @@
 - **Depends on:** T-391 (the duet harness)
 - **Paths this task may touch:** `tools/duet/run.ts`, `tools/duet/duet.test.ts`, this file
 - **Human gate:** no
-- **Status:** in review
+- **Status:** done (pull request 658, merged 2026-11-18)
 - **Agent/session:** duet-bad-offer, started by the scan-fixes session on 2026-11-18
 - **Roadmap row:** none (a CI defect that blocked PR 652)
 

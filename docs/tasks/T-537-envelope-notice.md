@@ -6,7 +6,7 @@
 - **Depends on:** T-523 (the triage of an outside scan's findings), D81
 - **Paths this task may touch:** `apps/adjudicator/src/service.ts`, `apps/adjudicator/src/service.test.ts`, `apps/adjudicator/scripts/mutants.mjs` (the mutant on the changed line), `apps/demo-cloud/src/refusals.test.ts`, `docs/decisions-today.md` (D81), `docs/audit/known-issues.md` (the H-2 row), this file
 - **Human gate:** no for the change; a deploy of the operators is Rafa's
-- **Status:** in review
+- **Status:** done (pull request 660, merged 2026-11-18; deployed with both operators 2026-11-18)
 - **Agent/session:** scan-fixes-main, on Rafa's word of 2026-11-18
 - **Roadmap row:** N191
 

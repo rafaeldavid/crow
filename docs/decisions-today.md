@@ -1518,6 +1518,7 @@ Today a seller with its own API reads 13 files of 98,462 bytes and runs 22 comma
 - **What changes in D77.** D77 had the outside audit read the phase-one contracts as deployed, at the tag `contracts-phase-one-1`, with every fix in the build after it. Now the fixes come first: the next build, on the lane `contracts-audit-ready`, carries the scan's contract fixes and RR-1 to RR-5.
 - **The fixed build is checked again.** A second scan reads the fixed version before the audit. Crow buys it through its own escrow, as a deal, when Rafa gives the go; it costs credits.
 - **The outside audit then reads the fixed build.** The first version's findings go with it, each with its status, so the auditor does not report them as new.
+- **Where it stands (2026-11-18).** All four contract fixes are merged on the lane: pull requests 649 (main into the lane), 654 (T-527), 657 (T-528) and 659 (T-529), the last as `d621291e`. The second check waits: Rafa is asking the scanning partner whether a review of the fixes fits the credits that remain.
 - **What stays from D77.** The code under audit does not change during the audit. Our own findings go to the auditor as known issues (`docs/audit/known-issues.md`). The audit is a Crow deal. The deployed phase-one contracts stay as they are until the fixed build's cutover (`docs/redeploy-contracts.md`), and each deploy step waits for Rafa.
 - **Litmus tests.** Neutrality, the hold and defended judgment: unchanged. This orders the work and changes no code.
 
