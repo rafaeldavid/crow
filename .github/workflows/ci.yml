@@ -166,13 +166,14 @@ jobs:
       - uses: foundry-rs/foundry-toolchain@dba66c27052e63476d886f22216e119ba7e615bf # v1
         with:
           version: v1.0.0
-      # Compiling takes about 131 s of this job (measured, run 42802205136). A pull request reuses the output when
-      # every input is the same: the Solidity under contracts/, the compiler settings, the remappings and the
-      # submodule's pinned commit. Push to main never restores it, so main always tests what it compiled itself,
-      # and only main's output is offered to pull requests that change no contract. A pull request restores and
-      # never saves (the restore-only action), so only main writes an entry. The contracts job never uses it.
+      # Compiling takes about 131 s of this job (measured, run 42802205136). A run reuses the output when every
+      # input is the same: the Solidity under contracts/, the compiler settings, the remappings and the submodule's
+      # pinned commit. A pull request restores and never saves (the restore-only action), so only main writes an
+      # entry. Since T-504 a push to main restores too, but only an entry main itself saved for exactly these inputs
+      # (the key has no fallback prefix); it compiles and saves when none exists. The contracts job never uses the
+      # cache, so every push to main still compiles and tests the contracts from source there.
       - uses: actions/cache/restore@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
-        if: github.event_name == 'pull_request'
+        id: forge-out
         with:
           path: |
             contracts/out
@@ -183,7 +184,7 @@ jobs:
         working-directory: contracts
         run: forge build
       - uses: actions/cache/save@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
-        if: github.event_name == 'push' && matrix.suite.name == 'settlement'
+        if: github.event_name == 'push' && matrix.suite.name == 'settlement' && steps.forge-out.outputs.cache-hit != 'true'
         with:
           path: |
             contracts/out
