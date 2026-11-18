@@ -9,7 +9,10 @@
 //   2. the terms in its call data hash to the commitment ID;
 //   3. both settlement signatures recover, under the deployment's domain, to the terms' buyer and seller;
 //   4. the note's domain-free EIP-712 struct hash is the settlement's nonce, so both parties signed this note;
-//   5. the note names the delivery the settlement names, and the settlement releases that delivery's key.
+//   5. the note names the delivery the settlement names, and the settlement releases that delivery's key;
+//   6. the note holds the five signed fields and no other (an unsigned extra field would hash the same), and as a
+//      waiver it names one or more waived checks and no successor.
+// Exit 0 passed, 1 a check failed, 2 could not run (a node that does not answer is not a failed check).
 import { readFileSync } from 'node:fs';
 import { decodeFunctionData, hashStruct, recoverTypedDataAddress, type Hex } from '../../../examples/node_modules/viem/_esm/index.js';
 import { commitmentIdOfView } from '../../../examples/evidence.ts';
@@ -34,8 +37,15 @@ const lc = (s: unknown) => String(s).toLowerCase();
 let failed = 0;
 const check = (ok: boolean, line: string) => { console.log(`${ok ? 'pass' : 'FAIL'}  ${line}`); if (!ok) failed++; };
 const read = async (method: string, params: unknown[]) => {
-  const res = await fetch(rpc, { method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify({ jsonrpc: '2.0', id: 1, method, params }) });
-  return ((await res.json()) as J).result;
+  try {
+    const res = await fetch(rpc, { method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify({ jsonrpc: '2.0', id: 1, method, params }) });
+    const out = ((await res.json()) as J).result;
+    if (!out) throw new Error(`${method} returned nothing`);
+    return out;
+  } catch (e) {
+    console.error(`note-check: could not run: ${rpc} ${(e as Error).message}. This says nothing about the note.`);
+    process.exit(2);
+  }
 };
 
 const pin = knownPins().find((p) => p.domain.chainId === 11155111);
@@ -62,6 +72,9 @@ const buyer = await recoverTypedDataAddress({ ...typed, signature: m.buyerSignat
 const seller = await recoverTypedDataAddress({ ...typed, signature: m.sellerSignature });
 check(lc(buyer) === lc(t.buyer) && lc(seller) === lc(t.seller), `the settlement's two signatures recover to the terms' buyer ${lc(t.buyer)} and seller ${lc(t.seller)}`);
 
+const keys = Object.keys(note).sort().join(',');
+check(keys === 'deliveryHash,kind,salt,successor,waivedChecks', `the note holds the five signed fields and no other (${keys})`);
+check(note.kind === 'waiver' && Array.isArray(note.waivedChecks) && note.waivedChecks.length > 0 && /^0x0{64}$/.test(String(note.successor)), `as a waiver it names ${note.waivedChecks?.length ?? 0} waived check(s) and no successor`);
 const noteHash = hashStruct({ types: NOTE_TYPES, primaryType: 'SettlementNote', data: note });
 check(lc(noteHash) === lc(m.nonce), `the note's hash ${noteHash} is the settlement's nonce: both parties signed this note`);
 check(lc(note.deliveryHash) === lc(m.deliveryHash) && m.hasDelivery === true && m.releaseKey === true, `the note names delivery ${note.deliveryHash}, the delivery the settlement names, and the settlement releases its key`);
