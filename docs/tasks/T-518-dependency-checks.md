@@ -49,7 +49,7 @@ The security review of 2026-11-18 found the largest gap in how outside code reac
 - [x] Only named packages may run an install or build script. Proof: a planted package with an install script is refused and its script does not run.
 - [x] The unpinned `npx wrangler@4` calls are pinned to one exact version.
 - [x] One row in the Rules and checks table, and a test that fails if the settings are removed.
-- [ ] Part 2: a scan of dependency changes as its own pull request under `.github/`, open and unmerged, for Rafa's yes.
+- [x] Part 2: a scan of dependency changes as its own pull request under `.github/` (PR 642), open and unmerged, for Rafa's yes.
 - [x] Handoff: the two steps only Rafa can take.
 
 ## Out of scope
@@ -69,6 +69,7 @@ All runs on Rafa's Mac on 2026-11-18 with pnpm 12.16.1 and Node 22.22.2, `CI=tru
 - **pnpm 12's defaults already refuse unapproved builds (measured):** the first `build/` run, with only `minimumReleaseAge` set, failed the same way. `strictDepBuilds: true` is written anyway, so a change of default in a later pnpm cannot open it, and the test can hold it.
 - **The test bites (measured).** `pnpm exec vitest run tests/install-rules.test.ts`: 7 of 7 pass on the branch. Its own cases remove `minimumReleaseAge`, lower it to 1,440 minutes, remove `strictDepBuilds` or `allowBuilds`, add `dangerouslyAllowAllBuilds` or `minimumReleaseAgeStrict: false`, and add a bare-name, range or pattern exception; each is reported. It accepts only six top-level keys and one line shape under each, so a quoted or indented `dangerouslyAllowAllBuilds`, a flow-style block, `trustLockfile`, `minimumReleaseAgeIgnoreMissingTime` or `pnpmfile` fails it, and it fails if a pnpmfile exists. The review found the first version passing with a quoted key and with `trustLockfile: true`, and failing on its own `docs/team.md` row; both are fixed.
 - **Nothing the pin touches broke (measured).** After `pnpm typecheck` (which builds): the deploy and deploy-plan tests (`apps/test-agents/src/deploy.test.ts`, `tests/early-access-deploy.test.ts`, `tests/site-deploy.test.ts`, `apps/demo-cloud/src/deploy-preflight.test.ts`, `apps/hosted-sellers`), `examples/e2e-scenarios-direct.test.ts` and the new test: 9 files, 119 tests passed, 4 skipped, in 67.8 s.
+- **Part 2's scan fails on a planted bad package and passes without it (measured, PR 642).** Run 44285712932 on a commit that planted a lockfile naming `flatmap-stream@0.1.1` and `lodash@4.17.20` failed (exit code 1). It reported "2 packages affected by 7 known vulnerabilities", including `MAL-2025-20690` (malicious code in flatmap-stream) and 4 lodash advisories. Run 44286139129, after the plant was removed, passed: 191 packages in `pnpm-lock.yaml` and 109 in `tools/one-click/package-lock.json`, 1 finding filtered by `osv-scanner.toml`, "No issues found". A first plant under `reports/` was not read, because the scanner skips gitignored paths (measured, run 44285360646).
 - **Cost (inferred):** CI has no verification cache, so each of its 6 `pnpm install` runs adds about 5 s for the lockfile check, from the 4.7 s measured locally.
 
 ## Decisions
@@ -77,11 +78,12 @@ All runs on Rafa's Mac on 2026-11-18 with pnpm 12.16.1 and Node 22.22.2, `CI=tru
 2. **Exceptions are exact `name@version` entries with a dated comment,** removed once the version turns 14 days old. The test refuses bare names, ranges and patterns, since a bare name would exempt every future version.
 3. **`allowBuilds`, not `permissions`.** pnpm 12.11 added `permissions`, which takes precedence over `allowBuilds`; the test refuses a `permissions` key so the allowlist stays in one place.
 4. **Wrangler at 4.151.3,** the exact version the hosted-seller deploys already ran, public for 29 days. One version in every file, held by the test; the newest version older than 14 days was 4.157.0, a move left for a deploy session to make and test.
-5. **Part 2 uses OSV-Scanner, not GitHub's dependency review action.** OSV's database carries the OpenSSF malicious-packages records for npm (`MAL-…` IDs; measured: a query for `flatmap-stream@0.1.1` returns `MAL-2025-20690` beside two GitHub advisories). The dependency review action's README (v5.0.1) does not mention malicious packages. OSV-Scanner also reads `pnpm-lock.yaml` directly and needs no account or token. Its Action runs a Docker image by tag, so the workflow pins the image by digest instead.
+5. **Part 2 uses OSV-Scanner, not GitHub's dependency review action.** OSV's database carries the OpenSSF malicious-packages records for npm (`MAL-…` IDs; measured: a query for `flatmap-stream@0.1.1` returns `MAL-2025-20690` beside two GitHub advisories). The dependency review action's README (v5.0.1) does not mention malicious packages. OSV-Scanner also reads both lockfiles directly and needs no account or token. The repository allows only selected Actions, which refused a Docker step at startup (measured: runs 44285104293 and 44285129764), so the workflow downloads the v2.7.0 release binary and refuses it unless its SHA-256 matches the pinned hash; the release's `SHA256SUMS` and GitHub's asset digest give the same hash (measured).
+6. **One existing finding is ignored, with an end date.** The first scan of `main` found GHSA-fc5q-39xc-vjpf, a High ReDoS in `picomatch` 4.0.7 that GitHub reviewed on 2026-11-17, with no fixed version. Only ESLint and vitest reach it, matching globs this repository writes (measured: `pnpm why picomatch`). Part 2's `osv-scanner.toml` lets it through until 2026-12-18, with that reason, and the scan fails again after that date.
 
 ## Handoff
 
-**Done:** part 1 (this pull request). **Open:** part 2's pull request, for Rafa's yes (linked in the coordinator's report).
+**Done:** part 1 (PR 641). **Open:** part 2, PR 642, a draft for Rafa's yes. It adds `.github/workflows/dependency-scan.yml` and `osv-scanner.toml`. It is not a required check; adding it to the `main` ruleset is a separate settings change.
 
 **Rafa's two steps:**
 
