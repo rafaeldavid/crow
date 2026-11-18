@@ -81,8 +81,20 @@ async function fund(buyer: Agent, id: Hex): Promise<void> {
   delete terms.signatures;
   await buyer.agreeAndFund(terms, 2_100_000_000n);
 }
-const name = (a: RunningAdapter, id: Hex, body: J, credential: string | null = READY) =>
-  fetch(`${a.url}/deals/${id}/job`, { method: 'POST', headers: { 'content-type': 'application/json', ...(credential === null ? {} : { authorization: `Bearer ${credential}` }) }, body: JSON.stringify(body) });
+/**
+ * The job route as a client calls it. A 409 `holder_busy` means the deal loop is part-way through the holding deal's
+ * pass (it still works on a deal for a moment after it records the refusal), and its detail says to send again; so
+ * does this, every 100 ms for up to 5 s. Every other answer, every other 409 included, comes back as it is (T-520).
+ */
+async function name(a: RunningAdapter, id: Hex, body: J, credential: string | null = READY): Promise<Response> {
+  for (let tries = 0; ; tries++) {
+    const res = await fetch(`${a.url}/deals/${id}/job`, { method: 'POST', headers: { 'content-type': 'application/json', ...(credential === null ? {} : { authorization: `Bearer ${credential}` }) }, body: JSON.stringify(body) });
+    if (res.status !== 409 || tries === 50) return res;
+    const answer = (await res.clone().json().catch(() => null)) as J;
+    if (answer?.type !== 'holder_busy') return res;
+    await new Promise((r) => setTimeout(r, 100));
+  }
+}
 async function until(what: string, ok: () => boolean | Promise<boolean>, timeoutMs = 15_000): Promise<void> {
   for (const end = Date.now() + timeoutMs; Date.now() < end; await new Promise((r) => setTimeout(r, 25))) if (await ok()) return;
   throw new Error(`timed out waiting for ${what}`);
