@@ -5,7 +5,7 @@
 - **Depends on:** T-504 (the CI review that found the reruns, PR 631)
 - **Paths this task may touch:** `examples/buyer-signer-addresses.test.ts`, this file
 - **Human gate:** no
-- **Status:** review
+- **Status:** done (pull request 633, merged 2026-11-18)
 - **Agent/session:** flaky-tests session `local_56a7ced9-ea7f-4f5c-9ab6-4e759abe1daf`, started by the coordinator on 2026-11-18
 - **Roadmap row:** N173
 
