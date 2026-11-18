@@ -1,0 +1,5 @@
+{
+  "about": "T-509 held-out set. Every report of one firm, fixed on 2026-11-18 before any report was read. The converter and the numbers were built on the design set only; these reports were only run through the same script. A later task that changes the form or the converter must not read these reports or tune on their results; it reruns measure.mjs and reports the held-out numbers as they come.",
+  "firm": "cyfrin",
+  "reports": ["cyfrin-1", "cyfrin-2", "cyfrin-3", "cyfrin-4", "cyfrin-5", "cyfrin-6"]
+}

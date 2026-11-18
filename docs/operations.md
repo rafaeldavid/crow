@@ -317,6 +317,12 @@ Rafa ran it from a clean worktree with Crow's corrected seller folder, the one t
 
 It carries T-502 (pull request 621) with the same folder, so the bundle SHA-256 is unchanged; the T-502 session ran it on Rafa's word. The deal guard read 0 open deals. The deploy's own check passes as soon as the fingerprint matches, which it already did, so the new code was confirmed separately: at 19:17 UTC `/health` read `operational`, `39d9d34a…5f75`, and the new field `"refused": []`, and `GET /deals/<id>` answered 404 for a deal the seller does not hold [measured]. `pilot-scan-1` was not deployed.
 
+### The seller's signed refund: pilot-scan-1 with T-503 (deployed 2026-11-18, 08:08 UTC)
+
+**Hosted seller pilot-scan-1 deploy 2026-11-18 08:08 UTC, commit `4d7aacb` on a detached HEAD: pass.** crow-seller-pilot-scan-1 `2e297344-58c2-4905-9910-6fdb2b0114fe` (rollback target `096d7162-224b-4181-af84-fd52355139df`).
+
+It carries T-503 (pull request 627): `POST /deals/<id>/refund`, behind the ready credential, makes the seller sign a full refund of a deal it delivered nothing into. The folder is unchanged, so the bundle SHA-256 stays `042fd6b9…8308`. Rafa ran it from a clean worktree. The deal guard read 0 open deals. At 08:08 UTC `/health` read `operational` with 0 open deals and `"refused": []`, and the refund route answered 401 to a request with no credential, so the new code serves [measured]. `pilot-scan-2` keeps its earlier version.
+
 ### The pilot's second deal: pilot-scan-1 with the artifacts call and an existing job (deployed 2026-11-17, 16:10 UTC)
 
 **Hosted seller pilot-scan-1 deploy 2026-11-17 16:10 UTC, commit `dc6238f` on a detached HEAD: pass.** crow-seller-pilot-scan-1 `096d7162-224b-4181-af84-fd52355139df` (rollback target `26ca51fd-7fe3-48d7-aa5e-96a65ab9e156`).
