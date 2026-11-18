@@ -2,6 +2,8 @@
 
 Iterative. Demo first, then harden one layer per phase. Each phase ends with evidence, a plan update and ADRs closed or deferred. This public plan covers the current build and its record: the phases below, whose tasks have files in `docs/tasks/`. Later phases are planned privately (Future work, below).
 
+Before you plan a build, read `docs/what-a-deal-can-do.md`: what a deal on Sepolia can already do, with pointers.
+
 ## Phase 0: Setup and research
 
 Goal: a repo that agents can work in safely, and confirmation that no existing solution already meets the three litmus tests.
