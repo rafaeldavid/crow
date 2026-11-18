@@ -261,6 +261,24 @@ describe("Crow's test buyer", () => {
     await s.stop();
   });
 
+  it('asks the faucet for no more than its cap, and still funds a 1,000 tUSDC deal under a small cap (T-545 review, finding 3)', async () => {
+    // A cap between one deal's total (1,001.10 tUSDC here) and a day's deals (above 50,000 tUSDC).
+    const world = await serveWorld({ faucetMaxAmount: 2_000_000_000n });
+    try {
+      const asks = spyFetch((url, init) => init?.method === 'POST' && url.endsWith('/v1/faucet'));
+      const s = startBuyer({ world });
+      const seller = await freshSeller(world);
+      const { id } = await offerTo(s, seller, { price: { token: pin.token.id, amount: '1000000000' }, timing: { ...TIMING, deliverWithinSec: 604_800 } });
+      expect((await postOffer(s, { commitmentId: id })).status).toBe(202);
+      await statusUntil(s, id, (x) => x.status === 'funded', 10_000);
+      const mine = asks.map((c) => JSON.parse(c.body)).filter((b) => b.address === s.buyer.agent.address);
+      expect(mine.map((b) => b.amount)).toEqual(['2000000000']);
+      await s.stop();
+    } finally {
+      await world.close();
+    }
+  });
+
   it('takes exactly 1,000 tUSDC and 7 days, and refuses one base unit or one second more, naming the rule (T-545)', async () => {
     const { checkTerms } = await import('./buyer.ts');
     const s = startBuyer({ run: false });
@@ -284,7 +302,9 @@ describe("Crow's test buyer", () => {
     expect(over.status).toBe(429);
     const body = await over.json();
     expect(body.rule).toBe('limits.perSellerOpen');
-    expect(body.retryAfterSec).toBeGreaterThan(0);
+    // The soonest the slot can free: the unfunded deal's 120 s for the adjudicator to accept, not a minute.
+    expect(body.retryAfterSec).toBeGreaterThan(60);
+    expect(body.retryAfterSec).toBeLessThanOrEqual(120);
     expect((await postOffer(s, { commitmentId: (await offerTo(s, await freshSeller())).id })).status).toBe(202);
     await s.stop();
   });

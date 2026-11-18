@@ -353,8 +353,14 @@ export class TestBuyer {
     const midnight = Date.parse(`${day(now)}T00:00:00Z`) + DAY;
     if (today.length >= this.limits.perDay) return { rule: 'limits.perDay', why: `${this.limits.perDay} deals today (UTC)`, until: midnight };
     // A deal may stay open 7 days: one seller holds at most perSellerOpen of the open slots (T-545).
+    // A slot frees only when one of the seller's deals closes: the retry hint is the soonest that can happen, an
+    // unfunded deal's adjudicator deadline or a funded deal's deliverBy (T-545 review, finding 1).
     const open = await Promise.all([...(await this.s.list({ prefix: 'o:' })).keys()].map((k) => this.s.get<BuyerDeal>(`d:${k.slice(2)}`)));
-    if (open.filter((d) => d?.seller === seller).length >= this.limits.perSellerOpen) return { rule: 'limits.perSellerOpen', why: `${this.limits.perSellerOpen} deals from your address in progress`, until: now + MIN };
+    const held = open.filter((d): d is BuyerDeal => d?.seller === seller);
+    if (held.length >= this.limits.perSellerOpen) {
+      const frees = held.map((d) => (d.status === 'accepted' ? d.acceptedAt + WINDOWS.maxAdjudicatorAcceptSec * 1000 : Date.parse(d.terms.timing.deliverBy)));
+      return { rule: 'limits.perSellerOpen', why: `${this.limits.perSellerOpen} deals from your address in progress; a slot frees when one closes`, until: Math.max(now + MIN, Math.min(...frees)) };
+    }
     const mine = recent.filter((r) => r.seller === seller);
     const lastHour = mine.filter((r) => now - r.at < HOUR);
     if (lastHour.length >= this.limits.perSellerPerHour) return { rule: 'limits.perSellerPerHour', why: `${this.limits.perSellerPerHour} deals from your address in the last hour`, until: Math.min(...lastHour.map((r) => r.at)) + HOUR };
@@ -567,12 +573,13 @@ export class TestBuyer {
     const need = BigInt(d.total);
     if (balance >= need && live) return;
     // The faucet grants an address once an hour, and a deal may cost 1,000 tUSDC: so one grant asks for a day's deals at
-    // the top price, perDay x (price + adjudication fee), and later deals that hour fund from it (T-545). Never more than
-    // the faucet's own cap, demo.faucet.maxGrant in discovery, and never less than this deal's total
-    // (site/ref/http.txt, "Discover and get test tUSDC").
-    const day = BigInt(this.limits.perDay) * (BigInt(MAX_PRICE_UNITS) + BigInt(MAX_ADJUDICATION_FEE_UNITS));
-    const cap = await a.trusted('/.well-known/holdback.json', (x) => String(x.demo?.faucet?.maxGrant?.amount ?? ''));
-    const ask = AMOUNT.test(cap) && day > BigInt(cap) ? BigInt(cap) : day;
+    // the top total, perDay x (price + adjudication fee + the operator fee at that price), and later deals that hour fund
+    // from it (T-545). Never more than the faucet's own cap, demo.faucet.maxGrant in discovery, and never less than this
+    // deal's total (site/ref/http.txt, "Discover and get test tUSDC").
+    const found = await a.trusted('/.well-known/holdback.json', (x) => ({ cap: String(x.demo?.faucet?.maxGrant?.amount ?? ''), fee: x.fees?.operator ?? null }));
+    const top = BigInt(MAX_PRICE_UNITS) + BigInt(MAX_ADJUDICATION_FEE_UNITS) + (found.fee ? operatorFeeOf({ token: this.token, amount: MAX_PRICE_UNITS }, found.fee) : 0n);
+    const day = BigInt(this.limits.perDay) * top;
+    const ask = AMOUNT.test(found.cap) && day > BigInt(found.cap) ? BigInt(found.cap) : day;
     const grant = await this.submit({ step: 'fund', path: '/v1/faucet', body: { address: a.address, amount: (ask > need ? ask : need).toString() }, key: crypto.randomUUID() });
     if (grant.clubId !== d.terms.clubId) throw new Refused(`the faucet admitted the buyer to ${grant.clubId}, not ${d.terms.clubId}`);
     this.log(`test-buyer: faucet granted ${grant.granted?.amount ?? '?'} base units`);
