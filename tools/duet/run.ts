@@ -82,15 +82,38 @@ export function finish(dir: string, events: readonly Event[], limits?: Partial<L
   return { summary, over, ticket: ticketPath, page };
 }
 
-const freePort = (): Promise<number> =>
-  new Promise((ok, fail) => {
+/**
+ * The first port of the range the operating system hands out on its own, to `listen(0)` and to outgoing connections:
+ * Linux's ip_local_port_range, macOS's net.inet.ip.portrange.first, else the IANA default 49152.
+ */
+export function ephemeralFirst(): number {
+  try { const first = Number(readFileSync('/proc/sys/net/ipv4/ip_local_port_range', 'utf8').trim().split(/\s+/)[0]); if (first > 0) return first; } catch { /* not Linux */ }
+  try { const first = Number(execFileSync('sysctl', ['-n', 'net.inet.ip.portrange.first'], { encoding: 'utf8' }).trim()); if (first > 0) return first; } catch { /* not macOS */ }
+  return 49152;
+}
+
+const bindable = (port: number): Promise<boolean> =>
+  new Promise((ok) => {
     const s = createServer();
-    s.once('error', fail);
-    s.listen(0, '127.0.0.1', () => {
-      const p = (s.address() as { port: number }).port;
-      s.close(() => ok(p));
-    });
+    s.once('error', () => ok(false));
+    s.listen(port, '127.0.0.1', () => s.close(() => ok(true)));
   });
+
+/**
+ * The port the seller adapter must listen on: free now, bound by the adapter seconds later. It is drawn below the
+ * operating system's own range (T-536): a port from that range, picked with listen(0) and closed, can go to any other
+ * socket on the machine before the adapter binds it, and the adapter then stops with EADDRINUSE and no buyer gets an offer.
+ */
+export async function pickAdapterPort(): Promise<number> {
+  const first = ephemeralFirst();
+  const low = first > 11_000 ? 10_000 : 1024;
+  if (first - low < 100) throw new Error(`the operating system hands out ports from ${first} up, which leaves no room below it for the seller adapter's port`);
+  for (let i = 0; i < 100; i++) {
+    const port = low + Math.floor(Math.random() * (first - low));
+    if (await bindable(port)) return port;
+  }
+  throw new Error(`no free port for the seller adapter between ${low} and ${first - 1} after 100 tries`);
+}
 
 const originOf = (u: string) => new URL(u).origin;
 
@@ -131,7 +154,7 @@ export async function runDuet(o: RunOptions): Promise<RunResult> {
   const world = await startWorld({ rec, ...(o.world ? { world: o.world } : {}), ...(o.docs ? { docs: o.docs } : {}), sellerPublic: join(real.sellerWork, 'public'), sellerName: SELLER_NAME, report: s.report, onSecret: (v) => secrets.add(v) });
   let ends: AgentEnd[] = [];
   try {
-    const adapterPort = await freePort();
+    const adapterPort = await pickAdapterPort();
     const sellerPage = `${world.web}/sellers/${SELLER_NAME}/`;
     const adapter = `http://127.0.0.1:${adapterPort}`;
     // On a local run, https://crow.direct is answered from this machine's copy of the site, home page included, so an
