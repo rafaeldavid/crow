@@ -855,9 +855,30 @@ describe('intake refusals publish nothing (review item 3)', () => {
     c.state = { ...(c.state as object), delivery: c.delivery } as typeof c.state;
     s.at('2026-11-01T10:00:30Z');
     const report = await a.adj.runOnce();
-    expect(report.refused[0]!.problem.detail).toMatch(/key_unwrap_failed/);
+    // T-537: retried, never rejected, and said as a turn the adjudicator cannot take yet, so the hosted world shows it.
+    expect(report.refused[0]!.problem.type).toBe('adjudicator_unavailable');
+    expect(report.refused[0]!.problem.detail).toMatch(/cannot open its envelope in the seller's delivery \(key_unwrap_failed\); not judged, nothing signed, retrying on each pass\. If nothing changes, this turn passes to the fallback or the default outcome by the terms/);
     expect(s.records.size).toBe(0);
     expect(s.decisions(id)).toHaveLength(0);
+    // The next pass tries again, and still signs nothing.
+    s.at('2026-11-01T10:01:00Z');
+    expect((await a.adj.runOnce()).refused.map((r) => r.problem.type)).toEqual(['adjudicator_unavailable']);
+    expect(s.decisions(id)).toHaveLength(0);
+    s.at('2026-11-01T10:02:00Z');
+    await b.adj.runOnce();
+    expect(s.state(id).kind).toBe('Released');
+  });
+
+  it('a delivery with no envelope for the primary is said the same way, retried and never decided (T-537)', async () => {
+    const { s, a, b, id } = await setup();
+    const c = s.cases.get(id)!;
+    const { signature: _s, ...unsigned } = { ...c.delivery!, encryptedKeys: c.delivery!.encryptedKeys.filter((k) => k.recipient !== A.address) }; // eslint-disable-line @typescript-eslint/no-unused-vars
+    c.delivery = { ...unsigned, signature: await signMessage(SELLER.key, DOMAIN, { ...unsigned, type: 'Delivery' }) };
+    c.state = { ...(c.state as object), delivery: c.delivery } as typeof c.state;
+    s.at('2026-11-01T10:00:30Z');
+    const report = await a.adj.runOnce();
+    expect(report.refused.map((r) => [r.problem.type, r.problem.detail])).toEqual([['adjudicator_unavailable', expect.stringMatching(/^the seller's delivery holds no envelope for this adjudicator; not judged, nothing signed, retrying on each pass/)]]);
+    expect([s.records.size, s.decisions(id).length, a.calls.length]).toEqual([0, 0, 0]);
     s.at('2026-11-01T10:02:00Z');
     await b.adj.runOnce();
     expect(s.state(id).kind).toBe('Released');

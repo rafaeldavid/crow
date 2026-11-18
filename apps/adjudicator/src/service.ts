@@ -807,7 +807,9 @@ export class Adjudicator {
     const envelope: EncryptedKey | undefined =
       role === 'primary' ? task.delivery.encryptedKeys.find((k) => k.recipient.toLowerCase() === this.address) : task.releasedKey;
     if (!envelope || envelope.recipient.toLowerCase() !== this.address) {
-      return err(problem('invalid_state', role === 'primary' ? 'no envelope for this adjudicator in the delivery' : `no key released to the ${role} adjudicator; it does not read the work before takeover`));
+      // T-537: the primary's missing envelope is said as an unopened one is: retried, never rejected.
+      if (role === 'primary') return err(problem('adjudicator_unavailable', `the seller's delivery holds no envelope for this adjudicator${ENVELOPE_THEN}`));
+      return err(problem('invalid_state', `no key released to the ${role} adjudicator; it does not read the work before takeover`));
     }
     // The seed for the role (ADR-0018).
     const bound = { policy: policyR.value.policy, impl: policyR.value.impl, judges: judges.value };
@@ -1026,13 +1028,19 @@ function errorClass(e: unknown): string {
  * store, not the seller, may be at fault; retried). A ciphertext the store does not return at all is
  * refused the same way, before intake (`#judge`, T-347).
  */
+/** T-537: what a party reads when this adjudicator cannot open its envelope in the seller's delivery. */
+const ENVELOPE_UNOPENED = "this adjudicator cannot open its envelope in the seller's delivery";
+const ENVELOPE_THEN = '; not judged, nothing signed, retrying on each pass. If nothing changes, this turn passes to the fallback or the default outcome by the terms';
+
 export function mapIntakeError(e: IntakeError): Result<DecisionOutcome, Problem> {
   switch (e.code) {
     case 'ciphertext_hash_mismatch':
       return err(problem('invalid_state', 'the stored ciphertext does not match the delivery; retrying later'));
     case 'no_key_for_recipient':
     case 'key_unwrap_failed':
-      return err(problem('invalid_state', `this adjudicator cannot open its key (${e.code}); refusing without a record`));
+      // T-537: retried, never rejected, since a final reject could punish a key fault of this adjudicator's own; and
+      // said, so both parties see the turn drifting to the fallback (ADR-0031 red team H-2).
+      return err(problem('adjudicator_unavailable', `${ENVELOPE_UNOPENED} (${e.code})${ENVELOPE_THEN}`));
     default:
       return ok('reject');
   }

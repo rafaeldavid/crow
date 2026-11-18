@@ -1520,3 +1520,15 @@ Today a seller with its own API reads 13 files of 98,462 bytes and runs 22 comma
 - **The outside audit then reads the fixed build.** The first version's findings go with it, each with its status, so the auditor does not report them as new.
 - **What stays from D77.** The code under audit does not change during the audit. Our own findings go to the auditor as known issues (`docs/audit/known-issues.md`). The audit is a Crow deal. The deployed phase-one contracts stay as they are until the fixed build's cutover (`docs/redeploy-contracts.md`), and each deploy step waits for Rafa.
 - **Litmus tests.** Neutrality, the hold and defended judgment: unchanged. This orders the work and changes no code.
+
+## D81. An adjudicator that cannot open its envelope retries and says so; it never signs a reject for it (T-537)
+
+**Status:** decided, 2026-11-18.
+
+**Decided 2026-11-18 by Rafa,** on the follow-up ADR-0031's red team named for its finding H-2 (the reference primary could sign a reject when its own envelope is missing or does not open). His words: "the reject from the adjudicator is final so since this can be a mistake, I don't think it should reject as much as retry", and, on making the retry visible, "Let's implement this, but feels like in the next contract rebuild we probably want some sort of onchain signal to make this harder".
+
+- **No reject.** In phase one a reject is final, and an envelope can fail to open through the adjudicator's own fault: the signed terms bind no encryption key for it, and its registration's key can change. So the reference adjudicator refuses the turn, signs and publishes nothing, and tries again on each pass. If nothing changes, the fallback decides, or the default outcome follows by the terms.
+- **Said, not silent.** The refusal is a turn the adjudicator cannot take yet (`adjudicator_unavailable`), so the hosted world's state read tells both parties: "The primary adjudicator cannot judge this deal yet: this adjudicator cannot open its envelope in the seller's delivery … If nothing changes, this turn passes to the fallback or the default outcome by the terms." A seller can see its envelope is broken while there is time, and a buyer sees the turn drift to the fallback. A delivery that holds no envelope for the primary is said the same way.
+- **What stays.** ADR-0031 red team H-2 is still an accepted limit: a seller can still hand the case to the fallback by breaking the primary's envelope. The notice makes that visible; it does not stop it.
+- **For the rebuilt contracts (roadmap row N26), not now.** An on-chain signal that an adjudicator could not open its envelope would make the steer harder: a signed message the primary sends, which the contract records and the terms can give a consequence. It is a protocol step and a signed type, so it needs an ADR and a schema version, and it waits for the rebuild. Not decided here: its shape and what it changes.
+- **Litmus tests.** Neutrality: no party gains a way to stop a deal; the fallback and the default stay. The hold: unchanged. Defended judgment: no verdict is signed on work the adjudicator could not read.
