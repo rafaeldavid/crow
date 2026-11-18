@@ -10,8 +10,9 @@ import {Base} from "./Base.sol";
 ///         the three dispute fields of the terms (optimistic mode only, which phase one does not run), the beacon fields
 ///         of a primary's decision (the primary proves no beacon round), and the appeal ground of the appeal
 ///         adjudicator's decision on an escalation (phase one has no party appeal). Each is refused with
-///         `InvalidMessage`. Core and the reference adjudicator send every one of them empty or zero, so no deal the
-///         operators build is refused.
+///         `InvalidMessage`. Core encodes the terms' dispute fields as 0, and the reference adjudicator signs the other
+///         fields empty, so no deal they build is refused. An outside adjudicator that fills one fails only its own
+///         decision; the deal's timeout paths stay open.
 contract SignedFieldsRefusedTest is Base {
     function _refusesFunding(H.Terms memory t) internal {
         bytes memory s = _sellerSig(t, SELLER_PK);

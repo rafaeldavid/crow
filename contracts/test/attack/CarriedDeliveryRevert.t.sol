@@ -39,9 +39,9 @@ contract CarriedDeliveryRevertTest is Base {
         vm.expectRevert(IHoldbackRules.BadSeed.selector);
         rules.decide(t, other, _noDelivery(), "");
 
-        // With the published seed, the primary decides the second delivery.
+        // With the published seed (`carried.seed`), the primary decides the second delivery.
         H.Decision memory again = _decision(H.ROLE_PRIMARY, H.OUTCOME_REJECT);
-        assertEq(again.seed, carried.seed);
+        again.seed = carried.seed;
         rules.decide(t, _signDecision(t, id, again, adjudicator, ADJ_PK), _noDelivery(), "");
         assertEq(uint8(_stage(id)), uint8(IHoldbackRules.Stage.Refunded));
         assertEq(rules.deliveryHashOf(id), hx.delivery(id, second));

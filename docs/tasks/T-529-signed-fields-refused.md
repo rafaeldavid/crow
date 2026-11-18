@@ -4,7 +4,7 @@
 - **Phase:** 2
 - **Kind:** 7, smart contracts, with a red team (new refusals in the funding and decision paths)
 - **Depends on:** T-527 (merged into the lane), T-523's plan, group G4 (L-1, I-1, RR-5)
-- **Paths this task may touch:** `contracts/src/HoldbackRules.sol`, `contracts/src/IHoldbackRules.sol`, `contracts/src/HoldbackTypes.sol` (two NatSpec blocks, comments only), `contracts/scripts/mutants-lane.json` (the mutants of the changed lines), `contracts/test/unit/SignedFieldsRefused.t.sol`, `contracts/test/attack/CarriedDeliveryRevert.t.sol` (G1's documenting test), `contracts/test/unit/ZeroAddressOutcomes.t.sol` (RR-3's documenting tests), the two test files that pinned the old behaviour (`contracts/test/crosscheck/R11Review.t.sol`, `contracts/test/attack/PhaseOneRedTeam.t.sol`), this file
+- **Paths this task may touch:** `contracts/src/HoldbackRules.sol`, `contracts/src/IHoldbackRules.sol`, `contracts/src/HoldbackTypes.sol` (two NatSpec blocks, comments only), `contracts/scripts/mutants-lane.json` (the mutants of the changed lines), `contracts/test/unit/SignedFieldsRefused.t.sol`, `contracts/test/attack/CarriedDeliveryRevert.t.sol` (G1's documenting test), `contracts/test/attack/SignedFieldRefusalsAttack.t.sol` (the red team's tests), `contracts/test/unit/ZeroAddressOutcomes.t.sol` (RR-3's documenting tests), the two test files that pinned the old behaviour (`contracts/test/crosscheck/R11Review.t.sol`, `contracts/test/attack/PhaseOneRedTeam.t.sol`), this file
 - **Human gate:** no for the lane; every deploy of the next build is Rafa's (Handoff)
 - **Status:** in review
 - **Agent/session:** the scan-fixes contract lane session (T-525)
@@ -95,7 +95,24 @@ Each new refusal could stop live deals on the next deployment if a sender filled
   - The invariant handler does not fuzz the refused fields.
   - `PinnedSource.t.sol` reads the default `out/` folder, so it fails under a separate `--out`. That comes from how the suite is run, not from this change.
 
-**Full suite and red team:** see the pull request.
+**Red team (2026-11-18): no Critical, High or Medium finding; one Low and four Info.**
+- **What held [measured by its tests]:**
+  - Every refused field sits inside a signature. A relayer or funder that alters one gets a revert, and the untouched message still settles or funds.
+  - After each refusal, every stage keeps its exit: the fallback path from Delivered, a corrected carried call from Held, and the default from Escalated.
+  - A fuzz test shows that a primary's decision settles exactly when all four beacon fields are empty.
+  - The fallback's `beaconSourceHash` stays signed only.
+  - Its whole-suite run with its own file passed 534 of 534 tests.
+- **Its 11 tests are kept as regression tests:** `contracts/test/attack/SignedFieldRefusalsAttack.t.sol`.
+- **Low, off chain (L-1):** core and the schema accept two things the contract now refuses: a `beacon` object on a primary's decision, and an `appealGround` on the appeal adjudicator's decision on an escalation. An outside adjudicator that sends either has its decision refused in the operator's simulation, with a bare `invalid_terms`. The deal then goes on by its timeouts. It is not a neutrality break, because either adjudicator could already stall by not signing. The fix is one rule each in core's phase-one checks, on `main` (Handoff).
+- **Info, fixed here:**
+  - `SignedFieldsRefused.t.sol`'s `@notice` overstated who builds decisions.
+  - `CarriedDeliveryRevert.t.sol` compared a seed with itself; it now uses the published seed explicitly.
+- **Info, recorded:**
+  - A tampered beacon field reverts `InvalidMessage` before the signature check, while a tampered ground reverts `BadSignature` after it. Both change nothing.
+  - Terms built in code that skip the schema can carry dispute fields past core and are then refused at funding, with no funds moved.
+  - `state-model.md:179` and `threat-model.md` TA-11 are stale (Handoff, item 5).
+
+**Full suite:** see the pull request.
 
 ## Handoff
 
@@ -109,10 +126,11 @@ Each new refusal could stop live deals on the next deployment if a sender filled
    - The beacon gains `MIN_PAIRING_GAS()`, `PAIRING_GAS()`, `NotEnoughGas` and `PairingGasBelowFloor`.
    - `packages/settlement/evm/errors.ts` maps neither beacon error. Through `decide`, a `NotEnoughGas` reaches an agent as "unknown error" (`invalid_state`). A one-line map entry on `main` would name it (off chain, not done here).
 4. **New refusals** in `agreeAndFund` and `decide`. No sender fills the refused fields (above). Step 7's live rounds on the new deployment prove it on Sepolia.
+   - **Off-chain follow-up on `main` (the red team's L-1):** core's phase-one checks should refuse a primary decision that carries a `beacon` and an escalation's appeal decision that carries an `appealGround`, with a named reason, so an outside adjudicator learns why before the relay simulates. One rule each in `packages/core/src/state.ts`.
 5. **Docs that change with this build** (the `docs/audit/` owner's, after the merge):
    - `known-issues.md` §10: RR-1 is fixed, RR-2 is fixed for the beacon (the other three addresses stay with the deploy script, Rafa 2026-11-12 and 2026-11-18), and RR-5 is documented.
    - `known-issues.md` §2: the "three checks not built" row is now built, and it cites the three replaced test names.
-   - `state-model.md` §8.1 (the dispute fields "never read"), §8.2 (the escalation ground and the primary's beacon "not checked") and §8.3, and the drand rows that quote 250,000 gas as a constant.
+   - `state-model.md:179` ("It does not refuse the dispute fields"), §8.1 (the dispute fields "never read"), §8.2 (the escalation ground and the primary's beacon "not checked") and §8.3, and the drand rows that quote 250,000 gas as a constant.
    - `functions.md:86` and `:88` (the dispute fields and the primary's beacon fields "signed only"), and `threat-model.md` TA-11 ("It does not refuse the dispute fields").
    - `contracts/README.md`.
 6. **Verification.** `scripts/sourcify-verify.mjs` zeroes immutables and compares the creation code as a prefix, so the beacon's argument needs no change there [inferred from reading].
