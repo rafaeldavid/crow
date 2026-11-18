@@ -16,7 +16,7 @@ ADR-0031's red team (H-2) found that a seller can choose which adjudicator decid
 
 Now the refusal is a turn the adjudicator cannot take yet (`adjudicator_unavailable`), with a detail that says what follows. The hosted world shows it on the deal's state read to both parties, and logs it once. A delivery with no envelope for the primary is said the same way. Nothing is signed or published, and the fallback and the default stay as they were.
 
-Non-goals: no reject, no contract change, no change to the fallback's or the appeal adjudicator's turn. An on-chain signal waits for the rebuilt contracts (D81, row N26).
+Non-goals: no reject and no contract change. The fallback's and the appeal adjudicator's turns behave as before (refused, retried, never signed); their notice says the default follows. An on-chain signal waits for the rebuilt contracts (D81, row N26).
 
 ## Acceptance criteria
 
@@ -25,7 +25,7 @@ Non-goals: no reject, no contract change, no change to the fallback's or the app
 - [x] The hosted world's state read tells the buyer and the seller, and the log has the line once.
 - [x] The mutant that turns the refusal into a reject is killed by the tests.
 - [x] Each new test fails before the change and passes after it.
-- [ ] One review has read the change, and its blocking findings are fixed.
+- [x] One review has read the change: PASS, no blocking finding. Its two notes are fixed: the notice is worded per role (after the primary's turn the default follows, not a fallback), and the constants no longer split `mapIntakeError` from its comment.
 
 ## Evidence
 
@@ -35,6 +35,7 @@ Measured on 2026-11-18 in the worktree `t-537-envelope-notice`, unless marked.
   - `apps/adjudicator/src/service.test.ts`: "a key the primary cannot unwrap refuses without a record or a decision; the fallback takes over at judgeBy" (extended: type, detail, a second pass) and "a delivery with no envelope for the primary is said the same way, retried and never decided (T-537)";
   - `apps/demo-cloud/src/refusals.test.ts`: "says the primary cannot open its envelope when the seller signed a delivery whose envelope for it does not open".
 - **After the change.** All three pass. `service.test.ts`, `unreadable-delivery.test.ts`, `refusals.test.ts`, `world.test.ts` and the root checks `cut-feature-alignment` and `decisions-status`: 261 of 262 passed in one run; the one failure, "a party appeal that overturns an accept signs reject", took 38 s under the load below and passes alone. `eslint` on the changed files and `pnpm typecheck` exit 0.
+- **After the review.** A fourth test, "a released key the fallback cannot open is retried, and says the default follows, not the fallback", passes; `service.test.ts`, `refusals.test.ts` and `cut-feature-alignment`: 123 of 123 passed.
 - **Load.** The machine ran other sessions' suites at a load average of 44 to 69; `apps/adjudicator/src/hung-read.test.ts`'s timing bounds failed with and without this change (3 of 13 both ways), so they say nothing about it. CI runs them on a clean runner.
 
 ## Handoff

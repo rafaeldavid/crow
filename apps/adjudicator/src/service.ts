@@ -808,7 +808,7 @@ export class Adjudicator {
       role === 'primary' ? task.delivery.encryptedKeys.find((k) => k.recipient.toLowerCase() === this.address) : task.releasedKey;
     if (!envelope || envelope.recipient.toLowerCase() !== this.address) {
       // T-537: the primary's missing envelope is said as an unopened one is: retried, never rejected.
-      if (role === 'primary') return err(problem('adjudicator_unavailable', `the seller's delivery holds no envelope for this adjudicator${ENVELOPE_THEN}`));
+      if (role === 'primary') return err(problem('adjudicator_unavailable', `the seller's delivery holds no envelope for this adjudicator${envelopeThen('primary')}`));
       return err(problem('invalid_state', `no key released to the ${role} adjudicator; it does not read the work before takeover`));
     }
     // The seed for the role (ADR-0018).
@@ -869,7 +869,7 @@ export class Adjudicator {
 
     let draft: Pick<JudgmentDraft, 'intake' | 'deterministic' | 'screen' | 'panel' | 'aggregate'>;
     if (!intaken.ok) {
-      const mapped = mapIntakeError(intaken.error);
+      const mapped = mapIntakeError(intaken.error, role);
       if (!mapped.ok) return mapped;
       draft = {
         intake: { plaintextHashVerified: false, mime: task.delivery.plaintextMime, bytes: 0, normalized: false },
@@ -1021,6 +1021,12 @@ function errorClass(e: unknown): string {
   return e instanceof Error ? e.name.slice(0, 40) : typeof e;
 }
 
+/** T-537: what a party reads when this adjudicator cannot open its envelope in the seller's delivery. */
+const ENVELOPE_UNOPENED = "this adjudicator cannot open its envelope in the seller's delivery";
+/** What follows when nothing changes: the primary's turn passes to the fallback; a later turn ends in the default. */
+const envelopeThen = (role: DecisionTask['role']) =>
+  `; not judged, nothing signed, retrying on each pass. If nothing changes, ${role === 'primary' ? 'this turn passes to the fallback or the default outcome by the terms' : 'the default outcome follows by the terms'}`;
+
 /**
  * Intake failures. The seller's faults reject without a panel. Everything else is
  * refused before any record is published: a key this adjudicator cannot open (the fallback takes over
@@ -1028,11 +1034,7 @@ function errorClass(e: unknown): string {
  * store, not the seller, may be at fault; retried). A ciphertext the store does not return at all is
  * refused the same way, before intake (`#judge`, T-347).
  */
-/** T-537: what a party reads when this adjudicator cannot open its envelope in the seller's delivery. */
-const ENVELOPE_UNOPENED = "this adjudicator cannot open its envelope in the seller's delivery";
-const ENVELOPE_THEN = '; not judged, nothing signed, retrying on each pass. If nothing changes, this turn passes to the fallback or the default outcome by the terms';
-
-export function mapIntakeError(e: IntakeError): Result<DecisionOutcome, Problem> {
+export function mapIntakeError(e: IntakeError, role: DecisionTask['role'] = 'primary'): Result<DecisionOutcome, Problem> {
   switch (e.code) {
     case 'ciphertext_hash_mismatch':
       return err(problem('invalid_state', 'the stored ciphertext does not match the delivery; retrying later'));
@@ -1040,7 +1042,7 @@ export function mapIntakeError(e: IntakeError): Result<DecisionOutcome, Problem>
     case 'key_unwrap_failed':
       // T-537: retried, never rejected, since a final reject could punish a key fault of this adjudicator's own; and
       // said, so both parties see the turn drifting to the fallback (ADR-0031 red team H-2).
-      return err(problem('adjudicator_unavailable', `${ENVELOPE_UNOPENED} (${e.code})${ENVELOPE_THEN}`));
+      return err(problem('adjudicator_unavailable', `${ENVELOPE_UNOPENED} (${e.code})${envelopeThen(role)}`));
     default:
       return ok('reject');
   }

@@ -969,6 +969,19 @@ describe('review item 4: rules the mutation sweep found untested', () => {
     expect(b.calls).toHaveLength(0);
   });
 
+  // T-537 review: the notice serves every role; after the primary's turn nothing passes to a fallback.
+  it("a released key the fallback cannot open is retried, and says the default follows, not the fallback", async () => {
+    const { s, b, id, commitment } = await setup();
+    const delivery = s.cases.get(id)!.delivery!;
+    const mine = s.cases.get(id)!.held.get(B.address)!;
+    const unopenable = { ...mine, ciphertext: delivery.encryptedKeys.find((k) => k.recipient === BUYER.address)!.ciphertext };
+    s.at('2026-11-01T10:02:00Z');
+    const r = await b.adj.decideTask({ commitment, role: 'fallback', attempt: 1, delivery, releasedKey: unopenable, roundFixedAt: commitment.timing.judgeBy, deadline: commitment.timing.fallbackBy });
+    expect(!r.ok && r.error.type).toBe('adjudicator_unavailable');
+    expect(!r.ok && r.error.detail).toMatch(/\(key_unwrap_failed\); not judged, nothing signed, retrying on each pass\. If nothing changes, the default outcome follows by the terms$/);
+    expect(s.records.size).toBe(0);
+  });
+
   it('refuses a bound policy whose appeal template hash is not this build', async () => {
     const s = new TestSettlement();
     const other = defaultPolicy('bench-a/p1', { appealPromptTemplateHash: `0x${'ab'.repeat(32)}` });
