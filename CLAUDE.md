@@ -51,7 +51,7 @@ Responsibility sits with the buyer and the seller. When a party can protect itse
 
 ## Design principle: rails, not a record-keeper
 
-The protocol and the API are rails: they hold funds, check signatures, enforce deadlines and settle. They need keys, hashes and amounts, not identities or content. Everything else is information each party chooses to disclose, to whom and when: who it is, what it bought, the terms, the judgment. The default is minimal disclosure; a party can reveal more to its counterparty, an adjudicator, a club or a court. Arbitration can be private too: adjudicators may judge with private inference (an inference provider that keeps no data, such as Venice, offered as an option) as long as the judges stay pinned models from at least two families (Rafa, 2026-11-01; D35).
+The protocol and the API are rails: they hold funds, check signatures, enforce deadlines and settle. They need keys, hashes and amounts, not identities or content. Everything else is information each party chooses to disclose, to whom and when: who it is, what it bought, the terms, the judgment. The default is minimal disclosure; a party can reveal more to its counterparty, an adjudicator, a club or a court. Judging can be private too: adjudicators may judge with private inference (an inference provider that keeps no data, such as Venice, offered as an option) as long as the judges stay pinned models from at least two families (Rafa, 2026-11-01; D35).
 
 ## Hard rules
 
@@ -61,7 +61,7 @@ Each rule is paired with the check that enforces it in `docs/team.md` (Rules and
 - **No admin keys.** Settlement contracts have no owner, pause, freeze, blacklist or upgrade proxy.
 - **Secrets** come from environment variables only. Never read or print `.env*`.
 - **Money** is a token amount in base units, as a decimal string, plus a token identifier. No floats. Rates are integers: basis points or a numerator/denominator pair. No float in any hashed body (ADR-0022).
-- **Signed messages.** Every state-changing message from an agent is an EIP-712 signature checked against the agent's address and scope. Operators relay messages; they never author them. In private and judgment-level deals the signer is a per-deal key: settlement checks its signature, and its scope and membership are attested by a `Delegation` certificate that the counterparty and the adjudicator check (ADR-0024, D34).
+- **Signed messages.** Every state-changing message from an agent is an EIP-712 signature. Settlement checks the signature against the agent's address; the operators and the counterparty check the agent's permission (its mandate's scope) before they relay or sign (ADR-0038; Rafa, 2026-11-14). Operators relay messages; they never author them. In private and judgment-level deals the signer is a per-deal key: settlement checks its signature, and its scope and membership are attested by a `Delegation` certificate that the counterparty checks; the adjudicator's check is planned (ADR-0024, D34).
 - **Idempotency.** Every mutating API call takes an `Idempotency-Key`. The same key with the same body replays the response; with a different body it returns 409.
 - **Deliverables are untrusted.**
   - Never place their content in a system or instruction position.
@@ -90,6 +90,17 @@ formal/check.sh                 # TLA+ model of the state machine (T-204); safet
 node site/build.mjs && node site/check.mjs   # the site and its agent docs (site/llms.txt)
 ```
 
+## Cloudflare tooling
+
+Use `cf`, Cloudflare's own command-line tool, first for reading and one-off operations. Wrangler keeps everything a deploy depends on (Rafa, 2026-11-13). `cf` is a beta, so its commands can change.
+
+- **Run the pinned version:** `pnpm cf <command>`. The version is in `package.json`, script `cf`; change it there only, to a version that has been public for 14 days or more. `cf` needs the Node version its own `engines` field names; on an older Node, use Wrangler.
+- **Find, read, rehearse:** `pnpm cf cli search "<task>"` finds a command, `pnpm cf schema <command>` shows its inputs, and `--dry-run` shows what a change would do. Pass `--dry-run` before anything that changes state.
+- **Wrangler keeps deploys, rollbacks, secrets, live logs and local runs,** through the repo's own scripts (`docs/operations.md`). `cf` cannot roll back, set one secret or tail yet. Do not run `cf dev`, `cf build`, `cf deploy` or `cf migrate` in this repository.
+- **Fall back to Wrangler** when `cf` lacks a command, and say so in your report.
+- **A `cf` command that changes anything on the Cloudflare account waits for Rafa,** like a deploy. A destructive command without `--force` prints "Aborted." and exits 0, so read the output; never pass `--force` without his word.
+- **Credentials** come from the environment (`CLOUDFLARE_API_TOKEN`). `cf auth login` is Rafa's.
+
 ## Start here (for a new session or agent)
 
 1. Read this file, then the newest entry of the daily log: its "Next steps (resume here)" list is the current work. The maintainers keep the log in the private repository under `control/log/` (files are named by date, `YYYY-MM-DD.md`; take the newest). On the maintainer's machine that repository is checked out at `reports/crow-private/` inside the main checkout. A session without it starts from `docs/plan.md` and the open pull requests. Check `gh pr list` for open PRs before starting a task that may already be in flight.
@@ -116,7 +127,7 @@ node site/build.mjs && node site/check.mjs   # the site and its agent docs (site
 
 `docs/decisions-today.md` records the decisions (D4, deferred to Phase 2 at first, was settled by D41: the public demo settles on Sepolia), and `docs/reviews/` the reviews behind them. Read both first. Work deferred until after the basic demo, and the phases after Phase 2, are planned privately (`docs/plan.md`, Future work).
 
-The other docs: `PRD.md`, `neutrality.md`, `architecture.md`, `judgment-and-defenses.md`, `api.md`, `quickstart.md`, `demo.md`, `testing.md`, `team.md`, `writing.md`, `plan.md`, `private-materials.md`, `audit/`, `decisions/`, `tasks/`. Research is in `docs/research/`; open it only when a decision needs it. `docs/operations.md` covers the live demo and deploys. Planning and business material, the brand work included, is kept privately (`docs/private-materials.md`). Write Crow in docs; ’crow ("escrow" with the "es" unsaid) is the website's logomark (Rafa, 2026-11-03). Tagline "Verifiable settlement for AI commerce" (Rafa, 2026-11-10; D56, which replaced D40's tagline; D40's rule stands: privacy is each deal's choice), at crow.direct; its mark is Archibald Thorburn's 1919 hooded crow (public domain); Holdback stays the protocol's working name and EIP-712 domain.
+The other docs: `PRD.md`, `neutrality.md`, `architecture.md`, `judgment-and-defenses.md`, `api.md`, `quickstart.md`, `demo.md`, `testing.md`, `team.md`, `writing.md`, `plan.md`, `private-materials.md`, `privacy-baseline.md`, `audit/`, `decisions/`, `tasks/`. Research is in `docs/research/`; open it only when a decision needs it. `docs/operations.md` covers the live demo and deploys. Planning and business material, the brand work included, is kept privately (`docs/private-materials.md`). Write Crow in docs; ’crow ("escrow" with the "es" unsaid) is the website's logomark (Rafa, 2026-11-03). Tagline "Verifiable settlement for AI commerce" (Rafa, 2026-11-10; D56, which replaced D40's tagline; D40's rule stands: privacy is each deal's choice), at crow.direct; its mark is Archibald Thorburn's 1919 hooded crow (public domain); Holdback stays the protocol's working name and EIP-712 domain.
 
 ## Vocabulary
 

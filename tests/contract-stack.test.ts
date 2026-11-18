@@ -1,8 +1,9 @@
 import { readFileSync, readdirSync } from 'node:fs';
 import { describe, expect, it } from 'vitest';
 // @ts-expect-error -- plain ESM helper without type declarations
-import { build, collect, INPUTS, PHASE_ONE_ADDRESS_KEYS, plain, shallow, stackVersion } from '../scripts/contract-stack.mjs';
+import { build, collect, CUT_WITH_BONDS, INPUTS, PHASE_ONE_ADDRESS_KEYS, plain, shallow, stackVersion } from '../scripts/contract-stack.mjs';
 import { execFileSync } from 'node:child_process';
+import { TOKENS_CSS } from '../site/brand/kit.mjs';
 
 const root = new URL('../', import.meta.url);
 const json = (path: string) => JSON.parse(readFileSync(new URL(path, root), 'utf8'));
@@ -18,6 +19,12 @@ describe('contract-stack page', () => {
       expect(c.codeLines).toBeGreaterThan(0);
       expect(c.text.length).toBeGreaterThan(10);
     }
+  });
+
+  it('words every file in contracts/src in tools/contract-stack/plain.json, and no file that is gone', () => {
+    const words = plain().contracts as Record<string, string>;
+    const names = readdirSync(new URL('contracts/src/', root)).filter((f) => f.endsWith('.sol')).map((f) => f.replace(/\.sol$/, '')).sort();
+    expect(Object.keys(words).sort()).toEqual(names);
   });
 
   it('marks the contracts the live record deployed', () => {
@@ -83,13 +90,19 @@ describe('contract-stack page', () => {
       const f = data.findings.find((x: { id: string }) => x.id === id);
       expect(f, id).toBeDefined();
       expect(['high', 'medium', 'low', 'info']).toContain(f.severity);
-      expect(['fixed', 'open', 'accepted']).toContain(f.state);
+      expect(['fixed', 'open', 'accepted', 'cut']).toContain(f.state);
       expect(f.text.length).toBeGreaterThan(10);
     }
   });
 
+  it('takes a finding\'s state from docs/audit/known-issues.md when it lists one: fixed, or not in phase one (T-398)', () => {
+    for (const id of ['L-4', 'L-6', 'L-8', 'I-2']) expect(data.findings.find((f: { id: string }) => f.id === id)?.state, id).toBe('fixed');
+    for (const id of ['L-2', 'L-3', 'L-5']) expect(data.findings.find((f: { id: string }) => f.id === id)?.state, id).toBe('cut');
+  });
+
   it('counts a T-212 item marked done as fixed, so the page follows the hardening task', () => {
-    for (const id of ['L-1', 'L-7', 'I-8']) expect(data.findings.find((f: { id: string }) => f.id === id)?.state, id).toBe('fixed');
+    // L-7 and I-8 fixed bond and appeal code that the phase-one contracts cut, so they show as cut, never as open.
+    for (const id of ['L-1', 'L-7', 'I-8']) expect(data.findings.find((f: { id: string }) => f.id === id)?.state, id).toBe(CUT_WITH_BONDS.includes(id) ? 'cut' : 'fixed');
   });
 
   it('has plain wording for every finding state it shows, or falls back to the review', () => {
@@ -101,7 +114,7 @@ describe('contract-stack page', () => {
     }
   });
 
-  it('finds every gas path it names in reports/differential-local.md, and the Sepolia deal T-212 records', () => {
+  it('finds every gas path it names in reports/differential-local.md, and the newest Sepolia smoke deal the deploy record or T-212 records', () => {
     for (const p of data.gas.paths) {
       expect(p.gas, p.fixture).toBeGreaterThan(0);
       expect(p.transactions, p.fixture).toBeGreaterThan(0);
@@ -138,5 +151,18 @@ describe('contract-stack page', () => {
     expect(embedded.length).toBeGreaterThan(1000);
     expect(embedded).not.toContain('</');
     for (const id of ['pills', 'safety', 'sources', 'addresses', 'gas', 'footer', 'deploy-intro', 'gas-notes']) expect(html).toContain(`id="${id}"`);
+  });
+
+  it('takes its colours and fonts from the brand kit: its tokens inlined, none written by the template (T-424)', () => {
+    const template = readFileSync(new URL('../tools/contract-stack/template.html', import.meta.url), 'utf8');
+    // the same rule as site/check.mjs group 15: a colour or a font stack is written only in site/brand/tokens.css
+    expect(template.match(/(?<![\w&/-])#(?:[0-9a-fA-F]{8}|[0-9a-fA-F]{6}|[0-9a-fA-F]{3,4})(?![\w-])|\b(?:rgba?|hsla?)\(/g)).toBeNull();
+    expect(template.match(/-apple-system|BlinkMacSystemFont|Helvetica|Arial|Garamond|Menlo|\bsans-serif\b|\bmonospace\b|"SF (?:Pro|Mono)|fonts\.googleapis/g)).toBeNull();
+    const html = build();
+    expect(html).toContain(TOKENS_CSS.trim());
+    expect(html).toContain('<header class="ck-bar">');
+    expect(html).toContain('url("data:image/svg+xml,');
+    expect(html).not.toContain('__KIT_');
+    expect(html).not.toMatch(/prefers-color-scheme/);
   });
 });

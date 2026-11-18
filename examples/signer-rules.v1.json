@@ -1,0 +1,269 @@
+{
+  "version": 1,
+  "constraintsVersion": "1",
+  "chain": {
+    "network": "sepolia"
+  },
+  "floatAddress": "0x0000000000000000000000000000000000000000",
+  "buying": {
+    "principal": "0x0000000000000000000000000000000000000000",
+    "standingKey": "0x0000000000000000000000000000000000000000",
+    "mandatePath": "mandate.json",
+    "revocationsPath": "revocations",
+    "maxPerDeal": "10000000",
+    "maxPerDay": "60000000",
+    "maxOpenDeals": 3,
+    "maxOpenTotal": "30000000",
+    "clubId": "demo-club",
+    "rulebookHash": "0x0000000000000000000000000000000000000000000000000000000000000000",
+    "reviewers": {
+      "adjudicator": "0x0000000000000000000000000000000000000000",
+      "fallbackAdjudicator": "0x0000000000000000000000000000000000000000",
+      "appealAdjudicator": "0x0000000000000000000000000000000000000000",
+      "policyId": "demo-policy",
+      "policyHash": "0x0000000000000000000000000000000000000000000000000000000000000000",
+      "registryHash": "0x0000000000000000000000000000000000000000000000000000000000000000",
+      "fee": "0"
+    },
+    "terms": {
+      "schemaVersion": "0.8",
+      "settlementMode": "guaranteed_on_decision",
+      "onReject": "full_refund",
+      "disclosure": "public",
+      "maxSubmissions": 1,
+      "appealWindowSec": 0,
+      "appealDecideSec": 60
+    },
+    "windows": {
+      "offerExpiresInSec": 300,
+      "fundWithinSec": 600,
+      "deliverWithinSec": 3600,
+      "judgeWithinSec": 3600,
+      "fallbackWithinSec": 3600
+    },
+    "clockSkewSec": 60,
+    "sellers": [
+      {
+        "seller": "0x0000000000000000000000000000000000000000",
+        "payoutAddress": "0x0000000000000000000000000000000000000000",
+        "deliverableHashes": [
+          "0x0000000000000000000000000000000000000000000000000000000000000000"
+        ],
+        "acceptanceHash": "0x0000000000000000000000000000000000000000000000000000000000000000"
+      }
+    ]
+  },
+  "selling": {
+    "principal": "0x0000000000000000000000000000000000000000",
+    "sellingKey": "0x0000000000000000000000000000000000000000",
+    "mandatePath": "selling-mandate.json",
+    "payoutAddress": "0x0000000000000000000000000000000000000000",
+    "price": "5000000",
+    "clubId": "demo-club",
+    "rulebookHash": "0x0000000000000000000000000000000000000000000000000000000000000000",
+    "reviewers": {
+      "adjudicator": "0x0000000000000000000000000000000000000000",
+      "fallbackAdjudicator": "0x0000000000000000000000000000000000000000",
+      "appealAdjudicator": "0x0000000000000000000000000000000000000000",
+      "policyId": "demo-policy",
+      "policyHash": "0x0000000000000000000000000000000000000000000000000000000000000000",
+      "registryHash": "0x0000000000000000000000000000000000000000000000000000000000000000",
+      "fee": "0"
+    },
+    "terms": {
+      "schemaVersion": "0.8",
+      "settlementMode": "guaranteed_on_decision",
+      "onReject": "full_refund",
+      "disclosure": "public",
+      "maxSubmissions": 1,
+      "appealWindowSec": 0,
+      "appealDecideSec": 60
+    },
+    "windows": {
+      "offerExpiresInSec": 300,
+      "fundWithinSec": 600,
+      "deliverWithinSec": 3600,
+      "judgeWithinSec": 60,
+      "fallbackWithinSec": 60
+    },
+    "clockSkewSec": 60,
+    "products": [
+      {
+        "deliverable": {
+          "kind": "document",
+          "description": "The checked deal record of public deal {{deal}}: one JSON file in the form holdback-deal-record/1 that examples/deal-record.ts writes, read from every operator's public routes only. It holds the signed terms, each step, the delivery, the judgment and the settlement as each operator serves them, each check with how it was made, and every section where the operators disagree. It holds no key and no work but what the operators publish.",
+          "format": "application/json"
+        },
+        "acceptance": {
+          "deterministicChecks": [
+            {
+              "id": "record",
+              "type": "json_schema",
+              "required": true,
+              "schema": {
+                "type": "object",
+                "required": [
+                  "record",
+                  "commitmentId",
+                  "party",
+                  "writtenAt",
+                  "operators",
+                  "terms",
+                  "outcome",
+                  "steps",
+                  "delivery",
+                  "judgment",
+                  "settlement",
+                  "balances",
+                  "checks",
+                  "disagreements",
+                  "row"
+                ],
+                "properties": {
+                  "record": {
+                    "const": "holdback-deal-record/1"
+                  },
+                  "commitmentId": {
+                    "const": "{{deal}}"
+                  },
+                  "party": {
+                    "enum": [
+                      "buyer",
+                      "seller"
+                    ]
+                  },
+                  "writtenAt": {
+                    "type": "string",
+                    "pattern": "^[0-9]{4}-[0-9]{2}-[0-9]{2}T"
+                  },
+                  "operators": {
+                    "type": "array",
+                    "minItems": 2
+                  },
+                  "terms": {
+                    "type": [
+                      "object",
+                      "null"
+                    ]
+                  },
+                  "outcome": {
+                    "type": [
+                      "object",
+                      "null"
+                    ]
+                  },
+                  "steps": {
+                    "type": "array"
+                  },
+                  "delivery": {
+                    "type": [
+                      "object",
+                      "null"
+                    ]
+                  },
+                  "judgment": {
+                    "type": [
+                      "object",
+                      "null"
+                    ]
+                  },
+                  "settlement": {
+                    "type": [
+                      "object",
+                      "null"
+                    ]
+                  },
+                  "balances": {
+                    "type": [
+                      "object",
+                      "null"
+                    ]
+                  },
+                  "checks": {
+                    "type": "array",
+                    "minItems": 1,
+                    "items": {
+                      "type": "object",
+                      "required": [
+                        "check",
+                        "ok"
+                      ],
+                      "properties": {
+                        "check": {
+                          "type": "string",
+                          "minLength": 1
+                        },
+                        "ok": {
+                          "enum": [
+                            true,
+                            false,
+                            null
+                          ]
+                        }
+                      }
+                    },
+                    "not": {
+                      "items": {
+                        "not": {
+                          "type": "object",
+                          "required": [
+                            "check",
+                            "ok"
+                          ],
+                          "properties": {
+                            "check": {
+                              "const": "commitment ID"
+                            },
+                            "ok": {
+                              "const": true
+                            }
+                          }
+                        }
+                      }
+                    }
+                  },
+                  "disagreements": {
+                    "type": "array"
+                  },
+                  "row": {
+                    "type": "object",
+                    "required": [
+                      "commitmentId"
+                    ],
+                    "properties": {
+                      "commitmentId": {
+                        "const": "{{deal}}"
+                      }
+                    }
+                  }
+                }
+              }
+            },
+            {
+              "id": "hidden",
+              "type": "hidden_characters_max",
+              "required": true,
+              "max": {
+                "total": 0
+              }
+            }
+          ],
+          "rubric": {
+            "passThreshold": 0,
+            "criteria": []
+          }
+        }
+      }
+    ],
+    "maxOffersPerHour": 20,
+    "maxOpenDeals": 10,
+    "maxDealsPerDay": 20
+  },
+  "reads": {
+    "operators": [
+      "https://api.crow.direct",
+      "https://api2.crow.direct"
+    ],
+    "lagSec": 300
+  }
+}

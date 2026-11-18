@@ -71,7 +71,7 @@ export interface Io {
 export const liveRefusal = (missing: readonly string[]) =>
   [
     `pnpm demo --live needs ${missing.join(', ')}.`,
-    'Live mode calls judges from two model families (Anthropic, and DeepSeek through an OpenAI-compatible API); set the variables in the environment or in the git-ignored .env at the repository root.',
+    'Live mode calls judges from two model families (Anthropic, and DeepSeek through an OpenAI-compatible API); set the variables in the environment, for example with op run --env-file=config/secrets/judges.refs -- pnpm demo --live.',
     'Run `pnpm demo` for scripted mode: the same beats with scripted judges and no keys.',
   ].join('\n');
 

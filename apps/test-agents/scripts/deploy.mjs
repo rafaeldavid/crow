@@ -5,7 +5,8 @@
 //   1. pre-flight: refuse, with exit code 2, a checkout whose tracked files differ from its commit, or one that lacks
 //      origin/main's commits after a fresh fetch;
 //   2. read the Worker's live version: its rollback target. When wrangler cannot say, nothing is uploaded;
-//   3. upload the Worker and its routes on crow.direct/agents/test-seller* and escrow.stream/agents/test-seller*;
+//   3. upload the Worker and its routes on crow.direct/agents/test-seller* and escrow.stream/agents/test-seller*, with the
+//      commit as BUILD_COMMIT, which its /version.json names (T-413);
 //   4. every 5 s for at most 120 s, read https://crow.direct/agents/test-seller/health until it says operational
 //      (degraded fails at once), then /agent.json until it answers 200 with JSON;
 //   5. when the upload is refused or a check fails, roll back if the live version changed, and exit 1;
@@ -14,7 +15,7 @@
 // and 4 to 6 do not run. The secret TEST_AGENTS_SEED is set once, by scripts/seed.mjs (docs/operations.md, "Crow's test
 // seller"); a Worker that was never deployed has no live version, so its first upload is `wrangler deploy` by hand.
 import { fileURLToPath } from 'node:url';
-import { sh } from '../../../scripts/deploy-lib.mjs';
+import { finishDeploy, sh } from '../../../scripts/deploy-lib.mjs';
 import { deploy } from './deploy-checks.mjs';
 
 const here = (p) => fileURLToPath(new URL(p, import.meta.url));
@@ -29,7 +30,7 @@ async function probe(url, timeoutMs) {
   }
 }
 
-process.exit(
+process.exit(await finishDeploy(
   await deploy({
     args: process.argv.slice(2),
     config: here('../wrangler.jsonc'),
@@ -40,4 +41,5 @@ process.exit(
     log: console.log,
     error: console.error,
   }),
-);
+  process.argv.slice(2),
+));

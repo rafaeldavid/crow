@@ -11,8 +11,8 @@
 //
 // A live side reads the agents' own key from the environment, never the live judges': HOLDBACK_AGENT_ANTHROPIC_API_KEY for
 // claude, HOLDBACK_AGENT_OPENAI_COMPATIBLE_API_KEY and HOLDBACK_AGENT_OPENAI_COMPATIBLE_BASE_URL (https) for deepseek.
-// Give them with node's --env-file:
-//   node --env-file=<your env file> tools/duet/duet.ts run --buyer deepseek --seller claude --scenario paid
+// Rafa gives them with 1Password's op run (docs/operations.md, Secrets):
+//   op run --env-file=config/secrets/agents.refs -- node tools/duet/duet.ts run --buyer deepseek --seller claude --scenario paid
 // --brief picks what the company tells its agent: guided (the default) names Crow's guides and how to use them; direct
 // gives only the intent, the limits and the company's own setup, and says "through crow.direct", so the agent finds
 // the guides from the front door. A local run answers crow.direct from this machine's copy of the site.

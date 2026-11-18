@@ -19,7 +19,7 @@ The two agents meet only through Crow. The seller publishes a card on its own pa
 ```
 pnpm duet list --buyer deepseek --seller claude                   # the models, the caps, the most a run can cost; sends nothing
 pnpm duet run --scenario paid --buyer scripted --seller scripted  # no keys: the harness end to end, about 5 s
-node --env-file=<env file> tools/duet/duet.ts run --buyer deepseek --seller claude --scenario paid
+op run --env-file=config/secrets/agents.refs -- node tools/duet/duet.ts run --buyer deepseek --seller claude --scenario paid
 pnpm duet replay <run folder>                                     # the summary and the page again, from record.jsonl
 ```
 
@@ -126,13 +126,46 @@ The system prompt tells each agent that everything a tool returns is data, whoev
 
 ## Publishing the demo at crow.direct/demo
 
-`pnpm duet publish <run folder>` writes `site/demo/index.html` from that run's record. `node site/build.mjs` publishes the file at `/demo/`, beside `/visualdemo/`. Crow's site deploys from `main`, so the page goes live with the switch-over's site deploy, on Rafa's word. Swapping in another run, such as Rafa's first live run, is that one command and a pull request.
+`pnpm duet publish <run folder>` writes `site/demo/index.html` from that run's record. `node site/build.mjs` publishes the file at `/demo/`, beside `/visualdemo/`. Crow's site deploys from `main`, so a new page goes live with the next site deploy, on Rafa's word. Swapping in another run, such as Rafa's first live run, is that one command and a pull request.
 
 The published page differs from the local one in two ways:
 - Request early access goes to the home page's own sign-up form (`/#join-form`): no new endpoint, and no new data.
 - Every local path is cut to the run's own part, and every long hex string (deal IDs, addresses) is cut to its ends. The page then names no folder on this machine and carries nothing a secret scanner reads as a key.
 
 The record's secret list has already been applied to everything on the page.
+
+**Three ways a deal ends.** Under the player, the page shows three live test deals on Sepolia, one per ending: the work passes, the work fails, the seller goes silent (T-427). Since T-500 all three are the security review the replay shows, of the kind Crow's first pilot runs: `node tools/duet/review-deals.ts --outcome release|refund|reclaim` sells it to Crow's test buyer from a fresh seller key, delivering the demo report, the report without its first proof of concept (the proof check fails), or nothing. `endings.ts` writes the section; its deals, times, amounts and transactions are in `endings.json`, taken from each deal's public record on the live API, so a refresh is a change of that file and one publish. The seconds on the cards are computed from the record's own times. Without scripts the three cards stack; with scripts a switch shows one at a time.
+
+The early-access controls open the site's sign-up pop-up (`site/drawer.ts`) when scripts run, and fall back to that link when they do not.
+
+## The demo page, for engineers
+
+The demo page speaks plain words; its "For engineers" card under Resources links here. This section holds what the page's old "For engineers" section said (T-400).
+
+**How the page is made.** It is generated from one run's `record.jsonl` alone, by `replay.ts`. `summary.json` beside the record holds the measures, and `ticket.md` the items over the limits when there are any. The page names the run's code commit and order ID in one small line under Resources. The rest of a run's details live beside its record: the engine, the operators and the docs served to the agents in the record's `world` line; the models, the brief and the company's policy in its `run.start` line; the order's final state in `summary.json` (`outcome.state`). Run records stay on the machine that made them. The published demo is a scripted run on the local simulator under phase-one rules, served the published guides with that world's operators in `OP1` and `OP2`; anyone can make it again, record and all. To make the published demo again:
+
+```bash
+pnpm duet run --scenario paid --buyer scripted --seller scripted
+```
+
+```bash
+pnpm duet publish reports/scratch/duet/<the run folder>
+```
+
+**The plain words and the protocol terms behind them:**
+
+| On the page | In the protocol |
+| --- | --- |
+| the payment hold, the held payment | the hold in the escrow contract |
+| the reviewer both sides chose | the adjudicator |
+| the agreed checks | the terms' deterministic checks |
+| signed | an EIP-712 signature |
+| the report unlocking | the content key released with the payment |
+| a payment record | a settlement transaction |
+| no admin keys | the phase-one settlement contracts have no owner, pause, freeze, blacklist or upgrade proxy (CLAUDE.md, hard rules) |
+| test dollars | the test token named in the demo deal's facts, with six decimals |
+
+**The agents.** Each is a tool-use loop over its vendor's API with fenced tools: GET to an allowlist, a fixed list of the repository's client commands (`buy-with-signer`, `seller-adapter`, `check-delivery`, `seal`, `deal-record`), and files in its own folder. Keys stay in files and environments the agents cannot read. The seller's tool is `examples/seller-adapter.ts` and the buyer's is `examples/buy-with-signer.ts`; the company's standing approval rule answers the signer's approval stop.
 
 ## The mark
 
@@ -155,16 +188,16 @@ When a run goes over a limit, or an agent stalls, the runner writes `ticket.md` 
 
 The command's last lines then print the ticket's path and "Send this ticket to the coordinator." With nothing over, the summary says so and there is no ticket.
 
-## Against Sepolia, after the redeploy
+## Against Sepolia
 
-Expected changes, inferred and not yet run:
+The phase-one contracts are live on Sepolia since 2026-11-13 (`contracts/deployments/sepolia.json`). A run against them is the next step: none is recorded yet [inferred from T-391's Handoff]. Expected changes, inferred and not yet run:
 
 - Pass `--world` with the two operators. The docs then default to the public site's.
 - The buyer's signer takes test funds from the test service's faucet itself.
 
 Two things to check on the first run:
 
-- Whether the faucet's grant covers the job API stub's price. The job costs 700.00 tokens. The local faucet grants 1,000.00 per call.
+- Whether the faucet's grant (`demo.faucet.grant` in the test service's discovery) covers the job API's quoted price plus the adjudication fee. The price is `REVIEW_PRICE_UNITS` in `tools/duet/review.ts`.
 - That the seller page and the job API stay local. The buyer reaches them on 127.0.0.1, and the seller adapter listens there.
 
 ## Files
@@ -176,7 +209,10 @@ Two things to check on the first run:
 | `loop.ts` | One agent's loop, caps, stall detection, system prompt |
 | `providers.ts` | Anthropic, OpenAI-compatible and scripted providers; the pinned registry |
 | `tools.ts` | The fenced tools and the company's approval policy |
-| `world.ts` | The local phase-one world, the docs and seller page, the job API (`examples/seller-adapter-stub.ts`) |
+| `world.ts` | The local phase-one world, the docs and seller page, the job API (`review-job-api.ts`) |
+| `review.ts` | The demo security review (T-500): the scope (Damn Vulnerable DeFi v4, two files at one commit), the terms filled from `examples/seller-adapter.template.json`, and the demo report in `review/report.json` |
+| `review-job-api.ts` | The seller's job API in the local run, in the shape of `examples/seller-adapter-stub.ts`, answering with the demo report. The stub itself is bundled into `buy.mjs` and `setup.mjs`, so it stays as it is |
+| `review-deals.ts` | One live security-review deal with Crow's test buyer on Sepolia: `--outcome release`, `refund` or `reclaim`. It filled `endings.json` |
 | `scenarios.ts` | The three scenarios and the two companies' briefs |
 | `scripted.ts` | The scripted agents the tests play |
 | `record.ts`, `measures.ts`, `replay.ts` | The record and its secret list, the seven measures, the page |

@@ -1,0 +1,179 @@
+#!/usr/bin/env node
+// The benchmark harness (T-412, roadmap B1): runs one of the six outsider scenarios or the two setup scenarios (scenarios.mjs) with a fresh agent
+// and writes one record, `crow.metrics.one-click/2` or `/3` for a setup scenario (bench-record.mjs builds it; scripts/metrics/schemas/
+// one-click.schema.json checks it). A record that fails its schema is kept as <runId>.json.invalid.
+//
+//   node tools/one-click/bench.mjs --scenario s1                 scripted: no key, no model, no network beyond 127.0.0.1
+//   node tools/one-click/bench.mjs --scenario all                scripted, the six in turn
+//   node tools/one-click/bench.mjs --scenario s1 --live          live: a fresh Claude Code on Sepolia; Rafa starts it
+//
+// Scripted runs play the scenario in the public demo's own world in this process, against Crow's test seller and test
+// buyer (bench-local.mjs): they prove the harness and the scenario path, and never fill a headline number. A scenario
+// Crow's test agents cannot play yet writes a record with the state "blocked" and what is missing.
+//
+// Live runs read the agent key from HOLDBACK_AGENT_ANTHROPIC_API_KEY and refuse to start without it (bench-live.mjs).
+// Options (live only): --model (claude-opus-5-5), --effort (medium), --permissions (prompt | sandbox-auto; T-441),
+// --max-replies (4), --timeout-min (40), --idle-min (5), --unsandboxed, --logs <dir> (raw messages, scrubbed, outside git).
+import { spawnSync } from 'node:child_process';
+import { randomBytes } from 'node:crypto';
+import { mkdirSync, readFileSync, renameSync, writeFileSync } from 'node:fs';
+import { basename, join, resolve, sep } from 'node:path';
+import { fileURLToPath } from 'node:url';
+import { parseArgs } from 'node:util';
+import { check } from '../../scripts/metrics/check.mjs';
+import { ROOT, gitCommit } from '../../scripts/metrics/lib.mjs';
+import { PERMISSIONS } from './bench-live.mjs'; // no SDK at import: runLive() loads it
+import { benchRunId, buildBenchRecord, buyerCheck, scrubSecrets } from './bench-record.mjs';
+import { EFFORTS, REQUESTED_MODEL_ID } from './metrics.mjs';
+import { DOCS, SCENARIOS, SCENARIO_IDS, SETUP_DOCS, goalFor } from './scenarios.mjs';
+
+// T-473: a setup scenario's payout address, fresh for each run: 20 random bytes, so no key for it exists anywhere and two
+// runs never share one. Test tokens paid to it are lost, which is the point: the seller's key is not the payout's.
+const freshPayout = () => `0x${randomBytes(20).toString('hex')}`;
+const TEST_BUYER = 'https://crow.direct/agents/test-buyer';
+const LIVE_OPERATOR = 'https://api.crow.direct';
+
+const KEY_VAR = 'HOLDBACK_AGENT_ANTHROPIC_API_KEY';
+
+function fail(message, code = 2) {
+  console.error(`bench: ${message}`);
+  process.exit(code);
+}
+
+let args;
+try {
+  args = parseArgs({
+    options: {
+      scenario: { type: 'string' },
+      live: { type: 'boolean', default: false },
+      out: { type: 'string' },
+      model: { type: 'string', default: 'claude-opus-5-5' },
+      effort: { type: 'string', default: 'medium' },
+      'max-replies': { type: 'string', default: '4' },
+      'timeout-min': { type: 'string', default: '40' },
+      'idle-min': { type: 'string', default: '5' },
+      unsandboxed: { type: 'boolean', default: false },
+      permissions: { type: 'string' },
+      logs: { type: 'string' },
+    },
+    strict: true,
+  }).values;
+} catch (e) {
+  fail(String(e?.message ?? e));
+}
+const ids = args.scenario === 'all' ? SCENARIO_IDS : [args.scenario];
+if (!args.scenario || !ids.every((id) => SCENARIOS[id])) fail(`--scenario is one of ${SCENARIO_IDS.join(', ')}${args.live ? '' : ', or all'}`);
+if (args.live && ids.length !== 1) fail('--live runs one scenario at a time');
+// T-473: a setup scenario whose setup.txt cannot do it yet is refused before the key check, so nothing is spent on it.
+if (args.live && SCENARIOS[ids[0]].live?.blockedBy) fail(`${ids[0]}'s live run waits for ${SCENARIOS[ids[0]].live.blockedBy}; nothing was sent`);
+
+// The key check comes before anything else a live run does, the SDK import included. The key is never printed.
+const key = args.live ? (process.env[KEY_VAR] ?? '').trim() : '';
+if (args.live && !key) fail(`a live run needs ${KEY_VAR} in the environment (the agents' own key, never the judges'), and it is not set; nothing was sent`);
+if (!args.live && process.env[KEY_VAR]) console.error(`bench: scripted run; ${KEY_VAR} is set and is not used`);
+if (args.live && !REQUESTED_MODEL_ID.test(args.model)) fail('--model is a model ID: lower-case letters, digits, dots and dashes');
+if (args.live && !EFFORTS.includes(args.effort)) fail(`--effort is one of ${EFFORTS.join(', ')}`);
+// T-441: prompt (Claude Code's default mode, every command asks) or sandbox-auto (Bash runs unprompted in the OS sandbox)
+const permissions = args.permissions ?? 'prompt';
+if (args.permissions !== undefined && !args.live) fail('--permissions is for live runs: a scripted run has no person to ask');
+if (!PERMISSIONS.includes(permissions)) fail(`--permissions is one of ${PERMISSIONS.join(', ')}`);
+if (permissions === 'sandbox-auto' && args.unsandboxed) fail('--permissions sandbox-auto needs the OS sandbox, so it does not take --unsandboxed');
+const whole = (name) => {
+  const n = Number.parseInt(args[name], 10);
+  if (!Number.isSafeInteger(n) || n < 0 || String(n) !== args[name]) fail(`--${name} takes a whole number`);
+  return n;
+};
+const maxReplies = whole('max-replies');
+const timeoutMs = whole('timeout-min') * 60_000;
+const idleMs = whole('idle-min') * 60_000;
+const logsDir = args.logs ? resolve(args.logs) : null;
+if (logsDir && (logsDir === ROOT || logsDir.startsWith(ROOT + sep)) && !logsDir.startsWith(join(ROOT, 'reports') + sep)) fail('--logs must be outside the repository or under reports/, so raw logs stay out of git');
+// Scripted and live records never share a folder, so a scripted file is never collected as a measurement; nor do the
+// two live permission modes, so copying live/*.json never picks up a sandbox-auto record (T-441).
+const outDir = resolve(args.out ?? join(ROOT, 'reports/scratch/one-click-bench', !args.live ? 'scripted' : permissions === 'prompt' ? 'live' : `live-${permissions}`));
+// and an explicit --out may not put one mode's record in the other mode's folder (T-441 review, finding 5)
+if (args.live && basename(outDir) === (permissions === 'prompt' ? 'live-sandbox-auto' : 'live')) fail(`--out ${basename(outDir)}/ holds the other permission mode's records; a ${permissions} record goes to ${permissions === 'prompt' ? 'live' : 'live-sandbox-auto'}/`);
+
+// The scripted world imports TypeScript that Node's default type stripping does not take (constructor parameter
+// properties), so a scripted run starts itself again with --experimental-transform-types.
+if (!args.live && !process.execArgv.includes('--experimental-transform-types')) {
+  const r = spawnSync(process.execPath, ['--experimental-transform-types', '--no-warnings', fileURLToPath(import.meta.url), ...process.argv.slice(2)], { stdio: 'inherit' });
+  process.exit(r.status ?? 1);
+}
+
+let prices = null;
+try {
+  prices = JSON.parse(readFileSync(join(ROOT, 'config/model-prices.json'), 'utf8'));
+} catch {
+  prices = null;
+}
+const commit = gitCommit(ROOT);
+
+/** Checks and writes one record; returns whether it passed its schema. */
+function write(record, secrets = []) {
+  const clean = scrubSecrets(record, secrets);
+  const ok = check('one-click', clean);
+  mkdirSync(outDir, { recursive: true });
+  const file = join(outDir, `${clean.runId}.json`);
+  writeFileSync(`${file}.invalid`, `${JSON.stringify(clean, null, 2)}\n`);
+  if (ok.ok) renameSync(`${file}.invalid`, file);
+  const o = clean.outcome;
+  console.error(`bench: ${clean.scenario.id} ${clean.mode} ${o.state}${o.success ? ' (success)' : ''}${o.blockedBy ? `: ${o.blockedBy}` : ''}; ${clean.approvals.total} approvals, ${clean.apiCalls.total} API calls, ${clean.time.wallMs} ms`);
+  console.error(`bench: record ${ok.ok ? `valid: ${file}` : `INVALID: ${file}.invalid\n${ok.errors.join('\n')}`}`);
+  return ok.ok;
+}
+
+async function scripted(id) {
+  const scenario = { id, ...SCENARIOS[id] };
+  const startedAtMs = Date.now();
+  const base = { mode: 'scripted', scenario, world: { engine: 'local', docs: 'the in-process world: no docs are read by a scripted agent' }, prices, startedAtMs, commit };
+  if ('blockedBy' in scenario.scripted) {
+    return { record: buildBenchRecord({ ...base, agent: {}, outcome: { state: 'blocked', blockedBy: scenario.scripted.blockedBy }, book: { wallMs: 0 }, generatedAtMs: Date.now() }), complete: false };
+  }
+  const { script } = scenario.scripted;
+  const { playScripted } = await import('./bench-local.mjs');
+  const { run, outcome, calls, crowOrigins } = await playScripted(scenario, { payout: freshPayout() });
+  const record = buildBenchRecord({ ...base, agent: { script }, outcome, book: { wallMs: run.wallMs, errors: outcome.errors, timedOut: run.timedOut }, calls, setup: { firstDealAtMs: run.firstDealAtMs, crowOrigins }, generatedAtMs: Date.now() });
+  if (!record.outcome.success) console.error(run.out.split('\n').slice(-15).join('\n'));
+  return { record, complete: true };
+}
+
+async function live(id) {
+  const scenario = { id, ...SCENARIOS[id] };
+  const startedAtMs = Date.now();
+  const runId = benchRunId(startedAtMs, id);
+  const note = (s) => console.error(`[${String(Math.round((Date.now() - startedAtMs) / 1000)).padStart(5)} s] ${s}`);
+  note(`scenario ${id} live: ${scenario.name}; model ${args.model}, effort ${args.effort}, permissions ${permissions}${args.unsandboxed ? ', unsandboxed' : ', in the OS sandbox'}`);
+  // T-473: a goal's answers are filled per run; one this harness cannot serve stops the run before anything is sent
+  const goal = goalFor(scenario, { payout: freshPayout() });
+  const unfilled = /\{(\w+)\}/.exec(goal);
+  if (unfilled) fail(`${id}'s goal names {${unfilled[1]}}, which a live run of this harness does not serve; nothing was sent`);
+  const { runLive } = await import('./bench-live.mjs');
+  const r = await runLive({ scenario, goal, key, model: args.model, effort: args.effort, permissions, maxReplies, timeoutMs, idleMs, sandboxed: !args.unsandboxed, logsDir, runId, note });
+  let outcome = r.outcome;
+  if (scenario.buyerMustBe === 'test-buyer' && outcome.commitmentId) {
+    // bench-local.mjs imports its TypeScript only inside startLocal and startJobApi, so these two plain reads load here
+    const { buyerOf, testBuyerAddress } = await import('./bench-local.mjs');
+    outcome = buyerCheck({ ...outcome, errors: [] }, { buyer: await buyerOf(LIVE_OPERATOR, outcome.commitmentId), testBuyer: await testBuyerAddress(TEST_BUYER) });
+    r.book.errors.push(...outcome.errors);
+  }
+  const docs = scenario.kind === 'setup' ? SETUP_DOCS : DOCS;
+  const record = buildBenchRecord({ mode: 'live', scenario, world: { engine: 'sepolia', docs }, agent: r.agent, outcome, book: r.book, results: r.results, calls: r.calls, texts: r.texts, prices, startedAtMs, generatedAtMs: Date.now(), commit, sources: r.sources, gaps: r.gaps, setup: { firstDealAtMs: r.firstDealAtMs, webCalls: r.webCalls } });
+  return { record, secrets: r.secrets };
+}
+
+let allValid = true;
+let allComplete = true;
+for (const id of ids) {
+  if (args.live) {
+    const { record, secrets } = await live(id);
+    allValid = write(record, secrets) && allValid;
+    allComplete = record.outcome.success && allComplete;
+  } else {
+    const { record, complete } = await scripted(id);
+    allValid = write(record) && allValid;
+    if (complete) allComplete = record.outcome.success && allComplete;
+  }
+}
+// 0: every record valid, and every scenario that can run reached its end state; 1: otherwise.
+process.exit(allValid && allComplete ? 0 : 1);

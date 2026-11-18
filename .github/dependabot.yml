@@ -4,3 +4,7 @@ updates:
     directory: /
     schedule:
       interval: weekly
+    # T-504 (roadmap row N50): a release opens a pull request only once it has been public for 14 days, the age
+    # CLAUDE.md asks of the cf tool's version. A bad release is usually pulled or fixed inside that time.
+    cooldown:
+      default-days: 14

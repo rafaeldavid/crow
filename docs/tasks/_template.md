@@ -7,6 +7,11 @@
 - **Human gate:** yes | no (yes only if it reaches outside the repository: deploys, remote force pushes, real keys or money, publishing, repository settings)
 - **Status:** todo | in progress | review | done
 - **Agent/session:** …
+- **Roadmap row:** N… (the roadmap row this task serves; several separated by commas, or "none")
+
+## What exists
+
+Fill this before any design. Read `docs/what-a-deal-can-do.md`, then name what already does this task's job or part of it, with pointers to the page, route or command. Say why the task is still needed; if nothing is left to build, stop and say so.
 
 ## Intent
 

@@ -1,10 +1,30 @@
 // The agent guides' helpers (T-393, site/guides.mjs): the budget's count, with and without a provider key, and the
 // checks site/check.mjs runs on the guides. No network: the provider is a fake fetch.
 import { describe, expect, it } from 'vitest';
+import { readFileSync } from 'node:fs';
 // @ts-expect-error plain JavaScript module with no declarations
-import { apiRoutes, citedSections, countTokens, duplicateSentences, estimateTokens, FIRST_DEAL_BUDGET, guideFiles, hasSection, measurePaths, namedCalls, namedReferences, routeKnown } from '../site/guides.mjs';
+import { apiRoutes, citedSections, countTokens, duplicateSentences, estimateTokens, FIRST_DEAL_BUDGET, guideFiles, hasSection, HTTP_BUYER_BUDGET, measureHttpBuyer, measurePaths, namedCalls, namedReferences, nonAscii, routeKnown, SETUP_MAX_BYTES } from '../site/guides.mjs';
+// @ts-expect-error plain JavaScript module with no declarations
+import { publishedGuides } from '../site/build.mjs';
 
 const answer = (status: number, body: unknown) => async () => new Response(JSON.stringify(body), { status, headers: { 'content-type': 'application/json' } });
+
+describe("the plain-HTTP buyer's budget (T-426)", () => {
+  it('is the front door plus the three reference pages a first purchase over HTTP reads', () => {
+    expect(HTTP_BUYER_BUDGET).toEqual({ tokens: 9450, target: 8700, path: ['llms.txt', 'ref/http.txt', 'ref/signing.txt', 'ref/http-buyer.txt'] });
+    for (const p of HTTP_BUYER_BUDGET.path) expect(guideFiles()).toContain(p);
+  });
+
+  it('estimates the pages joined by a newline, bytes divided by four', () => {
+    const published = new Map([['llms.txt', 'a'.repeat(4)], ['ref/http.txt', 'b'.repeat(4)], ['ref/signing.txt', 'c'.repeat(4)], ['ref/http-buyer.txt', 'd'.repeat(5)]]);
+    expect(measureHttpBuyer(published)).toEqual({ files: HTTP_BUYER_BUDGET.path, bytes: 20, tokens: 5 });
+  });
+
+  it('holds the published path within the budget, so an edit that grows it fails', () => {
+    const m = measureHttpBuyer(publishedGuides({ op1: 'https://op1.example.workers.dev', op2: 'https://op2.example.workers.dev' }));
+    expect(m.tokens, `the plain-HTTP buyer's path is ${m.bytes} bytes, ${m.tokens} tokens, over ${HTTP_BUYER_BUDGET.tokens}`).toBeLessThanOrEqual(HTTP_BUYER_BUDGET.tokens);
+  });
+});
 
 describe('the first-deal budget', () => {
   it('is stated once, for the buyer and the seller, each the front door plus its page', () => {
@@ -55,6 +75,15 @@ describe('the checks on the guides', () => {
     expect(routeKnown('GET /v1/faucet', routes)).toBe(false);
   });
 
+  it('finds every character above 127 in a guide, by line and code point', () => {
+    expect(nonAscii('Crow. Plain text...\nprice x bps - 1')).toEqual([]);
+    expect(nonAscii('ok\n\u2019crow \u2026 \u00d7\n\u00e9')).toEqual([{ line: 2, char: 'U+2019' }, { line: 2, char: 'U+2026' }, { line: 2, char: 'U+00D7' }, { line: 3, char: 'U+00E9' }]);
+  });
+
+  it('holds every published guide to ASCII', () => {
+    for (const p of guideFiles()) expect(nonAscii(readFileSync(new URL(`../site/${p}`, import.meta.url), 'utf8')), p).toEqual([]);
+  });
+
   it('lists the reference files a guide names', () => {
     expect(namedReferences('See `ref/http.txt`, https://crow.direct/ref/signing.txt and ref/http.txt again.')).toEqual(['ref/http.txt', 'ref/signing.txt']);
   });
@@ -73,6 +102,19 @@ describe('the checks on the guides', () => {
     const { guidePage } = await import('../site/build.mjs');
     expect(guidePage('Run:\n{{BUY_INSTALL}}\n', 'buy.txt', () => 'mkdir -p crow-buy')).toBe('Run:\nmkdir -p crow-buy\n');
     expect(() => guidePage('Run {{BUY_INSTALL}}', 'sell.txt')).toThrow('sell.txt has a {{placeholder}}');
+  });
+
+  it("lists setup.txt as a guide outside both first-deal budgets, fills its one command and holds it to 10,000 bytes (T-472, T-486)", async () => {
+    // @ts-expect-error plain JavaScript module with no declarations
+    const { guidePage, setupCommand, publishedGuides } = await import('../site/build.mjs');
+    expect(guideFiles()).toContain('setup.txt');
+    expect(Object.values(FIRST_DEAL_BUDGET.paths).flat()).not.toContain('setup.txt');
+    expect(SETUP_MAX_BYTES).toBe(10_000);
+    expect(guidePage('Run:\n{{SETUP_COMMAND}}\n', 'setup.txt')).toBe(`Run:\n${setupCommand()}\n`);
+    expect(() => guidePage('Run {{SETUP_COMMAND}}', 'sell.txt')).toThrow('sell.txt has a {{placeholder}}');
+    const published = publishedGuides({ op1: 'https://a.example', op2: 'https://b.example' }).get('setup.txt') as string;
+    expect(Buffer.byteLength(published)).toBeLessThanOrEqual(SETUP_MAX_BYTES);
+    expect(published.split('\n')).toContain(setupCommand());
   });
 
   it("runs each of buy.mjs's subcommands, and only that one, with no network", async () => {

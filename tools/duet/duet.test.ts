@@ -9,9 +9,11 @@ import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { afterAll, describe, expect, it } from 'vitest';
 import { measure } from './measures.ts';
-import { buyerBriefDirect, scenario, sellerBriefDirect } from './scenarios.ts';
+import { buyerBriefDirect, ITEM, scenario, sellerBriefDirect } from './scenarios.ts';
 import { limitsFor, overLimits } from './tickets.ts';
-import { CROW_MARK, EARLY_ACCESS, forPublishing, HERO, PITCH, replayPage } from './replay.ts';
+import { checkEndings, ENDINGS, ENDINGS_CSS, ENDINGS_SCRIPT, endingsSection, seconds } from './endings.ts';
+import { CHECK_WORDS, REPOSITORY, REVIEW_CHECK_IDS, REVIEW_SCOPE } from './review.ts';
+import { CROW_MARK, EARLY_ACCESS, ENGINEERS, forPublishing, HERO, JOIN, PITCH, replayPage } from './replay.ts';
 import { startWorld } from './world.ts';
 import { runAgent } from './loop.ts';
 import { anthropic, liveProvider, openaiCompatible, scripted, VendorError, type Provider, type Turn } from './providers.ts';
@@ -25,6 +27,9 @@ afterAll(() => { for (const d of made) rmSync(d, { recursive: true, force: true 
 /** What a reader sees: the page without its style, script, engineers' section and "Exact call" disclosures, or its tags. */
 const readerText = (html: string) => html.replace(/<style[\s\S]*?<\/style>|<script[\s\S]*?<\/script>|<title>[\s\S]*?<\/title>/gi, '').replace(/<details class="engineers"[\s\S]*?<\/details>/g, '').replace(/<details>[\s\S]*?<\/details>/g, '').replace(/<[^>]+>/g, ' ').replace(/&#39;/g, "'").replace(/&#34;/g, '"').replace(/&#38;/g, '&');
 const BANNED: Array<[string, RegExp]> = [['commitment', /\bcommitments?\b/i], ['escrowState', /escrowstate/i], ['adjudicator', /adjudicat/i], ['EIP-712', /eip-?712/i], ['Released', /\bReleased\b/], ['Refunded', /\bRefunded\b/], ['hold as a noun', /\b(the|a|an|its|this|that|your) hold\b/i], ['settlement layer', /settlement layer/i], ['escrow', /\bescrow\b/i]];
+// The ontology's calming claims refused until a fact backs them (crow-private strategy note of 2026-11-14), and the
+// phrase that names the buyer's worry instead of its answer.
+const REFUSED = /\bindependent\b|\bsecure\b|\baudited\b|\bguarantee|\bprivate deals?\b|\bno one can\b|Neither side can take it|agent-native|\binsurance\b|\barbitration\b/i;
 const banned = (text: string) => BANNED.filter(([, re]) => re.test(text)).map(([w]) => `${w}: …${text.slice(Math.max(0, text.search(BANNED.find(([x]) => x === w)![1]) - 60), text.search(BANNED.find(([x]) => x === w)![1]) + 60)}…`);
 const lines = (file: string) => readFileSync(file, 'utf8').split('\n').filter(Boolean).map((l) => JSON.parse(l));
 
@@ -81,7 +86,30 @@ describe('three scenarios, scripted, on the local phase-one world', () => {
       // The demo page: Crow and its descriptor in the header, the headline, the early-access button, the self-playing
       // demo with its one label, and everything else in the Learn more view.
       const q = (t: string) => t.replace(/'/g, '&#39;');
-      expect(page).toContain(`<span>Crow<small>${q(PITCH.descriptor)}</small></span></a>`);
+      // The header as on the home page: the mark and the word Crow, no subtitle, linking home (Rafa, 2026-11-13).
+      expect(page).toContain('<a class="app" href="https://crow.direct/"><svg class="mark"');
+      expect(page).toContain('<span>Crow</span></a>');
+      expect(page).not.toContain(`<small>${q(PITCH.descriptor)}</small>`);
+      // Light only, in either system mode.
+      expect(page).not.toMatch(/prefers-color-scheme:\s*dark/);
+      // On desktop the words and the demo share the first screen; the "after" line sits in the words' column.
+      // No "What was checked, what each side paid…" line under the demo's words (Rafa, 2026-11-13).
+      expect(page).not.toContain('What was checked, what each side paid');
+      // Request early access opens a drawer with the sign-up form, posting to the home page's sign-up service.
+      expect(page.match(/data-join rel=/g)?.length).toBe(3);
+      expect(page).toContain("querySelectorAll('[data-join]')");
+      expect(page).toContain(`fetch('${JOIN}'`);
+      expect(JOIN).toBe('https://join.crow.direct/early-access');
+      // Learn more reads without the demo: its headings name the demo deal.
+      expect(page).toContain('<h3 class="block-title">The demo deal</h3>');
+      expect(page).not.toMatch(/This sample purchase|Who made this sample/);
+      // Money is said in test dollars, never as "tokens", which a reader could take for AI model tokens.
+      expect(readerText(page)).not.toMatch(/test tokens/);
+      // Whole amounts show no decimals, and one dollar is singular (T-400).
+      if (name === 'paid') expect(readerText(page)).toMatch(/40 test dollars/);
+      expect(readerText(page)).not.toMatch(/\d\.00 test dollar|\b1 test dollars/);
+      // Where a reader checks a payment record, the token keeps its real name (in the demo deal's facts).
+      expect(page).toMatch(/<dt>Test money<\/dt><dd>Test dollars: the test token [A-Za-z0-9]+, with six decimals\./);
       expect(page).toContain(`<h1 class="headline">${q(HERO.headline)}</h1>`);
       expect(page).toContain(`href="${EARLY_ACCESS}"`);
       expect(page).toContain(`<span class="demo-label">${HERO.demoLabel}</span>`);
@@ -93,11 +121,21 @@ describe('three scenarios, scripted, on the local phase-one world', () => {
       expect(page).toContain('<dt>Enterprise Procurement Agent</dt><dd>Acting for the buyer.');
       expect(page).toContain('<dt>Enterprise Sales Agent</dt><dd>Acting for the seller.');
       expect(page).not.toMatch(/buying agent|selling agent/i);
+      // The ontology's words (T-418, T-427): no calming claim without a fact behind it, and the payment hold said
+      // with its release rule, the refund included, since the buyer's worry is getting the money back.
+      expect(readerText(page)).not.toMatch(REFUSED);
+      expect(readerText(page)).toMatch(/If the work never arrives, the buyer takes the whole payment back after the deadline/);
+      // Three ways a deal ends (T-427): under the player, inside the demo view, with its styles and its switch.
+      expect(page).toContain(endingsSection());
+      expect(page).toContain(ENDINGS_CSS);
+      expect(page).toContain(ENDINGS_SCRIPT);
+      expect(page.indexOf('id="demo-run"')).toBeLessThan(page.indexOf('id="endings"'));
+      expect(page.indexOf('id="endings"')).toBeLessThan(page.indexOf('<main id="learn-more">'));
       expect(events.some((e) => e.role === 'buyer') && events.some((e) => e.role === 'seller')).toBe(true);
       for (const b of PITCH.beats) expect(page).toContain(`<span class="beat-label">${b.label}</span>`);
       // The proof beat tells what this run did: Rafa's sentence when the work passed, what happened instead otherwise.
       const ending = name === 'paid' ? 'paid' : name === 'refund' ? 'refunded' : 'declined';
-      expect(page).toContain(PITCH.proof(ending, 'a software security audit').replace(/'/g, '&#39;'));
+      expect(page).toContain(PITCH.proof(ending, ITEM).replace(/'/g, '&#39;'));
       expect(page.indexOf('beat-label">Proof')).toBeLessThan(page.indexOf('<h3 class="block-title">How the payment is held</h3>'));
       // One accent: the filled button is the primary action; no chat bubble uses it.
       expect(page).not.toMatch(/#007aff|#0a84ff/i);
@@ -105,7 +143,16 @@ describe('three scenarios, scripted, on the local phase-one world', () => {
       expect(page).toContain('This run used a local test setup, so it has no public payment records to link.');
       expect(page).not.toMatch(/href="http:\/\/(127\.0\.0\.1|localhost)/);
       expect(page).toContain('href="https://crow.direct/llms.txt"');
-      expect(page).toMatch(/For engineers<\/summary>[\s\S]*the local simulator, phase-one rules/);
+      // T-400: For engineers is one Resources card linking to the run tool's README; the site's footer closes the
+      // page, and the record sentence is gone.
+      expect(page).toContain(`href="${ENGINEERS}"`);
+      expect(page).not.toContain('<details class="engineers"');
+      expect(page).toMatch(/This run: code <code>[0-9a-f]+<\/code>/);
+      expect(readerText(page)).not.toMatch(/SimChain/);
+      expect(page).toContain('<footer class="ck-foot">');
+      expect(page).not.toContain('Testing Now Live'); // Rafa, 2026-11-13: the pill left the footer
+      expect(page).not.toContain("Made from this run's own record");
+      expect(page).toContain('<meta property="og:title" content="Crow · Watch two agents close a deal">');
       if (name === 'refund') expect(page).toContain('would have held this one back');
       // The page for crow.direct/demo: the home page's own sign-up, no local folder, no long hex a scanner reads as a key.
       const published = replayPage(events, s, { publish: true });
@@ -157,6 +204,84 @@ describe('three scenarios, scripted, on the local phase-one world', () => {
       expect(page).not.toContain(key.slice(2));
     }, 200_000);
   }
+});
+
+describe('the published demo page (site/demo/index.html, edited beside replay.ts when no run record is at hand)', () => {
+  it('uses no refused claim and says the payment hold with its release rule, the refund included (T-427)', () => {
+    const text = readerText(readFileSync(new URL('../../site/demo/index.html', import.meta.url), 'utf8'));
+    expect(text).not.toMatch(REFUSED);
+    expect(text).toContain(HERO.intro);
+    expect(text).toMatch(/If the work never arrives, the buyer takes the whole payment back after the deadline/);
+    expect(text).toContain('The price is released to the seller when the work passes, and comes back to the buyer if the work fails or misses its deadline.');
+    expect(banned(text)).toEqual([]);
+  });
+  it('carries the section "Three ways a deal ends" as replay.ts writes it, with its styles and its switch (T-427)', () => {
+    const html = readFileSync(new URL('../../site/demo/index.html', import.meta.url), 'utf8');
+    expect(html).toContain(endingsSection());
+    expect(html).toContain(ENDINGS_CSS);
+    expect(html).toContain(ENDINGS_SCRIPT);
+    expect(html.indexOf('id="demo-run"')).toBeLessThan(html.indexOf('id="endings"'));
+    expect(html.indexOf('id="endings"')).toBeLessThan(html.indexOf('<main id="learn-more">'));
+  });
+});
+
+describe('three ways a deal ends (T-427): live test deals under the player', () => {
+  const html = endingsSection();
+  it('shows three cards, all readable without scripts, and a switch that only the script turns on', () => {
+    expect(html.match(/<article class="ending"/g)).toHaveLength(3);
+    expect(html).not.toMatch(/<article[^>]*hidden/);
+    expect(html).toMatch(/<div class="endings-switch" role="tablist"[^>]*hidden>/);
+    expect(html.match(/role="tab"/g)).toHaveLength(3);
+    expect(ENDINGS_SCRIPT).toContain('bar.hidden=false');
+    expect(ENDINGS_CSS).not.toMatch(/animation|transition/);
+    // Without scripts the cards are plain articles named by their headings; the script adds the tab roles.
+    expect(html).not.toMatch(/role="tabpanel"/);
+    expect(ENDINGS_SCRIPT).toContain("setAttribute('role','tabpanel')");
+  });
+  it("gives each card its rule, the record's own times and amounts, and links to its public record and transaction", () => {
+    const want: Record<string, [string, string]> = { passes: ['41 s', '40 test dollars'], fails: ['51 s', '40 test dollars'], silent: ['5 min 21 s', '41 test dollars'] };
+    for (const x of ENDINGS.endings) {
+      const cardHtml = html.slice(html.indexOf(`id="ending-${x.key}"`), html.indexOf('</article>', html.indexOf(`id="ending-${x.key}"`)));
+      expect(cardHtml).toContain(`<dd>${want[x.key]![0]}</dd>`);
+      expect(cardHtml).toContain(`<dd>${want[x.key]![1]}</dd>`);
+      expect(cardHtml).toContain(`href="https://api.crow.direct/v1/commitments/${x.commitment}"`);
+      expect(cardHtml).toContain(`href="https://sepolia.etherscan.io/tx/${x.tx}"`);
+    }
+    const silent = ENDINGS.endings.find((x) => x.key === 'silent')!;
+    expect(silent.how).toContain(`${seconds(silent.deliverBy!, silent.endedAt)} seconds after that deadline`);
+    // deliverBy counts from the settlement time the offer was prepared at, a second before the record's offer event.
+    expect(silent.how).toContain(`${Math.round(seconds(silent.offeredAt, silent.deliverBy!) / 60)} minutes from the offer`);
+    expect(readerText(html)).toContain('17 November 2026');
+  });
+  it('shows the security-review deal of the pilot\'s kind: the repository, the commit, the files, the price, the five checks and their limits (T-500)', () => {
+    const text = readerText(html);
+    expect(text).toContain("This is the kind of deal Crow's first pilot runs: an agent buys a security review of a smart-contract repository, and agreed checks decide whether the seller is paid.");
+    expect(text).toContain("The checks test the report's shape and scope, not how good the review is: a report with no findings passes them.");
+    expect(text).toContain('demo findings written for this page');
+    expect(text).toContain(REPOSITORY.name);
+    expect(text).toContain(REVIEW_SCOPE.commit.slice(0, 12));
+    for (const f of REVIEW_SCOPE.files) expect(text).toContain(f);
+    expect(text).toContain('40 test dollars, quoted by the seller');
+    for (const id of REVIEW_CHECK_IDS) expect(text).toContain(CHECK_WORDS[id]);
+    // Every link goes to Crow, the live records, Sepolia's explorer or the training repository at the reviewed commit.
+    const links = [...html.matchAll(/href="([^"]+)"/g)].map((m) => m[1]!);
+    const allowed = [/^https:\/\/api\.crow\.direct\/v1\/commitments\/0x[0-9a-f]{64}$/, /^https:\/\/sepolia\.etherscan\.io\/tx\/0x[0-9a-f]{64}$/, /^https:\/\/crow\.direct\/llms\.txt$/, new RegExp(`^${REPOSITORY.url}/(tree|blob)/${REVIEW_SCOPE.commit}(/|$)`)];
+    for (const l of links) expect(allowed.some((re) => re.test(l)), l).toBe(true);
+  });
+  it("uses the page's words: no refused claim, no protocol word", () => {
+    expect(readerText(html)).not.toMatch(REFUSED);
+    expect(banned(readerText(html))).toEqual([]);
+  });
+  it('refuses a data file it cannot show honestly', () => {
+    const bad = (f: (e: typeof ENDINGS) => void) => { const e = structuredClone(ENDINGS); f(e); return () => checkEndings(e); };
+    expect(bad((e) => { e.endings[0]!.tx = '0x1234'; })).toThrow(/32-byte/);
+    expect(bad((e) => { e.endings[1]!.endedAt = e.endings[1]!.offeredAt; })).toThrow(/ends before/);
+    expect(bad((e) => { e.record = 'https://example.com/'; })).toThrow(/live API/);
+    expect(bad((e) => { e.endings.pop(); })).toThrow(/three endings/);
+    expect(bad((e) => { e.endings[1]!.key = 'passes'; })).toThrow(/passes, fails and silent/);
+    expect(bad((e) => { delete e.endings[2]!.deliverBy; })).toThrow(/deliverBy is the deadline/);
+    expect(bad((e) => { e.endings[2]!.deliverBy = e.endings[2]!.endedAt; })).toThrow(/between the offer and the end/);
+  });
 });
 
 describe('the direct brief: intent, limits and setup only; the agents find Crow from crow.direct', () => {

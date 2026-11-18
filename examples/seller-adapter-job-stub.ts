@@ -8,6 +8,7 @@
 //   POST runs                 {estimate, reference, input}      -> 201 {run: {id}}; the same X-Request-Key gives the same run
 //   GET  runs/<id>                                              -> {run: {id, state}, output?}; state queued, running, complete or error
 //   GET  runs/<id>/files/<path>                                 -> the file's bytes
+//   GET  runs/<id>/notes                                        -> a list of notes on a finished run, [] before (T-501)
 // The price is made up for the tests: 100.00 tUSD plus 50.00 tUSD per depth, one day per depth. Test data only.
 import { createServer } from 'node:http';
 import type { AddressInfo } from 'node:net';
@@ -33,6 +34,19 @@ export interface JobStubOptions {
   runId?: J;
   /** Fields that replace the estimate's own. */
   estimateOverride?: J;
+  /**
+   * The stub serves accounts (T-435): estimates and runs live under `workspaces/<id>/`, and a run's answer names the
+   * account it ran in as `run.workspace`. `reportsWorkspace` replaces that name, as a job that ran elsewhere would.
+   */
+  workspaces?: boolean;
+  reportsWorkspace?: string;
+  /** Runs that exist before any start, such as a job that finished for an earlier deal (T-501). */
+  seedRuns?: Array<{ id: J; input: J; workspace?: string; state?: 'complete' | 'running' | 'error' }>;
+  /** The status and body the notes route answers; default 200 and one note per run. */
+  notesStatus?: number;
+  notesBody?: J;
+  /** A finished run's output by its input's target, in place of the made-up review (T-502: reports that fail a check). */
+  outputs?: Record<string, J>;
 }
 
 export interface JobStub {
@@ -40,6 +54,8 @@ export interface JobStub {
   base: string;
   /** Every request: method, path, and the headers the stub reads. */
   requests: Array<{ method: string; path: string; apiKey: string | undefined; requestKey: string | undefined; body: J }>;
+  /** With `workspaces`: the account each estimate and run request named, in order. */
+  workspacesNamed: string[];
   /** The runs made: one for each distinct X-Request-Key. */
   runs(): Array<{ id: J; key: string; reference: string }>;
   fixFiles(): void;
@@ -53,7 +69,9 @@ export const DEFAULT_FILES: Record<string, string> = {
 
 export async function startJobStub(o: JobStubOptions): Promise<JobStub> {
   const requests: JobStub['requests'] = [];
-  const runs = new Map<string, { id: J; key: string; reference: string; input: J; reads: number }>();
+  const runs = new Map<string, { id: J; key: string; reference: string; input: J; reads: number; workspace?: string; state?: 'complete' | 'running' | 'error' }>();
+  for (const r of o.seedRuns ?? []) runs.set(`seed-${String(r.id)}`, { id: r.id, key: `seed-${String(r.id)}`, reference: 'seeded', input: r.input, reads: 0, ...(r.workspace === undefined ? {} : { workspace: r.workspace }), state: r.state ?? 'complete' });
+  const workspacesNamed: string[] = [];
   let broken = new Set(o.brokenFiles ?? []);
   let startsSeen = 0;
   const files = o.files ?? DEFAULT_FILES;
@@ -72,7 +90,16 @@ export async function startJobStub(o: JobStubOptions): Promise<JobStub> {
       if (path === '/api/v2/moved') return void res.writeHead(302, { location: `${url}/elsewhere` }).end();
       if (!path.startsWith('/api/v2/')) return send(404, { detail: 'not found' });
       if (header('x-api-key') !== o.key) return send(401, { detail: 'X-Api-Key is missing or wrong' });
-      const route = path.slice('/api/v2/'.length);
+      let route = path.slice('/api/v2/'.length);
+      let account: string | undefined;
+      if (o.workspaces) {
+        const w = /^workspaces\/([^/]+)\/(estimates|runs)$/.exec(route);
+        if (w) {
+          account = decodeURIComponent(w[1]!);
+          workspacesNamed.push(account);
+          route = w[2]!;
+        } else if (route === 'estimates' || route === 'runs') return send(404, { detail: 'estimates and runs live under workspaces/<id>/' });
+      }
       if (req.method === 'POST' && route === 'estimates') {
         const depth = Number(body?.depth);
         if (typeof body?.target !== 'string' || !Number.isSafeInteger(depth)) return send(422, { detail: 'target and depth are required' });
@@ -82,7 +109,7 @@ export async function startJobStub(o: JobStubOptions): Promise<JobStub> {
       if (req.method === 'POST' && route === 'runs') {
         const key = header('x-request-key');
         if (!key) return send(400, { detail: 'POST runs needs X-Request-Key' });
-        if (!runs.has(key)) runs.set(key, { id: o.runId ?? 41 + runs.size, key, reference: body?.reference, input: body?.input, reads: 0 });
+        if (!runs.has(key)) runs.set(key, { id: o.runId ?? 41 + runs.size, key, reference: body?.reference, input: body?.input, reads: 0, ...(account === undefined ? {} : { workspace: account }) });
         startsSeen++;
         if (o.failFirstStart && startsSeen === 1) return send(503, { detail: 'the run was made, but the answer was lost' });
         return send(201, { run: { id: runs.get(key)!.id } });
@@ -95,16 +122,27 @@ export async function startJobStub(o: JobStubOptions): Promise<JobStub> {
         if (content === undefined) return send(404, { detail: 'no such file' });
         return res.writeHead(200, { 'content-type': 'application/octet-stream' }).end(content);
       }
+      const notes = /^runs\/([^/]+)\/notes$/.exec(route);
+      if (req.method === 'GET' && notes) {
+        const run = [...runs.values()].find((r) => String(r.id) === decodeURIComponent(notes[1]!));
+        if (!run) return send(404, { detail: 'no such run' });
+        if (o.notesStatus !== undefined) return send(o.notesStatus, o.notesBody ?? { detail: 'the notes store is down' });
+        return send(200, o.notesBody ?? [{ kind: 'note', run: run.id, text: `notes on ${run.input?.target}` }]);
+      }
       const read = /^runs\/([^/]+)$/.exec(route);
       if (req.method === 'GET' && read) {
         const run = [...runs.values()].find((r) => String(r.id) === decodeURIComponent(read[1]!));
         if (!run) return send(404, { detail: 'no such run' });
         const n = run.reads++;
         const until = o.readsUntilComplete ?? 2;
-        if (n < until) return send(200, { run: { id: run.id, state: n === 0 ? 'queued' : 'running' } });
-        if (o.fail) return send(200, { run: { id: run.id, state: 'error' }, detail: 'the job ran out of memory' });
-        const output = { summary: `Reviewed ${run.input?.target} to depth ${run.input?.depth}.`, target: run.input?.target, proofs: o.fileList ?? Object.keys(DEFAULT_FILES) };
-        return send(200, { run: { id: run.id, state: 'complete' }, output });
+        const named = o.reportsWorkspace ?? run.workspace;
+        const where = named === undefined ? {} : { workspace: named };
+        // The run's own request, as the job's answer names it: what jobScope reads (T-501).
+        if (run.state === 'running' || (run.state === undefined && n < until)) return send(200, { run: { id: run.id, state: run.state ?? (n === 0 ? 'queued' : 'running'), input: run.input, ...where } });
+        if (run.state === 'error' || o.fail) return send(200, { run: { id: run.id, state: 'error', input: run.input, ...where }, detail: 'the job ran out of memory' });
+        const given = o.outputs && typeof run.input?.target === 'string' && Object.hasOwn(o.outputs, run.input.target) ? o.outputs[run.input.target] : undefined;
+        const output = given ?? { summary: `Reviewed ${run.input?.target} to depth ${run.input?.depth}.`, target: run.input?.target, proofs: o.fileList ?? Object.keys(DEFAULT_FILES) };
+        return send(200, { run: { id: run.id, state: 'complete', input: run.input, ...where }, output });
       }
       return send(404, { detail: 'not found' });
     })().catch((e: Error) => send(400, { detail: e.message }));
@@ -118,6 +156,7 @@ export async function startJobStub(o: JobStubOptions): Promise<JobStub> {
     url,
     base: `${url}/api/v2/`,
     requests,
+    workspacesNamed,
     runs: () => [...runs.values()].map(({ id, key, reference }) => ({ id, key, reference })),
     fixFiles: () => void (broken = new Set()),
     close: () => new Promise<void>((resolve) => { server.closeAllConnections(); server.close(() => resolve()); }),

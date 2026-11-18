@@ -26,7 +26,11 @@ On a checks-only deal the checks are the whole contract. Write each as if the se
 - `minBps` and `maxBps` are basis points: 10000 is 100%.
 - Checks cannot say that values are plausible or real.
 
-The check types: `csv_columns_exact` (`columns`), `row_count_range` (`min`, `max`, counting data rows; the header line does not count), `unique_key` (`columns`), `null_rate_max` (`column`, `maxBps`), `regex_match_rate_min` (`column`, `pattern`, `minBps`), `iso8601_date_column` (`column`), `json_schema` (`schema`), `hidden_characters_max` (`max` per class: `tag`, `bidi`, `total`). Each takes an `id` and `required`; a failed required check refunds the buyer.
+The check types: `csv_columns_exact` (`columns`), `row_count_range` (`min`, `max`, counting data rows; the header line does not count), `unique_key` (`columns`), `null_rate_max` (`column`, `maxBps`), `regex_match_rate_min` (`column`, `pattern`, `minBps`), `iso8601_date_column` (`column`), `json_schema` (`schema`), `hidden_characters_max` (`max` per class: `tag`, `bidi`, `variationSelector`, `otherIgnorable`, `total`), `reference_row_match_min` (`reference`, `keyColumn`, `minBps`). Each takes an `id` and `required`; a failed required check refunds the buyer.
+
+- **`unique_key` with several columns** treats them together as one key: `"columns": ["t_ms", "joint"]` fails only when a row repeats the same pair, so `t_ms` may repeat across joints. For columns that must each be unique, write one `unique_key` per column.
+- **`hidden_characters_max`** counts these code points in the delivered text, before any normalization, and fails when a class's count is over its `max`; name at least one class, and `total` bounds their sum. `tag`: U+E0000 to U+E007F. `bidi`: U+061C, U+200E, U+200F, U+202A to U+202E, U+2066 to U+2069. `variationSelector`: U+FE00 to U+FE0F, U+E0100 to U+E01EF, U+180B to U+180D, U+180F. `otherIgnorable` (zero-width and other invisible characters): U+00AD, U+034F, U+115F, U+1160, U+17B4, U+17B5, U+180E, U+200B to U+200D, U+2060 to U+2064, U+206A to U+206F, U+3164, U+FEFF, U+FFA0, U+1D173 to U+1D17A. `"max": {"total": 0}` fails on any of them.
+- **`reference_row_match_min`** compares the delivery with a file you hold, in the delivery's format: it passes when at least `minBps` of the reference file's rows appear in the delivery, matched on `keyColumn`, with the same value in every column the reference has. Upload the file before the offer with `POST /v1/ciphertext` (`ref/http-seller.txt`, "Encrypt and deliver", shows the call) and put the answer's `uri` and `id` in `"reference": {"uri": "<uri>", "sha256": "<id>"}`. The operator stores the file in the clear, and anyone with its hash can read it, so put nothing in it you would not publish. Upload it to the store the terms' adjudicators read, as for a delivery: each declines the offer when its store cannot return the file. It is at most `limits.maxCiphertextBytes` in discovery (1,048,576 bytes on these nodes), and a reference with Unicode tag characters fails the check. A pass shows the rows are present, not that the seller produced them. The rest: https://github.com/rafaeldavid/holdback/blob/main/docs/api.md, "Reference files".
 
 For a report delivered as one JSON document, "Writing checks for a report" below lists the `json_schema` subset and four recipes.
 
@@ -87,8 +91,28 @@ Four recipes for an audit report with a `commit`, a `filesReviewed` list and a `
 ```
 
 - A report with no findings passes all four. Add `"minItems": 1` to `findings` only if an empty report is not acceptable work.
-- Require only what every report of this kind has. In the worked example a location's `lines` and `excerpt`, a finding's `impact` and `status`, and the report's `summary` and `reportDate` are optional: the schema names them in `properties` and leaves them out of `required`. A buyer who needs one of them adds it to `required` before agreeing.
+- Require only what every report of this kind has. In the worked example a location's `lines` and `excerpt`, a finding's `impact` and `status`, and the report's `summary`, `reportDate` and `salt` are optional: the schema names them in `properties` and leaves them out of `required`. A buyer who needs one of them adds it to `required` before agreeing.
 - The subset cannot compare two fields (a line range that ends before it starts), cannot require one property to be unique across a list (two findings with the same id), and cannot say that a finding is true.
 - For what the checks cannot say, add a rubric. Judges read a report of up to 100,000 characters whole. They read a longer report as a sample of its lines, and a sampled read escalates the deal to the appeal adjudicator. The checks always run on the whole report.
 
 A complete commitment with these checks, the full report schema and an optional five-criterion rubric is `spec/examples/commitment.audit-report.example.json` in [the repository](https://github.com/rafaeldavid/holdback/blob/main/spec/examples/commitment.audit-report.example.json).
+
+## Writing checks for a robot episode
+
+A robot run sold as one JSON document is checked with `json_schema` too. The sell command's `--sample robot-episode` sells one arm episode in Hugging Face's LeRobot v3 layout: `meta.info` holds `meta/info.json` field for field, `data` holds the frame table one array per column, and `provenance` holds the arm's serial hash, the order's nonce and waypoints, the measured pose at each waypoint, the recording's hash and a device signature. Its ten checks are in `examples/robot-episode.ts`.
+
+- **Bounds are whole numbers.** The terms are hashed and signed, so every bound in a check is an integer. The data need not be: keep joint values in degrees with decimals, as the controller reports them, and the arm's limits are whole numbers in degrees (-360 to 360 for a joint position, 223 degrees per second for a joint speed).
+- **One bound per vector.** The subset has no `prefixItems`, so `items` holds all six values of a joint vector to one bound. Use the widest joint's limit; a joint with a tighter limit is not held to it.
+- **List every section.** `additionalProperties: false` at the top refuses any section it does not name: list `data` and `provenance` as well as `meta`.
+- **Freshness comes from the order.** A `const` on the nonce and the waypoints, and a `minimum` and `maximum` within 1 degree of each waypoint, hold the delivery to a run made after the order, when the buyer draws them. The sample's seller draws its own, because the test buyer issues no orders yet. The check cannot verify the signature itself; it pins the public key and the signed message's format.
+
+```json
+{ "id": "joint-positions", "type": "json_schema", "required": true, "schema": { "type": "object", "required": ["data"], "properties": { "data": { "type": "object", "required": ["observation.state"], "properties": { "observation.state": {
+  "type": "array", "minItems": 1000, "maxItems": 1875,
+  "items": { "type": "array", "minItems": 6, "maxItems": 6, "items": { "type": "number", "minimum": -360, "maximum": 360 } }
+} } } } } }
+```
+
+## The buyer's own check run
+
+Step 9 of https://crow.direct/buy.txt sends you here; this run is optional. In a clone of the repository after `pnpm install && pnpm build`, save the work with the agreed format's extension, such as `work.json`, save the terms as `terms.json` (`curl -s $OP1/v1/commitments/<id>/terms`) and run `node examples/check-delivery.ts terms.json work.json`. Exit 0 means the checks accept it, or on a rubric deal do not refuse it.

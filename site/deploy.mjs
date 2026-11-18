@@ -17,7 +17,7 @@
 import { createHash } from 'node:crypto';
 import { readFileSync, realpathSync, rmSync } from 'node:fs';
 import { fileURLToPath } from 'node:url';
-import { checkout, liveVersion, recordLine, rollback, sh } from '../scripts/deploy-lib.mjs';
+import { checkout, finishDeploy, liveVersion, recordLine, rollback, sh } from '../scripts/deploy-lib.mjs';
 import { SITE_URL, TRY_URL, trySha256 } from './build.mjs';
 
 const WORKER = 'crow-site';
@@ -37,13 +37,15 @@ const PROBE_TIMEOUT_MS = 10_000;
  * @param {{ llms: Buffer, trySha256: string }} built reports/site-out/llms.txt, and the SHA-256 of site/try.mjs that
  *   the one command in llms.txt checks
  * @returns {string | null} null when nothing is.
- * @typedef {{ status: number, body: Buffer }} Answer
+ * @typedef {{ status: number, body: Buffer, type?: string }} Answer `type` is the content-type header, when the probe read it
  */
 export function siteProblem({ home, llms, tryMjs }, built) {
   const not200 = (url, a) => (a.status === 200 ? null : `${url} did not answer 200 (last answer: ${a.status === 0 ? 'no answer' : `HTTP ${a.status}`})`);
   const down = not200(SITE_URL, home) ?? not200(LLMS_URL, llms);
   if (down) return down;
   if (!llms.body.equals(built.llms)) return `${LLMS_URL} answered 200, but its body is not the built ${OUT}/llms.txt`;
+  // The guides and the bundles are UTF-8; without the charset a browser reads "Crow’s" as junk (T-400, apps/site/worker.js).
+  for (const [url, a] of [[LLMS_URL, llms], [TRY_URL, tryMjs]]) if (a.status === 200 && a.type !== undefined && !/charset=utf-8/i.test(a.type)) return `${url} answered 200 as "${a.type}", with no charset=utf-8`;
   const sha = createHash('sha256').update(tryMjs.body).digest('hex');
   return not200(TRY_URL, tryMjs) ?? (sha === built.trySha256 ? null : `${TRY_URL} answered 200, but its SHA-256 starts ${sha.slice(0, 12)}, and the build pinned ${built.trySha256.slice(0, 12)}`);
 }
@@ -89,7 +91,7 @@ export async function deploy({ args, sh, probe, clean, built, sleep, now, log, e
     before = (await liveVersion(WORKER, sh)) ?? fail(`wrangler cannot read ${WORKER}'s live version (is it logged in?), so nothing was uploaded`);
     log(`${WORKER} serves \`${before}\` now: the rollback target. Uploading.`);
     uploaded = true;
-    const r = await sh('npx', ['-y', 'wrangler@4', 'deploy', '--config', 'apps/site/wrangler.jsonc']);
+    const r = await sh('npx', ['-y', 'wrangler@4.151.3', 'deploy', '--config', 'apps/site/wrangler.jsonc']);
     version = /Current Version ID:\s*([0-9a-f-]{36})/.exec(r.out)?.[1] ?? null;
     if (r.code !== 0 || !version) fail(`${WORKER}'s upload was refused`);
 
@@ -111,7 +113,7 @@ export async function deploy({ args, sh, probe, clean, built, sleep, now, log, e
     if (uploaded && current !== before) {
       version ??= current ?? 'unknown';
       rolledBack = await rollback(WORKER, before, `${COMMAND} failed a check`, sh);
-      if (!rolledBack) error(`ROLLBACK FAILED for ${WORKER}. Run: npx wrangler@4 rollback ${before} --name ${WORKER}`);
+      if (!rolledBack) error(`ROLLBACK FAILED for ${WORKER}. Run: npx wrangler@4.151.3 rollback ${before} --name ${WORKER}`);
     }
   }
 
@@ -119,11 +121,11 @@ export async function deploy({ args, sh, probe, clean, built, sleep, now, log, e
   return failure ? 1 : 0;
 }
 
-/** One GET, never followed past a redirect: the status and the bytes, or status 0 when there is no answer in time. */
+/** One GET, never followed past a redirect: the status, the content type and the bytes, or status 0 when there is no answer in time. */
 async function probe(url, timeoutMs) {
   try {
     const r = await fetch(url, { redirect: 'manual', signal: AbortSignal.timeout(timeoutMs) });
-    return { status: r.status, body: Buffer.from(await r.arrayBuffer()) };
+    return { status: r.status, type: r.headers.get('content-type') ?? '', body: Buffer.from(await r.arrayBuffer()) };
   } catch {
     return { status: 0, body: Buffer.alloc(0) };
   }
@@ -131,7 +133,7 @@ async function probe(url, timeoutMs) {
 
 // Run as a command, not imported by a test. Node resolves the script's symbolic links, so compare real paths.
 if (process.argv[1] && realpathSync(process.argv[1]) === fileURLToPath(import.meta.url)) {
-  process.exit(
+  process.exit(await finishDeploy(
     await deploy({
       args: process.argv.slice(2),
       sh,
@@ -143,5 +145,6 @@ if (process.argv[1] && realpathSync(process.argv[1]) === fileURLToPath(import.me
       log: console.log,
       error: console.error,
     }),
-  );
+    process.argv.slice(2),
+  ));
 }

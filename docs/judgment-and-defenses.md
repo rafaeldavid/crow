@@ -41,7 +41,7 @@ The screen (`packages/judgment/src/screen.ts`, version `screen-1` since T-367) l
 - the verdict schema's own field, `injectionSuspected`;
 - hidden characters: Unicode tags, zero-width and bidi controls, characters NFKC changes, words that mix Latin with Cyrillic or Greek letters;
 - a decodable base64, hex or percent-encoded run whose decoded text holds any of the above, names a judging target, holds a weak phrase next to a judging target in the text around the run, or reads as running prose (five words in a row, with spaces, hyphens, underscores or camel case between them); any decodable Morse run;
-- text still encoded after two levels of decoding, and decoded text past 1 MiB (1,048,576 characters) in one delivery: both flag unread;
+- text still encoded after two levels of decoding, and decoded text past `MAX_DECODED_CHARS` characters in one delivery (`packages/judgment/src/screen.ts`): both flag unread;
 - in a CSV, a cell that starts a spreadsheet formula.
 
 **It lets through phrases that are ordinary in honest work, unless a judging target sits within 80 characters of them.** A judging target is the verdict, the rubric, the judges, the panel, an evaluator, a grader, an adjudicator, an assistant, the AI or an LLM, `injectionSuspected`, an `overall` value, "every criterion", "the highest score", or an order on the work itself ("accept this report", "pass on this delivery"). The phrases:
@@ -55,7 +55,7 @@ The screen (`packages/judgment/src/screen.ts`, version `screen-1` since T-367) l
 
 A flag on a deal with a rubric escalates the case, and a flagged case needs a unanimous accept. On a checks-only deal a flag only adds a reason to the record. The screen is a heuristic and has no classifier yet (Phase 3); the judges' own rule 3 (report text aimed at them as suspected injection) is the next line of defense.
 
-**What the judges read of a long delivery.** The prompt carries at most `maxDataChars` characters of the delivery (100,000 by default), each line counted with its line break. A CSV over the limit is sampled by seeded rows (`sample.ts`). Anything else gets the first line and lines at even intervals; a line longer than the room left, the first line or the only line included, is cut to that room, and the note above the data says what was cut. A sampled read escalates.
+**What the judges read of a long delivery.** The prompt carries at most `maxDataChars` characters of the delivery (by default `DEFAULT_MAX_DATA_CHARS` in `packages/judgment/src/prompt.ts`), each line counted with its line break. A CSV over the limit is sampled by seeded rows (`sample.ts`). Anything else gets the first line and lines at even intervals; a line longer than the room left, the first line or the only line included, is cut to that room, and the note above the data says what was cut. A sampled read escalates.
 
 ## Panel policy (defaults; rulebook may tighten)
 
@@ -133,7 +133,7 @@ Unit-test this function exhaustively with table-driven cases.
 | T10 | Seller non-delivery | — | Anyone can reclaim after deliverBy | `reclaim-no-delivery` |
 | T11 | Double spend, races | Parallel fund calls | Idempotency keys; serializable state transitions; settled-once guard | `error.concurrent-overdraft`, property tests |
 | T12 | Replay or forged messages | Reuse of a signed offer | EIP-712 with nonce, expiry, chainId and verifying contract; rulebook hash; scope check | `error.replay`, `error.scope-exceeded` |
-| T13 | Agent key compromise | A stolen key signs large commitments | Scope caps per commitment and per day; mandate expiry; revocation stops new commitments; on a live commitment, loss is bounded by the caps and there is no recourse (residual 12, D22) | `error.revoked-agent` |
+| T13 | Agent key compromise | A stolen key signs large commitments | The payment address's balance and the principal's own wallet bound the loss: money leaves only on the payment address's signatures for one deal. On a chain the contracts read no mandate (ADR-0038, D69). The cap per commitment and the mandate's expiry bind only through the operators that relay a deal and a counterparty that checks. The daily cap binds only through each operator's own count. A principal cannot revoke a mandate today. On a live commitment the loss is bounded by the holds already funded, and the protocol offers no recourse; recourse lies between the principal and its agent provider (residual 12, D22) | none yet: `error.revoked-agent` waits for revocation (ADR-0038) |
 | T14 | Adjudicator insolvency | Bond too small for open exposure | Not in phase one: no adjudicator posts a bond, and a default refunds the buyer. On SimChain under the full protocol, a coverage-ratio gate on assignment, and defaults compensated from the bond | `error.coverage-exceeded` (SimChain only) |
 | T15 | Exfiltration through judge output | A judge is induced to write secrets or URLs | Judges hold no secrets; schema-limited output; URL and length filter | `attack.exfil-attempt` |
 | T16 | Operator tampering | An operator drops or alters messages | Signed messages; escape hatch; hash-chained log; receipts | `neutrality.operator-refuses` |

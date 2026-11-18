@@ -1,0 +1,45 @@
+#cloud-config
+# A simulated party's machine: infra/party/README.md says what it is and how up.mjs makes it.
+# This file holds no secret, no address and no name of the project: it is readable on the machine and through
+# the cloud's metadata service, so it must stay that way. Rafa reviews every change to it.
+#
+# One user, "party", receives the SSH key the create request names and logs in with it only.
+# Root cannot log in. Password login is off. Security updates install themselves.
+# Node, the assistant's command-line tool and, for a seller that publishes, Caddy come after the first
+# SSH session, from infra/party/provision.sh, so that their versions follow the repository's pins.
+
+disable_root: true
+ssh_pwauth: false
+system_info:
+  default_user:
+    name: party
+    gecos: simulated party
+    shell: /bin/bash
+    lock_passwd: true
+    sudo: ["ALL=(ALL) NOPASSWD:ALL"]
+    groups: [sudo]
+
+package_update: true
+package_upgrade: true
+packages:
+  - ca-certificates
+  - curl
+  - unattended-upgrades
+
+write_files:
+  - path: /etc/ssh/sshd_config.d/10-party.conf
+    permissions: "0644"
+    content: |
+      PasswordAuthentication no
+      KbdInteractiveAuthentication no
+      PermitRootLogin no
+      AllowUsers party
+  - path: /etc/apt/apt.conf.d/20auto-upgrades
+    permissions: "0644"
+    content: |
+      APT::Periodic::Update-Package-Lists "1";
+      APT::Periodic::Unattended-Upgrade "1";
+
+runcmd:
+  - [systemctl, enable, --now, unattended-upgrades]
+  - [systemctl, restart, ssh]

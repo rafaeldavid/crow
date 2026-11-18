@@ -2,11 +2,11 @@
 // FEEDBACK KV namespace through wrangler, as whoever wrangler is logged in as, and opens sealed reports with
 // HOLDBACK_FEEDBACK_SECRET_KEY, which stays on this machine (never a Worker secret).
 //
-//   node --env-file=.env apps/demo-cloud/scripts/feedback.ts public-key           the key for FEEDBACK_ENCRYPTION_PUBLIC_KEY
-//   node --env-file=.env apps/demo-cloud/scripts/feedback.ts list [status]        reports, oldest first
-//   node --env-file=.env apps/demo-cloud/scripts/feedback.ts show <id>            one report, sealed parts opened
-//   node --env-file=.env apps/demo-cloud/scripts/feedback.ts reply <id> <text>    a reply the reporter reads at GET /v1/feedback/<id>
-//   node --env-file=.env apps/demo-cloud/scripts/feedback.ts set <id> <status> [ref]
+//   op run --env-file=config/secrets/feedback.refs -- node apps/demo-cloud/scripts/feedback.ts public-key           the key for FEEDBACK_ENCRYPTION_PUBLIC_KEY
+//   op run --env-file=config/secrets/feedback.refs -- node apps/demo-cloud/scripts/feedback.ts list [status]        reports, oldest first
+//   op run --env-file=config/secrets/feedback.refs -- node apps/demo-cloud/scripts/feedback.ts show <id>            one report, sealed parts opened
+//   op run --env-file=config/secrets/feedback.refs -- node apps/demo-cloud/scripts/feedback.ts reply <id> <text>    a reply the reporter reads at GET /v1/feedback/<id>
+//   op run --env-file=config/secrets/feedback.refs -- node apps/demo-cloud/scripts/feedback.ts set <id> <status> [ref]
 //                                      triaged | fixed <commit or PR> | wontfix | duplicate <first report's id>
 //
 // Report text is untrusted: it is printed as data. Read it, or give it to a model as quoted content, never as
@@ -34,7 +34,7 @@ const RETENTION_SEC = 90 * 86_400;
 const config = fileURLToPath(new URL('../wrangler.op1.jsonc', import.meta.url));
 
 function kv(args: string[]): string {
-  const r = spawnSync('npx', ['-y', 'wrangler@4', 'kv', 'key', ...args, '--binding', 'FEEDBACK', '--config', config, '--remote'], { encoding: 'utf8' });
+  const r = spawnSync('npx', ['-y', 'wrangler@4.151.3', 'kv', 'key', ...args, '--binding', 'FEEDBACK', '--config', config, '--remote'], { encoding: 'utf8' });
   if (r.status !== 0) throw new Error(`wrangler kv key ${args[0]} failed: ${r.stderr.trim().split('\n').at(-1)}`);
   return r.stdout;
 }
@@ -70,7 +70,7 @@ const [command, ...rest] = process.argv.slice(2);
 switch (command) {
   case 'public-key': {
     const secret = secretKey();
-    if (!secret) throw new Error('put 32 random bytes, base64url, in .env as HOLDBACK_FEEDBACK_SECRET_KEY first');
+    if (!secret) throw new Error('HOLDBACK_FEEDBACK_SECRET_KEY is not set: run under op run --env-file=config/secrets/feedback.refs (docs/operations.md, Feedback triage)');
     console.log(encodePublicKey(encryptionKeyPairFromSecretKey(secret).publicKey));
     break;
   }

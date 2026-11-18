@@ -1,4 +1,4 @@
-// One test deal on the ’crow demo. Test tokens only (tUSD on SimChain, tUSDC on Sepolia): nothing here is real money.
+// One test deal on the Crow demo. Test tokens only (tUSD on SimChain, tUSDC on Sepolia): nothing here is real money.
 //
 // With --seller <intake URL>, this script is the buyer and Crow's test seller (apps/test-agents, D47) is the other
 // party: the buyer seals a proposal to the seller's intake, as site/ref/intake.txt "Two agents, two people" describes,
@@ -13,15 +13,18 @@
 // Either way, every message an operator prepares is rebuilt from this script's own intent and checked before it is
 // signed (verify.ts).
 //
-// It calls only the two operators below and the test seller you name, keeps its keys in memory and writes no files.
-// It prints one line per step, then the commitment ID and the final state. It exits 0 when the deal ends as asked
+// It calls only the two operators below and the test seller you name, and keeps its keys in memory. It writes no file
+// unless --out <dir> names a folder for the deal's record: the terms, the transaction hashes, the data and its SHA-256.
+// It prints one line per step, then the commitment ID and the final state, then the operators' report route. It exits 0 when the deal ends as asked
 // (Released, or Refunded with --outcome refund), 3 when it refuses to sign something, and 1 when anything else stops it.
 //
-//   node try.mjs [--seller <url>] [--outcome refund]   the bundle served at https://crow.direct/try.mjs (node site/build.mjs)
+//   node try.mjs [--seller <url>] [--outcome refund] [--out <dir>]   the bundle served at https://crow.direct/try.mjs (node site/build.mjs)
 //   node examples/try.ts [--seller <url>]              from the repository
 //   HOLDBACK_OPERATORS=<url>,<url>                     other operators (two distinct origins)
 //
-// Source: https://github.com/rafaeldavid/holdback/blob/main/examples/try.ts, with agent.ts and verify.ts.
+// Source: https://github.com/rafaeldavid/holdback/blob/main/examples/try.ts, with agent.ts, verify.ts, finality.ts and
+// deployments.ts.
+import { mkdirSync, writeFileSync } from 'node:fs';
 import nacl from 'tweetnacl';
 import { recoverTypedDataAddress, type Hex } from 'viem';
 import { generatePrivateKey } from 'viem/accounts';
@@ -47,11 +50,12 @@ const BAD_CSV = 'customer_id,email\n1,ada@example.com\n2,alan@example.com\n';
 
 const args = process.argv.slice(2);
 // T-397: --help or -h first answers with what it does, the usage and an example, and runs nothing (exit 0); anywhere
-// else it is a wrong call (exit 2). Kept here: try.mjs imports only viem and tweetnacl.
+// else it is a wrong call (exit 2). Kept here, before any work.
 if (args.some((a) => a === '--help' || a === '-h')) {
   (args[0] === '--help' || args[0] === '-h' ? console.log : console.error)([
     "try: runs one test deal on Crow's demo with fresh keys, test tokens only. With --seller it is the buyer and Crow's test seller the other party; without, it plays both sides. --outcome refund asks for a refund.",
-    'usage: node try.mjs [--seller <test seller URL>] [--outcome release|refund]',
+    'usage: node try.mjs [--seller <test seller URL>] [--outcome release|refund] [--out <dir>]',
+    '--out <dir> writes the deal record to <dir>: <commitment ID>.json (the terms, the transaction hashes, the data\'s SHA-256) and <commitment ID>.csv (the data). Without it nothing is written. Under node --permission, create <dir> first and add --allow-fs-write=<dir>.',
     'example: node try.mjs --seller https://crow.direct/agents/test-seller',
   ].join('\n'));
   process.exit(args[0] === '--help' || args[0] === '-h' ? 0 : 2);
@@ -62,8 +66,11 @@ const option = (name: string): string | undefined => {
 };
 const SELLER = option('--seller')?.replace(/\/+$/, '');
 const OUTCOME = option('--outcome') ?? 'release';
+const OUT = option('--out');
+/** The faucet's limits as the operators' discovery states them, for the line a stopped run ends with. */
+let faucetLimits: { perClient: number; everySec: number } | undefined;
 
-const short = (h: string) => `${h.slice(0, 8)}…${h.slice(-4)}`;
+const short = (h: string) => `${h.slice(0, 8)}...${h.slice(-4)}`;
 /** Base units of a 6-decimal token as a decimal string, in integer arithmetic. */
 const units = (base: string | bigint) => {
   const v = BigInt(base);
@@ -161,7 +168,7 @@ async function askTestSeller(buyer: Agent, price: J): Promise<{ id: Hex; seller:
   const token = Buffer.from(crypto.getRandomValues(new Uint8Array(24))).toString('base64url');
   const request = { type: 'crow-request', proposal: { uri: stored.uri, sha256: stored.id }, sealedKey: sealKeyTo(key, 'intake', card.intake.encryptionPublicKey).ciphertext, statusTokenHash: await sha256hex(new TextEncoder().encode(token)), from: 'try.mjs' };
   await fromSeller(card.intake.api, { method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify(request) });
-  say(`sealed proposal stored on Crow (${stored.bytes} bytes) and sent to the intake: ${OUTCOME === 'refund' ? 'asking for work that fails a check, to see a refund' : 'the seller\'s own terms'}`);
+  say(`sealed proposal stored on Crow (${stored.bytes} bytes) and sent to the intake: ${OUTCOME === 'refund' ? 'asking for work that fails a check, to see a refund' : "this buyer's own terms: the price, the work and the three checks"}`);
 
   step = 'offered';
   let s: J;
@@ -179,16 +186,34 @@ async function askTestSeller(buyer: Agent, price: J): Promise<{ id: Hex; seller:
 
 async function main() {
   const started = Date.now();
-  console.log(`’crow test deal on ${OPERATORS.join(' and ')}: test tokens only, nothing here is real money`);
+  console.log(`Crow test deal on ${OPERATORS.join(' and ')}: test tokens only, nothing here is real money`);
   if (!globalThis.crypto?.subtle || typeof fetch !== 'function') throw new Error(`this needs Node 20 or later (Web Crypto and fetch); this is Node ${process.versions.node}`);
   if (OUTCOME !== 'release' && OUTCOME !== 'refund') throw new Error(`--outcome is release or refund, not ${OUTCOME}`);
   if (args.includes('--seller') && !/^https?:\/\/\S+$/.test(SELLER ?? '')) throw new Error('--seller takes the intake URL, such as https://crow.direct/agents/test-seller');
+  if (args.includes('--out')) {
+    if (!OUT || OUT.startsWith('--')) throw new Error('--out takes a folder, such as --out crow-record');
+    // Checked before any deal. Under node --permission a folder is writable only if it existed when Node started.
+    const permission = (process as unknown as { permission?: { has(scope: string, ref: string): boolean } }).permission;
+    const flag = `node --permission lets this script write only where --allow-fs-write allows: create the folder first (mkdir -p ${OUT}), then add --allow-fs-write=${OUT}`;
+    try {
+      mkdirSync(OUT, { recursive: true });
+    } catch (e) {
+      throw new Error(`--out cannot write to ${OUT}: ${(e as { code?: string }).code === 'ERR_ACCESS_DENIED' ? flag : (e as Error).message}`);
+    }
+    if (permission && !permission.has('fs.write', `${OUT}/record.json`)) throw new Error(`--out cannot write to ${OUT}: ${flag}`);
+  }
 
   step = 'keys';
   // Discovery as every operator serves it, and the settlement layers this script pins (never the operator's):
   // SimChain, and Sepolia's deployment, whose contracts and token it funds through.
   const reader = new Agent(OPERATORS, generatePrivateKey(), nacl.randomBytes(32));
-  const found = await reader.trusted('/.well-known/holdback.json', (x) => ({ domain: x.domain, clubId: x.demo?.clubId, token: x.demo?.token?.id, adjudicators: x.demo?.adjudicators }));
+  const limits: Array<{ perClient: number; everySec: number }> = [];
+  const found = await reader.trusted('/.well-known/holdback.json', (x) => {
+    const f = x.demo?.faucet;
+    if (Number.isSafeInteger(f?.perClientPerWindow) && Number.isSafeInteger(f?.perAddressEverySec)) limits.push({ perClient: f.perClientPerWindow, everySec: f.perAddressEverySec });
+    return { domain: x.domain, clubId: x.demo?.clubId, token: x.demo?.token?.id, adjudicators: x.demo?.adjudicators };
+  });
+  faucetLimits = limits.sort((a, b) => a.perClient - b.perClient)[0];
   const pins = knownPins();
   const pin = pins.find((p) => same(p.domain, found.domain));
   if (!pin) throw new Refusal(`refusing to sign: the operators serve EIP-712 domain ${jcs(found.domain)}, not one pinned here (${pins.map((p) => jcs(p.domain)).join(' or ')})`);
@@ -204,6 +229,16 @@ async function main() {
     return a;
   };
   const [primary, fallback, appeal] = [role('primary'), role('fallback'), role('appeal')];
+  // Who runs each role, before any money moves. On the default operators every role but the buyer is Crow's.
+  step = 'roles';
+  const crow = !process.env['HOLDBACK_OPERATORS'];
+  say([
+    'buyer: this script, with fresh keys',
+    SELLER ? `seller: Crow's test seller at ${SELLER}` : 'seller: this script too',
+    `adjudicators (primary, fallback, appeal): ${[primary, fallback, appeal].map(short).join(', ')}, ${crow ? "Crow's" : "as the operators' discovery names them"}`,
+    `operators: ${OPERATORS.map((o) => new URL(o).host).join(' and ')}${crow ? ", Crow's" : ''}`,
+  ].join('; '));
+  step = 'keys';
 
   // With --seller, Crow's test seller is the other party; this script plays it only when the seller cannot.
   let deal: { id: Hex; seller: string } | undefined;
@@ -317,13 +352,14 @@ async function main() {
   say(`${done.escrowState}: ${decided}`);
   if (done.escrowState !== expected) throw new Error(`the deal ended ${done.escrowState}, not ${expected}`);
 
+  let opened: string | undefined;
   if (done.escrowState === 'Released') {
     step = 'open'; // the buyer: its released envelope opens the content key; the hashes the seller signed are checked
     // The ciphertext is fetched from the URI the delivery event records: every operator must record the same one, on
     // an operator's own store, and when this script delivered, the one where it stored the work.
     const recorded = await buyer.trusted(`/v1/commitments/${id}/events?limit=200`, (x) => x.items.find((e: J) => e.type === 'delivery.submitted')?.payload?.ciphertext?.uri ?? null);
     if (!recorded || !OPERATORS.some((op) => new URL(op).origin === new URL(recorded).origin) || (storedAt && recorded !== storedAt)) throw new Error(`the operators record the delivery at ${recorded}, not ${storedAt ?? 'on an operator'}`);
-    const opened = await buyer.openDelivery(id);
+    opened = await buyer.openDelivery(id);
     if (seller && opened !== CSV) throw new Error('the buyer opened something other than what the seller delivered');
     const rows = opened.trimEnd().split('\n').slice(1);
     say(`the buyer decrypted its copy, sha256 checked: ${rows.length} rows, ${rows.join(' | ')}`);
@@ -336,6 +372,7 @@ async function main() {
   const balance = async (a: Agent) => tusd(await a.trusted(`/v1/balances/${a.address}`, (x) => x.amount));
   say(seller ? `buyer ${await balance(buyer)}, seller ${await balance(seller)}` : `buyer ${await balance(buyer)}`);
 
+  const transactions: Array<{ step: string; tx: string; url?: string }> = [];
   if (pin.chain) {
     // Every money step is a transaction anyone can check: the hold, the delivery, the release or refund.
     step = 'chain';
@@ -345,6 +382,7 @@ async function main() {
     for (const { type, tx } of events.sort((a, b) => a.seq - b.seq)) {
       if (seen.has(tx)) continue;
       seen.add(tx);
+      transactions.push({ step: what[type] ?? type, tx, ...(pin.chain.explorer ? { url: `${pin.chain.explorer}/tx/${tx}` } : {}) });
       say(`${(what[type] ?? type).padEnd(9)} ${pin.chain.explorer ? `${pin.chain.explorer}/tx/${tx}` : tx}`);
     }
   }
@@ -352,8 +390,26 @@ async function main() {
   step = 'final';
   const party = deal ? "with Crow's test seller as the other party" : SELLER ? 'with both sides played here, since the test seller was unavailable' : 'with both sides played here';
   say(`${done.escrowState} in ${Math.round((Date.now() - started) / 1000)} s ${party}; ${finality(terms.timing?.appealWindowSec, done.deadlines?.appealBy)}`);
+  if (OUT) {
+    // Only with --out: the record a principal may keep. The keys are never in it.
+    step = 'record';
+    const data = opened === undefined ? null : new TextEncoder().encode(opened);
+    const record = {
+      type: 'crow-try-record', commitmentId: id, state: done.escrowState, operators: OPERATORS, terms, transactions,
+      data: data ? { file: `${id}.csv`, format: 'text/csv', bytes: data.length, sha256: await sha256hex(data) } : null,
+    };
+    const files = [`${OUT}/${id}.json`, ...(data ? [`${OUT}/${id}.csv`] : [])];
+    writeFileSync(files[0]!, `${JSON.stringify(record, null, 2)}\n`, { flag: 'wx' });
+    if (data) writeFileSync(files[1]!, data, { flag: 'wx' });
+    say(`wrote ${files.join(' and ')}`);
+  }
   step = 'done';
   say(`commitment ${id} ${done.escrowState}`);
+  // The report route, from each operator's own discovery: a report is the agent's choice, with its principal's yes.
+  const takes = await Promise.all(OPERATORS.map((op) => buyer.call('GET', '/.well-known/holdback.json', undefined, op).then((d: J) => (typeof d?.feedback?.path === 'string' && /^\/[A-Za-z0-9/_-]{1,64}$/.test(d.feedback.path) ? `${op}${d.feedback.path}` : null), () => null)));
+  const routes = takes.filter((r): r is string => r !== null);
+  step = 'report';
+  if (routes.length) say(`with your principal's yes, report a problem or this first deal: POST ${routes.join(' or ')} (https://crow.direct/ref/limits.txt, "Reporting a problem")`);
 }
 
 try {
@@ -362,6 +418,7 @@ try {
 } catch (e) {
   const refused = e instanceof Refusal;
   console.error(`${refused ? 'refused' : 'stopped'} at ${step}: ${(e as Error).message}`);
-  if (!refused) console.error('Nothing here is real money. Run it again for a fresh deal; the faucet allows 10 new addresses per hour per client.');
+  const limit = faucetLimits ? `the faucet funds at most ${faucetLimits.perClient} new addresses per client every ${faucetLimits.everySec % 60 === 0 ? `${faucetLimits.everySec / 60} min` : `${faucetLimits.everySec} s`}` : "the faucet's limits per client are in the operators' discovery, demo.faucet";
+  if (!refused) console.error(`Nothing here is real money. Run it again for a fresh deal; ${limit}.`);
   process.exit(refused ? 3 : 1);
 }
