@@ -352,7 +352,8 @@ interface IHoldbackRules {
     ///      - `MessageExpired` at or after the acceptance's or the agreement's `expiresAt`;
     ///      - `InvalidMessage` when the acceptance reserves a bond (`bondReserved` not 0), the terms name another
     ///        token than `TOKEN`, the five deadlines are not strictly increasing, `maxSubmissions` is not 1,
-    ///        `appealDecideSec` is 0, or `appealWindowSec` is not 0;
+    ///        `appealDecideSec` is 0, `appealWindowSec` is not 0, or a dispute field (`disputeBy`, `disputeJudgeSec`,
+    ///        `disputeFallbackSec`) is not 0;
     ///      - `BadSignature` when the seller's, the primary's or the buyer's signature fails;
     ///      - `Unrepresentable` when a value is unrepresentable (see the error);
     ///      - the escrow's `ZeroAmount` when price + fee is 0, and the escrow's and the collector's own errors when
@@ -398,8 +399,8 @@ interface IHoldbackRules {
     ///      - `WrongStage` in None or a closed stage, where no adjudicator has a turn;
     ///      - `InvalidMessage` when the role is not the one whose turn it is, the attempt or the delivery hash is not
     ///        the posted one's, the outcome is not one the role may decide (the appeal adjudicator cannot escalate), a
-    ///        key travels with an outcome other than accept, an accept carries no key, or a primary's or fallback's
-    ///        decision names an appeal ground;
+    ///        key travels with an outcome other than accept, an accept carries no key, any decision names an appeal
+    ///        ground, or a primary's decision carries a beacon field (source, round, value or proof);
     ///      - `DeadlinePassed` at or after the role's deadline;
     ///      - `BadSeed` when the seed is wrong (see the error), and the beacon's own error when its proof fails;
     ///      - `BadSignature` when the adjudicator's signature fails.
@@ -479,7 +480,8 @@ interface IHoldbackRules {
     ///         FallbackJudging, `t1` the block time. Moves no money.
     /// @dev Refuses with `WrongStage` outside Delivered and `TooEarly` before `judgeBy`. Emits `FallbackTriggered`
     ///      with the round that fixes the fallback's seed: the first round published after
-    ///      `judgeBy − 1 + BEACON_MARGIN`.
+    ///      `judgeBy − 1 + BEACON_MARGIN`. It has no upper bound in time: sent at or after `fallbackBy`, it opens a
+    ///      fallback turn with no time left, and `triggerDefault` is due at once.
     /// @param t The deal's settlement view.
     function triggerFallback(H.Terms calldata t) external;
 
