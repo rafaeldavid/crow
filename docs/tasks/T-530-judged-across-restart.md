@@ -20,17 +20,32 @@ Non-goals: no change to what is judged or how; no change to the settlement layer
 
 ## Acceptance criteria
 
-- [ ] A restart after the panel returned signs the kept decision, names the kept record, and calls no judge.
-- [ ] A result the store cannot keep is neither published nor signed; the retry keeps it and calls no judge again.
-- [ ] A store that does not answer refuses the turn before any judge is called.
-- [ ] The kept row holds the record, the outcome and the published flag, and no key.
-- [ ] Each test fails before the change and passes after it.
-- [ ] One review has read the change, and its blocking findings are fixed.
+- [x] A restart after the panel returned signs the kept decision, names the kept record, and calls no judge.
+- [x] A result the store cannot keep is neither published nor signed; the retry keeps it and calls no judge again.
+- [x] A store that does not answer refuses the turn before any judge is called.
+- [x] The kept row holds the record, the outcome and the published flag, and no key.
+- [x] Each test fails before the change and passes after it.
+- [x] One review has read the change, and its blocking finding is fixed.
 
 ## Evidence
 
-To be filled in.
+Measured on 2026-11-18 in the worktree `t-530-judged-restart`, unless marked.
+
+- **Before the change.** With `apps/adjudicator/src/service.ts` at `origin/main`, the 3 tests of `describe('a judged result survives a restart (A-4)')` in `apps/adjudicator/src/service.test.ts` failed:
+  - "a restart after the panel returned signs the kept decision and never calls the judges again";
+  - "a result that cannot be kept is neither published nor signed; the retry keeps it without judging again";
+  - "a store that does not answer refuses before any judge is called".
+- **The review's finding.** The first version kept the result only after the fallback read its bond cover again, so a cover failure followed by a restart ran the panel again. The result is now kept before that read. The fourth test, "a fallback whose bond is taken while the panel runs keeps its result: after a restart it calls no judge", failed on the first version and passes now.
+- **After the change.** The 4 tests pass. `vitest run apps/adjudicator apps/demo-cloud`: 24 of 24 files that ran and 425 of 425 tests passed, 7 files and 17 tests skipped. The skipped files are the anvil suites; this worktree has no `forge build` output, and CI runs them.
+- **The world's storage check.** `apps/demo-cloud/src/world.test.ts`, "never receives a body, a header value, an IP or an address", lists every storage prefix the world may hold. It failed on `jd` until the prefix was added; its canary check over every stored value still passes, so no request data reaches a `jd:` row.
+- **Types and lint.** `pnpm typecheck` and `eslint` on the changed files exit 0.
 
 ## Handoff
 
-To be filled in.
+**Done:** the store, its wiring in the hosted world, and four tests.
+
+**A deploy of the operators would carry:** the hosted adjudicators write one `jd:` row per decided turn to the world's Durable Object storage, holding the published record and its outcome. Rows are not deleted; one deal adds at most one per role [inferred].
+
+**Not changed, from the review:**
+- After a restart, the fallback's first check reads its cached outcome from memory, so a kept escalation needs cover again at that check. A restart behaved the same before this change; phase-one deployments need no cover.
+- `docs/audit/known-issues.md` still lists A-4 as open. The docs batch (row N192) marks it fixed with this task.

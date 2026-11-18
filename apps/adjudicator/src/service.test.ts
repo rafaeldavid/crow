@@ -93,6 +93,7 @@ interface SetupOpts {
   fee?: TokenAmount;
   /** Config overrides for the primary only (a sham deal's primary, which accepts any terms). */
   overA?: Partial<AdjudicatorConfig>;
+  overB?: Partial<AdjudicatorConfig>;
   /** T-217: the club rulebook names drand-quicknet, and the port reads its rounds from this source (null: none). */
   drand?: (s: TestSettlement) => RandomnessSource | null;
   /** The port stands in for a chain settlement: the phase-one contracts, with no bonds and no party appeals (ADR-0031 §8). */
@@ -105,7 +106,7 @@ async function setup(opts: SetupOpts = {}) {
   if (opts.drand) s.drand = opts.drand(s);
   const r = opts.registry ?? reg;
   const a = bench(A, 'bench-a', s, opts.scriptA, undefined, r, undefined, opts.overA);
-  const b = bench(B, 'bench-b', s, opts.scriptB, undefined, r);
+  const b = bench(B, 'bench-b', s, opts.scriptB, undefined, r, undefined, opts.overB);
   const c = bench(C, 'bench-c', s, opts.scriptC, undefined, r);
   const commitment = makeCommitment({
     primary: A.address,
@@ -896,6 +897,28 @@ describe('a judged result survives a restart (A-4)', () => {
     await a.adj.runOnce();
     expect(s.state(id).kind).toBe('Released');
     expect([kept.rows.size, a.calls.length]).toEqual([1, 3]);
+  });
+
+  // Review of T-530: the fallback reads its cover again after the panel; the result is kept before that read.
+  it('a fallback whose bond is taken while the panel runs keeps its result: after a restart it calls no judge', async () => {
+    const kept = memory();
+    const box: { s?: TestSettlement } = {};
+    const drop = (req: JudgeRequest) => {
+      box.s!.bonds.set(B.address, 0n);
+      return honestVerdict(req);
+    };
+    const { s, b, id } = await setup({ scriptB: Object.fromEntries(REGISTRY.judges.map((j) => [j.id, drop])), overB: { judgedStore: kept.store } });
+    box.s = s;
+    s.at('2026-11-01T10:02:00Z');
+    const first = await b.adj.runOnce();
+    expect(first.refused.map((r) => r.problem.type)).toEqual(['coverage_exceeded']);
+    expect(b.calls.length).toBeGreaterThan(0);
+    expect([kept.rows.size, s.records.size]).toEqual([1, 0]);
+    s.bonds.delete(B.address);
+    const again = bench(B, 'bench-b', s, {}, undefined, reg, undefined, { judgedStore: kept.store });
+    await again.adj.runOnce();
+    expect(s.state(id).kind).toBe('Released');
+    expect(again.calls).toHaveLength(0);
   });
 
   it('a store that does not answer refuses before any judge is called', async () => {

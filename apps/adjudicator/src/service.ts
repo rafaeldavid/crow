@@ -761,15 +761,16 @@ export class Adjudicator {
       // the record does not cover.
       return err(problem('invalid_state', `this adjudicator judged delivery ${judged.record.deliveryHash} for this commitment, role and attempt; the task now carries ${deliveryHash(task.delivery)}, and it never judges an attempt twice`));
     }
+    // A-4 (T-530): kept the moment it exists, before any other read or anything published or signed, so no later
+    // failure and no restart runs the panel again or signs another verdict.
+    const keptFirst = await this.#keep(key, judged);
+    if (keptFirst) return err(keptFirst);
     // T-211: the bond may have moved while the panel ran; read it again before publishing and signing (kept, no re-roll).
     // An escalation reserves no bond on either chain, so it needs no cover.
     if (task.role === 'fallback' && judged.outcome !== 'escalate') {
       const short = await this.#coverProblem(task.commitment);
       if (short) return err(short);
     }
-    // A-4 (T-530): kept before anything of it is published or signed, so a restart never signs another verdict.
-    const keptFirst = await this.#keep(key, judged);
-    if (keptFirst) return err(keptFirst);
     if (!judged.published) {
       try {
         await this.#port.publishRecord(judged.record);
@@ -798,7 +799,7 @@ export class Adjudicator {
     if (!store) return ok(null);
     let kept: KeptJudgment | null | undefined;
     try {
-      kept = await store.get(key);
+      kept = await this.#read('the store of judged results', () => store.get(key));
     } catch (e) {
       return err(problem('adjudicator_unavailable', `the store of judged results did not answer (${errorClass(e)}); not judged, retrying (no record)`));
     }
