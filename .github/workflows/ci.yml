@@ -12,8 +12,9 @@ permissions:
 
 jobs:
   # A pull request that changes only docs/ or root Markdown files skips the heavy jobs (Rafa, 2026-11-07: the
-  # change recipes in docs/team.md). Since T-504 a push to main that merges only such files skips them too. Every
-  # other push to main runs everything, and so does a pull request or push whose file list can't be read.
+  # change recipes in docs/team.md). Since T-504 a push to main that merges only such files skips the model check,
+  # forge test and the anvil suites, and keeps the static job and the test shards. Every other push to main runs
+  # everything, and so does a pull request or push whose file list can't be read.
   changes:
     runs-on: ubuntu-latest
     permissions:
@@ -22,6 +23,7 @@ jobs:
     outputs:
       code: ${{ steps.files.outputs.code }}
       chain: ${{ steps.files.outputs.chain }}
+      formal: ${{ steps.files.outputs.formal }}
     steps:
       - id: files
         env:
@@ -34,14 +36,17 @@ jobs:
         run: |
           code=true
           chain=true
+          formal=true
           # T-504: a push to main whose commits touch only docs/ or root Markdown files (a merged docs or task-file
-          # pull request) skips the heavy jobs, as that pull request did. Its file list comes from GitHub's compare of
-          # the push's two commits; a list that can't be read, or that may be cut off (the compare lists at most 300
-          # files), runs everything.
+          # pull request) skips the model check, forge test and the anvil suites. It still runs the static job and the
+          # test shards at full counts, because tests there read docs (the phase-one cut scan, the decisions' status
+          # lines, the design map, the task-number check, the guides). The file list comes from GitHub's compare of
+          # the push's two commits, with each rename's old path; a list that can't be read, or that may be cut off
+          # (the compare lists at most 300 files), runs everything.
           if [ "$EVENT" = push ] && [ -n "$BEFORE" ] && [ "$BEFORE" != 0000000000000000000000000000000000000000 ] \
-            && pushed=$(gh api "repos/$REPO/compare/$BEFORE...$SHA" --jq '.files[].filename') && [ -n "$pushed" ] \
-            && [ "$(printf '%s\n' "$pushed" | wc -l)" -lt 300 ]; then
-            if [ -z "$(printf '%s\n' "$pushed" | grep -Ev '^(docs/.+|[^/]+\.md)$')" ]; then code=false; fi
+            && pushed=$(gh api "repos/$REPO/compare/$BEFORE...$SHA" --jq '.files[] | .filename, (.previous_filename // empty)') \
+            && [ -n "$pushed" ] && [ "$(printf '%s\n' "$pushed" | wc -l)" -lt 300 ]; then
+            if [ -z "$(printf '%s\n' "$pushed" | grep -Ev '^(docs/.+|[^/]+\.md)$')" ]; then chain=false; formal=false; fi
             echo "push: $(printf '%s\n' "$pushed" | wc -l) changed files"
           fi
           if [ "$EVENT" = pull_request ] && files=$(gh pr diff "$PR" --repo "$REPO" --name-only) && [ -n "$files" ]; then
@@ -57,6 +62,7 @@ jobs:
           fi
           echo "code=$code" | tee -a "$GITHUB_OUTPUT"
           echo "chain=$chain" | tee -a "$GITHUB_OUTPUT"
+          echo "formal=$formal" | tee -a "$GITHUB_OUTPUT"
 
   static:
     name: typecheck, lint, spec, snap
@@ -217,7 +223,7 @@ jobs:
   formal:
     name: formal (TLC)
     needs: changes
-    if: needs.changes.outputs.code == 'true'
+    if: needs.changes.outputs.code == 'true' && needs.changes.outputs.formal == 'true'
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
@@ -259,7 +265,8 @@ jobs:
           echo "static=${{ needs.static.result }} test=${{ needs.test.result }} contracts=${{ needs.contracts.result }} anvil=${{ needs.anvil.result }} formal=${{ needs.formal.result }}"
           test "${{ needs.static.result }}" = success
           test "${{ needs.test.result }}" = success
-          test "${{ needs.formal.result }}" = success
+          # skipped only on a docs-only push to main, when the changes job said so (T-504)
+          if [ "${{ needs.changes.outputs.formal }}" = false ]; then echo "docs-only push: the model check was skipped"; else test "${{ needs.formal.result }}" = success; fi
           if [ "${{ needs.changes.outputs.chain }}" = false ]; then echo "chain side untouched: the contracts and anvil jobs were skipped"; exit 0; fi
           test "${{ needs.contracts.result }}" = success
           test "${{ needs.anvil.result }}" = success
