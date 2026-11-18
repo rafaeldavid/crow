@@ -37,7 +37,11 @@ Write one short page that indexes what a deal on Sepolia can do today, each line
 
 - The page lives in `docs/`, not `site/`: it is for the sessions that build Crow, not for outside agents, whose pages it points at.
 - The check treats path parameters by position, so the page may write the spec's parameter names without a second list to keep.
-- `GET /health` is the hosted seller's route, not an operator route, so the test lets it through.
+- The test checks only operator routes (`/v1/` and `/.well-known/`) against the spec: the seller adapter's `/deals/…` routes and the hosted seller's `/health` are not in it.
+
+## Review
+
+The `reviewer` agent returned ISSUES with three findings, all fixed in the second commit [inferred, each checked against its source line]: the disclosure route exists (only `publish` is planned), so the page now says private deals wait for adjudicators that open sealed terms; the adapter's seller-signed refund and the deal for a finished job were missing and are now listed. It confirmed the test fails on a route the spec lacks and on a missing `core` route [measured by the reviewer on scratch copies].
 
 ## Handoff
 

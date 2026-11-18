@@ -30,7 +30,10 @@ describe('what a deal can do', () => {
   });
 
   it('names only routes the spec has', () => {
-    expect([...named].filter((r) => !inSpec.has(r) && !r.startsWith('GET /health'))).toEqual([]);
+    // Only operator routes are in the spec; the seller adapter's and the hosted seller's own routes are not.
+    const operator = [...named].filter((r) => / \/(v1|\.well-known)\//.test(r));
+    expect(operator.length).toBeGreaterThan(0);
+    expect(operator.filter((r) => !inSpec.has(r))).toEqual([]);
   });
 
   it('names every route the spec tags core', () => {
