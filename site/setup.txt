@@ -47,7 +47,7 @@ It sends nothing. It takes an empty folder only. It refuses a folder inside a gi
 
 The sample is `squares.csv` for 1 tUSDC.
 
-**The person's own work.** `seller --template <file>` in place of `--sample` sells work a JSON file describes; `seller` with no flag prints its shape. `--file <path>` adds finished work, delivered once the deal is funded. Without it `first-deal` exits 0 at `"state": "Held"` with `workPath` and `deliverBy`: put the work there and run it again. It delivers work that passes the agreed checks and names each failing check; `check --work <file>` runs them on a sample. Their own API: https://crow.direct/sell.txt.
+**The person's own work.** `seller --template <file>` sells work a JSON file describes; `seller` with no flag prints its shape. `--file <path>` adds finished work, delivered once the deal is funded. Without it `first-deal` exits 0 at `"state": "Held"` with `workPath` and `deliverBy`: put the work there and run it again. It delivers work that passes the agreed checks and names each failing check; `check --work <file>` runs them on a sample. Their own API: https://crow.direct/sell.txt.
 
 ## The list
 
@@ -72,12 +72,12 @@ What the person gives up: the request shows Crow the website and this machine's 
 | The faucet grant: the deal's fresh address and the folder's one holding address | Operator 1 | A mandate for that address, and a mint on Sepolia |
 | The signed offer | Both operators | The whole terms, with the payout address |
 | The commitment ID | Crow's test buyer | Nothing more |
-| The delivery, encrypted | Both operators | Its size, its time and its SHA-256; not its content |
+| The delivery, encrypted | Both operators | Its size, its time and its SHA-256; its content only to the buyer and the adjudicators |
 
 Before the commitment ID goes to the buyer, the command reads the signed terms and stops unless they name the payout address the person gave. The test buyer agrees and funds, the command delivers the work, and the agreed checks decide. Give the command a 20-minute timeout or run it in the background. It ends with `"step": "first-deal"`, `"state": "Released"` and the path of the deal record under `deals/`: report those. Then run the preflight (llms.txt); on `reports taken` and the person's yes, send a first-deal report (`ref/limits.txt`). If `first-deal` stops early, run it again: it continues the same deal and makes no second offer.
 
 - `first-deal --again` offers a new deal after one that ended without a release, such as an expired or refused offer; it never continues the ended one.
-- `first-deal --buyer <URL>` names another test buyer than Crow's.
+- `first-deal --buyer <URL>` names another test buyer.
 
 ## What leans on Crow-run hosts
 

@@ -29,7 +29,7 @@ Object.defineProperty(globalThis, 'crowEntry', { value: 'setup', enumerable: fal
 import { createRequire } from "node:module";
 import * as nc from "node:crypto";
 import { createHash, createHmac, randomBytes, randomUUID, timingSafeEqual } from "node:crypto";
-import { appendFileSync, chmodSync, closeSync, constants, existsSync, fstatSync, lstatSync, mkdirSync, openSync, readFileSync, readdirSync, realpathSync, renameSync, rmSync, statSync, writeFileSync } from "node:fs";
+import { appendFileSync, chmodSync, closeSync, constants, existsSync, fstatSync, lstatSync, mkdirSync, openSync, readFileSync, readSync, readdirSync, realpathSync, renameSync, rmSync, statSync, writeFileSync } from "node:fs";
 import { homedir } from "node:os";
 import { basename, dirname, isAbsolute, join, relative, resolve, sep } from "node:path";
 import { fileURLToPath, pathToFileURL } from "node:url";
@@ -56827,7 +56827,7 @@ function checkColumns(check) {
 	}
 	return out;
 }
-const HIDDEN = /^over the limit for [a-zA-Z]+(?:, [a-zA-Z]+)* \([a-zA-Z]+ \d+(?:, [a-zA-Z]+ \d+)*\)$/;
+const HIDDEN$1 = /^over the limit for [a-zA-Z]+(?:, [a-zA-Z]+)* \([a-zA-Z]+ \d+(?:, [a-zA-Z]+ \d+)*\)$/;
 /** The judgment writes a share as a count of a total (`3/40`) and a limit in basis points (`500 bps`). */
 const PCT = "\\d+/\\d+";
 const BPS = "\\d+ bps";
@@ -56855,7 +56855,7 @@ function safeCheckMessage(check, detail) {
 	if (detail.startsWith("check invalid: ")) return { message: "the check itself is invalid" };
 	if (check?.type === "json_schema") return safeSchemaMessage(detail, check.schema);
 	if (check?.type === "csv_columns_exact" && !detail.startsWith("csv_columns_exact needs")) return { message: "the columns are not the agreed columns" };
-	if (check?.type === "hidden_characters_max") return { message: HIDDEN.test(detail) ? detail : GENERIC_CHECK };
+	if (check?.type === "hidden_characters_max") return { message: HIDDEN$1.test(detail) ? detail : GENERIC_CHECK };
 	const notFound = /^column (.+) not found$/.exec(detail);
 	if (notFound) return { message: checkColumns(check).has(notFound[1]) && NAME.test(notFound[1]) ? detail : "a column the check names is not found" };
 	return { message: TABLE_PHRASES.some((p) => p.test(detail)) ? detail : GENERIC_CHECK };
@@ -59793,9 +59793,57 @@ const BASE_UNITS = /^(0|[1-9][0-9]{0,77})$/;
 const COMMITMENT_ID = /^0x[0-9a-f]{64}$/;
 /** A template to show a person: 5.00 of a 6-decimal test token for a CSV with two named columns. */
 const TEMPLATE_EXAMPLE = "{\"deliverable\": {\"kind\": \"dataset\", \"description\": \"What the buyer gets, in a sentence.\", \"format\": \"text/csv\"}, \"price\": \"5000000\", \"checks\": [{\"id\": \"cols\", \"type\": \"csv_columns_exact\", \"required\": true, \"columns\": [\"name\", \"url\"]}], \"deliverWithinSec\": 82800}";
-/** Throws when `path` names an environment file: the setup reads none, whatever flag names it. */
+/**
+* Throws when `path` names an environment file, by its own name or through a link: the setup reads none, whatever flag
+* names it. The real path is the one the file system resolves, every link followed, in the case the disk keeps.
+*/
 function refuseEnvFile(path, flag) {
-	if (/^\.env/i.test(basename(path))) throw new Error(`${flag} names ${plain$4(basename(path)).slice(0, 80)}, an environment file: the setup reads no .env file. Nothing was made or sent`);
+	const names = [basename(path)];
+	try {
+		names.push(basename(realpathSync.native(path)));
+	} catch {}
+	const env = names.find((n) => /^\.env/i.test(n));
+	if (env !== void 0) throw new Error(`${flag} names ${plain$4(env).slice(0, 80)}${env === names[0] ? "" : " through a link"}, an environment file: the setup reads no .env file. Nothing was made or sent`);
+}
+/** The folder's key file, by device and inode: no work is ever that file, under any name or link. */
+const keyFileOf = (folder) => join(folder, "keys", "signing.key");
+const sameFile = (a, path) => {
+	try {
+		const b = statSync(path);
+		return a.dev === b.dev && a.ino === b.ino;
+	} catch {
+		return false;
+	}
+};
+/**
+* A plain file's bytes, at most `max`, or why not; undefined when nothing is there. Opened non-blocking, so a FIFO or a
+* device never holds the process; `followLink` false refuses a symbolic link at the path and a file with a second
+* hard link; `keyFile` is a file no read may return.
+*/
+function readPlain(path, o) {
+	let fd;
+	try {
+		fd = openSync(path, constants.O_RDONLY | (constants.O_NONBLOCK ?? 0) | (o.followLink ? 0 : constants.O_NOFOLLOW ?? 0));
+	} catch (e) {
+		const code = e.code;
+		if (code === "ENOENT") return void 0;
+		return { problem: code === "ELOOP" || code === "EMLINK" ? "is a symbolic link: the setup reads no work through a link. Put the file itself there" : `cannot be read (${plain$4(String(code))})` };
+	}
+	try {
+		const stat = fstatSync(fd);
+		if (!stat.isFile()) return { problem: "is not a plain file" };
+		if (o.keyFile !== void 0 && sameFile(stat, o.keyFile)) return { problem: "is the folder's signing key: a key is never work" };
+		if (!o.followLink && stat.nlink > 1) return { problem: "has a second hard link: the setup reads no work that is also a file elsewhere. Put a copy of the file itself there" };
+		if (stat.size === 0) return { problem: "is empty: a delivery holds 1 byte or more" };
+		if (stat.size > o.max) return { problem: `is ${stat.size.toLocaleString("en-US")} bytes` };
+		const buffer = Buffer.alloc(o.max + 1);
+		let length = 0;
+		for (let n; length <= o.max && (n = readSync(fd, buffer, length, o.max + 1 - length, null)) > 0;) length += n;
+		if (length === 0 || length > o.max) return { problem: `changed while it was read` };
+		return { bytes: new Uint8Array(buffer.subarray(0, length)) };
+	} finally {
+		closeSync(fd);
+	}
 }
 /**
 * The template in `file`, checked for its shape. The commitment schema checks the rest (setup-check.ts, `template`).
@@ -59805,14 +59853,12 @@ function refuseEnvFile(path, flag) {
 function readWorkTemplate(file) {
 	refuseEnvFile(file, "--template");
 	const where = plain$4(file).slice(0, 200);
-	let text;
-	try {
-		const bytes = readFileSync(file);
-		if (bytes.length > MAX_TEMPLATE_BYTES) throw new Error(`is ${bytes.length} bytes; a template is at most ${MAX_TEMPLATE_BYTES}`);
-		text = bytes.toString("utf8");
-	} catch (e) {
-		throw new Error(`--template: ${where} ${e.code === "ENOENT" ? "is not there" : e.code ? `cannot be read (${e.code})` : plain$4(e.message)}. Nothing was made or sent`);
-	}
+	const read = readPlain(file, {
+		followLink: true,
+		max: MAX_TEMPLATE_BYTES
+	});
+	if (!read?.bytes) throw new Error(`--template: ${where} ${read === void 0 ? "is not there" : /^is \d/.test(read.problem ?? "") ? `${read.problem}; a template is at most ${MAX_TEMPLATE_BYTES}` : read.problem}. Nothing was made or sent`);
+	const text = Buffer.from(read.bytes).toString("utf8");
 	let t;
 	try {
 		t = JSON.parse(text);
@@ -59845,27 +59891,24 @@ function readWorkTemplate(file) {
 		deliverWithinSec: within
 	};
 }
-/** A plain file's bytes, read through no symbolic link, or why it is not work that can be delivered; undefined when nothing is there. */
-function readWorkFile(path, followLink = false) {
-	let fd;
-	try {
-		fd = openSync(path, constants.O_RDONLY | (followLink ? 0 : constants.O_NOFOLLOW ?? 0));
-	} catch (e) {
-		const code = e.code;
-		if (code === "ENOENT") return void 0;
-		return { problem: code === "ELOOP" || code === "EMLINK" ? "is a symbolic link: the setup reads no work through a link. Put the file itself there" : `cannot be read (${plain$4(String(code))})` };
-	}
-	try {
-		const stat = fstatSync(fd);
-		if (!stat.isFile()) return { problem: "is not a plain file" };
-		if (stat.size === 0) return { problem: "is empty: a delivery holds 1 byte or more" };
-		if (stat.size > 1048576) return { problem: `is ${stat.size.toLocaleString("en-US")} bytes: ${DELIVERY_LIMITS}` };
-		const bytes = readFileSync(fd);
-		if (bytes.length === 0 || bytes.length > 1048576) return { problem: `changed while it was read: ${DELIVERY_LIMITS}` };
-		return { bytes: new Uint8Array(bytes) };
-	} finally {
-		closeSync(fd);
-	}
+/** Characters a person does not see on a screen (plain.ts's class): text in the terms that nobody reviewing them reads. */
+const HIDDEN = /[\u061c\u200b-\u200f\u202a-\u202e\u2060-\u2069\ufeff]|[\u{e0000}-\u{e007f}]/gu;
+/** How many hidden characters the template's deliverable and checks carry: advice only (D31), since a party may mean them. */
+const hiddenCharacters = (t) => (JSON.stringify({
+	d: t.deliverable,
+	c: t.checks
+}).match(HIDDEN) ?? []).length;
+/**
+* Work's bytes, or why it is not work that can be delivered; undefined when nothing is there. `keyFile` is the folder's
+* key file, which no read returns. A path the person named (`followLink`) may be a link; one in work/ may not.
+*/
+function readWorkFile(path, followLink = false, keyFile) {
+	const read = readPlain(path, {
+		followLink,
+		max: DELIVERY_CAP_BYTES,
+		...keyFile === void 0 ? {} : { keyFile }
+	});
+	return read?.problem && /^(is \d|changed)/.test(read.problem) ? { problem: `${read.problem}: ${DELIVERY_LIMITS}` } : read;
 }
 /** Where a deal's work goes, and where the finished work of --file is kept. */
 const workPath = (folder, commitmentId, format) => join(folder, WORK_DIR, `${commitmentId}.${FORMATS[format]}`);
@@ -59888,7 +59931,7 @@ function workFor(folder, commitmentId, format) {
 		problem: `${WORK_DIR}/ is ${dir.isSymbolicLink() ? "a symbolic link" : "not a folder"}: the setup reads no work through a link. Make ${WORK_DIR}/ a plain folder`
 	};
 	for (const from of [path, readyPath(folder, format)]) {
-		const read = readWorkFile(from);
+		const read = readWorkFile(from, false, keyFileOf(folder));
 		if (read?.problem) return {
 			path,
 			from,
@@ -60241,8 +60284,7 @@ async function seller(c) {
 	let finished;
 	if (fileGiven !== void 0) {
 		refuseEnvFile(fileGiven, "--file");
-		if (inside(realPath(fileGiven), join(folder, FILES.keys))) throw new Error(`--file names a file under ${FILES.keys}/: a key is never work. Nothing was made or sent`);
-		const read = readWorkFile(fileGiven, true);
+		const read = readWorkFile(fileGiven, true, keyFileOf(folder));
 		if (!read?.bytes) throw new Error(`--file: ${realPath(fileGiven)} ${read?.problem ?? "is not there"}. Nothing was made or sent`);
 		if (format === void 0) throw new Error("--file needs the template that says what format the work has: give --template <file> with it. Nothing was made or sent");
 		finished = read.bytes;
@@ -60342,7 +60384,7 @@ async function seller(c) {
 					mode: 448
 				});
 				writeWhole$1(readyPath(folder, state.work.format), finished);
-			}
+			} else if (template) for (const ext of Object.values(FORMATS)) rmSync(join(folder, WORK_DIR, `ready.${ext}`), { force: true });
 			const configFile = join(folder, FILES.configuration);
 			const there = existsSync(configFile) ? readFileSync(configFile) : void 0;
 			if (there && sha256(there) !== state.files?.configuration) throw new Refused(`${FILES.configuration} is not the file this setup wrote: it was changed, or another program put it there. The seller command keeps no configuration it did not write. Move that file away, then run the same command again to have it written anew`);
@@ -60422,6 +60464,7 @@ async function seller(c) {
 				payout: payout.address,
 				keys: `${FILES.key} holds the signing key, mode 0600, on this machine only. Never read, print or copy it.`,
 				...payout.thisKey ? { payoutNote: `Every deal names this folder's standing address ${address} as its payout address in its public terms, which links this folder's deals to one another. Its key is on this machine, in ${FILES.key}.` } : { payoutNote: `Every deal names ${payout.address} as its payout address in its public terms, which links this folder's deals to one another.` },
+				...template && hiddenCharacters(template) > 0 ? { templateWarning: `The template's deliverable or checks carry ${hiddenCharacters(template)} characters a person does not see on a screen. They become part of the public terms, which a buyer's agent and the adjudicators read. Remove them unless you mean them.` } : {},
 				...sells === "template" ? {
 					sells: "template",
 					work: {
@@ -60750,7 +60793,7 @@ async function runChecks(folder, options = {}) {
 			refuseEnvFile(named, "--work");
 			const t = filledTerms(config, scope);
 			format = String(t.deliverable?.format);
-			const read = readWorkFile(named, options.work !== void 0);
+			const read = readWorkFile(named, options.work !== void 0, keyFileOf(folder));
 			if (!read?.bytes) throw new Error(`${plain$2(named, 300)} ${read?.problem ?? "is not there"}`);
 			mkdirSync(join(folder, "sample"), { recursive: true });
 			writeWhole(join(folder, FILES.sampleTerms), `${JSON.stringify({

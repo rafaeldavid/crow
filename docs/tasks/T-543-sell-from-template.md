@@ -9,7 +9,7 @@
   - This file.
   - It changes nothing in `examples/seller-adapter-core.ts` or `examples/seller-adapter-api.ts`, nothing under `apps/operator`, `apps/demo-cloud`, `packages/`, `spec/schemas/` or `contracts/`, no existing test, and no generated bundle but `site/setup.mjs`.
 - **Human gate:** yes, for the site deploy that publishes the new pinned `setup.mjs` and the two pages. The merge is not gated.
-- **Status:** review
+- **Status:** review (merged when CI passes)
 - **Agent/session:** `sell-from-template`, started by the `journeys` session on 2026-11-18
 - **Roadmap row:** N195, N160
 
@@ -49,7 +49,7 @@ A seller describes what it sells in one JSON file, the template: the work and it
 - [x] No change to the adapter's core, no new route, schema, signed message or contract change; `site/buy.mjs` and `site/try.mjs` keep their hashes.
 - [x] The sample path passes its existing tests unchanged.
 - [x] The published `setup.txt` is within `SETUP_MAX_BYTES`; `node site/build.mjs && node site/check.mjs` pass; `site/sell.txt` has one step that points to it.
-- [ ] On Sepolia, a seller with a template and no finished work reaches `Held` against Crow's test buyer and ends `Released` after the work is put there; a seller that names `--file` ends `Released` in one run. See Evidence.
+- [x] On Sepolia, a seller with a template and no finished work reaches `Held` against Crow's test buyer and ends `Released` after the work is put there; a seller that names `--file` ends `Released` in one run. See Evidence.
 
 ## Out of scope
 
@@ -84,7 +84,40 @@ Each item is labelled measured, inferred or guessed.
 
 ### The live runs
 
-Filled in after the runs on Sepolia.
+Run on 2026-11-18 between 20:29 and 20:32 UTC with the branch's built `site/setup.mjs`, from two fresh folders, against Crow's live operators and test buyer on Sepolia. Test tokens only. The template: a CSV with the columns `name` and `url`, 2 to 500 rows, for 5,000,000 base units (5.00 tUSDC), no window named, so 82,800 s.
+
+| Run | What was there | Result | Time |
+| --- | --- | --- | --- |
+| Later, 1 | No work | `"state": "Held"`, exit 0, `deliverBy` `2026-11-19T19:30:15Z`, `workPath` `.../work/0x3b93...1417.csv` | 31 s |
+| Later, 2 | A file with no `url` column | exit 1, `failed: [{"check": "cols", "required": true, "outcome": "fail"}]`, nothing delivered | 1 s |
+| Later, 3 | The corrected file | `"state": "Released"`, exit 0, the deal record's checks 15 passed, 0 failed, 5 not run, the operators agree | 34 s |
+| Ready, 1 | `--file` at `seller` | `"state": "Released"` in one run, exit 0, the same record counts | 70 s |
+
+- Commitment IDs: `0x3b938ae3011c621429c4bc2d91e003ff88757a0a90c12cabc5e5a1fcd9911417` (later) and `0xfdea423130522dd0d2c2befb5725ddbf4c83bc5e2bee217d6e183e4e1ad04764` (ready) [measured].
+- Both deals were signed with an empty scope and a window of 82,800 s, and the test buyer funded both [measured, the folders' journals]. The later deal shows one refusal before its delivery; the ready deal none [measured].
+- The local runs are on the demo's in-process world (SimChain), as `setup.test.ts` runs the sample; this task ran no anvil chain [measured].
+
+### The review and the red team
+
+- **Reviewer: PASS**, no blocking finding [measured, the reviewer's report]. It found the sample path unchanged line by line, and listed four lower findings.
+- **Red team: one High, several Medium and Low** [measured, the red-teamer's report]. The work API's credential, path traversal, price binding and neutrality held.
+- **Fixed in one round** [measured: each fix has a test]:
+  - High: the `.env` refusal looked at the name only, so a symbolic link got past it. It now also tests the real path, every link followed, for `--template`, `--file` and `--work`.
+  - A second hard link in `work/` was served. It is now refused.
+  - The key file reached as `KEYS/signing.key` or through a link was copied as work. A read now refuses the key file by device and inode, under any name.
+  - A FIFO given as the template or the work blocked the process. Every file is now opened non-blocking and read only when it is a plain file, at most its limit plus one byte.
+  - Hidden characters in a template passed silently. They now get an advisory `templateWarning` (D31).
+  - The setup page's table said the delivery shows "not its content". With the person's own work, the buyer and the adjudicators read it, and the row now says so.
+  - A new `--template` with no `--file` kept the old finished work. It is now removed.
+- **Left, each one line in Handoff:** `--again` on a funded deal that waits for work; the content of a failing sample is echoed by the judgment package's check message; the port can be held by another local account; one operator that never shows `Held` makes `first-deal` wait 1,200 s.
+
+### The kind's local checks after the fixes
+
+- `node site/build.mjs && node site/check.mjs`: PASS; the published `setup.txt` is 9,999 of 10,000 bytes [measured].
+- `npx vitest run examples/setup-work-api.test.ts apps/test-agents/src/setup-template.test.ts`: 20 of 20 pass [measured].
+- `npx vitest run apps/test-agents/src/setup.test.ts examples/setup-bundle.test.ts examples/setup-check.test.ts examples/setup-list.test.ts tests/site-guides.test.ts`: 71 of 71 pass, none of those files changed [measured].
+- `pnpm typecheck` and `npx eslint` on the changed files: no error [measured].
+- The full `pnpm verify` was not run: the recipe keeps it for before a deploy. CI is the gate.
 
 - Snapshot diffs: none; the task changes no scenario fixture.
 - Metrics: none recorded.
@@ -115,6 +148,11 @@ Choices made inside this task. None changes architecture, a contract or a defens
 - The roadmap rows N195 and N160, the daily log and the links: the coordinator's.
 
 **Follow-ups, none started:**
+- `first-deal --again` sets aside a deal that is funded and waits for work; the buyer's loss is bounded by `deliverBy`. Refuse it while the operators show the deal open, or say so on the page.
+- A failing sample's first line can appear in the `check` line, from the judgment package's `csv_columns_exact` message (`packages/judgment/src/checks/index.ts`). It is the person's own file now that `.env` files are refused through links, but a cap there would be safer.
+- Another account on the machine could hold the folder's port between runs; the run then names the port and stops, and the buyer is refunded at `deliverBy`.
+- One operator that never shows `Held` makes `first-deal` wait 1,200 s and exit 1 instead of printing the path; `status` still prints `workPath`.
+- A failing `work/ready.<ext>` fails `first-deal`'s check even when the deal's own file passes.
 - Several days with no result were read in the code and not run.
 - `status` shows `workPath` for the first deal only, as this version runs one deal at a time.
 - The test buyer's wider limits (1,000 tUSDC and 7 days) are another task; when they land, the default window can grow with them.

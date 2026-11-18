@@ -28,7 +28,7 @@ import { getAddress, type Hex } from 'viem';
 import { generatePrivateKey, privateKeyToAccount } from 'viem/accounts';
 import { holdingKeyOf } from './seller-adapter.ts';
 import { freePort, SAMPLE, SAMPLE_PRICE_UNITS, sampleAddresses } from './setup-sample-api.ts';
-import { DELIVERY_LIMITS, readWorkFile, readWorkTemplate, readyPath, refuseEnvFile, TEMPLATE_EXAMPLE, WORK_DIR, workAddresses } from './setup-work-api.ts';
+import { DELIVERY_LIMITS, FORMATS, hiddenCharacters, keyFileOf, readWorkFile, readWorkTemplate, readyPath, refuseEnvFile, TEMPLATE_EXAMPLE, WORK_DIR, workAddresses } from './setup-work-api.ts';
 
 export type J = any; // eslint-disable-line @typescript-eslint/no-explicit-any
 
@@ -305,8 +305,8 @@ export async function seller(c: Call): Promise<number> {
   let finished: Uint8Array | undefined;
   if (fileGiven !== undefined) {
     refuseEnvFile(fileGiven, '--file');
-    if (inside(realPath(fileGiven), join(folder, FILES.keys))) throw new Error(`--file names a file under ${FILES.keys}/: a key is never work. Nothing was made or sent`);
-    const read = readWorkFile(fileGiven, true); // the person named this path, so a link there is followed
+    // The person named this path, so a link there is followed; the folder's key file is refused by device and inode.
+    const read = readWorkFile(fileGiven, true, keyFileOf(folder));
     if (!read?.bytes) throw new Error(`--file: ${realPath(fileGiven)} ${read?.problem ?? 'is not there'}. Nothing was made or sent`);
     if (format === undefined) throw new Error('--file needs the template that says what format the work has: give --template <file> with it. Nothing was made or sent');
     finished = read.bytes;
@@ -390,6 +390,9 @@ export async function seller(c: Call): Promise<number> {
         if (at(dir)?.isSymbolicLink() || (at(dir) && !at(dir)!.isDirectory())) throw new Refused(`${WORK_DIR}/ is not a plain folder: the setup writes no work through a link. Remove it; the setup makes ${WORK_DIR}/ itself`);
         mkdirSync(dir, { recursive: true, mode: 0o700 });
         writeWhole(readyPath(folder, state.work!.format), finished);
+      } else if (template) {
+        // A new template with no --file: finished work kept for the old one is not this template's, so it goes.
+        for (const ext of Object.values(FORMATS)) rmSync(join(folder, WORK_DIR, `ready.${ext}`), { force: true });
       }
       const configFile = join(folder, FILES.configuration);
       const there = existsSync(configFile) ? readFileSync(configFile) : undefined;
@@ -429,6 +432,7 @@ export async function seller(c: Call): Promise<number> {
         step: 'seller', ok: true, folder, card, address, payout: payout.address,
         keys: `${FILES.key} holds the signing key, mode 0600, on this machine only. Never read, print or copy it.`,
         ...(payout.thisKey ? { payoutNote: `Every deal names this folder's standing address ${address} as its payout address in its public terms, which links this folder's deals to one another. Its key is on this machine, in ${FILES.key}.` } : { payoutNote: `Every deal names ${payout.address} as its payout address in its public terms, which links this folder's deals to one another.` }),
+        ...(template && hiddenCharacters(template) > 0 ? { templateWarning: `The template's deliverable or checks carry ${hiddenCharacters(template)} characters a person does not see on a screen. They become part of the public terms, which a buyer's agent and the adjudicators read. Remove them unless you mean them.` } : {}),
         ...(sells === 'template' ? { sells: 'template', work: { ...state.work!, ready: existsSync(readyPath(folder, state.work!.format)) ? readyPath(folder, state.work!.format) : null }, workNote: existsSync(readyPath(folder, state.work!.format)) ? `Every deal of this folder delivers ${readyPath(folder, state.work!.format)} once it is funded and the file passes the deal's checks.` : `No work is finished yet: first-deal stops once the deal is funded and prints where the work goes and when it is due. To test the checks first, run check --work <a sample of the work>.` } : {}),
         sent: 'nothing',
         next: "Next, the listing step: list --website <https URL> sends your website to Crow's list of who uses it, and list --skip declines. No deal depends on it. Then first-deal.",

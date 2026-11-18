@@ -6,7 +6,7 @@
 // the path for the work, and exits 0. The same command, run again, checks the file that is there, holds one that
 // fails a check and names the check, and delivers one that passes.
 import { spawn } from 'node:child_process';
-import { copyFileSync, existsSync, mkdirSync, mkdtempSync, readFileSync, realpathSync, statSync, writeFileSync } from 'node:fs';
+import { copyFileSync, existsSync, mkdirSync, mkdtempSync, readFileSync, realpathSync, statSync, symlinkSync, writeFileSync } from 'node:fs';
 import { createServer, type Server } from 'node:http';
 import type { AddressInfo } from 'node:net';
 import { tmpdir } from 'node:os';
@@ -284,6 +284,10 @@ describe('site/setup.mjs seller --template and check --work: what they take and 
       [['seller', '--sample', '--file', files.good, ...base], /--file names finished work for a folder that sells from a template/],
       [['seller', '--template', files.template, '--file', join(at.dir, 'missing.csv'), ...base], /missing\.csv is not there/],
     ];
+    // A link to an environment file is refused by what it points to, and its content is never printed (red team, T-543).
+    const linked = join(at.dir, 'innocent.csv');
+    symlinkSync(env, linked);
+    cases.push([['seller', '--template', files.template, '--file', linked, ...base], /--file names \.env through a link, an environment file/]);
     for (const [args, why] of cases) {
       const run = await node(at, args);
       expect(run.code, run.out + run.err).toBe(1);
@@ -310,6 +314,16 @@ describe('site/setup.mjs seller --template and check --work: what they take and 
     expect((await node(own, ['seller', '--template', ownFiles.template, '--folder', own.folder])).code).toBe(0);
     expect(stateOf(own.folder).work).toEqual({ price: '7000000', format: 'text/csv', deliverWithinSec: 7200 });
     expect(JSON.parse(readFileSync(join(own.folder, 'adapter.json'), 'utf8')).timing.deliverWithinSec).toBe(7200);
+    // Finished work kept for one template is not the next one's: a new --template with no --file removes it (review, T-543).
+    expect((await node(own, ['seller', '--template', ownFiles.template, '--file', ownFiles.good, '--folder', own.folder])).code).toBe(0);
+    expect(existsSync(join(own.folder, 'work', 'ready.csv'))).toBe(true);
+    expect((await node(own, ['seller', '--template', ownFiles.template, '--folder', own.folder])).code).toBe(0);
+    expect(existsSync(join(own.folder, 'work', 'ready.csv'))).toBe(false);
+    // Characters a person does not see: the command warns and refuses nothing (D31).
+    writeFileSync(ownFiles.template, JSON.stringify({ ...TEMPLATE, deliverable: { ...TEMPLATE.deliverable, description: 'A list\u202e\u{e0041}' } }));
+    const hidden = await node(own, ['seller', '--template', ownFiles.template, '--folder', own.folder]);
+    expect(hidden.code).toBe(0);
+    expect(jsonLines(hidden.out)[0].templateWarning).toMatch(/carry 2 characters a person does not see/);
     // With a deal open, it keeps the template the deal was offered from.
     const state = stateOf(own.folder);
     writeFileSync(join(own.folder, 'crow.json'), JSON.stringify({ ...state, firstDeal: { startedAt: new Date().toISOString(), commitmentId: `0x${'ab'.repeat(32)}` } }));

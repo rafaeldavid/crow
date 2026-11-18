@@ -13,9 +13,11 @@
 //
 // Every call needs the credential the setup made for this run, in `Authorization: Bearer`: the folder is mode 0700,
 // and without the credential any account on this machine could read unpaid work through the port. A work file is
-// read through no symbolic link, and one that is empty or over the delivery limit counts as not there yet.
+// read through no symbolic link and no second hard link, never is the folder's key file, and one that is empty or over
+// the delivery limit counts as not there yet. No file opened here can block the process: each is opened non-blocking
+// and read only when it is a plain file.
 import { createHash, timingSafeEqual } from 'node:crypto';
-import { closeSync, constants, fstatSync, lstatSync, openSync, readFileSync } from 'node:fs';
+import { closeSync, constants, fstatSync, lstatSync, openSync, readSync, realpathSync, statSync, type Stats } from 'node:fs';
 import { createServer, type IncomingMessage } from 'node:http';
 import type { AddressInfo } from 'node:net';
 import { basename, join } from 'node:path';
@@ -52,9 +54,61 @@ export interface WorkTemplate {
 /** A template to show a person: 5.00 of a 6-decimal test token for a CSV with two named columns. */
 export const TEMPLATE_EXAMPLE = '{"deliverable": {"kind": "dataset", "description": "What the buyer gets, in a sentence.", "format": "text/csv"}, "price": "5000000", "checks": [{"id": "cols", "type": "csv_columns_exact", "required": true, "columns": ["name", "url"]}], "deliverWithinSec": 82800}';
 
-/** Throws when `path` names an environment file: the setup reads none, whatever flag names it. */
+/**
+ * Throws when `path` names an environment file, by its own name or through a link: the setup reads none, whatever flag
+ * names it. The real path is the one the file system resolves, every link followed, in the case the disk keeps.
+ */
 export function refuseEnvFile(path: string, flag: string): void {
-  if (/^\.env/i.test(basename(path))) throw new Error(`${flag} names ${plain(basename(path)).slice(0, 80)}, an environment file: the setup reads no .env file. Nothing was made or sent`);
+  const names = [basename(path)];
+  try {
+    names.push(basename(realpathSync.native(path)));
+  } catch {
+    // nothing there: the read that follows says so
+  }
+  const env = names.find((n) => /^\.env/i.test(n));
+  if (env !== undefined) throw new Error(`${flag} names ${plain(env).slice(0, 80)}${env === names[0] ? '' : ' through a link'}, an environment file: the setup reads no .env file. Nothing was made or sent`);
+}
+
+/** The folder's key file, by device and inode: no work is ever that file, under any name or link. */
+export const keyFileOf = (folder: string): string => join(folder, 'keys', 'signing.key');
+const sameFile = (a: Stats, path: string): boolean => {
+  try {
+    const b = statSync(path);
+    return a.dev === b.dev && a.ino === b.ino;
+  } catch {
+    return false;
+  }
+};
+
+/**
+ * A plain file's bytes, at most `max`, or why not; undefined when nothing is there. Opened non-blocking, so a FIFO or a
+ * device never holds the process; `followLink` false refuses a symbolic link at the path and a file with a second
+ * hard link; `keyFile` is a file no read may return.
+ */
+function readPlain(path: string, o: { followLink: boolean; max: number; keyFile?: string }): { bytes?: Uint8Array; problem?: string } | undefined {
+  let fd: number;
+  try {
+    fd = openSync(path, constants.O_RDONLY | (constants.O_NONBLOCK ?? 0) | (o.followLink ? 0 : (constants.O_NOFOLLOW ?? 0)));
+  } catch (e) {
+    const code = (e as NodeJS.ErrnoException).code;
+    if (code === 'ENOENT') return undefined;
+    return { problem: code === 'ELOOP' || code === 'EMLINK' ? 'is a symbolic link: the setup reads no work through a link. Put the file itself there' : `cannot be read (${plain(String(code))})` };
+  }
+  try {
+    const stat = fstatSync(fd);
+    if (!stat.isFile()) return { problem: 'is not a plain file' };
+    if (o.keyFile !== undefined && sameFile(stat, o.keyFile)) return { problem: "is the folder's signing key: a key is never work" };
+    if (!o.followLink && stat.nlink > 1) return { problem: 'has a second hard link: the setup reads no work that is also a file elsewhere. Put a copy of the file itself there' };
+    if (stat.size === 0) return { problem: 'is empty: a delivery holds 1 byte or more' };
+    if (stat.size > o.max) return { problem: `is ${stat.size.toLocaleString('en-US')} bytes` };
+    const buffer = Buffer.alloc(o.max + 1);
+    let length = 0;
+    for (let n; length <= o.max && (n = readSync(fd, buffer, length, o.max + 1 - length, null)) > 0; ) length += n;
+    if (length === 0 || length > o.max) return { problem: `changed while it was read` };
+    return { bytes: new Uint8Array(buffer.subarray(0, length)) };
+  } finally {
+    closeSync(fd);
+  }
 }
 
 /**
@@ -65,14 +119,9 @@ export function refuseEnvFile(path: string, flag: string): void {
 export function readWorkTemplate(file: string): WorkTemplate {
   refuseEnvFile(file, '--template');
   const where = plain(file).slice(0, 200);
-  let text: string;
-  try {
-    const bytes = readFileSync(file);
-    if (bytes.length > MAX_TEMPLATE_BYTES) throw new Error(`is ${bytes.length} bytes; a template is at most ${MAX_TEMPLATE_BYTES}`);
-    text = bytes.toString('utf8');
-  } catch (e) {
-    throw new Error(`--template: ${where} ${(e as NodeJS.ErrnoException).code === 'ENOENT' ? 'is not there' : (e as NodeJS.ErrnoException).code ? `cannot be read (${(e as NodeJS.ErrnoException).code})` : plain((e as Error).message)}. Nothing was made or sent`);
-  }
+  const read = readPlain(file, { followLink: true, max: MAX_TEMPLATE_BYTES });
+  if (!read?.bytes) throw new Error(`--template: ${where} ${read === undefined ? 'is not there' : /^is \d/.test(read.problem ?? '') ? `${read.problem}; a template is at most ${MAX_TEMPLATE_BYTES}` : read.problem}. Nothing was made or sent`);
+  const text = Buffer.from(read.bytes).toString('utf8');
   let t: J;
   try {
     t = JSON.parse(text);
@@ -94,27 +143,18 @@ export function readWorkTemplate(file: string): WorkTemplate {
   return { deliverable: t.deliverable, price: t.price, checks: t.checks, deliverWithinSec: within };
 }
 
-/** A plain file's bytes, read through no symbolic link, or why it is not work that can be delivered; undefined when nothing is there. */
-export function readWorkFile(path: string, followLink = false): { bytes?: Uint8Array; problem?: string } | undefined {
-  let fd: number;
-  try {
-    fd = openSync(path, constants.O_RDONLY | (followLink ? 0 : (constants.O_NOFOLLOW ?? 0)));
-  } catch (e) {
-    const code = (e as NodeJS.ErrnoException).code;
-    if (code === 'ENOENT') return undefined;
-    return { problem: code === 'ELOOP' || code === 'EMLINK' ? 'is a symbolic link: the setup reads no work through a link. Put the file itself there' : `cannot be read (${plain(String(code))})` };
-  }
-  try {
-    const stat = fstatSync(fd);
-    if (!stat.isFile()) return { problem: 'is not a plain file' };
-    if (stat.size === 0) return { problem: 'is empty: a delivery holds 1 byte or more' };
-    if (stat.size > DELIVERY_CAP_BYTES) return { problem: `is ${stat.size.toLocaleString('en-US')} bytes: ${DELIVERY_LIMITS}` };
-    const bytes = readFileSync(fd);
-    if (bytes.length === 0 || bytes.length > DELIVERY_CAP_BYTES) return { problem: `changed while it was read: ${DELIVERY_LIMITS}` };
-    return { bytes: new Uint8Array(bytes) };
-  } finally {
-    closeSync(fd);
-  }
+/** Characters a person does not see on a screen (plain.ts's class): text in the terms that nobody reviewing them reads. */
+const HIDDEN = /[\u061c\u200b-\u200f\u202a-\u202e\u2060-\u2069\ufeff]|[\u{e0000}-\u{e007f}]/gu;
+/** How many hidden characters the template's deliverable and checks carry: advice only (D31), since a party may mean them. */
+export const hiddenCharacters = (t: Pick<WorkTemplate, 'deliverable' | 'checks'>): number => (JSON.stringify({ d: t.deliverable, c: t.checks }).match(HIDDEN) ?? []).length;
+
+/**
+ * Work's bytes, or why it is not work that can be delivered; undefined when nothing is there. `keyFile` is the folder's
+ * key file, which no read returns. A path the person named (`followLink`) may be a link; one in work/ may not.
+ */
+export function readWorkFile(path: string, followLink = false, keyFile?: string): { bytes?: Uint8Array; problem?: string } | undefined {
+  const read = readPlain(path, { followLink, max: DELIVERY_CAP_BYTES, ...(keyFile === undefined ? {} : { keyFile }) });
+  return read?.problem && /^(is \d|changed)/.test(read.problem) ? { problem: `${read.problem}: ${DELIVERY_LIMITS}` } : read;
 }
 
 /** Where a deal's work goes, and where the finished work of --file is kept. */
@@ -136,7 +176,7 @@ export function workFor(folder: string, commitmentId: string, format: string): {
   }
   if (dir.isSymbolicLink() || !dir.isDirectory()) return { path, problem: `${WORK_DIR}/ is ${dir.isSymbolicLink() ? 'a symbolic link' : 'not a folder'}: the setup reads no work through a link. Make ${WORK_DIR}/ a plain folder` };
   for (const from of [path, readyPath(folder, format)]) {
-    const read = readWorkFile(from);
+    const read = readWorkFile(from, false, keyFileOf(folder));
     if (read?.problem) return { path, from, problem: `${from} ${read.problem}` };
     if (read?.bytes) return { path, from, bytes: read.bytes };
   }

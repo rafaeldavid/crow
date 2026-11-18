@@ -25,7 +25,7 @@ import type { Hex } from 'viem';
 import { dealKeyOf, fill, holdingKeyOf, loadConfig, type SellerAdapterConfig } from './seller-adapter.ts';
 import { SAMPLE, SAMPLE_PRICE_UNITS, sampleAddresses, startSampleApi } from './setup-sample-api.ts';
 import { FILES, formsOf, modeProblem, readKey, readState, type J } from './setup-seller.ts';
-import { FORMATS, readWorkFile, readyPath, refuseEnvFile, workAddresses } from './setup-work-api.ts';
+import { FORMATS, keyFileOf, readWorkFile, readyPath, refuseEnvFile, workAddresses } from './setup-work-api.ts';
 
 /** The largest file the secrets check reads: 16 MiB. A key file is 67 bytes; a larger file is named, not read. */
 const MAX_SCANNED_BYTES = 16 * 1024 * 1024;
@@ -265,7 +265,7 @@ export async function runChecks(folder: string, options: { work?: string | undef
       refuseEnvFile(named, '--work');
       const t = filledTerms(config, scope);
       format = String(t.deliverable?.format);
-      const read = readWorkFile(named, options.work !== undefined);
+      const read = readWorkFile(named, options.work !== undefined, keyFileOf(folder));
       if (!read?.bytes) throw new Error(`${plain(named, 300)} ${read?.problem ?? 'is not there'}`);
       mkdirSync(join(folder, 'sample'), { recursive: true });
       writeWhole(join(folder, FILES.sampleTerms), `${JSON.stringify({ deliverable: t.deliverable, acceptance: t.acceptance }, null, 2)}\n`);

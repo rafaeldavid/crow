@@ -1,10 +1,11 @@
 // T-543: the work API a folder that sells from a template serves on the loopback address, and the template's reader.
-import { mkdirSync, mkdtempSync, realpathSync, rmSync, symlinkSync, writeFileSync } from 'node:fs';
+import { execFileSync } from 'node:child_process';
+import { linkSync, mkdirSync, mkdtempSync, realpathSync, rmSync, symlinkSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { afterEach, describe, expect, it } from 'vitest';
 import { DELIVERY_CAP_BYTES } from './seller-adapter-api.ts';
-import { DEFAULT_DELIVER_WITHIN_SEC, readWorkTemplate, readyPath, startWorkApi, TEMPLATE_EXAMPLE, workAddresses, workFor, workPath, type WorkApi } from './setup-work-api.ts';
+import { DEFAULT_DELIVER_WITHIN_SEC, hiddenCharacters, keyFileOf, readWorkFile, readWorkTemplate, refuseEnvFile, readyPath, startWorkApi, TEMPLATE_EXAMPLE, workAddresses, workFor, workPath, type WorkApi } from './setup-work-api.ts';
 
 const ID = `0x${'ab'.repeat(32)}`;
 const OTHER = `0x${'cd'.repeat(32)}`;
@@ -104,6 +105,33 @@ describe('the work API (T-543)', () => {
     expect(() => workFor(folder, '../x', 'text/csv')).toThrow();
   });
 
+  it('red team (T-543): a hard link, the key file under any name, and a FIFO are never served, and nothing blocks', async () => {
+    const folder = fresh();
+    mkdirSync(join(folder, 'work'));
+    mkdirSync(join(folder, 'keys'));
+    writeFileSync(keyFileOf(folder), `0x${'11'.repeat(32)}\n`);
+    const outside = join(fresh(), 'outside.csv');
+    writeFileSync(outside, 'not this deal\'s work');
+    linkSync(outside, workPath(folder, ID, 'text/csv'));
+    expect(workFor(folder, ID, 'text/csv')).toMatchObject({ problem: expect.stringMatching(/has a second hard link/) });
+    rmSync(workPath(folder, ID, 'text/csv'));
+    linkSync(keyFileOf(folder), readyPath(folder, 'text/csv'));
+    expect(workFor(folder, ID, 'text/csv').bytes).toBeUndefined();
+    expect(workFor(folder, ID, 'text/csv').problem).toMatch(/signing key|second hard link/);
+    // A path the person names may be a link, and is still never the key, in any letter case.
+    expect(readWorkFile(join(folder, 'KEYS', 'signing.key'), true, keyFileOf(folder))?.problem).toMatch(/is the folder's signing key|is not there/);
+    const link = join(folder, 'innocent.csv');
+    symlinkSync(keyFileOf(folder), link);
+    expect(readWorkFile(link, true, keyFileOf(folder))?.problem).toMatch(/is the folder's signing key/);
+    rmSync(readyPath(folder, 'text/csv'));
+    const fifo = workPath(folder, ID, 'text/csv');
+    execFileSync('mkfifo', [fifo]);
+    const began = Date.now();
+    expect(workFor(folder, ID, 'text/csv').problem).toMatch(/is not a plain file/);
+    expect(readWorkFile(fifo, true)?.problem).toMatch(/is not a plain file/);
+    expect(Date.now() - began).toBeLessThan(1000);
+  });
+
   it('the addresses are one loopback port, under one base URL, with the credential\'s variable', () => {
     expect(workAddresses(4321)).toEqual({ baseUrl: 'http://127.0.0.1:4321/', auth: { env: 'CROW_SETUP_WORK', header: 'authorization', prefix: 'Bearer ' }, quote: 'http://127.0.0.1:4321/quote', start: 'http://127.0.0.1:4321/jobs', result: 'http://127.0.0.1:4321/jobs/{jobId}/result' });
   });
@@ -151,7 +179,25 @@ describe('a template, as the person writes it (T-543)', () => {
     expect(() => readWorkTemplate(write('x'.repeat(65_537)))).toThrow(/a template is at most 65536/);
   });
 
-  it('reads no environment file, whatever it holds', () => {
+  it('reads no environment file, whatever it holds, by its name or through a link (red team, T-543)', () => {
     for (const name of ['.env', '.env.local', '.ENV.production']) expect(() => readWorkTemplate(write(good, name))).toThrow(/an environment file: the setup reads no \.env file/);
+    const dir = fresh();
+    writeFileSync(join(dir, '.env'), 'STAND_IN=not-a-secret');
+    symlinkSync(join(dir, '.env'), join(dir, 'work.csv'));
+    expect(() => refuseEnvFile(join(dir, 'work.csv'), '--file')).toThrow(/--file names \.env through a link, an environment file/);
+    symlinkSync(join(dir, '.env'), join(dir, 'template.json'));
+    expect(() => readWorkTemplate(join(dir, 'template.json'))).toThrow(/through a link, an environment file/);
+  });
+
+  it('a FIFO named as the template is refused at once, never read until it ends (red team, T-543)', () => {
+    const fifo = join(fresh(), 'template.json');
+    execFileSync('mkfifo', [fifo]);
+    expect(() => readWorkTemplate(fifo)).toThrow(/is not a plain file/);
+  });
+
+  it('counts characters a person does not see in the deliverable and the checks: advice only', () => {
+    expect(hiddenCharacters(good)).toBe(0);
+    expect(hiddenCharacters({ ...good, deliverable: { ...good.deliverable, description: 'safe\u202e\u{e0041}\u{e0042}' } })).toBe(3);
+    expect(readWorkTemplate(write({ ...good, deliverable: { ...good.deliverable, description: 'safe\u200b' } })).deliverable.description).toBe('safe\u200b');
   });
 });
