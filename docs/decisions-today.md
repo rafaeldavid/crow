@@ -1495,7 +1495,9 @@ Today a seller with its own API reads 13 files of 98,462 bytes and runs 22 comma
 
 ## D79. A carried delivery travels only with an accept; a reject or an escalation waits for the posted delivery (T-526)
 
-**Status:** the agent's call, 2026-11-18. Rafa may overrule it.
+**Status:** adopted, 2026-11-18.
+
+**Adopted 2026-11-18 by T-526,** as the agent's call after a red-team pass. Rafa may overrule any line.
 
 - **Why.** An outside scan's finding (group G1, private triage T-523): a contract call that carries the seller's delivery re-checks the seller inside the caller's transaction, so the seller can make it revert after its calldata has made the primary's panel seed public, then deliver again knowing the seed. Only a decision other than an accept gives the seller a reason to.
 - **The rule.** The EVM adapter carries a held delivery only in an accept or an early accept. For a reject or an escalation on a carried delivery, it simulates the carried decision, relays `deliver`, and sends `decide` once the delivery is posted.
