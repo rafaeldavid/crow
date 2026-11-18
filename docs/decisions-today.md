@@ -1533,3 +1533,27 @@ Today a seller with its own API reads 13 files of 98,462 bytes and runs 22 comma
 - **What stays.** ADR-0031 red team H-2 is still an accepted limit: a seller can still hand the case to the fallback by breaking the primary's envelope. The notice makes that visible; it does not stop it.
 - **For the rebuilt contracts (roadmap row N26), not now.** An on-chain signal that an adjudicator could not open its envelope would make the steer harder: a signed message the primary sends, which the contract records and the terms can give a consequence. It is a protocol step and a signed type, so it needs an ADR and a schema version, and it waits for the rebuild. Not decided here: its shape and what it changes.
 - **Litmus tests.** Neutrality: no party gains a way to stop a deal; the fallback and the default stay. The hold: unchanged. Defended judgment: no verdict is signed on work the adjudicator could not read.
+
+## D82. A seller makes a standing offer through a small contract of its own; the rules contract stays as it is (ADR-0040, T-544)
+
+**Status:** needs Rafa, 2026-11-18.
+
+**Why now.** Today every offer names one buyer and five fixed dates, and the seller signs the hash of the whole terms, so a seller needs a program that is always on to sign for each buyer [measured, `contracts/src/HoldbackTypes.sol:36-70`]. Rafa, 2026-11-18: "I think we need to fix this now so that there can be standing offers, instead of buyer-specific constraints".
+
+**Decided by Rafa, 2026-11-18, the direction:** a small contract on the seller's side, with the rules contract unchanged, which Crow may deploy for a seller. His words: "let's go with this, since Crow can also offer deploying this on behalf of sellers anyways as a service / by default during setup". ADR-0040 works it out; the two open points below are his.
+
+**The record** (ADR-0040; research in `docs/research/2026-11-18-standing-offers.md`):
+- **The seller contract** answers ERC-1271 yes to three things: its key's own signature, a take of a template the key signed (the buyer fills its address, payment address, encryption key, a nonce and the take's time; the dates count from the take), and the template's standing delivery. It rebuilds the terms itself and holds no money. A spike passed 10 of 10 tests against the unchanged rules contract [measured].
+- **The rules contract adds what the seller contract leaves out:** one commitment ID funds once, so a replayed take reverts; its offer expiry bounds how far a buyer can backdate a take [measured].
+- **A fixed file stands entirely:** one ciphertext and one delivery serve every take, so the seller acts once at setup. This needs one core rule change: a delivery may leave out the buyer's envelope, and the buyer's key then comes only with an adjudicator's accept [measured paths].
+- **Work done per buyer after funding** still needs the seller once per deal, to work and deliver, and nothing before funding.
+- **Deployment:** through the public deterministic deployer, at one address computed from the seller's key, whoever pays; the first take can deploy it in the same call. Crow paying gives Crow nothing, and no Crow-run host is needed [measured: the deployer has code on Sepolia].
+- **Off chain:** the operators, the reference adjudicator and a new buyer command (`site/take.mjs`; `buy.mjs` and `try.mjs` unchanged) read a contract seller. **This needs schema v0.12:** `signatures.seller` and the seller's delivery signature widen beyond 65 bytes. The contract, the EIP-712 domain and the signed encoding stay.
+- **Correction to the design study:** the rules contract has 4,121 bytes of size headroom [measured], so a new rules-contract function would fit. It was declined for the audit and the custody code, not for size.
+- **The build:** T-548 to T-552, about 6 pull requests and 1.1 million tokens [guessed]. None starts before these points are answered.
+
+**Open points for Rafa:**
+1. **Work that depends on the buyer's input** (the pilot's security review names the buyer's commit and files in its terms). Recommended: such sellers keep a per-buyer signer, and slots a buyer fills wait for measured demand. Or: decide bounded slots now, which grows the seller contract and its audit.
+2. **The seller's check of each buyer.** A template signs for buyers the seller never sees. Recommended: a standing offer waives the seller's own check of each buyer's mandate, and the operators' check before they relay remains (D32); the rule on signed messages in `CLAUDE.md` gains one sentence, which is his to write. Or: standing offers only for buyers a club rule admits.
+
+**Litmus tests.** Neutrality: an operator that refuses is bypassed by funding directly, a missing deployment is made by the seller or the first buyer, and an offline seller's fixed file is delivered by anyone. The hold: the rules contract is unchanged, and each take is one ID funded once. Defended judgment: checks and panel unchanged, each take judged on its own seed, and no buyer-filled scope.
