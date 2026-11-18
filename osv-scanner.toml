@@ -1,0 +1,7 @@
+# T-518: known findings the dependency scan (.github/workflows/dependency-scan.yml) lets through. Each entry names
+# the advisory, an end date and the reason, and is reviewed in its pull request. Remove it once a fix is installed.
+
+[[IgnoredVulns]]
+id = "GHSA-fc5q-39xc-vjpf"
+ignoreUntil = 2026-12-18
+reason = "2026-11-18: ReDoS in picomatch through 4.0.7, no fixed version yet. Reached only by development tools (ESLint via typescript-eslint, vitest via vite) matching globs this repository writes, never untrusted input. Recheck by the end date."
