@@ -5,7 +5,7 @@
 - **Depends on:** T-511 (the evidence file checked offline), T-531 (the research, task 1 of its section 8)
 - **Paths this task may touch:** `examples/proof-of-purchase.ts` and its test (new), `examples/evidence.ts` (two exports, no change to any check), `site/ref/after-funding.txt` (one paragraph), this file.
 - **Human gate:** no. A site deploy that serves the new paragraph is Rafa's.
-- **Status:** review
+- **Status:** done (PR 664 merged 2026-11-18 as `da958817`; the private files are in crow-private `ops-costs/deals/`)
 - **Agent/session:** the T-538 session, 2026-11-18, branch `t-538-proof-of-purchase`.
 - **Roadmap row:** N197
 - **Change kind:** 4, operator-side example code with its tests; 1 for the reference paragraph.
