@@ -6,7 +6,7 @@
 - **Depends on:** T-500 (the Released security-review deal on Sepolia that is the proof case), T-333 (the deal record, which reads the same routes online)
 - **Paths this task may touch:** `examples/evidence.ts`, `examples/evidence.test.ts`, `fixtures/evidence/`, `site/ref/after-funding.txt`, this file. Never: `contracts/src/`, `spec/schemas/`, the pinned bundles (`site/buy.mjs`, `site/try.mjs`, `site/setup.mjs` and their hash files), `.github/`, `CLAUDE.md`, `AGENTS.md`, `.claude/`.
 - **Human gate:** no. Nothing here deploys. The agent-docs paragraph reaches crow.direct only with the next site deploy, which is Rafa's.
-- **Status:** in progress
+- **Status:** done with the merge of PR 634
 - **Agent/session:** the T-511 session, 2026-11-18, branch `t-511-receipt-offline`
 - **Roadmap row:** T-242
 
@@ -51,12 +51,12 @@ Measured by reading the live API for the T-500 Released deal `0x341562cc…2e9b`
 
 **What `check` checks, in order** (each check names itself when it fails):
 
-1. The terms hash to the commitment ID, and the seller's signature recovers to the seller they name.
+1. The terms carry only fields the commitment ID covers, hash to it, and the seller's signature recovers to the seller they name.
 2. Every event names this commitment and hashes to its `hash`; consecutive events link by `prevHash`; every event has exactly one receipt, for this commitment, that recovers to the receipt signer.
 3. Each raw transaction hashes to the transaction hash the events name, is a call to the pinned rules contract on the pinned chain, and its calldata decodes to the function the event implies.
 4. `agreeAndFund`: its terms view hashes to the commitment ID (the contract's own formula); the seller's, the primary adjudicator's and the buyer's signatures recover to the addresses the terms name; the funding authorization recovers to the buyer's payment address for exactly price plus fee; the acceptance in the calldata is the one in the event.
 5. `deliver`: its terms hash to the commitment ID; the delivery's struct hash is the event's `deliveryHash`, its signature recovers to the seller, and its ciphertext and plaintext hashes are the event's; the ciphertext bytes hash to the recorded SHA-256 and length.
-6. `decide`: its terms hash to the commitment ID; the decision names the posted delivery, the role whose turn it was and an outcome, and its signature recovers to the adjudicator the terms name for that role; its seed hashes to the acceptance's seed commitment; its record hash is the judgment record's.
+6. `decide`: its terms hash to the commitment ID; the decision names the posted delivery, a role and a final outcome, and its signature recovers to the adjudicator the terms name for that role (whose turn it was is the contract's check, which the chain read confirms); its seed hashes to the acceptance's seed commitment; its record hash is the judgment record's.
 7. The judgment record hashes to its `recordHash`, its signature recovers to the deciding adjudicator, and it names this commitment, attempt, delivery, role, policy and seed. Its checks are exactly the terms' deterministic checks with the same `required` flags, and its decision is the decision's outcome. An accept has every required check passed and, when the terms have rubric criteria, a panel that ran.
 8. The outcome the events record (Released or Refunded, the key released on an accept) is the decision's.
 
@@ -82,7 +82,7 @@ Measured by reading the live API for the T-500 Released deal `0x341562cc…2e9b`
 All measured on 2026-11-18 in this branch's worktree unless marked otherwise.
 
 - **The bundles.** `node examples/evidence.ts fetch <id> --out …` against `https://api.crow.direct` and `ethereum-sepolia-rpc.publicnode.com` wrote both T-500 deals: the Released one `0x341562cc…2e9b` (9 events, 3 transactions) and the Refunded one `0x9908966e…4272` (8 events, 3 transactions). The chain reads, fetched with the command the check prints, are beside them. They are kept gzipped in `fixtures/evidence/` because the repository's secret scanner flags the public test-token address keyed `token` (gitleaks `generic-api-key`, 20 findings on the plain JSON, none on the gzipped files), and this task may not edit `.gitleaksignore`.
-- **The Released deal checks offline.** `node examples/evidence.ts check released.json`, exit 0:
+- **The Released deal checks offline.** `node examples/evidence.ts check released.json`, exit 0 (the run before the review's fixes, which added one check and changed no other line of this output):
 
 ```
 PASSED  47 offline checks on commitment 0x341562ccb28591a4df09a0cfbabfeffec1fff011631585e0a020a177ec192e9b, chain 11155111, rules contract 0x3be45128565abbc35dbd4660716b703ff489f1b4.
@@ -104,13 +104,20 @@ What it does not prove:
 - That the work itself passes the checks. The work is encrypted to the buyer and the adjudicators; a key holder can open it and rerun the checks with examples/check-delivery.ts.
 ```
 
-- **With the chain read.** `check released.json --receipt released.receipt.json`: exit 0, 50 checks, "Transaction 0xe47168fa…ae96 succeeded in block 12153293 on the chain the node serves: the rules contract recorded the decision "accept" and paid the price 40.00 tUSDC to the seller." The Refunded deal: 46 offline checks, 49 with its receipt, decision "reject", the `proof` check FAILED, "returned the price 40.00 tUSDC to the buyer".
-- **Attack tests** (`examples/evidence.test.ts`, 9 tests, all pass in about 6 s; `fetch` is stubbed to throw, so any network call on the check path fails them):
+- **With the chain read.** `check released.json --receipt released.receipt.json`: exit 0, 50 checks (51 after the review's fixes), "Transaction 0xe47168fa…ae96 succeeded in block 12153293 on the chain the node serves: the rules contract recorded the decision "accept" and paid the price 40.00 tUSDC to the seller"; after the review it names the seller's payout address. The Refunded deal: 46 offline checks, 49 with its receipt, decision "reject", the `proof` check FAILED, "returned the price 40.00 tUSDC to the buyer".
+- **Attack tests** (`examples/evidence.test.ts`, 13 tests after the review, all pass in about 6 s; `fetch` is stubbed to throw, so any network call on the check path fails them):
   - one changed value anywhere: every leaf and every key of the Released bundle (more than 300 positions) is changed one at a time, and the check fails on each. Its first run found one position the test did not change (a `null`), not a verifier gap; the test now changes `null` too;
   - a signature from the wrong key: the judgment record signed by another key, a receipt signed by another key, and the buyer's agreement in the funding calldata signed by another key inside a transaction the attacker built and its own operator recorded (fails at "buyer's agreement");
   - a receipt from another deal: a genuine receipt of the Refunded deal, as it is and renumbered to this deal's event;
   - a decision that does not match the terms' hash: the Refunded deal's genuine decide transaction (fails at "judgment.decided transaction is for these terms"); its signed decision inside a call with this deal's terms (fails at "adjudicator's signature on the decision"); this deal's decision with the outcome flipped; the Refunded deal's genuine judgment record;
   - the chain read: the other deal's receipt and a reverted receipt are refused.
+- **Red team** (one `red-teamer` pass, 2026-11-18, on commit `973d6b4a`): PASS. It found no bundle or receipt that makes the check print a false claim about what a party signed or how the deal settled. Its findings, all fixed in this PR with a test each:
+  - Medium: the terms could carry extra fields that the commitment ID ignores (a note, a `disputeBy`), so the file could show terms nobody signed while it passed. Fix: the terms must have exactly the signed fields (`terms carry only signed fields`).
+  - Low: a date that is not one, a `null` log or a missing block number crashed the check (exit 2) instead of failing it. Fix: any error while reading the bundle is the failed check `well-formed bundle`.
+  - Low: the chain-receipt check matched the payment by deal and amount, not by who was paid. Fix: the payment must name the seller (on an accept) or the buyer (on a reject) the terms name.
+  - Low: a deployment from `HOLDBACK_DEPLOYMENT` was trusted silently. Fix: the output says that the caller chose it, and the chain-read command names the pin's chain.
+  - Info: whose turn it was is the contract's check, which the chain read confirms; the design text and the output now say so. Payments name the seller's payout address and the buyer's payment address.
+  - Its attack files are in `reports/scratch/t511-redteam/` in the main checkout, which is not committed.
 - **Local checks** (kind 4 and kind 1): `pnpm exec vitest run examples/evidence.test.ts examples/deployments.test.ts tests/design-map.test.ts tests/site-*.test.ts tests/guide-budget.test.ts`: 107 of 107 passed. `pnpm exec eslint examples/evidence.ts examples/evidence.test.ts` and `pnpm exec tsc -b examples`: clean. `node site/build.mjs && node site/check.mjs`: PASS; `site/try.mjs` keeps SHA-256 `fd7d9a4a…`, and no pinned bundle changed (`git status` shows only `site/ref/after-funding.txt` under `site/`).
 
 ## Decisions
@@ -121,4 +128,13 @@ What it does not prove:
 
 ## Handoff
 
-Not started.
+**Done.** The command, its tests and the agent-docs paragraph are in PR 634; the PR's `Closes T-511` line marks the task done when it merges.
+
+- **Deploy:** none needed for the command, which runs from a clone. The paragraph in `site/ref/after-funding.txt` reaches crow.direct with the next site deploy (`pnpm site:deploy` from a fresh detached checkout of `origin/main`, as T-500's Handoff lists). That deploy is Rafa's.
+- **For each case study:** run `node examples/evidence.ts fetch <id> --out <file>` once the deal closes, and publish the file beside the case. Anyone can then run `check` on it.
+- **Not done, for the backlog** (none blocks this slice):
+  - Early accept, settlement by agreement, reclaim and default are refused as not checked yet. Each needs its own call's checks (`earlyAccept`, `mutualSettle`, the timeouts).
+  - A fallback or appeal adjudicator's beacon seed is not checked offline (the drand signature); the chain read covers it.
+  - The operator's receipt signer is not pinned; a pinned list of Crow's operators' receipt signers would let the receipts count as more than one operator's account.
+  - The planned `GET /v1/commitments/{id}/evidence` route could serve this same file, so an agent needs no Sepolia node to fetch it.
+  - A public bundle in the repository trips gitleaks' generic rule on the test token's address; a published case study's file lives outside this repository or needs a `.gitleaksignore` entry from Rafa's lane.

@@ -217,6 +217,50 @@ describe('attacks the check must refuse', () => {
     await failsAt(d, 'judgment record hash');
   });
 
+  // The red team's findings (T-511 review): each now fails.
+  it('a term nobody signed, in a field the commitment ID ignores', async () => {
+    for (const add of [(t: J) => (t.note = 'Released: 1000.00 tUSDC paid'), (t: J) => (t.timing.disputeBy = '2099-01-01T00:00:00Z'), (t: J) => (t.price.decimals = 0), (t: J) => (t.adjudication.fee.note = 'x')]) {
+      const b = bundleOf(RELEASED);
+      add(b.terms);
+      await failsAt(b, 'terms carry only signed fields');
+    }
+  });
+  it('a value that cannot be read fails the check instead of crashing it', async () => {
+    const b = bundleOf(RELEASED);
+    b.events.find((e: J) => e.type === 'adjudicator.accepted').payload.acceptance.expiresAt = 'not a date';
+    await failsAt(await reseal(b), 'well-formed bundle');
+    const receipt = receiptOf(RELEASED);
+    receipt.result.logs.unshift(null);
+    expect((await checkBundle(bundleOf(RELEASED), { receipt })).ok).toBe(true);
+    delete receipt.result.blockNumber;
+    const r = await checkBundle(bundleOf(RELEASED), { receipt });
+    expect(r.ok === false && r.failed).toBe('chain receipt');
+  });
+  it('a chain receipt that pays someone else', async () => {
+    for (const name of [RELEASED, REFUNDED]) {
+      const receipt = receiptOf(name);
+      const sig = name === RELEASED ? 'PaymentReleased' : 'Refunded';
+      const topic = keccak256(new TextEncoder().encode(`${sig}(bytes32,address,uint256)`));
+      const log = receipt.result.logs.find((l: J) => l.topics[0] === topic);
+      log.topics[2] = `0x${'00'.repeat(12)}${'aa'.repeat(20)}`;
+      const r = await checkBundle(bundleOf(name), { receipt });
+      expect(r.ok === false && r.failed, name).toBe('chain receipt records the payment');
+    }
+  });
+  it('a made-up HOLDBACK_DEPLOYMENT does not make real signatures pass, and the pinned case prints no caller-pin note', async () => {
+    const file = JSON.parse(readFileSync(new URL('../contracts/deployments/sepolia.json', import.meta.url), 'utf8'));
+    vi.stubEnv('HOLDBACK_DEPLOYMENT', JSON.stringify({ ...file, rules: `0x${'22'.repeat(20)}` }));
+    try {
+      const b = bundleOf(RELEASED);
+      b.operator.domain.verifyingContract = `0x${'22'.repeat(20)}`;
+      const r = await checkBundle(b);
+      expect(r.ok).toBe(false); // real signatures do not recover under another domain
+      expect((await checkBundle(bundleOf(RELEASED))).lines.join('\n')).not.toContain('HOLDBACK_DEPLOYMENT. This command does not pin it');
+    } finally {
+      vi.unstubAllEnvs();
+    }
+  });
+
   it('an unpinned settlement layer', async () => {
     const b = bundleOf(RELEASED);
     b.operator.domain.verifyingContract = `0x${'11'.repeat(20)}`;

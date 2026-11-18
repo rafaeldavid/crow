@@ -20,6 +20,7 @@
 import { readFileSync, writeFileSync } from 'node:fs';
 import { pathToFileURL } from 'node:url';
 import { concat, decodeEventLog, decodeFunctionData, encodeAbiParameters, keccak256, parseAbiParameters, parseTransaction, recoverAddress, recoverMessageAddress, recoverTypedDataAddress, stringToBytes, type Abi, type Hex } from 'viem';
+import { SEPOLIA } from './deployments.ts';
 import { plain } from './plain.ts';
 import { commitmentIdOf, ERC3009_TYPES, fundingNonceOf, jcsHash, knownPins, type Pin } from './verify.ts';
 
@@ -138,6 +139,23 @@ const money = (amount: bigint, token: string, pin: Pin) => {
   const frac = s.slice(s.length - d).replace(/0+$/, '').padEnd(2, '0');
   return `${s.slice(0, s.length - d)}.${frac} ${pin.token.symbol}`;
 };
+/**
+ * The terms as the commitment ID covers them: `1` a string or number the EIP-712 struct hashes, `'hashed'` a body the
+ * terms hash whole (keccak256 of its RFC 8785 JSON), an object the exact keys of a nested struct. Phase one's terms
+ * carry no dispute fields, which the struct hashes as 0.
+ */
+type Shape = 1 | 'hashed' | { [key: string]: Shape };
+const AMOUNT: Shape = { token: 1, amount: 1 };
+const TERMS_SHAPE: Shape = {
+  schemaVersion: 1, clubId: 1, rulebookHash: 1, buyer: 1, seller: 1, buyerPaymentAddress: 1, sellerPayoutAddress: 1, deliverable: 'hashed', acceptance: 'hashed', price: AMOUNT,
+  adjudication: { adjudicator: 1, fallbackAdjudicator: 1, appealAdjudicator: 1, policyId: 1, fee: AMOUNT, registryHash: 1, policyHash: 1 },
+  timing: { offerExpiresAt: 1, fundBy: 1, deliverBy: 1, judgeBy: 1, fallbackBy: 1, appealWindowSec: 1, appealDecideSec: 1, maxSubmissions: 1 },
+  settlement: { mode: 1, token: 1 }, remedy: { onReject: 1 }, disclosure: { level: 1 }, buyerEncryptionPublicKey: 1, nonce: 1, createdAt: 1, id: 1, signatures: { seller: 1 },
+};
+const exact = (v: J, s: Shape): boolean =>
+  s === 1 ? typeof v === 'string' || typeof v === 'number'
+  : s === 'hashed' ? v !== null && typeof v === 'object'
+  : v !== null && typeof v === 'object' && !Array.isArray(v) && keysOf(v) === Object.keys(s).sort().join(',') && Object.entries(s).every(([key, x]) => exact(v[key], x));
 const keysOf = (o: J) => (o && typeof o === 'object' && !Array.isArray(o) ? Object.keys(o).sort().join(',') : '');
 
 /**
@@ -153,8 +171,9 @@ export async function checkBundle(b: J, o: { receipt?: J } = {}): Promise<Result
   try {
     return { ok: true, passed, ...(await run(b, o, must, passed)) };
   } catch (e) {
-    if (!(e instanceof Failed)) throw e;
-    return { ok: false, passed, failed: e.check, why: e.message.slice(e.check.length + 2), lines: [`FAILED  ${plain(e.message)}`, `This bundle is not a true record of the deal it names: do not rely on it. ${passed.length} checks passed before this one.`] };
+    // Anything that throws on the way (a date that is not one, a log that is not an object) is a malformed bundle.
+    const f = e instanceof Failed ? e : new Failed('well-formed bundle', `a value could not be read (${e instanceof Error ? e.name : 'error'})`);
+    return { ok: false, passed, failed: f.check, why: f.message.slice(f.check.length + 2), lines: [`FAILED  ${plain(f.message)}`, `This bundle is not a true record of the deal it names: do not rely on it. ${passed.length} checks passed before this one.`] };
   }
 }
 
@@ -170,8 +189,12 @@ async function run(b: J, o: { receipt?: J }, must: Must, passed: string[]): Prom
   const pin = knownPins().find((p) => p.chain && keysOf(d) === 'chainId,name,verifyingContract,version' && d.name === p.domain.name && d.version === p.domain.version && String(d.chainId) === String(p.domain.chainId) && d.verifyingContract === lc(p.domain.verifyingContract));
   must('pinned settlement layer', pin, `the bundle's EIP-712 domain ${plain(JSON.stringify(d)).slice(0, 200)} is not a chain deployment this command pins (examples/deployments.ts); for an earlier deployment, pass its file from contracts/deployments/ as HOLDBACK_DEPLOYMENT`);
   const c = pin!.chain!;
+  // A deployment from HOLDBACK_DEPLOYMENT is the caller's own choice, not one this file pins: the output says so.
+  const own = !SEPOLIA || lc(c.rules) !== lc(SEPOLIA.rules);
 
-  // 2. The terms: they hash to the commitment ID, and the seller signed that ID.
+  // 2. The terms: they hash to the commitment ID, and the seller signed that ID. Only signed fields may be present:
+  // commitmentIdOf ignores any other key, so a key it ignores would be a term nobody signed.
+  must('terms carry only signed fields', exact(b.terms, TERMS_SHAPE), 'the terms carry a field the commitment ID does not cover');
   const { id: servedId, signatures, ...terms } = b.terms ?? {};
   let fromJson: Hex | null = null;
   try {
@@ -306,10 +329,11 @@ async function run(b: J, o: { receipt?: J }, must: Must, passed: string[]): Prom
 
   // What it proves, and the one chain read.
   const short = (h: string) => `${h.slice(0, 10)}…${h.slice(-4)}`;
-  const rpcCommand = `curl -s -X POST -H 'content-type: application/json' --data '{"jsonrpc":"2.0","id":1,"method":"eth_getTransactionReceipt","params":["${decideTx}"]}' https://ethereum-sepolia-rpc.publicnode.com`;
+  const rpcCommand = `curl -s -X POST -H 'content-type: application/json' --data '{"jsonrpc":"2.0","id":1,"method":"eth_getTransactionReceipt","params":["${decideTx}"]}' ${c.tokenDomain.chainId === 11155111 ? 'https://ethereum-sepolia-rpc.publicnode.com' : `<a node for chain ${c.tokenDomain.chainId}>`}`;
   const required = det.filter((x) => x.required);
   const lines = [
     `PASSED  ${passed.length} offline checks on commitment ${id}, chain ${c.tokenDomain.chainId}, rules contract ${lc(c.rules)}.`,
+    ...(own ? ['Settlement layer: the deployment you passed in HOLDBACK_DEPLOYMENT. This command does not pin it, so these results hold only if you trust that file.'] : []),
     '',
     'What this file proves, with no network:',
     `- The seller ${lc(terms.seller)} signed these terms. They hash to the commitment ID, so no term can differ from what was signed.`,
@@ -322,7 +346,7 @@ async function run(b: J, o: { receipt?: J }, must: Must, passed: string[]): Prom
     `- Operator ${signer} signed a receipt for each of the ${events.length} events it recorded. That is this operator's own account: compare the address with GET /v1/status of an operator you trust.`,
     '',
     'What it does not prove:',
-    `- That the transactions were mined and succeeded, so that the money moved. One chain read proves it: the receipt of the decide transaction ${decideTx}. From a node you trust:`,
+    `- That the transactions were mined and succeeded, so that the money moved and the contract found it was that adjudicator's turn. One chain read proves it: the receipt of the decide transaction ${decideTx}. From a node you trust:`,
     `    ${rpcCommand} > receipt.json`,
     `  then run this check again with --receipt receipt.json.`,
     "- That the work itself passes the checks. The work is encrypted to the buyer and the adjudicators; a key holder can open it and rerun the checks with examples/check-delivery.ts.",
@@ -331,8 +355,8 @@ async function run(b: J, o: { receipt?: J }, must: Must, passed: string[]): Prom
   // The chain read's answer, when given: checked offline too.
   if (o.receipt !== undefined) {
     const x = o.receipt?.result !== undefined ? o.receipt.result : o.receipt;
-    must('chain receipt', x && x.transactionHash === decideTx && x.status === '0x1' && lc(x.to) === lc(c.rules), `the receipt is not a successful receipt of transaction ${decideTx} to the rules contract`);
-    const logs = (Array.isArray(x.logs) ? x.logs : []).filter((l: J) => lc(l.address) === lc(c.rules)).map((l: J) => {
+    must('chain receipt', x && x.transactionHash === decideTx && x.status === '0x1' && lc(x.to) === lc(c.rules) && /^0x[0-9a-f]+$/.test(String(x.blockNumber)), `the receipt is not a successful receipt of transaction ${decideTx} to the rules contract`);
+    const logs = (Array.isArray(x.logs) ? x.logs : []).filter((l: J) => l && typeof l === 'object' && lc(l.address) === lc(c.rules)).map((l: J) => {
       try {
         return decodeEventLog({ abi: RULES_ABI, data: l.data, topics: l.topics }) as J;
       } catch {
@@ -341,11 +365,11 @@ async function run(b: J, o: { receipt?: J }, must: Must, passed: string[]): Prom
     }).filter(Boolean);
     const decided = logs.find((l: J) => l.eventName === 'Decided' && l.args.id === id);
     must('chain receipt records the decision', decided && lc(decided.args.adjudicator) === decider && decided.args.role === m.role && decided.args.outcome === m.outcome && decided.args.judgmentRecordHash === recordHash && decided.args.seed === m.seed, 'the receipt has no Decided event for this commitment with the signed decision');
-    const paid = logs.find((l: J) => l.eventName === (outcome === 'accept' ? 'PaymentReleased' : 'Refunded') && l.args.jobId === id && l.args.amount === BigInt(terms.price.amount));
-    must('chain receipt records the payment', paid, `the receipt has no ${outcome === 'accept' ? 'PaymentReleased' : 'Refunded'} event for the price ${terms.price.amount} on this commitment`);
+    const paid = logs.find((l: J) => l.eventName === (outcome === 'accept' ? 'PaymentReleased' : 'Refunded') && l.args.jobId === id && l.args.amount === BigInt(terms.price.amount) && lc(outcome === 'accept' ? l.args.provider : l.args.client) === lc(outcome === 'accept' ? terms.seller : terms.buyer));
+    must('chain receipt records the payment', paid, `the receipt has no ${outcome === 'accept' ? 'PaymentReleased' : 'Refunded'} event paying the price ${terms.price.amount} on this commitment for the ${outcome === 'accept' ? 'seller' : 'buyer'} the terms name`);
     lines.splice(lines.indexOf('What it does not prove:'), 4,
       'What the chain read adds:',
-      `- Transaction ${decideTx} succeeded in block ${BigInt(x.blockNumber)} on the chain the node serves: the rules contract recorded the decision "${outcome}" and ${outcome === 'accept' ? `paid the price ${money(BigInt(terms.price.amount), terms.price.token, pin!)} to the seller` : `returned the price ${money(BigInt(terms.price.amount), terms.price.token, pin!)} to the buyer`}. The contract checked the same signatures when it ran.`,
+      `- Transaction ${decideTx} succeeded in block ${BigInt(x.blockNumber)} on the chain the node serves: the rules contract recorded the decision "${outcome}" and ${outcome === 'accept' ? `paid the price ${money(BigInt(terms.price.amount), terms.price.token, pin!)} to the seller's payout address ${lc(terms.sellerPayoutAddress)}` : `returned the price ${money(BigInt(terms.price.amount), terms.price.token, pin!)} to the buyer's payment address ${lc(terms.buyerPaymentAddress)}`}. The contract checked the same signatures when it ran.`,
       '',
       'What it does not prove:');
     lines[0] = `PASSED  ${passed.length} checks on commitment ${id}, chain ${c.tokenDomain.chainId}, rules contract ${lc(c.rules)}: offline, and the chain read you gave.`;
