@@ -10,27 +10,44 @@ import { describe, expect, it } from 'vitest';
 const root = fileURLToPath(new URL('..', import.meta.url));
 const FOURTEEN_DAYS_IN_MINUTES = 14 * 24 * 60;
 
-/** The top-level `key: value` lines of a pnpm-workspace.yaml, and the item lines under each block key. */
-function topLevel(yaml: string): Map<string, { value: string; items: string[] }> {
+// The only top-level keys the file may carry, and the shape of each line under a block key. Any other key, a quoted
+// or flow-style key, or a line of another shape is a problem: a setting such as `trustLockfile`,
+// `minimumReleaseAgeIgnoreMissingTime`, `dangerouslyAllowAllBuilds` or `pnpmfile` can weaken the rules, so a new
+// key is added here on purpose, in review, or not at all.
+const ITEM_SHAPES: Record<string, RegExp | undefined> = {
+  packages: /^- [\w./*-]+$/,
+  overrides: /^[\w@./<>=^~*-]+: [\w.^~<>=*-]+$/,
+  minimumReleaseAge: undefined,
+  minimumReleaseAgeExclude: /^- .+$/,
+  strictDepBuilds: undefined,
+  allowBuilds: /^.+$/,
+};
+
+/** The top-level `key: value` lines of a pnpm-workspace.yaml, the item lines under each block key, and stray lines. */
+function topLevel(yaml: string): { keys: Map<string, { value: string; items: string[] }>; stray: string[] } {
   const keys = new Map<string, { value: string; items: string[] }>();
-  let current: { value: string; items: string[] } | undefined;
+  const stray: string[] = [];
+  let current: { name: string; value: string; items: string[] } | undefined;
   for (const line of yaml.split('\n')) {
     if (/^\s*(#|$)/.test(line)) continue;
-    const top = /^([A-Za-z][\w.-]*):\s*(.*?)\s*(#.*)?$/.exec(line);
+    const top = /^([A-Za-z][\w.-]*):(?:\s+(.*?))?\s*(#.*)?$/.exec(line);
     if (top) {
-      current = { value: top[2] ?? '', items: [] };
+      if (!(top[1]! in ITEM_SHAPES) || keys.has(top[1]!)) stray.push(line);
+      current = { name: top[1]!, value: top[2] ?? '', items: [] };
       keys.set(top[1]!, current);
-    } else if (current) current.items.push(line.trim());
+    } else if (current && /^\s+\S/.test(line) && ITEM_SHAPES[current.name]?.test(line.trim().replace(/\s+#.*$/, ''))) {
+      current.items.push(line.trim().replace(/\s+#.*$/, ''));
+    } else stray.push(line);
   }
-  return keys;
+  return { keys, stray };
 }
 
 const EXACT_NAME_AT_VERSION = /^'?(@[a-z0-9._-]+\/)?[a-z0-9._-]+@\d+\.\d+\.\d+(-[0-9A-Za-z.-]+)?'?$/;
 
 /** What is wrong with the install rules in this pnpm-workspace.yaml text; an empty list when they hold. */
 export function installRuleProblems(yaml: string): string[] {
-  const keys = topLevel(yaml);
-  const problems: string[] = [];
+  const { keys, stray } = topLevel(yaml);
+  const problems: string[] = stray.map((line) => `unexpected line in pnpm-workspace.yaml: ${line.trim()}`);
   const age = Number(keys.get('minimumReleaseAge')?.value);
   if (!(age >= FOURTEEN_DAYS_IN_MINUTES)) problems.push(`minimumReleaseAge must be at least ${FOURTEEN_DAYS_IN_MINUTES} (14 days in minutes)`);
   if (keys.get('minimumReleaseAgeStrict')?.value === 'false') problems.push('minimumReleaseAgeStrict must not be false');
@@ -76,6 +93,21 @@ describe('the install rules (T-518)', () => {
     const npmrc = join(root, '.npmrc');
     const text = existsSync(npmrc) ? readFileSync(npmrc, 'utf8') : '';
     expect(text).not.toMatch(/minimum-release-age|minimumReleaseAge|dep-builds|DepBuilds|allow-all-builds|AllowAllBuilds|ignore-scripts\s*=\s*false/);
+  });
+
+  it('are not rewritten by a pnpmfile', () => {
+    for (const name of ['.pnpmfile.cjs', '.pnpmfile.mjs', 'pnpmfile.cjs', 'pnpmfile.mjs']) expect(existsSync(join(root, name)), name).toBe(false);
+  });
+
+  it('fail on a key outside the allowlist, however it is written', () => {
+    const under = (line: string) => yaml.replace('strictDepBuilds: true', `strictDepBuilds: true\n${line}`);
+    expect(installRuleProblems(under('"dangerouslyAllowAllBuilds": true'))).not.toEqual([]);
+    expect(installRuleProblems(under('  dangerouslyAllowAllBuilds: true'))).not.toEqual([]);
+    expect(installRuleProblems(`${yaml}\ntrustLockfile: true\n`)).not.toEqual([]);
+    expect(installRuleProblems(`${yaml}\nminimumReleaseAgeIgnoreMissingTime: true\n`)).not.toEqual([]);
+    expect(installRuleProblems(`${yaml}\npnpmfile: x.cjs\n`)).not.toEqual([]);
+    expect(installRuleProblems(`${yaml}\n{ dangerouslyAllowAllBuilds: true }\n`)).not.toEqual([]);
+    expect(installRuleProblems(`${yaml}\nstrictDepBuilds: false\n`)).not.toEqual([]);
   });
 
   it('fail when a setting is removed or weakened', () => {
