@@ -5,7 +5,7 @@
 - **Depends on:** T-546, the review of an outside evaluation
 - **Paths this task may touch:** `apps/operator/src/sim-world.ts` and its test, `apps/operator/src/server.ts` (the ciphertext route's refusal), `apps/operator/src/agent-ready.test.ts`, `apps/demo-cloud/src/world.test.ts`, `examples/audit-deal.ts`, `site/sell.txt`, `site/llms.txt`, `site/ref/after-funding.txt`, `site/ref/checks.txt`, `site/ref/http-seller.txt`, `site/trust.mjs` and its built `trust.txt` and `trust.html`, `site/check.mjs`, this file
 - **Human gate:** no for the merge. The site deploy that carries the doc changes is Rafa's.
-- **Status:** review
+- **Status:** done
 - **Agent/session:** the T-547 session, started by the coordinator on 2026-11-18
 - **Roadmap row:** N202
 
