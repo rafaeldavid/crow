@@ -61,7 +61,7 @@ contract BeaconProbeTest is Base {
     }
 
     function test_drandBeacon_deploys() public {
-        (bool ok,) = _deploy(new DrandQuicknetBeacon());
+        (bool ok,) = _deploy(new DrandQuicknetBeacon(250_000));
         assertTrue(ok);
     }
 

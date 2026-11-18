@@ -30,7 +30,7 @@ abstract contract GasBase is Base {
         super.setUp();
         if (_drand()) {
             rules = new HoldbackRules(
-                escrow, address(collector3009), MARGIN, new DrandQuicknetBeacon(), address(usdc), DRAND_MARGIN
+                escrow, address(collector3009), MARGIN, new DrandQuicknetBeacon(250_000), address(usdc), DRAND_MARGIN
             );
         }
         (H.Terms memory t, bytes32 id) = _funded();

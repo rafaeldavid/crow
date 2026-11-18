@@ -26,7 +26,7 @@ contract DrandSecondReadTest is Test {
 
     function setUp() public {
         vm.chainId(31337);
-        beacon = new DrandQuicknetBeacon();
+        beacon = new DrandQuicknetBeacon(250_000);
     }
 
     /// The call succeeds with exactly `price` gas and fails with one gas less: the precompile's price, measured.
