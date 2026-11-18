@@ -31,7 +31,15 @@ A buyer that wants no seller code in its path uses the HTTP API directly: make y
 
 ## Payment from a separate wallet
 
-Step 6 of https://crow.direct/buy.txt sends you here. Set `CROW_PAYMENT_ADDRESS=0x<the wallet's address>` before `node` on the quote run. The approve run then stops with exit status 4 before funding. It writes `<address>.funding.typed.json`, the message the wallet signs, and `<address>.terms.json` in the key store directory (and `<address>.operator-fee.typed.json` when the operator fee is above 0, whose signature `fund` takes second). It prints each file's digest, who pays whom how much until when, and a `check` command: run it where the wallet is. It rebuilds the message from the terms and its own pins, and refuses with exit 3 on any difference. Sign only a file it passes, with any wallet that signs EIP-712 typed data (`eth_signTypedData_v4`) and shows the same digest. The holder needs `buy.mjs` too, installed by buy.txt's step 1 command. Then run `HOLDBACK_OPERATORS=$OP1,$OP2 node buy.mjs pay fund <directory> <commitment ID> <signature>`. A signature that is not 65 bytes (`0x` and 130 hex characters), or does not recover to the payment address, is refused and pays nothing: sign again. The wallet holder's rules in full: `ref/http-buyer.txt`.
+Step 6 of https://crow.direct/buy.txt sends you here. Set `CROW_PAYMENT_ADDRESS=0x<the wallet's address>` before `node` on the quote run. The approve run then stops with exit status 4 before funding. It writes `<address>.funding.typed.json`, the message the wallet signs, and `<address>.terms.json` in the key store directory (and `<address>.operator-fee.typed.json` when the operator fee is above 0, whose signature `fund` takes second). It prints each file's digest, who pays whom how much until when, and a `check` command: run it where the wallet is. It rebuilds the message from the terms and its own pins, and refuses with exit 3 on any difference. Sign only a file it passes, with any wallet that signs EIP-712 typed data (`eth_signTypedData_v4`) and shows the same digest. A wallet that shows no digest but signs the checked file itself is enough: `fund` recovers the signature over its own copy of the message and refuses a file changed since it was written. With Foundry's `cast`, for example (`<dir>/<name>` is the keystore; keep the password in a file of mode 600):
+
+```sh
+CAST_PASSWORD="$(cat <password file>)" cast wallet new <dir> <name>
+cast wallet sign --data --from-file <address>.funding.typed.json --keystore <dir>/<name> --password-file <password file>
+cast wallet verify --address <address> --data --from-file <address>.funding.typed.json <signature>
+```
+
+The last line prints `Validation succeeded`. The holder needs `buy.mjs` too, installed by buy.txt's step 1 command. Then run `HOLDBACK_OPERATORS=$OP1,$OP2 node buy.mjs pay fund <directory> <commitment ID> <signature>`. A signature that is not 65 bytes (`0x` and 130 hex characters), or does not recover to the payment address, is refused and pays nothing: sign again. The wallet holder's rules in full: `ref/http-buyer.txt`.
 
 ## A signer with rules, for an agent that holds no payment key
 
