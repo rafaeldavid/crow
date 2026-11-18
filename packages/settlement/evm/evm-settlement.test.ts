@@ -165,11 +165,16 @@ describe.skipIf(!ready)(`EvmSettlement on anvil${ready ? '' : ' (SKIPPED: needs 
     expect([chain.transactions().length, await world.publicClient.getBlockNumber()]).toEqual([txs, block]);
     await must(chain, cast, d.decide('primary', 'escalate'));
     expect((await chain.stage(d.id)).stage).toBe('Escalated');
+    // The escalation's round, as gas.ts takes it, so the ground is the decision's only fault.
+    const at = Math.floor(Date.parse(chain.now()) / 1000) - 1;
+    chain.advance(2);
     [txs, block] = [chain.transactions().length, await world.publicClient.getBlockNumber()];
-    const ground = await chain.submit(await d.decide('appeal', 'reject', 1, { appealGround: 'wrong-outcome' }), { sender: cast.appeal.key });
+    const ground = await chain.submit(await d.decide('appeal', 'reject', at + 1, { appealGround: 'wrong-outcome' }), { sender: cast.appeal.key });
     expect(ground.ok ? 'ok' : `${ground.problem.type}: ${ground.problem.detail}`).toMatch(/^invalid_terms: .*carries no appeal ground/);
     expect([chain.transactions().length, await world.publicClient.getBlockNumber()]).toEqual([txs, block]);
     expect((await chain.stage(d.id)).stage).toBe('Escalated');
+    await must(chain, cast, d.decide('appeal', 'reject', at + 1));
+    expect((await chain.stage(d.id)).stage).toBe('Refunded');
   }, 60_000);
 
   // ADR-0029: a signature that names a delivery other than the posted one is refused as SimChain refuses it, and the
