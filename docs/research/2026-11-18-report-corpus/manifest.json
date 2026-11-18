@@ -1,0 +1,269 @@
+{
+  "fetched": "2026-11-18",
+  "reports": [
+    {
+      "id": "pashov-1",
+      "firm": "Pashov Audit Group",
+      "set": "design",
+      "date": "2026-03-26",
+      "address": "https://github.com/pashov/audits/blob/5550be96af284b3cf67b9d7dbbdbeb95c2502fe8/team/md/RegnumAurum-security-review_2026-03-26.md",
+      "licence": "No licence file in the repository; published for public reading. Reuse here: links, hashes and counts only; no copy is committed.",
+      "format": "Markdown",
+      "bytes": 35947,
+      "sha256": "94cca6af0e8e5c2e47fceefa1d3953f3dbf21ff610264035f526a83d990caf86"
+    },
+    {
+      "id": "pashov-2",
+      "firm": "Pashov Audit Group",
+      "set": "design",
+      "date": "2026-04-06",
+      "address": "https://github.com/pashov/audits/blob/5550be96af284b3cf67b9d7dbbdbeb95c2502fe8/team/md/Spicenet-security-review_2026-04-06.md",
+      "licence": "No licence file in the repository; published for public reading. Reuse here: links, hashes and counts only; no copy is committed.",
+      "format": "Markdown",
+      "bytes": 48727,
+      "sha256": "a0cb5b77f2394899c0594c25acc2d1824b5ac75273989f33af947e54b724ec2a"
+    },
+    {
+      "id": "pashov-3",
+      "firm": "Pashov Audit Group",
+      "set": "design",
+      "date": "2026-04-16",
+      "address": "https://github.com/pashov/audits/blob/5550be96af284b3cf67b9d7dbbdbeb95c2502fe8/team/md/Polygun-security-review_2026-04-16.md",
+      "licence": "No licence file in the repository; published for public reading. Reuse here: links, hashes and counts only; no copy is committed.",
+      "format": "Markdown",
+      "bytes": 124654,
+      "sha256": "f1f88e9953145285fc049df5423ac05cd157f3b91d08e9d1462ccaf771588ac0"
+    },
+    {
+      "id": "pashov-4",
+      "firm": "Pashov Audit Group",
+      "set": "design",
+      "date": "2026-04-30",
+      "address": "https://github.com/pashov/audits/blob/5550be96af284b3cf67b9d7dbbdbeb95c2502fe8/team/md/BNBChain-security-review_2026-04-30.md",
+      "licence": "No licence file in the repository; published for public reading. Reuse here: links, hashes and counts only; no copy is committed.",
+      "format": "Markdown",
+      "bytes": 12488,
+      "sha256": "6e1abab0801c89342cb213d8d3e31c4fa433d37553455b6cabe649cb6c8d8aaa"
+    },
+    {
+      "id": "pashov-5",
+      "firm": "Pashov Audit Group",
+      "set": "design",
+      "date": "2026-05-14",
+      "address": "https://github.com/pashov/audits/blob/5550be96af284b3cf67b9d7dbbdbeb95c2502fe8/team/md/Biconomy-security-review_2026-05-14.md",
+      "licence": "No licence file in the repository; published for public reading. Reuse here: links, hashes and counts only; no copy is committed.",
+      "format": "Markdown",
+      "bytes": 20024,
+      "sha256": "1833476e90bdf33e5980a291495e0395a5f1fd354a470b20c74b6b5f557e1cd4"
+    },
+    {
+      "id": "pashov-6",
+      "firm": "Pashov Audit Group",
+      "set": "design",
+      "date": "2026-05-23",
+      "address": "https://github.com/pashov/audits/blob/5550be96af284b3cf67b9d7dbbdbeb95c2502fe8/team/md/DefiApp-security-review_2026-05-23.md",
+      "licence": "No licence file in the repository; published for public reading. Reuse here: links, hashes and counts only; no copy is committed.",
+      "format": "Markdown",
+      "bytes": 6102,
+      "sha256": "6ecc8c724b2722ccdf6510e49e2bc935c6209cd4e3a2e72b5a6d55c1b21849db"
+    },
+    {
+      "id": "tob-1",
+      "firm": "Trail of Bits",
+      "set": "design",
+      "date": "2026-09",
+      "address": "https://github.com/trailofbits/publications/blob/e08944909b8fcb747aef40ee294d92b2a9663685/reviews/2026-09-offchain-osp-guard-securityreview.pdf",
+      "licence": "CC-BY-SA-4.0 (the repository's licence). Reuse here: links, hashes and counts only; no copy is committed.",
+      "format": "PDF",
+      "bytes": 854417,
+      "sha256": "2198f6f9afe2ad4b4c31004792908e5ff3d42063220a43060c2d7305ef33109b"
+    },
+    {
+      "id": "tob-2",
+      "firm": "Trail of Bits",
+      "set": "design",
+      "date": "2026-09",
+      "address": "https://github.com/trailofbits/publications/blob/e08944909b8fcb747aef40ee294d92b2a9663685/reviews/2026-09-openai-openclaw-securityreview.pdf",
+      "licence": "CC-BY-SA-4.0 (the repository's licence). Reuse here: links, hashes and counts only; no copy is committed.",
+      "format": "PDF",
+      "bytes": 762607,
+      "sha256": "f0f68aed44d8744d9c63c97fac1393a403fea5439f4e2545138e401851ce00e2"
+    },
+    {
+      "id": "tob-3",
+      "firm": "Trail of Bits",
+      "set": "design",
+      "date": "2026-10",
+      "address": "https://github.com/trailofbits/publications/blob/e08944909b8fcb747aef40ee294d92b2a9663685/reviews/2026-10-bron-cggmp21-securityreview.pdf",
+      "licence": "CC-BY-SA-4.0 (the repository's licence). Reuse here: links, hashes and counts only; no copy is committed.",
+      "format": "PDF",
+      "bytes": 1289185,
+      "sha256": "a5347923f5133b3f10ccc4b967901818efeb6eb3a63a578d60701c3ecd318de7"
+    },
+    {
+      "id": "tob-4",
+      "firm": "Trail of Bits",
+      "set": "design",
+      "date": "2026-10",
+      "address": "https://github.com/trailofbits/publications/blob/e08944909b8fcb747aef40ee294d92b2a9663685/reviews/2026-10-offchain-labs-glamsterdam-gas-parameters-securityreview.pdf",
+      "licence": "CC-BY-SA-4.0 (the repository's licence). Reuse here: links, hashes and counts only; no copy is committed.",
+      "format": "PDF",
+      "bytes": 509783,
+      "sha256": "0a98d003d5f9daabf82cb4fc3e1d3f155f21e93193c33ef56041fdaee3b64d01"
+    },
+    {
+      "id": "tob-5",
+      "firm": "Trail of Bits",
+      "set": "design",
+      "date": "2026-10",
+      "address": "https://github.com/trailofbits/publications/blob/e08944909b8fcb747aef40ee294d92b2a9663685/reviews/2026-10-sigstore-rust-securityreview.pdf",
+      "licence": "CC-BY-SA-4.0 (the repository's licence). Reuse here: links, hashes and counts only; no copy is committed.",
+      "format": "PDF",
+      "bytes": 1046256,
+      "sha256": "db7300bd494d709e9b2f8368747cc52719d2cc7603ab5680a2e305e037addf6e"
+    },
+    {
+      "id": "tob-6",
+      "firm": "Trail of Bits",
+      "set": "design",
+      "date": "2026-11",
+      "address": "https://github.com/trailofbits/publications/blob/e08944909b8fcb747aef40ee294d92b2a9663685/reviews/2026-11-offchain-stylus-permissioned-deployer-securityreview.pdf",
+      "licence": "CC-BY-SA-4.0 (the repository's licence). Reuse here: links, hashes and counts only; no copy is committed.",
+      "format": "PDF",
+      "bytes": 598910,
+      "sha256": "74ceaa3e478f245930dbed1be6bb949c8c47adcd7fa8e92120e52188c8940c9e"
+    },
+    {
+      "id": "sherlock-1",
+      "firm": "Sherlock",
+      "set": "design",
+      "date": "2026-07-01",
+      "address": "https://github.com/sherlock-protocol/sherlock-reports/blob/497f7158dcd99b7cc6512638e5da4465086832ad/audits/2026.07.01%20-%20Final%20-%20Delpho%20Collaborative%20Audit%20Report%201782919020.pdf",
+      "licence": "No licence file in the repository; published for public reading. Reuse here: links, hashes and counts only; no copy is committed.",
+      "format": "PDF",
+      "bytes": 1306072,
+      "sha256": "af1bfb3e7afc2d902aae104c693f08c58aba3f1d2aa1df99ad42cabdca9be7bf"
+    },
+    {
+      "id": "sherlock-2",
+      "firm": "Sherlock",
+      "set": "design",
+      "date": "2026-07-21",
+      "address": "https://github.com/sherlock-protocol/sherlock-reports/blob/497f7158dcd99b7cc6512638e5da4465086832ad/audits/2026.07.21%20-%20Final%20-%20Noon%20Capital%20Collaborative%20Audit%20Report%201784634533.pdf",
+      "licence": "No licence file in the repository; published for public reading. Reuse here: links, hashes and counts only; no copy is committed.",
+      "format": "PDF",
+      "bytes": 927313,
+      "sha256": "b294267aa1f9b56f60e7a4110813319d8991b5a1af02462f75df4d0b68b75139"
+    },
+    {
+      "id": "sherlock-3",
+      "firm": "Sherlock",
+      "set": "design",
+      "date": "2026-09-08",
+      "address": "https://github.com/sherlock-protocol/sherlock-reports/blob/497f7158dcd99b7cc6512638e5da4465086832ad/audits/2026.09.08%20-%20Final%20-%20Mezzanine%20Collaborative%20Audit%20Report%201788868057.pdf",
+      "licence": "No licence file in the repository; published for public reading. Reuse here: links, hashes and counts only; no copy is committed.",
+      "format": "PDF",
+      "bytes": 891916,
+      "sha256": "dbea71b52715d10ebaea0ea3ddf6fee91f66bbc4aecd69f7de21dc156acf9a68"
+    },
+    {
+      "id": "sherlock-4",
+      "firm": "Sherlock",
+      "set": "design",
+      "date": "2026-09-08",
+      "address": "https://github.com/sherlock-protocol/sherlock-reports/blob/497f7158dcd99b7cc6512638e5da4465086832ad/audits/2026.09.08%20-%20Final%20-%20Mezzanine%20Collaborative%20Audit%20Report%201788868086.pdf",
+      "licence": "No licence file in the repository; published for public reading. Reuse here: links, hashes and counts only; no copy is committed.",
+      "format": "PDF",
+      "bytes": 806559,
+      "sha256": "f458eb9bd19a64e5bd6a64f2dc13c8ad328817d25225fdbbb129542f4cb07b44"
+    },
+    {
+      "id": "sherlock-5",
+      "firm": "Sherlock",
+      "set": "design",
+      "date": "2026-09-21",
+      "address": "https://github.com/sherlock-protocol/sherlock-reports/blob/497f7158dcd99b7cc6512638e5da4465086832ad/audits/2026.09.21%20-%20Final%20-%20Maple%20Collaborative%20Audit%20Report%201789995803.pdf",
+      "licence": "No licence file in the repository; published for public reading. Reuse here: links, hashes and counts only; no copy is committed.",
+      "format": "PDF",
+      "bytes": 883868,
+      "sha256": "2c4daae255382e9767eb8776576ae76b789b07c5c74c271a1ee414ba138672db"
+    },
+    {
+      "id": "sherlock-6",
+      "firm": "Sherlock",
+      "set": "design",
+      "date": "2026-09-29",
+      "address": "https://github.com/sherlock-protocol/sherlock-reports/blob/497f7158dcd99b7cc6512638e5da4465086832ad/audits/2026.09.29%20-%20Final%20-%20Delpho%20Collaborative%20Audit%20Report%201790693081.pdf",
+      "licence": "No licence file in the repository; published for public reading. Reuse here: links, hashes and counts only; no copy is committed.",
+      "format": "PDF",
+      "bytes": 1037699,
+      "sha256": "0dc16d8f3150ab9108a0a52c2a1eb185a26954051b0c8bebbcb6c2126b22f4c9"
+    },
+    {
+      "id": "cyfrin-1",
+      "firm": "Cyfrin",
+      "set": "heldout",
+      "date": "2026-11-12",
+      "address": "https://github.com/Cyfrin/cyfrin-audit-reports/blob/dd2c1d0331f32e4e93f1ebba0b88262ec813a898/reports/2026-11-12-cyfrin-ecoreal-v3-v2.0.pdf",
+      "licence": "No licence file in the repository; published for public reading. Reuse here: links, hashes and counts only; no copy is committed.",
+      "format": "PDF",
+      "bytes": 166448,
+      "sha256": "8159366f93d83138c9c8e68d5c9e46cb4fe50356465a9ef558b05e9b004c1887"
+    },
+    {
+      "id": "cyfrin-2",
+      "firm": "Cyfrin",
+      "set": "heldout",
+      "date": "2026-11-12",
+      "address": "https://github.com/Cyfrin/cyfrin-audit-reports/blob/dd2c1d0331f32e4e93f1ebba0b88262ec813a898/reports/2026-11-12-cyfrin-lotus-v2.0.pdf",
+      "licence": "No licence file in the repository; published for public reading. Reuse here: links, hashes and counts only; no copy is committed.",
+      "format": "PDF",
+      "bytes": 188461,
+      "sha256": "bd519db092150d45f1f675f5067ae03dbf49227a22bbbc2511b3355ba5e37be6"
+    },
+    {
+      "id": "cyfrin-3",
+      "firm": "Cyfrin",
+      "set": "heldout",
+      "date": "2026-11-12",
+      "address": "https://github.com/Cyfrin/cyfrin-audit-reports/blob/dd2c1d0331f32e4e93f1ebba0b88262ec813a898/reports/2026-11-12-cyfrin-okumoney-v2.0.pdf",
+      "licence": "No licence file in the repository; published for public reading. Reuse here: links, hashes and counts only; no copy is committed.",
+      "format": "PDF",
+      "bytes": 171823,
+      "sha256": "b13a2bdd395453b9cfea0921fb99eb35e91cbf521a48e0108f0338083c713a83"
+    },
+    {
+      "id": "cyfrin-4",
+      "firm": "Cyfrin",
+      "set": "heldout",
+      "date": "2026-11-12",
+      "address": "https://github.com/Cyfrin/cyfrin-audit-reports/blob/dd2c1d0331f32e4e93f1ebba0b88262ec813a898/reports/2026-11-12-cyfrin-yieldy-evm-contracts-v2.0.pdf",
+      "licence": "No licence file in the repository; published for public reading. Reuse here: links, hashes and counts only; no copy is committed.",
+      "format": "PDF",
+      "bytes": 175153,
+      "sha256": "68b50004d52c5ba333b92afab54e47c70139f2cc7bcfebf1b65ce13b37ac31b0"
+    },
+    {
+      "id": "cyfrin-5",
+      "firm": "Cyfrin",
+      "set": "heldout",
+      "date": "2026-11-13",
+      "address": "https://github.com/Cyfrin/cyfrin-audit-reports/blob/dd2c1d0331f32e4e93f1ebba0b88262ec813a898/reports/2026-11-13-cyfrin-securitize-evm-on-off-ramp-v2.0.pdf",
+      "licence": "No licence file in the repository; published for public reading. Reuse here: links, hashes and counts only; no copy is committed.",
+      "format": "PDF",
+      "bytes": 171215,
+      "sha256": "7516762d5e85e2063222b7cc2129ba9730f1209cc1641982d461cf40f7fcfec8"
+    },
+    {
+      "id": "cyfrin-6",
+      "firm": "Cyfrin",
+      "set": "heldout",
+      "date": "2026-11-17",
+      "address": "https://github.com/Cyfrin/cyfrin-audit-reports/blob/dd2c1d0331f32e4e93f1ebba0b88262ec813a898/reports/2026-11-17-cyfrin-sandcastle-v2.0.pdf",
+      "licence": "No licence file in the repository; published for public reading. Reuse here: links, hashes and counts only; no copy is committed.",
+      "format": "PDF",
+      "bytes": 168994,
+      "sha256": "789960f09e94e49ff6cbd155964aba23f6e8aae181963aeab6ff138337546e4d"
+    }
+  ]
+}
