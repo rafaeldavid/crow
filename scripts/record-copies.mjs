@@ -102,6 +102,7 @@ export const HISTORY = [
   { path: 'docs/cutover-phase-one.md', why: 'the dated record of the 2026-11-13 cutover, which names the old world on purpose' },
   { path: 'docs/audit/scope.md', why: 'rewritten for the frozen commit at cutover step 11.4' },
   { path: 'tests/metrics/fixtures/', why: 'recorded answers of past live runs' },
+  { path: 'fixtures/evidence/', why: 'evidence bundles of past live deals and their chain receipts: their hashes cover these values' },
   { path: 'examples/e2e-run.test.ts', why: 'a recorded Sepolia run' },
   { path: 'examples/e2e-adjudicator.test.ts', why: 'a fixed test vector: its hashes are computed over these values' },
   { path: 'examples/send-timeout.test.ts', why: 'a fixed test vector: its commitment ID is the hash of its terms' },

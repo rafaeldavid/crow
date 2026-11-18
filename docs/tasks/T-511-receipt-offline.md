@@ -4,7 +4,7 @@
 - **Phase:** 2, settlement on EVM (stable EVM operations, D53)
 - **Kind:** 4 (an `examples/` command and its tests), with kind 1 for the agent-docs paragraph. The command reads signed settlement and judgment records, so it gets one `red-teamer` pass on the verifier's logic: a verifier that passes a false record is worse than none.
 - **Depends on:** T-500 (the Released security-review deal on Sepolia that is the proof case), T-333 (the deal record, which reads the same routes online)
-- **Paths this task may touch:** `examples/evidence.ts`, `examples/evidence.test.ts`, `fixtures/evidence/`, `site/ref/after-funding.txt`, this file. Never: `contracts/src/`, `spec/schemas/`, the pinned bundles (`site/buy.mjs`, `site/try.mjs`, `site/setup.mjs` and their hash files), `.github/`, `CLAUDE.md`, `AGENTS.md`, `.claude/`.
+- **Paths this task may touch:** `examples/evidence.ts`, `examples/evidence.test.ts`, `fixtures/evidence/`, `site/ref/after-funding.txt`, one `HISTORY` line in `scripts/record-copies.mjs`, this file. Never: `contracts/src/`, `spec/schemas/`, the pinned bundles (`site/buy.mjs`, `site/try.mjs`, `site/setup.mjs` and their hash files), `.github/`, `CLAUDE.md`, `AGENTS.md`, `.claude/`.
 - **Human gate:** no. Nothing here deploys. The agent-docs paragraph reaches crow.direct only with the next site deploy, which is Rafa's.
 - **Status:** done with the merge of PR 634
 - **Agent/session:** the T-511 session, 2026-11-18, branch `t-511-receipt-offline`
@@ -124,7 +124,8 @@ What it does not prove:
 
 1. **No route, no schema change.** The bundle is assembled from the public routes and the chain. The evidence route stays planned; when it is built it can serve this same file.
 2. **The raw transactions carry the missing signatures.** Decoding calldata offline needs the rules contract's ABI, which `packages/settlement/evm/abis.json` already holds and keeps equal to the compiled contracts.
-3. **The receipt signer is not pinned.** No pinned list of operator receipt signers exists in `examples/`. The parties' signatures bind the deal; the receipts only add the operator's own account. The command prints the address instead.
+3. **The fixtures are dated records.** A redeploy's sweep (`scripts/record-copies.mjs`) rewrites old contract addresses in tracked files outside its `HISTORY` list; CI's first run failed `tests/record-copies.test.ts` on the two chain receipts. Rewriting them would break their hashes, so `fixtures/evidence/` joins `HISTORY` beside `tests/metrics/fixtures/`. After a redeploy the tests take the deals' deployment from its dated record through `HOLDBACK_DEPLOYMENT`, as a user would.
+4. **The receipt signer is not pinned.** No pinned list of operator receipt signers exists in `examples/`. The parties' signatures bind the deal; the receipts only add the operator's own account. The command prints the address instead.
 
 ## Handoff
 
@@ -136,5 +137,6 @@ What it does not prove:
   - Early accept, settlement by agreement, reclaim and default are refused as not checked yet. Each needs its own call's checks (`earlyAccept`, `mutualSettle`, the timeouts).
   - A fallback or appeal adjudicator's beacon seed is not checked offline (the drand signature); the chain read covers it.
   - The operator's receipt signer is not pinned; a pinned list of Crow's operators' receipt signers would let the receipts count as more than one operator's account.
+  - Old bundles after a redeploy: the command pins only the current deployment, so a case study's bundle from before a redeploy needs its dated record passed as `HOLDBACK_DEPLOYMENT`, and the output says so. Pinning every dated phase-one record in `examples/deployments.ts` would remove that step.
   - The planned `GET /v1/commitments/{id}/evidence` route could serve this same file, so an agent needs no Sepolia node to fetch it.
   - A public bundle in the repository trips gitleaks' generic rule on the test token's address; a published case study's file lives outside this repository or needs a `.gitleaksignore` entry from Rafa's lane.

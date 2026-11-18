@@ -1,6 +1,6 @@
 // The evidence bundle's offline check (T-511) on two real Sepolia deals from T-500, and the attacks it must refuse.
 // The bundles are gzipped only so the repository's secret scanner skips the public test-token address they carry.
-import { mkdtempSync, readFileSync, writeFileSync } from 'node:fs';
+import { mkdtempSync, readdirSync, readFileSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { gunzipSync } from 'node:zlib';
@@ -17,7 +17,14 @@ const receiptOf = (name: string): J => JSON.parse(readFileSync(here(`${name}.rec
 const RELEASED = 'released-0x341562cc';
 const REFUNDED = 'refunded-0x9908966e';
 const ABI = (JSON.parse(readFileSync(new URL('../packages/settlement/evm/abis.json', import.meta.url), 'utf8')) as { rules: Abi }).rules;
-const pin = knownPins().find((p) => p.chain && p.domain.chainId === 11155111)!;
+// The deployment these deals ran on. After a redeploy it is a dated record in contracts/deployments/, which the
+// command takes from HOLDBACK_DEPLOYMENT like any earlier deployment; the deals and their bundles stay as they were.
+const dealRules = bundleOf(RELEASED).operator.domain.verifyingContract;
+const deployments = readdirSync(new URL('../contracts/deployments/', import.meta.url)).filter((f) => f.endsWith('.json'));
+const ranOn = deployments.find((f) => JSON.parse(readFileSync(new URL(`../contracts/deployments/${f}`, import.meta.url), 'utf8')).rules.toLowerCase() === dealRules)!;
+const pinnedHere = ranOn === 'sepolia.json';
+if (!pinnedHere) process.env['HOLDBACK_DEPLOYMENT'] = readFileSync(new URL(`../contracts/deployments/${ranOn}`, import.meta.url), 'utf8');
+const pin = knownPins().find((p) => p.chain && p.domain.verifyingContract.toLowerCase() === dealRules)!;
 const clone = (x: J): J => JSON.parse(JSON.stringify(x));
 
 // The check must make no network call: any fetch fails the test that made it.
@@ -26,7 +33,10 @@ beforeAll(() => {
     throw new Error('the offline check made a network call');
   });
 });
-afterAll(() => vi.unstubAllGlobals());
+afterAll(() => {
+  vi.unstubAllGlobals();
+  if (!pinnedHere) delete process.env['HOLDBACK_DEPLOYMENT'];
+});
 
 /** An attacker who runs its own operator: rehashes the events and signs every receipt with its own key. */
 async function reseal(b: J, key: Hex = generatePrivateKey()): Promise<J> {
@@ -247,7 +257,7 @@ describe('attacks the check must refuse', () => {
       expect(r.ok === false && r.failed, name).toBe('chain receipt records the payment');
     }
   });
-  it('a made-up HOLDBACK_DEPLOYMENT does not make real signatures pass, and the pinned case prints no caller-pin note', async () => {
+  it('a made-up HOLDBACK_DEPLOYMENT does not make real signatures pass, and the output names a deployment the caller passed', async () => {
     const file = JSON.parse(readFileSync(new URL('../contracts/deployments/sepolia.json', import.meta.url), 'utf8'));
     vi.stubEnv('HOLDBACK_DEPLOYMENT', JSON.stringify({ ...file, rules: `0x${'22'.repeat(20)}` }));
     try {
@@ -255,10 +265,11 @@ describe('attacks the check must refuse', () => {
       b.operator.domain.verifyingContract = `0x${'22'.repeat(20)}`;
       const r = await checkBundle(b);
       expect(r.ok).toBe(false); // real signatures do not recover under another domain
-      expect((await checkBundle(bundleOf(RELEASED))).lines.join('\n')).not.toContain('HOLDBACK_DEPLOYMENT. This command does not pin it');
     } finally {
       vi.unstubAllEnvs();
     }
+    if (pinnedHere) expect((await checkBundle(bundleOf(RELEASED))).lines.join('\n')).not.toContain('HOLDBACK_DEPLOYMENT. This command does not pin it');
+    else expect((await checkBundle(bundleOf(RELEASED))).lines.join('\n')).toContain('HOLDBACK_DEPLOYMENT. This command does not pin it');
   });
 
   it('an unpinned settlement layer', async () => {
