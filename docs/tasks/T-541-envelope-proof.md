@@ -6,7 +6,7 @@
 - **Depends on:** T-535 (case study 3, the waiver run as ADR-0039 describes it)
 - **Paths this task may touch:** `tools/envelope-proof/` (new), this file
 - **Human gate:** no (no deploy; Rafa approved installing Rust and RISC Zero's toolchain on the Mac on 2026-11-18)
-- **Status:** review
+- **Status:** done with the merge of pull request 669 on 2026-11-18, after CI passed and the review's findings were fixed (PASS on the re-review); the prototype stays optional and not integrated
 - **Agent/session:** the T-534 session, 2026-11-18, branch `t-541-envelope-proof`
 - **Roadmap row:** N200
 
