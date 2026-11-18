@@ -1039,10 +1039,12 @@ export class EvmSettlement implements Settlement {
         const m = s.message;
         const book = this.bookOf(m.commitmentId);
         const carry = this.carrying(book);
-        const d = carry ?? book.delivery;
-        const beacon = m.role === 'primary' || !m.beacon ? null : { round: m.beacon.round, value: m.beacon.value };
-        const mirror = (at: Timestamp): EscrowEvent[] => [...(carry ? [{ type: 'deliver' as const, at, delivery: carry }] : []), { type: 'decide', at, message: m, beacon }];
-        await this.call(m.commitmentId, 'decide', [termsView(book.state.terms), decisionView(m), d ? deliveryView(d) : NO_DELIVERY, d?.signature ?? '0x'], mirror, options, dryRun, m.adjudicator, { decision: m, ...(carry ? { delivery: carry } : {}) });
+        // An outside scan's finding (G1): a call that carries the delivery re-checks the seller inside it, so the seller
+        // can make it revert after its calldata has published the primary's seed, then deliver again knowing the seed.
+        // Only a decision other than an accept gives the seller a reason to, so a carried delivery travels with an
+        // accept alone (D4's two transactions). A reject or an escalation waits for the posted delivery.
+        if (carry && m.outcome !== 'accept') return this.postThenDecide(book, m, carry, options, dryRun);
+        await this.decide(book, m, carry, options, dryRun);
         return m.commitmentId;
       }
       case 'appeal':
@@ -1152,6 +1154,38 @@ export class EvmSettlement implements Settlement {
       }
       throw e;
     }
+  }
+
+  /** A decision relayed as one `decide`, carrying `carry` when it is given; `bare` sends no delivery at all. */
+  private async decide(book: Book, m: Decision, carry: Delivery | undefined, options: Relay, dryRun: boolean, bare = false): Promise<void> {
+    const d = bare ? undefined : (carry ?? book.delivery);
+    const beacon = m.role === 'primary' || !m.beacon ? null : { round: m.beacon.round, value: m.beacon.value };
+    const mirror = (at: Timestamp): EscrowEvent[] => [...(carry ? [{ type: 'deliver' as const, at, delivery: carry }] : []), { type: 'decide', at, message: m, beacon }];
+    await this.call(m.commitmentId, 'decide', [termsView(book.state.terms), decisionView(m), d ? deliveryView(d) : NO_DELIVERY, d?.signature ?? '0x'], mirror, options, dryRun, m.adjudicator, { decision: m, ...(carry ? { delivery: carry } : {}) });
+  }
+
+  /**
+   * A reject or an escalation on a carried delivery (G1): `deliver`, then `decide` once the delivery is posted. The
+   * carried decision is simulated first, so one the contract would refuse sends nothing, the delivery included. The
+   * delivery goes out under a relay note of its own with no Idempotency-Key: a restart between the two transactions
+   * lands it as a plain relay of the delivery, and the decision's key answers only once the decision lands.
+   */
+  private async postThenDecide(book: Book, m: Decision, carry: Delivery, options: Relay, dryRun: boolean): Promise<Hex32> {
+    await this.decide(book, m, carry, options, true);
+    if (dryRun) return m.commitmentId;
+    const n = options.note;
+    const own: Relay = n ? { ...options, note: { commitmentId: n.commitmentId, call: '', via: n.via, submission: { kind: 'deliver', delivery: carry } } } : options;
+    try {
+      await this.deliver(book, carry, own, false);
+    } catch (e) {
+      if (!(e instanceof Refusal)) throw e;
+      // The decision named this delivery, so it cannot land without it; nothing of the decision was sent.
+      const p = problem(e.problem.type, `a ${m.outcome} waits for the posted delivery, and posting the carried delivery failed: ${e.problem.detail}. The decision was not sent.`);
+      throw e instanceof Reverted ? new Reverted(p, e.block, e.at) : new Refusal(p, e.revert);
+    }
+    // Posted now: the contract reads no delivery outside Held, so the decision's calldata carries none (red team, T-526).
+    await this.decide(book, m, this.carrying(book), options, false, true);
+    return m.commitmentId;
   }
 
   /** True when the book holds delivery `want`, joined. */

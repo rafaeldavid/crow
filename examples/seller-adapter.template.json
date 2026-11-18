@@ -1,7 +1,12 @@
 {
+  "form": {
+    "name": "security-review",
+    "version": 2,
+    "reference": "examples/security-review-form.md"
+  },
   "deliverable": {
     "kind": "document",
-    "description": "Security review of the code at commit {{commit}}. Scope: {{files}}. Deliver one JSON report with the commit reviewed, the files reviewed and the findings; it may add a summary, the report's date and a salt of 32 random bytes that keeps its fingerprint from being guessed. Each finding has an id, a severity, a title, one or more locations, the root cause and a recommended fix; it may add its impact and a status (open, fixed or acknowledged). Each location names a file in scope and may add a line range and the code excerpt it is about. A finding rated Medium or higher also carries the proof-of-concept files that show it. Severity scale: Critical, anyone can take or lock funds with no special access; High, funds can be taken or locked only with a precondition such as a privileged role or an unusual market state; Medium, the code breaks a stated rule or loses a bounded amount; Low, a defect that puts no funds at risk; Info, a note on clarity, style or cost. A report with no findings is a complete report.",
+    "description": "Security review of the code at commit {{commit}}. Scope: {{files}}. Deliver one JSON report with the commit reviewed, the files reviewed and the findings; it may add a summary, the report's date and a salt of 32 random bytes that keeps its fingerprint from being guessed. Each finding has an id, a severity, a title and the root cause, each text up to 8,000 characters; it may add its locations, its impact, a recommended fix, proof-of-concept files and a status: open, fixed or acknowledged, or known, duplicate or out-of-scope for a finding set aside. A finding set aside needs no root cause. Each location names a file and may add a line range and the code excerpt it is about. A finding with locations has at least one in a file in scope, and the others may cite related code; a finding set aside may cite any file. The report holds no invisible characters, such as zero-width spaces. Severity scale: Critical, anyone can take or lock funds with no special access; High, funds can be taken or locked only with a precondition such as a privileged role or an unusual market state; Medium, the code breaks a stated rule or loses a bounded amount; Low, a defect that puts no funds at risk; Info, a note on clarity, style or cost. A report with no findings is a complete report.",
     "format": "application/json"
   },
   "checks": [
@@ -51,10 +56,28 @@
               "required": [
                 "id",
                 "severity",
-                "title",
-                "locations",
-                "rootCause",
-                "recommendedFix"
+                "title"
+              ],
+              "anyOf": [
+                {
+                  "required": [
+                    "rootCause"
+                  ]
+                },
+                {
+                  "required": [
+                    "status"
+                  ],
+                  "properties": {
+                    "status": {
+                      "enum": [
+                        "known",
+                        "duplicate",
+                        "out-of-scope"
+                      ]
+                    }
+                  }
+                }
               ],
               "properties": {
                 "id": {
@@ -74,7 +97,10 @@
                   "enum": [
                     "open",
                     "fixed",
-                    "acknowledged"
+                    "acknowledged",
+                    "known",
+                    "duplicate",
+                    "out-of-scope"
                   ]
                 },
                 "title": {
@@ -84,7 +110,6 @@
                 },
                 "locations": {
                   "type": "array",
-                  "minItems": 1,
                   "items": {
                     "type": "object",
                     "additionalProperties": false,
@@ -126,17 +151,17 @@
                 "rootCause": {
                   "type": "string",
                   "minLength": 1,
-                  "maxLength": 2000
+                  "maxLength": 8000
                 },
                 "impact": {
                   "type": "string",
                   "minLength": 1,
-                  "maxLength": 2000
+                  "maxLength": 8000
                 },
                 "recommendedFix": {
                   "type": "string",
                   "minLength": 1,
-                  "maxLength": 2000
+                  "maxLength": 8000
                 },
                 "pocFiles": {
                   "type": "array",
@@ -169,45 +194,6 @@
       }
     },
     {
-      "id": "proof",
-      "type": "json_schema",
-      "required": true,
-      "schema": {
-        "type": "object",
-        "required": [
-          "findings"
-        ],
-        "properties": {
-          "findings": {
-            "type": "array",
-            "items": {
-              "type": "object",
-              "required": [
-                "severity"
-              ],
-              "anyOf": [
-                {
-                  "properties": {
-                    "severity": {
-                      "enum": [
-                        "Low",
-                        "Info"
-                      ]
-                    }
-                  }
-                },
-                {
-                  "required": [
-                    "pocFiles"
-                  ]
-                }
-              ]
-            }
-          }
-        }
-      }
-    },
-    {
       "id": "scope",
       "type": "json_schema",
       "required": true,
@@ -225,26 +211,51 @@
             "type": "array",
             "items": {
               "type": "object",
-              "required": [
-                "locations"
-              ],
-              "properties": {
-                "locations": {
-                  "type": "array",
-                  "minItems": 1,
-                  "items": {
-                    "type": "object",
-                    "required": [
-                      "file"
-                    ],
-                    "properties": {
-                      "file": {
-                        "enum": "{{files}}"
-                      }
+              "anyOf": [
+                {
+                  "required": [
+                    "status"
+                  ],
+                  "properties": {
+                    "status": {
+                      "enum": [
+                        "known",
+                        "duplicate",
+                        "out-of-scope"
+                      ]
+                    }
+                  }
+                },
+                {
+                  "properties": {
+                    "locations": {
+                      "type": "array",
+                      "anyOf": [
+                        {
+                          "maxItems": 0
+                        },
+                        {
+                          "not": {
+                            "items": {
+                              "not": {
+                                "type": "object",
+                                "required": [
+                                  "file"
+                                ],
+                                "properties": {
+                                  "file": {
+                                    "enum": "{{files}}"
+                                  }
+                                }
+                              }
+                            }
+                          }
+                        }
+                      ]
                     }
                   }
                 }
-              }
+              ]
             }
           }
         }

@@ -966,8 +966,9 @@ describe('telemetry (T-031)', () => {
     // And no header, query or body value, nor the IP, lands anywhere in the world's storage.
     const everything = await storage.list({ prefix: '' });
     // `ar`: the demo adjudicators' own registrations (T-221), which hold no request data. `lc`: the daily caps (T-422),
-    // keyed by the client hashed with the world's secret; the IP check below covers them.
-    expect(new Set([...everything.keys()].map((k) => k.split(':')[0]))).toEqual(new Set(['meta', 'j', 'fa', 'ct', 'jr', 'rl', 'tm', 'ar', 'lc']));
+    // keyed by the client hashed with the world's secret; the IP check below covers them. `jd`: each adjudicator's judged
+    // result (A-4, T-530), the same record `jr` publishes, with its outcome and no key.
+    expect(new Set([...everything.keys()].map((k) => k.split(':')[0]))).toEqual(new Set(['meta', 'j', 'fa', 'ct', 'jr', 'jd', 'rl', 'tm', 'ar', 'lc']));
     const stored = JSON.stringify([...everything.values()], (_k, v) => (v instanceof Uint8Array ? undefined : v)).toLowerCase();
     for (const secret of [...Object.values(canaries), 'c0ffeec0ffee', 'canary-query', 'canary-body', ip]) expect(stored).not.toContain(secret.toLowerCase());
   }, 60_000);

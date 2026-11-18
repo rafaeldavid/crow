@@ -4,7 +4,7 @@
 import { execFileSync, spawnSync } from 'node:child_process';
 import { mkdirSync, mkdtempSync, readFileSync, realpathSync, rmSync, symlinkSync, writeFileSync } from 'node:fs';
 import { createServer } from 'node:http';
-import type { AddressInfo } from 'node:net';
+import { createServer as createNetServer, type AddressInfo } from 'node:net';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { afterAll, describe, expect, it } from 'vitest';
@@ -18,7 +18,7 @@ import { startWorld } from './world.ts';
 import { runAgent } from './loop.ts';
 import { anthropic, liveProvider, openaiCompatible, scripted, VendorError, type Provider, type Turn } from './providers.ts';
 import { Recorder, Secrets } from './record.ts';
-import { REPO, runDuet } from './run.ts';
+import { ephemeralFirst, pickAdapterPort, REPO, runDuet } from './run.ts';
 import { Toolbox, type ToolboxOptions } from './tools.ts';
 
 const made: string[] = [];
@@ -42,7 +42,7 @@ describe('three scenarios, scripted, on the local phase-one world', () => {
       const r = await runDuet({ scenario: name, buyer: 'scripted', seller: 'scripted', out: join(tmp(name), 'run'), caps: { turns: 400, tokens: 50_000_000 }, graceSec: 30, timeoutSec: 180, secrets: [fakeModelKey], ...(name === 'refund' ? { limits: { workTokensPerAgent: 1000 } } : name === 'late-offer' ? {} : { limits: { workTokensPerAgent: 5_000_000 } }) });
       const s = r.summary;
       expect(s.outcome.state).toBe(state);
-      expect(s.decisionRight).toBe(true);
+      expect(s.decisionRight, s.why).toBe(true);
       expect(s.humanInterventions).toBe(0);
       expect(s.stalls).toEqual([]);
       expect(s.forbiddenTerms).toMatchObject({ funded: false, askedToApprove: name === 'late-offer' });
@@ -644,5 +644,26 @@ describe('a side that never starts', () => {
     expect(seen[0]).not.toContain('sk-ant-KEY');
     await expect(openaiCompatible('deepseek-v4-pro@2026-11-01', 'ds-KEY', 'https://api.deepseek.com', stub).ping()).rejects.toThrow(/HTTP 400/);
     expect(JSON.parse(seen[1]!)).toMatchObject({ model: 'deepseek-v4-pro', max_tokens: 1 });
+  });
+});
+
+describe("the seller adapter's port (T-536)", () => {
+  const listen0 = () => new Promise<number>((ok) => { const s = createNetServer(); s.listen(0, '127.0.0.1', () => { const p = (s.address() as AddressInfo).port; s.close(() => ok(p)); }); });
+  it('reads the range the operating system hands out on its own: every listen(0) port is in it', async () => {
+    const first = ephemeralFirst();
+    for (let i = 0; i < 20; i++) expect(await listen0()).toBeGreaterThanOrEqual(first);
+  });
+
+  // The runner picks the port, then the adapter binds it seconds later. A port from that range can go to another
+  // socket in between (another test's listen(0), an outgoing connection), and then the adapter stops with EADDRINUSE,
+  // the buyer gets no offer, and bad-offer ends "no offer reached the buyer's approval stop" after the 30 s grace.
+  it('is below that range, so only an explicit bind to its number can take it, and is free when picked', async () => {
+    const first = ephemeralFirst();
+    for (let i = 0; i < 20; i++) {
+      const port = await pickAdapterPort();
+      expect(port).toBeGreaterThanOrEqual(1024);
+      expect(port).toBeLessThan(first);
+      await new Promise<void>((ok, fail) => { const s = createNetServer(); s.once('error', fail); s.listen(port, '127.0.0.1', () => s.close(() => ok())); });
+    }
   });
 });

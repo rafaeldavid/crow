@@ -102,10 +102,11 @@ Rafa refused this cut on 2026-11-11: "Keep multisig compatibility and smart-cont
 - **What it is not.** An owner over Crow's contracts. The hard rule stands: no owner, pause, freeze, blacklist or upgrade proxy.
 - **What keeping them costs,** for the tasks that build and document phase one:
   - tests with a contract wallet in every role, through every entry point; a wallet whose answer changes between two steps of one deal; a wallet that burns the gas it is given; an account with delegated code (EIP-7702). Today's tests cover a contract buyer only [documented by the plan];
-  - the threat model (T-340) says what a contract signer can do: its code runs, read-only, inside the signature check; its answer can differ from step to step; each step checks its own signature, so a changed answer blocks that wallet's own next step and no one else's;
+  - the threat model (T-340) says what a contract signer can do: its code runs, read-only, inside the signature check; its answer can differ from step to step; each step checks its own signature, so a changed answer blocks that wallet's own next step. Corrected on 2026-11-18 (T-533): it also blocks another party's call that carries the wallet's delivery, because in Held the primary's decision and the buyer's early accept re-check the seller inside their own transaction (known issue OS-2);
   - a wallet that is not deployed yet cannot agree and fund in one call: the buyer's agreement is checked before the funding step deploys the wallet (`:208`, then `:218`). The wallet must exist first;
   - Crow's own operators check plain-key signatures only and cannot follow a step sent through a contract wallet (residual 13). The contract is composable; the operators are not yet. That work (T-227) must land before the mainnet test.
 - **What would reopen it.** A finding in those tests that a contract signer can block another party's step.
+- **That finding, and the answer (2026-11-18).** An outside scan showed the case above: a contract seller whose answer changes makes the primary's decision that carries its delivery revert (known issue OS-2). Rafa kept contract signers (the triage's D-2): the bound is corrected here and in the threat model, the harm stays within one deal (the primary's fee, and the case goes to the fallback or the default), and Crow's operators carry a delivery only in an accept or an early accept (D79). The same review found that a mutual settlement's digest names no signer (OS-3): a contract wallet that signs for Crow binds its own address in what it accepts, as ERC-7739 does, and the type gains the signer with the rebuilt contracts (roadmap row N26; the triage's D-1).
 
 ### 6. SC-5: refuse terms that settlement does not process
 
@@ -325,7 +326,7 @@ Rafa, 2026-11-11: **"The contract Seller (as in agree-er) should not be the same
 - **The fallback and the default outcome.** A silent primary is replaced. If no adjudicator decides, anyone triggers the default and the buyer gets the price and the fee back.
 - **Escalation.** An adjudicator that cannot decide passes the case to the appeal adjudicator instead of guessing.
 - **The defenses in front of the decision** are unchanged: deterministic checks, the screen, a panel across model families, the primary's seed commitment and the beacon for the others.
-- **Two exits that need no adjudicator:** the buyer's early accept, and a settlement both parties sign, at any time before a decision.
+- **Two exits that need no adjudicator:** the buyer's early accept, in Held or Delivered until someone triggers the fallback, and a settlement both parties sign, at any time before a decision (corrected 2026-11-18, T-533: the contract refuses an early accept after `triggerFallback` or an escalation).
 - **The signed record.** The terms, the delivery, the acceptance and the decision with its judgment record hash and seed are signed and attributable. They are the evidence a party takes to the adjudicator's owner, a club or a court.
 - **The law** (D26, residual 5). Owners and controllers of agents can be compelled. The protocol bounds the loss and keeps the record; it does not replace recourse.
 

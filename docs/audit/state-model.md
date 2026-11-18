@@ -119,7 +119,7 @@ From the escrow's expiry (`fallbackBy + D + EXPIRY_MARGIN`, `_escrowExpiry`), th
 In that state [measured at the cited lines]:
 
 - every capture reverts, because the expiry has passed (`E:277`) and nothing is left (`E:284`); every void reverts (`E:308`). So no decision, early accept or settlement can close the deal: each makes at least one of those calls;
-- `deliver`, `triggerFallback` and an `escalate` decision still succeed, because they do not call the escrow;
+- `triggerFallback` still succeeds: it does not call the escrow and has no upper bound (known issue RR-5). `deliver` and an `escalate` decision do not call the escrow either, but their deadlines (`deliverBy`, and `judgeBy` or `fallbackBy`) have passed by the escrow's expiry, so both revert (corrected 2026-11-18, T-533);
 - the timeouts close the deal: `_refundAll` reads the escrow and skips the void when nothing is held. `reclaim` closes P02; `triggerFallback` moves P03 to P04; `triggerDefault` closes P04 and P05.
 
 The contract refuses terms whose deadlines are not strictly in order (`agreeAndFund`), so every timeout is already due at the escrow's expiry and anyone can close the deal at once.
@@ -435,6 +435,7 @@ Other documents:
 - [`docs/neutrality.md`](../neutrality.md) describes the full protocol, where defaulting adjudicators' bonds compensate the seller. That is not in phase one: a default refunds the buyer's payment address and pays nobody from a bond (`triggerDefault`).
 - The comment on `Deal.t1` (`IHoldbackRules.sol`) says the last of `triggerFallback`, an escalation or a first-instance decision sets it. After an escalation decision (P10, P11), `t1` is still the escalation's time, and the decision's time is in no field.
 - Core and ADR-0019 took the contract's rule for a settlement in Held that names an unposted delivery (T-357), so finding F-1 is closed.
+- **A late early accept.** Core takes an early accept in Delivered whenever its message is live, whatever the time (`packages/core/src/state.ts`, `messageLive`). The contract has no deadline of its own for it either, but past the escrow's expiry a capture reverts (`E:277`). So with a price above 0 a late early accept reverts on chain and closes the deal in core, and with price 0 it runs no capture, only the fee's void [inferred from `earlyAccept` and section 5.2; no test was run] (added 2026-11-18, T-533).
 - **The funding deadline.** ADR-0031 §6 settled it: on the contract an offer funds until `offerExpiresAt`, and `fundBy` bounds only the ERC-3009 authorization (`_paymentInfo` sets it as `preApprovalExpiry`). Core and SimChain keep two steps: agree before `offerExpiresAt`, then fund before `fundBy` (`packages/core/src/state.ts`, `agree` and `fund`). The formal model's phase-one profile funds by `offerExpiresAt`.
 
 ## 11. Findings
