@@ -39,16 +39,19 @@ Non-goals:
 
 Measured on 2026-11-18. The setup:
 - The toolchain: Rust 1.100.0 by rustup, and RISC Zero by rzup (`cargo-risczero` 3.1.0, `r0vm` 3.1.0, risc0 Rust 1.97.0), about 2.1 GB in `~/.rustup`, `~/.cargo` and `~/.risc0`. Installed from the official installers after Rafa's yes.
-- The build: `cargo build --release` in `tools/envelope-proof/`, first try, in 2 min 37 s. Image ID `db89f5589567929f697d81389f6332425de67750a5c3ac39e4a1ede0ceb5b381`.
+- The build: `cargo build --release` in `tools/envelope-proof/`, first try, in 2 min 37 s. Image ID `db89f5589567929f697d81389f6332425de67750a5c3ac39e4a1ede0ceb5b381` before the review; `e3f804b63d4dbf142efd72a637cab4313dce58fa5e42345d1f0adb7b9902c055` after its scheme check.
 - The inputs: `fixture.ts` on two converted case-study reports, `shieldify-l5` (3,048 bytes) and `shieldify-l3` (26,151 bytes), each sealed as `prepareDelivery` seals it. The fixture's own check opened each envelope with the buyer's secret and decrypted the report.
 
-The proof of the 3,048-byte report, not dev mode:
+The proof of the 3,048-byte report, not dev mode, under the final image ID:
 - 8,519,680 cycles in 9 segments;
-- 1,915 s of wall time and 8,781 s of CPU, 4.96 GB peak memory, at a load average of 30 to 61 from other sessions;
+- 2,813 s of wall time and 8,809 s of CPU, 4.62 GB peak memory, at a load average of 18 to 53 from other sessions;
 - a succinct receipt of 224,410 bytes.
 
-`verify` passed all six checks, in 14 ms of receipt verification:
-- the receipt;
+The first build's proof of the same report took 1,915 s at a load average of 30 to 61.
+
+`verify` passed all seven checks, in 17 ms of receipt verification:
+- the receipt, succinct;
+- one envelope for the buyer in the offer;
 - the recipient;
 - the buyer's key;
 - the envelope hash;
@@ -61,7 +64,9 @@ What fails as it should:
 - A wrong key in the envelope: the guest stops, "the content key does not decrypt the ciphertext", exit 1, no receipt.
 - A wrong secret: the guest stops at the ephemeral-key check, exit 1, no receipt.
 - The verifier given another delivery's envelope hash: FAIL, "do not countersign", exit 1.
-- A dev-mode receipt verified without dev mode: FAIL on the receipt, exit 1.
+- A dev-mode receipt, verified with and without `RISC0_DEV_MODE=1` set: FAIL on the receipt, exit 1.
+- An offer listing two envelopes for the buyer: FAIL, exit 1.
+- An envelope labelled with another scheme: the guest stops, no proof, exit 1.
 
 `pnpm exec eslint tools/envelope-proof/fixture.ts`: clean. CI does not build Rust, so CI covers only the fixture's lint.
 
@@ -70,6 +75,10 @@ What fails as it should:
 - **RISC Zero, proving locally.** Rafa chose it on 2026-11-18, over SP1, whose usual route sends inputs to a proving network.
 - **The statement covers the match only:** envelope, key, ciphertext and plaintext hash. Proving the checks too needs a second implementation of `packages/judgment` that must equal the adjudicator's, which is real risk and upkeep.
 - **The envelope is named by its EIP-712 hash,** the one a waiver offer shows. The buyer compares the hash it already holds, so the proof needs no new field.
+- **The review (one reviewer agent, 2026-11-18): ISSUES, one blocking, all fixed.**
+  - Blocking, fixed: `verify` accepted a dev-mode receipt when `RISC0_DEV_MODE` was set in the buyer's shell, measured by the reviewer. It now refuses any receipt that is not succinct before it verifies. Retested with the variable set: FAIL, exit 1.
+  - Fixed: the contract releases any envelope addressed to the buyer that the submitter names, so `verify` now requires the waiver offer to list exactly one, and the PASSED line no longer overstates. Binding the envelope into the signed settlement is on the hardening list.
+  - Fixed: the guest now asserts the scheme. Another label gives no proof, which changed the image ID to `e3f804b63d4dbf142efd72a637cab4313dce58fa5e42345d1f0adb7b9902c055`.
 - **Pure-Rust crates, without RISC Zero's accelerated forks,** to keep the first build's dependencies plain. That makes the proof slower.
 
 ## Handoff

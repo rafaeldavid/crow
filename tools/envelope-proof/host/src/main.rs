@@ -15,7 +15,7 @@
 use base64::{engine::general_purpose::URL_SAFE_NO_PAD, Engine};
 use envelope_methods::{ENVELOPE_GUEST_ELF, ENVELOPE_GUEST_ID};
 use envelope_statement::{Input, Statement};
-use risc0_zkvm::{default_prover, Digest, ExecutorEnv, ProverOpts, Receipt};
+use risc0_zkvm::{default_prover, Digest, ExecutorEnv, InnerReceipt, ProverOpts, Receipt};
 use serde::Deserialize;
 use std::{fs, process::exit, time::Instant};
 
@@ -38,6 +38,9 @@ struct ExpectFile {
     envelope_hash: String,
     ciphertext_sha256: String,
     plaintext_sha256: String,
+    /// How many envelopes the waiver offer lists for the buyer. The contract releases any envelope addressed to the
+    /// buyer that the submitter names, so the proof means something only when there is exactly one.
+    envelopes_for_buyer: u32,
 }
 
 fn fail(code: i32, why: &str) -> ! {
@@ -96,7 +99,11 @@ fn verify(receipt_path: &str, expect_path: &str) {
     let receipt: Receipt = bincode::deserialize(&bytes).unwrap_or_else(|e| fail(2, &format!("{receipt_path} is not a receipt: {e}")));
     let e: ExpectFile = read_json(expect_path);
     let started = Instant::now();
-    let proof_ok = receipt.verify(ENVELOPE_GUEST_ID).is_ok();
+    // Only a succinct receipt counts. A fake (dev-mode) receipt has no cryptographic integrity, and risc0 accepts one
+    // in verify() when RISC0_DEV_MODE is set in this process's environment, so the kind is checked first, whatever the
+    // environment says.
+    let succinct = matches!(receipt.inner, InnerReceipt::Succinct(_));
+    let proof_ok = succinct && receipt.verify(ENVELOPE_GUEST_ID).is_ok();
     let ms = started.elapsed().as_millis();
     let mut failed = 0;
     let mut check = |ok: bool, line: String| {
@@ -105,7 +112,8 @@ fn verify(receipt_path: &str, expect_path: &str) {
             failed += 1;
         }
     };
-    check(proof_ok, format!("the receipt is a valid proof of the guest with image ID {} (verified in {ms} ms)", image_id()));
+    check(proof_ok, format!("the receipt is a valid succinct proof of the guest with image ID {} (verified in {ms} ms){}", image_id(), if succinct { "" } else { "; it is not a succinct receipt" }));
+    check(e.envelopes_for_buyer == 1, format!("the waiver offer lists exactly one envelope for the buyer ({}), so the settlement can release no other", e.envelopes_for_buyer));
     let s: Statement = match receipt.journal.decode() {
         Ok(s) => s,
         Err(_) => fail(1, "the receipt's journal is not a statement"),
@@ -115,7 +123,7 @@ fn verify(receipt_path: &str, expect_path: &str) {
     check(s.envelope_hash == hex_n::<32>(&e.envelope_hash, "envelopeHash"), format!("the envelope is the one the waiver offer names, hash 0x{}", hex::encode(s.envelope_hash)));
     check(s.ciphertext_sha256 == hex_n::<32>(&e.ciphertext_sha256, "ciphertextSha256"), format!("its key decrypts the delivery's ciphertext, sha256:{}", hex::encode(s.ciphertext_sha256)));
     check(s.plaintext_sha256 == hex_n::<32>(&e.plaintext_sha256, "plaintextSha256"), format!("to the signed plaintext, sha256:{}", hex::encode(s.plaintext_sha256)));
-    println!("{}", if failed == 0 { "PASSED  the buyer's envelope opens the held work: countersigning releases a key that works" } else { "FAILED  do not countersign" });
+    println!("{}", if failed == 0 { "PASSED  the envelope the offer names opens the held work; countersign only a settlement that releases that envelope" } else { "FAILED  do not countersign" });
     exit(if failed == 0 { 0 } else { 1 });
 }
 

@@ -42,6 +42,7 @@ fn envelope_struct_hash(recipient: &[u8; 20], scheme: &[u8], envelope: &[u8]) ->
 
 fn main() {
     let input: Input = env::read();
+    assert_eq!(input.scheme.as_slice(), b"x25519-xsalsa20poly1305", "the envelope's scheme is not the one this guest opens");
     assert_eq!(input.envelope.len(), 104, "an envelope is 32 + 24 + 48 bytes");
     assert!(input.ciphertext.len() > 12 + 16, "a ciphertext is a 12-byte nonce, the data and a 16-byte tag");
 

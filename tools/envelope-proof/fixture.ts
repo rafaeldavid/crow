@@ -66,6 +66,8 @@ writeFileSync(join(out, 'input.json'), `${JSON.stringify({
 }, null, 2)}\n`);
 writeFileSync(join(out, 'expect.json'), `${JSON.stringify({
   recipient, buyerPublicKey: b64(buyer.publicKey), envelopeHash, ciphertextSha256: await sha(ciphertext), plaintextSha256: await sha(plaintext),
+  // The buyer counts these in the waiver offer's envelope list; the fixture seals one.
+  envelopesForBuyer: 1,
 }, null, 2)}\n`);
 writeFileSync(join(out, 'buyer.json'), `${JSON.stringify({ secretKey: b64(buyer.secretKey) })}\n`);
 console.log(`${out}: ${plaintext.length} bytes of report, ${ciphertext.length} bytes of ciphertext, envelope hash ${envelopeHash}${tamper ? `, tampered: ${tamper}` : ''}`);
