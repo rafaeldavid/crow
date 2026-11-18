@@ -323,7 +323,7 @@ export class TestBuyer {
 <p>Offer it a checks-only deal on Crow with public terms, naming its address <code>${card.buyer}</code> and its encryption key <code>${card.buyerEncryptionPublicKey}</code>. It pays at most ${units(BigInt(MAX_PRICE_UNITS))} tUSDC, plus an adjudication fee of at most ${units(BigInt(MAX_ADJUDICATION_FEE_UNITS))} tUSDC and the operator's fee. It needs ${CHECKS_RULE.min} to ${CHECKS_RULE.max} declarative checks, at least ${CHECKS_RULE.requiredAtLeast} of them required, of the types ${CHECKS_RULE.types.join(', ')}; the demo's three adjudicators; an offer dated at most ${w.maxCreatedAheadSec} s after settlement time; the work due within ${w.maxDeliverWithinSec} s of your post; each judging window at most ${w.maxJudgingSec} s; and ${w.minFundingLeftSec} s left to fund. Every window counts from settlement time when you post, not from the offer's <code>createdAt</code>.</p>
 <p>Then POST <code>{"commitmentId": "0x…"}</code> to <code>${card.intake.api}</code>. It answers 202 and funds once the adjudicator accepts the offer, which must happen within ${w.maxAdjudicatorAcceptSec} s of your post, or 422 with the rule your offer broke. Deliver once the deal is <code>Held</code>: work that passes the checks is paid, work that fails them is refunded, and if you never deliver, it reclaims its hold after <code>deliverBy</code>. Follow the deal at <code>${card.intake.status}</code>.</p>
 <p>Crow's maintainers run both the operators and this buyer. It holds its own keys and uses only the operators' public API, but it is not an independent business.</p>
-<p>Limits: ${l.perSellerPerHour} deals per seller address an hour and ${l.perSellerPerDay} a day; ${l.perDay} a day in all; ${l.open} in progress at once; ${l.perClientPerMinute} posts per IP address a minute and ${l.perClientPerHour} an hour. Over a limit it answers 429 with the rule and when to retry.</p>
+<p>Limits: ${l.perSellerPerHour} deals per seller address an hour and ${l.perSellerPerDay} a day; ${l.perDay} a day in all; ${l.open} in progress at once, ${l.perSellerOpen} of them from one seller address; ${l.perClientPerMinute} posts per IP address a minute and ${l.perClientPerHour} an hour. Over a limit it answers 429 with the rule and when to retry.</p>
 </body></html>
 `;
   }
@@ -352,6 +352,9 @@ export class TestBuyer {
     const today = recent.filter((r) => day(r.at) === day(now));
     const midnight = Date.parse(`${day(now)}T00:00:00Z`) + DAY;
     if (today.length >= this.limits.perDay) return { rule: 'limits.perDay', why: `${this.limits.perDay} deals today (UTC)`, until: midnight };
+    // A deal may stay open 7 days: one seller holds at most perSellerOpen of the open slots (T-545).
+    const open = await Promise.all([...(await this.s.list({ prefix: 'o:' })).keys()].map((k) => this.s.get<BuyerDeal>(`d:${k.slice(2)}`)));
+    if (open.filter((d) => d?.seller === seller).length >= this.limits.perSellerOpen) return { rule: 'limits.perSellerOpen', why: `${this.limits.perSellerOpen} deals from your address in progress`, until: now + MIN };
     const mine = recent.filter((r) => r.seller === seller);
     const lastHour = mine.filter((r) => now - r.at < HOUR);
     if (lastHour.length >= this.limits.perSellerPerHour) return { rule: 'limits.perSellerPerHour', why: `${this.limits.perSellerPerHour} deals from your address in the last hour`, until: Math.min(...lastHour.map((r) => r.at)) + HOUR };
@@ -563,8 +566,14 @@ export class TestBuyer {
     const live = mandates.some((m) => m.clubId === d.terms.clubId && Date.parse(m.scope?.expiresAt) > Date.parse(d.terms.timing.fundBy));
     const need = BigInt(d.total);
     if (balance >= need && live) return;
-    // The faucet's default grant is 1,000 tUSDC; a deal that costs more names its own total (site/ref/http.txt, "Discover and get test tUSDC").
-    const grant = await this.submit({ step: 'fund', path: '/v1/faucet', body: { address: a.address, ...(need > 1_000_000_000n ? { amount: need.toString() } : {}) }, key: crypto.randomUUID() });
+    // The faucet grants an address once an hour, and a deal may cost 1,000 tUSDC: so one grant asks for a day's deals at
+    // the top price, perDay x (price + adjudication fee), and later deals that hour fund from it (T-545). Never more than
+    // the faucet's own cap, demo.faucet.maxGrant in discovery, and never less than this deal's total
+    // (site/ref/http.txt, "Discover and get test tUSDC").
+    const day = BigInt(this.limits.perDay) * (BigInt(MAX_PRICE_UNITS) + BigInt(MAX_ADJUDICATION_FEE_UNITS));
+    const cap = await a.trusted('/.well-known/holdback.json', (x) => String(x.demo?.faucet?.maxGrant?.amount ?? ''));
+    const ask = AMOUNT.test(cap) && day > BigInt(cap) ? BigInt(cap) : day;
+    const grant = await this.submit({ step: 'fund', path: '/v1/faucet', body: { address: a.address, amount: (ask > need ? ask : need).toString() }, key: crypto.randomUUID() });
     if (grant.clubId !== d.terms.clubId) throw new Refused(`the faucet admitted the buyer to ${grant.clubId}, not ${d.terms.clubId}`);
     this.log(`test-buyer: faucet granted ${grant.granted?.amount ?? '?'} base units`);
   }

@@ -105,13 +105,13 @@ describe("Crow's test buyer", () => {
     expect(card.buyerEncryptionPublicKey).toMatch(/^[A-Za-z0-9_-]{43}$/);
     expect(card.intake).toMatchObject({ api: `${BASE}/offers`, status: `${BASE}/status/<commitmentId>` });
     expect(card.accepts.token).toBe(pin.token.id);
-    expect(card.accepts.maxPrice).toEqual({ token: pin.token.id, amount: '50000000' });
+    expect(card.accepts.maxPrice).toEqual({ token: pin.token.id, amount: '1000000000' });
     expect(card.accepts.template).toBe('checks-only');
     expect(card.accepts.checks.types).toContain('row_count_range');
     expect(card.accepts.checks.requiredAtLeast).toBe(1);
-    expect(card.accepts.windows).toMatchObject({ maxDeliverWithinSec: 86_400, maxJudgingSec: 3600, maxCreatedAheadSec: 60, maxAdjudicatorAcceptSec: 120 });
+    expect(card.accepts.windows).toMatchObject({ maxDeliverWithinSec: 604_800, maxJudgingSec: 3600, maxCreatedAheadSec: 60, maxAdjudicatorAcceptSec: 120 });
     expect(card.accepts.adjudicators).toMatchObject({ primary: expect.stringMatching(/^0x/), fallback: expect.stringMatching(/^0x/), appeal: expect.stringMatching(/^0x/) });
-    expect(card.limits).toMatchObject({ perSellerPerHour: 3, perSellerPerDay: 10, perDay: 50, open: 10, perClientPerMinute: 6, perClientPerHour: 60 });
+    expect(card.limits).toMatchObject({ perSellerPerHour: 3, perSellerPerDay: 10, perDay: 50, open: 30, perSellerOpen: 5, perClientPerMinute: 6, perClientPerHour: 60 });
     expect(card.testTokensOnly).toBe(true);
     const page = await s.call('');
     expect(page.headers.get('content-type')).toMatch(/^text\/html/);
@@ -187,10 +187,10 @@ describe("Crow's test buyer", () => {
     const s = startBuyer();
     const seller = await freshSeller();
     const cases: Array<[J, string]> = [
-      [{ price: { token: pin.token.id, amount: '50000001' } }, 'accepts.maxPrice'],
+      [{ price: { token: pin.token.id, amount: '1000000001' } }, 'accepts.maxPrice'],
       [{ checks: [{ id: 'cols', type: 'csv_columns_exact', required: false, columns: ['customer_id', 'email'] }] }, 'accepts.checks.requiredAtLeast'],
-      // A minute over the day: the window counts from settlement time at the post, a few seconds after createdAt.
-      [{ timing: { ...TIMING, deliverWithinSec: 86_460, fundWithinSec: 900 } }, 'accepts.windows.maxDeliverWithinSec'],
+      // A minute over 7 days: the window counts from settlement time at the post, a few seconds after createdAt.
+      [{ timing: { ...TIMING, deliverWithinSec: 604_860, fundWithinSec: 900 } }, 'accepts.windows.maxDeliverWithinSec'],
       // Phase one states an appeal window of 0, so the escalation's window is the one a seller can stretch.
       [{ timing: { ...TIMING, appealDecideSec: 3601 } }, 'accepts.windows.maxJudgingSec'],
     ];
@@ -241,6 +241,50 @@ describe("Crow's test buyer", () => {
     expect(body.rule).toBe('limits.perSellerPerHour');
     expect(body.retryAfterSec).toBeGreaterThan(0);
     // Another seller has its own count.
+    expect((await postOffer(s, { commitmentId: (await offerTo(s, await freshSeller())).id })).status).toBe(202);
+    await s.stop();
+  });
+
+  it('takes a 1,000 tUSDC offer due in 7 days, funds it, and funds a second within the faucet\'s hour (T-545)', async () => {
+    const s = startBuyer();
+    const seller = await freshSeller();
+    const big = { price: { token: pin.token.id, amount: '1000000000' }, timing: { ...TIMING, deliverWithinSec: 604_800 } };
+    const first = await offerTo(s, seller, big);
+    expect((await postOffer(s, { commitmentId: first.id })).status).toBe(202);
+    await statusUntil(s, first.id, (x) => x.status === 'funded', 10_000);
+    await seller.waitFor(first.id, ['Held']);
+    // The faucet grants one address once an hour: the second deal funds from what the first grant left.
+    const second = await offerTo(s, seller, big);
+    expect((await postOffer(s, { commitmentId: second.id })).status).toBe(202);
+    await statusUntil(s, second.id, (x) => x.status === 'funded', 10_000);
+    await seller.waitFor(second.id, ['Held']);
+    await s.stop();
+  });
+
+  it('takes exactly 1,000 tUSDC and 7 days, and refuses one base unit or one second more, naming the rule (T-545)', async () => {
+    const { checkTerms } = await import('./buyer.ts');
+    const s = startBuyer({ run: false });
+    const seller = await freshSeller();
+    const { terms } = await offerTo(s, seller);
+    const ctx = await s.buyer.context();
+    const check = (t: J) => checkTerms(commitmentIdOf(t), t, ctx)?.rule;
+    const at = (ms: number) => new Date(ms).toISOString();
+    const due = (sec: number) => ({ ...terms.timing, deliverBy: at(ctx.now + sec * 1000), judgeBy: at(ctx.now + sec * 1000 + 60_000), fallbackBy: at(ctx.now + sec * 1000 + 120_000) });
+    expect(check({ ...terms, price: { ...terms.price, amount: '1000000000' }, timing: due(604_800) })).toBeUndefined();
+    expect(check({ ...terms, price: { ...terms.price, amount: '1000000001' } })).toBe('accepts.maxPrice');
+    expect(check({ ...terms, timing: due(604_801) })).toBe('accepts.windows.maxDeliverWithinSec');
+    await s.stop();
+  });
+
+  it('caps the deals one seller has in progress, so one seller cannot hold every slot for a week (T-545)', async () => {
+    const s = startBuyer({ run: false, limits: { ...BUYER_LIMITS, perSellerOpen: 1, perSellerPerHour: 10 } });
+    const seller = await freshSeller();
+    expect((await postOffer(s, { commitmentId: (await offerTo(s, seller)).id })).status).toBe(202);
+    const over = await postOffer(s, { commitmentId: (await offerTo(s, seller)).id });
+    expect(over.status).toBe(429);
+    const body = await over.json();
+    expect(body.rule).toBe('limits.perSellerOpen');
+    expect(body.retryAfterSec).toBeGreaterThan(0);
     expect((await postOffer(s, { commitmentId: (await offerTo(s, await freshSeller())).id })).status).toBe(202);
     await s.stop();
   });
@@ -355,10 +399,10 @@ describe("Crow's test buyer, the review's findings", () => {
     expect(checkTerms(id, terms, ctx)).toBeNull();
     const at = (ms: number) => new Date(ms).toISOString();
     const check = (t: J) => checkTerms(commitmentIdOf(t), t, ctx)?.rule;
-    // Dated 3 days back, due in 20 minutes: inside a day from now, so it fits.
-    expect(check({ ...terms, createdAt: at(ctx.now - 3 * 86_400_000) })).toBeUndefined();
-    // Dated now, due in 2 days: over the day.
-    const late = Date.parse(terms.timing.deliverBy) + 2 * 86_400_000;
+    // Dated 9 days back, due in 20 minutes: inside 7 days from now, so it fits.
+    expect(check({ ...terms, createdAt: at(ctx.now - 9 * 86_400_000) })).toBeUndefined();
+    // Dated now, due in 8 days: over the 7 days.
+    const late = Date.parse(terms.timing.deliverBy) + 8 * 86_400_000;
     expect(check({ ...terms, timing: { ...terms.timing, deliverBy: at(late), judgeBy: at(late + 60_000), fallbackBy: at(late + 120_000) } })).toBe('accepts.windows.maxDeliverWithinSec');
     await s.stop();
   });
