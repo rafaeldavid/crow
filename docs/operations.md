@@ -44,12 +44,12 @@ All on Rafa's Cloudflare account (its ID is the 1Password item that `config/secr
 - **When `op` asks for approval:** a Touch ID prompt from 1Password names the terminal app that asked. Approve it only for a command you started yourself. A prompt you did not expect means some process in that terminal session called `op`: deny it.
 - **The Sepolia relayer key** (D41, ADR-0028) is the Worker secret `SEPOLIA_RELAYER_KEY` on holdback-op1, made by `node apps/demo-cloud/scripts/relayer.mjs`: it generates a fresh key in memory, pipes it to `wrangler secret bulk` and prints only the public addresses. It is a Sepolia-only gas payer with no role in any contract, and it refuses to replace an existing key (`--replace` overrides; the old lanes' Sepolia ETH would be stranded). Set 2026-11-03; its funding lane is `0x601137a8DE7E195E1426f57C053aFa49B20Ef555` (Rafa funds this one; Crow Control reads this line when discovery is down), and the world tops up its deal lanes from it. Discovery lists both under `demo.relayer` (`fundingLane`, `dealLanes`). Optional secret `SEPOLIA_RPC_URLS` (comma-separated keyed URLs, tried before the public ones); optional variable `SEPOLIA_MAX_FEE_GWEI` (default 20).
 - **The test seller's secret** (D47, T-222) is the Worker secret `TEST_AGENTS_SEED` on crow-test-agents, made by `node apps/test-agents/scripts/seed.mjs`: it generates 32 random bytes in memory, pipes them to `wrangler secret bulk` and prints only the intake's public encryption key. Every key the seller uses derives from it (`apps/test-agents/src/keys.ts`). It is Sepolia-only, holds no ETH (the operators pay the gas) and guards worthless test tokens; it refuses to replace an existing secret (`--replace` overrides, which gives the seller a new address and a new intake key).
-- `wrangler` uses Rafa's OAuth login on his Mac, or `CLOUDFLARE_API_TOKEN` (scoped to Workers and KV) in an isolated environment. On the Mac the token can come from 1Password instead: `op run --env-file=config/secrets/cloudflare.refs -- npx wrangler@4 …`. The OAuth login keeps its token in a file in Rafa's home folder that any process he runs can read, agents' shells included; T-480's design moves agents' deploys off it.
+- `wrangler` uses Rafa's OAuth login on his Mac, or `CLOUDFLARE_API_TOKEN` (scoped to Workers and KV) in an isolated environment. On the Mac the token can come from 1Password instead: `op run --env-file=config/secrets/cloudflare.refs -- npx wrangler@4.151.3 …`. The OAuth login keeps its token in a file in Rafa's home folder that any process he runs can read, agents' shells included; T-480's design moves agents' deploys off it.
 - **Runtime secrets reach the Workers without a file on disk.** Each script builds its secrets in memory and pipes them to `wrangler secret bulk` on standard input: `pnpm demo-cloud:secrets` (the judges' keys, from `op run`), `relayer.mjs` and `seed.mjs` (generated in memory), and the hosted sellers' `secrets.ts` (the API key typed at a hidden prompt). Cloudflare never shows a Worker secret's value again, in the dashboard or in Wrangler, so 1Password holds the copy of every key that comes from outside, and a generated key has no copy at all: replacing it means a new key.
 
 ## Deploy
 
-Always build and check before deploying; deploy only what changed. Deploys run as whoever runs them: an agent with Rafa's go-ahead (or within an approved task), using wrangler's OAuth login on Rafa's Mac or `CLOUDFLARE_API_TOKEN` in an isolated environment. Wrangler is pinned to major version 4 (`npx wrangler@4`).
+Always build and check before deploying; deploy only what changed. Deploys run as whoever runs them: an agent with Rafa's go-ahead (or within an approved task), using wrangler's OAuth login on Rafa's Mac or `CLOUDFLARE_API_TOKEN` in an isolated environment. Wrangler is pinned to one exact version, `npx wrangler@4.151.3`, in every script and command (T-518): the old major-only pin ran whatever 4.x was newest that minute, with the Cloudflare login. Move the pin only to a version public for 14 days or more, in all files at once (`tests/install-rules.test.ts` refuses a mix).
 
 ```sh
 # the site: builds, runs site/check.mjs, deploys, checks the live page, llms.txt and try.mjs, and rolls back on its own
@@ -64,7 +64,7 @@ HOLDBACK_OPERATORS=https://api.crow.direct,https://api2.crow.direct node example
 
 # early-access sign-ups (T-413): deploys, waits for join.crow.direct/version.json to name the commit, and rolls back on its own
 node apps/early-access/deploy.mjs
-npx wrangler@4 kv key list --binding EMAILS --config apps/early-access/wrangler.jsonc --remote
+npx wrangler@4.151.3 kv key list --binding EMAILS --config apps/early-access/wrangler.jsonc --remote
 
 # the list of who uses Crow (T-486, D76): the same Worker and the same store, under the prefix listing:, once the
 # Worker is deployed with POST /listing. A person reads the listed websites out, then checks each for a Crow card.
@@ -73,7 +73,7 @@ npx wrangler@4 kv key list --binding EMAILS --config apps/early-access/wrangler.
 # no prefix, or a mistyped one, writes people's email addresses into the file. The script refuses such a file whole:
 # it says how many entries are not listed websites, checks none, echoes none and exits 1. Then delete the file.
 # A run shows each listed site this machine's IP address and the time of the run.
-npx wrangler@4 kv key list --binding EMAILS --config apps/early-access/wrangler.jsonc --remote --prefix listing: > reports/listing-keys.json
+npx wrangler@4.151.3 kv key list --binding EMAILS --config apps/early-access/wrangler.jsonc --remote --prefix listing: > reports/listing-keys.json
 node scripts/listing-check.mjs reports/listing-keys.json
 
 # Crow's test seller (T-222): deploys, waits for /health to read operational, and rolls back on its own
@@ -108,10 +108,10 @@ So any open deal no longer blocks a deploy: only a deploy that drops what an ope
 **Before an operator deploy that changes the screen version** (since PR 386, T-367): check that no deal is open first. After such a deploy the adjudicator refuses every deal accepted before the deploy and still open, with `policy_mismatch`. Each such deal runs down to its default outcome with no judgment. Deploy only when no such deal is open. The three reads that list the open deals are in `docs/tasks/T-367-screen-audit-lines.md`, Handoff. This holds until the fix that T-373's decision record (ADR-0036) tracks is built.
 
 **To roll back by hand**, use the rollback targets the line names, both operators together:
-- `npx wrangler@4 rollback <holdback-op1 target> --name holdback-op1`
-- `npx wrangler@4 rollback <holdback-op2 target> --name holdback-op2`
+- `npx wrangler@4.151.3 rollback <holdback-op1 target> --name holdback-op1`
+- `npx wrangler@4.151.3 rollback <holdback-op2 target> --name holdback-op2`
 
-**Crow's test seller, the first deploy** (D47; Rafa's go-ahead first). Done on 2026-11-04. Since T-313 the script reads the live version before it uploads, so a Worker that was never deployed takes its first upload from `npx wrangler@4 deploy --config apps/test-agents/wrangler.jsonc` by hand; every later deploy uses the script. The site's one command buys from the test seller, so the seller goes live before the site that names it:
+**Crow's test seller, the first deploy** (D47; Rafa's go-ahead first). Done on 2026-11-04. Since T-313 the script reads the live version before it uploads, so a Worker that was never deployed takes its first upload from `npx wrangler@4.151.3 deploy --config apps/test-agents/wrangler.jsonc` by hand; every later deploy uses the script. The site's one command buys from the test seller, so the seller goes live before the site that names it:
 
 1. `node apps/test-agents/scripts/deploy.mjs`: the Worker, its Durable Object and its routes `crow.direct/agents/test-seller*` and `escrow.stream/agents/test-seller*`. The route takes that path before crow-site's Custom Domain, as Cloudflare documents. If it does not, switch the route to the Custom Domain `agents.crow.direct`, and change `SELLER_URL` and `TEST_SELLER_URL` in `site/build.mjs` to match.
 2. `node apps/test-agents/scripts/seed.mjs`: sets `TEST_AGENTS_SEED`.
@@ -144,7 +144,7 @@ If the seller is down or busy, `try.mjs` plays both sides and says so, so a site
 
 A later deploy is step 5's command without `--check-only`. It refuses while a deal is at `starting` (the deal guard), or when the live seller does not answer three reads. Then it uploads with deferred code updates, checks the seller for up to 7 minutes, and rolls back on a failed check. A hosted seller keeps its open deals across deploys: its object's name does not change. Before a contracts cutover, read each hosted seller's `/health` for open deals.
 
-**A world changes in place (D49).** The Sepolia world replays nothing on open, and each deal's book carries its own rulebook. So a rulebook change, an additive schema bump or a code deploy keeps the world names as they are, and deals open at the deploy continue. A new world is for a new rules contract or another chain only; record the switch in the deploy record (below). The SimChain world still replays its journal on open, so a rulebook change there needs a new `sim` name (2026-11-02: v0.8 refused v0.7's offers with `rulebook_unknown`). Check `schemaVersion` in `/v1/status` after a deploy, and run `npx wrangler@4 tail holdback-op1 --format json` if it is wrong.
+**A world changes in place (D49).** The Sepolia world replays nothing on open, and each deal's book carries its own rulebook. So a rulebook change, an additive schema bump or a code deploy keeps the world names as they are, and deals open at the deploy continue. A new world is for a new rules contract or another chain only; record the switch in the deploy record (below). The SimChain world still replays its journal on open, so a rulebook change there needs a new `sim` name (2026-11-02: v0.8 refused v0.7's offers with `rulebook_unknown`). Check `schemaVersion` in `/v1/status` after a deploy, and run `npx wrangler@4.151.3 tail holdback-op1 --format json` if it is wrong.
 
 **When a world changes** (D49): Rafa approves the redeploy. Switch while no deal is open on the old world, or send its permissionless timeouts afterwards and record them. Record in the deploy record (below) the old world's name, rules address and deployment file, the new world's, and the Worker versions. Never delete a world's storage: a rollback of both Workers serves it again.
 
@@ -181,7 +181,7 @@ The operator nodes keep only what they already see (ADR-0024 §1, D39), in the W
 - **Quota warnings:** an `alert: "durable-object-quota"` line (`console.warn`) when today's use passes 80% and again at 95% of a Free-tier daily limit. The account is on Workers Paid, where those numbers are not limits, so the line is an activity signal, not a cost or outage one. The SimChain world's adjudicator alarm alone (once a second while the world is active, about 86,400 requests a day) trips the request alert on a day the world stays active for about 22 hours or more (see "Durable Object use" below).
 - **No invocation logs:** both wrangler files set `observability.logs.invocation_logs` to false, because Cloudflare's invocation logs record every request's headers, which carry `Authorization` (ReadTokens) and the caller's IP. Console lines and uncaught exceptions are still kept. `wrangler tail` still shows live requests, headers included, and stores nothing.
 
-Read the lines in the dashboard: Workers & Pages, then holdback-op1, then Observability (or Durable Objects, then the World namespace, then Observability), and filter on `telemetry` or `alert`. Live: `npx wrangler@4 tail holdback-op1 --format json`. Workers Logs keeps them 7 days on Workers Paid.
+Read the lines in the dashboard: Workers & Pages, then holdback-op1, then Observability (or Durable Objects, then the World namespace, then Observability), and filter on `telemetry` or `alert`. Live: `npx wrangler@4.151.3 tail holdback-op1 --format json`. Workers Logs keeps them 7 days on Workers Paid.
 
 | # | Metric | Field (hour and day lines unless noted) |
 | --- | --- | --- |
@@ -232,7 +232,7 @@ It never holds the reporter's IP or a header value. An IP lives only in the hour
 
 **Setting it up** (Rafa's gate, once):
 
-1. Create the store: `npx wrangler@4 kv namespace create FEEDBACK`. Add `"kv_namespaces": [{ "binding": "FEEDBACK", "id": "<id>" }]` to `apps/demo-cloud/wrangler.op1.jsonc`.
+1. Create the store: `npx wrangler@4.151.3 kv namespace create FEEDBACK`. Add `"kv_namespaces": [{ "binding": "FEEDBACK", "id": "<id>" }]` to `apps/demo-cloud/wrangler.op1.jsonc`.
 2. For sealed reports, create the 1Password item `mac-feedback-sealing` (Secrets, above) and let 1Password generate its `credential`: 43 characters, letters and digits only. That string is 32 bytes in base64url, the form the script needs (measured with Node's decoder). `op run --env-file=config/secrets/feedback.refs -- node apps/demo-cloud/scripts/feedback.ts public-key` prints the public key; set it as the var `FEEDBACK_ENCRYPTION_PUBLIC_KEY` in `wrangler.op1.jsonc`. It is public, and discovery serves it as `feedback.encryptionPublicKey`.
 3. `pnpm demo-cloud:deploy`.
 
@@ -402,7 +402,7 @@ Measured after the deploys, at 16:07 UTC:
 - `https://crow.direct/guide-budget.json` names `8c465bb` and puts the buyer's first-deal path at 4,544 of 5,000 tokens and the seller's at 4,156 (estimates);
 - the test seller and the test buyer read operational 2 s after the upload.
 
-**Earlier site deploys the same day.** Two deploys carried no record line here; their versions come from `npx wrangler@4 deployments list --name crow-site`:
+**Earlier site deploys the same day.** Two deploys carried no record line here; their versions come from `npx wrangler@4.151.3 deployments list --name crow-site`:
 - 12:17 UTC, commit `a6b9472` (PR 529, T-421's Coming soon notice): crow-site `b0c3a3d3-448d-40dd-a112-38e0cce332de` (rollback target `68d33780-5033-4053-a46e-fe3fdfff1e83`).
 - 14:18 UTC, commit `0250676` (PR 548): crow-site `2282f633-7bc9-4794-9a67-c61406685562` (rollback target `3f6b27aa-be9e-472e-9771-aef718c855a8`).
 
@@ -629,11 +629,11 @@ Every check passed, and nothing was rolled back (measured; T-231 Evidence). Two 
 
 **On Sepolia an offer expiry costs 147,581 gas** (measured: the deploy's check, transaction [`0x0c27b233…504f`](https://sepolia.etherscan.io/tx/0x0c27b23328786937454e5f031c1d1c4b9742962eb0f3614aaa47c9fe1653504f)). That is 2.2 times the 65,597 gas measured on anvil. If every timeout costs that much, the day's 200 cost about 29.5 million gas, 0.03 Sepolia ETH at 1 gwei (inferred).
 
-**To roll back** (`npx wrangler@4 rollback <version> --name <worker>`): both operators together, then the site if its lines must go too.
+**To roll back** (`npx wrangler@4.151.3 rollback <version> --name <worker>`): both operators together, then the site if its lines must go too.
 
-- `npx wrangler@4 rollback 8bcda43c-ba12-4919-9355-54048b98f720 --name holdback-op1`
-- `npx wrangler@4 rollback 7e4d3fa5-273f-47a2-b6c4-537dbf31b58f --name holdback-op2`
-- `npx wrangler@4 rollback 16038434-1066-452c-bfec-25c064547359 --name crow-site`
+- `npx wrangler@4.151.3 rollback 8bcda43c-ba12-4919-9355-54048b98f720 --name holdback-op1`
+- `npx wrangler@4.151.3 rollback 7e4d3fa5-273f-47a2-b6c4-537dbf31b58f --name holdback-op2`
+- `npx wrangler@4.151.3 rollback 16038434-1066-452c-bfec-25c064547359 --name crow-site`
 
 T-231 adds one storage prefix, `ot:`, the daily budget row, which T-230's code never reads (inferred from PR 230's diff). After a rollback the operators stop sending timeouts, and a party's trigger after a timeout ran answers 409 again.
 
@@ -655,11 +655,11 @@ Every check passed, and nothing was rolled back (measured; T-230 Evidence). `/v1
 
 **What it carries,** since T-228's build (`236786a`): T-230 only, in `packages/settlement/evm/evm-settlement.ts` and `sync.ts`. An operator joins a seller's posted delivery whose hash the chain already holds, whether the post comes before or after its sync pass, and sends no second delivery that lands. When it cannot read the seller's transaction yet, it answers 409 `invalid_state`, keeps the signed copy and joins it within about a minute. No contract change, no schema change, no new secret or variable. The other files that changed since `236786a` are examples, tests, the site, and `config/model-prices.json` and `config/ops-cost-prices.json`, which only `scripts/metrics/` reads (measured: `git diff --stat 236786a e5f667a` and a search for the two file names).
 
-**To roll back** (`npx wrangler@4 rollback <version> --name <worker>`): the targets above, both operators together, then the site if its line must go too.
+**To roll back** (`npx wrangler@4.151.3 rollback <version> --name <worker>`): the targets above, both operators together, then the site if its line must go too.
 
-- `npx wrangler@4 rollback ba7a2ad9-0172-458a-92a0-5d51d18afd0a --name holdback-op1`
-- `npx wrangler@4 rollback 7826e3ce-b8ce-422f-a2ea-9e88bd982ba9 --name holdback-op2`
-- `npx wrangler@4 rollback 4f049eb5 --name crow-site`
+- `npx wrangler@4.151.3 rollback ba7a2ad9-0172-458a-92a0-5d51d18afd0a --name holdback-op1`
+- `npx wrangler@4.151.3 rollback 7826e3ce-b8ce-422f-a2ea-9e88bd982ba9 --name holdback-op2`
+- `npx wrangler@4.151.3 rollback 4f049eb5 --name crow-site`
 
 T-230 adds two book fields, `posted` and `postedKeys`, and no storage prefix, so T-228's code keeps them unread (inferred from PR 232's diff). A copy kept at the rollback then never joins, and its deal waits for the seller to post again, as before T-230.
 
@@ -675,7 +675,7 @@ T-230 adds two book fields, `posted` and `postedKeys`, and no storage prefix, so
 
 The deploy uploaded 2 files, `index.html` and `llms.txt`; the live copies match the build byte for byte, and `https://escrow.stream/try.mjs` still serves sha256 `cc310963…d832`, the one the command names (measured). After the deploy, a fresh Claude Code needed 1 approval per deal in both permission modes (measured; T-229 Evidence).
 
-**To roll back:** `npx wrangler@4 rollback 704bd295 --name crow-site`. That restores the link-only prompt and the `llms.txt` without T-228's line; the operators keep T-228.
+**To roll back:** `npx wrangler@4.151.3 rollback 704bd295 --name crow-site`. That restores the link-only prompt and the `llms.txt` without T-228's line; the operators keep T-228.
 
 ### T-228: the operators close a deal behind the chain by its timeout (deployed 2026-11-05)
 
@@ -692,7 +692,7 @@ Every check passed, and nothing was rolled back (measured; T-228 Evidence, "The 
 
 **What it carries,** since T-220's build (`69021a6`): T-228 only. The operators relay a due timeout for a deal behind the chain (residual 13 in `docs/neutrality.md`) through `POST /v1/commitments/<id>/triggers/<kind>`, at their own gas; a timeout that is not due reverts in the simulation and is not sent. Signed steps for such a deal still answer `invalid_state` until T-227. No contract change, no schema change, no new secret or variable. Main reached `2e6f3c6` during the deploy; its four later commits change none of the Worker's inputs (`apps/`, `packages/`, `spec/`, `config/`, `contracts/deployments/`), only CI, docs, the site and `examples/try.test.ts` (measured: `git diff --stat 236786a 2e6f3c6`).
 
-**To roll back** (`npx wrangler@4 rollback <version> --name <worker>`, both Workers): the targets above. T-228 adds no storage prefix, so T-220's code reads the world as it is (inferred from PR 207's diff); a timeout for a deal behind the chain then answers `invalid_state` again.
+**To roll back** (`npx wrangler@4.151.3 rollback <version> --name <worker>`, both Workers): the targets above. T-228 adds no storage prefix, so T-220's code reads the world as it is (inferred from PR 207's diff); a timeout for a deal behind the chain then answers `invalid_state` again.
 
 ### T-220: round 1's prerequisites in one deploy (deployed 2026-11-05)
 
@@ -719,7 +719,7 @@ Every step below passed (measured; T-220 Evidence). The new code answered reques
 
 **Deploy,** both Workers together, then the site, as at the 0.7 cutover:
 
-1. `pnpm demo-cloud:deploy` (builds, then holdback-op1, then holdback-op2). Watch `npx wrangler@4 tail holdback-op1 --format json` for the first requests. One earlier deploy was refused with "Script startup exceeded CPU time limit" and the retry passed (backlog); the curve library T-217 adds loads on first use, so startup should not move (inferred, T-217 Decision 15). Record the two version IDs.
+1. `pnpm demo-cloud:deploy` (builds, then holdback-op1, then holdback-op2). Watch `npx wrangler@4.151.3 tail holdback-op1 --format json` for the first requests. One earlier deploy was refused with "Script startup exceeded CPU time limit" and the retry passed (backlog); the curve library T-217 adds loads on first use, so startup should not move (inferred, T-217 Decision 15). Record the two version IDs.
 2. `curl -s https://api.escrow.stream/v1/status` and the same on api2: `schemaVersion` 0.10, the same domain and `verifyingContract`.
 3. `GET /v1/clubs/demo-club` on both nodes: `randomness` names `drand-quicknet` with the chain hash above, and `rulebookHash` is `0x3fecb058383da073d562995df281fbd28dc895c3f7c93e7114266f607218d108`, keccak256 of the rulebook's canonical JSON. Before the deploy it is `0xd25b8f97bf315dd3d4f8dfe36c472f9bc96ba7fbc742a2c3a3f04c1ecbf50c25` (measured from the live club on 2026-11-05; the new hash is that rulebook with only `randomness` changed, computed).
 4. `GET /v1/adjudicators` on both nodes: the three demo adjudicators, each with a signed `registration`, `observed.bond: "bonded"` and its `observed.defaultFor` role. The first open after the deploy writes their three `ar:` rows (T-221, measured on a storage copy).
@@ -727,10 +727,10 @@ Every step below passed (measured; T-220 Evidence). The new code answered reques
 6. The setup pass sends nothing: no new transaction from the funding lane, the deal lanes or the three adjudicator addresses on Etherscan, and the funding lane's balance as in step 5 of Before. Measured on the fork run: 0 transactions and an unchanged balance.
 7. Every deal from step 4 of Before reads the same `escrowState` and `rulebookHash` as before (`0xf0453986…5e5b` also carries the notice from step 5).
 8. The smoke deal: `HOLDBACK_OPERATORS=https://api.escrow.stream,https://api2.escrow.stream node examples/try.ts` ends Released with three Etherscan links, as at the 0.7 cutover. `apps/demo-cloud/scripts/deal.ts` runs on SimChain only: on 2026-11-05 it refused the Sepolia nodes before it sent anything.
-9. The site: `node site/build.mjs --op1 https://api.escrow.stream --op2 https://api2.escrow.stream --out reports/site-out`, `node site/check.mjs`, `npx wrangler@4 deploy --config apps/site/wrangler.jsonc`. Then `https://escrow.stream/try.mjs` has sha256 `cc310963bb0833e0d23f8018eb4ea802db09fa05fbd9489020340d2be2eed832` (it serves `26ccaa80…` before), and the one command in `llms.txt` ("Try it") runs end to end against both nodes.
+9. The site: `node site/build.mjs --op1 https://api.escrow.stream --op2 https://api2.escrow.stream --out reports/site-out`, `node site/check.mjs`, `npx wrangler@4.151.3 deploy --config apps/site/wrangler.jsonc`. Then `https://escrow.stream/try.mjs` has sha256 `cc310963bb0833e0d23f8018eb4ea802db09fa05fbd9489020340d2be2eed832` (it serves `26ccaa80…` before), and the one command in `llms.txt` ("Try it") runs end to end against both nodes.
 10. Record here the Worker and site versions, and in T-220's Evidence what each step measured. Then T-216 reruns round 1 with `--t220`. (Done for this deploy: the versions are under State, above.)
 
-**Rollback** (`npx wrangler@4 rollback <version> --name <worker>`): holdback-op1 `50fd05c4`, holdback-op2 `1a95b960`, crow-site `5582b10e`. The world is the same under the old code (inferred, `docs/research/2026-11-04-one-world.md`, finding 3):
+**Rollback** (`npx wrangler@4.151.3 rollback <version> --name <worker>`): holdback-op1 `50fd05c4`, holdback-op2 `1a95b960`, crow-site `5582b10e`. The world is the same under the old code (inferred, `docs/research/2026-11-04-one-world.md`, finding 3):
 
 - the old code lists only its own prefixes, so it never reads `cursor`, `lane:`, `ar:` or `ph:` rows, and books keep `chainTxs` and `beaconSource` unread;
 - the old operators serve the sim rulebook again, so new offers bind the old hash, and an offer prepared against the drand hash gets 422 `rulebook_unknown`;
@@ -744,11 +744,11 @@ Every step below passed (measured; T-220 Evidence). The new code answered reques
 - crow-site `5582b10e` (llms.txt names the test seller; try.mjs sha256 `26ccaa80…`);
 - holdback-op1 `50fd05c4` and holdback-op2 `1a95b960`, with T-210's and T-211's fixes.
 
-After the deploy, a smoke deal ended Released in 44 s, and the test seller sold once each way (T-222 Evidence) [measured]. To roll back: holdback-op1 `5d369b0e`, holdback-op2 `1f169857` and crow-site `cb0adcb5` (`npx wrangler@4 rollback <version> --name <worker>`); `npx wrangler@4 delete --name crow-test-agents` removes the seller.
+After the deploy, a smoke deal ended Released in 44 s, and the test seller sold once each way (T-222 Evidence) [measured]. To roll back: holdback-op1 `5d369b0e`, holdback-op2 `1f169857` and crow-site `cb0adcb5` (`npx wrangler@4.151.3 rollback <version> --name <worker>`); `npx wrangler@4.151.3 delete --name crow-test-agents` removes the seller.
 
 ### The 0.7 redeploy: new contracts, a new world (deployed 2026-11-04)
 
-**The 0.7 cutover, 2026-11-04, about 08:30 UTC** (Rafa approved it the same day; T-212 Handoff): the 0.7 contracts, then holdback-op1 `5d369b0e`, holdback-op2 `1f169857` and crow-site `87d3c54c`, all built from `t-212-sepolia-redeploy` (main at `64be1f1` plus the new record, the world names and the site pins). Both Workers deployed together (`pnpm demo-cloud:deploy`), since both already settled on Sepolia. To roll back to the 0.6 world: holdback-op1 `3b6febc8`, holdback-op2 `45c2e6a9` and crow-site `671481dc` (`npx wrangler@4 rollback <version> --name <worker>` for each); the 0.6 world's storage and its deals on chain stay.
+**The 0.7 cutover, 2026-11-04, about 08:30 UTC** (Rafa approved it the same day; T-212 Handoff): the 0.7 contracts, then holdback-op1 `5d369b0e`, holdback-op2 `1f169857` and crow-site `87d3c54c`, all built from `t-212-sepolia-redeploy` (main at `64be1f1` plus the new record, the world names and the site pins). Both Workers deployed together (`pnpm demo-cloud:deploy`), since both already settled on Sepolia. To roll back to the 0.6 world: holdback-op1 `3b6febc8`, holdback-op2 `45c2e6a9` and crow-site `671481dc` (`npx wrangler@4.151.3 rollback <version> --name <worker>` for each); the 0.6 world's storage and its deals on chain stay.
 
 - **The 0.7 redeploy (ADR-0029; Rafa approved it on 2026-11-04).** The whole stack was deployed again from `64be1f1` with the same script, after a rehearsal on a Sepolia fork, and `--check` passes against Sepolia [measured]. The rules contract signs under "Holdback" 0.7 [measured: `eip712Domain()`]. The throwaway deployer is the one of 2026-11-03. The 0.6 deployment's record moved to `contracts/deployments/sepolia-2026-11-03-domain-0.6.json`; check it with `deploy-sepolia.sh --check` from a checkout at `2342756`, after copying that file over `sepolia.json`. The 0.7 deployment also has a Permit2 collector and the bond vault `HoldbackBonds`, which are not in phase one.
 
@@ -760,9 +760,9 @@ The procedure as it ran:
 
 **Cutover** (Rafa approved it on 2026-11-03):
 
-1. Deploy holdback-op1's code with `SETTLEMENT` still `sim`: `pnpm -C apps/demo-cloud build`, then `npx wrangler@4 deploy -c apps/demo-cloud/wrangler.op1.jsonc --var SETTLEMENT:sim`. The SimChain demo keeps running.
+1. Deploy holdback-op1's code with `SETTLEMENT` still `sim`: `pnpm -C apps/demo-cloud build`, then `npx wrangler@4.151.3 deploy -c apps/demo-cloud/wrangler.op1.jsonc --var SETTLEMENT:sim`. The SimChain demo keeps running.
 2. Deploy holdback-op2 with `SETTLEMENT` `sepolia`. Smoke test against op2's two origins: `HOLDBACK_OPERATORS=https://api2.crow.direct,https://holdback-op2.<account>.workers.dev node examples/try.ts`; it must end Released with three Sepolia transaction links. From here until step 4 the try command in `llms.txt` fails: try.mjs requires both operators to serve one discovery document, and op1 still serves SimChain's.
 3. Deploy the site at once (the Sepolia `llms.txt`, and a `try.mjs` that knows both the SimChain and the Sepolia pins).
 4. Deploy holdback-op1 with `SETTLEMENT` `sepolia`, and run the one command from `llms.txt` ("Try it"). Steps 2 to 4 take a few minutes; that is the window in which the try command fails.
 
-**Rollback:** set `SETTLEMENT` back to `sim` on both wrangler files and run `pnpm demo-cloud:deploy`, then deploy the previous site build (`npx wrangler@4 rollback` on `crow-site`). The SimChain world resumes where it stopped; the Sepolia world's storage and its deals on chain stay, and a later flip back serves them again.
+**Rollback:** set `SETTLEMENT` back to `sim` on both wrangler files and run `pnpm demo-cloud:deploy`, then deploy the previous site build (`npx wrangler@4.151.3 rollback` on `crow-site`). The SimChain world resumes where it stopped; the Sepolia world's storage and its deals on chain stay, and a later flip back serves them again.

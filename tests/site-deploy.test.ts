@@ -98,7 +98,7 @@ async function run(stage: Stage = {}) {
     log: (s: string) => out.push(s),
     error: (s: string) => err.push(s),
   });
-  const ran = commands.filter((c) => !c.startsWith('git ')).map((c) => c.replace('npx -y wrangler@4 ', ''));
+  const ran = commands.filter((c) => !c.startsWith('git ')).map((c) => c.replace('npx -y wrangler@4.151.3 ', ''));
   return { code, commands, ran, probes, out: out.join('\n'), err: err.join('\n'), record: out.join('\n').split('\n').find((l) => l.startsWith('**Site deploy')) };
 }
 const BUILD = 'node site/build.mjs --op1 https://api.crow.direct --op2 https://api2.crow.direct --out reports/site-out';
@@ -191,7 +191,7 @@ describe('pnpm site:deploy', () => {
   it('says so, and gives the command, when the rollback does not take', async () => {
     const r = await run({ tryMjs: [{ status: 404, body: Buffer.alloc(0) }], live: [BEFORE, AFTER, AFTER] });
     expect(r.code).toBe(1);
-    expect(r.err).toContain(`ROLLBACK FAILED for crow-site. Run: npx wrangler@4 rollback ${BEFORE} --name crow-site`);
+    expect(r.err).toContain(`ROLLBACK FAILED for crow-site. Run: npx wrangler@4.151.3 rollback ${BEFORE} --name crow-site`);
     expect(r.record).toContain(`(rollback target \`${BEFORE}\`, ROLLBACK FAILED).`);
   });
 });

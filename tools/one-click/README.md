@@ -198,7 +198,7 @@ node scripts/metrics/check.mjs one-click reports/scratch/one-click/<runId>.json
 | `--model <id>\|unset` | `claude-opus-5-5` | Passed as `Options.model`; checked against the run file's model ID pattern at start |
 | `--out <dir>` | `reports/scratch/one-click`, or `reports/scratch/one-click-dry` for a dry run | Where the run file goes |
 | `--logs <dir>` | none | Keeps the SDK's raw messages as JSON lines; must be outside the repository or under `reports/` |
-| `--tail` | off | Runs `npx wrangler@4 tail` on holdback-op1, holdback-op2 and crow-test-agents for the run, and keeps counts only: requests, and any CPU and wall time the events carry. No header, URL path or IP is kept (D39). A Worker whose tail never connected or exited early is left out with a gap line; with none connected, `cloudflare` is null |
+| `--tail` | off | Runs `npx wrangler@4.151.3 tail` on holdback-op1, holdback-op2 and crow-test-agents for the run, and keeps counts only: requests, and any CPU and wall time the events carry. No header, URL path or IP is kept (D39). A Worker whose tail never connected or exited early is left out with a gap line; with none connected, `cloudflare` is null |
 | `--probe` | off | Asks only "Reply with the single word: ok" with no tools at all, and touches no Crow site; prints the effort the hooks saw |
 | `--unsandboxed` | off | Runs the assistant's commands without the OS sandbox. Only as a separate user or in a throwaway virtual machine |
 | `--dry-run <file>` | off | Plays a script (`scripted.mjs`) in place of the model: no SDK, no key, no network. `tests/metrics/fixtures/one-click-script.json` is the one CI runs |

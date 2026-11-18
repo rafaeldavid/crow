@@ -9,7 +9,7 @@ import { spawn } from 'node:child_process';
 import { fileURLToPath } from 'node:url';
 
 const ROOT = fileURLToPath(new URL('../', import.meta.url));
-const WRANGLER = ['-y', 'wrangler@4'];
+const WRANGLER = ['-y', 'wrangler@4.151.3'];
 
 /**
  * Runs a command from the repository root, shows its output unless told not to, and keeps it.

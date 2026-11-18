@@ -8,3 +8,23 @@ packages:
 # minimatch 11 on dependents that ask for ^10; remove it once ESLint and typescript-eslint depend on 11.
 overrides:
   minimatch@<11.0.1: 11.0.1
+
+# T-518 (roadmap row N181): the install rules. `tests/install-rules.test.ts` fails if they are removed or weakened.
+#
+# The age rule: an install refuses a package version published less than 14 days ago (20160 minutes). A bad release
+# is usually pulled or fixed inside that time. With the value set here, pnpm is strict: CI fails with
+# ERR_PNPM_NO_MATURE_MATCHING_VERSION, and the lockfile is checked against the rule too.
+minimumReleaseAge: 20160
+# A fix younger than 14 days gets in only by a named exception here, reviewed in its pull request: the exact
+# name@version (no ranges, no bare names), above it a comment with the date, the advisory or reason, and the task.
+# Remove the entry once the version is 14 days old. Example:
+#   # 2026-11-18, GHSA-xxxx-xxxx-xxxx, T-nnn: remove after 2026-12-02
+#   - some-package@1.2.3
+minimumReleaseAgeExclude: []
+
+# The install-script allowlist: no dependency runs an install or build script unless it is named under allowBuilds.
+# An unnamed package with a script fails the install with ERR_PNPM_IGNORED_BUILDS instead of being skipped in
+# silence. On 2026-11-18 no package in the lockfile has a preinstall, install or postinstall script or a
+# binding.gyp, so the list is empty. Each entry needs a comment with the date and why the package must build.
+strictDepBuilds: true
+allowBuilds: {}

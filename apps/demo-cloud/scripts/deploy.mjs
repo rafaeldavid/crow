@@ -72,7 +72,7 @@ try {
     uploaded = true;
     // T-066: discovery's demo.build.commit names the commit each Worker runs, so Crow Control can tell what is
     // merged but not live. The pre-flight above refused a changed tree, so `commit` is what was built.
-    const r = await sh('npx', ['-y', 'wrangler@4', 'deploy', '-c', here(`../${w.config}`), ...(/^[0-9a-f]{40}$/.test(commit) ? ['--var', `BUILD_COMMIT:${commit}`] : [])]);
+    const r = await sh('npx', ['-y', 'wrangler@4.151.3', 'deploy', '-c', here(`../${w.config}`), ...(/^[0-9a-f]{40}$/.test(commit) ? ['--var', `BUILD_COMMIT:${commit}`] : [])]);
     w.version = /Current Version ID:\s*([0-9a-f-]{36})/.exec(r.out)?.[1];
     if (r.code !== 0 || !w.version) fail(`${w.name}'s upload was refused`);
   }
@@ -103,7 +103,7 @@ try {
     if (now === w.before) continue;
     w.version ??= now ?? 'unknown';
     w.rolledBack = await rollback(w.name, w.before, 'pnpm demo-cloud:deploy failed a check');
-    if (!w.rolledBack) console.error(`ROLLBACK FAILED for ${w.name}. Run: npx wrangler@4 rollback ${w.before} --name ${w.name}`);
+    if (!w.rolledBack) console.error(`ROLLBACK FAILED for ${w.name}. Run: npx wrangler@4.151.3 rollback ${w.before} --name ${w.name}`);
   }
 }
 
