@@ -1492,3 +1492,17 @@ Today a seller with its own API reads 13 files of 98,462 bytes and runs 22 comma
 4. The buyer's stop: recommended, the principal's yes on every waiver and replacement; or skip it for a replacement whose checks are only stricter.
 
 **Litmus tests.** Neutrality: no single actor waives or replaces, and an operator that refuses is bypassed. The hold: a waiver or a refund needs both signatures and pays only the two money addresses; if a replacement's batch fails, the old hold stays as it was [measured]. Defended judgment: the checks run first and their failures are what a buyer waives; no replacement after a delivery is posted.
+
+## D79. A carried delivery travels only with an accept; a reject or an escalation waits for the posted delivery (T-526)
+
+**Status:** adopted, 2026-11-18.
+
+**Adopted 2026-11-18 by T-526,** as the agent's call after a red-team pass. Rafa may overrule any line.
+
+- **Why.** An outside scan's finding (group G1, private triage T-523): a contract call that carries the seller's delivery re-checks the seller inside the caller's transaction, so the seller can make it revert after its calldata has made the primary's panel seed public, then deliver again knowing the seed. Only a decision other than an accept gives the seller a reason to.
+- **The rule.** The EVM adapter carries a held delivery only in an accept or an early accept. For a reject or an escalation on a carried delivery, it simulates the carried decision, relays `deliver`, and sends `decide` once the delivery is posted.
+- **The cost.** A primary's reject or escalation on a carried delivery takes three transactions where it took two. An accept keeps D4's two.
+- **What it does not change.** The contracts: anyone who relays directly can still send a carried reject. The live operators post every delivery the seller submits, so the carried path runs only where a caller asks the adapter to carry one (measured: `carryDelivery`'s callers in `packages/` and `apps/`).
+- **What stays (the red team's finding, Medium).** The posted delivery tells a seller who watches the mempool that the coming decision is not an accept. The seller can then land another attempt-1 delivery first. The decision is refused with nothing sent and the seed stays secret, but the seller has had one free look at the verdict on its first delivery, once per deal (measured: `attack.t526-seller-frontruns-posted-delivery` in `packages/settlement/evm/t526-redteam.test.ts`). The reference primary does not judge a second delivery for the same attempt (`decideTask` in `apps/adjudicator/src/service.ts`), so the fallback then decides [inferred]. Before this rule, the same front-run published the seed as well.
+- **What Rafa may overrule.** The alternative closes the free look: no decision carries a delivery, so every decision on a carried delivery is posted first and the order tells nothing. An accept then takes three transactions too, and D4's two-transaction path survives only for the early accept.
+- **Litmus tests.** Neutrality: no party gains a way to stop a valid commitment; the seller loses one. The hold: unchanged. Defended judgment: the panel seed stays secret from the seller until the posted delivery fixes what is judged.
