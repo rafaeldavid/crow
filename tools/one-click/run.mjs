@@ -10,7 +10,7 @@
 //   node tools/one-click/run.mjs --scenario buyer --effort medium --out reports/scratch/one-click [--logs <dir>] [--tail]
 //
 // --effort unset     passes no effort, so the hooks record the SDK's default for the model.
-// --tail             counts Cloudflare events per Worker with `npx wrangler@4 tail` during the run (wrangler's login;
+// --tail             counts Cloudflare events per Worker with `npx wrangler@4.151.3 tail` during the run (wrangler's login;
 //                    Gates item 4). Counts only: no header, URL path or IP is kept (D39).
 // --logs <dir>       keeps the SDK's raw messages as JSON lines, outside git (outside the repository, or under reports/).
 // --probe            asks only "Reply with the single word: ok", with no tools at all, touches no Crow site, and prints
@@ -159,7 +159,7 @@ function startTail() {
       if (!t.connected) t.connectedAt = Date.now();
       t.connected = true;
     };
-    const p = spawn('npx', ['--yes', 'wrangler@4', 'tail', w, '--format', 'json'], { stdio: ['ignore', 'pipe', 'pipe'] });
+    const p = spawn('npx', ['--yes', 'wrangler@4.151.3', 'tail', w, '--format', 'json'], { stdio: ['ignore', 'pipe', 'pipe'] });
     p.on('error', () => {
       t.exitedEarly = true;
     });

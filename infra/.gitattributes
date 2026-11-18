@@ -1,0 +1,4 @@
+# T-485: `git archive` writes the commit into these files, so a script copied to the Mac mini can print the commit
+# it came from (the rule for every privileged file, infra/dev-host/README.md).
+dev-host/*.sh export-subst
+lib/attest.mjs export-subst

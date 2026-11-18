@@ -1,0 +1,18 @@
+{
+  "name": "@holdback/hosted-sellers",
+  "version": "0.0.0",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "build": "tsc -b",
+    "check-report": "node scripts/check-report.ts"
+  },
+  "dependencies": {
+    "tweetnacl": "^1.0.3",
+    "viem": "^2.57.13"
+  },
+  "devDependencies": {
+    "@holdback/demo-cloud": "workspace:*",
+    "@holdback/operator": "workspace:*"
+  }
+}

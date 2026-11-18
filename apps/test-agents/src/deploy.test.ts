@@ -154,11 +154,12 @@ async function run(stage: Stage) {
     log: (s: string) => out.push(s),
     error: (s: string) => err.push(s),
   });
-  const wrangler = commands.filter((c) => c.startsWith('npx ')).map((c) => c.replace('npx -y wrangler@4 ', ''));
+  const wrangler = commands.filter((c) => c.startsWith('npx ')).map((c) => c.replace('npx -y wrangler@4.151.3 ', ''));
   return { code, wrangler, probes, out: out.join('\n'), err: err.join('\n'), record: out.join('\n').split('\n').find((l) => l.startsWith('**Test seller deploy')) };
 }
 const STATUS = 'deployments status --name crow-test-agents --json';
-const UPLOAD = 'deploy -c /repo/apps/test-agents/wrangler.jsonc';
+const UPLOAD = 'deploy -c /repo/apps/test-agents/wrangler.jsonc --var BUILD_COMMIT:016c28e0123456789abcdef0123456789abcdef0';
+const DRY_RUN = 'deploy -c /repo/apps/test-agents/wrangler.jsonc --dry-run';
 const ROLLBACK = `rollback ${BEFORE} --name crow-test-agents --message apps/test-agents/scripts/deploy.mjs failed a check --yes`;
 
 describe("the test seller's deploy", () => {
@@ -258,7 +259,7 @@ describe("the test seller's deploy", () => {
   it('says so, and gives the command, when the rollback fails', async () => {
     const stuck = await run({ health: [{ status: 500, body: '' }], live: [BEFORE, AFTER, AFTER] });
     expect(stuck.code).toBe(1);
-    expect(stuck.err).toContain(`ROLLBACK FAILED for crow-test-agents. Run: npx wrangler@4 rollback ${BEFORE} --name crow-test-agents`);
+    expect(stuck.err).toContain(`ROLLBACK FAILED for crow-test-agents. Run: npx wrangler@4.151.3 rollback ${BEFORE} --name crow-test-agents`);
     expect(stuck.record).toContain(`(rollback target \`${BEFORE}\`, ROLLBACK FAILED).`);
     const refused = await run({ health: [{ status: 500, body: '' }], live: [BEFORE, AFTER, BEFORE], rollback: { code: 1 } });
     expect(refused.record).toContain('ROLLBACK FAILED');
@@ -288,7 +289,7 @@ describe("the test seller's deploy", () => {
   it('keeps --dry-run as it was: wrangler bundles, and nothing is read, checked or recorded', async () => {
     const ok = await run({ args: ['--dry-run'], upload: { code: 0, out: '--dry-run: exiting now.' } });
     expect(ok.code).toBe(0);
-    expect(ok.wrangler).toEqual([`${UPLOAD} --dry-run`]);
+    expect(ok.wrangler).toEqual([DRY_RUN]);
     expect(ok.probes).toEqual([]);
     expect(ok.out).toBe('');
     expect((await run({ args: ['--dry-run'], upload: { code: 3, out: 'Build failed' } })).code).toBe(3);

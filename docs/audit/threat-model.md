@@ -2,7 +2,7 @@
 
 ## Summary
 
-This page names who can act on the contracts, what each actor can and cannot do, what is at stake, and the assumptions the contracts rest on. It describes the phase-one contracts in `contracts/src` at `<FREEZE_COMMIT>` ([`scope.md`](scope.md)). SimChain keeps the full protocol, appeals and bonds included; this page does not describe it. It changes no code and adds no finding beyond [`state-model.md`](state-model.md) section 11.
+This page names who can act on the contracts, what each actor can and cannot do, what is at stake, and the assumptions the contracts rest on. It describes the phase-one contracts in `contracts/src` at the frozen commit (the tag `contracts-phase-one-1`; [`scope.md`](scope.md)). SimChain keeps the full protocol, appeals and bonds included; this page does not describe it. It changes no code and adds no finding beyond [`state-model.md`](state-model.md) section 11.
 
 - **Every entry point of the rules contract is open to anyone.** Authority comes from a signature or an expired deadline, never from the caller [measured: `HoldbackRules.sol` does not read `msg.sender`].
 - **No actor can move a hold outside the signed terms** [inferred from the transition table in `state-model.md` section 3].
@@ -10,7 +10,7 @@ This page names who can act on the contracts, what each actor can and cannot do,
 - **Phase one has no party appeals and no bonds on chain** (D57). The first decision by the primary or the fallback adjudicator is final, and so is the appeal adjudicator's decision after an escalation.
 - **Phase one keeps contract signers and the on-chain beacon proof.** The maintainer refused scope cut SC-4 and did not cut SC-8, both on 2026-11-11. A multisig or another smart contract can be the buyer, the seller or an adjudicator, and any contract can relay a step.
 
-Labels: **measured** (read in the named function or file), **inferred**, **guessed**. Citations follow `state-model.md`: contract code by function, error, event or constant name in `HoldbackRules.sol` and `HoldbackTypes.sol` (imported as `H`) at `<FREEZE_COMMIT>`; `E:` is a line of the Commerce Payments `AuthCaptureEscrow.sol` at `6b0a5ef`. Row numbers (P01 to P17) are that page's section 9.3. SC-n and IS-n are the labels of the contract refinement plan, which the maintainers keep privately ([`docs/private-materials.md`](../private-materials.md)).
+Labels: **measured** (read in the named function or file), **inferred**, **guessed**. Citations follow `state-model.md`: contract code by function, error, event or constant name in `HoldbackRules.sol` and `HoldbackTypes.sol` (imported as `H`) at the frozen commit (the tag `contracts-phase-one-1`; [`scope.md`](scope.md)); `E:` is a line of the Commerce Payments `AuthCaptureEscrow.sol` at `6b0a5ef`. Row numbers (P01 to P17) are that page's section 9.3. SC-n and IS-n are the labels of the contract refinement plan, which the maintainers keep privately ([`docs/private-materials.md`](../private-materials.md)).
 
 ## 1. Assets
 
@@ -21,7 +21,7 @@ Labels: **measured** (read in the named function or file), **inferred**, **guess
 | AS-5 | **The record:** the deal's word and the events, as evidence of who signed what | The rules contract's storage and logs | No entry point rewrites a terminal row; there is no admin path (the contract's NatSpec: no owner, role, pause, upgrade, fallback or receive) |
 | AS-6 | **Liveness:** every funded deal closes | The timeouts anyone may call (`reclaim`, `triggerFallback`, `triggerDefault`) | Each non-terminal row has a timeout (`state-model.md` section 3) |
 
-The deployed model's assets AS-2 and AS-3, adjudicators' bonds and appeal bonds, are not in phase one.
+The 2026-11-04 contracts' (domain 0.7) assets AS-2 and AS-3, adjudicators' bonds and appeal bonds, are not in phase one.
 
 ## 2. Actors
 
@@ -61,7 +61,7 @@ A nested call needs no hostile token. The ERC-3009 collector unwraps an ERC-6492
 
 ## 4. Assumptions
 
-Each assumption names what the contracts rely on, where, and what happens if it fails. The deployed model's TA-3 and TA-10, about the vault's push payments and a bond held through a long appeal window, are not in phase one.
+Each assumption names what the contracts rely on, where, and what happens if it fails. The 0.7 contracts' TA-3 and TA-10, about the vault's push payments and a bond held through a long appeal window, are not in phase one.
 
 | # | Assumption | Where the code relies on it | If it fails |
 | --- | --- | --- | --- |
@@ -82,7 +82,7 @@ Each assumption names what the contracts rely on, where, and what happens if it 
 
 ## 5. Attack classes and where each is handled
 
-Each row names what an attacker tries, the code that refuses it and the test that covers it. The tests are named from the files in `contracts/test/` at `<FREEZE_COMMIT>` [measured on the lane's tip: the files and the invariant names exist; their bodies were not read for this page].
+Each row names what an attacker tries, the code that refuses it and the test that covers it. The tests are named from the files in `contracts/test/` at the frozen commit (the tag `contracts-phase-one-1`; [`scope.md`](scope.md)) [measured at the tag on 2026-11-13 with `git ls-tree` and `git grep`: the files and the invariant names exist]. T-499 read the invariant bodies and the handler on 2026-11-17: each invariant asserts its property through the handler's counters or real balances ([`invariants.md`](invariants.md)).
 
 | Class | What the attacker tries | Refused at | Test |
 | --- | --- | --- | --- |
@@ -106,7 +106,7 @@ Each row names what an attacker tries, the code that refuses it and the test tha
 | A decision on a closed deal | Decide again, or with another role, after the deal closed | `_turn` | `unit/PhaseOneNoBonds.t.sol`, `attack/PhaseOneRedTeam.t.sol` |
 | An admin path | Upgrade, pause, destroy or drain | None exists | `fuzz/NoAdmin.fuzz.t.sol`; `invariant_noAdminPath` |
 
-`invariant_escrowMatchesState` holds only while no deal passes the escrow's expiry with its hold reclaimed; TA-1 is the state it does not cover [inferred from the invariant's name and `state-model.md` 5.2].
+`invariant_escrowMatchesState` covers TA-1: the campaign targets the payment address's own reclaim on the escrow (`cppReclaim` in `RulesInvariants.t.sol`), and the handler's mirror of the hold is 0 after it (`heldMirror` in `RulesHandler.sol`) [measured: T-499 read both, 2026-11-17].
 
 ## 6. What the contracts do not defend against
 
@@ -133,5 +133,5 @@ Each is accepted or tracked elsewhere; this list points to it.
 ## Where this page did not look
 
 - **Not read in full:** the ERC-3009 collector, `TokenStore.sol`, and Solady's signature library. The claims about them come from [`scope.md`](scope.md) and the reviews it cites.
-- **Not run for this page:** no invariant campaign and no model check. The unit tests passed on the lane on 2026-11-12 ([`scope.md`](scope.md)).
+- **Runs:** the unit tests passed on the lane at `ba941e0` on 2026-11-12, before the freeze ([`scope.md`](scope.md)). At the tag, the invariant campaign and the full model check passed; [`invariants.md`](invariants.md), "Recorded runs at the tag", gives the commands and dates.
 - **Not covered:** the off-chain components (the operators, the reference adjudicator, the judgment pipeline). [`scope.md`](scope.md) lists what each may and may not do.

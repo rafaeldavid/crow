@@ -8,7 +8,7 @@
 // no expressions, no code, no template language beyond that. Every request goes under `baseUrl` when one is set, and
 // a mapping needs one: a configuration or an answer that would send a request anywhere else is refused. The
 // credential is sent only to those requests, and never logged, journaled or put in an error message.
-import { plain } from '@holdback/testkit';
+import { plain } from './plain.ts';
 
 type J = any; // eslint-disable-line @typescript-eslint/no-explicit-any
 
@@ -25,14 +25,25 @@ export interface CallMapping {
   body?: J;
 }
 export interface QuoteMapping extends CallMapping {
-  /** JSON pointers into the answer. Left out: today's `/price/amount`, `/price/token`, `/quoteId`, `/deliverWithinSec`. */
-  read?: { amount?: string; token?: string; quoteId?: string; deliverWithinSec?: string; validForSec?: string };
+  /**
+   * JSON pointers into the answer. Left out: today's `/price/amount`, `/price/token`, `/quoteId`, `/deliverWithinSec`.
+   * `units` instead of `amount`: the answer counts units (credits, hours), and the price is that count times `unitPrice`.
+   */
+  read?: { amount?: string; units?: string; token?: string; quoteId?: string; deliverWithinSec?: string; validForSec?: string };
+  /** With `read.units`: the price of one unit, in the token's base units as a decimal string (T-406). */
+  unitPrice?: string;
 }
 export interface StartMapping extends CallMapping {
   /** A JSON pointer to the job's ID in the answer. Left out: `/jobId`. */
   read?: { jobId?: string };
   /** The header that carries the deal's ID as the idempotency key. Left out: `Idempotency-Key`. */
   idempotencyHeader?: string;
+  /**
+   * Whether the API returns the same job when the start is sent again with the same key (T-408). Left out: true
+   * when the mapping names an `idempotencyHeader`, false when it names none. A start that is not repeatable is sent at
+   * most once a deal.
+   */
+  repeatable?: boolean;
 }
 /** How the result call says the job runs, is done or failed. Left out: HTTP 202 runs, 200 is done. */
 export type JobStatus =
@@ -58,7 +69,39 @@ export interface ResultMapping extends CallMapping {
   /** A second call, made once the job is done, whose answer holds the result. */
   reportCall?: CallMapping;
   files?: FilesMapping;
+  /**
+   * A second call, made once the job is done and its workspace checked, whose JSON answer goes into the result at
+   * `into` (T-501): an API that serves a job's artifacts apart from the job. Its path takes `{{jobId}}` only.
+   */
+  merge?: { path: string; into: string };
+  /**
+   * Where the result call's answer names the job's own request, by scope field (T-501): each must equal the deal's
+   * scope, a list in any order. A result whose job asked for another scope is never delivered.
+   */
+  jobScope?: Record<string, string>;
 }
+/**
+ * The one account at your API that the adapter's jobs run in (T-435, ADR-0037 section 5): a workspace, a project or a
+ * tenant. The quote and start paths carry it as `{{workspace}}`, filled from `id` only. `resultPointer`, when set,
+ * points into the result call's answer at the account the job ran in; a result from another account is not delivered.
+ */
+export interface WorkspacePin {
+  id: string;
+  resultPointer?: string;
+}
+
+/** A result whose job ran in another account than `sellerApi.workspace` names (T-435): never delivered. */
+export class WrongWorkspace extends Error {}
+/** A result whose job asked for another scope than the deal's, by `sellerApi.result.jobScope` (T-501): never delivered. */
+export class WrongScope extends Error {
+  /** The scope field that differs, a name from the configuration (T-502); absent when the request cannot be read. */
+  readonly field: string | undefined;
+  constructor(message: string, field?: string) {
+    super(message);
+    this.field = field;
+  }
+}
+
 export interface SellerApiConfig {
   /** Every request goes under this address. Required with a mapping or a credential. */
   baseUrl?: string;
@@ -67,6 +110,8 @@ export interface SellerApiConfig {
   quote: string | QuoteMapping;
   start: string | StartMapping;
   result: string | ResultMapping;
+  /** The account the jobs run in, pinned (T-435). Left out: the paths name none. */
+  workspace?: WorkspacePin;
 }
 
 /** The named values a placeholder may stand for. */
@@ -78,23 +123,37 @@ export interface Values {
   quoteId?: string | undefined;
   jobId?: string | undefined;
   file?: string | undefined;
+  /** Filled by the client from `sellerApi.workspace.id`, never from a caller. */
+  workspace?: string | undefined;
 }
 
 /** A further file could not be fetched or added: the delivery waits, and the seller is alerted. */
 export class FilesNotAdded extends Error {}
 
-export type JobAnswer = { state: 'running' } | { state: 'failed'; status: string } | { state: 'done'; bytes: Uint8Array };
+/** `status`, when the state is read by a field: the field's value, such as `queued` or `running` (T-417, for the events). */
+export type JobAnswer = { state: 'running'; status?: string } | { state: 'failed'; status: string } | { state: 'done'; bytes: Uint8Array };
 
 export interface SellerApi {
   /** One log line: where the API is and how it is reached. Names the credential's variable, never its value. */
   describe: string;
   /** false: the quote's answer names no token, so the price is in the settlement layer's token. */
   readsToken: boolean;
+  /** false: a start sent again could start a second job, so the adapter sends it at most once a deal (T-408). */
+  startRepeatable: boolean;
+  /** Why a start is not repeatable, for the start-up line; absent when it is. */
+  startOneShotBecause?: string;
   quote(v: Values): Promise<J>;
   start(v: Values): Promise<string>;
   result(v: Values): Promise<JobAnswer>;
   /** The result with its further files added, or the result as it is when none are configured. */
   withFiles(result: Uint8Array, v: Values): Promise<Uint8Array>;
+  /**
+   * Whether a result call can tell an existing job's account and request (T-501): `sellerApi.result.jobScope` is set,
+   * and a pinned workspace has its `resultPointer`. Without both, no existing job is taken for a deal.
+   */
+  checksJob: boolean;
+  /** When `checksJob` is false: what the configuration lacks, for the route's refusal. */
+  checksJobNot: string;
 }
 
 const PLACEHOLDER = /\{\{([A-Za-z][A-Za-z0-9]*)(?:\.([A-Za-z][A-Za-z0-9]*))?\}\}/g;
@@ -104,14 +163,33 @@ const RESERVED_HEADERS = ['host', 'content-length', 'transfer-encoding', 'connec
 const CONTROL = /[\0-\x1f\x7f]/;
 const OMIT = Symbol('omit');
 const isRecord = (v: J): boolean => v !== null && typeof v === 'object' && !Array.isArray(v);
+/**
+ * Whether an answer fetched with `redirect: 'manual'` is a redirect: a 3xx status, or the opaque redirect a browser's
+ * fetch returns in its place (status 0). The adapter follows none (T-433).
+ */
+export const isRedirect = (res: Response): boolean => res.type === 'opaqueredirect' || (res.status >= 300 && res.status <= 399);
 const short = (v: J) => plain(String(v)).slice(0, 80);
+/** Two JSON values are the same; two lists are the same items in any order (T-501, the job's request). */
+function sameValue(a: J, b: J): boolean {
+  if (Array.isArray(a) && Array.isArray(b)) {
+    if (a.length !== b.length) return false;
+    const key = (x: J[]) => x.map((i) => JSON.stringify(i)).sort();
+    const [ka, kb] = [key(a), key(b)];
+    return ka.every((x, i) => x === kb[i]);
+  }
+  if (Array.isArray(a) || Array.isArray(b)) return false;
+  if (a === undefined || b === undefined) return a === b;
+  return JSON.stringify(a) === JSON.stringify(b);
+}
 
 /** The names each call may use. `scope` and `options` stand alone only, as a whole body value. */
 const NAMES = {
-  quote: ['buyer', 'scope', 'options'],
-  start: ['buyer', 'scope', 'options', 'commitmentId', 'quoteId'],
-  result: ['buyer', 'scope', 'options', 'commitmentId', 'quoteId', 'jobId'],
-  file: ['buyer', 'scope', 'options', 'commitmentId', 'quoteId', 'jobId', 'file'],
+  quote: ['buyer', 'scope', 'options', 'workspace'],
+  start: ['buyer', 'scope', 'options', 'commitmentId', 'quoteId', 'workspace'],
+  result: ['buyer', 'scope', 'options', 'commitmentId', 'quoteId', 'jobId', 'workspace'],
+  file: ['buyer', 'scope', 'options', 'commitmentId', 'quoteId', 'jobId', 'file', 'workspace'],
+  // T-501: the artifacts call names the job and its account only, so nothing else can steer where it goes.
+  merge: ['jobId', 'workspace'],
 } as const;
 type Use = keyof typeof NAMES;
 
@@ -249,9 +327,62 @@ const CALL_KEYS = ['method', 'path', 'headers', 'body'];
  * an unknown field, a placeholder this call cannot fill, a path or header that could leave the base URL, an unset
  * credential. Nothing is sent here.
  */
-export function sellerApiClient(api: J, env: Readonly<Record<string, string | undefined>>, fields: Fields): SellerApi {
+/**
+ * `fetcher`: how requests are sent; the global fetch, read at each call, unless a caller gives another. The local report check
+ * (apps/hosted-sellers/scripts/check-report.ts, T-502) answers from files with it, so it runs this same code.
+ */
+export function sellerApiClient(api: J, env: Readonly<Record<string, string | undefined>>, fields: Fields, fetcher?: typeof fetch): SellerApi {
   if (!isRecord(api)) throw new Error('sellerApi must be an object: your API\'s quote, start and result calls');
-  for (const k of Object.keys(api)) if (!['baseUrl', 'auth', 'quote', 'start', 'result'].includes(k)) throw new Error(`sellerApi has a field the adapter does not take: ${short(k)}`);
+  for (const k of Object.keys(api)) if (!['baseUrl', 'auth', 'quote', 'start', 'result', 'workspace'].includes(k)) throw new Error(`sellerApi has a field the adapter does not take: ${short(k)}`);
+  // ---- The account the jobs run in (T-435): named once, carried by the quote and start paths ----
+  let workspace: { id: string; segment: string; resultAt: string[] | undefined } | undefined;
+  if (api.workspace !== undefined) {
+    const w = api.workspace;
+    if (!isRecord(w)) throw new Error('sellerApi.workspace must be an object: id and an optional resultPointer');
+    for (const k of Object.keys(w)) if (!['id', 'resultPointer'].includes(k)) throw new Error(`sellerApi.workspace has a field the adapter does not take: ${short(k)}`);
+    if (typeof w.id !== 'string' || !/^[\x21-\x7e]{1,200}$/.test(w.id) || w.id.includes('/') || w.id === '.' || w.id === '..') throw new Error('sellerApi.workspace.id must be 1 to 200 printable characters with no slash');
+    const segmentsOf = (path: string): string[] => path.split(/[?#]/)[0]!.split('/');
+    const carries = (path: unknown) => typeof path === 'string' && segmentsOf(path).includes('{{workspace}}');
+    // A whole segment of the path, not part of one or of the query: the client checks the built path for it.
+    for (const k of ['quote', 'start'] as const) {
+      const call = api[k];
+      if (!isRecord(call) || !carries(call.path)) throw new Error(`sellerApi.${k}.path must carry {{workspace}} as one whole path segment: sellerApi.workspace pins the account every quote and start runs in`);
+    }
+    // The report call and the files carry the credential too, and a file's path comes from the job's answer: with an
+    // account pinned, they name it as well, or a job's output could send the credential into another account (T-435).
+    const rmap: J = isRecord(api.result) ? api.result : {};
+    if (isRecord(rmap.reportCall) && !carries(rmap.reportCall.path)) throw new Error('sellerApi.result.reportCall.path must carry {{workspace}} as one whole path segment, as the quote and start do');
+    if (isRecord(rmap.files) && !carries(rmap.files.path)) throw new Error('sellerApi.result.files.path must carry {{workspace}} as one whole path segment, as the quote and start do');
+    // The segment before {{workspace}} (such as "workspaces") is the accounts' collection: no path may name another
+    // account in it as text, before or after the placeholder.
+    const parentIn = (path: string) => {
+      const segs = segmentsOf(path);
+      return segs[segs.indexOf('{{workspace}}') - 1];
+    };
+    const parent = parentIn((api.quote as J).path as string);
+    if (parent !== parentIn((api.start as J).path as string)) throw new Error('sellerApi.quote.path and sellerApi.start.path name the account under different segments: both write <collection>/{{workspace}}');
+    if (parent !== undefined && parent !== '' && !parent.includes('{{')) {
+      const all = [api.quote, api.start, api.result, rmap.reportCall, rmap.files, rmap.merge].map((cl: J) => (typeof cl === 'string' ? cl : isRecord(cl) ? cl.path : undefined)).filter((x): x is string => typeof x === 'string');
+      for (const path of all) {
+        const segs = segmentsOf(path);
+        segs.forEach((seg, i) => {
+          if (seg === parent && segs[i + 1] !== '{{workspace}}') throw new Error(`sellerApi: the path ${short(path)} names an account under ${short(parent)} that is not {{workspace}}`);
+        });
+      }
+    }
+    for (const k of ['quote', 'start', 'result'] as const) {
+      const call = api[k];
+      const paths = [typeof call === 'string' ? call : isRecord(call) ? call.path : undefined, isRecord(call) && isRecord(call.reportCall) ? call.reportCall.path : undefined, isRecord(call) && isRecord(call.files) ? call.files.path : undefined, isRecord(call) && isRecord(call.merge) ? call.merge.path : undefined];
+      for (const path of paths) {
+        if (typeof path === 'string' && path.split(/[/?#]/).some((seg: string) => seg === w.id || seg === encodeURIComponent(w.id))) {
+          throw new Error(`sellerApi.${k}: a path names the workspace as text; write {{workspace}}, so the paths and sellerApi.workspace.id can never differ`);
+        }
+      }
+    }
+    workspace = { id: w.id, segment: encodeURIComponent(w.id), resultAt: w.resultPointer === undefined ? undefined : pointerParts('sellerApi.workspace.resultPointer', w.resultPointer) };
+  } else if (JSON.stringify(api).includes('{{workspace}}')) {
+    throw new Error('sellerApi uses {{workspace}}, and sellerApi.workspace names none: add {"id": "<the account>"}');
+  }
   const mapped = ['quote', 'start', 'result'].some((k) => isRecord(api[k]));
   let base: URL | undefined;
   if (api.baseUrl !== undefined) {
@@ -282,7 +413,7 @@ export function sellerApiClient(api: J, env: Readonly<Record<string, string | un
     auth = { header: a.header.toLowerCase(), value: `${a.prefix ?? ''}${value}`, env: a.env };
   }
 
-  const LABELS: Record<string, string> = { 'sellerApi.quote': 'the quote', 'sellerApi.start': 'the start', 'sellerApi.result': 'the result', 'sellerApi.result.reportCall': 'the report call', 'sellerApi.result.files': 'a file' };
+  const LABELS: Record<string, string> = { 'sellerApi.quote': 'the quote', 'sellerApi.start': 'the start', 'sellerApi.result': 'the result', 'sellerApi.result.reportCall': 'the report call', 'sellerApi.result.files': 'a file', 'sellerApi.result.merge': 'the artifacts call' };
   const prepare = (at: string, c: J, use: Use, defaults: { method: Method; body: J }, extraKeys: string[], reserved: string[]): Prepared => {
     if (typeof c === 'string') {
       // Today's form: a whole address, with `{jobId}` where the job's ID goes.
@@ -329,8 +460,16 @@ export function sellerApiClient(api: J, env: Readonly<Record<string, string | un
 
   // ---- The quote ----
   const q = api.quote;
-  const quote = prepare('sellerApi.quote', q, 'quote', { method: 'POST', body: { scope: '{{scope}}', options: '{{options}}' } }, ['read'], []);
-  const quoteRead = pointers('sellerApi.quote.read', isRecord(q) ? q.read : undefined, { amount: '/price/amount', token: '/price/token', quoteId: '/quoteId', deliverWithinSec: '/deliverWithinSec', validForSec: '' });
+  const quote = prepare('sellerApi.quote', q, 'quote', { method: 'POST', body: { scope: '{{scope}}', options: '{{options}}' } }, ['read', 'unitPrice'], []);
+  const quoteRead = pointers('sellerApi.quote.read', isRecord(q) ? q.read : undefined, { amount: '/price/amount', units: '', token: '/price/token', quoteId: '/quoteId', deliverWithinSec: '/deliverWithinSec', validForSec: '' });
+  // T-406: a quote that counts units, such as credits, priced at a fixed price per unit. No arithmetic beyond one
+  // whole-number product, in base units, with no float anywhere.
+  const unitsAt = isRecord(q) && isRecord(q.read) && q.read.units !== undefined ? String(q.read.units) : undefined;
+  const unitPrice: J = isRecord(q) ? q.unitPrice : undefined;
+  if (unitPrice !== undefined && unitsAt === undefined) throw new Error('sellerApi.quote.unitPrice needs sellerApi.quote.read.units, the pointer to the count the answer prices');
+  if (unitsAt !== undefined && unitPrice === undefined) throw new Error('sellerApi.quote.read.units needs sellerApi.quote.unitPrice, the price of one unit in base units');
+  if (unitsAt !== undefined && isRecord(q) && q.read.amount !== undefined) throw new Error('sellerApi.quote.read takes units or amount, not both');
+  if (unitPrice !== undefined && (typeof unitPrice !== 'string' || !/^(0|[1-9][0-9]{0,77})$/.test(unitPrice))) throw new Error('sellerApi.quote.unitPrice must be base units as a decimal string, such as "1500000" for 1.50 of a 6-decimal token');
   // In today's shape the token is in the answer; a mapping whose `read` names no token prices in the layer's token.
   const readsToken = !isRecord(q) || q.read === undefined || q.read.token !== undefined;
   const validFor = isRecord(q) && q.read?.validForSec !== undefined;
@@ -339,12 +478,17 @@ export function sellerApiClient(api: J, env: Readonly<Record<string, string | un
   const s = api.start;
   const idem = isRecord(s) && s.idempotencyHeader !== undefined ? s.idempotencyHeader : 'Idempotency-Key';
   if (typeof idem !== 'string' || !TOKEN.test(idem) || RESERVED_HEADERS.includes(idem.toLowerCase()) || idem.toLowerCase() === auth?.header) throw new Error('sellerApi.start.idempotencyHeader must be a header name other than the credential\'s');
-  const start = prepare('sellerApi.start', s, 'start', { method: 'POST', body: { commitmentId: '{{commitmentId}}', quoteId: '{{quoteId}}', scope: '{{scope}}', options: '{{options}}' } }, ['read', 'idempotencyHeader'], [idem.toLowerCase()]);
+  const start = prepare('sellerApi.start', s, 'start', { method: 'POST', body: { commitmentId: '{{commitmentId}}', quoteId: '{{quoteId}}', scope: '{{scope}}', options: '{{options}}' } }, ['read', 'idempotencyHeader', 'repeatable'], [idem.toLowerCase()]);
+  // T-408: today's three addresses take the deal's ID as their key, so they repeat safely; a mapping repeats safely
+  // only when it names the header its API keys a start by, or says so.
+  if (isRecord(s) && s.repeatable !== undefined && typeof s.repeatable !== 'boolean') throw new Error('sellerApi.start.repeatable must be true or false');
+  const startRepeatable = !isRecord(s) ? true : s.repeatable ?? s.idempotencyHeader !== undefined;
+  const startOneShotBecause = startRepeatable ? undefined : isRecord(s) && s.repeatable === false ? 'the mapping says "repeatable": false' : 'the mapping names no idempotencyHeader';
   const startRead = pointers('sellerApi.start.read', isRecord(s) ? s.read : undefined, { jobId: '/jobId' });
 
   // ---- The result ----
   const r = api.result;
-  const result = prepare('sellerApi.result', r, 'result', { method: 'GET', body: undefined }, ['status', 'report', 'reportCall', 'files'], []);
+  const result = prepare('sellerApi.result', r, 'result', { method: 'GET', body: undefined }, ['status', 'report', 'reportCall', 'files', 'merge', 'jobScope'], []);
   const rm: J = isRecord(r) ? r : {};
   let status: { by: 'http'; running: number[]; done: number[]; failed: number[] } | { by: 'field'; pointer: string[]; running: string[]; done: string[]; failed: string[] } = { by: 'http', running: [202], done: [200], failed: [] };
   if (rm.status !== undefined) {
@@ -355,6 +499,8 @@ export function sellerApiClient(api: J, env: Readonly<Record<string, string | un
       const codes = (k: string, d: number[]): number[] => {
         const x = st[k] ?? d;
         if (!Array.isArray(x) || !x.every((n: J) => Number.isSafeInteger(n) && n >= 200 && n <= 599)) throw new Error(`sellerApi.result.status.${k} must be a list of HTTP status codes`);
+        // Under a base URL every 3xx is a redirect the adapter refuses (T-433), so a list that names one could never match.
+        if (x.some((n: number) => n >= 300 && n <= 399)) throw new Error(`sellerApi.result.status.${k} names a 3xx code: the adapter refuses every redirect, so that code can never mean a job's state`);
         return x;
       };
       status = { by: 'http', running: codes('running', [202]), done: codes('done', [200]), failed: codes('failed', []) };
@@ -392,10 +538,52 @@ export function sellerApiClient(api: J, env: Readonly<Record<string, string | un
     const call = prepare('sellerApi.result.files', { path: f.path }, 'file', { method: 'GET', body: undefined }, [], []);
     files = { list: pointerParts('sellerApi.result.files.list', f.list), into, same: f.list === f.into, call, maxCount: f.maxCount, maxTotalBytes: f.maxTotalBytes, encoding: f.encoding ?? 'utf8' };
   }
+  // ---- T-501: the artifacts call, and the job's own request ----
+  let merge: { call: Prepared; into: string[]; carries: boolean } | undefined;
+  if (rm.merge !== undefined) {
+    const m = rm.merge;
+    if (!isRecord(m)) throw new Error('sellerApi.result.merge must be an object: path and into');
+    for (const k of Object.keys(m)) if (!['path', 'into'].includes(k)) throw new Error(`sellerApi.result.merge has a field the adapter does not take: ${short(k)}`);
+    if (rm.reportCall !== undefined) throw new Error('sellerApi.result.merge and sellerApi.result.reportCall cannot both be set: the artifacts call adds to the result call\'s answer, which a report call replaces');
+    if (typeof m.path !== 'string' || !m.path.split(/[/?#]/).includes('{{jobId}}')) throw new Error('sellerApi.result.merge.path must be a path under sellerApi.baseUrl with {{jobId}} as one whole segment');
+    const into = pointerParts('sellerApi.result.merge.into', m.into);
+    if (into.length === 0) throw new Error('sellerApi.result.merge.into must name a field inside the result, not the whole result');
+    const carries = m.path.split(/[?#]/)[0]!.split('/').includes('{{workspace}}');
+    // The call goes out with the credential: it must follow a result whose account was read, or name the account itself.
+    if (workspace && !carries && !workspace.resultAt) throw new Error('sellerApi.result.merge needs sellerApi.workspace.resultPointer, or {{workspace}} in its path: the call runs only after the job is known to be in the pinned workspace');
+    merge = { call: prepare('sellerApi.result.merge', { path: m.path }, 'merge', { method: 'GET', body: undefined }, [], []), into, carries };
+  }
+  let jobScope: Array<[string, string[]]> | undefined;
+  if (rm.jobScope !== undefined) {
+    const s = rm.jobScope;
+    if (!isRecord(s) || Object.keys(s).length === 0) throw new Error('sellerApi.result.jobScope must name one or more scope fields, each with a JSON pointer into the result answer');
+    jobScope = Object.entries(s).map(([k, p]) => {
+      if (!fields.scope.includes(k)) throw new Error(`sellerApi.result.jobScope names ${short(k)}, which the scope rules do not define`);
+      return [k, pointerParts(`sellerApi.result.jobScope.${k}`, p)];
+    });
+  }
+  // T-501 red team: an existing job stands in for the start, so jobScope must cover every scope field the start sends,
+  // and the start may send no options, which no pointer compares. `{{scope}}` whole sends every field.
+  const startText = JSON.stringify({ url: start.url, headers: start.headers, body: start.body ?? null });
+  const startScope = new Set<string>();
+  let startOptions = false;
+  for (const [, n, f] of startText.matchAll(PLACEHOLDER)) {
+    if (n === 'scope') for (const x of f === undefined ? fields.scope : [f]) startScope.add(x);
+    if (n === 'options') startOptions = true;
+  }
+  const uncovered = [...startScope].filter((k) => !jobScope?.some(([j]) => j === k));
+  const checksJob = jobScope !== undefined && uncovered.length === 0 && !startOptions && (!workspace || workspace.resultAt !== undefined);
+  const checksJobNot = jobScope === undefined ? 'set sellerApi.result.jobScope' : uncovered.length ? `sellerApi.result.jobScope must also name ${uncovered.map(short).join(', ')}, which the start sends` : startOptions ? 'the start sends options, which jobScope cannot compare' : 'set sellerApi.workspace.resultPointer with a pinned workspace';
 
   const strict = base !== undefined; // a mapping or a credential: no redirects, and answers capped
-  const send = async (p: Prepared, v: Values, extra: Record<string, string> = {}, cap: number | undefined = strict ? DELIVERY_CAP_BYTES : undefined): Promise<{ status: number; bytes: Uint8Array }> => {
+  const send = async (p: Prepared, given: Values, extra: Record<string, string> = {}, cap: number | undefined = strict ? DELIVERY_CAP_BYTES : undefined): Promise<{ status: number; bytes: Uint8Array }> => {
+    // The workspace comes from the configuration only: whatever a caller passed under that name is replaced.
+    const v: Values = { ...given, workspace: workspace?.id };
     const url = urlFor(p.what, p.url, v, base);
+    const named = ['sellerApi.quote', 'sellerApi.start', 'sellerApi.result.reportCall', 'sellerApi.result.files', ...(merge?.carries ? ['sellerApi.result.merge'] : [])];
+    if (workspace && named.includes(p.what) && !url.pathname.split('/').includes(workspace.segment)) {
+      throw new Error(`${p.label} would go to ${url.pathname}, which does not name the pinned workspace: nothing was sent`);
+    }
     const headers: Record<string, string> = Object.create(null);
     for (const [k, t] of Object.entries(p.headers)) {
       const filled = t.replace(PLACEHOLDER, (_m, name: string, field?: string) => asText(valueOf(v, name, field)));
@@ -410,8 +598,13 @@ export function sellerApiClient(api: J, env: Readonly<Record<string, string | un
     }
     Object.assign(headers, extra);
     if (auth) headers[auth.header] = auth.value;
-    // Redirects are refused under a base URL: a redirect could carry the credential elsewhere.
-    const res = await fetch(url, { method: p.method, headers, ...(payload === undefined ? {} : { body: payload }), redirect: strict ? 'error' : 'follow', signal: AbortSignal.timeout(30_000) });
+    // Redirects are refused under a base URL: a redirect could carry the credential elsewhere. `manual` returns the 3xx
+    // unfollowed and the adapter refuses it here, because the Workers runtime does not implement `error` (T-433).
+    const res = await (fetcher ?? fetch)(url, { method: p.method, headers, ...(payload === undefined ? {} : { body: payload }), redirect: strict ? 'manual' : 'follow', signal: AbortSignal.timeout(30_000) });
+    if (strict && isRedirect(res)) {
+      await res.body?.cancel().catch(() => {}); // the redirect is the error to report, not a failed cancel
+      throw new Error(`the seller API answered ${res.status} to ${p.label}, a redirect, which the adapter never follows: it could carry the credential elsewhere`);
+    }
     return { status: res.status, bytes: await body(res, p.label, cap) };
   };
   const ok2xx = (what: string, status: number) => {
@@ -424,7 +617,11 @@ export function sellerApiClient(api: J, env: Readonly<Record<string, string | un
 
   return {
     readsToken,
-    describe: `The seller API is ${base ? `under ${base.href}` : 'at the three configured addresses'}, with ${auth ? `a credential from ${auth.env} in header ${auth.header}` : 'no credential'}; its job state is read by ${status.by === 'http' ? 'HTTP status' : 'a status field'}${files ? `, and a result's further files are added at ${plain(rm.files.into)}` : ''}.`,
+    startRepeatable,
+    checksJob,
+    checksJobNot,
+    ...(startOneShotBecause ? { startOneShotBecause } : {}),
+    describe: `The seller API is ${base ? `under ${base.href}` : 'at the three configured addresses'}, with ${auth ? `a credential from ${auth.env} in header ${auth.header}` : 'no credential'}${unitsAt !== undefined ? `; a quote prices ${plain(unitsAt)} units at ${unitPrice} base units each` : ''}; its job state is read by ${status.by === 'http' ? 'HTTP status' : 'a status field'}${files ? `, and a result's further files are added at ${plain(rm.files.into)}` : ''}${merge ? `; once the job is done, the artifacts call adds its answer at ${plain(rm.merge.into)}` : ''}${jobScope ? `; a job whose request names another ${jobScope.map(([k]) => plain(k)).join(', ')} than the deal's is not delivered` : ''}${workspace ? `; every quote and start runs in the pinned workspace${workspace.resultAt ? ', and a result from another is not delivered' : ''}` : ''}.`,
 
     async quote(v) {
       const { status: code, bytes } = await send(quote, v);
@@ -432,7 +629,17 @@ export function sellerApiClient(api: J, env: Readonly<Record<string, string | un
       const a = json(bytes, 'the quote');
       const read = (k: string) => pick(a, quoteRead[k]!);
       const quoteId = read('quoteId');
-      return { price: { token: readsToken ? read('token') : undefined, amount: read('amount') }, quoteId: Number.isSafeInteger(quoteId) ? String(quoteId) : quoteId, deliverWithinSec: read('deliverWithinSec'), ...(validFor ? { validForSec: read('validForSec') } : {}) };
+      let amount: J = unitsAt === undefined ? read('amount') : undefined;
+      let unitsRead: string | undefined;
+      if (unitsAt !== undefined) {
+        const units = read('units');
+        const whole = (typeof units === 'number' && Number.isSafeInteger(units) && units >= 0) || (typeof units === 'string' && /^(0|[1-9][0-9]{0,30})$/.test(units));
+        if (!whole) throw new Error(`the quote's ${plain(unitsAt)} is not a whole number of units, as a JSON number or digits with no leading zero: ${short(JSON.stringify(units ?? null))}`);
+        amount = (BigInt(units) * BigInt(unitPrice)).toString();
+        unitsRead = String(units);
+        if (amount.length > 78) throw new Error(`the quote's price, ${units} units at ${unitPrice} base units, is larger than base units can hold`);
+      }
+      return { ...(unitsRead === undefined ? {} : { units: unitsRead }), price: { token: readsToken ? read('token') : undefined, amount }, quoteId: Number.isSafeInteger(quoteId) ? String(quoteId) : quoteId, deliverWithinSec: read('deliverWithinSec'), ...(validFor ? { validForSec: read('validForSec') } : {}) };
     },
 
     async start(v) {
@@ -447,6 +654,18 @@ export function sellerApiClient(api: J, env: Readonly<Record<string, string | un
     async result(v) {
       const { status: code, bytes } = await send(result, v);
       let done: Uint8Array = bytes;
+      const pinned = () => {
+        // The job's own account, read from the result call's answer, must be the pinned one (T-435).
+        if (!workspace?.resultAt) return;
+        let doc: J;
+        try {
+          doc = JSON.parse(new TextDecoder().decode(bytes));
+        } catch {
+          throw new WrongWorkspace(`the result answer is not JSON, so the account its job ran in cannot be read at ${plain(String(api.workspace.resultPointer))}`);
+        }
+        const at = pick(doc, workspace.resultAt);
+        if (at !== workspace.id) throw new WrongWorkspace(`the job ran in account ${at === undefined ? '(none named)' : short(at)}, not the pinned one at ${plain(String(api.workspace.resultPointer))}`);
+      };
       if (status.by === 'http') {
         if (status.running.includes(code)) return { state: 'running' };
         if (status.failed.includes(code)) return { state: 'failed', status: `HTTP ${code}` };
@@ -455,9 +674,50 @@ export function sellerApiClient(api: J, env: Readonly<Record<string, string | un
         ok2xx('the result', code);
         const word = pick(json(bytes, 'the result'), status.pointer);
         const w = typeof word === 'string' || typeof word === 'number' || typeof word === 'boolean' ? String(word) : undefined;
-        if (w !== undefined && status.running.includes(w)) return { state: 'running' };
+        if (w !== undefined && status.running.includes(w)) return { state: 'running', status: short(w) };
         if (w !== undefined && status.failed.includes(w)) return { state: 'failed', status: short(w) };
         if (w === undefined || !status.done.includes(w)) throw new Error(`the seller API's job status ${w === undefined ? 'is missing' : `"${short(w)}" is none of the configured values`}`);
+      }
+      pinned();
+      if (jobScope) {
+        // T-501: the job's own request, read from the same answer, must be the deal's scope, field by field.
+        let doc: J;
+        try {
+          doc = JSON.parse(new TextDecoder('utf-8', { fatal: true }).decode(bytes));
+        } catch {
+          throw new WrongScope('the result answer is not JSON, so the job\'s request cannot be read');
+        }
+        for (const [field, at] of jobScope) {
+          const got = pick(doc, at);
+          const want = isRecord(v.scope) && Object.hasOwn(v.scope, field) ? v.scope[field] : undefined;
+          if (!sameValue(got, want)) throw new WrongScope(`the job asked for ${plain(field)} ${short(JSON.stringify(got) ?? 'nothing')}, not the deal's ${short(JSON.stringify(want) ?? 'nothing')}`, field);
+        }
+      }
+      if (merge) {
+        // T-501: after the workspace check, never before. The path is the configuration's, filled with the job's ID
+        // only; the answer is capped, must be 2xx and JSON, and goes into a field the result does not have.
+        let got: { status: number; bytes: Uint8Array };
+        try {
+          got = await send(merge.call, { jobId: v.jobId });
+        } catch (e) {
+          throw new FilesNotAdded(`the artifacts call: ${plain((e as Error).message)}`);
+        }
+        if (got.status < 200 || got.status > 299) throw new FilesNotAdded(`the seller API answered ${got.status} to the artifacts call`);
+        let doc: J;
+        let added: J;
+        try {
+          doc = JSON.parse(new TextDecoder('utf-8', { fatal: true }).decode(bytes));
+          added = JSON.parse(new TextDecoder('utf-8', { fatal: true }).decode(got.bytes));
+        } catch {
+          throw new FilesNotAdded('the result or the artifacts call\'s answer is not JSON');
+        }
+        const parent = pick(doc, merge.into.slice(0, -1));
+        const last = merge.into[merge.into.length - 1]!;
+        if (!isRecord(parent)) throw new FilesNotAdded(`the result has no object at ${plain(rm.merge.into)}'s parent, to add the artifacts to`);
+        if (Object.hasOwn(parent, last)) throw new FilesNotAdded(`the result already has a field at ${plain(rm.merge.into)}`);
+        Object.defineProperty(parent, last, { value: added, enumerable: true, writable: true, configurable: true });
+        done = new TextEncoder().encode(JSON.stringify(doc));
+        if (done.length > DELIVERY_CAP_BYTES) throw new FilesNotAdded(`the result with its artifacts is ${done.length} bytes, more than the delivery cap of ${DELIVERY_CAP_BYTES}`);
       }
       if (reportCall) {
         const second = await send(reportCall, v);

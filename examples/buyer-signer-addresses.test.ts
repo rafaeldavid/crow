@@ -11,7 +11,7 @@ import { join } from 'node:path';
 import { MemoryStorage, PublicWorld } from '@holdback/demo-cloud';
 import nacl from 'tweetnacl';
 import { generatePrivateKey, privateKeyToAccount } from 'viem/accounts';
-import { afterAll, beforeAll, describe, expect, it } from 'vitest';
+import { afterAll, afterEach, beforeAll, describe, expect, it } from 'vitest';
 import { Agent } from './agent.ts';
 import { makeKeys } from './buyer-signer.ts';
 import { serveTwoOrigins, type TwoOrigins } from './two-origins.ts';
@@ -44,7 +44,7 @@ const store = () => {
  * `payment(asked)` picks the payment address the offer names (default: the one the quote asked for); `price` the price.
  */
 type SellerOptions = { payout?: string; payment?: (asked: J) => string | undefined; price?: J; work?: string };
-type Seller = { quoteUrl: string; address: string; asked: J[]; set(o: SellerOptions): void; close(): Promise<void> };
+type Seller = { quoteUrl: string; address: string; asked: J[]; set(o: SellerOptions): void; forget(): void; close(): Promise<void> };
 async function serveSeller(operators: string[]): Promise<Seller> {
   const agent = new Agent(operators, generatePrivateKey(), nacl.randomBytes(32));
   await agent.call('POST', '/v1/faucet', { address: agent.address });
@@ -54,10 +54,18 @@ async function serveSeller(operators: string[]): Promise<Seller> {
   let open = true;
   let o: SellerOptions = {};
   const asked: J[] = [];
+  // T-508: each deal's watch ends when the seller delivers or when the test that made the deal ends (forget). Every
+  // request in this file counts against one client's read budget at node 0, 1,200 a minute; watches left running on
+  // deals nobody funds read about 10 times a second each and spent that budget before the last test ran.
+  const watching = new Set<string>();
   const deliverWhenHeld = async (id: `0x${string}`, terms: J, work: string) => {
-    while (open) {
+    watching.add(id);
+    while (open && watching.has(id)) {
       const s = await agent.call('GET', `/v1/commitments/${id}`);
-      if (s.escrowState === 'Held') return void (await agent.deliver(terms, new TextEncoder().encode(work)));
+      if (s.escrowState === 'Held') {
+        watching.delete(id);
+        return void (await agent.deliver(terms, new TextEncoder().encode(work)));
+      }
       await new Promise((r) => setTimeout(r, 100));
     }
   };
@@ -82,6 +90,7 @@ async function serveSeller(operators: string[]): Promise<Seller> {
   return {
     quoteUrl: `http://127.0.0.1:${(server.address() as AddressInfo).port}/quote`, address: agent.address, asked,
     set: (x) => void (o = x),
+    forget: () => watching.clear(),
     close: async () => {
       open = false;
       await new Promise<void>((resolve) => server.close(() => resolve()));
@@ -98,6 +107,7 @@ beforeAll(async () => {
   demo = await serveTwoOrigins(world, { tickMs: 100 });
   seller = await serveSeller(demo.urls);
 });
+afterEach(() => seller.forget());
 afterAll(async () => {
   await seller.close();
   await demo.close();

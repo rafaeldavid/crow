@@ -199,7 +199,7 @@ describe('examples/audit-deal.ts', () => {
 });
 
 describe('examples/audit-deal.ts with a seller\'s own report and terms (T-326)', () => {
-  // The world's faucet grants 10 times per client per hour of world time, and each deal takes 2 grants. This world's
+  // The world's faucet grants 50 times per client per hour of world time, and each deal takes 2 grants. This world's
   // clock is the test's, so each test starts a fresh window.
   beforeEach(() => world.advanceClock(3601));
   it('released: a two-file report under its own terms, 1,234.56 tUSD and a 2-day window, ends Released and the buyer opens the exact bytes', async () => {
@@ -262,7 +262,10 @@ describe('examples/audit-deal.ts with a seller\'s own report and terms (T-326)',
     const { result } = await run('released', { reportFile: fixture('data/audit-report/report.json') });
     const r = await result;
     expect(r.outcome).toBe('Released');
-    expect(r.delivery!.work).toBe(readFileSync(fixture('data/audit-report/report.json'), 'utf8'));
+    // The built-in terms carry the salt (T-431): the report file's own bytes, with one salt field put first.
+    const work = r.delivery!.work!;
+    expect(work).toMatch(/^\{\s*"salt": "0x[0-9a-f]{64}",/);
+    expect(work.replace(/^\{\s*"salt": "0x[0-9a-f]{64}",/, '{')).toBe(readFileSync(fixture('data/audit-report/report.json'), 'utf8'));
     expect(r.sellerReceived).toEqual({ token: 'tUSD', amount: PRICE_UNITS });
   }, 60_000);
 

@@ -15,7 +15,9 @@ import { PROBLEM_BASE, PROBLEMS } from '@holdback/operator';
 import { LiveChain, SEPOLIA_PUBLIC_RPCS, type DeploymentFile } from '@holdback/settlement/live';
 import { PublicWorld, type LiveSettlement, type Via } from './world.js';
 import { KvFeedbackStore, type KvNamespace } from './feedback-store.js';
+import { admitted, clientKey, emptySegment, flooded, oversized } from './limits.js';
 import type { WorldStorage } from './storage.js';
+import { secured } from './headers.js';
 
 // The few Workers runtime types used here, declared locally so the package needs no Workers type package.
 interface DurableObjectStorage extends WorldStorage {
@@ -50,6 +52,10 @@ export interface Env {
   SEPOLIA_RPC_URLS?: string;
   /** Optional: the fee cap per gas in gwei (default 20). */
   SEPOLIA_MAX_FEE_GWEI?: string;
+  /** T-422: the flood ceiling, a Cloudflare rate-limit binding (`ratelimits` in the Wrangler file). Absent: no ceiling. */
+  FLOOD?: { limit(o: { key: string }): Promise<{ success: boolean }> };
+  /** T-413: Cloudflare's version-metadata binding: when the live version of this Worker was created. */
+  CF_VERSION_METADATA?: { id?: string; timestamp?: string };
   [name: string]: unknown;
 }
 
@@ -73,6 +79,17 @@ const NODE = 'x-holdback-node';
 const ORIGIN = 'x-holdback-origin';
 const CLIENT = 'x-holdback-client';
 const SETTLEMENT = 'x-holdback-settlement';
+const DEPLOYED = 'x-holdback-deployed-at';
+/** An ISO 8601 UTC time as Date#toISOString writes it; anything else is not a deploy time. */
+const ISO_UTC = /^[0-9]{4}-[0-9]{2}-[0-9]{2}T[0-9]{2}:[0-9]{2}:[0-9]{2}\.[0-9]{3}Z$/;
+/** The version-metadata binding's timestamp in the ISO form apps/site/build-info.js writes, or null. */
+function deployTime(env: Env): string | null {
+  const t = env.CF_VERSION_METADATA?.timestamp;
+  const at = typeof t === 'string' && t !== '' ? new Date(t) : null;
+  return at && !Number.isNaN(at.getTime()) ? at.toISOString() : null;
+}
+
+const isLocal = (host: string): boolean => host === 'localhost' || host === '127.0.0.1' || host === '[::1]' || host.endsWith('.localhost');
 
 const strings = (env: Env): Record<string, string> => Object.fromEntries(Object.entries(env).filter((e): e is [string, string] => typeof e[1] === 'string'));
 /** The settlement a value names, or null: there is no default, so a typo cannot serve the SimChain world as Sepolia's. */
@@ -182,9 +199,15 @@ export class World {
     if (!asked) return unconfigured(request.headers.has(SETTLEMENT));
     const opened = this.open(asked);
     const world = await opened;
-    const via: Via = { node: request.headers.get(NODE) === '1' ? 1 : 0, origin: request.headers.get(ORIGIN) ?? new URL(request.url).origin, client: request.headers.get(CLIENT) ?? 'unknown' };
+    const deployed = request.headers.get(DEPLOYED);
+    const via: Via = {
+      node: request.headers.get(NODE) === '1' ? 1 : 0,
+      origin: request.headers.get(ORIGIN) ?? new URL(request.url).origin,
+      client: request.headers.get(CLIENT) ?? 'unknown',
+      deployedAt: deployed !== null && ISO_UTC.test(deployed) ? deployed : null,
+    };
     const headers = new Headers(request.headers);
-    for (const h of [NODE, ORIGIN, CLIENT, SETTLEMENT]) headers.delete(h);
+    for (const h of [NODE, ORIGIN, CLIENT, SETTLEMENT, DEPLOYED]) headers.delete(h);
     const response = await world.fetch(new Request(request, { headers }), via).finally(() => this.retire(opened, world));
     await this.schedule(world);
     return response;
@@ -215,17 +238,35 @@ export class World {
 }
 
 export default {
+  // T-451: every answer leaves through secured() (headers.ts), the one place the security headers are set.
   async fetch(request: Request, env: Env): Promise<Response> {
-    const url = new URL(request.url);
-    const headers = new Headers(request.headers);
-    const settlement = settlementOf(env.SETTLEMENT);
-    if (!settlement) return unconfigured(env.SETTLEMENT !== undefined);
-    // Set by this Worker only: whatever a caller sent under these names is replaced.
-    headers.set(NODE, env.NODE_INDEX === '1' ? '1' : '0');
-    headers.set(ORIGIN, url.origin);
-    headers.set(CLIENT, request.headers.get('cf-connecting-ip') ?? 'unknown');
-    headers.set(SETTLEMENT, settlement);
-    const stub = env.WORLD.get(env.WORLD.idFromName(WORLD_NAMES[settlement]));
-    return stub.fetch(new Request(request, { headers }));
+    return secured(await forward(request, env));
   },
 };
+
+async function forward(request: Request, env: Env): Promise<Response> {
+  const url = new URL(request.url);
+  // T-451: plain HTTP is processed nowhere. A read gets a 301 to the same path over HTTPS; a write gets a 308, which a
+  // client follows with the same method and body or not at all, so nothing sent over plain HTTP reaches the World.
+  // Local runs (127.0.0.1, localhost) stay on HTTP.
+  if (url.protocol === 'http:' && !isLocal(url.hostname)) return Response.redirect(`https://${url.host}${url.pathname}${url.search}`, request.method === 'GET' || request.method === 'HEAD' ? 301 : 308);
+  const headers = new Headers(request.headers);
+  const settlement = settlementOf(env.SETTLEMENT);
+  if (!settlement) return unconfigured(env.SETTLEMENT !== undefined);
+  // T-422: limits the World object never sees, so a flood or a large body costs it nothing (docs/operator-threat-model.md).
+  // The binding fails open: a rate-limit outage must not stop the API.
+  const client = clientKey(request.headers.get('cf-connecting-ip') ?? 'unknown');
+  if (env.FLOOD && !(await admitted(env.FLOOD, client))) return flooded();
+  const refused = emptySegment(url) ?? oversized(request, url.pathname);
+  if (refused) return refused;
+  // Set by this Worker only: whatever a caller sent under these names is replaced.
+  headers.set(NODE, env.NODE_INDEX === '1' ? '1' : '0');
+  headers.set(ORIGIN, url.origin);
+  headers.set(CLIENT, client);
+  headers.set(SETTLEMENT, settlement);
+  const deployed = deployTime(env);
+  if (deployed) headers.set(DEPLOYED, deployed);
+  else headers.delete(DEPLOYED);
+  const stub = env.WORLD.get(env.WORLD.idFromName(WORLD_NAMES[settlement]));
+  return stub.fetch(new Request(request, { headers }));
+}

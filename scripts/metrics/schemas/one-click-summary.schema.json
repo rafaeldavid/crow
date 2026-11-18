@@ -1,0 +1,156 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://escrow.stream/metrics/schemas/one-click-summary.schema.json",
+  "title": "one-click-summary.json: the benchmark's headline numbers from the harness's version 2 and 3 records (T-412, T-473, scripts/metrics/one-click-summary.mjs)",
+  "description": "Only live records that reached their scenario's end state fill a number; a number with none reads state missing and value null.",
+  "type": "object",
+  "$ref": "common.schema.json#/$defs/Envelope",
+  "unevaluatedProperties": false,
+  "required": ["medianOf", "runs", "headline", "byScenario"],
+  "properties": {
+    "schema": { "const": "crow.metrics.one-click-summary/1" },
+    "medianOf": { "$ref": "common.schema.json#/$defs/Count" },
+    "runs": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["records", "live", "scripted", "liveCompleted", "invalid", "versionOne"],
+      "properties": {
+        "records": { "$ref": "common.schema.json#/$defs/Count" },
+        "live": { "$ref": "common.schema.json#/$defs/Count" },
+        "scripted": { "$ref": "common.schema.json#/$defs/Count" },
+        "liveCompleted": { "$ref": "common.schema.json#/$defs/Count" },
+        "invalid": { "$ref": "common.schema.json#/$defs/Count" },
+        "versionOne": { "$ref": "common.schema.json#/$defs/Count" }
+      }
+    },
+    "headline": { "$ref": "#/$defs/Headline", "description": "Records in the prompt permission mode only (a record without agent.permissions is one)." },
+    "sandboxAuto": {
+      "description": "The same four numbers from live records in the sandbox-auto permission mode (T-441). Absent from summaries written before T-441.",
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["live", "liveCompleted", "headline"],
+      "properties": {
+        "live": { "$ref": "common.schema.json#/$defs/Count" },
+        "liveCompleted": { "$ref": "common.schema.json#/$defs/Count" },
+        "headline": { "$ref": "#/$defs/Headline" }
+      }
+    },
+    "byScenario": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["s1", "s2", "s3", "s4", "s5", "s6"],
+      "properties": {
+        "s1": { "$ref": "#/$defs/Scenario" },
+        "s2": { "$ref": "#/$defs/Scenario" },
+        "s3": { "$ref": "#/$defs/Scenario" },
+        "s4": { "$ref": "#/$defs/Scenario" },
+        "s5": { "$ref": "#/$defs/Scenario" },
+        "s6": { "$ref": "#/$defs/Scenario" },
+        "s9": { "$ref": "#/$defs/Scenario", "description": "A buyer by quote from buy.txt (T-489). Absent from summaries written before T-489." }
+      }
+    },
+    "setup": {
+      "description": "The setup scenarios (T-473), each apart from the six deal scenarios, so they move no headline number. Absent from summaries written before T-473.",
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["s7", "s8"],
+      "properties": {
+        "s7": { "$ref": "#/$defs/SetupScenario" },
+        "s8": { "$ref": "#/$defs/SetupScenario" }
+      }
+    }
+  },
+  "$defs": {
+    "SetupScenario": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["live", "liveCompleted", "latestLive", "latestScripted", "headline", "sandboxAuto"],
+      "properties": {
+        "live": { "$ref": "common.schema.json#/$defs/Count" },
+        "liveCompleted": { "$ref": "common.schema.json#/$defs/Count" },
+        "latestLive": { "oneOf": [{ "type": "null" }, { "$ref": "#/$defs/Run" }] },
+        "latestScripted": { "oneOf": [{ "type": "null" }, { "$ref": "#/$defs/Run" }] },
+        "headline": { "$ref": "#/$defs/SetupHeadline", "description": "Completed live runs in the prompt permission mode, newest 10." },
+        "sandboxAuto": { "$ref": "#/$defs/SetupHeadline", "description": "Completed live runs in the sandbox-auto permission mode, newest 10." }
+      }
+    },
+    "SetupHeadline": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["approvalsPerDeal", "tokensPerDeal", "timeWithoutUserMs", "costPerDealUsdMicros", "requestsBeforeFirstDeal", "guideFilesFetched"],
+      "properties": {
+        "approvalsPerDeal": { "$ref": "#/$defs/IntMetric" },
+        "timeWithoutUserMs": { "$ref": "#/$defs/IntMetric" },
+        "tokensPerDeal": { "$ref": "#/$defs/Headline/properties/tokensPerDeal" },
+        "costPerDealUsdMicros": { "$ref": "#/$defs/Headline/properties/costPerDealUsdMicros" },
+        "requestsBeforeFirstDeal": { "$ref": "#/$defs/IntMetric", "description": "Median over the runs whose count is known; deals counts those runs." },
+        "guideFilesFetched": { "$ref": "#/$defs/IntMetric", "description": "Median over the runs whose count is known; deals counts those runs." }
+      }
+    },
+    "Headline": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["approvalsPerDeal", "tokensPerDeal", "timeWithoutUserMs", "costPerDealUsdMicros"],
+      "properties": {
+        "approvalsPerDeal": { "$ref": "#/$defs/IntMetric" },
+        "timeWithoutUserMs": { "$ref": "#/$defs/IntMetric" },
+        "tokensPerDeal": {
+          "type": "object",
+          "additionalProperties": false,
+          "required": ["state", "in", "uncachedIn", "out", "total", "deals"],
+          "properties": {
+            "state": { "enum": ["measured", "missing"] },
+            "in": { "$ref": "common.schema.json#/$defs/CountOrNull", "description": "input, cache writes and cache reads" },
+            "uncachedIn": { "$ref": "common.schema.json#/$defs/CountOrNull", "description": "input tokens that were neither written to nor read from the cache" },
+            "out": { "$ref": "common.schema.json#/$defs/CountOrNull" },
+            "total": { "$ref": "common.schema.json#/$defs/CountOrNull" },
+            "deals": { "$ref": "common.schema.json#/$defs/Count" }
+          }
+        },
+        "costPerDealUsdMicros": {
+          "type": "object",
+          "additionalProperties": false,
+          "required": ["state", "value", "deals"],
+          "properties": {
+            "state": { "enum": ["measured", "missing"] },
+            "value": { "$ref": "common.schema.json#/$defs/UIntOrNull" },
+            "deals": { "$ref": "common.schema.json#/$defs/Count" }
+          }
+        }
+      }
+    },
+    "IntMetric": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["state", "value", "deals"],
+      "properties": {
+        "state": { "enum": ["measured", "missing"] },
+        "value": { "$ref": "common.schema.json#/$defs/CountOrNull" },
+        "deals": { "$ref": "common.schema.json#/$defs/Count" }
+      }
+    },
+    "Run": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["runId", "state", "success"],
+      "properties": {
+        "runId": { "type": "string", "pattern": "^\\d{4}-\\d{2}-\\d{2}T\\d{2}-\\d{2}-\\d{2}Z-s[1-8]$" },
+        "state": { "enum": ["Released", "Refunded", "stopped", "timedOut", "blocked"] },
+        "success": { "type": "boolean" },
+        "blockedBy": { "type": ["string", "null"], "maxLength": 300 },
+        "permissions": { "enum": ["prompt", "sandbox-auto"], "description": "latestLive only: the run's permission mode (T-441)" }
+      }
+    },
+    "Scenario": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["live", "liveCompleted", "latestLive", "latestScripted"],
+      "properties": {
+        "live": { "$ref": "common.schema.json#/$defs/Count" },
+        "liveCompleted": { "$ref": "common.schema.json#/$defs/Count" },
+        "latestLive": { "oneOf": [{ "type": "null" }, { "$ref": "#/$defs/Run" }] },
+        "latestScripted": { "oneOf": [{ "type": "null" }, { "$ref": "#/$defs/Run" }] }
+      }
+    }
+  }
+}

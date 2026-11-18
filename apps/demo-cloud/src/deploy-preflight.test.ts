@@ -73,9 +73,12 @@ describe('pnpm demo-cloud:deploy, before the build', () => {
     return d;
   };
 
-  /** Stand-ins for pnpm and npx: each says it ran and fails, so a run that reaches the build stops there. */
+  /**
+   * Stand-ins for pnpm and npx: each says it ran and fails, so a run that reaches the build stops there. And for gh
+   * (N166), so the deploy's last step, which asks GitHub for a Crow Control build, never reaches GitHub from a test.
+   */
   const bin = temp('crow-deploy-bin-');
-  for (const name of ['pnpm', 'npx']) {
+  for (const name of ['pnpm', 'npx', 'gh']) {
     writeFileSync(join(bin, name), `#!/bin/sh\necho "stand-in ${name} ran: $*"\nexit 1\n`);
     chmodSync(join(bin, name), 0o755);
   }
@@ -114,6 +117,8 @@ describe('pnpm demo-cloud:deploy, before the build', () => {
     expect(r.stdout).not.toContain('stand-in npx ran');
     expect(r.stderr).toContain('FAIL: the build failed');
     expect(r.stdout).toMatch(new RegExp(`\\*\\*Deploy \\d{4}-\\d\\d-\\d\\d \\d\\d:\\d\\d UTC, commit \`${git(root, 'rev-parse', 'HEAD').slice(0, 7)}\` on branch \`t-999-deploy\`: FAIL, the build failed\\.\\*\\*`));
+    // N166: the last step asks for a Crow Control build; the stand-in gh refuses, and the deploy says so and keeps its code
+    expect(r.stdout).toMatch(/^Crow Control: no build started \(gh exit 1\); the page shows this deploy at its next build, or run: gh workflow run control-hourly\.yml --repo rafaeldavid\/crow-private --ref main$/m);
     expect(r.status).toBe(1);
   });
 

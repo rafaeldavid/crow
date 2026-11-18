@@ -19,7 +19,7 @@
 // and the startup guards refuse anything else at run time. A cutover deploys the Workers one at a time instead
 // (docs/operations.md, Settlement).
 import { fileURLToPath } from 'node:url';
-import { checkout, dealGuard, liveVersion, recordLine, rollback, sh, waitForCommit } from '../../../scripts/deploy-lib.mjs';
+import { checkout, dealGuard, finishDeploy, liveVersion, recordLine, rollback, sh, waitForCommit } from '../../../scripts/deploy-lib.mjs';
 
 const NODES = ['https://api.crow.direct', 'https://api2.crow.direct'];
 const WORKERS = [
@@ -72,7 +72,7 @@ try {
     uploaded = true;
     // T-066: discovery's demo.build.commit names the commit each Worker runs, so Crow Control can tell what is
     // merged but not live. The pre-flight above refused a changed tree, so `commit` is what was built.
-    const r = await sh('npx', ['-y', 'wrangler@4', 'deploy', '-c', here(`../${w.config}`), ...(/^[0-9a-f]{40}$/.test(commit) ? ['--var', `BUILD_COMMIT:${commit}`] : [])]);
+    const r = await sh('npx', ['-y', 'wrangler@4.151.3', 'deploy', '-c', here(`../${w.config}`), ...(/^[0-9a-f]{40}$/.test(commit) ? ['--var', `BUILD_COMMIT:${commit}`] : [])]);
     w.version = /Current Version ID:\s*([0-9a-f-]{36})/.exec(r.out)?.[1];
     if (r.code !== 0 || !w.version) fail(`${w.name}'s upload was refused`);
   }
@@ -103,7 +103,7 @@ try {
     if (now === w.before) continue;
     w.version ??= now ?? 'unknown';
     w.rolledBack = await rollback(w.name, w.before, 'pnpm demo-cloud:deploy failed a check');
-    if (!w.rolledBack) console.error(`ROLLBACK FAILED for ${w.name}. Run: npx wrangler@4 rollback ${w.before} --name ${w.name}`);
+    if (!w.rolledBack) console.error(`ROLLBACK FAILED for ${w.name}. Run: npx wrangler@4.151.3 rollback ${w.before} --name ${w.name}`);
   }
 }
 
@@ -111,4 +111,4 @@ const against = served && !served.failure ? `, against commit \`${commit.slice(0
 const orphaned = guard?.withdrawnOrphans?.length ? ` Declined under the recorded withdrawal of ${override}: ${guard.withdrawnOrphans.map((o) => `\`${o.id}\``).join(', ')}.` : '';
 const deal = smoke?.id ? ` Smoke deal \`${smoke.id}\` ${smoke.state} in ${smoke.seconds} s${against}.` : '';
 console.log(`\nThe record line for docs/operations.md:\n\n${recordLine({ title: 'Deploy', startedAt, commit, branch, failure, workers: WORKERS, note: `${deal}${orphaned}` })}\n`);
-process.exit(failure ? 1 : 0);
+process.exit(await finishDeploy(failure ? 1 : 0, process.argv.slice(2)));

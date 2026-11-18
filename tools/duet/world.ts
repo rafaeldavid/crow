@@ -3,12 +3,14 @@
 // operators (`--world`), which is how the same command later runs against Sepolia. Either way the runner adds:
 //   - a small web: the agent docs (llms.txt and sell.txt, with this world's operators filled in, when run locally) and
 //     the seller's own public page, served from the seller's folder;
-//   - the seller's job API: examples/seller-adapter-stub.ts, the repository's audit-report stub, unchanged.
+//   - the seller's job API: review-job-api.ts, in the shape of examples/seller-adapter-stub.ts, answering with the demo
+//     security review of review.ts (T-500).
 import { existsSync, lstatSync, readFileSync, realpathSync } from 'node:fs';
 import { createServer, type IncomingMessage, type Server, type ServerResponse } from 'node:http';
 import type { AddressInfo } from 'node:net';
 import { extname, resolve, sep } from 'node:path';
-import { startStubSellerApi, type StubSellerApi } from '../../examples/seller-adapter-stub.ts';
+import type { StubSellerApi } from '../../examples/seller-adapter-stub.ts';
+import { startReviewJobApi } from './review-job-api.ts';
 import type { Recorder } from './record.ts';
 
 type J = any; // eslint-disable-line @typescript-eslint/no-explicit-any
@@ -76,11 +78,14 @@ async function web(o: { docs?: { guide: string; sell: string; home?: string; not
  */
 export async function localGuide(operators: string[]): Promise<{ guide: string; sell: string; home: string; notFound: string; pages: Record<string, string>; changes: string[] }> {
   const build: string = '../../site/build.mjs'; // plain JavaScript with no declarations: its three functions are typed here
-  const site = (await import(build)) as { strip(md: string): string; tryCommand(): string; sellerPage(txt: string): string; guidePage(txt: string, name: string): string };
+  const site = (await import(build)) as { strip(md: string): string; tryCommand(): string; goalCommands(): Record<string, string>; fillFacts(md: string): string; sellerPage(txt: string): string; guidePage(txt: string, name: string): string; referenceText(guides: Map<string, string>): string; REFERENCE_PATH: string };
   const listing: string = '../../site/guides.mjs';
   const guides = (await import(listing)) as { guideFiles(): string[]; guideSource(path: string): string };
-  const pages = Object.fromEntries(guides.guideFiles().filter((p) => p !== 'llms.txt').map((p) => [p, site.guidePage(guides.guideSource(p), p)]));
-  const guide = site.strip(readFileSync(new URL('../../site/llms.txt', import.meta.url), 'utf8')).replace('{{OP1}}', operators[0]!).replace('{{OP2}}', operators[1] ?? operators[0]!).replace('{{TRY_COMMAND}}', () => site.tryCommand());
+  const pages: Record<string, string> = Object.fromEntries(guides.guideFiles().filter((p) => p !== 'llms.txt').map((p) => [p, site.guidePage(guides.guideSource(p), p)]));
+  pages[site.REFERENCE_PATH] = site.referenceText(new Map(Object.entries(pages))); // the one reference file (T-469)
+  let guide = site.strip(readFileSync(new URL('../../site/llms.txt', import.meta.url), 'utf8')).replace('{{OP1}}', operators[0]!).replace('{{OP2}}', operators[1] ?? operators[0]!).replace('{{TRY_COMMAND}}', () => site.tryCommand());
+  for (const [placeholder, line] of Object.entries(site.goalCommands())) guide = guide.replace(placeholder, () => line); // the goal commands (T-469)
+  guide = site.fillFacts(guide); // the log retention and the Node version (T-495)
   if (/\{\{[A-Z0-9_]+\}\}/.test(guide)) throw new Error('site/llms.txt has a placeholder the published build does not fill');
   const sell = site.sellerPage(readFileSync(new URL('../../site/sell.txt', import.meta.url), 'utf8'));
   const home = readFileSync(new URL('../../site/index.html', import.meta.url), 'utf8');
@@ -140,7 +145,7 @@ async function rest(o: WorldOptions, operators: string[], local: boolean, closer
   const docs = local ? await localGuide(operators) : undefined;
   const w = await web({ ...(docs ? { docs: { guide: docs.guide, sell: docs.sell, home: docs.home, notFound: docs.notFound, pages: docs.pages } } : {}), sellers: { [o.sellerName]: o.sellerPublic } });
   closers.push(() => closeServer(w.server));
-  const jobApi = await startStubSellerApi({ port: 0, report: o.report, token, pollsUntilComplete: 1 });
+  const jobApi = await startReviewJobApi({ report: o.report, token, pollsUntilComplete: 1 });
   closers.push(() => jobApi.close());
   return {
     operators,

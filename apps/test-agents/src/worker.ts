@@ -5,10 +5,13 @@
 // only: they sign for the pinned Sepolia deployment and nothing else, and refuse to start without their Sepolia-only
 // secret.
 import { SEPOLIA } from '../../../examples/deployments.ts';
+// @ts-expect-error -- plain ESM module without type declarations
+import { buildInfo, buildResponse, isBuildRead } from '../../site/build-info.js';
 import { knownPins, type Pin } from '../../../examples/verify.ts';
 import { prefixed, TestBuyer } from './buyer.ts';
 import { SEED_VAR } from './keys.ts';
 import { TestSeller, type Storage } from './seller.ts';
+import { secured, toHttps } from './headers.ts';
 
 // The few Workers runtime types used here, declared locally so the package needs no Workers type package.
 interface DurableObjectStorage extends Storage {
@@ -35,7 +38,14 @@ export interface Env {
   BUYER_URL?: string;
   /** Worker secret: 32 bytes of 0x-prefixed hex, Sepolia only (apps/test-agents/scripts/seed.mjs). */
   TEST_AGENTS_SEED?: string;
+  /** The commit this build came from, set by scripts/deploy.mjs (T-413). Not secret. */
+  BUILD_COMMIT?: string;
+  /** Cloudflare's version-metadata binding: the live version's ID and creation time (T-413). */
+  CF_VERSION_METADATA?: { id?: string; timestamp?: string };
 }
+
+/** The two agents' build reads, answered by the Worker itself, before the Durable Object (T-413, build-info.js). */
+const BUILD_PATHS = ['/agents/test-seller/version.json', '/agents/test-buyer/version.json'];
 
 /**
  * Fresh storage for each deployment: the name is the pinned record's rules address (T-383), so a new record is a new
@@ -122,12 +132,28 @@ const FORWARDED = 'escrow.stream';
 const CANONICAL = 'https://crow.direct';
 
 export default {
+  // T-462: every answer leaves through secured() (headers.ts), the one place the security headers are set.
+  // An answer that throws (a storage error, an operator's malformed answer) becomes a 500 with the headers and the
+  // agents' CORS, not Cloudflare's own error page, which carries neither.
   async fetch(request: Request, env: Env): Promise<Response> {
-    const url = new URL(request.url);
-    if (url.hostname === FORWARDED) return Response.redirect(`${CANONICAL}${url.pathname}${url.search}`, 308);
-    const headers = new Headers(request.headers);
-    // Set by this Worker only: whatever a caller sent under this name is replaced.
-    headers.set(CLIENT, request.headers.get('cf-connecting-ip') ?? 'unknown');
-    return env.AGENTS.get(env.AGENTS.idFromName(OBJECT_NAME)).fetch(new Request(request, { headers }));
+    return secured(
+      await route(request, env).catch((e: unknown) => {
+        console.error(`crow-test-agents: ${e instanceof Error ? e.message : String(e)}`);
+        return new Response(JSON.stringify({ error: 'internal error' }), { status: 500, headers: { 'content-type': 'application/json', 'cache-control': 'no-store', 'access-control-allow-origin': '*' } });
+      }),
+    );
   },
 };
+
+async function route(request: Request, env: Env): Promise<Response> {
+  const url = new URL(request.url);
+  // T-462: plain HTTP gets a redirect to HTTPS on the same host first, before it reaches the agents (headers.ts).
+  const insecure = toHttps(request);
+  if (insecure) return insecure;
+  if (url.hostname === FORWARDED) return Response.redirect(`${CANONICAL}${url.pathname}${url.search}`, 308);
+  if (BUILD_PATHS.some((p) => isBuildRead(request, p))) return buildResponse(buildInfo({ worker: 'crow-test-agents', commit: env.BUILD_COMMIT, metadata: env.CF_VERSION_METADATA }), request.method);
+  const headers = new Headers(request.headers);
+  // Set by this Worker only: whatever a caller sent under this name is replaced.
+  headers.set(CLIENT, request.headers.get('cf-connecting-ip') ?? 'unknown');
+  return env.AGENTS.get(env.AGENTS.idFromName(OBJECT_NAME)).fetch(new Request(request, { headers }));
+}

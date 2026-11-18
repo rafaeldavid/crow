@@ -34,6 +34,25 @@ const refusal = (why: string): never => {
   throw new Refusal(`refusing to submit: ${why}`);
 };
 const sha = async (b: Uint8Array) => `sha256:${Buffer.from(await crypto.subtle.digest('SHA-256', bytes(b))).toString('hex')}`;
+/** How many times Agent.call sends a request whose answer is lost on the network, and the wait before each retry (1 s, then 2 s). */
+export const CALL_ATTEMPTS = 3;
+const CALL_BACKOFF_MS = 1000;
+/**
+ * Network errors that are not retried. Most mean the request never reached the operator, so no answer was lost: a
+ * refused or timed-out connection, a host or network out of reach, a name that does not resolve, a TLS failure, a port
+ * fetch refuses. A headers timeout means the operator held the request for minutes: a retry would only wait as long again.
+ */
+const NOT_RETRIED = new Set(['ECONNREFUSED', 'ENOTFOUND', 'EHOSTUNREACH', 'ENETUNREACH', 'UND_ERR_CONNECT_TIMEOUT', 'UND_ERR_HEADERS_TIMEOUT']);
+const neverSent = (e: unknown) => {
+  const cause = (e as { cause?: { code?: string; message?: string } })?.cause;
+  const code = cause?.code ?? '';
+  return NOT_RETRIED.has(code) || /^(ERR_TLS_|ERR_SSL_|UNABLE_TO_|SELF_SIGNED|DEPTH_ZERO)|CERT/.test(code) || cause?.message === 'bad port'; // a port fetch refuses to call, such as 9
+};
+/** A fetch failure with its cause, which fetch keeps out of the message: "fetch failed: other side closed (UND_ERR_SOCKET)". */
+const networkError = (e: unknown): string => {
+  const cause = (e as { cause?: { message?: string; code?: string } })?.cause;
+  return `${(e as Error)?.message ?? String(e)}${cause?.message ? `: ${cause.message}${cause.code ? ` (${cause.code})` : ''}` : ''}`;
+};
 
 export class Agent {
   readonly account;
@@ -58,7 +77,20 @@ export class Agent {
   async call<T = J>(method: 'GET' | 'POST', path: string, body?: unknown, api = this.operators[0], extra: Record<string, string> = {}): Promise<T> {
     const headers: Record<string, string> = { 'content-type': body instanceof Uint8Array ? 'application/octet-stream' : 'application/json', ...extra };
     if (method === 'POST' && !path.startsWith('/v1/prepare/')) headers['idempotency-key'] = crypto.randomUUID();
-    const res = await fetch(`${api}${path}`, { method, headers, ...(body === undefined ? {} : { body: body instanceof Uint8Array ? body : JSON.stringify(body) }) });
+    const init = { method, headers, ...(body === undefined ? {} : { body: body instanceof Uint8Array ? body : JSON.stringify(body) }) };
+    // T-497: an answer lost on the network is retried as the same request, under the same Idempotency-Key, so the
+    // operator replays what it did instead of doing it twice. An answer that arrived, a refusal too, is never retried.
+    // It stays a TypeError, as fetch's own failure is, so a caller that fails over on one still does.
+    let res: Response | undefined;
+    for (let attempt = 1; !res; attempt++) {
+      try {
+        res = await fetch(`${api}${path}`, init);
+      } catch (e) {
+        // A refused or unresolved connection never reached the operator: nothing to replay, so the caller moves on at once.
+        if (attempt >= CALL_ATTEMPTS || neverSent(e)) throw new TypeError(`${method} ${path} at ${new URL(String(api)).host}: no answer after ${attempt} ${attempt === 1 ? 'try' : 'tries'} (${networkError(e)})`, { cause: e });
+        await new Promise((r) => setTimeout(r, CALL_BACKOFF_MS * attempt));
+      }
+    }
     const out = (await res.json()) as J;
     if (!res.ok) throw new Error(`${method} ${path}: ${out.type}: ${out.detail}`);
     return out as T;
@@ -293,7 +325,7 @@ export class Agent {
 
   /**
    * A one-time signing key and x25519 key for one deal, and the Delegation this long-term key signs for them
-   * (ADR-0024 §7). Use the returned agent for everything in that deal; send the certificate to the counterparty
+   * (ADR-0024 section 7). Use the returned agent for everything in that deal; send the certificate to the counterparty
    * before agree, and to the primary with the offer. Random keys, not derived ones: one xpub would link every deal.
    * Funding the deal key from your treasury links the two on chain (residual 11); fund it how you choose.
    */
@@ -310,7 +342,7 @@ export class Agent {
   }
 
   /**
-   * Checks a counterparty's Delegation before you sign with it (ADR-0024 §7, D32): the certificate itself
+   * Checks a counterparty's Delegation before you sign with it (ADR-0024 section 7, D32): the certificate itself
    * (verify.ts verifyDelegation), then the certifying agent's mandate from its principal in this club, as every
    * operator serves it, allowing the role and the price. Settlement does not run this check; you do.
    */
@@ -328,7 +360,7 @@ export class Agent {
   }
 
   /**
-   * An Authorization header with a ReadToken for one commitment at one operator (ADR-0024 §3). The audience binds it
+   * An Authorization header with a ReadToken for one commitment at one operator (ADR-0024 section 3). The audience binds it
    * to that operator, so it cannot be replayed at another; you pick the expiry (D31).
    */
   async readToken(id: Hex, api = this.operators[0]!, ttlSec = 300): Promise<string> {
@@ -343,7 +375,7 @@ export class Agent {
   }
 
   /**
-   * Seller, with its per-deal agent: a private offer from the recipe, with no operator prepare (ADR-0024 §4). The
+   * Seller, with its per-deal agent: a private offer from the recipe, with no operator prepare (ADR-0024 section 4). The
    * agent reads the rulebook hash, the primary's registration and settlement time from every operator, picks its own
    * nonce and salts, builds the terms, seals both bodies to the buyer's per-deal key and the primary's registered key,
    * signs and submits ciphertext. The operator never sees the bodies. Keep `keys`: they are what you disclose later.

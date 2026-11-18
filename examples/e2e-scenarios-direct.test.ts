@@ -309,7 +309,7 @@ describe('e2e-scenarios-direct.ts', () => {
       // What Rafa reads at the pause: the lane and nonce in flight, and the exact deploy command.
       pausedLines = pausedLines.map((l) => l.replace(/^\[11\] PAUSED +/, ''));
       expect(pausedLines.join('\n')).toMatch(/broadcast the delivery from lane 0x[0-9a-f]{40} at nonce \d+ and has not answered yet/);
-      expect(pausedLines.join('\n')).toContain(`npx -y wrangler@4 deploy -c ${root.replace(/\/+$/, '')}/apps/demo-cloud/wrangler.op1.jsonc`);
+      expect(pausedLines.join('\n')).toContain(`npx -y wrangler@4.151.3 deploy -c ${root.replace(/\/+$/, '')}/apps/demo-cloud/wrangler.op1.jsonc`);
       // The stray Enter before the word does not end the pause.
       expect(pausedLines.join('\n')).toMatch(/ignored a line that is not "deployed"/);
       expect(failed(byId['11']), r.out).toEqual(['holdback-op1 restarted during the pause', 'the restart cut the relayed delivery before holdback-op1 answered it']);

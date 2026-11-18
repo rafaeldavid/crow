@@ -225,9 +225,21 @@ describe('deal-record.ts writes one verified record of a finished deal (T-333)',
 });
 
 /** A proxy in front of one operator that rewrites some answers: the escrow state, the terms' price, a ciphertext URI. */
-async function proxy(target: string, lie: { state?: string; tamperPrice?: string; ciphertextUri?: string; noPostings?: boolean }): Promise<{ url: string; close(): Promise<void> }> {
+async function proxy(target: string, lie: { state?: string; tamperPrice?: string; ciphertextUri?: string; noPostings?: boolean; txs?: Record<string, string>; refuseEvents?: { times: number; status: number }; refuseCiphertext?: boolean }): Promise<{ url: string; close(): Promise<void> }> {
+  let refusals = 0;
   const server = createServer(async (req, res) => {
     const path = req.url ?? '/';
+    if (lie.refuseCiphertext && path.startsWith('/v1/ciphertext/')) {
+      res.writeHead(503, { 'content-type': 'application/problem+json' }).end(JSON.stringify({ type: 'internal', status: 503 }));
+      return;
+    }
+    // T-492: the events read refused `times` times with `status` (429 names a 0 s wait), then served.
+    if (lie.refuseEvents && /\/events/.test(path) && refusals < lie.refuseEvents.times) {
+      refusals++;
+      const s = lie.refuseEvents.status;
+      res.writeHead(s, { 'content-type': 'application/problem+json' }).end(JSON.stringify({ type: s === 429 ? 'rate_limited' : 'internal', status: s, ...(s === 429 ? { retryAfterSec: 0 } : {}) }));
+      return;
+    }
     const up = await realFetch(`${target}${path}`, { method: req.method! });
     let text = Buffer.from(await up.arrayBuffer()).toString();
     if (up.ok && (up.headers.get('content-type') ?? '').includes('json')) {
@@ -237,6 +249,8 @@ async function proxy(target: string, lie: { state?: string; tamperPrice?: string
       if (lie.ciphertextUri && /\/events/.test(path)) for (const e of body.items) if (e.type === 'delivery.submitted') e.payload.ciphertext.uri = lie.ciphertextUri;
       // A chain's events carry no postings (packages/settlement/evm/evm-settlement.ts:1538): the shape of the EVM world.
       if (lie.noPostings && /\/events/.test(path)) for (const e of body.items) if (e.payload) delete e.payload.postings;
+      // A chain's events carry the transaction that emitted them, and one transaction can emit several (a decision's).
+      if (lie.txs && /\/events/.test(path)) for (const e of body.items) if (lie.txs[e.type]) e.payload = { ...e.payload, tx: lie.txs[e.type] };
       text = JSON.stringify(body);
     }
     res.writeHead(up.status, { 'content-type': up.headers.get('content-type') ?? 'application/json' }).end(text);
@@ -251,6 +265,71 @@ async function proxy(target: string, lie: { state?: string; tamperPrice?: string
   };
 }
 
+describe('deal-record.ts never reads a refused read as missing data (T-492)', () => {
+  let refunded: Deal;
+  beforeAll(async () => {
+    refunded = await deal(BAD);
+  }, 60_000);
+  const both = (url: string) => [world.info.operators[0]!, url];
+
+  it('retries a 429 and a 500 on the events read, and the refund is in the record', async () => {
+    for (const status of [429, 500]) {
+      const busy = await proxy(world.info.operators[1]!, { refuseEvents: { times: 2, status } });
+      try {
+        const r = await dealRecord(refunded.id, { operators: both(busy.url), party: 'buyer' });
+        expect(r.checks.find((x) => x.check === 'every read answered'), String(status)).toMatchObject({ ok: true });
+        expect(r.row, String(status)).toMatchObject({ outcome: 'Refunded', refundedTo: refunded.buyer.address.toLowerCase() });
+        // The retry reads the busy operator about 1 s after the other, so `steps` may differ by the closing event
+        // the world appends in between; the money sections must agree.
+        expect(r.disagreements.map((d) => d.section).filter((s) => ['terms', 'outcome', 'settlement'].includes(s)), String(status)).toEqual([]);
+      } finally {
+        await busy.close();
+      }
+    }
+  }, 30_000);
+
+  it('names a read still refused after its retries as a failed check, instead of a record that says no refund', async () => {
+    const down = await proxy(world.info.operators[1]!, { refuseEvents: { times: 99, status: 429 } });
+    try {
+      const r = await dealRecord(refunded.id, { operators: both(down.url), party: 'buyer' });
+      const c = r.checks.find((x) => x.check === 'every read answered');
+      expect(c).toMatchObject({ ok: false, why: expect.stringContaining(`${down.url}: /v1/commitments/${refunded.id}/events answered 429 after 3 tries`) });
+      expect(c?.why).toContain('refundedTo may read null');
+    } finally {
+      await down.close();
+    }
+  }, 30_000);
+
+  it("reads only the configured operators' public routes: a ciphertext ID that would leave them is never fetched", async () => {
+    // An operator's answer names the ciphertext; the record checks its form before building a path, and the read
+    // guard refuses any path outside the operators' routes. The lying operator's ID is malformed, so nothing is read.
+    const liar = await proxy(world.info.operators[1]!, { ciphertextUri: 'https://elsewhere.example/x' });
+    watching = true;
+    sent.length = 0;
+    try {
+      const r = await dealRecord(refunded.id, { operators: both(liar.url), party: 'buyer' });
+      expect(sent.every((s) => s.method === 'GET' && [world.info.operators[0]!, liar.url].some((o) => s.url.startsWith(`${o}/`)))).toBe(true);
+      expect(r.checks.find((x) => x.check === 'every read answered')).toMatchObject({ ok: true });
+    } finally {
+      watching = false;
+      await liar.close();
+    }
+  }, 30_000);
+
+  it('names a ciphertext no operator would serve, instead of only "no operator serves it"', async () => {
+    const a = await proxy(world.info.operators[0]!, { refuseCiphertext: true });
+    const b = await proxy(world.info.operators[1]!, { refuseCiphertext: true });
+    try {
+      const r = await dealRecord(refunded.id, { operators: [a.url, b.url], party: 'buyer' });
+      expect(r.checks.find((x) => x.check === 'ciphertext sha256')).toMatchObject({ ok: null });
+      expect(r.checks.find((x) => x.check === 'every read answered')).toMatchObject({ ok: false, why: expect.stringMatching(/\/v1\/ciphertext\/sha256:[0-9a-f]{64} answered 503 after 3 tries/) });
+    } finally {
+      await a.close();
+      await b.close();
+    }
+  }, 60_000);
+});
+
 describe('deal-record.ts when a release\'s event carries no postings (T-390)', () => {
   // A chain's events carry no postings, and there the record marks its postings checks not run (pin.chain set; not
   // run here, since the local world pins no chain). On SimChain, which writes postings for a release, it fails closed.
@@ -263,6 +342,24 @@ describe('deal-record.ts when a release\'s event carries no postings (T-390)', (
       expect(by['postings conserve the hold']?.ok).toBe(false);
       expect(by['postings follow the outcome']?.ok).toBe(false);
       expect(r.row).toMatchObject({ outcome: 'Released', paidTo: null });
+    } finally {
+      await Promise.all(fronts.map((f) => f.close()));
+    }
+  }, 60_000);
+});
+
+describe('deal-record.ts lists each transaction once (T-399 Finding 6)', () => {
+  it('a decision that emits three events in one transaction is one transaction, under its first step', async () => {
+    const released = await deal(GOOD);
+    const fund = `0x${'1'.repeat(64)}`, decide = `0x${'2'.repeat(64)}`;
+    const txs = { 'hold.funded': fund, 'judgment.decided': decide, 'settlement.released': decide, 'key.released': decide };
+    const fronts = await Promise.all(world.info.operators.map((op) => proxy(op, { txs })));
+    try {
+      const r = await dealRecord(released.id, { operators: fronts.map((f) => f.url), party: 'buyer' });
+      // The step is the first of the three in the event order the operators serve (SimChain releases the key first).
+      const first = (r.steps as J[]).map((x) => x.step).find((x) => ['judgment.decided', 'settlement.released', 'key.released'].includes(x));
+      expect((r.settlement as J).transactions).toEqual([{ step: 'hold.funded', tx: fund, url: null }, { step: first, tx: decide, url: null }]);
+      expect(r.row.transactions).toEqual([fund, decide]);
     } finally {
       await Promise.all(fronts.map((f) => f.close()));
     }

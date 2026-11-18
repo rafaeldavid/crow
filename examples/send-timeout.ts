@@ -4,7 +4,7 @@
 // deal's full terms, which the parties hold. This command takes those terms and the deployment record, reads the
 // deal's stage from `dealOf` and the chain's own clock, and sends the one timeout due now, if any.
 //
-//   node --env-file-if-exists=.env examples/send-timeout.ts --terms <file> --deployment <file> [--rpc <url>] [--dry-run]
+//   node examples/send-timeout.ts --terms <file> --deployment <file> [--rpc <url>] [--dry-run]
 //
 // --terms       the deal's terms as JSON: the body GET /v1/commitments/<id>/terms serves a party, or a buyer
 //               signer's `checked.terms` (`jq .checked.terms <key file>`). Public or private wire form.
@@ -67,7 +67,7 @@ export function parseArgs(argv: readonly string[]): Args | { error: string } {
   return { terms: out.terms, deployment: out.deployment, rpc: out.rpc ?? null, dryRun: out.dryRun };
 }
 
-export const USAGE = 'usage: node --env-file-if-exists=.env examples/send-timeout.ts --terms <file> --deployment <file> [--rpc <url>] [--dry-run]';
+export const USAGE = 'usage: node examples/send-timeout.ts --terms <file> --deployment <file> [--rpc <url>] [--dry-run]';
 
 // The inputs
 
