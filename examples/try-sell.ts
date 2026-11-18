@@ -16,7 +16,7 @@
 //                        waypoints itself, because the test buyer issues no orders yet
 //   --work <file> --terms <file>   your own work, and a JSON file {"price": "<base units>", "deliverable":
 //                        {"kind", "description", "format"}, "checks": [...]}; the test buyer takes 1 to 10 checks,
-//                        at least one required, and a price of at most 50 tUSDC
+//                        at least one required, and a price of at most 1,000 tUSDC
 //   --outcome refund     deliver work that fails a check (the samples only), to see the buyer refunded
 //
 // It calls only the two operators and the test buyer, keeps its keys in memory and reads only the two files you name.
