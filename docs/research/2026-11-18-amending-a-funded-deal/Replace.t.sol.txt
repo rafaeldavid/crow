@@ -1,0 +1,136 @@
+// SPDX-License-Identifier: MIT
+pragma solidity ^0.8.28;
+
+// T-524 scratch test, not for the repository: can the frozen phase-one contracts refund a Held deal by agreement and
+// fund its replacement in one transaction, tied by data both original keys sign? Batch stands in for Multicall3.
+
+import {AuthCaptureEscrow} from "commerce-payments/AuthCaptureEscrow.sol";
+import {HoldbackRules} from "../../src/HoldbackRules.sol";
+import {IHoldbackRules} from "../../src/IHoldbackRules.sol";
+import {HoldbackTypes as H} from "../../src/HoldbackTypes.sol";
+import {Base} from "./Base.sol";
+
+contract Batch {
+    function run(
+        HoldbackRules rules,
+        H.Terms calldata oldTerms,
+        H.Mutual calldata refund,
+        H.Terms calldata newTerms,
+        bytes calldata sellerSig,
+        H.Acceptance calldata acc,
+        H.Agree calldata ag,
+        H.Funding calldata f
+    ) external returns (bytes32) {
+        H.Delivery memory none;
+        H.KeyProof memory k;
+        rules.mutualSettle(oldTerms, refund, none, k);
+        return rules.agreeAndFund(newTerms, sellerSig, acc, ag, f);
+    }
+}
+
+contract ReplaceTest is Base {
+    Batch internal batch;
+
+    struct Signed {
+        bytes sellerSig;
+        H.Acceptance acc;
+        H.Agree ag;
+        H.Funding f;
+    }
+
+    function setUp() public override {
+        super.setUp();
+        batch = new Batch();
+    }
+
+    function _refund(H.Terms memory t, bytes32 id, bytes32 tie) internal view returns (H.Mutual memory m) {
+        H.Payout[] memory p = new H.Payout[](1);
+        p[0] = H.Payout(t.buyerPaymentAddress, t.price);
+        m.payouts = p;
+        m.nonce = tie; // the replacement's commitment ID, signed by both original keys
+        m.expiresAt = uint64(block.timestamp + 1 hours);
+        bytes32 h = hx.mutual(id, address(usdc), m);
+        m.buyerSignature = _sign(BUYER_PK, h);
+        m.sellerSignature = _sign(SELLER_PK, h);
+    }
+
+    function _signed(H.Terms memory t, uint256 agreePk) internal view returns (Signed memory s) {
+        s.sellerSig = _sellerSig(t, SELLER_PK);
+        s.acc = _acceptance(t, ADJ_PK);
+        s.ag = _agree(t, agreePk);
+        s.f = _erc3009(t, BUYER_PK);
+    }
+
+    function _capturable(H.Terms memory t) internal view returns (uint256 c) {
+        (, c,) = escrow.paymentState(escrow.getHash(_pi(t)));
+    }
+
+    /// The buyer's wallet holds only the hold: everything else moves away, so the new funding needs the refund.
+    function _emptyWallet() internal {
+        uint256 free = usdc.balanceOf(buyer);
+        vm.prank(buyer);
+        usdc.transfer(address(0xdead), free);
+    }
+
+    function test_refundAndFundInOneTransaction() public {
+        (H.Terms memory t1, bytes32 id1) = _funded();
+        _emptyWallet();
+        H.Terms memory t2 = _terms();
+        t2.acceptanceHash = keccak256("corrected checks");
+        bytes32 id2 = hx.id(t2);
+        H.Mutual memory m = _refund(t1, id1, id2);
+        Signed memory s = _signed(t2, BUYER_PK);
+
+        vm.prank(relayer);
+        bytes32 got = batch.run(rules, t1, m, t2, s.sellerSig, s.acc, s.ag, s.f);
+
+        assertEq(got, id2);
+        assertEq(uint8(_stage(id1)), uint8(IHoldbackRules.Stage.Settled), "old deal settled");
+        assertEq(uint8(_stage(id2)), uint8(IHoldbackRules.Stage.Held), "new deal held");
+        assertEq(_capturable(t1), 0, "old hold empty");
+        assertEq(_capturable(t2), PRICE + FEE, "new hold full");
+        assertEq(_held(t1), PRICE + FEE, "the store holds one hold");
+        assertEq(usdc.balanceOf(buyer), 0, "the refund funded the new hold");
+    }
+
+    function test_wholeTransactionRevertsWhenTheNewFundingFails() public {
+        (H.Terms memory t1, bytes32 id1) = _funded();
+        _emptyWallet();
+        H.Terms memory t2 = _terms();
+        t2.acceptanceHash = keccak256("corrected checks");
+        bytes32 id2 = hx.id(t2);
+        H.Mutual memory m = _refund(t1, id1, id2);
+        Signed memory s = _signed(t2, OTHER_PK); // the Agree is not the buyer's
+
+        vm.expectRevert(IHoldbackRules.BadSignature.selector);
+        batch.run(rules, t1, m, t2, s.sellerSig, s.acc, s.ag, s.f);
+        assertEq(uint8(_stage(id1)), uint8(IHoldbackRules.Stage.Held), "old deal untouched");
+        assertEq(_capturable(t1), PRICE + FEE, "old hold intact");
+        assertEq(usdc.balanceOf(buyer), 0, "nothing refunded");
+    }
+
+    function test_higherHoldThanTheWalletRevertsWhole() public {
+        (H.Terms memory t1, bytes32 id1) = _funded();
+        _emptyWallet();
+        H.Terms memory t2 = _terms();
+        t2.price = PRICE + 1;
+        bytes32 id2 = hx.id(t2);
+        H.Mutual memory m = _refund(t1, id1, id2);
+        Signed memory s = _signed(t2, BUYER_PK);
+
+        vm.expectRevert();
+        batch.run(rules, t1, m, t2, s.sellerSig, s.acc, s.ag, s.f);
+        assertEq(uint8(_stage(id1)), uint8(IHoldbackRules.Stage.Held), "old deal untouched");
+        assertEq(_capturable(t1), PRICE + FEE, "old hold intact");
+    }
+
+    /// The refund alone, without the new deal: the buyer can always take it, as today.
+    function test_theRefundAloneStillSettles() public {
+        (H.Terms memory t1, bytes32 id1) = _funded();
+        H.Mutual memory m = _refund(t1, id1, keccak256("a replacement never funded"));
+        H.Delivery memory none;
+        H.KeyProof memory k;
+        rules.mutualSettle(t1, m, none, k);
+        assertEq(uint8(_stage(id1)), uint8(IHoldbackRules.Stage.Settled));
+    }
+}
