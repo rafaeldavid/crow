@@ -106,6 +106,53 @@ describe.skipIf(!ready)(`EvmSettlement on anvil${ready ? '' : ' (SKIPPED: needs 
     expect(chain.transactions().map((t) => t.call)).toEqual(['agreeAndFund', 'deliver', 'decide']);
   }, 60_000);
 
+  // An outside scan's finding (G1, T-526): a call that carries the delivery re-checks the seller inside it, so the seller
+  // could make a carried reject revert after its calldata published the primary's seed. Only an accept carries it.
+  it('a carried delivery travels only with an accept: a reject or an escalation is sent after the delivery is posted (G1)', async () => {
+    const { chain, cast, club } = await newSettlement(world);
+    const calldata = async (hash: Hex) => (await world.publicClient.getTransaction({ hash })).input.toLowerCase();
+    const sellerSig = (d: EvmDeal) => d.delivery!.signature.slice(2).toLowerCase();
+    for (const outcome of ['reject', 'escalate'] as const) {
+      const d = new EvmDeal(chain, cast, club, `g1-${outcome}`);
+      for (const sub of [d.offer(), d.accept(), d.agreeAndFund()]) await must(chain, cast, await sub);
+      const carried = await d.deliver();
+      expect(carried.kind === 'deliver' && (await chain.carryDelivery(carried.delivery))).toBeNull();
+      const from = chain.transactions().length;
+      await must(chain, cast, d.decide('primary', outcome));
+      const txs = chain.transactions().slice(from).filter((t) => t.commitmentId === d.id);
+      expect(txs.map((t) => t.call), outcome).toEqual(['deliver', 'decide']);
+      // The delivery lands alone; the decision's calldata holds no delivery for the seller's wallet to re-check.
+      expect(await calldata(txs[0]!.hash)).toContain(sellerSig(d));
+      expect(await calldata(txs[1]!.hash)).not.toContain(sellerSig(d));
+      expect((await chain.stage(d.id)).stage).toBe(outcome === 'reject' ? 'Refunded' : 'Escalated');
+    }
+    // An accept still carries the delivery: D4's two transactions.
+    const a = new EvmDeal(chain, cast, club, 'g1-accept');
+    for (const sub of [a.offer(), a.accept(), a.agreeAndFund()]) await must(chain, cast, await sub);
+    const carried = await a.deliver();
+    expect(carried.kind === 'deliver' && (await chain.carryDelivery(carried.delivery))).toBeNull();
+    const from = chain.transactions().length;
+    await must(chain, cast, a.decide('primary', 'accept'));
+    const [accept, ...rest] = chain.transactions().slice(from).filter((t) => t.commitmentId === a.id);
+    expect([accept!.call, rest.length]).toEqual(['decide', 0]);
+    expect(await calldata(accept!.hash)).toContain(sellerSig(a));
+  }, 120_000);
+
+  it('a carried reject the contract would refuse sends nothing, the delivery included (G1)', async () => {
+    const { chain, cast, club } = await newSettlement(world);
+    const d = new EvmDeal(chain, cast, club, 'g1-refused');
+    for (const sub of [d.offer(), d.accept(), d.agreeAndFund()]) await must(chain, cast, await sub);
+    const carried = await d.deliver();
+    expect(carried.kind === 'deliver' && (await chain.carryDelivery(carried.delivery))).toBeNull();
+    const [txs, block] = [chain.transactions().length, await world.publicClient.getBlockNumber()];
+    // A reject that names another delivery: the contract refuses it (ADR-0029).
+    const wrong = await chain.submit(await d.decide('primary', 'reject', undefined, { deliveryHash: `0x${'ab'.repeat(32)}` }), { sender: cast.primary.key });
+    expect(wrong.ok ? 'ok' : wrong.problem.type).toBe('invalid_terms');
+    expect([chain.transactions().length, await world.publicClient.getBlockNumber()]).toEqual([txs, block]);
+    expect((await chain.stage(d.id)).stage).toBe('Held');
+    expect(chain.escrowState(d.id)?.kind).toBe('Held');
+  }, 60_000);
+
   // ADR-0029: a signature that names a delivery other than the posted one is refused as SimChain refuses it, and the
   // contract's deliveryHashOf, the mirror and the read model name the same delivery.
   it('an early accept or a decision naming another delivery is refused; the read model names the posted delivery', async () => {
@@ -455,11 +502,11 @@ describe.skipIf(!ready)(`EvmSettlement on anvil${ready ? '' : ' (SKIPPED: needs 
   const SETTLES: Record<string, { calls: string[]; finalState: string }> = {
     'happy path (decision carries the delivery)': { calls: ['agreeAndFund', 'decide'], finalState: 'Released' },
     'happy path with an on-chain deliver': { calls: ['agreeAndFund', 'deliver', 'decide'], finalState: 'Released' },
-    'reject (fee-only capture + void)': { calls: ['agreeAndFund', 'decide'], finalState: 'Refunded' },
+    'reject (fee-only capture + void)': { calls: ['agreeAndFund', 'deliver', 'decide'], finalState: 'Refunded' },
     'reclaim (nothing delivered)': { calls: ['agreeAndFund', 'reclaim'], finalState: 'Refunded' },
     'early accept (delivery carried)': { calls: ['agreeAndFund', 'earlyAccept'], finalState: 'Released' },
     'mutual settlement (70/30, before delivery)': { calls: ['agreeAndFund', 'mutualSettle'], finalState: 'Settled' },
-    'escalation, then the appeal adjudicator decides': { calls: ['agreeAndFund', 'decide', 'decide'], finalState: 'Released' },
+    'escalation, then the appeal adjudicator decides': { calls: ['agreeAndFund', 'deliver', 'decide', 'decide'], finalState: 'Released' },
     'fallback (primary silent, fallback accepts)': { calls: ['agreeAndFund', 'deliver', 'triggerFallback', 'decide'], finalState: 'Released' },
     'default (primary and fallback silent)': { calls: ['agreeAndFund', 'deliver', 'triggerFallback', 'triggerDefault'], finalState: 'Refunded' },
     'operator fee bundled with funding, then accept': { calls: ['agreeAndFund', 'decide'], finalState: 'Released' },
@@ -724,6 +771,32 @@ describe.skipIf(!ready)(`relayed transactions a restart left in flight (T-219; a
     // One row written and one removed per transaction, across the three restarts (each copy counts its own writes).
     expect([saved.writes, f.copy.writes, g.copy.writes, h.copy.writes]).toEqual([1, 1, 1, 0]);
     expect(f.copy.removes + g.copy.removes + h.copy.removes).toBe(3);
+  }, 120_000);
+
+  // G1 (T-526): a carried reject sends two transactions under one Idempotency-Key. A restart between them must not answer
+  // that key for a decision that never landed.
+  it("a restart after a carried reject's delivery lands applies the delivery alone, and the reject's key replays nothing (G1)", async () => {
+    const saved = new Saved();
+    const a = await open(saved);
+    const d = new EvmDeal(a, cast, club, 'g1-restart');
+    for (const sub of [await d.offer(), await d.accept(), await d.agreeAndFund()]) expect((await a.submit(sub, { via: 'op-1' })).ok).toBe(true);
+    const carried = await d.deliver();
+    expect(carried.kind === 'deliver' && (await a.carryDelivery(carried.delivery))).toBeNull();
+    await saved.persist(a);
+    const reject = await d.decide('primary', 'reject');
+    const r = await interrupted(a, saved, reject, 'k-g1-reject');
+    // The row in flight is the delivery's, relayed as a delivery with no key.
+    const [row] = [...r.copy.rows.values()];
+    expect(row!.note).toMatchObject({ call: 'deliver', submission: { kind: 'deliver' } });
+    expect(row!.note!.idempotencyKey).toBeUndefined();
+    const b = await open(r.copy);
+    expect(await b.recover()).toMatchObject({ applied: 1, failed: 0 });
+    expect(b.escrowState(d.id)?.kind).toBe('Delivered');
+    // The retry is not answered from the delivery's receipt: it runs as a decision (here the first node's reject has
+    // already landed on the shared chain, so the contract refuses it).
+    const retry = await b.submit(reject, { idempotencyKey: 'k-g1-reject' });
+    expect(retry).not.toMatchObject({ replayed: true });
+    expect(retry.ok).toBe(false);
   }, 120_000);
 
   it("a persist while the answer is being read keeps the row, so a restart still replays the client's retry (review, 2026-11-04)", async () => {
