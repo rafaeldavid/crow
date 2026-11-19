@@ -179,8 +179,13 @@ function schedule(c: Call, state: State): number {
   } else if (process.platform === 'win32') {
     c.say({ ...line, scheduler: 'none', detail: `This version prints an entry for cron and launchd only. Run deliver every ${EVERY_MINUTES} minutes with this machine's own scheduler.` });
   } else {
-    // cron reads % as a line break: each one in the command is escaped.
-    c.say({ ...line, scheduler: 'cron', entry: `*/${EVERY_MINUTES} * * * * ${command.replace(/%/g, '\\%')}`, detail: `Add entry as one line with crontab -e. Deleting the line stops it. ${node}` });
+    // cron reads % as a line break and a backslash before it as an escape, which implementations read differently:
+    // an entry that holds either is refused, never escaped.
+    if (/[%\\]/.test(command)) {
+      c.say({ step: 'schedule', ok: false, detail: 'A path or a flag in the entry holds % or a backslash, which cron reads as a line break or an escape. Move the folder or this file to a path without one. Nothing was printed to install.' });
+      return 1;
+    }
+    c.say({ ...line, scheduler: 'cron', entry: `*/${EVERY_MINUTES} * * * * ${command}`, detail: `Add entry as one line with crontab -e. Deleting the line stops it. ${node}` });
   }
   return 0;
 }

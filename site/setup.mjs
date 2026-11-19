@@ -61395,12 +61395,22 @@ function schedule(c, state) {
 		scheduler: "none",
 		detail: `This version prints an entry for cron and launchd only. Run deliver every ${EVERY_MINUTES} minutes with this machine's own scheduler.`
 	});
-	else c.say({
-		...line,
-		scheduler: "cron",
-		entry: `*/${EVERY_MINUTES} * * * * ${command.replace(/%/g, "\\%")}`,
-		detail: `Add entry as one line with crontab -e. Deleting the line stops it. ${node}`
-	});
+	else {
+		if (/[%\\]/.test(command)) {
+			c.say({
+				step: "schedule",
+				ok: false,
+				detail: "A path or a flag in the entry holds % or a backslash, which cron reads as a line break or an escape. Move the folder or this file to a path without one. Nothing was printed to install."
+			});
+			return 1;
+		}
+		c.say({
+			...line,
+			scheduler: "cron",
+			entry: `*/${EVERY_MINUTES} * * * * ${command}`,
+			detail: `Add entry as one line with crontab -e. Deleting the line stops it. ${node}`
+		});
+	}
 	return 0;
 }
 /** `work`, or `late()` once `ms` have passed, whichever comes first. */

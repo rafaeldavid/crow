@@ -411,4 +411,24 @@ describe('site/setup.mjs deliver: one pass over the funded deals (T-568)', () =>
     expect(run.code).toBe(1);
     expect(jsonLines(run.out)).toEqual([expect.objectContaining({ step: 'schedule', ok: false, detail: expect.stringContaining('line break') })]);
   }, 60_000);
+
+  // cron reads % as a line break and a backslash as an escape (CodeQL, incomplete escaping): its entry refuses both.
+  it('--schedule refuses % or a backslash in a cron entry, and launchd takes them as they are', async () => {
+    const at = fresh();
+    const odd = join(at.dir, '50% done\\x');
+    writeFileSync(join(at.dir, 'template.json'), JSON.stringify(TEMPLATE));
+    const made = await node(at, ['seller', '--template', join(at.dir, 'template.json'), '--payout', 'this-key', '--folder', odd, ...operators()]);
+    expect(made.code, made.out + made.err).toBe(0);
+    const run = await node(at, ['deliver', '--schedule', '--folder', odd, ...operators()]);
+    const [line] = jsonLines(run.out);
+    if (process.platform === 'darwin') {
+      expect(run.code, run.out + run.err).toBe(0);
+      expect(line).toMatchObject({ scheduler: 'launchd', ok: true });
+      expect(line.plist).toContain('50% done\\x');
+    } else {
+      expect(run.code).toBe(1);
+      expect(line).toMatchObject({ step: 'schedule', ok: false, detail: expect.stringContaining('% or a backslash') });
+      expect(line.entry).toBeUndefined();
+    }
+  }, 60_000);
 });
