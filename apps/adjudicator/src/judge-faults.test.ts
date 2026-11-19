@@ -187,7 +187,7 @@ async function world(o: WorldOptions = {}) {
   const id = commitmentId(terms);
   /** A new process for the primary: a fresh service with the same keys, config and store. */
   const restartPrimary = () => bench(cast.primary, 11);
-  return { cast, chain, blobs, records, calls, late, judges, primary, fallback, appeal, buyerEnc, terms, id, restartPrimary };
+  return { cast, chain, settlement, blobs, records, calls, late, judges, primary, fallback, appeal, buyerEnc, terms, id, restartPrimary };
 }
 
 /** Offer, the primary's acceptance, agreement and funding, and the sealed delivery of `csv`. */
@@ -555,5 +555,23 @@ describe('T-570: a record that cannot be built never runs the panel again', () =
       expect(r.refused.map((x) => x.problem.type ?? x.problem.detail).join(' ')).toMatch(/invalid_state|never judges an attempt twice/);
     }
     expect(w.calls).toHaveLength(calls);
+  });
+
+  it('without a store, a task list read that fails drops nothing: the next pass still builds from the held result', async () => {
+    const w = await delivered(DEMO_CSV);
+    const seats = primaryPanel(w);
+    recordHash.fails = true;
+    try {
+      expect((await w.primary.adj.runOnce()).decided).toEqual([]);
+    } finally {
+      recordHash.fails = false;
+    }
+    // One pass whose task list read fails (an RPC error): before this fix it dropped every held result.
+    const tasks = w.settlement.tasks.bind(w.settlement);
+    w.settlement.tasks = async () => Promise.reject(new Error('rpc 502'));
+    await w.primary.adj.runOnce().catch(() => undefined);
+    w.settlement.tasks = tasks;
+    expect((await w.primary.adj.runOnce()).decided).toEqual([{ commitmentId: w.id, role: 'primary', outcome: 'accept' }]);
+    expect(w.calls).toHaveLength(seats.length);
   });
 });

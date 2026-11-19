@@ -251,7 +251,7 @@ export class Adjudicator {
   readonly #judged = new Map<string, Judged>();
   /**
    * The panel's result by commitment|role|attempt. This service keeps it the moment runPipeline returns and drops it
-   * once the record is built. When the record fails to build, the service also writes it to `judgedStore`, so the next
+   * once the record is built, or once the turn leaves a task list that was read in full. When the record fails to build, the service also writes it to `judgedStore`, so the next
    * pass, after a restart too, builds the record from it and calls no judge (T-570, red team of PR 722).
    */
   readonly #drafts = new Map<string, Omit<KeptDraft, 'kind'>>();
@@ -419,8 +419,6 @@ export class Adjudicator {
     } finally {
       this.#passWaitLeft = null;
       for (const id of this.#stalled) if (!seen.has(id)) this.#stalled.delete(id);
-      // A deal that left this adjudicator's lists (decided, or past its turn) needs its held result no more.
-      for (const k of this.#drafts.keys()) if (!seen.has(k.slice(0, k.indexOf('|')) as Hex32)) this.#drafts.delete(k);
     }
   }
 
@@ -457,7 +455,15 @@ export class Adjudicator {
         }
       }, seen);
     }
+    const unavailable = report.unavailable.length;
     const tasks = await this.#list('tasks', report, () => port.tasks(this.address));
+    // A turn that left the task list (decided, or past its deadline) needs its held panel result no more. Pruned only
+    // after a read that answered: a read that failed or timed out drops nothing, so it can never cost a second panel
+    // (T-570, red team of PR 729).
+    if (report.unavailable.length === unavailable) {
+      const listed = new Set(tasks.map((t) => judgedKey(t)));
+      for (const k of this.#drafts.keys()) if (!listed.has(k)) this.#drafts.delete(k);
+    }
     for (const task of this.#ordered(tasks, (t) => t.commitment.id)) {
       await this.#unit(task.commitment.id, async () => {
         try {
@@ -1076,14 +1082,16 @@ export class Adjudicator {
       // restart as well, and calls no judge.
       const held = this.#drafts.get(key);
       const store = this.#cfg.judgedStore;
+      let lost = '';
       if (held && store) {
         try {
           await store.put(`${key}|draft`, { kind: 'draft', ...held });
-        } catch {
-          // Best effort: the result stays held in memory, and only a restart before the record builds loses it.
+        } catch (w) {
+          // The result stays held in memory; only a restart before the record builds would lose it, and the refusal says so.
+          lost = `; the store of judged results did not keep the panel's result (${errorClass(w)}), so a restart before the record builds would run the panel again`;
         }
       }
-      return err(problem('adjudicator_unavailable', `this adjudicator could not build the judgment record (${errorClass(e)}); it keeps the panel's result, calls no judge again, and builds the record again on the next pass`));
+      return err(problem('adjudicator_unavailable', `this adjudicator could not build the judgment record (${errorClass(e)}); it keeps the panel's result, calls no judge again, and builds the record again on the next pass${lost}`));
     }
     this.#drafts.delete(key);
     return ok({ record, outcome, published: false, ...(contentKey ? { contentKey } : {}) });
