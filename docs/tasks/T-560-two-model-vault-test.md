@@ -6,7 +6,7 @@
 - **Depends on:** T-391 (the duet harness), T-554 and ADR-0041 (spend controls are a protocol of their own; Holdback sees only a payment address that funds a hold)
 - **Paths this task may touch:** `tools/duet/tools.ts`, `tools/duet/duet.test.ts`, `tools/duet/README.md`, this file. Never `contracts/`, `spec/schemas/`, the pinned bundles (`site/buy.mjs`, `site/try.mjs`, `site/setup.mjs`) or the operators.
 - **Human gate:** the live runs spend on the agents' own model keys (Rafa's yes on the batch's cost ceiling); stage 2 (a Sepolia deploy of Crest) waits for Rafa's word
-- **Status:** in review
+- **Status:** done (stage 1; the harness option merged in pull request 695)
 - **Agent/session:** the T-560 session, started by the coordinator on 2026-11-19
 - **Roadmap row:** N204
 
