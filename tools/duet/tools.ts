@@ -11,8 +11,8 @@
 // seller's key is the child's HOLDBACK_KEY. Every tool result passes through the run's secret list before a model or
 // the record sees it. The buyer's approval stop is answered by the company's policy file, not by a person.
 import { spawn, type ChildProcess } from 'node:child_process';
-import { existsSync, lstatSync, mkdirSync, readdirSync, readFileSync, writeFileSync } from 'node:fs';
-import { dirname, join, relative, resolve, sep } from 'node:path';
+import { existsSync, lstatSync, mkdirSync, readdirSync, readFileSync, realpathSync, writeFileSync } from 'node:fs';
+import { dirname, isAbsolute, join, relative, resolve, sep } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import type { ToolSpec } from './providers.ts';
 import type { Recorder, Role, Secrets } from './record.ts';
@@ -78,6 +78,46 @@ export interface ToolboxOptions {
   alias?: { from: string; to: string };
   /** Ends a running command when the run ends (SIGTERM, then SIGKILL after 3 s). */
   signal?: AbortSignal;
+  /**
+   * Commands the company installed from outside this checkout, beside the repository's own, and the environment they
+   * need. Each command brings its own fence: `check` sees every argument and refuses what it does not accept. Its
+   * environment is still built from nothing (`env()`), with `env` added: no model key reaches it unless put here.
+   */
+  installed?: Installed;
+}
+
+/** A command from outside this checkout, with its own argument fence. */
+export interface InstalledCommand {
+  /** The script's absolute path, run as `node <script> <args>` from the agent's folder. */
+  script: string;
+  /** One line for the run tool's description. */
+  describe?: string;
+  /** The arguments as the command will get them, or a throw whose message the agent reads as the refusal. */
+  check(args: string[], fence: Fence): string[] | Promise<string[]>;
+  /** Whether this call gets the long time limit. Default: the short one. */
+  long?(args: string[]): boolean;
+  /** Exit codes besides 0 that are not errors, such as a stop that waits for approval. */
+  okExits?: number[];
+}
+
+export interface Installed {
+  commands: Record<string, InstalledCommand>;
+  /** Added to every command's environment, this role's own and the repository's alike: plain settings, shown as they are. */
+  env?: Record<string, string>;
+  /** Added like `env`, and each value put on the run's secret list, so it is scrubbed from every result and the record. */
+  secretEnv?: Record<string, string>;
+  /** The repository's own commands this company installed, a part of its role's list. Left out: all of them. */
+  repository?: string[];
+}
+
+/** What an installed command's check may use: the toolbox's own fences. */
+export interface Fence {
+  /** The URL if it is on the allowlist; else a refusal. */
+  url(raw: string): URL;
+  /** The absolute path if it is inside the agent's folder; else a refusal. A file argument never starts with "-". */
+  file(p: string, what: string, mustExist?: boolean): string;
+  /** The company's pre-set approval policy, applied to `offer`; a refusal names every reason. */
+  approve(commitmentId: string, max: string, offer: unknown): Promise<void>;
 }
 
 /** What a tool call returns to the loop: the text the model reads, and whether it failed. */
@@ -120,7 +160,46 @@ export class Toolbox {
 
   constructor(o: ToolboxOptions) {
     this.o = o;
-    this.specs = specs(o.role);
+    if (o.installed) checkInstalled(o.installed, o.role as 'buyer' | 'seller', o.work);
+    // A secret the company hands a command in its environment is scrubbed like every other.
+    for (const v of Object.values(o.installed?.secretEnv ?? {})) o.secrets.add(v);
+    this.specs = specs(o.role, Object.entries(o.installed?.commands ?? {}), this.repositoryCommands);
+  }
+
+  /** The installed command of that name, an own key only; undefined for every other name. */
+  private installedCommand(command: string): InstalledCommand | undefined {
+    const c = this.o.installed?.commands;
+    return c && Object.hasOwn(c, command) ? c[command] : undefined;
+  }
+
+  /** The repository's commands this company installed: its role's list, or the part of it `installed.repository` names. */
+  private get repositoryCommands(): string[] {
+    const all = COMMANDS[this.o.role as 'buyer' | 'seller'];
+    const only = this.o.installed?.repository;
+    return only ? all.filter((c) => only.includes(c)) : all;
+  }
+
+  /** The commands this agent may run: the repository's, then the installed ones. */
+  private get commands(): string[] {
+    return [...this.repositoryCommands, ...Object.keys(this.o.installed?.commands ?? {})];
+  }
+
+  /** The fences an installed command's check may use. */
+  private fence(command: string): Fence {
+    return {
+      url: (raw) => this.allowed(raw),
+      file: (p, what, mustExist = true) => {
+        if (!p) throw new Refused(`${command} needs ${what}`);
+        if (p.startsWith('-')) throw new Refused(`${what} is a file name, and a file name here does not start with "-": rename it`);
+        return this.inside(p, { mustExist });
+      },
+      // The offer must come from where the agent cannot write it, such as the key store's shown offer.
+      approve: (id, max, offer) => {
+        if (!ID.test(id)) throw new Refused('the commitment ID is 0x and 64 hex digits');
+        if (!DEC.test(max)) throw new Refused('the most you pay is base units as a decimal string');
+        return this.approval(id.toLowerCase(), max, offer);
+      },
+    };
   }
 
   /** Runs one tool call. A refusal or an error is a result the model reads, never a throw. */
@@ -238,10 +317,21 @@ export class Toolbox {
   // ---- The client commands ----
 
   private async run(command: string, args: string[]): Promise<ToolResult> {
-    const role = this.o.role;
-    if (!COMMANDS[role].includes(command)) throw new Refused(`${JSON.stringify(command).slice(0, 80)} is not one of your company's installed commands: ${COMMANDS[role].join(', ')}`);
+    const commands = this.commands;
+    if (!commands.includes(command)) throw new Refused(`${JSON.stringify(command).slice(0, 80)} is not one of your company's installed commands: ${commands.join(', ')}`);
     if (args.length > 12 || args.some((a) => a.length > 20_000)) throw new Refused('at most 12 arguments of at most 20,000 characters each');
     if (args.some((a) => a.includes('\0'))) throw new Refused('an argument with a NUL character is refused');
+    // An installed command's check sees every call, a usage question included: nothing reaches its script unchecked.
+    const extra = this.installedCommand(command);
+    if (extra) {
+      let checked: string[];
+      let long = false;
+      try {
+        checked = await extra.check(args, this.fence(command));
+        long = extra.long?.(checked) ?? false;
+      } catch (e) { throw e instanceof Refused ? e : new Refused((e as Error).message); }
+      return this.exec(command, checked, long ? 'long' : 'short');
+    }
     // An agent that asks a command for its usage gets the command's own answer: each client command answers --help
     // itself (T-397), so the runner keeps no second copy of its usage. adapter-log is the runner's own tool.
     if (args.length === 1 && (args[0] === '--help' || args[0] === '-h')) {
@@ -371,10 +461,10 @@ export class Toolbox {
    * budget, the required checks, a delivery no later than the company accepts, every other deadline within the judging
    * slack after it, and a createdAt inside the band around settlement time.
    */
-  private async approval(id: string, max: string): Promise<void> {
+  private async approval(id: string, max: string, offer?: unknown): Promise<void> {
     const policy = this.o.policy;
     if (!policy) throw new Refused('your company has set no approval policy: nothing is approved');
-    const shown = this.shownOffer(id);
+    const shown = offer ?? this.shownOffer(id);
     const why: string[] = [];
     if (!shown) why.push(`no stop showed ${id} with a key in your key store`);
     else {
@@ -403,7 +493,7 @@ export class Toolbox {
         if (typeof v === 'number' && /Sec$/.test(k) && v > policy.decisionSlackSec) why.push(`${k} is ${v} s, longer than the company's judging slack of ${policy.decisionSlackSec} s`);
       }
     }
-    this.o.rec.add('buyer', 'approval', { commitmentId: id, granted: why.length === 0, by: 'company policy (pre-set)', reasons: why, policy });
+    this.o.rec.add(this.o.role, 'approval', { commitmentId: id, granted: why.length === 0, by: 'company policy (pre-set)', reasons: why, policy });
     if (why.length) throw new Refused(`your company's pre-set policy does not approve this offer: ${why.join('; ')}. Nothing was signed or paid.`);
   }
 
@@ -493,12 +583,14 @@ export class Toolbox {
     const env: Record<string, string> = { PATH: process.env['PATH'] ?? '/usr/bin:/bin', HOME: this.o.work, TMPDIR: join(this.o.work, '.tmp'), HOLDBACK_OPERATORS: this.o.operators.join(','), NO_COLOR: '1', DUET_FETCH_LOG: this.fetchLog };
     mkdirSync(env['TMPDIR']!, { recursive: true });
     if (this.o.role === 'seller' && this.o.sellerKey) env['HOLDBACK_KEY'] = this.o.sellerKey;
+    Object.assign(env, this.o.installed?.env ?? {}, this.o.installed?.secretEnv ?? {});
     return env;
   }
 
   private exec(command: string, args: string[], kind: 'short' | 'long'): Promise<ToolResult> {
     const timeout = (this.o.timeoutMs ?? { short: 180_000, long: 1_200_000 })[kind];
-    const script = join(this.o.repo, SCRIPTS[command]!);
+    const extra = this.installedCommand(command);
+    const script = extra ? extra.script : join(this.o.repo, SCRIPTS[command]!);
     const started = Date.now();
     return new Promise((done) => {
       const child = spawn(process.execPath, node(script, args), { cwd: this.o.work, env: this.env(), stdio: ['ignore', 'pipe', 'pipe'] });
@@ -528,7 +620,7 @@ export class Toolbox {
           }
         }
         const timedOut = signal === 'SIGTERM' && Date.now() - started >= timeout;
-        done({ content: `exit ${code ?? signal}${timedOut ? ` (stopped after ${Math.round(timeout / 1000)} s)` : ''}\n--- stdout\n${out}\n--- stderr\n${err}`, isError: code !== 0 && !(command === 'buy-with-signer' && code === 3) });
+        done({ content: `exit ${code ?? signal}${timedOut ? ` (stopped after ${Math.round(timeout / 1000)} s)` : ''}\n--- stdout\n${out}\n--- stderr\n${err}`, isError: code !== 0 && !(command === 'buy-with-signer' && code === 3) && !(code !== null && extra?.okExits?.includes(code)) });
       });
     });
   }
@@ -599,12 +691,41 @@ export class Toolbox {
   }
 }
 
+/** The variables every command's environment sets, and those that would change how Node runs: no installed env sets them. */
+const BASE_ENV = ['PATH', 'HOME', 'TMPDIR', 'HOLDBACK_OPERATORS', 'NO_COLOR', 'DUET_FETCH_LOG', 'HOLDBACK_KEY'];
+const NODE_ENV = /^NODE_|^npm_|^DYLD_|^LD_/i;
+
+/**
+ * The company's installed commands, checked once when the toolbox is made: each script an absolute path to a file
+ * outside the agent's folder (the agent writes there), no name that is one of the role's own commands, and an
+ * environment that leaves the base variables and Node's own settings alone. A mistake here is the runner's: it throws.
+ */
+function checkInstalled(i: Installed, role: 'buyer' | 'seller', work: string): void {
+  const own = [...COMMANDS[role], 'adapter-log'];
+  for (const [name, c] of Object.entries(i.commands)) {
+    if (!/^[a-z][a-z0-9-]{0,39}$/.test(name)) throw new Error(`installed command name ${JSON.stringify(name).slice(0, 60)} is not lowercase letters, digits and dashes`);
+    if (own.includes(name)) throw new Error(`installed command ${name} has the name of one of the ${role}'s own commands`);
+    if (!isAbsolute(c.script) || !existsSync(c.script)) throw new Error(`installed command ${name}: its script must be an absolute path to a file`);
+    if (lstatSync(c.script).isSymbolicLink() || !lstatSync(c.script).isFile()) throw new Error(`installed command ${name}: its script must be a plain file, not a link or a folder`);
+    const real = realpathSync(c.script), home = realpathSync(work);
+    if (real === home || real.startsWith(home + sep)) throw new Error(`installed command ${name}: its script is inside the agent's folder, which the agent can write`);
+  }
+  // The secret list ignores values under 12 characters, so a shorter secret would not be scrubbed.
+  for (const [k, v] of Object.entries(i.secretEnv ?? {})) if (String(v).length < 12) throw new Error(`installed secretEnv ${k} is under 12 characters: the run cannot scrub a value that short`);
+  for (const k of [...Object.keys(i.env ?? {}), ...Object.keys(i.secretEnv ?? {})]) if (BASE_ENV.includes(k) || NODE_ENV.test(k)) throw new Error(`installed env may not set ${k}: the toolbox sets it, or it changes how Node runs`);
+  for (const r of i.repository ?? []) if (!COMMANDS[role].includes(r)) throw new Error(`installed.repository names ${r}, which is not one of the ${role}'s own commands`);
+}
+
 /** The tools as each model is told about them. The run tool's list is the company's installed commands. */
-function specs(role: 'buyer' | 'seller'): ToolSpec[] {
-  const commands = COMMANDS[role];
+function specs(role: 'buyer' | 'seller', installed: Array<[string, InstalledCommand]> = [], repository: string[] = COMMANDS[role]): ToolSpec[] {
+  const commands = [...repository, ...installed.map(([n]) => n)];
+  const said = (c: string) => installed.find(([n]) => n === c)?.[1].describe;
+  const from = installed.length === 0
+    ? 'from Crow\'s public repository, as `node examples/<command>.ts <args>`'
+    : `${repository.length ? `from Crow's public repository (${repository.join(', ')}, as \`node examples/<command>.ts <args>\`) and ` : ''}from elsewhere (${installed.map(([n]) => n).join(', ')})`;
   return [
     { name: 'fetch_url', description: 'GET a URL and read the answer: status, content type and body (up to 60,000 characters; pass offset to read further). Only URLs on your company\'s allowlist; redirects are not followed. GET only: anything that changes state goes through your company\'s commands.', input: { type: 'object', properties: { url: { type: 'string' }, offset: { type: 'integer', minimum: 0 } }, required: ['url'] } },
-    { name: 'run_command', description: `Run one of the client commands your company installed from Crow's public repository, as \`node examples/<command>.ts <args>\`, from your folder, and read its exit code, stdout and stderr. Installed: ${commands.map((c) => (c === 'adapter-log' ? 'adapter-log (the new lines the background seller adapter has logged)' : c === 'seller-adapter' ? 'seller-adapter (starts in the background)' : c)).join(', ')}. Pass the arguments as the docs give them, one per array item, with no shell quoting. Your company has set the environment these commands need (HOLDBACK_OPERATORS${role === 'seller' ? ', and HOLDBACK_KEY with your signing key' : ''}); you never see a key.`, input: { type: 'object', properties: { command: { type: 'string', enum: commands }, args: { type: 'array', items: { type: 'string' } } }, required: ['command', 'args'] } },
+    { name: 'run_command', description: `Run one of the client commands your company installed ${from}, from your folder, and read its exit code, stdout and stderr. Installed: ${commands.map((c) => (said(c) ? `${c} (${said(c)})` : c === 'adapter-log' ? 'adapter-log (the new lines the background seller adapter has logged)' : c === 'seller-adapter' ? 'seller-adapter (starts in the background)' : c)).join(', ')}. Pass the arguments as the docs give them, one per array item, with no shell quoting. Your company has set the environment these commands need (HOLDBACK_OPERATORS${role === 'seller' ? ', and HOLDBACK_KEY with your signing key' : ''}); you never see a key.`, input: { type: 'object', properties: { command: { type: 'string', enum: commands }, args: { type: 'array', items: { type: 'string' } } }, required: ['command', 'args'] } },
     { name: 'read_file', description: 'Read a text file in your folder (up to 60,000 characters; pass offset to read further).', input: { type: 'object', properties: { path: { type: 'string' }, offset: { type: 'integer', minimum: 0 } }, required: ['path'] } },
     { name: 'write_file', description: 'Write a text file in your folder (at most 1 MB), making folders as needed.', input: { type: 'object', properties: { path: { type: 'string' }, content: { type: 'string' } }, required: ['path', 'content'] } },
     { name: 'list_files', description: 'List a folder inside your folder.', input: { type: 'object', properties: { path: { type: 'string' } } } },
