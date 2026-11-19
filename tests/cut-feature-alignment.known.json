@@ -8,6 +8,7 @@
     "examples/deployments.ts": "examples/ pinned client [R6c-3 for G; open for the rest]",
     "fixtures/clubs/data-services-v1.yaml": "fixtures/ [R6c-1, R6 part 1]",
     "fixtures/scenarios/neutrality.adjudicator-never-accepts.scenario.yaml": "fixtures/ [R6c-1, R6 part 1]",
+    "fixtures/scenarios/neutrality.onramp-offline-before-funding.scenario.yaml": "fixtures/ [R6c-1, R6 part 1]",
     "formal/Holdback.tla": "formal/ [R6 part 1 (A); open for the rest]",
     "packages/core/src/eip712.binding.test.ts": "packages/core [R6 part 1, R5, R6c-1, R8]",
     "packages/core/src/eip712.test.ts": "packages/core [R6 part 1, R5, R6c-1, R8]",
