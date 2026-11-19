@@ -85,4 +85,15 @@ Accepted so far: 2 of 2 (measured). The table closes at 5.
 
 ## Handoff
 
-(filled in at the end)
+**State:** runs 1 and 2 passed on 2026-11-19. Runs 3 to 5 are scheduled from this task's worktree for 00:02 UTC on 2026-11-20, when the judge budget resets. Each run stops the chain if it exits non-zero; the re-roll guard refuses runs 4 and 5 if run 3's release beat is rejected by a live panel. The table above closes with them. To resume elsewhere: `pnpm demo:sepolia` for a full run, `pnpm demo:sepolia --beat release` for the good path alone, after checking `--dry-run` for the calls left.
+
+**What was slow or flaky (for triage, not fixed here):**
+- **Info · the demo primary sometimes takes about a minute to accept an offer.** In run 2 the release and reject offers, made at 21:40:16 UTC, reached AcceptedByAdjudicator 72 s later; in run 1 it took about 2 s (measured, the two timelines). It added about 70 s to run 2, which still fit in 300 s. Likely cause (inferred, not confirmed in Workers logs): the World's adjudicator pass backs off, doubling to once a minute, while nothing moves (`apps/demo-cloud/src/world.ts`, `nextPass`; `docs/operations.md`, the cadence paragraph). An offer that the fetch's `look()` does not see as a new settlement event does not `stir()` the world, so the acceptance waits for the next alarm. To confirm: Workers Logs for `alarmSet` and the pass times around 21:40 UTC. The owner is whoever next touches `apps/demo-cloud` (T-549's lane today). A demo that must stay under 5 minutes has about 2 minutes of slack (measured, run 2).
+- **Low · the live judge cap fits about 2.5 full runs a day** (Evidence). A demo day needs the cap raised or the runs planned; that is Rafa's call.
+
+**Review findings left open (Low, from the reviewer subagent):**
+- A beat that stops mid-deal is not closed by the command. The operators send due timeouts themselves (T-231), and the windows are the club's shortest, so the deal closes within minutes (inferred). The refunded test tokens go to a key that only lived in memory. The timeline now prints the deal's state and deadlines when a beat ends unsettled.
+- The live calls per beat (3 and 8) are constants in `examples/demo-sepolia.ts`, from the registry's panel sizes today. If the registry changes them, the budget refusal is off by the difference. The live-panel checks still fail a run whose panel turned scripted, so a scripted panel is never passed off as live.
+- `pnpm demo` has no runner for beat 8 (the bond-paid wrongful decision); round 1's scenario 7 plays that story on SimChain.
+
+**No deploy is needed:** the change is an example command and docs.
