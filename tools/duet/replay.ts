@@ -13,7 +13,7 @@ import type { Summary } from './measures.ts';
 import type { Event } from './record.ts';
 import type { Over } from './tickets.ts';
 import { AGENT_NAME } from './scenarios.ts';
-import { ENDINGS_CSS, ENDINGS_SCRIPT, endingsSection } from './endings.ts';
+import { ENDINGS, ENDINGS_CSS, ENDINGS_SCRIPT, endingsSection } from './endings.ts';
 import { CHECK_WORDS } from './review.ts';
 
 type J = any; // eslint-disable-line @typescript-eslint/no-explicit-any
@@ -278,17 +278,27 @@ export interface PageExtras {
   /**
    * For crow.direct/demo: early access goes to the home page's own sign-up form (same site), and every local path
    * and every long hex string (deal IDs, addresses) is shortened, so the published page names no folder on this
-   * machine and carries nothing a secret scanner reads as a key.
+   * machine and carries nothing a secret scanner reads as a key. A link to a deal's record or to its Sepolia
+   * transaction (PUBLIC_LINK) keeps its public ID whole (T-574).
    */
   publish?: boolean;
 }
 
 
-/** The published page's text: local paths cut to the run's own part, long hex strings to their ends. */
+const escRe = (s: string) => s.replace(/[.*+?^${}()|[\]\\/]/g, '\\$&');
+/**
+ * T-574: a link the page writes to a deal's record on the live service or to a transaction on Sepolia: the endings'
+ * links and a Sepolia run's payment records. Each names a public deal ID or transaction hash, so the publish keeps it
+ * whole: cut short, it led nowhere. An agent's text never forms one, since the page escapes its quotes.
+ */
+export const PUBLIC_LINK = new RegExp(`\\bhref="(?:${[ENDINGS.record, ENDINGS.explorer].map(escRe).join('|')})0x[0-9a-f]{64}"`, 'g');
+
+/** The published page's text: local paths cut to the run's own part, long hex strings to their ends, except in a PUBLIC_LINK. */
 export function forPublishing(html: string): string {
+  const longHex = /0x([0-9a-fA-F]{6})[0-9a-fA-F]{30,}([0-9a-fA-F]{4})(?![0-9a-fA-F])/g;
   return html
     .replace(/\/(?:Users|home|private|var|tmp)\/[^\s"'<>&]+/g, (p) => { const tail = /(\/(?:buyer|seller)\/.*)$/.exec(p)?.[1]; return `…${tail ?? `/${p.split('/').pop() ?? ''}`}`; })
-    .replace(/0x([0-9a-fA-F]{6})[0-9a-fA-F]{30,}([0-9a-fA-F]{4})(?![0-9a-fA-F])/g, '0x$1…$2');
+    .replace(new RegExp(`${PUBLIC_LINK.source}|${longHex.source}`, 'g'), (m: string, head?: string, tail?: string) => (head === undefined ? m : `0x${head}…${tail}`));
 }
 
 export function replayPage(events: readonly Event[], s: Summary, extras: PageExtras = {}): string {

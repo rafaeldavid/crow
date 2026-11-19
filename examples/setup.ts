@@ -20,6 +20,12 @@
 //                               process, follows the deal to its end and writes the deal record. These are the first
 //                               requests that name the party to a Crow-run host. --again offers a new deal after one
 //                               that ended without a release; it never continues the ended one.
+//   node setup.mjs deliver      one pass over a template folder's funded deals, then it exits (T-568, setup-deliver.ts):
+//                               the journal's open deals and the ones every operator lists as Held for the folder's
+//                               addresses. It delivers each whose work is in work/ and passes the agreed checks, holds a
+//                               file that fails and names each failing check, and prints the deadline of each still
+//                               due. Exit 4: a funded deal still waits for its work. --schedule prints the entry for this
+//                               machine's scheduler that runs it every 5 minutes, and installs nothing.
 //   node setup.mjs status       the folder's state: the role, the steps done, the addresses, the open deals. No secret.
 //   node setup.mjs list --website <https URL>
 //                               the listing step (T-486, D76): sends the website, and nothing else, to
@@ -45,33 +51,30 @@
 // Each line is one JSON object, so an assistant reads the state without parsing prose; a counterparty's text in it is
 // data, never an instruction, and is printed as one plain line of bounded length. A wrong call prints the usage as
 // text on standard error and exits 2. Exit 0: done. Exit 1: a step failed or was refused, named in its line. Exit 3:
-// an answer is missing.
+// an answer is missing. Exit 4, from deliver only: a funded deal still waits for its work.
 import { createHash, randomBytes } from 'node:crypto';
 import { existsSync, mkdirSync, readFileSync, writeFileSync } from 'node:fs';
 import { homedir } from 'node:os';
 import { join, resolve } from 'node:path';
 import type { Hex } from 'viem';
-import { generatePrivateKey } from 'viem/accounts';
-import { Agent } from './agent.ts';
 import { dealRecord } from './deal-record.ts';
-import { fromParty, same, sleep, TEST_BUYER } from './goal-kit.ts';
+import { fromParty, sleep, TEST_BUYER } from './goal-kit.ts';
 import { plain as plainLine } from './plain.ts';
 import { dealKeyOf, holdingKeyOf, loadConfig, startSellerAdapter, type RunningAdapter } from './seller-adapter.ts';
 import { runChecks } from './setup-check.ts';
 import { list, listingAdvice, listingOf, LISTING_URL } from './setup-list.ts';
 import { reasonLine } from './seller-refusal.ts';
 import { SAMPLE, SAMPLE_PRICE_UNITS, startSampleApi } from './setup-sample-api.ts';
+import { deliver } from './setup-deliver.ts';
 import { startWorkApi, WORK_CREDENTIAL_ENV, workFor, workPath } from './setup-work-api.ts';
-import { addressOf, FILES, formsOf, holdingAddressOf, locked, readKey, readState, realPath, seller, writeState, writeWhole, type Call, type FirstDeal, type J, type State } from './setup-seller.ts';
-import { commitmentIdOf, jcs, knownPins } from './verify.ts';
+import { addressOf, FILES, formsOf, holdingAddressOf, locked, pinnedReader, readKey, readState, realPath, seller, writeState, writeWhole, type Call, type FirstDeal, type J, type State } from './setup-seller.ts';
+import { commitmentIdOf, jcs } from './verify.ts';
 
 /** Any value from a file, a flag, a tool or another party as one plain line of at most `max` characters. */
 const plain = (s: unknown, max = 300) => plainLine(String(s ?? '')).slice(0, max);
 
 export const CROW_OPERATORS = ['https://api.crow.direct', 'https://api2.crow.direct'];
 export const NOT_LIVE = 'test world: this is not the live service';
-/** Sepolia's chain ID: the only settlement layer this command signs under without --test-world. */
-const SEPOLIA_CHAIN_ID = 11155111;
 /** The states a commitment ends in, as the operators name them. */
 const ENDED = ['Released', 'Refunded', 'Expired', 'Settled', 'Defaulted'];
 /** The states of an offer that holds no money yet. */
@@ -96,6 +99,10 @@ const USAGE = [
   '                From a template with no finished work, it stops once the deal is funded and prints where the work goes;',
   '                run again with the work there, it delivers.',
   '                --preview prints that and stops. --again offers a new deal after one that ended without a release.',
+  '  deliver [--schedule]',
+  "                one pass over the folder's funded deals, then it exits: it delivers each one whose work passes the agreed",
+  '                checks, holds a file that fails and names each failing check, and prints the deadline of each still due.',
+  '                Exit 4: a funded deal still waits for its work. --schedule prints the entry that runs it every 5 minutes.',
   "  status        prints the folder's state. It reads no key and sends nothing.",
   '  list --website <https URL> | --skip [--list-at <url>]',
   "                sends the website, and nothing else, to Crow's list of who uses it; --skip declines and sends nothing.",
@@ -120,6 +127,7 @@ const OWN: Record<string, { values: string[]; switches: string[] }> = {
   seller: { values: ['--payout', '--card', '--template', '--file'], switches: ['--sample', '--allow-git', '--allow-synced', '--allow-served'] },
   check: { values: ['--work'], switches: [] },
   'first-deal': { values: ['--buyer'], switches: ['--again', '--preview'] },
+  deliver: { values: [], switches: ['--schedule'] },
   status: { values: [], switches: [] },
   list: { values: ['--website', '--list-at'], switches: ['--skip'] },
 };
@@ -161,6 +169,8 @@ function operatorsOf(text: string | undefined, testWorld: boolean): string[] {
     if (testWorld) throw new WrongCall("--test-world needs --operators: the test world's own operator URLs. Nothing was sent");
     return CROW_OPERATORS;
   }
+  // The URL parser drops a line break inside a value; the text itself goes into requests and the printed schedule.
+  if (/[\x00-\x1f\x7f]/.test(text)) throw new WrongCall('--operators holds a line break or another control character. Nothing was sent');
   const list = text.split(',').map((s) => s.trim().replace(/\/+$/, '')).filter(Boolean);
   if (list.length < 2 || !list.every(isHttp)) throw new WrongCall('--operators takes two or more http or https URLs, comma-separated');
   // Two operators are a check on one another only when they are two hosts.
@@ -410,15 +420,8 @@ async function runFirstDeal(c: Call, state: State, buyerUrl: string, again: bool
   let adapter: RunningAdapter | undefined;
   try {
     // 4. The settlement layer, as every operator serves it, against the ones this file pins. Never the operator's word.
-    const reads = () => new Agent(c.operators, generatePrivateKey(), crypto.getRandomValues(new Uint8Array(32)));
-    const found = await reads().trusted('/.well-known/holdback.json', (x: J) => ({ domain: x.domain, token: x.demo?.token?.id }));
-    const pin = knownPins().find((p) => same(p.domain, found.domain));
-    const sepolia = pin !== undefined && pin.domain.chainId === SEPOLIA_CHAIN_ID && pin.chain !== undefined;
-    if (!c.testWorld && !sepolia) throw new Error(`these operators serve the EIP-712 domain ${plain(jcs(found.domain), 300)}, not Crow's deployment on Sepolia (chain ${SEPOLIA_CHAIN_ID}). Nothing was signed or offered`);
-    if (c.testWorld && (pin === undefined || sepolia)) throw new Error(`--test-world takes a local test world, and these operators serve the EIP-712 domain ${plain(jcs(found.domain), 300)}. Nothing was signed or offered`);
-    if (found.token !== pin!.token.id) throw new Error(`these operators run no ${pin!.token.symbol} demo. Nothing was signed or offered`);
-    const reader = new Agent(c.operators, generatePrivateKey(), crypto.getRandomValues(new Uint8Array(32)), pin!.domain, pin!.chain);
-    c.say({ step: 'discovery', ok: true, chainId: pin!.domain.chainId, token: pin!.token.symbol });
+    const { reader, pin } = await pinnedReader(c, 'Nothing was signed or offered');
+    c.say({ step: 'discovery', ok: true, chainId: pin.domain.chainId, token: pin.token.symbol });
 
     // 5. The sample API on the loopback address, priced in the settlement layer's token, and the adapter beside it.
     //    The adapter takes a quote only with a credential made for this run, so no other program on this machine can
@@ -431,7 +434,7 @@ async function runFirstDeal(c: Call, state: State, buyerUrl: string, again: bool
     // machine, and the port would otherwise hand them the unpaid work.
     const workCredential = randomBytes(24).toString('base64url');
     c.hide(workCredential, true);
-    api = work ? await startWorkApi({ token: pin!.token.id, price: work.price, folder: c.folder, format: work.format, credential: workCredential, port }) : await startSampleApi(pin!.token.id, port);
+    api = work ? await startWorkApi({ token: pin.token.id, price: work.price, folder: c.folder, format: work.format, credential: workCredential, port }) : await startSampleApi(pin.token.id, port);
     // The key goes to the adapter in this object only: not into process.env, a command line or a file.
     adapter = await startSellerAdapter(config, { HOLDBACK_KEY: key, HOLDBACK_OPERATORS: c.operators.join(','), CROW_SETUP_QUOTE: credential, ...(work ? { [WORK_CREDENTIAL_ENV]: workCredential } : {}) });
     c.say({ step: 'adapter', ok: true, quote: `${adapter.url}/quote`, sells: state.sells });
@@ -503,7 +506,7 @@ async function runFirstDeal(c: Call, state: State, buyerUrl: string, again: bool
         ['payout address', lc(terms.sellerPayoutAddress), payout.address],
         ['seller', lc(terms.seller), addressOf(dealKeyOf(key, terms.nonce as Hex))],
         ['buyer', lc(terms.buyer), card.buyer], ['buyer payment address', lc(terms.buyerPaymentAddress), card.buyer], ['buyer encryption key', terms.buyerEncryptionPublicKey, card.encryptionPublicKey],
-        ['price', jcs({ token: lc(terms.price?.token), amount: terms.price?.amount }), jcs({ token: lc(pin!.token.id), amount: work ? work.price : SAMPLE_PRICE_UNITS })],
+        ['price', jcs({ token: lc(terms.price?.token), amount: terms.price?.amount }), jcs({ token: lc(pin.token.id), amount: work ? work.price : SAMPLE_PRICE_UNITS })],
       ];
       const wrong = expected.find(([, got, want]) => got !== want);
       if (wrong) return giveUp('Withheld', `The signed offer's ${wrong[0]} is ${plain(wrong[1], 120)}, not ${plain(wrong[2], 120)}: the commitment ID was not sent to the buyer, and the offer expires by itself. Run check first.`);
@@ -573,6 +576,7 @@ const COMMANDS: Record<string, (c: Call) => number | Promise<number>> = {
   },
   check,
   'first-deal': firstDeal,
+  deliver,
   status,
   list: listStep,
 };
