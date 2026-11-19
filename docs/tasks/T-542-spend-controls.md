@@ -1,6 +1,7 @@
 # T-542: Spend controls on the home page and in the limits reference
 
-- **Lane:** no-crypto (row N201, private)
+- **Lane:** no-crypto
+- **Roadmap row:** N201
 - **Change kind:** 1, copy and agent docs
 - **Paths this task may touch:** `site/build.mjs` (the value props), `site/vignettes.mjs` (one comment), `site/index.html` (built), `site/buy.txt`, `site/ref/limits.txt`, this file
 - **Human gate:** no (the site deploy after the merge is Rafa's word)
