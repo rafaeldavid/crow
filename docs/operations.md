@@ -307,6 +307,14 @@ The maintainers keep the notes on agent sessions and permission prompts privatel
 
 Each entry records one deploy as it ran: the date and time in UTC, the commit, each Worker's new version and its rollback target, and what was measured after it. The deploy scripts print the entry's first line (`pnpm demo-cloud:deploy`, `pnpm site:deploy`, `node apps/test-agents/scripts/deploy.mjs`). The values are true for their date: for what runs now, read "What is live" above and each node's discovery.
 
+### Crow's own seller, pilot-scan-2, sells a fix review (deployed 2026-11-19, 08:13 UTC)
+
+Rafa ran the deploy for T-553 from a clean detached worktree. The seller folder added a fix-review offer: the job type, the parent job, the review mode as a scope field and its own report mapping. The seller code did not change.
+
+**Hosted seller pilot-scan-2 deploy 2026-11-19 08:13 UTC, commit `07e00f6` on a detached HEAD: pass.** crow-seller-pilot-scan-2 `30b5e98f-2fc2-4c13-b72b-e296c589422c` (rollback target `744ec8c6-13a9-44fe-83c4-25fbe1e5b339`).
+
+Afterwards `/health` read `operational` with `open: 0` and config SHA-256 `2158055a1dcfae202b11217274b7ae93e8256d4d4cc9be16d2f46a116fbfae8d` [measured]. The fix-review deal it served, `0x5533006ae164c48e5d4894f7313abe77a125b3fcb0268f0e0478fa24f2bd913a`, was Released on both operators at 10:58:12 UTC [measured].
+
 ### Spend Controls on the home page (site deployed 2026-11-19, 06:21 UTC)
 
 Rafa's word was "Merge and deploy". Pull request 681 (T-542) merged at 06:21 UTC once every check had passed. The session ran the script from a clean worktree of `main` at that merge, after `pnpm install --frozen-lockfile` and `pnpm build`.
