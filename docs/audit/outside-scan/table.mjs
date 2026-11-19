@@ -13,7 +13,8 @@ export const START = '<!-- findings table: rendered by node docs/audit/outside-s
 export const END = '<!-- end of findings table -->';
 
 const read = (f) => JSON.parse(readFileSync(join(here, f), 'utf8'));
-const cell = (s) => String(s ?? '').replace(/\|/g, '\\|').replace(/\s+/g, ' ').trim();
+// A Markdown table cell: backslashes first, then the pipe, so a title cannot end a cell or escape the next one.
+const cell = (s) => String(s ?? '').replace(/\\/g, '\\\\').replace(/\|/g, '\\|').replace(/\s+/g, ' ').trim();
 const SHORT = { Informational: 'Info' };
 export const STATUS_ORDER = ['open', 'fixed in part', 'fixed in the new version', 'fixed off chain', 'deploy check', 'accepted limit', 'not a defect'];
 const SEVERITY_ORDER = ['Critical', 'High', 'Medium', 'Low', 'Informational'];
