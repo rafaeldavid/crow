@@ -38,12 +38,11 @@ export function validatorsSource(): string {
   // code calls: `uri` a function, `date-time` an object with `validate`. validators.ts passes the same shapes.
   addFormats.default(ajv, ['uri', 'date-time']);
   for (const { schema } of schemas) ajv.addSchema(schema);
-  // T-574: one validator per message type as well (`messages#Decision`), so a refused message is explained by the type
-  // it names: the oneOf's own first error comes from whichever branch failed first. Refs are not inlined, so each type's
-  // validator is the function the oneOf already calls: about 17 KB more code, not a second copy of every type (about
-  // 200 KB, measured).
-  const messages = schemas.find((x) => x.name === 'messages')!.schema as unknown as { $id: string; $defs: Record<string, { properties?: { type?: { const?: string } } }> };
-  const types = Object.entries(messages.$defs).filter(([d, x]) => x.properties?.type?.const === d).map(([d]) => [`messages#${d}`, `${messages.$id}#/$defs/${d}`]);
+  // T-574: one validator per message type as well, keyed by the type it names (`messages#Decision`), so a refused message
+  // is explained by its own type: the oneOf's first error comes from whichever branch failed first. Each is a second
+  // copy of the oneOf's function for that type, about 120 KB in all; compiling refs as functions (`inlineRefs: false`)
+  // saves about 99 KB, so the file grows about 21 KB, against about 170 KB with refs inlined (measured).
+  const types = messageTypes(schemas).map(({ type, def }) => [`messages#${type}`, `${def}`]);
   const code = standalone.default(ajv, Object.fromEntries([...schemas.map(({ name, schema }) => [name, schema.$id]), ...types]));
 
   // Standalone code is CommonJS: `exports.<name> = validateN;`, and `require("…").default` for Ajv's runtime
@@ -80,4 +79,16 @@ export function validatorsSource(): string {
     '',
     '',
   ].join('\n');
+}
+
+/** Each branch of messages.schema.json's oneOf: the `type` constant it names and its `$defs` ref. Throws on a branch with none. */
+export function messageTypes(schemas: { name: string; schema: { $id: string } }[]): { type: string; def: string }[] {
+  type Messages = { $id: string; oneOf: { $ref: string }[]; $defs: Record<string, { properties?: { type?: { const?: unknown } } }> };
+  const messages = schemas.find((x) => x.name === 'messages')!.schema as unknown as Messages;
+  return messages.oneOf.map(({ $ref }) => {
+    const name = /^#\/\$defs\/([A-Za-z]+)$/.exec($ref)?.[1];
+    const type = name === undefined ? undefined : messages.$defs[name]?.properties?.type?.const;
+    if (typeof type !== 'string') throw new Error(`validators: the messages oneOf branch ${$ref} names no type constant`);
+    return { type, def: `${messages.$id}${$ref}` };
+  });
 }

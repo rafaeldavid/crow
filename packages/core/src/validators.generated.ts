@@ -26764,7 +26764,7 @@ return errors === 0;
 }
 validate586.evaluated = {"props":true,"dynamicProps":false,"dynamicItems":false};
 
-exports["messages#TransferAuthorization"] = validate595;
+exports["messages#EarlyAccept"] = validate595;
 
 function validate595(data, {instancePath="", parentData, parentDataProperty, rootData=data, dynamicAnchors={}}={}){
 let vErrors = null;
@@ -26780,14 +26780,14 @@ const _errs0 = errors;
 if(errors === 0){
 if(data && typeof data == "object" && !Array.isArray(data)){
 let missing0;
-if((((((((((((((data.type === undefined) && (missing0 = "type")) || ((data.scheme === undefined) && (missing0 = "scheme"))) || ((data.purpose === undefined) && (missing0 = "purpose"))) || ((data.commitmentId === undefined) && (missing0 = "commitmentId"))) || ((data.from === undefined) && (missing0 = "from"))) || ((data.to === undefined) && (missing0 = "to"))) || ((data.value === undefined) && (missing0 = "value"))) || ((data.token === undefined) && (missing0 = "token"))) || ((data.validAfter === undefined) && (missing0 = "validAfter"))) || ((data.validBefore === undefined) && (missing0 = "validBefore"))) || ((data.nonce === undefined) && (missing0 = "nonce"))) || ((data.expiresAt === undefined) && (missing0 = "expiresAt"))) || ((data.signature === undefined) && (missing0 = "signature"))){
+if(((((((((data.type === undefined) && (missing0 = "type")) || ((data.commitmentId === undefined) && (missing0 = "commitmentId"))) || ((data.buyer === undefined) && (missing0 = "buyer"))) || ((data.attempt === undefined) && (missing0 = "attempt"))) || ((data.deliveryHash === undefined) && (missing0 = "deliveryHash"))) || ((data.nonce === undefined) && (missing0 = "nonce"))) || ((data.expiresAt === undefined) && (missing0 = "expiresAt"))) || ((data.signature === undefined) && (missing0 = "signature"))){
 validate595.errors = [{instancePath,schemaPath:"#/required",keyword:"required",params:{missingProperty: missing0},message:"must have required property '"+missing0+"'"}];
 return false;
 }
 else {
 const _errs1 = errors;
 for(const key0 in data){
-if(!(func0.call(schema86.properties, key0))){
+if(!((((((((key0 === "type") || (key0 === "commitmentId")) || (key0 === "buyer")) || (key0 === "attempt")) || (key0 === "deliveryHash")) || (key0 === "nonce")) || (key0 === "expiresAt")) || (key0 === "signature"))){
 validate595.errors = [{instancePath,schemaPath:"#/additionalProperties",keyword:"additionalProperties",params:{additionalProperty: key0},message:"must NOT have additional properties"}];
 return false;
 break;
@@ -26797,279 +26797,8 @@ if(_errs1 === errors){
 if(data.type !== undefined){
 let data0 = data.type;
 const _errs2 = errors;
-if("TransferAuthorization" !== data0){
-validate595.errors = [{instancePath:instancePath+"/type",schemaPath:"#/properties/type/const",keyword:"const",params:{allowedValue: "TransferAuthorization"},message:"must be equal to constant"}];
-return false;
-}
-else {
-}
-if(errors === _errs2){
-}
-var valid0 = _errs2 === errors;
-}
-else {
-var valid0 = true;
-}
-if(valid0){
-if(data.scheme !== undefined){
-let data1 = data.scheme;
-const _errs3 = errors;
-const vSchema0 = schema86.properties.scheme.enum;
-if(!(data1 === "erc3009")){
-validate595.errors = [{instancePath:instancePath+"/scheme",schemaPath:"#/properties/scheme/enum",keyword:"enum",params:{allowedValues: schema86.properties.scheme.enum},message:"must be equal to one of the allowed values"}];
-return false;
-}
-else {
-}
-if(errors === _errs3){
-}
-var valid0 = _errs3 === errors;
-}
-else {
-var valid0 = true;
-}
-if(valid0){
-if(data.purpose !== undefined){
-let data2 = data.purpose;
-const _errs4 = errors;
-if("operator_fee" !== data2){
-validate595.errors = [{instancePath:instancePath+"/purpose",schemaPath:"#/properties/purpose/const",keyword:"const",params:{allowedValue: "operator_fee"},message:"must be equal to constant"}];
-return false;
-}
-else {
-}
-if(errors === _errs4){
-}
-var valid0 = _errs4 === errors;
-}
-else {
-var valid0 = true;
-}
-if(valid0){
-if(data.commitmentId !== undefined){
-let data3 = data.commitmentId;
-const _errs5 = errors;
-if(!(validate174(data3, {instancePath:instancePath+"/commitmentId",parentData:data,parentDataProperty:"commitmentId",rootData,dynamicAnchors}))){
-vErrors = vErrors === null ? validate174.errors : vErrors.concat(validate174.errors);
-errors = vErrors.length;
-}
-else {
-}
-var valid0 = _errs5 === errors;
-}
-else {
-var valid0 = true;
-}
-if(valid0){
-if(data.from !== undefined){
-let data4 = data.from;
-const _errs6 = errors;
-if(!(validate176(data4, {instancePath:instancePath+"/from",parentData:data,parentDataProperty:"from",rootData,dynamicAnchors}))){
-vErrors = vErrors === null ? validate176.errors : vErrors.concat(validate176.errors);
-errors = vErrors.length;
-}
-else {
-}
-var valid0 = _errs6 === errors;
-}
-else {
-var valid0 = true;
-}
-if(valid0){
-if(data.to !== undefined){
-let data5 = data.to;
-const _errs7 = errors;
-if(!(validate176(data5, {instancePath:instancePath+"/to",parentData:data,parentDataProperty:"to",rootData,dynamicAnchors}))){
-vErrors = vErrors === null ? validate176.errors : vErrors.concat(validate176.errors);
-errors = vErrors.length;
-}
-else {
-}
-var valid0 = _errs7 === errors;
-}
-else {
-var valid0 = true;
-}
-if(valid0){
-if(data.value !== undefined){
-let data6 = data.value;
-const _errs8 = errors;
-const _errs9 = errors;
-if(errors === _errs8){
-if(typeof data6 === "string"){
-if(!pattern5.test(data6)){
-validate595.errors = [{instancePath:instancePath+"/value",schemaPath:"#/properties/value/pattern",keyword:"pattern",params:{pattern: "^(0|[1-9][0-9]{0,77})$"},message:"must match pattern \""+"^(0|[1-9][0-9]{0,77})$"+"\""}];
-return false;
-}
-else {
-}
-}
-else {
-validate595.errors = [{instancePath:instancePath+"/value",schemaPath:"#/properties/value/type",keyword:"type",params:{type: "string"},message:"must be string"}];
-return false;
-}
-if(errors === _errs8){
-}
-}
-var valid0 = _errs8 === errors;
-}
-else {
-var valid0 = true;
-}
-if(valid0){
-if(data.token !== undefined){
-let data7 = data.token;
-const _errs10 = errors;
-if(!(validate209(data7, {instancePath:instancePath+"/token",parentData:data,parentDataProperty:"token",rootData,dynamicAnchors}))){
-vErrors = vErrors === null ? validate209.errors : vErrors.concat(validate209.errors);
-errors = vErrors.length;
-}
-else {
-}
-var valid0 = _errs10 === errors;
-}
-else {
-var valid0 = true;
-}
-if(valid0){
-if(data.validAfter !== undefined){
-let data8 = data.validAfter;
-const _errs11 = errors;
-if(!(validate179(data8, {instancePath:instancePath+"/validAfter",parentData:data,parentDataProperty:"validAfter",rootData,dynamicAnchors}))){
-vErrors = vErrors === null ? validate179.errors : vErrors.concat(validate179.errors);
-errors = vErrors.length;
-}
-else {
-}
-var valid0 = _errs11 === errors;
-}
-else {
-var valid0 = true;
-}
-if(valid0){
-if(data.validBefore !== undefined){
-let data9 = data.validBefore;
-const _errs12 = errors;
-if(!(validate179(data9, {instancePath:instancePath+"/validBefore",parentData:data,parentDataProperty:"validBefore",rootData,dynamicAnchors}))){
-vErrors = vErrors === null ? validate179.errors : vErrors.concat(validate179.errors);
-errors = vErrors.length;
-}
-else {
-}
-var valid0 = _errs12 === errors;
-}
-else {
-var valid0 = true;
-}
-if(valid0){
-if(data.nonce !== undefined){
-let data10 = data.nonce;
-const _errs13 = errors;
-if(!(validate174(data10, {instancePath:instancePath+"/nonce",parentData:data,parentDataProperty:"nonce",rootData,dynamicAnchors}))){
-vErrors = vErrors === null ? validate174.errors : vErrors.concat(validate174.errors);
-errors = vErrors.length;
-}
-else {
-}
-var valid0 = _errs13 === errors;
-}
-else {
-var valid0 = true;
-}
-if(valid0){
-if(data.expiresAt !== undefined){
-let data11 = data.expiresAt;
-const _errs14 = errors;
-if(!(validate179(data11, {instancePath:instancePath+"/expiresAt",parentData:data,parentDataProperty:"expiresAt",rootData,dynamicAnchors}))){
-vErrors = vErrors === null ? validate179.errors : vErrors.concat(validate179.errors);
-errors = vErrors.length;
-}
-else {
-}
-var valid0 = _errs14 === errors;
-}
-else {
-var valid0 = true;
-}
-if(valid0){
-if(data.signature !== undefined){
-let data12 = data.signature;
-const _errs15 = errors;
-if(!(validate203(data12, {instancePath:instancePath+"/signature",parentData:data,parentDataProperty:"signature",rootData,dynamicAnchors}))){
-vErrors = vErrors === null ? validate203.errors : vErrors.concat(validate203.errors);
-errors = vErrors.length;
-}
-else {
-}
-var valid0 = _errs15 === errors;
-}
-else {
-var valid0 = true;
-}
-if(valid0){
-}
-}
-}
-}
-}
-}
-}
-}
-}
-}
-}
-}
-}
-}
-}
-}
-else {
-validate595.errors = [{instancePath,schemaPath:"#/type",keyword:"type",params:{type: "object"},message:"must be object"}];
-return false;
-}
-if(errors === 0){
-}
-}
-validate595.errors = vErrors;
-return errors === 0;
-}
-validate595.evaluated = {"props":true,"dynamicProps":false,"dynamicItems":false};
-
-exports["messages#EarlyAccept"] = validate605;
-
-function validate605(data, {instancePath="", parentData, parentDataProperty, rootData=data, dynamicAnchors={}}={}){
-let vErrors = null;
-let errors = 0;
-const evaluated0 = validate605.evaluated;
-if(evaluated0.dynamicProps){
-evaluated0.props = undefined;
-}
-if(evaluated0.dynamicItems){
-evaluated0.items = undefined;
-}
-const _errs0 = errors;
-if(errors === 0){
-if(data && typeof data == "object" && !Array.isArray(data)){
-let missing0;
-if(((((((((data.type === undefined) && (missing0 = "type")) || ((data.commitmentId === undefined) && (missing0 = "commitmentId"))) || ((data.buyer === undefined) && (missing0 = "buyer"))) || ((data.attempt === undefined) && (missing0 = "attempt"))) || ((data.deliveryHash === undefined) && (missing0 = "deliveryHash"))) || ((data.nonce === undefined) && (missing0 = "nonce"))) || ((data.expiresAt === undefined) && (missing0 = "expiresAt"))) || ((data.signature === undefined) && (missing0 = "signature"))){
-validate605.errors = [{instancePath,schemaPath:"#/required",keyword:"required",params:{missingProperty: missing0},message:"must have required property '"+missing0+"'"}];
-return false;
-}
-else {
-const _errs1 = errors;
-for(const key0 in data){
-if(!((((((((key0 === "type") || (key0 === "commitmentId")) || (key0 === "buyer")) || (key0 === "attempt")) || (key0 === "deliveryHash")) || (key0 === "nonce")) || (key0 === "expiresAt")) || (key0 === "signature"))){
-validate605.errors = [{instancePath,schemaPath:"#/additionalProperties",keyword:"additionalProperties",params:{additionalProperty: key0},message:"must NOT have additional properties"}];
-return false;
-break;
-}
-}
-if(_errs1 === errors){
-if(data.type !== undefined){
-let data0 = data.type;
-const _errs2 = errors;
 if("EarlyAccept" !== data0){
-validate605.errors = [{instancePath:instancePath+"/type",schemaPath:"#/properties/type/const",keyword:"const",params:{allowedValue: "EarlyAccept"},message:"must be equal to constant"}];
+validate595.errors = [{instancePath:instancePath+"/type",schemaPath:"#/properties/type/const",keyword:"const",params:{allowedValue: "EarlyAccept"},message:"must be equal to constant"}];
 return false;
 }
 else {
@@ -27116,14 +26845,14 @@ if(data.attempt !== undefined){
 let data3 = data.attempt;
 const _errs5 = errors;
 if(!(((typeof data3 == "number") && (!(data3 % 1) && !isNaN(data3))) && (isFinite(data3)))){
-validate605.errors = [{instancePath:instancePath+"/attempt",schemaPath:"#/properties/attempt/type",keyword:"type",params:{type: "integer"},message:"must be integer"}];
+validate595.errors = [{instancePath:instancePath+"/attempt",schemaPath:"#/properties/attempt/type",keyword:"type",params:{type: "integer"},message:"must be integer"}];
 return false;
 }
 const _errs6 = errors;
 if(errors === _errs5){
 if((typeof data3 == "number") && (isFinite(data3))){
 if(data3 < 1 || isNaN(data3)){
-validate605.errors = [{instancePath:instancePath+"/attempt",schemaPath:"#/properties/attempt/minimum",keyword:"minimum",params:{comparison: ">=", limit: 1},message:"must be >= 1"}];
+validate595.errors = [{instancePath:instancePath+"/attempt",schemaPath:"#/properties/attempt/minimum",keyword:"minimum",params:{comparison: ">=", limit: 1},message:"must be >= 1"}];
 return false;
 }
 else {
@@ -27210,23 +26939,23 @@ if(valid0){
 }
 }
 else {
-validate605.errors = [{instancePath,schemaPath:"#/type",keyword:"type",params:{type: "object"},message:"must be object"}];
+validate595.errors = [{instancePath,schemaPath:"#/type",keyword:"type",params:{type: "object"},message:"must be object"}];
 return false;
 }
 if(errors === 0){
 }
 }
-validate605.errors = vErrors;
+validate595.errors = vErrors;
 return errors === 0;
 }
-validate605.evaluated = {"props":true,"dynamicProps":false,"dynamicItems":false};
+validate595.evaluated = {"props":true,"dynamicProps":false,"dynamicItems":false};
 
-exports["messages#Decision"] = validate612;
+exports["messages#Decision"] = validate602;
 
-function validate612(data, {instancePath="", parentData, parentDataProperty, rootData=data, dynamicAnchors={}}={}){
+function validate602(data, {instancePath="", parentData, parentDataProperty, rootData=data, dynamicAnchors={}}={}){
 let vErrors = null;
 let errors = 0;
-const evaluated0 = validate612.evaluated;
+const evaluated0 = validate602.evaluated;
 if(evaluated0.dynamicProps){
 evaluated0.props = undefined;
 }
@@ -27310,14 +27039,14 @@ if(errors === _errs6){
 if(data && typeof data == "object" && !Array.isArray(data)){
 let missing1;
 if((data.encryptedKeys === undefined) && (missing1 = "encryptedKeys")){
-validate612.errors = [{instancePath,schemaPath:"#/allOf/0/then/required",keyword:"required",params:{missingProperty: missing1},message:"must have required property '"+missing1+"'"}];
+validate602.errors = [{instancePath,schemaPath:"#/allOf/0/then/required",keyword:"required",params:{missingProperty: missing1},message:"must have required property '"+missing1+"'"}];
 return false;
 }
 else {
 }
 }
 else {
-validate612.errors = [{instancePath,schemaPath:"#/allOf/0/then/type",keyword:"type",params:{type: "object"},message:"must be object"}];
+validate602.errors = [{instancePath,schemaPath:"#/allOf/0/then/type",keyword:"type",params:{type: "object"},message:"must be object"}];
 return false;
 }
 if(errors === _errs6){
@@ -27335,7 +27064,7 @@ ifClause0 = "then";
 else {
 const _errs8 = errors;
 if(!(data && typeof data == "object" && !Array.isArray(data))){
-validate612.errors = [{instancePath,schemaPath:"#/allOf/0/else/type",keyword:"type",params:{type: "object"},message:"must be object"}];
+validate602.errors = [{instancePath,schemaPath:"#/allOf/0/else/type",keyword:"type",params:{type: "object"},message:"must be object"}];
 return false;
 }
 const _errs9 = errors;
@@ -27373,7 +27102,7 @@ if(errors === _errs11){
 }
 var valid3 = _errs11 === errors;
 if(valid3){
-validate612.errors = [{instancePath,schemaPath:"#/allOf/0/else/not",keyword:"not",params:{},message:"must NOT be valid"}];
+validate602.errors = [{instancePath,schemaPath:"#/allOf/0/else/not",keyword:"not",params:{},message:"must NOT be valid"}];
 return false;
 }
 else {
@@ -27404,7 +27133,7 @@ else {
 vErrors.push(err5);
 }
 errors++;
-validate612.errors = vErrors;
+validate602.errors = vErrors;
 return false;
 }
 else {
@@ -27418,14 +27147,14 @@ if(errors === 0){
 if(data && typeof data == "object" && !Array.isArray(data)){
 let missing3;
 if(((((((((((((((data.type === undefined) && (missing3 = "type")) || ((data.commitmentId === undefined) && (missing3 = "commitmentId"))) || ((data.attempt === undefined) && (missing3 = "attempt"))) || ((data.deliveryHash === undefined) && (missing3 = "deliveryHash"))) || ((data.adjudicator === undefined) && (missing3 = "adjudicator"))) || ((data.role === undefined) && (missing3 = "role"))) || ((data.outcome === undefined) && (missing3 = "outcome"))) || ((data.seed === undefined) && (missing3 = "seed"))) || ((data.policyHash === undefined) && (missing3 = "policyHash"))) || ((data.registryHash === undefined) && (missing3 = "registryHash"))) || ((data.judgmentRecordHash === undefined) && (missing3 = "judgmentRecordHash"))) || ((data.nonce === undefined) && (missing3 = "nonce"))) || ((data.expiresAt === undefined) && (missing3 = "expiresAt"))) || ((data.signature === undefined) && (missing3 = "signature"))){
-validate612.errors = [{instancePath,schemaPath:"#/required",keyword:"required",params:{missingProperty: missing3},message:"must have required property '"+missing3+"'"}];
+validate602.errors = [{instancePath,schemaPath:"#/required",keyword:"required",params:{missingProperty: missing3},message:"must have required property '"+missing3+"'"}];
 return false;
 }
 else {
 const _errs13 = errors;
 for(const key0 in data){
 if(!(func0.call(schema71.properties, key0))){
-validate612.errors = [{instancePath,schemaPath:"#/additionalProperties",keyword:"additionalProperties",params:{additionalProperty: key0},message:"must NOT have additional properties"}];
+validate602.errors = [{instancePath,schemaPath:"#/additionalProperties",keyword:"additionalProperties",params:{additionalProperty: key0},message:"must NOT have additional properties"}];
 return false;
 break;
 }
@@ -27435,7 +27164,7 @@ if(data.type !== undefined){
 let data1 = data.type;
 const _errs14 = errors;
 if("Decision" !== data1){
-validate612.errors = [{instancePath:instancePath+"/type",schemaPath:"#/properties/type/const",keyword:"const",params:{allowedValue: "Decision"},message:"must be equal to constant"}];
+validate602.errors = [{instancePath:instancePath+"/type",schemaPath:"#/properties/type/const",keyword:"const",params:{allowedValue: "Decision"},message:"must be equal to constant"}];
 return false;
 }
 else {
@@ -27467,14 +27196,14 @@ if(data.attempt !== undefined){
 let data3 = data.attempt;
 const _errs16 = errors;
 if(!(((typeof data3 == "number") && (!(data3 % 1) && !isNaN(data3))) && (isFinite(data3)))){
-validate612.errors = [{instancePath:instancePath+"/attempt",schemaPath:"#/properties/attempt/type",keyword:"type",params:{type: "integer"},message:"must be integer"}];
+validate602.errors = [{instancePath:instancePath+"/attempt",schemaPath:"#/properties/attempt/type",keyword:"type",params:{type: "integer"},message:"must be integer"}];
 return false;
 }
 const _errs17 = errors;
 if(errors === _errs16){
 if((typeof data3 == "number") && (isFinite(data3))){
 if(data3 < 1 || isNaN(data3)){
-validate612.errors = [{instancePath:instancePath+"/attempt",schemaPath:"#/properties/attempt/minimum",keyword:"minimum",params:{comparison: ">=", limit: 1},message:"must be >= 1"}];
+validate602.errors = [{instancePath:instancePath+"/attempt",schemaPath:"#/properties/attempt/minimum",keyword:"minimum",params:{comparison: ">=", limit: 1},message:"must be >= 1"}];
 return false;
 }
 else {
@@ -27524,7 +27253,7 @@ let data6 = data.role;
 const _errs20 = errors;
 const vSchema0 = schema71.properties.role.enum;
 if(!(((data6 === "primary") || (data6 === "fallback")) || (data6 === "appeal"))){
-validate612.errors = [{instancePath:instancePath+"/role",schemaPath:"#/properties/role/enum",keyword:"enum",params:{allowedValues: schema71.properties.role.enum},message:"must be equal to one of the allowed values"}];
+validate602.errors = [{instancePath:instancePath+"/role",schemaPath:"#/properties/role/enum",keyword:"enum",params:{allowedValues: schema71.properties.role.enum},message:"must be equal to one of the allowed values"}];
 return false;
 }
 else {
@@ -27542,7 +27271,7 @@ let data7 = data.outcome;
 const _errs21 = errors;
 const vSchema1 = schema71.properties.outcome.enum;
 if(!(((data7 === "accept") || (data7 === "reject")) || (data7 === "escalate"))){
-validate612.errors = [{instancePath:instancePath+"/outcome",schemaPath:"#/properties/outcome/enum",keyword:"enum",params:{allowedValues: schema71.properties.outcome.enum},message:"must be equal to one of the allowed values"}];
+validate602.errors = [{instancePath:instancePath+"/outcome",schemaPath:"#/properties/outcome/enum",keyword:"enum",params:{allowedValues: schema71.properties.outcome.enum},message:"must be equal to one of the allowed values"}];
 return false;
 }
 else {
@@ -27623,14 +27352,14 @@ if(errors === _errs26){
 if(data12 && typeof data12 == "object" && !Array.isArray(data12)){
 let missing4;
 if(((data12.scheme === undefined) && (missing4 = "scheme")) || ((data12.ciphertext === undefined) && (missing4 = "ciphertext"))){
-validate612.errors = [{instancePath:instancePath+"/keyForBuyer",schemaPath:"#/properties/keyForBuyer/required",keyword:"required",params:{missingProperty: missing4},message:"must have required property '"+missing4+"'"}];
+validate602.errors = [{instancePath:instancePath+"/keyForBuyer",schemaPath:"#/properties/keyForBuyer/required",keyword:"required",params:{missingProperty: missing4},message:"must have required property '"+missing4+"'"}];
 return false;
 }
 else {
 const _errs28 = errors;
 for(const key1 in data12){
 if(!((key1 === "scheme") || (key1 === "ciphertext"))){
-validate612.errors = [{instancePath:instancePath+"/keyForBuyer",schemaPath:"#/properties/keyForBuyer/additionalProperties",keyword:"additionalProperties",params:{additionalProperty: key1},message:"must NOT have additional properties"}];
+validate602.errors = [{instancePath:instancePath+"/keyForBuyer",schemaPath:"#/properties/keyForBuyer/additionalProperties",keyword:"additionalProperties",params:{additionalProperty: key1},message:"must NOT have additional properties"}];
 return false;
 break;
 }
@@ -27640,7 +27369,7 @@ if(data12.scheme !== undefined){
 let data13 = data12.scheme;
 const _errs29 = errors;
 if("x25519-xsalsa20poly1305" !== data13){
-validate612.errors = [{instancePath:instancePath+"/keyForBuyer/scheme",schemaPath:"#/properties/keyForBuyer/properties/scheme/const",keyword:"const",params:{allowedValue: "x25519-xsalsa20poly1305"},message:"must be equal to constant"}];
+validate602.errors = [{instancePath:instancePath+"/keyForBuyer/scheme",schemaPath:"#/properties/keyForBuyer/properties/scheme/const",keyword:"const",params:{allowedValue: "x25519-xsalsa20poly1305"},message:"must be equal to constant"}];
 return false;
 }
 else {
@@ -27674,7 +27403,7 @@ if(valid5){
 }
 }
 else {
-validate612.errors = [{instancePath:instancePath+"/keyForBuyer",schemaPath:"#/properties/keyForBuyer/type",keyword:"type",params:{type: "object"},message:"must be object"}];
+validate602.errors = [{instancePath:instancePath+"/keyForBuyer",schemaPath:"#/properties/keyForBuyer/type",keyword:"type",params:{type: "object"},message:"must be object"}];
 return false;
 }
 if(errors === _errs26){
@@ -27691,7 +27420,7 @@ let data15 = data.appealGround;
 const _errs31 = errors;
 const vSchema2 = schema71.properties.appealGround.enum;
 if(!((((data15 === "wrong-outcome") || (data15 === "missing-or-wrong-key")) || (data15 === "policy-or-panel-violation")) || (data15 === "mislabeled-model"))){
-validate612.errors = [{instancePath:instancePath+"/appealGround",schemaPath:"#/properties/appealGround/enum",keyword:"enum",params:{allowedValues: schema71.properties.appealGround.enum},message:"must be equal to one of the allowed values"}];
+validate602.errors = [{instancePath:instancePath+"/appealGround",schemaPath:"#/properties/appealGround/enum",keyword:"enum",params:{allowedValues: schema71.properties.appealGround.enum},message:"must be equal to one of the allowed values"}];
 return false;
 }
 else {
@@ -27824,7 +27553,7 @@ let ifClause1;
 if(_valid1){
 const _errs41 = errors;
 if(!(data19 && typeof data19 == "object" && !Array.isArray(data19))){
-validate612.errors = [{instancePath:instancePath+"/beacon",schemaPath:"#/properties/beacon/then/type",keyword:"type",params:{type: "object"},message:"must be object"}];
+validate602.errors = [{instancePath:instancePath+"/beacon",schemaPath:"#/properties/beacon/then/type",keyword:"type",params:{type: "object"},message:"must be object"}];
 return false;
 }
 const _errs42 = errors;
@@ -27862,7 +27591,7 @@ if(errors === _errs44){
 }
 var valid8 = _errs44 === errors;
 if(valid8){
-validate612.errors = [{instancePath:instancePath+"/beacon",schemaPath:"#/properties/beacon/then/not",keyword:"not",params:{},message:"must NOT be valid"}];
+validate602.errors = [{instancePath:instancePath+"/beacon",schemaPath:"#/properties/beacon/then/not",keyword:"not",params:{},message:"must NOT be valid"}];
 return false;
 }
 else {
@@ -27891,14 +27620,14 @@ if(errors === _errs46){
 if(data19 && typeof data19 == "object" && !Array.isArray(data19)){
 let missing7;
 if((data19.signature === undefined) && (missing7 = "signature")){
-validate612.errors = [{instancePath:instancePath+"/beacon",schemaPath:"#/properties/beacon/else/required",keyword:"required",params:{missingProperty: missing7},message:"must have required property '"+missing7+"'"}];
+validate602.errors = [{instancePath:instancePath+"/beacon",schemaPath:"#/properties/beacon/else/required",keyword:"required",params:{missingProperty: missing7},message:"must have required property '"+missing7+"'"}];
 return false;
 }
 else {
 }
 }
 else {
-validate612.errors = [{instancePath:instancePath+"/beacon",schemaPath:"#/properties/beacon/else/type",keyword:"type",params:{type: "object"},message:"must be object"}];
+validate602.errors = [{instancePath:instancePath+"/beacon",schemaPath:"#/properties/beacon/else/type",keyword:"type",params:{type: "object"},message:"must be object"}];
 return false;
 }
 if(errors === _errs46){
@@ -27922,7 +27651,7 @@ else {
 vErrors.push(err11);
 }
 errors++;
-validate612.errors = vErrors;
+validate602.errors = vErrors;
 return false;
 }
 else {
@@ -27931,14 +27660,14 @@ if(errors === _errs35){
 if(data19 && typeof data19 == "object" && !Array.isArray(data19)){
 let missing8;
 if((((data19.source === undefined) && (missing8 = "source")) || ((data19.round === undefined) && (missing8 = "round"))) || ((data19.value === undefined) && (missing8 = "value"))){
-validate612.errors = [{instancePath:instancePath+"/beacon",schemaPath:"#/properties/beacon/required",keyword:"required",params:{missingProperty: missing8},message:"must have required property '"+missing8+"'"}];
+validate602.errors = [{instancePath:instancePath+"/beacon",schemaPath:"#/properties/beacon/required",keyword:"required",params:{missingProperty: missing8},message:"must have required property '"+missing8+"'"}];
 return false;
 }
 else {
 const _errs48 = errors;
 for(const key2 in data19){
 if(!((((key2 === "source") || (key2 === "round")) || (key2 === "value")) || (key2 === "signature"))){
-validate612.errors = [{instancePath:instancePath+"/beacon",schemaPath:"#/properties/beacon/additionalProperties",keyword:"additionalProperties",params:{additionalProperty: key2},message:"must NOT have additional properties"}];
+validate602.errors = [{instancePath:instancePath+"/beacon",schemaPath:"#/properties/beacon/additionalProperties",keyword:"additionalProperties",params:{additionalProperty: key2},message:"must NOT have additional properties"}];
 return false;
 break;
 }
@@ -27963,14 +27692,14 @@ if(data19.round !== undefined){
 let data22 = data19.round;
 const _errs50 = errors;
 if(!(((typeof data22 == "number") && (!(data22 % 1) && !isNaN(data22))) && (isFinite(data22)))){
-validate612.errors = [{instancePath:instancePath+"/beacon/round",schemaPath:"#/properties/beacon/properties/round/type",keyword:"type",params:{type: "integer"},message:"must be integer"}];
+validate602.errors = [{instancePath:instancePath+"/beacon/round",schemaPath:"#/properties/beacon/properties/round/type",keyword:"type",params:{type: "integer"},message:"must be integer"}];
 return false;
 }
 const _errs51 = errors;
 if(errors === _errs50){
 if((typeof data22 == "number") && (isFinite(data22))){
 if(data22 < 0 || isNaN(data22)){
-validate612.errors = [{instancePath:instancePath+"/beacon/round",schemaPath:"#/properties/beacon/properties/round/minimum",keyword:"minimum",params:{comparison: ">=", limit: 0},message:"must be >= 0"}];
+validate602.errors = [{instancePath:instancePath+"/beacon/round",schemaPath:"#/properties/beacon/properties/round/minimum",keyword:"minimum",params:{comparison: ">=", limit: 0},message:"must be >= 0"}];
 return false;
 }
 else {
@@ -28007,14 +27736,14 @@ const _errs54 = errors;
 if(errors === _errs53){
 if(typeof data24 === "string"){
 if(!pattern53.test(data24)){
-validate612.errors = [{instancePath:instancePath+"/beacon/signature",schemaPath:"#/properties/beacon/properties/signature/pattern",keyword:"pattern",params:{pattern: "^0x([0-9a-f]{2}){1,256}$"},message:"must match pattern \""+"^0x([0-9a-f]{2}){1,256}$"+"\""}];
+validate602.errors = [{instancePath:instancePath+"/beacon/signature",schemaPath:"#/properties/beacon/properties/signature/pattern",keyword:"pattern",params:{pattern: "^0x([0-9a-f]{2}){1,256}$"},message:"must match pattern \""+"^0x([0-9a-f]{2}){1,256}$"+"\""}];
 return false;
 }
 else {
 }
 }
 else {
-validate612.errors = [{instancePath:instancePath+"/beacon/signature",schemaPath:"#/properties/beacon/properties/signature/type",keyword:"type",params:{type: "string"},message:"must be string"}];
+validate602.errors = [{instancePath:instancePath+"/beacon/signature",schemaPath:"#/properties/beacon/properties/signature/type",keyword:"type",params:{type: "string"},message:"must be string"}];
 return false;
 }
 if(errors === _errs53){
@@ -28034,7 +27763,7 @@ if(valid9){
 }
 }
 else {
-validate612.errors = [{instancePath:instancePath+"/beacon",schemaPath:"#/properties/beacon/type",keyword:"type",params:{type: "object"},message:"must be object"}];
+validate602.errors = [{instancePath:instancePath+"/beacon",schemaPath:"#/properties/beacon/type",keyword:"type",params:{type: "object"},message:"must be object"}];
 return false;
 }
 if(errors === _errs35){
@@ -28053,7 +27782,7 @@ const _errs56 = errors;
 if(errors === _errs55){
 if(Array.isArray(data25)){
 if(data25.length < 1){
-validate612.errors = [{instancePath:instancePath+"/encryptedKeys",schemaPath:"#/properties/encryptedKeys/minItems",keyword:"minItems",params:{limit: 1},message:"must NOT have fewer than 1 items"}];
+validate602.errors = [{instancePath:instancePath+"/encryptedKeys",schemaPath:"#/properties/encryptedKeys/minItems",keyword:"minItems",params:{limit: 1},message:"must NOT have fewer than 1 items"}];
 return false;
 }
 else {
@@ -28078,7 +27807,7 @@ if(valid10){
 }
 }
 else {
-validate612.errors = [{instancePath:instancePath+"/encryptedKeys",schemaPath:"#/properties/encryptedKeys/type",keyword:"type",params:{type: "array"},message:"must be array"}];
+validate602.errors = [{instancePath:instancePath+"/encryptedKeys",schemaPath:"#/properties/encryptedKeys/type",keyword:"type",params:{type: "array"},message:"must be array"}];
 return false;
 }
 if(errors === _errs55){
@@ -28112,23 +27841,23 @@ if(valid4){
 }
 }
 else {
-validate612.errors = [{instancePath,schemaPath:"#/type",keyword:"type",params:{type: "object"},message:"must be object"}];
+validate602.errors = [{instancePath,schemaPath:"#/type",keyword:"type",params:{type: "object"},message:"must be object"}];
 return false;
 }
 if(errors === 0){
 }
 }
-validate612.errors = vErrors;
+validate602.errors = vErrors;
 return errors === 0;
 }
-validate612.evaluated = {"props":true,"dynamicProps":false,"dynamicItems":false};
+validate602.evaluated = {"props":true,"dynamicProps":false,"dynamicItems":false};
 
-exports["messages#AgentRevocation"] = validate627;
+exports["messages#AgentRevocation"] = validate617;
 
-function validate627(data, {instancePath="", parentData, parentDataProperty, rootData=data, dynamicAnchors={}}={}){
+function validate617(data, {instancePath="", parentData, parentDataProperty, rootData=data, dynamicAnchors={}}={}){
 let vErrors = null;
 let errors = 0;
-const evaluated0 = validate627.evaluated;
+const evaluated0 = validate617.evaluated;
 if(evaluated0.dynamicProps){
 evaluated0.props = undefined;
 }
@@ -28140,14 +27869,14 @@ if(errors === 0){
 if(data && typeof data == "object" && !Array.isArray(data)){
 let missing0;
 if(((((((data.type === undefined) && (missing0 = "type")) || ((data.agent === undefined) && (missing0 = "agent"))) || ((data.principal === undefined) && (missing0 = "principal"))) || ((data.nonce === undefined) && (missing0 = "nonce"))) || ((data.expiresAt === undefined) && (missing0 = "expiresAt"))) || ((data.signature === undefined) && (missing0 = "signature"))){
-validate627.errors = [{instancePath,schemaPath:"#/required",keyword:"required",params:{missingProperty: missing0},message:"must have required property '"+missing0+"'"}];
+validate617.errors = [{instancePath,schemaPath:"#/required",keyword:"required",params:{missingProperty: missing0},message:"must have required property '"+missing0+"'"}];
 return false;
 }
 else {
 const _errs1 = errors;
 for(const key0 in data){
 if(!((((((key0 === "type") || (key0 === "agent")) || (key0 === "principal")) || (key0 === "nonce")) || (key0 === "expiresAt")) || (key0 === "signature"))){
-validate627.errors = [{instancePath,schemaPath:"#/additionalProperties",keyword:"additionalProperties",params:{additionalProperty: key0},message:"must NOT have additional properties"}];
+validate617.errors = [{instancePath,schemaPath:"#/additionalProperties",keyword:"additionalProperties",params:{additionalProperty: key0},message:"must NOT have additional properties"}];
 return false;
 break;
 }
@@ -28157,7 +27886,7 @@ if(data.type !== undefined){
 let data0 = data.type;
 const _errs2 = errors;
 if("AgentRevocation" !== data0){
-validate627.errors = [{instancePath:instancePath+"/type",schemaPath:"#/properties/type/const",keyword:"const",params:{allowedValue: "AgentRevocation"},message:"must be equal to constant"}];
+validate617.errors = [{instancePath:instancePath+"/type",schemaPath:"#/properties/type/const",keyword:"const",params:{allowedValue: "AgentRevocation"},message:"must be equal to constant"}];
 return false;
 }
 else {
@@ -28255,23 +27984,23 @@ if(valid0){
 }
 }
 else {
-validate627.errors = [{instancePath,schemaPath:"#/type",keyword:"type",params:{type: "object"},message:"must be object"}];
+validate617.errors = [{instancePath,schemaPath:"#/type",keyword:"type",params:{type: "object"},message:"must be object"}];
 return false;
 }
 if(errors === 0){
 }
 }
-validate627.errors = vErrors;
+validate617.errors = vErrors;
 return errors === 0;
 }
-validate627.evaluated = {"props":true,"dynamicProps":false,"dynamicItems":false};
+validate617.evaluated = {"props":true,"dynamicProps":false,"dynamicItems":false};
 
-exports["messages#MemberAdmission"] = validate633;
+exports["messages#MemberAdmission"] = validate623;
 
-function validate633(data, {instancePath="", parentData, parentDataProperty, rootData=data, dynamicAnchors={}}={}){
+function validate623(data, {instancePath="", parentData, parentDataProperty, rootData=data, dynamicAnchors={}}={}){
 let vErrors = null;
 let errors = 0;
-const evaluated0 = validate633.evaluated;
+const evaluated0 = validate623.evaluated;
 if(evaluated0.dynamicProps){
 evaluated0.props = undefined;
 }
@@ -28283,14 +28012,14 @@ if(errors === 0){
 if(data && typeof data == "object" && !Array.isArray(data)){
 let missing0;
 if(((((((((data.type === undefined) && (missing0 = "type")) || ((data.clubId === undefined) && (missing0 = "clubId"))) || ((data.member === undefined) && (missing0 = "member"))) || ((data.operator === undefined) && (missing0 = "operator"))) || ((data.validUntil === undefined) && (missing0 = "validUntil"))) || ((data.nonce === undefined) && (missing0 = "nonce"))) || ((data.expiresAt === undefined) && (missing0 = "expiresAt"))) || ((data.signature === undefined) && (missing0 = "signature"))){
-validate633.errors = [{instancePath,schemaPath:"#/required",keyword:"required",params:{missingProperty: missing0},message:"must have required property '"+missing0+"'"}];
+validate623.errors = [{instancePath,schemaPath:"#/required",keyword:"required",params:{missingProperty: missing0},message:"must have required property '"+missing0+"'"}];
 return false;
 }
 else {
 const _errs1 = errors;
 for(const key0 in data){
 if(!((((((((key0 === "type") || (key0 === "clubId")) || (key0 === "member")) || (key0 === "operator")) || (key0 === "validUntil")) || (key0 === "nonce")) || (key0 === "expiresAt")) || (key0 === "signature"))){
-validate633.errors = [{instancePath,schemaPath:"#/additionalProperties",keyword:"additionalProperties",params:{additionalProperty: key0},message:"must NOT have additional properties"}];
+validate623.errors = [{instancePath,schemaPath:"#/additionalProperties",keyword:"additionalProperties",params:{additionalProperty: key0},message:"must NOT have additional properties"}];
 return false;
 break;
 }
@@ -28300,7 +28029,7 @@ if(data.type !== undefined){
 let data0 = data.type;
 const _errs2 = errors;
 if("MemberAdmission" !== data0){
-validate633.errors = [{instancePath:instancePath+"/type",schemaPath:"#/properties/type/const",keyword:"const",params:{allowedValue: "MemberAdmission"},message:"must be equal to constant"}];
+validate623.errors = [{instancePath:instancePath+"/type",schemaPath:"#/properties/type/const",keyword:"const",params:{allowedValue: "MemberAdmission"},message:"must be equal to constant"}];
 return false;
 }
 else {
@@ -28430,23 +28159,23 @@ if(valid0){
 }
 }
 else {
-validate633.errors = [{instancePath,schemaPath:"#/type",keyword:"type",params:{type: "object"},message:"must be object"}];
+validate623.errors = [{instancePath,schemaPath:"#/type",keyword:"type",params:{type: "object"},message:"must be object"}];
 return false;
 }
 if(errors === 0){
 }
 }
-validate633.errors = vErrors;
+validate623.errors = vErrors;
 return errors === 0;
 }
-validate633.evaluated = {"props":true,"dynamicProps":false,"dynamicItems":false};
+validate623.evaluated = {"props":true,"dynamicProps":false,"dynamicItems":false};
 
-exports["messages#MemberRevocation"] = validate641;
+exports["messages#MemberRevocation"] = validate631;
 
-function validate641(data, {instancePath="", parentData, parentDataProperty, rootData=data, dynamicAnchors={}}={}){
+function validate631(data, {instancePath="", parentData, parentDataProperty, rootData=data, dynamicAnchors={}}={}){
 let vErrors = null;
 let errors = 0;
-const evaluated0 = validate641.evaluated;
+const evaluated0 = validate631.evaluated;
 if(evaluated0.dynamicProps){
 evaluated0.props = undefined;
 }
@@ -28458,14 +28187,14 @@ if(errors === 0){
 if(data && typeof data == "object" && !Array.isArray(data)){
 let missing0;
 if((((((((data.type === undefined) && (missing0 = "type")) || ((data.clubId === undefined) && (missing0 = "clubId"))) || ((data.member === undefined) && (missing0 = "member"))) || ((data.operator === undefined) && (missing0 = "operator"))) || ((data.nonce === undefined) && (missing0 = "nonce"))) || ((data.expiresAt === undefined) && (missing0 = "expiresAt"))) || ((data.signature === undefined) && (missing0 = "signature"))){
-validate641.errors = [{instancePath,schemaPath:"#/required",keyword:"required",params:{missingProperty: missing0},message:"must have required property '"+missing0+"'"}];
+validate631.errors = [{instancePath,schemaPath:"#/required",keyword:"required",params:{missingProperty: missing0},message:"must have required property '"+missing0+"'"}];
 return false;
 }
 else {
 const _errs1 = errors;
 for(const key0 in data){
 if(!(((((((key0 === "type") || (key0 === "clubId")) || (key0 === "member")) || (key0 === "operator")) || (key0 === "nonce")) || (key0 === "expiresAt")) || (key0 === "signature"))){
-validate641.errors = [{instancePath,schemaPath:"#/additionalProperties",keyword:"additionalProperties",params:{additionalProperty: key0},message:"must NOT have additional properties"}];
+validate631.errors = [{instancePath,schemaPath:"#/additionalProperties",keyword:"additionalProperties",params:{additionalProperty: key0},message:"must NOT have additional properties"}];
 return false;
 break;
 }
@@ -28475,7 +28204,7 @@ if(data.type !== undefined){
 let data0 = data.type;
 const _errs2 = errors;
 if("MemberRevocation" !== data0){
-validate641.errors = [{instancePath:instancePath+"/type",schemaPath:"#/properties/type/const",keyword:"const",params:{allowedValue: "MemberRevocation"},message:"must be equal to constant"}];
+validate631.errors = [{instancePath:instancePath+"/type",schemaPath:"#/properties/type/const",keyword:"const",params:{allowedValue: "MemberRevocation"},message:"must be equal to constant"}];
 return false;
 }
 else {
@@ -28589,23 +28318,23 @@ if(valid0){
 }
 }
 else {
-validate641.errors = [{instancePath,schemaPath:"#/type",keyword:"type",params:{type: "object"},message:"must be object"}];
+validate631.errors = [{instancePath,schemaPath:"#/type",keyword:"type",params:{type: "object"},message:"must be object"}];
 return false;
 }
 if(errors === 0){
 }
 }
-validate641.errors = vErrors;
+validate631.errors = vErrors;
 return errors === 0;
 }
-validate641.evaluated = {"props":true,"dynamicProps":false,"dynamicItems":false};
+validate631.evaluated = {"props":true,"dynamicProps":false,"dynamicItems":false};
 
-exports["messages#Dispute"] = validate648;
+exports["messages#Dispute"] = validate638;
 
-function validate648(data, {instancePath="", parentData, parentDataProperty, rootData=data, dynamicAnchors={}}={}){
+function validate638(data, {instancePath="", parentData, parentDataProperty, rootData=data, dynamicAnchors={}}={}){
 let vErrors = null;
 let errors = 0;
-const evaluated0 = validate648.evaluated;
+const evaluated0 = validate638.evaluated;
 if(evaluated0.dynamicProps){
 evaluated0.props = undefined;
 }
@@ -28617,14 +28346,14 @@ if(errors === 0){
 if(data && typeof data == "object" && !Array.isArray(data)){
 let missing0;
 if((((((((((((data.type === undefined) && (missing0 = "type")) || ((data.commitmentId === undefined) && (missing0 = "commitmentId"))) || ((data.buyer === undefined) && (missing0 = "buyer"))) || ((data.attempt === undefined) && (missing0 = "attempt"))) || ((data.grounds === undefined) && (missing0 = "grounds"))) || ((data.bond === undefined) && (missing0 = "bond"))) || ((data.fee === undefined) && (missing0 = "fee"))) || ((data.encryptedKeys === undefined) && (missing0 = "encryptedKeys"))) || ((data.nonce === undefined) && (missing0 = "nonce"))) || ((data.expiresAt === undefined) && (missing0 = "expiresAt"))) || ((data.signature === undefined) && (missing0 = "signature"))){
-validate648.errors = [{instancePath,schemaPath:"#/required",keyword:"required",params:{missingProperty: missing0},message:"must have required property '"+missing0+"'"}];
+validate638.errors = [{instancePath,schemaPath:"#/required",keyword:"required",params:{missingProperty: missing0},message:"must have required property '"+missing0+"'"}];
 return false;
 }
 else {
 const _errs1 = errors;
 for(const key0 in data){
 if(!(func0.call(schema81.properties, key0))){
-validate648.errors = [{instancePath,schemaPath:"#/additionalProperties",keyword:"additionalProperties",params:{additionalProperty: key0},message:"must NOT have additional properties"}];
+validate638.errors = [{instancePath,schemaPath:"#/additionalProperties",keyword:"additionalProperties",params:{additionalProperty: key0},message:"must NOT have additional properties"}];
 return false;
 break;
 }
@@ -28634,7 +28363,7 @@ if(data.type !== undefined){
 let data0 = data.type;
 const _errs2 = errors;
 if("Dispute" !== data0){
-validate648.errors = [{instancePath:instancePath+"/type",schemaPath:"#/properties/type/const",keyword:"const",params:{allowedValue: "Dispute"},message:"must be equal to constant"}];
+validate638.errors = [{instancePath:instancePath+"/type",schemaPath:"#/properties/type/const",keyword:"const",params:{allowedValue: "Dispute"},message:"must be equal to constant"}];
 return false;
 }
 else {
@@ -28681,14 +28410,14 @@ if(data.attempt !== undefined){
 let data3 = data.attempt;
 const _errs5 = errors;
 if(!(((typeof data3 == "number") && (!(data3 % 1) && !isNaN(data3))) && (isFinite(data3)))){
-validate648.errors = [{instancePath:instancePath+"/attempt",schemaPath:"#/properties/attempt/type",keyword:"type",params:{type: "integer"},message:"must be integer"}];
+validate638.errors = [{instancePath:instancePath+"/attempt",schemaPath:"#/properties/attempt/type",keyword:"type",params:{type: "integer"},message:"must be integer"}];
 return false;
 }
 const _errs6 = errors;
 if(errors === _errs5){
 if((typeof data3 == "number") && (isFinite(data3))){
 if(data3 < 1 || isNaN(data3)){
-validate648.errors = [{instancePath:instancePath+"/attempt",schemaPath:"#/properties/attempt/minimum",keyword:"minimum",params:{comparison: ">=", limit: 1},message:"must be >= 1"}];
+validate638.errors = [{instancePath:instancePath+"/attempt",schemaPath:"#/properties/attempt/minimum",keyword:"minimum",params:{comparison: ">=", limit: 1},message:"must be >= 1"}];
 return false;
 }
 else {
@@ -28711,14 +28440,14 @@ const _errs9 = errors;
 if(errors === _errs7){
 if(typeof data4 === "string"){
 if(func1(data4) > 2000){
-validate648.errors = [{instancePath:instancePath+"/grounds",schemaPath:"#/properties/grounds/maxLength",keyword:"maxLength",params:{limit: 2000},message:"must NOT have more than 2000 characters"}];
+validate638.errors = [{instancePath:instancePath+"/grounds",schemaPath:"#/properties/grounds/maxLength",keyword:"maxLength",params:{limit: 2000},message:"must NOT have more than 2000 characters"}];
 return false;
 }
 else {
 }
 }
 else {
-validate648.errors = [{instancePath:instancePath+"/grounds",schemaPath:"#/properties/grounds/type",keyword:"type",params:{type: "string"},message:"must be string"}];
+validate638.errors = [{instancePath:instancePath+"/grounds",schemaPath:"#/properties/grounds/type",keyword:"type",params:{type: "string"},message:"must be string"}];
 return false;
 }
 if(errors === _errs7){
@@ -28812,7 +28541,7 @@ const _errs16 = errors;
 if(errors === _errs15){
 if(Array.isArray(data10)){
 if(data10.length < 3){
-validate648.errors = [{instancePath:instancePath+"/encryptedKeys",schemaPath:"#/properties/encryptedKeys/minItems",keyword:"minItems",params:{limit: 3},message:"must NOT have fewer than 3 items"}];
+validate638.errors = [{instancePath:instancePath+"/encryptedKeys",schemaPath:"#/properties/encryptedKeys/minItems",keyword:"minItems",params:{limit: 3},message:"must NOT have fewer than 3 items"}];
 return false;
 }
 else {
@@ -28837,7 +28566,7 @@ if(valid1){
 }
 }
 else {
-validate648.errors = [{instancePath:instancePath+"/encryptedKeys",schemaPath:"#/properties/encryptedKeys/type",keyword:"type",params:{type: "array"},message:"must be array"}];
+validate638.errors = [{instancePath:instancePath+"/encryptedKeys",schemaPath:"#/properties/encryptedKeys/type",keyword:"type",params:{type: "array"},message:"must be array"}];
 return false;
 }
 if(errors === _errs15){
@@ -28864,23 +28593,23 @@ if(valid0){
 }
 }
 else {
-validate648.errors = [{instancePath,schemaPath:"#/type",keyword:"type",params:{type: "object"},message:"must be object"}];
+validate638.errors = [{instancePath,schemaPath:"#/type",keyword:"type",params:{type: "object"},message:"must be object"}];
 return false;
 }
 if(errors === 0){
 }
 }
-validate648.errors = vErrors;
+validate638.errors = vErrors;
 return errors === 0;
 }
-validate648.evaluated = {"props":true,"dynamicProps":false,"dynamicItems":false};
+validate638.evaluated = {"props":true,"dynamicProps":false,"dynamicItems":false};
 
-exports["messages#MutualSettlement"] = validate657;
+exports["messages#MutualSettlement"] = validate647;
 
-function validate657(data, {instancePath="", parentData, parentDataProperty, rootData=data, dynamicAnchors={}}={}){
+function validate647(data, {instancePath="", parentData, parentDataProperty, rootData=data, dynamicAnchors={}}={}){
 let vErrors = null;
 let errors = 0;
-const evaluated0 = validate657.evaluated;
+const evaluated0 = validate647.evaluated;
 if(evaluated0.dynamicProps){
 evaluated0.props = undefined;
 }
@@ -28961,7 +28690,7 @@ if(errors === _errs6){
 if(data && typeof data == "object" && !Array.isArray(data)){
 let missing1;
 if((data.releaseKey === undefined) && (missing1 = "releaseKey")){
-validate657.errors = [{instancePath,schemaPath:"#/then/required",keyword:"required",params:{missingProperty: missing1},message:"must have required property '"+missing1+"'"}];
+validate647.errors = [{instancePath,schemaPath:"#/then/required",keyword:"required",params:{missingProperty: missing1},message:"must have required property '"+missing1+"'"}];
 return false;
 }
 else {
@@ -28969,7 +28698,7 @@ if(data.releaseKey !== undefined){
 let data1 = data.releaseKey;
 const _errs8 = errors;
 if(false !== data1){
-validate657.errors = [{instancePath:instancePath+"/releaseKey",schemaPath:"#/then/properties/releaseKey/const",keyword:"const",params:{allowedValue: false},message:"must be equal to constant"}];
+validate647.errors = [{instancePath:instancePath+"/releaseKey",schemaPath:"#/then/properties/releaseKey/const",keyword:"const",params:{allowedValue: false},message:"must be equal to constant"}];
 return false;
 }
 else {
@@ -28986,7 +28715,7 @@ if(valid2){
 }
 }
 else {
-validate657.errors = [{instancePath,schemaPath:"#/then/type",keyword:"type",params:{type: "object"},message:"must be object"}];
+validate647.errors = [{instancePath,schemaPath:"#/then/type",keyword:"type",params:{type: "object"},message:"must be object"}];
 return false;
 }
 if(errors === _errs6){
@@ -29009,7 +28738,7 @@ else {
 vErrors.push(err3);
 }
 errors++;
-validate657.errors = vErrors;
+validate647.errors = vErrors;
 return false;
 }
 else {
@@ -29018,14 +28747,14 @@ if(errors === 0){
 if(data && typeof data == "object" && !Array.isArray(data)){
 let missing2;
 if((((((((((data.type === undefined) && (missing2 = "type")) || ((data.commitmentId === undefined) && (missing2 = "commitmentId"))) || ((data.deliveryHash === undefined) && (missing2 = "deliveryHash"))) || ((data.payouts === undefined) && (missing2 = "payouts"))) || ((data.releaseKey === undefined) && (missing2 = "releaseKey"))) || ((data.nonce === undefined) && (missing2 = "nonce"))) || ((data.expiresAt === undefined) && (missing2 = "expiresAt"))) || ((data.buyerSignature === undefined) && (missing2 = "buyerSignature"))) || ((data.sellerSignature === undefined) && (missing2 = "sellerSignature"))){
-validate657.errors = [{instancePath,schemaPath:"#/required",keyword:"required",params:{missingProperty: missing2},message:"must have required property '"+missing2+"'"}];
+validate647.errors = [{instancePath,schemaPath:"#/required",keyword:"required",params:{missingProperty: missing2},message:"must have required property '"+missing2+"'"}];
 return false;
 }
 else {
 const _errs9 = errors;
 for(const key0 in data){
 if(!(func0.call(schema82.properties, key0))){
-validate657.errors = [{instancePath,schemaPath:"#/additionalProperties",keyword:"additionalProperties",params:{additionalProperty: key0},message:"must NOT have additional properties"}];
+validate647.errors = [{instancePath,schemaPath:"#/additionalProperties",keyword:"additionalProperties",params:{additionalProperty: key0},message:"must NOT have additional properties"}];
 return false;
 break;
 }
@@ -29035,7 +28764,7 @@ if(data.type !== undefined){
 let data2 = data.type;
 const _errs10 = errors;
 if("MutualSettlement" !== data2){
-validate657.errors = [{instancePath:instancePath+"/type",schemaPath:"#/properties/type/const",keyword:"const",params:{allowedValue: "MutualSettlement"},message:"must be equal to constant"}];
+validate647.errors = [{instancePath:instancePath+"/type",schemaPath:"#/properties/type/const",keyword:"const",params:{allowedValue: "MutualSettlement"},message:"must be equal to constant"}];
 return false;
 }
 else {
@@ -29115,7 +28844,7 @@ else {
 vErrors.push(err5);
 }
 errors++;
-validate657.errors = vErrors;
+validate647.errors = vErrors;
 return false;
 }
 else {
@@ -29156,7 +28885,7 @@ if(data.releaseKey !== undefined){
 let data6 = data.releaseKey;
 const _errs18 = errors;
 if(typeof data6 !== "boolean"){
-validate657.errors = [{instancePath:instancePath+"/releaseKey",schemaPath:"#/properties/releaseKey/type",keyword:"type",params:{type: "boolean"},message:"must be boolean"}];
+validate647.errors = [{instancePath:instancePath+"/releaseKey",schemaPath:"#/properties/releaseKey/type",keyword:"type",params:{type: "boolean"},message:"must be boolean"}];
 return false;
 }
 const _errs19 = errors;
@@ -29241,23 +28970,23 @@ if(valid3){
 }
 }
 else {
-validate657.errors = [{instancePath,schemaPath:"#/type",keyword:"type",params:{type: "object"},message:"must be object"}];
+validate647.errors = [{instancePath,schemaPath:"#/type",keyword:"type",params:{type: "object"},message:"must be object"}];
 return false;
 }
 if(errors === 0){
 }
 }
-validate657.errors = vErrors;
+validate647.errors = vErrors;
 return errors === 0;
 }
-validate657.evaluated = {"props":true,"dynamicProps":false,"dynamicItems":false};
+validate647.evaluated = {"props":true,"dynamicProps":false,"dynamicItems":false};
 
-exports["messages#Publish"] = validate665;
+exports["messages#Publish"] = validate655;
 
-function validate665(data, {instancePath="", parentData, parentDataProperty, rootData=data, dynamicAnchors={}}={}){
+function validate655(data, {instancePath="", parentData, parentDataProperty, rootData=data, dynamicAnchors={}}={}){
 let vErrors = null;
 let errors = 0;
-const evaluated0 = validate665.evaluated;
+const evaluated0 = validate655.evaluated;
 if(evaluated0.dynamicProps){
 evaluated0.props = undefined;
 }
@@ -29269,14 +28998,14 @@ if(errors === 0){
 if(data && typeof data == "object" && !Array.isArray(data)){
 let missing0;
 if((((((((data.type === undefined) && (missing0 = "type")) || ((data.commitmentId === undefined) && (missing0 = "commitmentId"))) || ((data.level === undefined) && (missing0 = "level"))) || ((data.nonce === undefined) && (missing0 = "nonce"))) || ((data.expiresAt === undefined) && (missing0 = "expiresAt"))) || ((data.buyerSignature === undefined) && (missing0 = "buyerSignature"))) || ((data.sellerSignature === undefined) && (missing0 = "sellerSignature"))){
-validate665.errors = [{instancePath,schemaPath:"#/required",keyword:"required",params:{missingProperty: missing0},message:"must have required property '"+missing0+"'"}];
+validate655.errors = [{instancePath,schemaPath:"#/required",keyword:"required",params:{missingProperty: missing0},message:"must have required property '"+missing0+"'"}];
 return false;
 }
 else {
 const _errs1 = errors;
 for(const key0 in data){
 if(!(((((((key0 === "type") || (key0 === "commitmentId")) || (key0 === "level")) || (key0 === "nonce")) || (key0 === "expiresAt")) || (key0 === "buyerSignature")) || (key0 === "sellerSignature"))){
-validate665.errors = [{instancePath,schemaPath:"#/additionalProperties",keyword:"additionalProperties",params:{additionalProperty: key0},message:"must NOT have additional properties"}];
+validate655.errors = [{instancePath,schemaPath:"#/additionalProperties",keyword:"additionalProperties",params:{additionalProperty: key0},message:"must NOT have additional properties"}];
 return false;
 break;
 }
@@ -29286,7 +29015,7 @@ if(data.type !== undefined){
 let data0 = data.type;
 const _errs2 = errors;
 if("Publish" !== data0){
-validate665.errors = [{instancePath:instancePath+"/type",schemaPath:"#/properties/type/const",keyword:"const",params:{allowedValue: "Publish"},message:"must be equal to constant"}];
+validate655.errors = [{instancePath:instancePath+"/type",schemaPath:"#/properties/type/const",keyword:"const",params:{allowedValue: "Publish"},message:"must be equal to constant"}];
 return false;
 }
 else {
@@ -29400,16 +29129,287 @@ if(valid0){
 }
 }
 else {
-validate665.errors = [{instancePath,schemaPath:"#/type",keyword:"type",params:{type: "object"},message:"must be object"}];
+validate655.errors = [{instancePath,schemaPath:"#/type",keyword:"type",params:{type: "object"},message:"must be object"}];
 return false;
 }
 if(errors === 0){
 }
 }
-validate665.errors = vErrors;
+validate655.errors = vErrors;
 return errors === 0;
 }
-validate665.evaluated = {"props":true,"dynamicProps":false,"dynamicItems":false};
+validate655.evaluated = {"props":true,"dynamicProps":false,"dynamicItems":false};
+
+exports["messages#TransferAuthorization"] = validate662;
+
+function validate662(data, {instancePath="", parentData, parentDataProperty, rootData=data, dynamicAnchors={}}={}){
+let vErrors = null;
+let errors = 0;
+const evaluated0 = validate662.evaluated;
+if(evaluated0.dynamicProps){
+evaluated0.props = undefined;
+}
+if(evaluated0.dynamicItems){
+evaluated0.items = undefined;
+}
+const _errs0 = errors;
+if(errors === 0){
+if(data && typeof data == "object" && !Array.isArray(data)){
+let missing0;
+if((((((((((((((data.type === undefined) && (missing0 = "type")) || ((data.scheme === undefined) && (missing0 = "scheme"))) || ((data.purpose === undefined) && (missing0 = "purpose"))) || ((data.commitmentId === undefined) && (missing0 = "commitmentId"))) || ((data.from === undefined) && (missing0 = "from"))) || ((data.to === undefined) && (missing0 = "to"))) || ((data.value === undefined) && (missing0 = "value"))) || ((data.token === undefined) && (missing0 = "token"))) || ((data.validAfter === undefined) && (missing0 = "validAfter"))) || ((data.validBefore === undefined) && (missing0 = "validBefore"))) || ((data.nonce === undefined) && (missing0 = "nonce"))) || ((data.expiresAt === undefined) && (missing0 = "expiresAt"))) || ((data.signature === undefined) && (missing0 = "signature"))){
+validate662.errors = [{instancePath,schemaPath:"#/required",keyword:"required",params:{missingProperty: missing0},message:"must have required property '"+missing0+"'"}];
+return false;
+}
+else {
+const _errs1 = errors;
+for(const key0 in data){
+if(!(func0.call(schema86.properties, key0))){
+validate662.errors = [{instancePath,schemaPath:"#/additionalProperties",keyword:"additionalProperties",params:{additionalProperty: key0},message:"must NOT have additional properties"}];
+return false;
+break;
+}
+}
+if(_errs1 === errors){
+if(data.type !== undefined){
+let data0 = data.type;
+const _errs2 = errors;
+if("TransferAuthorization" !== data0){
+validate662.errors = [{instancePath:instancePath+"/type",schemaPath:"#/properties/type/const",keyword:"const",params:{allowedValue: "TransferAuthorization"},message:"must be equal to constant"}];
+return false;
+}
+else {
+}
+if(errors === _errs2){
+}
+var valid0 = _errs2 === errors;
+}
+else {
+var valid0 = true;
+}
+if(valid0){
+if(data.scheme !== undefined){
+let data1 = data.scheme;
+const _errs3 = errors;
+const vSchema0 = schema86.properties.scheme.enum;
+if(!(data1 === "erc3009")){
+validate662.errors = [{instancePath:instancePath+"/scheme",schemaPath:"#/properties/scheme/enum",keyword:"enum",params:{allowedValues: schema86.properties.scheme.enum},message:"must be equal to one of the allowed values"}];
+return false;
+}
+else {
+}
+if(errors === _errs3){
+}
+var valid0 = _errs3 === errors;
+}
+else {
+var valid0 = true;
+}
+if(valid0){
+if(data.purpose !== undefined){
+let data2 = data.purpose;
+const _errs4 = errors;
+if("operator_fee" !== data2){
+validate662.errors = [{instancePath:instancePath+"/purpose",schemaPath:"#/properties/purpose/const",keyword:"const",params:{allowedValue: "operator_fee"},message:"must be equal to constant"}];
+return false;
+}
+else {
+}
+if(errors === _errs4){
+}
+var valid0 = _errs4 === errors;
+}
+else {
+var valid0 = true;
+}
+if(valid0){
+if(data.commitmentId !== undefined){
+let data3 = data.commitmentId;
+const _errs5 = errors;
+if(!(validate174(data3, {instancePath:instancePath+"/commitmentId",parentData:data,parentDataProperty:"commitmentId",rootData,dynamicAnchors}))){
+vErrors = vErrors === null ? validate174.errors : vErrors.concat(validate174.errors);
+errors = vErrors.length;
+}
+else {
+}
+var valid0 = _errs5 === errors;
+}
+else {
+var valid0 = true;
+}
+if(valid0){
+if(data.from !== undefined){
+let data4 = data.from;
+const _errs6 = errors;
+if(!(validate176(data4, {instancePath:instancePath+"/from",parentData:data,parentDataProperty:"from",rootData,dynamicAnchors}))){
+vErrors = vErrors === null ? validate176.errors : vErrors.concat(validate176.errors);
+errors = vErrors.length;
+}
+else {
+}
+var valid0 = _errs6 === errors;
+}
+else {
+var valid0 = true;
+}
+if(valid0){
+if(data.to !== undefined){
+let data5 = data.to;
+const _errs7 = errors;
+if(!(validate176(data5, {instancePath:instancePath+"/to",parentData:data,parentDataProperty:"to",rootData,dynamicAnchors}))){
+vErrors = vErrors === null ? validate176.errors : vErrors.concat(validate176.errors);
+errors = vErrors.length;
+}
+else {
+}
+var valid0 = _errs7 === errors;
+}
+else {
+var valid0 = true;
+}
+if(valid0){
+if(data.value !== undefined){
+let data6 = data.value;
+const _errs8 = errors;
+const _errs9 = errors;
+if(errors === _errs8){
+if(typeof data6 === "string"){
+if(!pattern5.test(data6)){
+validate662.errors = [{instancePath:instancePath+"/value",schemaPath:"#/properties/value/pattern",keyword:"pattern",params:{pattern: "^(0|[1-9][0-9]{0,77})$"},message:"must match pattern \""+"^(0|[1-9][0-9]{0,77})$"+"\""}];
+return false;
+}
+else {
+}
+}
+else {
+validate662.errors = [{instancePath:instancePath+"/value",schemaPath:"#/properties/value/type",keyword:"type",params:{type: "string"},message:"must be string"}];
+return false;
+}
+if(errors === _errs8){
+}
+}
+var valid0 = _errs8 === errors;
+}
+else {
+var valid0 = true;
+}
+if(valid0){
+if(data.token !== undefined){
+let data7 = data.token;
+const _errs10 = errors;
+if(!(validate209(data7, {instancePath:instancePath+"/token",parentData:data,parentDataProperty:"token",rootData,dynamicAnchors}))){
+vErrors = vErrors === null ? validate209.errors : vErrors.concat(validate209.errors);
+errors = vErrors.length;
+}
+else {
+}
+var valid0 = _errs10 === errors;
+}
+else {
+var valid0 = true;
+}
+if(valid0){
+if(data.validAfter !== undefined){
+let data8 = data.validAfter;
+const _errs11 = errors;
+if(!(validate179(data8, {instancePath:instancePath+"/validAfter",parentData:data,parentDataProperty:"validAfter",rootData,dynamicAnchors}))){
+vErrors = vErrors === null ? validate179.errors : vErrors.concat(validate179.errors);
+errors = vErrors.length;
+}
+else {
+}
+var valid0 = _errs11 === errors;
+}
+else {
+var valid0 = true;
+}
+if(valid0){
+if(data.validBefore !== undefined){
+let data9 = data.validBefore;
+const _errs12 = errors;
+if(!(validate179(data9, {instancePath:instancePath+"/validBefore",parentData:data,parentDataProperty:"validBefore",rootData,dynamicAnchors}))){
+vErrors = vErrors === null ? validate179.errors : vErrors.concat(validate179.errors);
+errors = vErrors.length;
+}
+else {
+}
+var valid0 = _errs12 === errors;
+}
+else {
+var valid0 = true;
+}
+if(valid0){
+if(data.nonce !== undefined){
+let data10 = data.nonce;
+const _errs13 = errors;
+if(!(validate174(data10, {instancePath:instancePath+"/nonce",parentData:data,parentDataProperty:"nonce",rootData,dynamicAnchors}))){
+vErrors = vErrors === null ? validate174.errors : vErrors.concat(validate174.errors);
+errors = vErrors.length;
+}
+else {
+}
+var valid0 = _errs13 === errors;
+}
+else {
+var valid0 = true;
+}
+if(valid0){
+if(data.expiresAt !== undefined){
+let data11 = data.expiresAt;
+const _errs14 = errors;
+if(!(validate179(data11, {instancePath:instancePath+"/expiresAt",parentData:data,parentDataProperty:"expiresAt",rootData,dynamicAnchors}))){
+vErrors = vErrors === null ? validate179.errors : vErrors.concat(validate179.errors);
+errors = vErrors.length;
+}
+else {
+}
+var valid0 = _errs14 === errors;
+}
+else {
+var valid0 = true;
+}
+if(valid0){
+if(data.signature !== undefined){
+let data12 = data.signature;
+const _errs15 = errors;
+if(!(validate203(data12, {instancePath:instancePath+"/signature",parentData:data,parentDataProperty:"signature",rootData,dynamicAnchors}))){
+vErrors = vErrors === null ? validate203.errors : vErrors.concat(validate203.errors);
+errors = vErrors.length;
+}
+else {
+}
+var valid0 = _errs15 === errors;
+}
+else {
+var valid0 = true;
+}
+if(valid0){
+}
+}
+}
+}
+}
+}
+}
+}
+}
+}
+}
+}
+}
+}
+}
+}
+else {
+validate662.errors = [{instancePath,schemaPath:"#/type",keyword:"type",params:{type: "object"},message:"must be object"}];
+return false;
+}
+if(errors === 0){
+}
+}
+validate662.errors = vErrors;
+return errors === 0;
+}
+validate662.evaluated = {"props":true,"dynamicProps":false,"dynamicItems":false};
 
 exports["messages#ReadToken"] = validate672;
 
