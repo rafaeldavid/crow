@@ -359,6 +359,12 @@ function nextNumber(s: Series, key: 'invoice' | 'creditNote', issued: Issued[]):
   return { number, gap: last === 0 ? 0 : s.next - last - 1 };
 }
 
+/**
+ * The block explorer for a pin's chain. It follows the chain, not the file that pinned it: a deal on an earlier Sepolia
+ * deployment, pinned through HOLDBACK_DEPLOYMENT, keeps its links (T-565, after the T-563 redeploy).
+ */
+export const explorerOf = (pin: Pin): string | null => pin.chain?.explorer ?? (pin.domain.chainId === SEPOLIA_CHAIN ? 'https://sepolia.etherscan.io' : null);
+
 /** Builds the document. Pure: the same inputs give the same bytes. */
 export async function make(record: J, o: Options): Promise<Made> {
   const d = await dealOf(record);
@@ -408,7 +414,8 @@ export async function make(record: J, o: Options): Promise<Made> {
 
   const chainId = d.pin.domain.chainId;
   const network = chainId === SEPOLIA_CHAIN ? 'Sepolia, a test network: its tokens have no monetary value' : chainId === SIM_CHAIN ? 'SimChain, a local simulation: its tokens have no monetary value' : `chain ${chainId}`;
-  const explorer = (tx: string | null) => (tx && d.pin.chain?.explorer ? `${d.pin.chain.explorer}/tx/${tx}` : null);
+  const base = explorerOf(d.pin);
+  const explorer = (tx: string | null) => (tx && base ? `${base}/tx/${tx}` : null);
   const description = plain(String(t.deliverable?.description ?? '')).slice(0, DESCRIPTION_MAX);
   const payment = kind === 'invoice'
     ? { status: d.outcome === 'Settled' ? 'paid: the seller\'s share of a settlement both parties signed' : 'paid: released to the seller on acceptance', to: lc(t.sellerPayoutAddress), amount: amt(amount), transaction: d.settlement, explorer: explorer(d.settlement), settledAt: d.settledAt }

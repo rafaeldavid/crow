@@ -10,8 +10,8 @@ import type { Hex } from 'viem';
 import { afterAll, beforeAll, describe, expect, it } from 'vitest';
 import { Agent } from './agent.ts';
 import { dealRecord } from './deal-record.ts';
-import { esc, fractionOf, main, SELLER_FORMAT } from './seller-invoice.ts';
-import { freshNonce, type Intent } from './verify.ts';
+import { esc, explorerOf, fractionOf, main, SELLER_FORMAT } from './seller-invoice.ts';
+import { freshNonce, pinOf, SIMCHAIN_DOMAIN, type Intent } from './verify.ts';
 
 type J = any; // eslint-disable-line @typescript-eslint/no-explicit-any
 
@@ -438,6 +438,16 @@ describe("seller-invoice: the seller's invoice and credit note from a deal recor
     expect(f.doc('INV-2026-0001').fiat).toMatchObject({ currency: 'EUR', rate: '0.9234', rateFraction: { numerator: '9234', denominator: '10000' }, rateSource: 'ECB reference rate', rateDate: '2026-11-18', total: '23.09', tax: '3.69', net: '19.40' });
     expect(f.html('INV-2026-0001')).toContain('In EUR: net 19.40, tax 3.69, total 23.09, at 0.9234 EUR for one tUSD, from ECB reference rate on 2026-11-18');
     expect(fractionOf('12.5')).toEqual({ numerator: 125n, denominator: 10n });
+  });
+
+  it('keeps the explorer links for a deal on an earlier Sepolia deployment pinned through HOLDBACK_DEPLOYMENT', () => {
+    const dir = new URL('../contracts/deployments/', import.meta.url);
+    const earlier = readdirSync(dir).find((f) => f.endsWith('.json') && f !== 'sepolia.json')!;
+    // pinOf without an explorer is what knownPins builds from HOLDBACK_DEPLOYMENT.
+    const pin = pinOf(JSON.parse(readFileSync(new URL(earlier, dir), 'utf8')));
+    expect(pin.chain?.explorer).toBeUndefined();
+    expect(explorerOf(pin)).toBe('https://sepolia.etherscan.io');
+    expect(explorerOf({ domain: SIMCHAIN_DOMAIN, token: { id: 'tUSD', symbol: 'tUSD', decimals: 6 } })).toBeNull();
   });
 
   it('refuses a call it cannot read, and a date that is not one', async () => {
