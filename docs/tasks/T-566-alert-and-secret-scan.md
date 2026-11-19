@@ -5,7 +5,7 @@
 - **Depends on:** none
 - **Paths this task may touch:** `docs/reviews/`, `docs/tasks/T-566-alert-and-secret-scan.md`; in the private repository, one workflow, its gitleaks config and ignore files, and a note in `company-ops/`
 - **Human gate:** no (Rafa approved the dismissal of alert 38 and the private workflow on 2026-11-19; making either check required is a repository setting and stays his)
-- **Status:** review
+- **Status:** done
 - **Agent/session:** T-566 session, 2026-11-19
 - **Roadmap row:** N182, N183
 
