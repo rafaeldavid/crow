@@ -9,14 +9,15 @@
 #   velocity_mdeg_s  joint speed, millidegrees per second
 #   current_ma       motor current, milliamperes
 #
-# Duration, rate and gaps come from three checks together: `time-grid` allows the 1,000 timestamps 0, 10, ...,
-# 9990; `time-unique` forbids a repeat; `rows` asks for 1,000 rows. So every timestamp of the grid appears
+# Duration, rate and gaps come from three checks together: `time-grid`, with minBps 10000 so that every row
+# matches, allows the 1,000 timestamps 0, 10, ..., 9990; `time-unique` forbids a repeat; `rows` asks for 1,000 rows. So every timestamp of the grid appears
 # exactly once: 10 s at 100 Hz, no gap and no duplicate. The checks do not hold the rows in time order.
 #
 # What a party changes when it copies this template:
 #   - the run ID (description and `run`);
 #   - the rate and the duration (description, `rows`, and the `time-grid` pattern, which lists the timestamps
-#     on the grid as digits: for steps of 10 ms below 10 s, 0 or 1 to 3 digits followed by a 0);
+#     on the grid as digits: for steps of 10 ms below 10 s, 0, or a digit 1 to 9, up to 2 more digits, then a 0;
+#     with no leading zero, so that unique_key, which compares text, compares values);
 #   - the columns and their ranges (description, `columns` and one pattern per column);
 #   - the price and the windows.
 #

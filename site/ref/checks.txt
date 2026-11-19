@@ -117,8 +117,8 @@ A robot run sold as one JSON document is checked with `json_schema` too. The sel
 
 A robot run's readings sold as one CSV file, one row per sample, take the column checks. The template is `fixtures/terms/telemetry-run.yaml` in [the repository](https://github.com/rafaeldavid/holdback/blob/main/fixtures/terms/telemetry-run.yaml): a run ID on every row, a timestamp in ms, and integer readings in fixed units, each held to its range by a pattern.
 
-- **Duration, rate and gaps by counting.** A `time-grid` pattern allows only the timestamps of the agreed grid, `unique_key` forbids a repeat, and `row_count_range` with `min` and `max` both set to the grid's size makes every timestamp appear once: the whole run at the agreed rate, with no gap.
-- **The checks do not hold the rows in time order,** and cannot compare two rows or two columns.
+- **Duration, rate and gaps by counting.** A `regex_match_rate_min` check on the timestamp column with `minBps: 10000` allows only the grid's timestamps, written without leading zeros. `unique_key` forbids a repeat, and `row_count_range` with `min` and `max` both at the grid's size then makes each timestamp appear once: the whole run at the agreed rate, with no gap. With a `minBps` below 10000 the count proves nothing.
+- **No check compares the order of rows or the step between them,** or two columns.
 
 ## The buyer's own check run
 

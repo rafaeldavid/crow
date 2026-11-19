@@ -41,7 +41,7 @@ The template's run: 10 s at 100 Hz, so 1,000 rows and `t_ms` from 0 to 9,990 in 
 | `velocity` | `regex_match_rate_min` | every speed inside the arm's limit, none empty |
 | `current` | `regex_match_rate_min` | every current inside the drive's range, none empty |
 
-**Duration, rate and gaps from three checks together.** `time-grid` allows 1,000 values, `time-unique` forbids a repeat, and `rows` asks for 1,000 rows. So every point of the grid appears exactly once: the file covers the full 10 s at exactly 100 Hz, with no gap and no duplicate. No check compares two rows; this follows from counting.
+**Duration, rate and gaps from three checks together.** `time-grid` allows 1,000 values, `time-unique` forbids a repeat, and `rows` asks for 1,000 rows. So every point of the grid appears exactly once: the file covers the full 10 s at exactly 100 Hz, with no gap and no duplicate. No check compares the order of rows or the step between them; this follows from counting, and only with `minBps: 10000` on `time-grid`.
 
 **Ranges as patterns.** The check runner has no numeric range check (`site/ref/checks.txt`), so each range is a full-match pattern over integers with no leading zeros. A pattern rejects an empty cell, so a range check also refuses a missing reading.
 
@@ -62,7 +62,7 @@ The template's run: 10 s at 100 Hz, so 1,000 rows and `t_ms` from 0 to 9,990 in 
 ## Evidence
 
 **Local checks (measured, 2026-11-19, from the worktree at `origin/main` commit `46b590c6`, after `pnpm install --frozen-lockfile && pnpm build`):**
-- `pnpm vitest run tests/telemetry-run-template.test.ts`: 20 of 20 passed, 2.0 s.
+- `pnpm vitest run tests/telemetry-run-template.test.ts`: 20 of 20 passed, 2.0 s; after the review's fixes, 22 of 22.
 - `pnpm typecheck` and `pnpm lint`: exit 0.
 - `node site/build.mjs && node site/check.mjs`: PASS. The first-deal paths are unchanged, since `ref/checks.txt` is on neither: buyer 4,881 of 5,000 tokens, seller 4,504 of 5,000 (estimate, bytes divided by four).
 - `pnpm vitest run packages/testkit/src/fixture-files.test.ts apps/operator/src/guide-pointers.test.ts tests/design-map.test.ts`, the tests that read `fixtures/terms/` or `ref/checks.txt`: 79 of 79 passed.
@@ -81,7 +81,7 @@ The template's run: 10 s at 100 Hz, so 1,000 rows and `t_ms` from 0 to 9,990 in 
   - funding `0xccc7c4f74c02676b924e1ed5dc09196c8612aead82aa7525c987a5ae5adf8bfe`, block 12171055;
   - delivery `0x813510516738402c9fd22dc0dc62c56e5314c8b37492b0818496a8d39e1e99a3`, block 12171056;
   - decision `0xa3a38c81d0d6aca12b460ed353680211ae9a0c08125eec9f93aa6075992c836d`, block 12171057.
-- Money, from the decision receipt's two token transfers: 10.00 tUSDC to the seller, 1.00 to the adjudicator. The seller's balance read 1,010 tUSDC after.
+- Money, from the decision receipt's two token transfers: 10.00 tUSDC to the seller, 1.00 tUSDC to the adjudicator. The seller's balance read 1,010.00 tUSDC after.
 - `GET /v1/commitments/<id>` on both operators: `Released`, delivery hash `0x148b1236…2e4d`.
 - The buyer's own check run, `node examples/check-delivery.ts <signed terms from api2> run.csv`: exit 0, accept.
 
@@ -94,7 +94,7 @@ The template's run: 10 s at 100 Hz, so 1,000 rows and `t_ms` from 0 to 9,990 in 
   - funding `0x5aeaf6709a1e77d879dc3af3998f6afb91921564ba4d35e0cd937d563a675ed8`, block 12171060;
   - delivery `0x32d603b440a346ea9686861bfcf429a3d71cfee783bc33495eed404c0171025d`, block 12171061;
   - decision `0x75ded697a8b9919aedf3d22c194af2b13aa02b052dfc2d1807c0bba95858b904`, block 12171062.
-- Money, from the decision receipt's two token transfers: 10.00 tUSDC back to the buyer, 1.00 to the adjudicator.
+- Money, from the decision receipt's two token transfers: 10.00 tUSDC back to the buyer, 1.00 tUSDC to the adjudicator.
 - `GET /v1/commitments/<id>` on both operators: `Refunded`, delivery hash `0x11cafcd9…5dbd`.
 - The buyer's own check run on the gap file: exit 1, "The required check rows fails".
 
@@ -105,6 +105,8 @@ The template's run: 10 s at 100 Hz, so 1,000 rows and `t_ms` from 0 to 9,990 in 
 - **CSV, not JSON lines.** The check runner reads CSV and a JSON array of flat objects; JSON lines is neither. CSV keeps a reading per row, as a telemetry log is written.
 - **Beside the audit template.** The template is a terms file in `fixtures/terms/`, in the shape of `fixtures/terms/audit-report.yaml`, with its data in `fixtures/data/telemetry-run/` and its test in `tests/`.
 - **Live through `examples/try-sell.ts --work --terms`.** The command plays the seller with fresh keys and faucet tokens and sells to Crow's test buyer, which accepts every check type the template uses. It does not call the test seller's quote route.
+
+- **The review (one reviewer agent, 2026-11-19, on `34717ef3`): ISSUES, none blocking.** It reproduced the deals from both operators and the receipts, and probed 15 file variants without finding a complete-looking file that is not the whole run. Fixed: the site section did not say the counting needs `minBps: 10000` and named the check ID `time-grid` as if it were a type (Medium; a test now passes an off-grid file at 9,990 basis points and holds the section's wording); "no check compares two rows" was wrong, since `unique_key` does (Low); the template's comment on the grid pattern left out the leading digit 1 to 9 (Low); two amounts lacked a unit or two decimals (Low). Recorded for triage: a trailing blank line refuses the whole CSV (Low), and the test skips the intake's byte-order-mark handling (Info).
 
 ## Handoff
 
@@ -127,5 +129,7 @@ The template's run: 10 s at 100 Hz, so 1,000 rows and `t_ms` from 0 to 9,990 in 
 | A run ID the buyer draws, with a start time after the order | freshness: an old recording fails | a run ID in the terms, chosen before the offer |
 
 **Found on the way, for triage (not this task's lane):**
+- Low · `packages/judgment/src/checks/csv.ts` refuses a CSV that ends with a blank line (`\n\n` or `\r\n\r\n`), so all eight checks fail on one parse error (measured by the review). A seller whose tool writes a trailing blank line loses the deal; the buyer's own check run shows it before delivery.
+- Info · The test runs the check library on text and skips the adjudicator's intake, which decodes with a default `TextDecoder` and so strips a byte-order mark (inferred by the review): a file with one passes a real delivery and fails the test harness.
 - Low · `examples/try-sell.ts` with `--work` exits 1 on a refund and prints neither the transactions nor the full commitment ID, so a seller that sells failing work on purpose has to read them from the operators.
 - Low · On deal 2 Crow's test buyer reported "the price and the adjudication fee came back", while the decision receipt shows the 1.00 tUSDC fee paid to the adjudicator and the 10.00 price returned. The test seller's own page says the fees do not come back. The text is in `apps/test-agents/src/buyer.ts` (the `refunded` status, line 690 at `46b590c6`), and should say the fee went to the adjudicator.

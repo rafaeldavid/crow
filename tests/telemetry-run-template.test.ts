@@ -128,6 +128,23 @@ describe('one failing file per check, refused by that check alone', () => {
   });
 });
 
+describe('the counting rule holds only with minBps 10000 on the time grid', () => {
+  // The review of PR 718 (Medium): the rule needs every row on the grid. With one row allowed off it, a file can swap
+  // a grid timestamp for one off the grid, and then the run has a gap that the count does not see.
+  const offGrid = withCell(500, 't_ms', '5005');
+  it('refuses a timestamp off the grid at 10000 basis points and passes it at 9990', () => {
+    expect(failed(offGrid)).toEqual(['time-grid']);
+    const loose = checks.map((c) => (c.id === 'time-grid' ? { ...c, minBps: 9990 } : c));
+    expect(runChecks(loose, { data: UntrustedData.wrap(offGrid), mime: 'text/csv' }).outcomes.filter((o) => !o.passed)).toEqual([]);
+  });
+  it('says so in site/ref/checks.txt, with the check type and not the template\'s check ID', () => {
+    const text = readFileSync(join(root, 'site/ref/checks.txt'), 'utf8');
+    const section = text.slice(text.indexOf('## Writing checks for a telemetry run'), text.indexOf("## The buyer's own check run"));
+    expect(section).toContain('`regex_match_rate_min` check on the timestamp column with `minBps: 10000`');
+    expect(section).not.toContain('time-grid');
+  });
+});
+
 describe('a run at the wrong rate or with a gap', () => {
   it('refuses a run at 50 Hz over 20 s by its timestamps, and at 50 Hz over 10 s by its row count', () => {
     expect(failed(withColumn('t_ms', (k) => String(k * 20)))).toEqual(['time-grid']);
