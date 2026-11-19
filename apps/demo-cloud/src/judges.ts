@@ -2,6 +2,10 @@
 // set as Worker secrets, within a daily cap on live judge calls; scripted fake judges otherwise. The cap is the
 // spending limit for the public faucet: past it, panels are scripted for the rest of the UTC day, and their
 // verdicts carry the fake-judge mark, so a record never passes scripted output for a model's.
+//
+// T-574: a panel is live or scripted as a whole, chosen once when it starts (`PanelConfig.panel`). Before, each call
+// chose, so a live seat's retry after an HTTP 503 could go to the scripted judge once the budget ran out, and that
+// scripted pass counted as the second model family (T-570's red team, H2).
 import { liveJudges, liveRegistry, LIVE_REGISTRY_URI, markedFake, markerFake, missingLiveEnv, placeholderRegistry, type JudgeUsage, type KeptRegistry, type TestAdjudicatorOptions } from '@holdback/adjudicator';
 import type { WorldStorage } from './storage.js';
 
@@ -44,7 +48,11 @@ export class JudgeBudget {
 
   private async load(): Promise<Day> {
     const day = new Date(this.now()).toISOString().slice(0, 10);
-    if (this.today?.day !== day) this.today = (await this.storage.get<Day>(`lj:${day}`)) ?? { day, calls: 0, inputTokens: 0, outputTokens: 0 };
+    if (this.today?.day !== day) {
+      // A pass that crosses UTC midnight writes the old day before it moves on, so its calls stay counted (T-574 red team L2).
+      await this.flush();
+      this.today = (await this.storage.get<Day>(`lj:${day}`)) ?? { day, calls: 0, inputTokens: 0, outputTokens: 0 };
+    }
     return this.today;
   }
 
@@ -69,6 +77,16 @@ export class JudgeBudget {
     d.calls++;
     this.dirty = true;
     return true;
+  }
+
+  /**
+   * Counts one call of a panel already chosen live (T-574). A live panel finishes live, and its retries are counted, so
+   * the next panel sees what they cost. It never passes the budget: a panel is chosen live only when the budget holds
+   * twice its size, a first call and one retry for every seat (`PanelConfig.panel`).
+   */
+  async charge(): Promise<void> {
+    (await this.load()).calls++;
+    this.dirty = true;
   }
 
   usage(u: JudgeUsage): void {
@@ -105,11 +123,19 @@ export interface PanelConfig {
   kept: KeptRegistry[];
   /** The live-judging variables that are missing, by name (empty when live). */
   missing: string[];
-  /** What every adjudicator calls: live while `allowLive` is set and the budget lasts, scripted otherwise. */
+  /** What every adjudicator calls: the live models inside a panel chosen live, the scripted judges otherwise. */
   provider: JudgeProvider;
   budget: JudgeBudget;
-  /** Set before each adjudicator pass: live only when today's budget holds a whole panel. */
+  /** Set before each adjudicator pass: no panel in the pass is live unless it is set. */
   allowLive: boolean;
+  /**
+   * Runs one panel (one decision task) live or scripted as a whole (T-574): live when `allowLive` is set and today's
+   * budget still holds `2 * size` calls, chosen once before any call. Each seat calls once and retries at most once
+   * after a transport error (packages/judgment, pipeline.ts), so a live panel never passes the day's cap. Every call inside it, a retry included, goes the same
+   * way, and a live call is counted. A call outside any panel is scripted. Panels run one at a time: a panel asked for
+   * while another is open waits for it (T-574 red team L1), so no panel's end can change another's choice.
+   */
+  panel<T>(size: number, run: () => Promise<T>): Promise<T>;
 }
 
 export interface PanelOptions {
@@ -129,8 +155,12 @@ export function panelConfig(o: PanelOptions): PanelConfig {
   const scripted = markedFake(markerFake());
   const live = o.judgeProvider ? { ok: true as const, value: o.judgeProvider } : liveJudges(o.env, { onUsage: (u) => budget.usage(u) });
   if (!live.ok) {
-    return { live: false, registry: placeholderRegistry(), registryUri: PLACEHOLDER_REGISTRY_URI, kept: [], missing: missingLiveEnv(o.env), provider: scripted, budget, allowLive: false };
+    return { live: false, registry: placeholderRegistry(), registryUri: PLACEHOLDER_REGISTRY_URI, kept: [], missing: missingLiveEnv(o.env), provider: scripted, budget, allowLive: false, panel: (_size, run) => run() };
   }
+  /** The open panel's choice: undefined outside a panel. */
+  let mode: 'live' | 'scripted' | undefined;
+  /** The end of the last panel asked for: the next one starts after it. */
+  let queue: Promise<unknown> = Promise.resolve();
   const cfg: PanelConfig = {
     live: true,
     registry: liveRegistry(),
@@ -140,7 +170,23 @@ export function panelConfig(o: PanelOptions): PanelConfig {
     budget,
     allowLive: false,
     provider: {
-      complete: async (r) => ((cfg.allowLive && (await budget.take())) ? live.value.complete(r) : scripted.complete(r)),
+      complete: async (r) => {
+        if (mode !== 'live') return scripted.complete(r);
+        await budget.charge();
+        return live.value.complete(r);
+      },
+    },
+    panel: (size, run) => {
+      const turn = queue.then(async () => {
+        mode = cfg.allowLive && (await budget.remaining()) >= 2 * size ? 'live' : 'scripted';
+        try {
+          return await run();
+        } finally {
+          mode = undefined;
+        }
+      });
+      queue = turn.catch(() => undefined);
+      return turn;
     },
   };
   return cfg;
