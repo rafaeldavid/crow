@@ -1,0 +1,138 @@
+// SPDX-License-Identifier: MIT
+pragma solidity ^0.8.28;
+
+// T-544 research spike only: never deployed, never committed. It measures whether a seller contract that answers
+// ERC-1271 for "terms equal to a signed template, filled by the buyer" works against the unchanged HoldbackRules.
+
+import {EIP712} from "solady/utils/EIP712.sol";
+import {SignatureCheckerLib} from "solady/utils/SignatureCheckerLib.sol";
+import {HoldbackTypes as H} from "../../src/HoldbackTypes.sol";
+import {IHoldbackRules} from "../../src/IHoldbackRules.sol";
+
+contract StandingSellerSpike is EIP712 {
+    /// The template: every field of the terms but the buyer's five, with the five deadlines and disputeBy as offsets
+    /// from createdAt, plus an optional standing delivery.
+    struct Template {
+        address rules; // the deployment whose domain the take is valid under
+        uint64 expiresAt; // no take from this instant on
+        H.Terms base; // buyer, buyerPaymentAddress, buyerKeyHash, nonce, createdAt ignored; timing deadlines are offsets
+        bool hasDelivery;
+        bytes32 ciphertextHash;
+        bytes32 plaintextSha256Hash;
+        bytes32 plaintextMimeHash;
+        bytes32 encryptedKeysHash;
+        uint64 submittedAt;
+    }
+
+    struct Fill {
+        address buyer;
+        address buyerPaymentAddress;
+        bytes32 buyerKeyHash;
+        bytes32 nonce;
+        uint64 createdAt;
+    }
+
+    bytes32 internal constant TEMPLATE_TYPEHASH = keccak256("StandingOffer(bytes32 templateHash)");
+    bytes32 internal constant REVOKE_TYPEHASH = keccak256("Revoke(bytes32 templateHash)");
+    uint8 internal constant TAKE = 1;
+    uint8 internal constant DELIVERY = 2;
+
+    address public immutable KEY;
+    mapping(bytes32 => bool) public revoked;
+
+    error Unrepresentable();
+
+    constructor(address key) {
+        KEY = key;
+    }
+
+    function _domainNameAndVersion() internal pure override returns (string memory, string memory) {
+        return ("HoldbackStandingSeller", "spike");
+    }
+
+    function templateHash(Template memory tpl) public pure returns (bytes32) {
+        return keccak256(abi.encode(tpl));
+    }
+
+    function revoke(bytes32 th, bytes calldata keySig) external {
+        if (msg.sender != KEY) {
+            require(
+                SignatureCheckerLib.isValidSignatureNowCalldata(
+                    KEY, _hashTypedData(keccak256(abi.encode(REVOKE_TYPEHASH, th))), keySig
+                ),
+                "bad revoke"
+            );
+        }
+        revoked[th] = true;
+    }
+
+    /// The commitment ID and delivery hash with the rules contract's own library (calldata-only, so a self-call).
+    function idOf(H.Terms calldata t) external pure returns (bytes32) {
+        return H.commitmentId(t);
+    }
+
+    function deliveryHashOf(bytes32 id, H.Delivery calldata d) external pure returns (bytes32) {
+        return H.deliveryHash(id, d);
+    }
+
+    function termsOf(Template memory tpl, Fill memory f) public view returns (H.Terms memory t) {
+        t = tpl.base;
+        t.seller = address(this);
+        (t.buyer, t.buyerPaymentAddress, t.buyerKeyHash, t.createdAt) =
+            (f.buyer, f.buyerPaymentAddress, f.buyerKeyHash, f.createdAt);
+        // Red team finding 1: the take's nonce binds the template, so a take's ID differs per template.
+        t.nonce = keccak256(abi.encode(templateHash(tpl), f.nonce));
+        H.Timing memory o = tpl.base.timing;
+        t.timing.offerExpiresAt = _at(f.createdAt, o.offerExpiresAt);
+        t.timing.fundBy = _at(f.createdAt, o.fundBy);
+        t.timing.deliverBy = _at(f.createdAt, o.deliverBy);
+        t.timing.judgeBy = _at(f.createdAt, o.judgeBy);
+        t.timing.fallbackBy = _at(f.createdAt, o.fallbackBy);
+        t.timing.disputeBy = o.disputeBy == 0 ? 0 : _at(f.createdAt, o.disputeBy);
+    }
+
+    function _at(uint64 createdAt, uint64 offset) internal pure returns (uint64) {
+        uint256 v = uint256(createdAt) + offset;
+        if (v > type(uint64).max) revert Unrepresentable();
+        return uint64(v);
+    }
+
+    function isValidSignature(bytes32 hash, bytes calldata sig) external view returns (bytes4) {
+        // A plain 64- or 65-byte signature: the seller's own key, for anything (a settlement, a per-buyer delivery).
+        if (sig.length == 64 || sig.length == 65) {
+            return SignatureCheckerLib.isValidSignatureNowCalldata(KEY, hash, sig) ? bytes4(0x1626ba7e) : bytes4(0);
+        }
+        (uint8 kind, Template memory tpl, bytes memory tplSig, Fill memory f) =
+            abi.decode(sig, (uint8, Template, bytes, Fill));
+        bytes32 th = templateHash(tpl);
+        if (!SignatureCheckerLib.isValidSignatureNow(KEY, _hashTypedData(keccak256(abi.encode(TEMPLATE_TYPEHASH, th))), tplSig)) {
+            return bytes4(0);
+        }
+        H.Terms memory t = termsOf(tpl, f);
+        bytes32 id = this.idOf(t);
+        bytes32 structHash;
+        if (kind == TAKE) {
+            if (revoked[th] || block.timestamp >= tpl.expiresAt || f.createdAt > block.timestamp) return bytes4(0);
+            structHash = id;
+        } else if (kind == DELIVERY && tpl.hasDelivery) {
+            structHash = this.deliveryHashOf(
+                id,
+                H.Delivery({
+                    attempt: 1,
+                    ciphertextHash: tpl.ciphertextHash,
+                    plaintextSha256Hash: tpl.plaintextSha256Hash,
+                    plaintextMimeHash: tpl.plaintextMimeHash,
+                    encryptedKeysHash: tpl.encryptedKeysHash,
+                    submittedAt: tpl.submittedAt
+                })
+            );
+        } else {
+            return bytes4(0);
+        }
+        return hash == IHoldbackRules(tpl.rules).typedDataHash(structHash) ? bytes4(0x1626ba7e) : bytes4(0);
+    }
+
+    function domainSeparatorForTest() external view returns (bytes32) {
+        return _domainSeparator();
+    }
+}

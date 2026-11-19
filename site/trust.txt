@@ -2,8 +2,8 @@
 
 > Due-diligence answers about Crow for an agent or a security team. Each answer stands alone and ends with its source. The same answers as a page: https://crow.direct/trust. Checked against the sources on 2026-11-14.
 
-Coming soon: An outside audit of Crow's own contracts, a penetration test, a certification such as SOC 2 or ISO 27001, a bug bounty, and deals with real money. Today Crow runs on a test network, with test tokens only.
-Source: SECURITY.md, "Status", https://github.com/rafaeldavid/holdback/blob/main/SECURITY.md#status; docs/audit/scope.md, https://github.com/rafaeldavid/holdback/blob/main/docs/audit/scope.md
+Coming soon: An outside audit of Crow's own contracts by human reviewers, with further reviews over time as partners ask, a penetration test, a certification such as SOC 2 or ISO 27001, a bug bounty, and deals with real money. Today Crow runs on a test network, with test tokens only.
+Source: SECURITY.md, "Status", https://github.com/rafaeldavid/holdback/blob/main/SECURITY.md#status; docs/audit/outside-scan.md, https://github.com/rafaeldavid/holdback/blob/main/docs/audit/outside-scan.md
 
 ## Money
 
@@ -24,7 +24,7 @@ In five ways set by the deal's signed terms, plus one backstop. The rules contra
 - the buyer signs an early accept;
 - both parties sign a settlement;
 - the seller misses its delivery deadline, which refunds the buyer;
-- no adjudicator decides in time, and the default outcome applies, which on the live service refunds the buyer.
+- no adjudicator decides in time, and the default outcome applies, which on the live service refunds the buyer the price and the adjudication fee. The live service pays the seller nothing on a default; bond compensation is the full protocol on SimChain only (docs/architecture.md).
 The backstop: if funds are still held 24 hours after the deal's last decision deadline, the buyer's payment address can take them back directly from the escrow.
 Source: docs/neutrality.md, "The test", https://github.com/rafaeldavid/holdback/blob/main/docs/neutrality.md#the-test; docs/audit/scope.md, "In scope", https://github.com/rafaeldavid/holdback/blob/main/docs/audit/scope.md#in-scope; The rules contract on Etherscan, https://sepolia.etherscan.io/address/0x3BE45128565ABBc35DbD4660716b703Ff489f1b4; contracts/src/HoldbackRules.sol, "_escrowExpiry", https://github.com/rafaeldavid/holdback/blob/main/contracts/src/HoldbackRules.sol
 
@@ -134,8 +134,8 @@ Source: crow.direct/ref/limits.txt, "Honest limits", https://crow.direct/ref/lim
 
 ### Does an operator store problem reports?
 
-No. The live operators' report route, POST /v1/feedback, is switched off, so the operators keep no problem reports.
-Source: docs/operations.md, "Feedback triage (T-032)", https://github.com/rafaeldavid/holdback/blob/main/docs/operations.md#feedback-triage-t-032
+Yes, when you send one. Each live operator keeps a report sent to POST /v1/feedback for 90 days in its private store, with its log line for the report's requestId. A report is not encrypted, and the live operators take no sealed reports yet, so leave out keys, the work and terms.
+Source: docs/operations.md, "Feedback triage (T-032)", https://github.com/rafaeldavid/holdback/blob/main/docs/operations.md#feedback-triage-t-032; crow.direct/ref/limits.txt, "Reporting a problem", https://crow.direct/ref/limits.txt
 
 ### What does the early-access sign-up store?
 
@@ -149,10 +149,10 @@ Source: apps/early-access/worker.js, https://github.com/rafaeldavid/holdback/blo
 Yes. Cantina reviewed the escrow contract twice in April 2025 and found one critical issue, which was fixed before release. In July 2026, Cantina reviewed the contract's last code change, PR 90, at the exact commit Crow deploys, and found three informational issues. One later change, the renames in PR 71, has no review.
 Source: docs/reviews/2026-11-03-public-audit-crosscheck.md, https://github.com/rafaeldavid/holdback/blob/main/docs/reviews/2026-11-03-public-audit-crosscheck.md; contracts/lib/commerce-payments/, https://github.com/rafaeldavid/holdback/tree/main/contracts/lib/commerce-payments; docs/decisions/ADR-0003-escrow-contract-base.md, https://github.com/rafaeldavid/holdback/blob/main/docs/decisions/ADR-0003-escrow-contract-base.md
 
-### Has the rules contract had an external audit?
+### Has the rules contract had an outside review?
 
-No. Crow's rules contract (HoldbackRules), which decides when the escrow pays out, has had no outside audit yet. Models from two AI families reviewed it, and the scope an auditor would need is written.
-Source: docs/operations.md, "Sepolia contracts (T-206)", https://github.com/rafaeldavid/holdback/blob/main/docs/operations.md#sepolia-contracts-t-206; docs/audit/scope.md, https://github.com/rafaeldavid/holdback/blob/main/docs/audit/scope.md
+Yes, by AI. The contracts behind Crow's settlement were reviewed by Zero Cool's AI deep scan on 2026-11-18, and the fixes by its fix review on 2026-11-19. Zero Cool reports first places in Sherlock audit contests and a second place in a Cantina contest. The scan rated nothing Critical or High. Three Informational items stay open, and the fixed version is not deployed yet. Every finding and its status is published. Further reviews will follow over time, guided by partner feedback.
+Source: docs/audit/outside-scan.md, https://github.com/rafaeldavid/holdback/blob/main/docs/audit/outside-scan.md; Zero Cool, https://zerocool.ai/; docs/audit/known-issues.md, https://github.com/rafaeldavid/holdback/blob/main/docs/audit/known-issues.md
 
 ### What testing does Crow run?
 
@@ -189,6 +189,14 @@ Source: SECURITY.md, https://github.com/rafaeldavid/holdback/blob/main/SECURITY.
 
 ## Reporting a problem
 
+### How do I contact Crow?
+
+Three ways, by what you send:
+- A report to either operator: POST /v1/feedback, the route discovery names as feedback. A report is not encrypted, and the live operators take no sealed reports yet, so leave out keys, the work and terms.
+- A public issue on Crow's GitHub repository, with a GitHub account.
+- A security problem: privately, through the advisory form that security.txt names.
+Source: crow.direct/ref/limits.txt, "Reporting a problem", https://crow.direct/ref/limits.txt; GitHub: issues, https://github.com/rafaeldavid/holdback/issues; crow.direct/.well-known/security.txt, https://crow.direct/.well-known/security.txt
+
 ### Where do I report a security problem?
 
 Privately, through GitHub's private vulnerability reporting for Crow's repository. Crow acknowledges each report within 3 business days and takes no legal action over research that follows the security policy.
@@ -196,8 +204,8 @@ Source: GitHub: report a vulnerability, https://github.com/rafaeldavid/holdback/
 
 ### Where do I report any other problem?
 
-In a public issue on Crow's GitHub repository. Issues are public, so leave out keys and anything you need to keep to yourself. The operators' own report route, POST /v1/feedback, is not switched on yet.
-Source: GitHub: issues, https://github.com/rafaeldavid/holdback/issues; docs/operations.md, "Feedback triage (T-032)", https://github.com/rafaeldavid/holdback/blob/main/docs/operations.md#feedback-triage-t-032
+To either operator, at POST /v1/feedback (crow.direct/ref/limits.txt, "Reporting a problem", says how), or in a public issue on Crow's GitHub repository. Issues are public, so leave out keys and anything you need to keep to yourself.
+Source: crow.direct/ref/limits.txt, "Reporting a problem", https://crow.direct/ref/limits.txt; GitHub: issues, https://github.com/rafaeldavid/holdback/issues; docs/operations.md, "Feedback triage (T-032)", https://github.com/rafaeldavid/holdback/blob/main/docs/operations.md#feedback-triage-t-032
 
 ### How do I check whether Crow is up?
 

@@ -6,7 +6,7 @@
 - **Depends on:** T-523 (the triage of an outside scan's findings), T-526 (the relay rule, merged), the triage's decisions D-1, D-2 and D-3 (Rafa, 2026-11-18)
 - **Paths this task may touch:** `docs/audit/known-issues.md`, `docs/audit/threat-model.md`, `docs/audit/state-model.md`, `docs/decisions/ADR-0031-phase-one-contract-scope.md` and `docs/decisions/ADR-0032-*.md` (text only), `docs/decisions-today.md` (D80 and a pointer in D77), `docs/tasks/T-526-relay-rule.md` (its status), this file
 - **Human gate:** no
-- **Status:** in review
+- **Status:** done
 - **Agent/session:** scan-fixes-main, started by the coordinator on 2026-11-18
 - **Roadmap row:** N192
 

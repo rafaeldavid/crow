@@ -1,0 +1,253 @@
+// SPDX-License-Identifier: MIT
+pragma solidity ^0.8.28;
+
+// T-544 research spike only. Measures the template-take design against the unchanged HoldbackRules.
+
+import {IHoldbackRules} from "../../src/IHoldbackRules.sol";
+import {HoldbackTypes as H} from "../../src/HoldbackTypes.sol";
+import {Base} from "../unit/Base.sol";
+import {StandingSellerSpike as S} from "./StandingSellerSpike.sol";
+
+contract StandingSellerSpikeTest is Base {
+    // Arachnid's deterministic deployment proxy, the address and runtime Foundry and most chains use.
+    address internal constant CREATE2_DEPLOYER = 0x4e59b44847b379578588920cA78FbF26c0B4956C;
+    bytes internal constant CREATE2_RUNTIME =
+        hex"7fffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffe03601600081602082378035828234f58015156039578182fd5b8082525050506014600cf3";
+    uint256 internal constant KEY_PK = 0x5E1F;
+    S internal ss;
+
+    function setUp() public override {
+        super.setUp();
+        vm.etch(CREATE2_DEPLOYER, CREATE2_RUNTIME);
+        ss = S(_deployVia(makeAddr("crow-relayer")));
+    }
+
+    function _initcode() internal view returns (bytes memory) {
+        return abi.encodePacked(type(S).creationCode, abi.encode(vm.addr(KEY_PK)));
+    }
+
+    function _deployVia(address payer) internal returns (address a) {
+        a = vm.computeCreate2Address(bytes32(0), keccak256(_initcode()), CREATE2_DEPLOYER);
+        if (a.code.length > 0) return a;
+        vm.prank(payer);
+        (bool ok,) = CREATE2_DEPLOYER.call(abi.encodePacked(bytes32(0), _initcode()));
+        require(ok, "deploy failed");
+    }
+
+    function _template() internal returns (S.Template memory tpl) {
+        H.Terms memory b = _terms();
+        b.sellerPayoutAddress = makeAddr("payout");
+        b.timing.offerExpiresAt = 15 minutes;
+        b.timing.fundBy = 30 minutes;
+        b.timing.deliverBy = 1 days;
+        b.timing.judgeBy = 2 days;
+        b.timing.fallbackBy = 3 days;
+        tpl.rules = address(rules);
+        tpl.expiresAt = uint64(block.timestamp + 30 days);
+        tpl.base = b;
+        tpl.hasDelivery = true;
+        tpl.ciphertextHash = keccak256("one ciphertext for every take");
+        tpl.plaintextSha256Hash = keccak256("sha256:file");
+        tpl.plaintextMimeHash = keccak256("application/pdf");
+        tpl.encryptedKeysHash = keccak256("envelopes to the three adjudicators");
+        tpl.submittedAt = uint64(block.timestamp);
+    }
+
+    function _tplSig(S.Template memory tpl, uint256 pk) internal view returns (bytes memory) {
+        bytes32 sh = keccak256(abi.encode(keccak256("StandingOffer(bytes32 templateHash)"), ss.templateHash(tpl)));
+        return _signRaw(pk, keccak256(abi.encodePacked("\x19\x01", ss.domainSeparatorForTest(), sh)));
+    }
+
+    function _fill(uint256 n) internal view returns (S.Fill memory) {
+        return S.Fill({
+            buyer: buyer,
+            buyerPaymentAddress: buyer,
+            buyerKeyHash: keccak256("buyer key"),
+            nonce: keccak256(abi.encode("take", n)),
+            createdAt: uint64(block.timestamp)
+        });
+    }
+
+    function _take(S.Template memory tpl, bytes memory tplSig, S.Fill memory f)
+        internal
+        returns (H.Terms memory t, bytes32 id)
+    {
+        t = ss.termsOf(tpl, f);
+        bytes memory blob = abi.encode(uint8(1), tpl, tplSig, f);
+        vm.prank(relayer);
+        id = rules.agreeAndFund(t, blob, _acceptance(t, ADJ_PK), _agree(t, BUYER_PK), _erc3009(t, BUYER_PK));
+    }
+
+    function _standingDelivery(S.Template memory tpl) internal pure returns (H.Delivery memory) {
+        return H.Delivery({
+            attempt: 1,
+            ciphertextHash: tpl.ciphertextHash,
+            plaintextSha256Hash: tpl.plaintextSha256Hash,
+            plaintextMimeHash: tpl.plaintextMimeHash,
+            encryptedKeysHash: tpl.encryptedKeysHash,
+            submittedAt: tpl.submittedAt
+        });
+    }
+
+    // 1. Two buyers take one template; one standing delivery serves both; both are paid on accept.
+    function test_twoTakes_oneStandingDelivery_bothPaid() public {
+        S.Template memory tpl = _template();
+        bytes memory sig = _tplSig(tpl, KEY_PK);
+        uint256 g = gasleft();
+        S.Fill memory f1 = _fill(1);
+        (H.Terms memory t1, bytes32 id1) = _take(tpl, sig, f1);
+        emit log_named_uint("gas, agreeAndFund by a take (incl. test helpers)", g - gasleft());
+        vm.warp(block.timestamp + 1 hours);
+        S.Fill memory f2 = _fill(2);
+        (H.Terms memory t2, bytes32 id2) = _take(tpl, sig, f2);
+        assertTrue(id1 != id2, "one ID per take");
+        bytes memory dblob1 = abi.encode(uint8(2), tpl, sig, f1);
+        bytes memory dblob2 = abi.encode(uint8(2), tpl, sig, f2);
+        vm.prank(makeAddr("anyone"));
+        rules.deliver(t1, _standingDelivery(tpl), dblob1);
+        rules.deliver(t2, _standingDelivery(tpl), dblob2);
+        rules.decide(t1, _primary(t1, id1, H.OUTCOME_ACCEPT), _noDelivery(), "");
+        rules.decide(t2, _primary(t2, id2, H.OUTCOME_ACCEPT), _noDelivery(), "");
+        assertEq(usdc.balanceOf(makeAddr("payout")), 2 * PRICE, "paid twice to the payout address");
+        assertEq(usdc.balanceOf(address(ss)), 0, "the seller contract holds nothing");
+    }
+
+    // 2. A replayed take (same fill) is refused by the rules contract: the ID is already funded.
+    function test_replayedTake_refused() public {
+        S.Template memory tpl = _template();
+        bytes memory sig = _tplSig(tpl, KEY_PK);
+        S.Fill memory f = _fill(1);
+        (H.Terms memory t,) = _take(tpl, sig, f);
+        bytes memory blob = abi.encode(uint8(1), tpl, sig, f);
+        H.Acceptance memory acc = _acceptance(t, ADJ_PK);
+        H.Agree memory ag = _agree(t, BUYER_PK);
+        H.Funding memory fu = _erc3009(t, BUYER_PK);
+        vm.expectRevert(abi.encodeWithSelector(IHoldbackRules.WrongStage.selector, IHoldbackRules.Stage.Held));
+        rules.agreeAndFund(t, blob, acc, ag, fu);
+    }
+
+    // 3. A take with any field changed from the template (price) is refused: the contract rebuilds the terms itself.
+    function test_alteredTerms_refused() public {
+        S.Template memory tpl = _template();
+        bytes memory sig = _tplSig(tpl, KEY_PK);
+        S.Fill memory f = _fill(1);
+        H.Terms memory t = ss.termsOf(tpl, f);
+        t.price = 1;
+        bytes memory blob = abi.encode(uint8(1), tpl, sig, f);
+        H.Acceptance memory acc = _acceptance(t, ADJ_PK);
+        H.Agree memory ag = _agree(t, BUYER_PK);
+        H.Funding memory fu = _erc3009(t, BUYER_PK);
+        vm.expectRevert(IHoldbackRules.BadSignature.selector);
+        rules.agreeAndFund(t, blob, acc, ag, fu);
+    }
+
+    // 4. A take created in the future is refused by the seller contract.
+    function test_futureCreatedAt_refused() public {
+        S.Template memory tpl = _template();
+        bytes memory sig = _tplSig(tpl, KEY_PK);
+        S.Fill memory f = _fill(1);
+        f.createdAt = uint64(block.timestamp + 1 days);
+        H.Terms memory t = ss.termsOf(tpl, f);
+        bytes memory blob = abi.encode(uint8(1), tpl, sig, f);
+        H.Acceptance memory acc = _acceptance(t, ADJ_PK);
+        H.Agree memory ag = _agree(t, BUYER_PK);
+        H.Funding memory fu = _erc3009(t, BUYER_PK);
+        vm.expectRevert(IHoldbackRules.BadSignature.selector);
+        rules.agreeAndFund(t, blob, acc, ag, fu);
+    }
+
+    // 5. A backdated take: createdAt older than the template's offer window is refused by the rules contract's own
+    //    offer expiry, so the seller always gets at least deliverBy - offerWindow seconds to deliver.
+    function test_backdatedCreatedAt_refusedByOfferExpiry() public {
+        S.Template memory tpl = _template();
+        bytes memory sig = _tplSig(tpl, KEY_PK);
+        S.Fill memory f = _fill(1);
+        f.createdAt = uint64(block.timestamp - 15 minutes);
+        H.Terms memory t = ss.termsOf(tpl, f);
+        bytes memory blob = abi.encode(uint8(1), tpl, sig, f);
+        H.Acceptance memory acc = _acceptance(t, ADJ_PK);
+        H.Agree memory ag = _agree(t, BUYER_PK);
+        H.Funding memory fu = _erc3009(t, BUYER_PK);
+        vm.expectRevert(IHoldbackRules.DeadlinePassed.selector);
+        rules.agreeAndFund(t, blob, acc, ag, fu);
+    }
+
+    // 6. A delivery of another file is refused: the standing delivery approves only the template's hashes.
+    function test_deliveryOfAnotherFile_refused() public {
+        S.Template memory tpl = _template();
+        bytes memory sig = _tplSig(tpl, KEY_PK);
+        S.Fill memory f = _fill(1);
+        (H.Terms memory t,) = _take(tpl, sig, f);
+        H.Delivery memory d = _standingDelivery(tpl);
+        d.ciphertextHash = keccak256("another file");
+        bytes memory dblob = abi.encode(uint8(2), tpl, sig, f);
+        vm.expectRevert(IHoldbackRules.BadSignature.selector);
+        rules.deliver(t, d, dblob);
+    }
+
+    // 7. A template the key did not sign is refused.
+    function test_templateSignedByAnotherKey_refused() public {
+        S.Template memory tpl = _template();
+        bytes memory sig = _tplSig(tpl, OTHER_PK);
+        S.Fill memory f = _fill(1);
+        H.Terms memory t = ss.termsOf(tpl, f);
+        bytes memory blob = abi.encode(uint8(1), tpl, sig, f);
+        H.Acceptance memory acc = _acceptance(t, ADJ_PK);
+        H.Agree memory ag = _agree(t, BUYER_PK);
+        H.Funding memory fu = _erc3009(t, BUYER_PK);
+        vm.expectRevert(IHoldbackRules.BadSignature.selector);
+        rules.agreeAndFund(t, blob, acc, ag, fu);
+    }
+
+    // 8. A revoked or expired template takes no new deal; a deal already funded still takes its standing delivery.
+    function test_revokedTemplate_noNewTake_fundedDealStillDelivers() public {
+        S.Template memory tpl = _template();
+        bytes memory sig = _tplSig(tpl, KEY_PK);
+        S.Fill memory f = _fill(1);
+        (H.Terms memory t1,) = _take(tpl, sig, f);
+        bytes32 th = ss.templateHash(tpl);
+        bytes32 rh = keccak256(abi.encode(keccak256("Revoke(bytes32 templateHash)"), th));
+        bytes memory rsig = _signRaw(KEY_PK, keccak256(abi.encodePacked("\x19\x01", ss.domainSeparatorForTest(), rh)));
+        vm.prank(makeAddr("crow-relayer"));
+        ss.revoke(th, rsig);
+        S.Fill memory f2 = _fill(2);
+        H.Terms memory t2 = ss.termsOf(tpl, f2);
+        bytes memory blob = abi.encode(uint8(1), tpl, sig, f2);
+        H.Acceptance memory acc = _acceptance(t2, ADJ_PK);
+        H.Agree memory ag = _agree(t2, BUYER_PK);
+        H.Funding memory fu = _erc3009(t2, BUYER_PK);
+        vm.expectRevert(IHoldbackRules.BadSignature.selector);
+        rules.agreeAndFund(t2, blob, acc, ag, fu);
+        rules.deliver(t1, _standingDelivery(tpl), abi.encode(uint8(2), tpl, sig, f));
+    }
+
+    // 9. Anyone can deploy the same code at the same address; the payer gets nothing: no owner, only the key.
+    function test_anyPayerDeploysTheSameAddress() public {
+        address a1 = address(ss);
+        address a2 = _deployVia(makeAddr("seller itself"));
+        assertEq(a1, a2);
+        assertEq(ss.KEY(), vm.addr(KEY_PK));
+        // A second deployment attempt by another payer fails without changing anything.
+        vm.prank(makeAddr("someone else"));
+        (bool ok,) = CREATE2_DEPLOYER.call(abi.encodePacked(bytes32(0), _initcode()));
+        assertFalse(ok, "already deployed");
+    }
+
+    // 10. The key path: a mutual settlement signed by the seller's own key lands for a take.
+    function test_keyPath_mutualSettlementForATake() public {
+        S.Template memory tpl = _template();
+        bytes memory sig = _tplSig(tpl, KEY_PK);
+        (H.Terms memory t, bytes32 id) = _take(tpl, sig, _fill(1));
+        H.Mutual memory m;
+        m.payouts = new H.Payout[](1);
+        m.payouts[0] = H.Payout({to: t.buyerPaymentAddress, amount: PRICE});
+        m.nonce = keccak256("refund by agreement");
+        m.expiresAt = uint64(block.timestamp + 1 hours);
+        bytes32 mh = hx.mutual(id, t.token, m);
+        m.buyerSignature = _sign(BUYER_PK, mh);
+        m.sellerSignature = _sign(KEY_PK, mh);
+        H.KeyProof memory k;
+        rules.mutualSettle(t, m, _noDelivery(), k);
+        assertEq(uint8(_stage(id)), uint8(IHoldbackRules.Stage.Settled));
+    }
+}

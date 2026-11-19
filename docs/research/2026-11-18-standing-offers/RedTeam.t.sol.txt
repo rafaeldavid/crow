@@ -1,0 +1,123 @@
+// SPDX-License-Identifier: MIT
+pragma solidity ^0.8.28;
+
+// T-544 red team, scratch only. Attacks on the spike seller contract against the unchanged HoldbackRules.
+
+import {IHoldbackRules} from "../../src/IHoldbackRules.sol";
+import {HoldbackTypes as H} from "../../src/HoldbackTypes.sol";
+import {StandingSellerSpike as S} from "./StandingSellerSpike.sol";
+import {StandingSellerSpikeTest} from "./StandingSellerSpike.t.sol";
+
+contract RedTeamTest is StandingSellerSpikeTest {
+    function _revoke(S.Template memory tpl) internal {
+        bytes32 th = ss.templateHash(tpl);
+        bytes32 rh = keccak256(abi.encode(keccak256("Revoke(bytes32 templateHash)"), th));
+        ss.revoke(th, _signRaw(KEY_PK, keccak256(abi.encodePacked("\x19\x01", ss.domainSeparatorForTest(), rh))));
+    }
+
+    // A1. The seller replaces a file: template B has the same terms as template A and a new file. The seller revokes
+    //     A. Anyone attaches A's old file to a take of B, because the commitment ID does not depend on the template.
+    function test_rt_revokedOldFileLandsOnNewTemplatesTake() public {
+        S.Template memory a = _template();
+        bytes memory sigA = _tplSig(a, KEY_PK);
+        S.Template memory b = _template();
+        b.ciphertextHash = keccak256("the corrected file");
+        bytes memory sigB = _tplSig(b, KEY_PK);
+        _revoke(a);
+        S.Fill memory f = _fill(1);
+        (H.Terms memory t, bytes32 id) = _take(b, sigB, f);
+        vm.prank(makeAddr("griefer"));
+        rules.deliver(t, _standingDelivery(a), abi.encode(uint8(2), a, sigA, f));
+        assertEq(rules.deliveryHashOf(id), hx.delivery(id, _standingDelivery(a)), "the revoked template's file is the deal's delivery");
+        rules.decide(t, _primary(t, id, H.OUTCOME_ACCEPT), _noDelivery(), "");
+        assertEq(usdc.balanceOf(makeAddr("payout")), PRICE, "paid for the old file");
+    }
+
+    // A1b. Same, when the new template is per-buyer work (no standing delivery): the old file preempts the worker.
+    function test_rt_oldFilePreemptsPerBuyerWork() public {
+        S.Template memory a = _template();
+        bytes memory sigA = _tplSig(a, KEY_PK);
+        S.Template memory b = _template();
+        b.hasDelivery = false;
+        b.ciphertextHash = bytes32(0);
+        b.plaintextSha256Hash = bytes32(0);
+        b.plaintextMimeHash = bytes32(0);
+        b.encryptedKeysHash = bytes32(0);
+        b.submittedAt = 0;
+        bytes memory sigB = _tplSig(b, KEY_PK);
+        _revoke(a);
+        S.Fill memory f = _fill(1);
+        (H.Terms memory t, bytes32 id) = _take(b, sigB, f);
+        rules.deliver(t, _standingDelivery(a), abi.encode(uint8(2), a, sigA, f));
+        assertEq(uint8(_stage(id)), uint8(IHoldbackRules.Stage.Delivered));
+    }
+
+    // A2. A standing delivery with no buyer envelope: early accept and a key-releasing settlement both revert.
+    function test_rt_noBuyerEnvelope_earlyAcceptAndReleaseRevert() public {
+        S.Template memory tpl = _template();
+        H.KeyProof memory k = _buyerKey();
+        k.keyHashes[1] = keccak256("appeal envelope"); // three adjudicator envelopes, none for the buyer
+        tpl.encryptedKeysHash = keccak256(abi.encodePacked(k.keyHashes));
+        bytes memory sig = _tplSig(tpl, KEY_PK);
+        S.Fill memory f = _fill(1);
+        (H.Terms memory t, bytes32 id) = _take(tpl, sig, f);
+        rules.deliver(t, _standingDelivery(tpl), abi.encode(uint8(2), tpl, sig, f));
+        H.EarlyAccept memory m = _early(t, id, BUYER_PK);
+        vm.expectRevert(IHoldbackRules.BadKeyProof.selector);
+        rules.earlyAccept(t, m, _standingDelivery(tpl), "", k);
+        // A forged proof: the buyer's own envelope at index 1 no longer hashes to the delivery's list.
+        H.KeyProof memory forged = _buyerKey();
+        forged.keyHashes[1] = hx.key(buyer, forged);
+        vm.expectRevert(IHoldbackRules.BadKeyProof.selector);
+        rules.earlyAccept(t, m, _standingDelivery(tpl), "", forged);
+    }
+
+    // A3. Gas of one take's ERC-1271 answer, and of a collision on the deterministic deployer.
+    function test_rt_gas() public {
+        S.Template memory tpl = _template();
+        bytes memory sig = _tplSig(tpl, KEY_PK);
+        S.Fill memory f = _fill(1);
+        H.Terms memory t = ss.termsOf(tpl, f);
+        bytes32 digest = rules.typedDataHash(hx.id(t));
+        bytes memory blob = abi.encode(uint8(1), tpl, sig, f);
+        uint256 g = gasleft();
+        bytes4 r = ss.isValidSignature(digest, blob);
+        emit log_named_uint("gas, isValidSignature for a take", g - gasleft());
+        assertEq(r, bytes4(0x1626ba7e));
+        emit log_named_uint("bytes, take blob", blob.length);
+        g = gasleft();
+        (bool ok,) = CREATE2_DEPLOYER.call{gas: 3_000_000}(abi.encodePacked(bytes32(0), _initcode()));
+        emit log_named_uint("gas, a second deployment given 3,000,000", g - gasleft());
+        assertFalse(ok);
+    }
+
+    // A4. The key path approves any digest the key signed, from any app or domain.
+    function test_rt_keyPathApprovesForeignDigest() public view {
+        bytes32 foreign = keccak256("a Permit2 or other app digest that does not name the signer");
+        assertEq(ss.isValidSignature(foreign, _signRaw(KEY_PK, foreign)), bytes4(0x1626ba7e));
+    }
+
+    // A5. A template whose payout address is the seller contract: the take pays, and the money sits in a contract
+    //     with no function that moves it.
+    function test_rt_payoutToTheContractItself() public {
+        S.Template memory tpl = _template();
+        tpl.base.sellerPayoutAddress = address(ss);
+        bytes memory sig = _tplSig(tpl, KEY_PK);
+        S.Fill memory f = _fill(1);
+        (H.Terms memory t, bytes32 id) = _take(tpl, sig, f);
+        rules.deliver(t, _standingDelivery(tpl), abi.encode(uint8(2), tpl, sig, f));
+        rules.decide(t, _primary(t, id, H.OUTCOME_ACCEPT), _noDelivery(), "");
+        assertEq(usdc.balanceOf(address(ss)), PRICE, "the seller contract holds the price");
+    }
+
+    // A6. Fields the contract ignores still change the template hash: two signed variants, one revoked, one live.
+    function test_rt_ignoredFieldsMakeASecondLiveTemplate() public {
+        S.Template memory a = _template();
+        S.Template memory b = _template();
+        b.base.buyer = address(0xdead); // ignored by termsOf
+        bytes memory sigB = _tplSig(b, KEY_PK);
+        _revoke(a);
+        assertTrue(ss.templateHash(a) != ss.templateHash(b));
+        _take(b, sigB, _fill(1)); // funds although "the" template was revoked
+    }
+}

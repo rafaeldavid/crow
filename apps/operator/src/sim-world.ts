@@ -99,7 +99,15 @@ export interface SimWorldOptions {
    * `sim-operator-fees` account): the nodes are one operator with one schedule. Default: no fee.
    */
   operatorFee?: { bps: number; min: string; max: string | null; to?: Address };
+  /**
+   * The largest ciphertext each node stores, in bytes (`limits.maxCiphertextBytes` in discovery). Default
+   * SIM_MAX_CIPHERTEXT_BYTES, the test service's limit, so a delivery the live operators refuse fails here too (T-547).
+   */
+  maxCiphertextBytes?: number;
 }
+
+/** The test service's limit on one ciphertext, 1 MiB (DEMO_MAX_CIPHERTEXT_BYTES in apps/demo-cloud; its test compares them). */
+export const SIM_MAX_CIPHERTEXT_BYTES = 1_048_576;
 
 export interface SimWorld {
   url: string;
@@ -243,6 +251,7 @@ export async function startSimWorld(options: SimWorldOptions = {}): Promise<SimW
         // T-221 review: prepare fills in no default that would decline the terms, and notes one the parties named.
         registry: { ...base, get mandates() { return chain.agentMandates(); }, faucet, defaultAdjudicators, declines: declinesOf(() => Object.values(adjudicators)), judgment: (id) => latest.get(id) ?? null },
         store,
+        maxCiphertextBytes: options.maxCiphertextBytes ?? SIM_MAX_CIPHERTEXT_BYTES,
         ...operatorFee,
         // The plan's 2c: SimChain's world has one token, and the operators refuse terms in any other.
         token: { id: TOKEN, symbol: TOKEN, decimals: 6 },

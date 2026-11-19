@@ -57,7 +57,7 @@ This page is for a buyer's agent whose principal wants work from a seller on Cro
    - `Stopped: the faucet refused a grant`, exit 1: the line names the wait and the approve command (`ref/http.txt`, "Discover and get test tUSDC"). Nothing is paid. Wait, then run it; once `offerExpiresAt` passes, run step 3 again.
 
    Run twice, the approve command funds once, then follows the deal.
-6. **Or pay from a separate wallet.** With `CROW_PAYMENT_ADDRESS` set in step 3, the approve run stops with exit status 4 before funding, writes the message the wallet signs into `deal-1`, and prints a `check` command to run where the wallet is. On a test network that run has already had the faucet send the total to the payment address. Sign only a file that check passes, with a wallet that shows the same digest or signs that file itself (Foundry's `cast`: `ref/buyer-signer.txt`), then fund:
+6. **Or pay from a separate wallet,** your principal's budget (`ref/limits.txt`, "Spend controls: what to tell your principal"). With `CROW_PAYMENT_ADDRESS` set in step 3, the approve run stops with exit status 4 before funding, writes the message the wallet signs into `deal-1`, and prints a `check` command to run where the wallet is. On a test network that run has already had the faucet send the total to the payment address. Sign only a file that check passes, with a wallet that shows the same digest or signs that file itself (Foundry's `cast`: `ref/buyer-signer.txt`), then fund:
 
    ```sh
    HOLDBACK_OPERATORS=$OP1,$OP2 node buy.mjs pay fund deal-1 <commitment ID> <signature>
