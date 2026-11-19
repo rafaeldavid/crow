@@ -235,30 +235,46 @@ describe('neutrality.t422: no service limit refuses a replay of an accepted requ
 });
 
 describe('attack.t422: the replay budget floods the one World object', () => {
-  it('attack.t422-replay-cpu: replays of one accepted 1 MiB write cost the object far more than the write budget allowed', async () => {
-    const { urls, other } = await serveWorld({ rateLimit: { writes: 120, reads: 1200, windowMs: 60_000 } });
+  // T-574: counts the body work instead of timing it. The clock version (30 replays, ms per replay times the budget)
+  // failed on a loaded machine (0.73 and 1.90 object-seconds a second against 0.5) and passed alone. What it guarded
+  // is the red team's F3 (T-422): replays under a known key read and hashed their body before any limit. The fix counts
+  // every known-key request at entry against a replay budget the size of the write budget, so a client's replays cost
+  // at most that many body reads a window, and every one past it costs none. This proves the count; the cost of one
+  // replay of a 1 MB body is T-422's measurement (75 ms), so the bound is the budget times that.
+  it('attack.t422-replay-cpu: replays of one accepted 1 MiB write past the replay budget cost the object no body work', async () => {
+    const writes = 12;
+    const { urls, other } = await serveWorld({ rateLimit: { writes, reads: 1200, windowMs: 60_000 } });
     const a = freshAgent(urls);
     // The faucet ignores fields it does not know, so one grant can carry a body of about 1 MiB of small objects.
     const pad = Array.from({ length: 17_000 }, (_, i) => ({ k: 'v'.repeat(40), i }));
     const body = JSON.stringify({ address: a.address, pad });
-    console.log('accepted body bytes:', body.length);
+    expect(body.length).toBeGreaterThan(900_000);
     const first = await post(`${urls[0]}/v1/faucet`, body, 'heavy-1');
     expect(first.status).toBe(200);
-    const n = 30;
-    const t0 = performance.now();
-    const statuses: number[] = [];
-    for (let i = 0; i < n; i++) statuses.push((await post(`${urls[0]}/v1/faucet`, body, 'heavy-1')).status);
-    const msPer = (performance.now() - t0) / n;
-    // Meanwhile, how long does a stranger's read take while 20 replays are in flight at once?
-    const burst = Array.from({ length: 20 }, () => post(`${urls[0]}/v1/faucet`, body, 'heavy-1'));
-    const r0 = performance.now();
-    await fetch(`${other[0]}/v1/commitments?limit=1`);
-    const strangerMs = performance.now() - r0;
-    await Promise.all(burst);
-    const perMinute = 120; // the replay budget: the write budget, 120 a minute
-    console.log(`replays answered: ${statuses.filter((s) => s === 200).length}/${n}; ms per replay: ${msPer.toFixed(0)}; object-seconds per second at ${perMinute} replays a minute: ${((perMinute / 60) * msPer / 1000).toFixed(2)}; a stranger's read during a 20-replay burst: ${strangerMs.toFixed(0)} ms`);
-    // The defence the threat model claims: one client cannot fill the object. Allow it half of one object-second a second.
-    expect(((perMinute / 60) * msPer) / 1000).toBeLessThan(0.5);
+    // Each time a body this size is parsed is one unit of the work F3 found: the operator's read of the body, which
+    // comes before its fingerprint and the stored answer.
+    const parse = JSON.parse;
+    let bodyReads = 0;
+    JSON.parse = ((text: string, reviver?: Parameters<typeof JSON.parse>[1]) => {
+      if (typeof text === 'string' && text.length >= body.length) bodyReads++;
+      return parse(text, reviver);
+    }) as typeof JSON.parse;
+    try {
+      const statuses: number[] = [];
+      for (let i = 0; i < 3 * writes; i++) statuses.push((await post(`${urls[0]}/v1/faucet`, body, 'heavy-1')).status);
+      // A burst at once past the budget, and a stranger's read meanwhile.
+      const burst = Array.from({ length: writes }, () => post(`${urls[0]}/v1/faucet`, body, 'heavy-1'));
+      const stranger = await fetch(`${other[0]}/v1/commitments?limit=1`);
+      const burstStatuses = await Promise.all(burst.map(async (r) => (await r).status));
+      console.log(`replays answered: ${statuses.filter((x) => x === 200).length} of ${statuses.length}, then a burst of ${writes}: ${burstStatuses.filter((x) => x === 429).length} refused; body reads: ${bodyReads}`);
+      expect(statuses).toEqual([...Array<number>(writes).fill(200), ...Array<number>(2 * writes).fill(429)]);
+      expect(burstStatuses).toEqual(Array<number>(writes).fill(429));
+      // One body read for each answered replay, none for the 3 budgets' worth refused at entry.
+      expect(bodyReads).toBe(writes);
+      expect(stranger.status).toBe(200);
+    } finally {
+      JSON.parse = parse;
+    }
   }, 120_000);
 });
 

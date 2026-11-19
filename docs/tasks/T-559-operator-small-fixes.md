@@ -5,7 +5,7 @@
 - **Depends on:** T-547 (the ciphertext route's read-on refusal), T-540 (its finds 1 and 3)
 - **Paths this task may touch:** `apps/operator/src/server.ts` (the JSON body reader) and a new test beside it, `packages/settlement/evm/evm-settlement.ts` (the `decide` case), `packages/settlement/evm/errors.ts` and its test, `packages/settlement/evm/testing.ts`, a new anvil test in `packages/settlement/evm/`, `packages/settlement/evm/sync.test.ts` (one intermittent test, found after the cutover), `packages/core/src/state.ts` (the reason as a named constant), this file
 - **Human gate:** no for the merge. The operator deploy that carries the change is Rafa's.
-- **Status:** in review
+- **Status:** done
 - **Agent/session:** the T-559 session, started by the coordinator on 2026-11-19
 - **Roadmap row:** N202
 
@@ -75,7 +75,7 @@ All measured on 2026-11-19 in this worktree, at `origin/main` `d9da8a00` plus th
 
 ## Handoff
 
-**Done:** items 1 to 3, merged onto the fixed contracts (above). Merge by hand once every check passes at the branch's head.
+**Done:** items 1 to 3. Pull request 702 merged at `fd24eb75` on 2026-11-19 at 20:24 UTC, after every check passed at its head `05aad6be` and an independent review of the changes since the cutover returned PASS. The next operator deploy carries both refusals.
 
 **What an operator deploy would carry:** `apps/operator/src/server.ts` and `packages/settlement/evm/evm-settlement.ts` are in the operators' Worker.
 - A JSON body over a route's limit gets the same 413 at the end of the body.

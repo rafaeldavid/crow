@@ -5,7 +5,7 @@
 - **Depends on:** T-544 (ADR-0040), and Rafa's answers to D82's open points
 - **Paths this task may touch:** `contracts/src/HoldbackStandingSeller.sol` and `contracts/src/IHoldbackStandingSeller.sol` (new), `contracts/test/` (new tests only), `packages/core/src/eip712.vectors.test.ts` (the new type's vectors), this file. Not `HoldbackRules.sol`, `HoldbackTypes.sol` or `IHoldbackRules.sol`.
 - **Human gate:** no. Deploying it to Sepolia waits for Rafa.
-- **Status:** in review
+- **Status:** done (pull request 693, merge commit `10322887`, 2026-11-19)
 - **Agent/session:** Claude Code session, branch `t-548-standing-seller-contract` (2026-11-19)
 - **Roadmap row:** N196
 - **Change kind:** 7, smart contracts.

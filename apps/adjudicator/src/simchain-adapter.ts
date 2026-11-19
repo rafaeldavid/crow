@@ -4,6 +4,7 @@
 // store, the record store and the adjudicator registry are not part of the Settlement interface, so the
 // caller supplies them.
 import {
+  contractSignerRule,
   err,
   ok,
   SIM_BEACON,
@@ -22,6 +23,7 @@ import {
   type Problem,
   type Result,
   type Signature,
+  type SignerCheck,
   type Timestamp,
   type TokenAmount,
 } from '@holdback/core';
@@ -94,6 +96,11 @@ export class SettlementAdapter implements AdjudicatorSettlement {
   get phaseOne(): boolean {
     const chain = this.#o.chain as SettlementReads & { profile?: string };
     return chain.kind !== 'sim' || chain.profile === 'phase_one';
+  }
+
+  /** The settlement layer's contract-signer rule (ADR-0040 §5). A layer without one has no contracts: keys only. */
+  signerCheck(): SignerCheck {
+    return this.#o.chain.signerCheck?.() ?? contractSignerRule({ code: async () => '0x', isValidSignature: async () => false });
   }
 
   /** The source the commitment's rulebook names, which core keeps in the escrow state from the offer (T-217). */

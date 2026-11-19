@@ -1,0 +1,65 @@
+# Terms template for one robot telemetry run delivered as one CSV file (T-572). Checks-only: the rubric is
+# empty, so the eight required checks below decide and no panel sits. tests/telemetry-run-template.test.ts
+# runs them on the synthetic files in fixtures/data/telemetry-run/.
+#
+# The file: one row per sample, integers in fixed units, so every bound is a whole number (ADR-0022).
+#   run_id           the run the terms name, on every row
+#   t_ms             milliseconds since the run started
+#   position_mdeg    joint position, millidegrees
+#   velocity_mdeg_s  joint speed, millidegrees per second
+#   current_ma       motor current, milliamperes
+#
+# Duration, rate and gaps come from three checks together: `time-grid`, with minBps 10000 so that every row
+# matches, allows the 1,000 timestamps 0, 10, ..., 9990; `time-unique` forbids a repeat; `rows` asks for 1,000 rows. So every timestamp of the grid appears
+# exactly once: 10 s at 100 Hz, no gap and no duplicate. The checks do not hold the rows in time order.
+#
+# What a party changes when it copies this template:
+#   - the run ID (description and `run`);
+#   - the rate and the duration (description, `rows`, and the `time-grid` pattern, which lists the timestamps
+#     on the grid as digits: for steps of 10 ms below 10 s, 0, or a digit 1 to 9, up to 2 more digits, then a 0;
+#     with no leading zero, so that unique_key, which compares text, compares values);
+#   - the columns and their ranges (description, `columns` and one pattern per column);
+#   - the price and the windows.
+#
+# There is no numeric range check, so each range is a full-match pattern over integers with no leading zeros
+# and no "-0" (site/ref/checks.txt). A pattern rejects an empty cell, so each range check also refuses a
+# missing reading. Field rules are as in clean-customers-2000.yaml.
+schemaVersion: "0.8"
+clubId: data-services-v1
+deliverable:
+  kind: dataset
+  description: "Telemetry of robot run run-7f3a9c2e as one CSV file with the columns run_id, t_ms, position_mdeg, velocity_mdeg_s and current_ma, in that order. One row per sample at 100 Hz for the 10 s of the run: 1,000 rows, t_ms from 0 to 9990 in steps of 10 ms, each timestamp once. Every value is an integer: joint position in millidegrees from -360000 to 360000, joint speed in millidegrees per second from -223000 to 223000, motor current in milliamperes from -10000 to 10000. No cell is empty."
+  format: text/csv
+acceptance:
+  deterministicChecks:
+    - { id: columns, type: csv_columns_exact, required: true, columns: [run_id, t_ms, position_mdeg, velocity_mdeg_s, current_ma] }
+    - { id: rows, type: row_count_range, required: true, min: 1000, max: 1000 }
+    - { id: run, type: regex_match_rate_min, required: true, column: run_id, pattern: '^run-7f3a9c2e$', minBps: 10000 }
+    # 0, or 10 to 9990 in steps of 10: 1,000 values.
+    - { id: time-grid, type: regex_match_rate_min, required: true, column: t_ms, pattern: '^(0|[1-9][0-9]{0,2}0)$', minBps: 10000 }
+    - { id: time-unique, type: unique_key, required: true, columns: [t_ms] }
+    # -360000 to 360000.
+    - { id: position, type: regex_match_rate_min, required: true, column: position_mdeg, pattern: '^(0|-?([1-9][0-9]{0,4}|[12][0-9]{5}|3[0-5][0-9]{4}|360000))$', minBps: 10000 }
+    # -223000 to 223000.
+    - { id: velocity, type: regex_match_rate_min, required: true, column: velocity_mdeg_s, pattern: '^(0|-?([1-9][0-9]{0,4}|1[0-9]{5}|2[01][0-9]{4}|22[0-2][0-9]{3}|223000))$', minBps: 10000 }
+    # -10000 to 10000.
+    - { id: current, type: regex_match_rate_min, required: true, column: current_ma, pattern: '^(0|-?([1-9][0-9]{0,3}|10000))$', minBps: 10000 }
+  rubric:
+    passThreshold: 0
+    criteria: []
+price: { token: tUSD, amount: "10000000" }
+adjudication:
+  policyId: bench-a/p1
+  fee: { token: tUSD, amount: "1000000" }
+timing:
+  offerExpiresInSec: 600
+  fundWithinSec: 900
+  deliverWithinSec: 3600
+  judgeWithinSec: 60
+  fallbackWithinSec: 60
+  appealWindowSec: 0
+  appealDecideSec: 60
+  maxSubmissions: 1
+settlement: { mode: guaranteed_on_decision, token: tUSD }
+remedy: { onReject: full_refund }
+disclosure: { level: public }
