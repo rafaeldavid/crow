@@ -200,12 +200,22 @@ export type SettlementProfile = 'full' | 'phase_one';
 const NO_PARTY_APPEAL = 'phase one has no party appeal: the first decision is final (ADR-0031)';
 
 /**
+ * T-574: whether a decision carries an appeal ground. The signed message encodes an absent ground as the empty string
+ * (eip712.ts), and the rules contract reads no ground as keccak256("") (HoldbackRules: appealGroundHash), so a decision
+ * without the field and one with `appealGround: ""` are the same signed message, with no ground. Every refusal of a
+ * ground, here and in the EVM relay, asks this.
+ */
+export function carriesAppealGround(m: Pick<Decision, 'appealGround'>): boolean {
+  return ((m.appealGround as string | undefined) ?? '') !== '';
+}
+
+/**
  * T-540: two decision fields the phase-one rules contract refuses with `InvalidMessage` (T-529), named here so an
  * adjudicator learns why before a relay simulates the call. Undefined when the decision carries neither.
  */
 export function phaseOneDecisionProblem(m: Decision, escalated: boolean): string | undefined {
   if (m.role === 'primary' && m.beacon) return "a primary adjudicator's decision carries no beacon: its seed is the one its acceptance committed to (ADR-0018), and the phase-one rules contract refuses a primary decision with beacon fields";
-  if (escalated && m.appealGround !== undefined) return 'a decision on an escalation carries no appeal ground: phase one has no party appeal (ADR-0031), and the phase-one rules contract refuses one';
+  if (escalated && carriesAppealGround(m)) return 'a decision on an escalation carries no appeal ground: phase one has no party appeal (ADR-0031), and the phase-one rules contract refuses one';
   return undefined;
 }
 
@@ -504,7 +514,7 @@ function firstInstance(
   if (!attempt.ok) return attempt;
   const named = namesTheDelivery(m, s.delivery);
   if (!named.ok) return named;
-  if (m.appealGround !== undefined) return fail('invalid_terms', APPEAL_GROUND_APPEAL_ONLY);
+  if (carriesAppealGround(m)) return fail('invalid_terms', APPEAL_GROUND_APPEAL_ONLY);
   const signed = profile === 'phase_one' ? phaseOneDecisionProblem(m, false) : undefined;
   if (signed) return fail('invalid_terms', signed);
   // ADR-0018: the primary reveals its committed seed; the fallback takes the beacon seed for judgeBy.
