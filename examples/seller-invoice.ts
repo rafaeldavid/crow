@@ -338,6 +338,7 @@ export async function make(record: J, o: Options): Promise<Made> {
   const { kind, amount } = kindOf(d, o.credits);
   const tax = o.tax ?? o.seller.tax;
   const taxNote = o.taxNote ?? o.seller.taxNote;
+  if (tax.treatment === 'reverse-charge' && !o.seller.taxId) refuse('the tax treatment is reverse charge, which an invoice states with both parties\' VAT numbers, and the seller file gives none for you (taxId). Add it, or state another treatment with --tax');
   if (tax.treatment === 'reverse-charge' && !o.buyer.taxId) refuse('the tax treatment is reverse charge, which an invoice states with the buyer\'s VAT number, and the buyer file gives none (taxId). Ask the buyer for it, or state another treatment with --tax');
   for (const [k, v] of [['issue date', o.issueDate], ['supply date', o.supplyDate], ['credited invoice date', o.credits?.issueDate], ['rate date', o.fiat?.date]] as const) {
     if (v !== undefined && (!DATE.test(v) || Number.isNaN(Date.parse(`${v}T00:00:00Z`)) || new Date(`${v}T00:00:00Z`).toISOString().slice(0, 10) !== v)) usage(`the ${k} must be a date as YYYY-MM-DD`);

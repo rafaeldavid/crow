@@ -199,7 +199,13 @@ describe("seller-invoice: the seller's invoice and credit note from a deal recor
     const r = await f.run(records.released, ['--tax', 'reverse-charge'], { buyer: { name: 'Buyer Ltd' } });
     expect(r.code).toBe(1);
     expect(r.out).toMatch(/reverse charge.*VAT number.*taxId/);
+    // The seller's own VAT number too (EU Article 226(3) and (4); Germany §14a UStG; Peppol rule BR-AE-02).
+    const g = folder({ ...SELLER, taxId: undefined });
+    const s = await g.run(records.released, ['--tax', 'reverse-charge'], { buyer: BUYER });
+    expect(s.code).toBe(1);
+    expect(s.out).toMatch(/both parties' VAT numbers, and the seller file gives none for you \(taxId\)/);
     expect(f.documents()).toEqual([]);
+    expect(g.documents()).toEqual([]);
   });
 
   it('a deal with a price of 0: no seller\'s invoice, since the seller was paid nothing; the fee is the adjudicator\'s', async () => {
