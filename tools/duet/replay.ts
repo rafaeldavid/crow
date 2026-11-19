@@ -13,7 +13,7 @@ import type { Summary } from './measures.ts';
 import type { Event } from './record.ts';
 import type { Over } from './tickets.ts';
 import { AGENT_NAME } from './scenarios.ts';
-import { ENDINGS_CSS, ENDINGS_SCRIPT, endingsSection } from './endings.ts';
+import { ENDINGS, ENDINGS_CSS, ENDINGS_SCRIPT, endingsSection } from './endings.ts';
 import { CHECK_WORDS } from './review.ts';
 
 type J = any; // eslint-disable-line @typescript-eslint/no-explicit-any
@@ -284,11 +284,19 @@ export interface PageExtras {
 }
 
 
-/** The published page's text: local paths cut to the run's own part, long hex strings to their ends. */
+const escRe = (s: string) => s.replace(/[.*+?^${}()|[\]\\/]/g, '\\$&');
+/**
+ * T-574: a link to a deal's record on the live service or to its transaction on Sepolia, the endings' two links. Each
+ * names a public deal ID or transaction hash, so the publish keeps it whole: cut short, it led nowhere.
+ */
+export const PUBLIC_LINK = new RegExp(`\\bhref="(?:${[ENDINGS.record, ENDINGS.explorer].map(escRe).join('|')})0x[0-9a-f]{64}"`, 'g');
+
+/** The published page's text: local paths cut to the run's own part, long hex strings to their ends, except in a PUBLIC_LINK. */
 export function forPublishing(html: string): string {
+  const longHex = /0x([0-9a-fA-F]{6})[0-9a-fA-F]{30,}([0-9a-fA-F]{4})(?![0-9a-fA-F])/g;
   return html
     .replace(/\/(?:Users|home|private|var|tmp)\/[^\s"'<>&]+/g, (p) => { const tail = /(\/(?:buyer|seller)\/.*)$/.exec(p)?.[1]; return `…${tail ?? `/${p.split('/').pop() ?? ''}`}`; })
-    .replace(/0x([0-9a-fA-F]{6})[0-9a-fA-F]{30,}([0-9a-fA-F]{4})(?![0-9a-fA-F])/g, '0x$1…$2');
+    .replace(new RegExp(`${PUBLIC_LINK.source}|${longHex.source}`, 'g'), (m: string, head?: string, tail?: string) => (head === undefined ? m : `0x${head}…${tail}`));
 }
 
 export function replayPage(events: readonly Event[], s: Summary, extras: PageExtras = {}): string {
