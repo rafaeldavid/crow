@@ -9,7 +9,7 @@ import {DrandQuicknetBeacon} from "../../src/DrandQuicknetBeacon.sol";
 import {Base} from "../unit/Base.sol";
 
 /// Opens the beacon's decompression to the differential tests below. A test contract only.
-contract BeaconHarness is DrandQuicknetBeacon {
+contract BeaconHarness is DrandQuicknetBeacon(250_000) {
     function decompress(bytes calldata s) external view returns (bytes memory) {
         return _decompress(s);
     }
@@ -194,7 +194,7 @@ contract DrandRedTeamTest is Base {
 
     function setUp() public override {
         super.setUp();
-        drand = new DrandQuicknetBeacon();
+        drand = new DrandQuicknetBeacon(250_000);
         harness = new BeaconHarness();
         filer = new SeedGatedFiler();
         rules = new HoldbackRules(escrow, address(collector3009), MARGIN, drand, address(usdc), DRAND_MARGIN);
@@ -489,8 +489,8 @@ contract DrandRedTeamTest is Base {
 
     /// Attack: relay a valid fallback decision with too little gas, so the capped pairing call starves. Expected:
     /// the transaction reverts and changes nothing; the same decision settles with more gas. Result: so it does.
-    /// One thing to know: in a band of gas limits the revert is `InvalidSignature`, not out-of-gas, although the
-    /// signature is valid.
+    /// Until T-528, a band of gas limits reverted `InvalidSignature` although the signature is valid; that band now
+    /// reverts `NotEnoughGas`, and no gas limit makes the valid proof say `InvalidSignature`.
     function test_attack_break_validDecisionWithTooLittleGas_revertsAndSettlesOnRetry() public {
         (H.Terms memory t, bytes32 id) = _toFallback();
         H.Decision memory m = _drandDecision(id, H.ROLE_FALLBACK, H.OUTCOME_ACCEPT, FALLBACK_ROUND, FALLBACK_SIG);
@@ -498,8 +498,9 @@ contract DrandRedTeamTest is Base {
         bytes memory callData = abi.encodeCall(rules.decide, (t, m, _noDelivery(), ""));
 
         uint256 saidInvalid;
+        uint256 saidShort;
         uint256 firstSettled;
-        for (uint256 g = 60_000; g <= 600_000; g += 5_000) {
+        for (uint256 g = 1; g <= 600_000; g += g < 60_000 ? 3 : 5_000) {
             (bool ok, bytes memory ret) = address(rules).call{gas: g}(callData);
             if (ok) {
                 firstSettled = g;
@@ -507,11 +508,13 @@ contract DrandRedTeamTest is Base {
             }
             assertEq(uint8(_stage(id)), uint8(IHoldbackRules.Stage.FallbackJudging), "a failed relay changed state");
             if (ret.length == 4 && bytes4(ret) == INVALID) saidInvalid++;
+            if (ret.length == 4 && bytes4(ret) == DrandQuicknetBeacon.NotEnoughGas.selector) saidShort++;
         }
         assertGt(firstSettled, 0, "the decision never settled");
         assertEq(uint8(_stage(id)), uint8(IHoldbackRules.Stage.Released));
-        assertGt(saidInvalid, 0, "no gas limit produced InvalidSignature for the valid proof");
-        emit log_named_uint("gas limits, 5,000 gas apart, where the valid proof says InvalidSignature", saidInvalid);
+        assertEq(saidInvalid, 0, "a gas limit made the valid proof say InvalidSignature");
+        assertGt(saidShort, 0, "no gas limit produced NotEnoughGas for the valid proof");
+        emit log_named_uint("gas limits (3 gas apart below 60,000, then 5,000) where the valid proof says NotEnoughGas", saidShort);
         emit log_named_uint("least gas limit at which the valid fallback decision settles", firstSettled);
     }
 
