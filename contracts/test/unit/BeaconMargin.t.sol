@@ -150,7 +150,7 @@ contract BeaconMarginTest is Base {
     /// between BEACON_MARGIN + 1 and BEACON_MARGIN + 3 seconds after it, and the round before it no later than
     /// lastChoice + BEACON_MARGIN.
     function test_property_drandRoundPublishesMarginPlusOneToThreeSecondsAfterTheLastChoice() public {
-        DrandQuicknetBeacon drand = new DrandQuicknetBeacon();
+        DrandQuicknetBeacon drand = new DrandQuicknetBeacon(250_000);
         uint256 g = drand.GENESIS();
         for (uint64 margin = 0; margin <= 29; margin += 29) {
             RoundsHarness h = new RoundsHarness(escrow, drand, margin);

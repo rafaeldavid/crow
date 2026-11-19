@@ -1,6 +1,6 @@
 # ADR-0039: Changing a funded deal by agreement: a waiver first, a replacement for new terms, one signed note for both
 
-- **Status:** Proposed, 2026-11-18 (D78). Needs Rafa, except two points he decided on 2026-11-18 (section 4): the default tie between a replaced deal and its successor, and the note's carrier, a hash in the settlement's existing `nonce` for now, with a named field and an event later in a contract version of its own. Nothing here is built.
+- **Status:** Accepted, 2026-11-19 (D78). Rafa decided two points on 2026-11-18 (section 4) and answered the four open points on 2026-11-19 (section "Open points for Rafa", with his answers). Where an earlier section says the hosted seller signs only on the ready credential, or that the principal says yes on every waiver and replacement, his answers to points 2 and 4 replace it. Nothing here is built.
 - **Raised by:** T-524, roadmap row N188. Rafa, 2026-11-18: "contracts / API need to allow for mutually agreed contract amendments seamlessly. It needs to be a normal path of trade". The same day, through the coordinator, he asked to:
   - weigh "the API help sign an atomic transaction that refunds, creates new escrow, and sends money from first contract back to buyer to new contract atomically";
   - decide the tie: "Let's do the default as transaction data which is signed by both buyer and seller original keys";
@@ -251,7 +251,7 @@ If replacements measure a cost (gas, or readers confused by two IDs), a contract
 
 ## Open points for Rafa
 
-1. **The order.** Recommended: waiver first, replacement for a real change of terms, the in-place variation only if measurements ask for it. The alternative is the replacement as the one path.
-2. **The hosted seller's waiver offer.** Recommended: it holds failing work and offers the waiver on every refused check, and signs only on the ready credential. The alternative is to sign the waiver at once, so the buyer's yes is the only step.
-3. **The note's text on chain.** Recommended: in the same transaction by default, through the identity precompile, with the receipt as the record. The alternative is the hash on chain and the text only in the receipt.
-4. **The buyer's stop.** Recommended: the principal's yes on every waiver and every replacement. The alternative is to skip it for a replacement whose checks are only stricter.
+1. **The order.** Recommended: waiver first, replacement for a real change of terms, the in-place variation only if measurements ask for it. The alternative is the replacement as the one path. **Answered by Rafa, 2026-11-19:** "Waiver first, replacement second --- but agent should be able to decide. Waiver I think would be the default choice to start." Both paths are offered, the waiver is the default, and the agent chooses.
+2. **The hosted seller's waiver offer.** Recommended: it holds failing work and offers the waiver on every refused check, and signs only on the ready credential. The alternative is to sign the waiver at once, so the buyer's yes is the only step. **Answered by Rafa, 2026-11-19:** "The seller signs at once, so the buyer's yes is the only step". He chose the alternative: the hosted seller signs the waiver when a check refuses, with no credential step.
+3. **The note's text on chain.** Recommended: in the same transaction by default, through the identity precompile, with the receipt as the record. The alternative is the hash on chain and the text only in the receipt. **Answered by Rafa, 2026-11-19:** "In the same transaction, public by default". The recommended reading holds.
+4. **The buyer's stop.** Recommended: the principal's yes on every waiver and every replacement. The alternative is to skip it for a replacement whose checks are only stricter. **Answered by Rafa, 2026-11-19:** "Skip, assume agent will have their own configuration requiring signature, this is not for Crow to decide". Crow's tools require no yes from the principal; a buyer's own configuration may.
