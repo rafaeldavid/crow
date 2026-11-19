@@ -1584,7 +1584,9 @@ Today a seller with its own API reads 13 files of 98,462 bytes and runs 22 comma
 
 **Open.**
 - The contract's design, its fee and who may deploy it. Answered by D84 (ADR-0041): spend controls are a protocol of their own, and their design goes in its own record.
-- Two of the research's five decisions (crow-private, part 7.2): an on-ramp top-up and a payout to an exchange in the capped mainnet test, and a brief for an adviser before the mainnet gate.
+- None of the research's five decisions (crow-private, part 7.2). Rafa answered the last two on 2026-11-19, each with "Yes":
+  - The capped real-money test adds one top-up by a person at a public on-ramp and one release to an exchange deposit address. They are MG-40 and MG-41 in ADR-0034's gate.
+  - An adviser is briefed on the money path before real money. The brief is written privately for Rafa to send; it serves MG-32.
 - Real money stays forbidden (hard rule 1).
 
 ## D84. Spend controls are a protocol of their own, and Holdback sees only a funded payer (ADR-0041, T-554)
