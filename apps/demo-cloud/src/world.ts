@@ -1008,10 +1008,11 @@ export class PublicWorld {
         },
       });
       await registerOwn(registrations, domain, a.keys.privateKey, { ...adj.registration(), pool: { terms: { ...POOL_TERMS } }, poolTermsHash: canonicalKeccak(POOL_TERMS), status: 'active' }, { label: a.label, start: meta.start, now: wholeSecond(now()) });
-      // T-574: each decision task runs at most one panel, so each runs live or scripted as a whole, retries included.
+      // T-574: each decision task runs at most one panel, so each runs live or scripted as a whole, retries included. Its
+      // size is the policy the deal bound, which may be another adjudicator's (T-574 red team L3).
       const decide = adj.service.decideTask.bind(adj.service);
-      adj.service.decideTask = (task) => {
-        const policy = adj.registration().policy;
+      adj.service.decideTask = async (task) => {
+        const policy = (await registrations.policy(task.commitment.adjudication.policyHash)) ?? adj.registration().policy;
         return panel.panel(task.role === 'appeal' ? policy.appealPanelSize : policy.panelSize, () => decide(task));
       };
       adjudicators[a.role] = adj;

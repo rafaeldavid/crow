@@ -48,7 +48,11 @@ export class JudgeBudget {
 
   private async load(): Promise<Day> {
     const day = new Date(this.now()).toISOString().slice(0, 10);
-    if (this.today?.day !== day) this.today = (await this.storage.get<Day>(`lj:${day}`)) ?? { day, calls: 0, inputTokens: 0, outputTokens: 0 };
+    if (this.today?.day !== day) {
+      // A pass that crosses UTC midnight writes the old day before it moves on, so its calls stay counted (T-574 red team L2).
+      await this.flush();
+      this.today = (await this.storage.get<Day>(`lj:${day}`)) ?? { day, calls: 0, inputTokens: 0, outputTokens: 0 };
+    }
     return this.today;
   }
 
@@ -126,8 +130,8 @@ export interface PanelConfig {
   /**
    * Runs one panel (one decision task) live or scripted as a whole (T-574): live when `allowLive` is set and today's
    * budget still holds `size` calls, chosen once before any call. Every call inside it, a retry included, goes the same
-   * way, and a live call is counted. A call outside any panel is scripted. Panels run one at a time: the adjudicator
-   * decides its tasks in turn, and the world runs its adjudicators in turn.
+   * way, and a live call is counted. A call outside any panel is scripted. Panels run one at a time: a panel asked for
+   * while another is open waits for it (T-574 red team L1), so no panel's end can change another's choice.
    */
   panel<T>(size: number, run: () => Promise<T>): Promise<T>;
 }
@@ -153,6 +157,8 @@ export function panelConfig(o: PanelOptions): PanelConfig {
   }
   /** The open panel's choice: undefined outside a panel. */
   let mode: 'live' | 'scripted' | undefined;
+  /** The end of the last panel asked for: the next one starts after it. */
+  let queue: Promise<unknown> = Promise.resolve();
   const cfg: PanelConfig = {
     live: true,
     registry: liveRegistry(),
@@ -168,13 +174,17 @@ export function panelConfig(o: PanelOptions): PanelConfig {
         return live.value.complete(r);
       },
     },
-    panel: async (size, run) => {
-      mode = cfg.allowLive && (await budget.remaining()) >= size ? 'live' : 'scripted';
-      try {
-        return await run();
-      } finally {
-        mode = undefined;
-      }
+    panel: (size, run) => {
+      const turn = queue.then(async () => {
+        mode = cfg.allowLive && (await budget.remaining()) >= size ? 'live' : 'scripted';
+        try {
+          return await run();
+        } finally {
+          mode = undefined;
+        }
+      });
+      queue = turn.catch(() => undefined);
+      return turn;
     },
   };
   return cfg;
