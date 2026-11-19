@@ -103,6 +103,8 @@ export interface EvmChain {
   readonly tokenDomain: { name: string; version: string };
   /** eth_call from `from`; throws the RPC error on a revert. `at` (scenario clock): the pending block's second. */
   simulate(tx: { from: Address; to: Address; data: Hex }, at?: number): Promise<void>;
+  /** Anvil's scenario clock only: eth_call on the pending block at second `at`, returning the call's data; throws the RPC error on a revert. */
+  callAt?(tx: { to: Address; data: Hex }, at: number): Promise<Hex>;
   /**
    * Sends and waits for the receipt. `key` absent: `senderFor(lane)`. `at` (scenario clock): the block's second.
    * `note` (a live chain with a lane store): kept in the lane's in-flight row until the receipt is applied (T-219).

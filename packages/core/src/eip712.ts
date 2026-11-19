@@ -14,6 +14,7 @@
 import { hashStruct, hashTypedData, isAddressEqual, recoverTypedDataAddress, type Hex } from 'viem';
 import { signTypedData } from 'viem/accounts';
 import { canonicalKeccak } from './canonical.js';
+import type { SignerCheck } from './signer.js';
 import { instant } from './timing.js';
 import type {
   Address,
@@ -610,7 +611,21 @@ async function sign(privateKey: Hex, t: Typed): Promise<Signature> {
   return signTypedData({ privateKey, ...t } as Parameters<typeof signTypedData>[0]);
 }
 
-async function recoversTo(t: Typed, signature: Signature, expected: Address): Promise<boolean> {
+/**
+ * The ECDSA recovery of today when `check` is absent. With `check` (the contract-signer rule of signer.ts, for a buyer's or a
+ * seller's signature): the check, over the typed data's digest. A digest that cannot be computed is false; a failed read
+ * inside `check` throws.
+ */
+async function recoversTo(t: Typed, signature: Signature, expected: Address, check?: SignerCheck): Promise<boolean> {
+  if (check) {
+    let digest: Hex32;
+    try {
+      digest = hashTypedData(t as Parameters<typeof hashTypedData>[0]);
+    } catch {
+      return false;
+    }
+    return check(digest, signature, expected);
+  }
   try {
     const signer = await recoverTypedDataAddress({ ...t, signature } as Parameters<typeof recoverTypedDataAddress>[0]);
     return isAddressEqual(signer, expected);
@@ -623,15 +638,19 @@ async function recoversTo(t: Typed, signature: Signature, expected: Address): Pr
 export const signTerms = (privateKey: Hex, domain: HoldbackDomain, terms: AnyCommitmentTerms): Promise<Signature> =>
   sign(privateKey, typed(domain, 'CommitmentTerms', typedTermsOf(terms)));
 
-export function verifyTerms(domain: HoldbackDomain, terms: AnyCommitmentTerms, signature: Signature, expected: Address): Promise<boolean> {
-  return recoversTo(typed(domain, 'CommitmentTerms', typedTermsOf(terms)), signature, expected);
+/** `check`: the contract-signer rule (signer.ts), for a seller or a buyer that may be a contract; absent, ECDSA. */
+export function verifyTerms(domain: HoldbackDomain, terms: AnyCommitmentTerms, signature: Signature, expected: Address, check?: SignerCheck): Promise<boolean> {
+  return recoversTo(typed(domain, 'CommitmentTerms', typedTermsOf(terms)), signature, expected, check);
 }
 
 export const signMessage = (privateKey: Hex, domain: HoldbackDomain, message: UnsignedMessage): Promise<Signature> =>
   sign(privateKey, typed(domain, message.type, encodeMessage(message)));
 
-/** True when the message's signature recovers to `expected`. Never throws on malformed input. */
-export async function verifyMessage(domain: HoldbackDomain, message: SignableMessage, expected: Address): Promise<boolean> {
+/**
+ * True when the message's signature recovers to `expected`. Never throws on malformed input. `check`: the contract-signer
+ * rule (signer.ts), for a message a buyer or a seller signs; absent, ECDSA.
+ */
+export async function verifyMessage(domain: HoldbackDomain, message: SignableMessage, expected: Address, check?: SignerCheck): Promise<boolean> {
   const { signature, ...unsigned } = message;
   let encoded: Encoded;
   try {
@@ -639,11 +658,11 @@ export async function verifyMessage(domain: HoldbackDomain, message: SignableMes
   } catch {
     return false;
   }
-  return recoversTo(typed(domain, message.type, encoded), signature, expected);
+  return recoversTo(typed(domain, message.type, encoded), signature, expected, check);
 }
 
-/** True when buyer and seller both signed the identical struct. Never throws on malformed input. */
-export async function verifyCoSigned(domain: HoldbackDomain, m: CoSignedMessage, buyer: Address, seller: Address): Promise<boolean> {
+/** True when buyer and seller both signed the identical struct. Never throws on malformed input. `check`: as verifyMessage. */
+export async function verifyCoSigned(domain: HoldbackDomain, m: CoSignedMessage, buyer: Address, seller: Address, check?: SignerCheck): Promise<boolean> {
   const { buyerSignature, sellerSignature, ...unsigned } = m;
   let encoded: Encoded;
   try {
@@ -652,9 +671,9 @@ export async function verifyCoSigned(domain: HoldbackDomain, m: CoSignedMessage,
     return false;
   }
   const t = typed(domain, m.type, encoded);
-  return (await recoversTo(t, buyerSignature, buyer)) && (await recoversTo(t, sellerSignature, seller));
+  return (await recoversTo(t, buyerSignature, buyer, check)) && (await recoversTo(t, sellerSignature, seller, check));
 }
 
 /** A mutual settlement is valid only when both parties signed it (ADR-0019). */
-export const verifyMutualSettlement = (domain: HoldbackDomain, m: MutualSettlement, buyer: Address, seller: Address): Promise<boolean> =>
-  verifyCoSigned(domain, m, buyer, seller);
+export const verifyMutualSettlement = (domain: HoldbackDomain, m: MutualSettlement, buyer: Address, seller: Address, check?: SignerCheck): Promise<boolean> =>
+  verifyCoSigned(domain, m, buyer, seller, check);
