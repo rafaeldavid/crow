@@ -26,7 +26,11 @@ import { homedir } from 'node:os';
 import { basename, dirname, isAbsolute, join, relative, resolve, sep } from 'node:path';
 import { getAddress, type Hex } from 'viem';
 import { generatePrivateKey, privateKeyToAccount } from 'viem/accounts';
+import { Agent } from './agent.ts';
+import { same } from './goal-kit.ts';
 import { holdingKeyOf } from './seller-adapter.ts';
+import { jcs, knownPins } from './verify.ts';
+import { plain as plainLine } from './plain.ts';
 import { freePort, SAMPLE, SAMPLE_PRICE_UNITS, sampleAddresses } from './setup-sample-api.ts';
 import { DELIVERY_LIMITS, FORMATS, hiddenCharacters, keyFileOf, readWorkFile, readWorkTemplate, readyPath, refuseEnvFile, TEMPLATE_EXAMPLE, WORK_DIR, workAddresses } from './setup-work-api.ts';
 
@@ -455,4 +459,24 @@ export function modeProblem(folder: string): string {
   if (mode(FILES.keys) !== 0o700) return `${FILES.keys}/ has mode ${mode(FILES.keys).toString(8)}, not 700`;
   if (mode(FILES.key) !== 0o600) return `${FILES.key} has mode ${mode(FILES.key).toString(8)}, not 600`;
   return '';
+}
+
+/** Sepolia's chain ID: the only settlement layer the setup signs under without --test-world. */
+const SEPOLIA_CHAIN_ID = 11155111;
+export type Pin = ReturnType<typeof knownPins>[number];
+
+/**
+ * The settlement layer, as every operator serves it, against the ones verify.ts pins: Crow's deployment on Sepolia,
+ * or with --test-world a local one. Never the operator's word. `nothing` ends each refusal, saying what was not done.
+ * Returns a reader with a throwaway key under the pinned domain, and the pin.
+ */
+export async function pinnedReader(c: Pick<Call, 'operators' | 'testWorld'>, nothing: string): Promise<{ reader: Agent; pin: Pin }> {
+  const plain = (s: unknown) => plainLine(String(s ?? '')).slice(0, 300);
+  const found = await new Agent(c.operators, generatePrivateKey(), crypto.getRandomValues(new Uint8Array(32))).trusted('/.well-known/holdback.json', (x: J) => ({ domain: x.domain, token: x.demo?.token?.id }));
+  const pin = knownPins().find((p) => same(p.domain, found.domain));
+  const sepolia = pin !== undefined && pin.domain.chainId === SEPOLIA_CHAIN_ID && pin.chain !== undefined;
+  if (!c.testWorld && !sepolia) throw new Error(`these operators serve the EIP-712 domain ${plain(jcs(found.domain))}, not Crow's deployment on Sepolia (chain ${SEPOLIA_CHAIN_ID}). ${nothing}`);
+  if (c.testWorld && (pin === undefined || sepolia)) throw new Error(`--test-world takes a local test world, and these operators serve the EIP-712 domain ${plain(jcs(found.domain))}. ${nothing}`);
+  if (found.token !== pin!.token.id) throw new Error(`these operators run no ${pin!.token.symbol} demo. ${nothing}`);
+  return { reader: new Agent(c.operators, generatePrivateKey(), crypto.getRandomValues(new Uint8Array(32)), pin!.domain, pin!.chain), pin: pin! };
 }
