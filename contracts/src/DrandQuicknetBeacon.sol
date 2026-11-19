@@ -60,15 +60,32 @@ contract DrandQuicknetBeacon is IHoldbackBeacon {
     address internal constant G1ADD = address(0x0b);
     address internal constant PAIRING_CHECK = address(0x0f);
     address internal constant MAP_FP_TO_G1 = address(0x10);
-    /// @dev Gas forwarded to PAIRING_CHECK: two pairs cost 102,900 under EIP-2537. A failing precompile burns all the
-    ///      gas it was given (a point outside G1 makes it fail), so the cap bounds what a bad proof costs its relayer.
-    uint256 internal constant PAIRING_GAS = 250_000;
+    /// @notice The least pairing gas a deployment may set: two pairs' price under EIP-2537, 102,900 gas.
+    uint256 public constant MIN_PAIRING_GAS = 102_900;
+    /// @notice Gas forwarded to PAIRING_CHECK, fixed at deploy at or above `MIN_PAIRING_GAS`, so a repricing is met by
+    ///         a new beacon instead of failing every proof. A failing precompile burns all the gas it was given (a point
+    ///         outside G1 makes it fail), so the value also bounds what a bad proof costs its relayer. A value above what
+    ///         a transaction can forward makes every failed pairing read as `NotEnoughGas`; the deployer chooses it, and
+    ///         the parties can read it here.
+    uint256 public immutable PAIRING_GAS;
 
     /// @notice The proof does not verify: not 48 bytes, not a valid compressed G1 point, not in the subgroup, not the
     ///         signature of the round, or a precompile missing or failing.
     error InvalidSignature();
 
-    constructor() {
+    /// @notice The call ran short of gas before the proof was judged: a precompile before the pairing failed, or the
+    ///         pairing failed with 1/63 of `PAIRING_GAS` or less left (it got less than `PAIRING_GAS`, or that with almost
+    ///         nothing to spare). The same call with more gas is judged.
+    error NotEnoughGas();
+
+    /// @notice A constructor's pairing gas below `MIN_PAIRING_GAS`, two pairs' price under EIP-2537: a deploy-time
+    ///         check on the deployer.
+    error PairingGasBelowFloor();
+
+    /// @param pairingGas The gas forwarded to PAIRING_CHECK; refused with `PairingGasBelowFloor` below `MIN_PAIRING_GAS`.
+    constructor(uint256 pairingGas) {
+        if (pairingGas < MIN_PAIRING_GAS) revert PairingGasBelowFloor();
+        PAIRING_GAS = pairingGas;
         P_LO = 0x64774b84f38512bf6730d2a0f6b0f6241eabfffeb153ffffb9feffffffffaaab;
     }
 
@@ -79,13 +96,18 @@ contract DrandQuicknetBeacon is IHoldbackBeacon {
 
     /// @inheritdoc IHoldbackBeacon
     /// @dev Verifies the 48-byte compressed signature of `round` with one pairing check and returns sha256 of the
-    ///      signature bytes. Reverts `InvalidSignature` when it does not verify.
+    ///      signature bytes. Reverts `InvalidSignature` when it does not verify, and `NotEnoughGas` when the call ran
+    ///      short of gas before the proof was judged (see the error).
     function beaconValue(uint64 round, bytes calldata signature) external view returns (bytes32) {
         if (signature.length != 48) revert InvalidSignature();
         bytes memory sig = _decompress(signature);
         bytes memory h = hashToG1(sha256(abi.encodePacked(round)));
         (bool ok, bytes memory out) =
             PAIRING_CHECK.staticcall{gas: PAIRING_GAS}(bytes.concat(sig, _negG2(), h, _publicKey()));
+        // A call forwards at most 63/64 of the gas left (EIP-150). A failed pairing that leaves 1/63 of the cap or less
+        // was given less than the cap, or the cap with almost nothing to spare: the sender is told to send more gas,
+        // and with more the proof is judged.
+        if (!ok && gasleft() <= PAIRING_GAS / 63) revert NotEnoughGas();
         if (!ok || out.length != 32 || uint256(bytes32(out)) != 1) revert InvalidSignature();
         return sha256(signature);
     }
@@ -158,9 +180,15 @@ contract DrandQuicknetBeacon is IHoldbackBeacon {
         return _call(MODEXP, abi.encodePacked(uint256(64), e.length, uint256(64), hi, lo, e, P_HI, P_LO), 64);
     }
 
+    /// @dev MODEXP, MAP_FP_TO_G1 and G1ADD get only well-formed input here (field elements reduced mod p, x below p,
+    ///      mapped points). A call that fails and leaves 1/63 of the gas before it or less ran out of gas (EIP-150, as
+    ///      for the pairing): `NotEnoughGas`. Any other failure, and a missing precompile's empty answer, are refused
+    ///      with `InvalidSignature`.
     function _call(address precompile, bytes memory input, uint256 outLen) internal view returns (bytes memory out) {
         bool ok;
+        uint256 before = gasleft();
         (ok, out) = precompile.staticcall(input);
+        if (!ok && gasleft() <= before / 63) revert NotEnoughGas();
         if (!ok || out.length != outLen) revert InvalidSignature();
     }
 
