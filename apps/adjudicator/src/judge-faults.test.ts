@@ -280,6 +280,25 @@ describe('T-570: a malformed answer never re-runs the panel (red team H1)', () =
     ['text an object', { kind: 'ok', text: { overall: 'pass' } }],
     ['no response object', undefined],
   ];
+  /** A schema-valid verdict whose rationale ends in a lone UTF-16 surrogate, which canonical JSON cannot hash. */
+  const loneSurrogate = (req: JudgeRequest): JudgeResponse => {
+    const r = honestVerdict(req, 'pass');
+    return r.kind === 'ok' ? { kind: 'ok', text: r.text.replace('"rationale":"', '"rationale":"\\ud800 ') } : r;
+  };
+  it('a lone surrogate in a verdict from every judge of one family: each seated judge is called once across two passes, and the seat is an error', async () => {
+    const w = await delivered(DEMO_CSV);
+    const seats = primaryPanel(w);
+    const family = familyOf(seats[0]!);
+    w.judges.script = Object.fromEntries(REGISTRY.judges.filter((j) => j.family === family).map((j) => [j.id, loneSurrogate]));
+    const first = await w.primary.adj.runOnce();
+    expect(first.refused).toEqual([]);
+    expect(first.decided).toHaveLength(1);
+    w.judges.script = {};
+    expect((await w.primary.adj.runOnce()).decided).toEqual([]);
+    expect(w.calls.map((c) => c.judgeId).sort()).toEqual([...seats].sort());
+    const [record] = [...w.records.values()];
+    for (const m of record!.panel.members) expect(m.status).toBe(familyOf(m.judgeId) === family ? 'error' : 'ok');
+  });
   it.each(SHAPES)('%s from every judge of one family: each seated judge is called once across two passes, and the seat is an error', async (_name, shape) => {
     const w = await delivered(DEMO_CSV);
     const seats = primaryPanel(w);

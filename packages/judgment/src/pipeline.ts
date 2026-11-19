@@ -4,7 +4,7 @@
 // calls go through an injected provider; a request carries the model ID, the two prompt strings and
 // fixed sampling parameters, and nothing else (no tools, no secrets, no URLs to fetch).
 import type { Hex32, MimeType, PanelMember, Problem, Result } from '@holdback/core';
-import { canonicalKeccak, err, ok, problem } from '@holdback/core';
+import { canonicalJson, canonicalKeccak, err, ok, problem } from '@holdback/core';
 import { preDecision, type Aggregate, type PanelVerdict, type PreDecision } from './aggregate.js';
 import { runChecks, type CheckOutcome } from './checks/index.js';
 import type { Intaken } from './intake.js';
@@ -242,24 +242,28 @@ export async function runPipeline(input: PipelineInput): Promise<Result<Judgment
   const sameIds = (cs: readonly JudgmentCriterion[]) => cs.length === rubricIds.length && cs.every((c) => rubricIds.includes(c.id)) && new Set(cs.map((c) => c.id)).size === cs.length;
 
   type SeatResult = { member: PanelMember; verdict: PanelVerdict; canaryEcho: boolean; filtered?: string; strided: boolean };
-  const results = await Promise.all(
-    seats.map(async (seat, i): Promise<SeatResult | string> => {
-      const family = families[i]!;
-      const criteria = input.criteriaFor?.(seat, i) ?? acceptance.rubric.criteria;
-      if (!sameIds(criteria)) return `criteria for ${seat.judgeId} are not a permutation of the rubric`;
-      const prompt = buildPrompt({
-        spec: { description: input.deliverable.description },
-        criteria,
-        data: input.intake.data,
-        nonces: input.nonces(seat, i),
-        ...(input.template ? { template: input.template } : {}),
-        templates,
-        stride: screener.stride,
-        ...(input.maxDataChars !== undefined ? { maxDataChars: input.maxDataChars } : {}),
-        ...(input.sampleSeed ? { sample: { seed: input.sampleSeed(seat, i), mime: input.intake.mime } } : {}),
-      });
-      if (!prompt.ok) return `prompt for ${seat.judgeId}: ${prompt.error}`;
-      const p = prompt.value;
+  // Every seat's prompt is built before any judge is called, so a refusal (a bad criteria order, a prompt that cannot
+  // be built) never follows a judge call, and a retry of the turn never calls the same judges again for nothing.
+  const prompts: Array<{ seat: PanelSeat; family: string; p: Exclude<ReturnType<typeof buildPrompt>, { ok: false }>['value'] }> = [];
+  for (const [i, seat] of seats.entries()) {
+    const criteria = input.criteriaFor?.(seat, i) ?? acceptance.rubric.criteria;
+    if (!sameIds(criteria)) return err(problem('invalid_terms', `criteria for ${seat.judgeId} are not a permutation of the rubric`));
+    const prompt = buildPrompt({
+      spec: { description: input.deliverable.description },
+      criteria,
+      data: input.intake.data,
+      nonces: input.nonces(seat, i),
+      ...(input.template ? { template: input.template } : {}),
+      templates,
+      stride: screener.stride,
+      ...(input.maxDataChars !== undefined ? { maxDataChars: input.maxDataChars } : {}),
+      ...(input.sampleSeed ? { sample: { seed: input.sampleSeed(seat, i), mime: input.intake.mime } } : {}),
+    });
+    if (!prompt.ok) return err(problem('invalid_terms', `prompt for ${seat.judgeId}: ${prompt.error}`));
+    prompts.push({ seat, family: families[i]!, p: prompt.value });
+  }
+  const rs: SeatResult[] = await Promise.all(
+    prompts.map(async ({ seat, family, p }): Promise<SeatResult> => {
       const member: PanelMember = {
         judgeId: seat.judgeId,
         provider: seat.provider,
@@ -280,6 +284,7 @@ export async function runPipeline(input: PipelineInput): Promise<Result<Judgment
         maxOutputTokens: input.maxOutputTokens ?? 2048,
       });
       const none = { family, verdict: null };
+      const seatError = { member: { ...member, status: 'error' as const }, verdict: none, canaryEcho: false, strided: p.sampling === 'stride' };
       if (res.kind !== 'ok') return { member: { ...member, status: res.kind }, verdict: none, canaryEcho: false, strided: p.sampling === 'stride' };
       if (res.latencyMs !== undefined) member.latencyMs = res.latencyMs;
       let parsed: ReturnType<AggregationImpl['parseVerdict']>;
@@ -287,18 +292,23 @@ export async function runPipeline(input: PipelineInput): Promise<Result<Judgment
         parsed = aggregation.parseVerdict(res.text, { criterionIds: rubricIds, canary: p.canary, rationaleMaxChars: policy.rationaleMaxChars });
       } catch {
         // A verdict filter that throws on one seat's output makes that seat an error, never the whole panel's failure.
-        return { member: { ...member, status: 'error' }, verdict: none, canaryEcho: false, strided: p.sampling === 'stride' };
+        return seatError;
       }
       if (parsed.status === 'abstain') {
         return { member: { ...member, status: 'abstain' }, verdict: none, canaryEcho: parsed.reason === 'canary_echo', filtered: parsed.reason, strided: p.sampling === 'stride' };
+      }
+      // The verdict goes into the signed record, whose hash is RFC 8785 canonical JSON. A verdict canonical JSON cannot
+      // represent (a lone UTF-16 surrogate, from the judge or from cutting redacted evidence) is an error for that seat;
+      // left in, it made the record hash throw and the adjudicator call the panel again (T-570 review of PR 722).
+      try {
+        canonicalJson(parsed.verdict);
+      } catch {
+        return seatError;
       }
       const status = parsed.verdict.overall === 'abstain' ? 'abstain' : 'ok';
       return { member: { ...member, status, verdict: parsed.verdict }, verdict: { family, verdict: parsed.verdict }, canaryEcho: false, strided: p.sampling === 'stride' };
     }),
   );
-  const refused = results.find((r): r is string => typeof r === 'string');
-  if (refused) return err(problem('invalid_terms', refused));
-  const rs = results as SeatResult[];
 
   const canarySignals = rs.filter((r) => r.canaryEcho).map((r) => ({ kind: 'canary_echo' as const, detail: `judge ${r.member.judgeId} echoed its canary` }));
   const finalScreen: ScreenResult = { flagged: baseScreen.flagged || canarySignals.length > 0, signals: [...baseScreen.signals, ...canarySignals] };

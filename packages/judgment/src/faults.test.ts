@@ -8,6 +8,7 @@
 //   - aggregation agg-3 signs a reject on one family's verdicts when the faulty family holds one seat of three and its
 //     fault is not a filter abstention (ONE_FAMILY_REJECT_AT_AGG3);
 //   - an answer whose text is not a string makes runPipeline throw, so the adjudicator retries and calls the panel again.
+import { canonicalJson } from '@holdback/core';
 import { describe, expect, it } from 'vitest';
 import { ADJUDICATOR, delivery, fakeUnwrap, GOOD_CSV, NONCES, POLICY, RUBRIC, seal, utf8 } from './_helpers.js';
 import { intake } from './intake.js';
@@ -130,27 +131,68 @@ describe('T-570: no seat\'s output aborts the panel (red team H1)', () => {
   // An OpenAI-compatible host can answer content null, an array or a number, which live.ts passes on as an ok answer.
   // Before this fix parseVerdict threw, runPipeline rejected, and the adjudicator called the whole panel again on its
   // next pass. Each malformed shape is now an error for that seat: no vote, and the panel still returns.
-  const SHAPES: Array<[string, unknown]> = [
-    ['text null', { kind: 'ok', text: null }],
-    ['text an array', { kind: 'ok', text: [{ type: 'text', text: 'x' }] }],
-    ['text a number', { kind: 'ok', text: 7 }],
-    ['text an object', { kind: 'ok', text: { overall: 'pass' } }],
-    ['no response object', undefined],
-    ['an unknown kind', { kind: 'maybe' }],
-    ['a latency that is not whole milliseconds', { kind: 'ok', text: 'not json', latencyMs: 1.5 }],
+  // Each malformed shape with the status its seat gets: an error (the provider gave no usable answer) or a filter
+  // abstention (a string the verdict filter refuses).
+  const SHAPES: Array<[string, unknown, 'error' | 'abstain']> = [
+    ['text null', { kind: 'ok', text: null }, 'error'],
+    ['text an array', { kind: 'ok', text: [{ type: 'text', text: 'x' }] }, 'error'],
+    ['text a number', { kind: 'ok', text: 7 }, 'error'],
+    ['text an object', { kind: 'ok', text: { overall: 'pass' } }, 'error'],
+    ['no response object', undefined, 'error'],
+    ['an unknown kind', { kind: 'maybe' }, 'error'],
+    ['a string that is not a verdict, with a fractional latency', { kind: 'ok', text: 'not json', latencyMs: 1.5 }, 'abstain'],
+    ['a lone surrogate in the rationale', { kind: 'ok', text: verdictText('pass', { rationale: 'r \ud800' }) }, 'error'],
   ];
-  it.each(SHAPES)('%s: the seat is an error or a filter abstention, never a vote, and every judge is called once', async (_name, shape) => {
+  it.each(SHAPES)('%s: the seat is %s, never a vote, and every judge is called once', async (_name, shape, status) => {
     const calls: string[] = [];
     const provider: JudgeProvider = { complete: async (req) => (calls.push(req.judgeId), req.judgeId === 'gpt-a' ? (shape as JudgeResponse) : answer('pass')) };
     const draft = await run(provider);
     const gpt = draft.panel.members.find((m) => m.judgeId === 'gpt-a')!;
-    expect(gpt.status === 'error' || gpt.status === 'abstain').toBe(true);
+    expect(gpt.status).toBe(status);
     expect(gpt.verdict).toBeUndefined();
+    expect(gpt.latencyMs === undefined || Number.isSafeInteger(gpt.latencyMs)).toBe(true);
     expect(draft.aggregate.passCount).toBe(2);
     expect(draft.aggregate.decision).toBe('escalate');
     expect(calls.sort()).toEqual(['claude-a', 'claude-b', 'gpt-a']);
-    if (gpt.status === 'ok') expect.unreachable();
-    expect(gpt.latencyMs === undefined || Number.isSafeInteger(gpt.latencyMs)).toBe(true);
+    // The draft canonicalizes: the adjudicator can hash the record it signs.
+    expect(() => canonicalJson(draft)).not.toThrow();
+  });
+
+  it('a valid pass with a fractional latency still counts as a vote, without the latency', async () => {
+    const provider: JudgeProvider = { complete: async () => ({ ...answer('pass'), latencyMs: 1.5 }) as JudgeResponse };
+    const draft = await run(provider);
+    expect(draft.panel.members.every((m) => m.status === 'ok' && m.latencyMs === undefined)).toBe(true);
+    expect(draft.aggregate.passCount).toBe(3);
+  });
+
+  it('URL redaction that cuts an emoji in half makes the seat an error, and the draft still canonicalizes', async () => {
+    // "www.ab" (6 characters) becomes "[link removed]" (14), and the cut at 300 UTF-16 units splits the emoji.
+    const text = JSON.stringify({ criteria: RUBRIC.criteria.map((c) => ({ id: c.id, score: 4, evidence: `www.ab ${'a'.repeat(284)}\u{1F600}` })), overall: 'pass', injectionSuspected: false, rationale: 'r' });
+    const provider: JudgeProvider = { complete: async (req) => (req.judgeId === 'gpt-a' ? { kind: 'ok', text } : answer('pass')) };
+    const draft = await run(provider);
+    expect(draft.panel.members.find((m) => m.judgeId === 'gpt-a')!.status).toBe('error');
+    expect(() => canonicalJson(draft)).not.toThrow();
+  });
+
+  it('a seat whose criteria order is refused stops the turn before any judge is called', async () => {
+    const calls: string[] = [];
+    const provider: JudgeProvider = { complete: async (req) => (calls.push(req.judgeId), answer('pass')) };
+    const pt = utf8(GOOD_CSV);
+    const ct = seal(pt);
+    const intaken = await intake({ delivery: delivery(pt, ct), ciphertext: ct, recipient: ADJUDICATOR, unwrapKey: fakeUnwrap });
+    if (!intaken.ok) throw new Error(intaken.error.detail);
+    const r = await runPipeline({
+      intake: intaken.value,
+      acceptance: ACCEPTANCE,
+      deliverable: { description: 'Clean customers.csv.' },
+      policy: POLICY,
+      seats: SEATS,
+      provider,
+      nonces: (_s, i) => ({ boundary: NONCES.boundary.replace(/.$/, String(i)), canary: NONCES.canary.replace(/.$/, String(i)) }),
+      criteriaFor: (_s, i) => (i === 2 ? RUBRIC.criteria.slice(1) : RUBRIC.criteria),
+    });
+    expect(r.ok).toBe(false);
+    expect(calls).toEqual([]);
   });
 
   it('a verdict filter that throws on one seat makes that seat an error, and the panel still returns', async () => {
