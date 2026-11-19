@@ -1,7 +1,7 @@
 // FROZEN: agg-3, as released before T-570 (commit 22dd494a, packages/judgment/src/aggregate.ts). ADR-0036 section 1: a kept
 // version never changes under its label. Only the import paths and this header differ from that commit; the replay
-// (packages/testkit/src/replay.ts) and the pinned digest in aggregate.test.ts hold it to its results. agg-4 adds the
-// two-family rule for every decision (T-570); deals bound to agg-3 keep this rule until they settle.
+// (packages/testkit/src/replay.ts) and the pinned digests in aggregate.test.ts hold it to its results. agg-4 adds two
+// rules for judge faults (T-570, ADR-0043); deals bound to agg-3 keep this rule until they settle.
 // Stage 5, aggregation: the rule in docs/judgment-and-defenses.md, with D17 and D18 applied.
 //
 //   if any required deterministic check failed            -> REJECT  (no panel)
