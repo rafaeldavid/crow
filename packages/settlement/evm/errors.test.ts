@@ -2,7 +2,7 @@ import { existsSync, readFileSync } from 'node:fs';
 import { join } from 'node:path';
 import { encodeErrorResult, parseAbi } from 'viem';
 import { describe, expect, it } from 'vitest';
-import { BEACON_ERRORS, problemFromRevert, revertData, revertName } from './errors.js';
+import { BEACON_ERRORS, BY_NAME, problemFromRevert, revertData, revertName } from './errors.js';
 
 const abi = parseAbi([
   'error WrongStage(uint8 current)',
@@ -78,5 +78,14 @@ describe("the beacon's errors through the rules contract's ABI", () => {
     const declared = (JSON.parse(readFileSync(built, 'utf8')).abi as Item[]).filter((x) => x.type === 'error').map(sig);
     expect(declared.length).toBeGreaterThan(0);
     expect((BEACON_ERRORS as readonly Item[]).map(sig)).toEqual(expect.arrayContaining(declared));
+    // And each has its problem type by name: without one it would decode, then fall back to invalid_state (T-559).
+    const names = (JSON.parse(readFileSync(built, 'utf8')).abi as Item[]).filter((x) => x.type === 'error').map((e) => e.name!);
+    expect(names.filter((n) => !Object.hasOwn(BY_NAME, n))).toEqual([]);
+  });
+
+  it('gives every error in the list its problem type by name, with or without a build (T-559)', () => {
+    const names = (BEACON_ERRORS as ReadonlyArray<{ type: string; name?: string }>).filter((x) => x.type === 'error').map((e) => e.name!);
+    expect(names.length).toBeGreaterThan(0);
+    expect(names.filter((n) => !Object.hasOwn(BY_NAME, n))).toEqual([]);
   });
 });
