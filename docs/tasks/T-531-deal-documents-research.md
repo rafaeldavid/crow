@@ -5,7 +5,7 @@
 - **Depends on:** T-333 (the deal record), T-511 (the evidence file checked offline)
 - **Paths this task may touch:** `docs/research/2026-11-18-deal-documents.md` (new), `docs/research/README.md` (one row), this file.
 - **Human gate:** no. The adviser questions in the note's section 9 are Rafa's to put to an adviser; nothing is built.
-- **Status:** review
+- **Status:** done
 - **Agent/session:** the T-531 session, 2026-11-18, branch `t-531-deal-documents`.
 - **Roadmap row:** N194
 - **Change kind:** 10, research and decisions.
