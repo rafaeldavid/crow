@@ -6,7 +6,7 @@
 - **Depends on:** T-509 and T-534 (the report corpus and its converter, holdback pull requests 635 and 661)
 - **Paths this task may touch:** `docs/research/2026-11-19-screen-flags-on-real-reports.md` (new), `docs/research/2026-11-19-screen-flags-on-real-reports/` (new: `count.mjs`, `results.json`), this file
 - **Human gate:** no; the recommended screen change is a decision for Rafa and is not made here
-- **Status:** done with the merge of pull request 696 on 2026-11-19, after CI passed and one review's findings were fixed
+- **Status:** review: pull request 696 passed CI and one review; it waits for the T-563 merge freeze, then takes `origin/main` and merges
 - **Agent/session:** the T-557 session, 2026-11-19, branch `t-557-screen-flag-count`
 - **Roadmap row:** N40
 
