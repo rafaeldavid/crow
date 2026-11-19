@@ -20,7 +20,7 @@ Rafa, 2026-11-19: "Add a short page saying \"test network only\" we don't have a
 ## Acceptance criteria
 
 - [x] `/legal` and `/legal.txt` come from one source in `site/trust.mjs`: four short paragraphs, about 100 words, two links on words and no bare address.
-- [x] The home page shows the kit's pill "Demo now live · Test network, no real money" above the eyebrow, linked to `/legal`. The hero's own words still come from `llms.txt`.
+- [x] The home page shows the kit's pill "Available today for demo only" above the eyebrow, linked to `/legal` (Rafa changed it from "Demo now live · Test network, no real money" on 2026-11-19, after seeing the page). The hero's own words still come from `llms.txt`.
 - [x] The footer links Legal on every page except the home page, whose demo line links it; the trust page and `trust.txt` link the notice.
 - [x] `site/check.mjs` holds the page to its words and its size (at most 1,200 bytes in `legal.txt`, at most 3 links in the page body), refuses an invented entity, jurisdiction, email address or compliance claim, and applies the trust page's refused words.
 - [x] No agent page changes, so the first-deal budgets do not move; the pinned bundles do not change; `site/index.html` stays within its 8,000-byte cap.
@@ -38,7 +38,7 @@ Rafa, 2026-11-19: "Add a short page saying \"test network only\" we don't have a
 - **First pass: test-network notices** (read for structure; no text copied) [measured]: Celo's testnet terms, Bitcoin Computer's `LEGAL.md`, Golem Network's terms, Pipette's terms and privacy pages, Fossify's privacy page.
 - **Facts checked in the repo** [measured]: test network and tUSDC (`docs/operations.md`, "Sepolia contracts (T-206)"); the sign-up keeps the email, the time and the page (`apps/early-access/worker.js`, its header); Apache 2.0's "as is" clause (`LICENSE`, section 7).
 - **Commands** [measured]: `pnpm build`, `node site/build.mjs`, a publish build to `reports/site-out`, `node site/check.mjs`: PASS. `pnpm typecheck`: pass. `pnpm vitest run tests/site`: 5 files, 58 tests passed. The page was not opened in a browser [not measured].
-- **Budgets, before and after** [measured, the check's estimate of bytes divided by four]: buyer `llms.txt + buy.txt` 4,881 of 5,000 tokens before and after; seller `llms.txt + sell.txt` 4,508 of 5,000 before and after; `setup.txt` unchanged. `site/index.html` 7,890 bytes before, 7,977 after, of 8,000. `site/buy.mjs`, `site/try.mjs` and `site/setup.mjs` unchanged.
+- **Budgets, before and after** [measured, the check's estimate of bytes divided by four]: buyer `llms.txt + buy.txt` 4,881 of 5,000 tokens before and after; seller `llms.txt + sell.txt` 4,508 of 5,000 before and after; `setup.txt` unchanged. `site/index.html` 7,890 bytes before, 7,962 after, of 8,000. `site/buy.mjs`, `site/try.mjs` and `site/setup.mjs` unchanged.
 
 ## Decisions
 

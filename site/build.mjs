@@ -20,9 +20,9 @@ import { rolldown } from 'rolldown';
 import { JOIN_URL } from './drawer.ts';
 import { CARDS, cardTags, FOOTER_CSS, footerHtml } from './footer.ts';
 import { headerBar, ICON_FILES, iconBytes, iconLinks, iconTags, kitCss, listRows, sectionHead, TOKENS } from './brand/kit.mjs';
-/** The demo line above the hero's eyebrow (T-564, Rafa 2026-11-19: "Demo Now Live"). Site trim like the demo link: the
+/** The demo line above the hero's eyebrow (T-564, Rafa 2026-11-19: "Demo Now Live", then "Available today for demo only"). Site trim like the demo link: the
  * hero's own words still come from llms.txt, which opens with the same fact for agents ("Test tokens only"). */
-export const LIVE_LINE = 'Demo now live · Test network, no real money';
+export const LIVE_LINE = 'Available today for demo only';
 import { writeInlineHashes } from './csp.mjs';
 import { guideFiles, guideSource } from './guides.mjs';
 import { legalPage, legalText, PAGES_CSS, securityTxt, statusJson, statusPage, trustFacts, trustPage, trustText } from './trust.mjs';
