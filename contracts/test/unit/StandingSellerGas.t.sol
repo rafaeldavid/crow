@@ -13,9 +13,9 @@ import {StandingSellerBase} from "./StandingSellerBase.sol";
 /// measures warm calls, so there the budgets only catch a gross regression.
 contract StandingSellerGasTest is StandingSellerBase {
     uint256 internal constant PLAIN_FUND_BUDGET = 300_000; // GasPerDeal's FUND_BUDGET
-    uint256 internal constant TAKE_FUND_BUDGET = 330_000; // measured 264,557 (--isolate, 2026-11-19)
-    uint256 internal constant STANDING_DELIVER_BUDGET = 175_000; // measured 139,792 (--isolate, 2026-11-19)
-    uint256 internal constant DEPLOY_BUDGET = 3_200_000; // measured 2,569,525 (--isolate, 2026-11-19)
+    uint256 internal constant TAKE_FUND_BUDGET = 330_000; // measured 261,233 (--isolate, 2026-11-19)
+    uint256 internal constant STANDING_DELIVER_BUDGET = 175_000; // measured 136,458 (--isolate, 2026-11-19)
+    uint256 internal constant DEPLOY_BUDGET = 3_200_000; // measured 2,548,708 (--isolate, 2026-11-19)
 
     function setUp() public override {
         super.setUp();

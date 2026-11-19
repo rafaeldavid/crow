@@ -13,10 +13,11 @@ import {HoldbackTypes as H} from "./HoldbackTypes.sol";
 ///         signature by that address through ERC-1271 (`HoldbackRules._requireSigned`), so this contract decides what
 ///         the seller has signed. The rules contract is unchanged.
 ///
-///         **Its one key.** `KEY`, the seller's own key, is the constructor's only argument and never changes. There
-///         is no owner, role, pause, upgrade, fallback or receive. The deployer, whoever pays, gets no power: the
-///         address follows from the creation code, the key and the salt through the deterministic deployment proxy
-///         (ADR-0040 §4).
+///         **Its one key.** `KEY`, the seller's own key, is the constructor's only argument and never changes. It is
+///         checked by ECDSA alone (a 64- or 65-byte signature), never through ERC-1271, so its answer cannot change
+///         after a take funds, even if the key's address later has code (red team Info-1). There is no owner, role,
+///         pause, upgrade, fallback or receive. The deployer, whoever pays, gets no power: the address follows from
+///         the creation code, the key and the salt through the deterministic deployment proxy (ADR-0040 §4).
 ///
 ///         **What is stored.** One mapping, `revoked[templateHash]`, and one flag, `retired`. Nothing per take: the
 ///         rules contract funds one commitment ID once.
@@ -29,15 +30,18 @@ import {HoldbackTypes as H} from "./HoldbackTypes.sol";
 ///            agreement, a per-buyer delivery, a per-buyer offer from this address).
 ///         2. `signature` is a take, `abi.encode(uint8(1), offer, keySignature, fill)`: `KEY` signed the offer
 ///            under this contract's EIP-712 domain; the offer is not revoked and the contract is not retired;
-///            `block.timestamp < offer.expiresAt`; `fill.createdAt <= block.timestamp`; and `hash` is the named rules
-///            deployment's digest (`typedDataHash`) of the commitment ID of `termsOf(offer, fill)`.
+///            `block.timestamp < offer.expiresAt`; `fill.createdAt <= block.timestamp`; and `hash` is the digest of
+///            the commitment ID of `termsOf(offer, fill)` under the rules contract's domain at `offer.rules`.
 ///         3. `signature` is a standing delivery, `abi.encode(uint8(2), offer, keySignature, fill)`: `KEY` signed
-///            the offer; the offer carries one standing delivery; and `hash` is the named rules deployment's digest
-///            of that delivery's hash for the commitment ID of `termsOf(offer, fill)`. Revocation, retirement and
-///            expiry do not end this case, so a funded take always gets its delivery.
+///            the offer; the offer carries one standing delivery; and `hash` is the digest of that delivery's hash for
+///            the commitment ID of `termsOf(offer, fill)` under the rules contract's domain at `offer.rules`.
+///            Revocation, retirement and expiry do not end this case, so a funded take always gets its delivery.
 ///         Any other input answers `0xffffffff` or reverts; the rules contract reads both as no (`BadSignature`).
-///         The contract never trusts a commitment ID, terms or a digest from the caller: it rebuilds them with the
-///         rules contract's own library, `HoldbackTypes.commitmentId` and `HoldbackTypes.deliveryHash`.
+///         The contract never trusts a commitment ID, terms or a digest from the caller: it rebuilds the ID and the
+///         delivery hash with the rules contract's own library, `HoldbackTypes.commitmentId` and
+///         `HoldbackTypes.deliveryHash`, and the digest itself from the rules contract's domain (name "Holdback",
+///         version "0.8", this chain, `offer.rules`). It calls no code at `offer.rules`, so a template naming a wrong
+///         address approves only digests no real rules deployment asks about (red team H-1).
 ///
 ///         **The take's terms** (`termsOf`). Every field comes from the offer, except:
 ///         - `seller`: this contract;
@@ -57,6 +61,9 @@ import {HoldbackTypes as H} from "./HoldbackTypes.sol";
 ///         - The key path (case 1) approves any digest `KEY` signs, so another application's digest signed by the key
 ///           is approved by every seller contract of that key. The contract holds nothing and grants no allowance, so
 ///           such an approval reaches nothing here. The seller's tools use the key for this contract only.
+///         - The refusal of a payout to this contract covers templates only. A per-buyer offer the key signs through
+///           case 1 is not read, so the seller's tool refuses such terms before signing.
+///         - A rules deployment under another domain name or version needs a new version of this contract.
 ///         - `retire()` ends case 2 only. A leaked key can still sign per-buyer offers through case 1; the seller's
 ///           answer is a new key and a new contract, published on its card.
 ///         - The answer changes over time (revocation, retirement, expiry), as the rules contract's known issue on
@@ -153,7 +160,7 @@ interface IHoldbackStandingSeller {
 
     // Events
 
-    /// @notice The key revoked a template: no new take of it from this block on. Emitted once per template.
+    /// @notice The key revoked a template: no new take of it from this transaction on. Emitted once per template.
     event Revoked(bytes32 indexed templateHash);
 
     /// @notice The key retired the contract: no new take of any template, for good. Emitted once.
@@ -178,7 +185,8 @@ interface IHoldbackStandingSeller {
 
     // Functions
 
-    /// @notice The seller's key: the only signer this contract answers for. Set once, at deployment.
+    /// @notice The seller's key: the only signer this contract answers for, by ECDSA. Set once, at deployment. It must
+    ///         be a key that signs (an externally owned account's): a contract address there can sign nothing.
     function KEY() external view returns (address);
 
     /// @notice Whether the key revoked the template with this hash.
@@ -192,14 +200,14 @@ interface IHoldbackStandingSeller {
     function isValidSignature(bytes32 hash, bytes calldata signature) external view returns (bytes4);
 
     /// @notice Revokes a template: no new take of it. Sent by `KEY` (`keySignature` is then not read), or relayed by
-    ///         anyone with `KEY`'s EIP-712 signature of `Revoke(bytes32 templateHash)` under this contract's domain.
-    ///         Idempotent. A funded take still gets its standing delivery.
+    ///         anyone with `KEY`'s ECDSA signature of the EIP-712 `Revoke(bytes32 templateHash)` under this contract's
+    ///         domain. Idempotent. A funded take still gets its standing delivery.
     /// @dev Reverts `BadSignature` when the sender is not `KEY` and the signature is not `KEY`'s.
     function revoke(bytes32 templateHash, bytes calldata keySignature) external;
 
     /// @notice Retires the contract: no new take of any template, for good. Sent by `KEY`, or relayed by anyone with
-    ///         `KEY`'s EIP-712 signature of `Retire()` under this contract's domain. Idempotent. Not a pause: the key
-    ///         path and every standing delivery keep working, so funded deals settle as their terms say.
+    ///         `KEY`'s ECDSA signature of the EIP-712 `Retire()` under this contract's domain. Idempotent. Not a pause:
+    ///         the key path and every standing delivery keep working, so funded deals settle as their terms say.
     /// @dev Reverts `BadSignature` when the sender is not `KEY` and the signature is not `KEY`'s.
     function retire(bytes calldata keySignature) external;
 

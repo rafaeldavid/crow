@@ -23,6 +23,19 @@ contract BackDoorSeller {
     }
 }
 
+/// A `rules` address that answers `typedDataHash` with whatever its owner stored (red team H-1). Test only.
+contract HostileRules {
+    bytes32 public answer;
+
+    function set(bytes32 a) external {
+        answer = a;
+    }
+
+    function typedDataHash(bytes32) external view returns (bytes32) {
+        return answer;
+    }
+}
+
 /// T-548: the forge tests ADR-0040 §9 assigns to T-548, each named after its fixture (`attack.take-replayed` is
 /// `test_attack_takeReplayed`), against the unchanged rules contract. Scenario and local-chain fixtures of the same
 /// table belong to T-549 and T-550.
@@ -42,29 +55,69 @@ contract StandingSellerAttackTest is StandingSellerBase {
         bytes memory blob = _blob(TAKE, o, sig, f);
         for (uint256 i; i < 22; ++i) {
             H.Terms memory t = ss.termsOf(o, f);
-            if (i == 0) t.price += 1;
-            else if (i == 1) t.price = 1;
-            else if (i == 2) t.sellerPayoutAddress = makeAddr("thief");
-            else if (i == 3) t.adjudicator = makeAddr("adj2");
-            else if (i == 4) t.fallbackAdjudicator = makeAddr("fb2");
-            else if (i == 5) t.appealAdjudicator = makeAddr("ap2");
-            else if (i == 6) t.fee += 1;
-            else if (i == 7) t.deliverableHash = keccak256("other work");
-            else if (i == 8) t.acceptanceHash = keccak256("weaker checks");
-            else if (i == 9) t.policyHash = keccak256("other policy");
-            else if (i == 10) t.registryHash = keccak256("other registry");
-            else if (i == 11) t.policyIdHash = keccak256("other policy id");
-            else if (i == 12) t.timing.deliverBy += 1;
-            else if (i == 13) t.timing.fallbackBy += 1;
-            else if (i == 14) t.timing.appealDecideSec += 1;
-            else if (i == 15) t.disclosureHash = keccak256(abi.encode(keccak256("Disclosure(string level)"), keccak256("private")));
-            else if (i == 16) t.remedyHash = keccak256("other remedy");
-            else if (i == 17) t.seller = seller; // an EOA: the blob is not its signature
-            else if (i == 18) t.nonce = f.nonceSeed; // the seed itself, not the derived nonce
-            else if (i == 19) t.rulebookHash = keccak256("other rulebook");
-            else if (i == 20) t.clubIdHash = keccak256("other club");
-            else t.schemaVersionHash = keccak256("0.9");
+            if (i == 0) {
+                t.price += 1;
+            } else if (i == 1) {
+                t.price = 1;
+            } else if (i == 2) {
+                t.sellerPayoutAddress = makeAddr("thief");
+            } else if (i == 3) {
+                t.adjudicator = makeAddr("adj2");
+            } else if (i == 4) {
+                t.fallbackAdjudicator = makeAddr("fb2");
+            } else if (i == 5) {
+                t.appealAdjudicator = makeAddr("ap2");
+            } else if (i == 6) {
+                t.fee += 1;
+            } else if (i == 7) {
+                t.deliverableHash = keccak256("other work");
+            } else if (i == 8) {
+                t.acceptanceHash = keccak256("weaker checks");
+            } else if (i == 9) {
+                t.policyHash = keccak256("other policy");
+            } else if (i == 10) {
+                t.registryHash = keccak256("other registry");
+            } else if (i == 11) {
+                t.policyIdHash = keccak256("other policy id");
+            } else if (i == 12) {
+                t.timing.deliverBy += 1;
+            } else if (i == 13) {
+                t.timing.fallbackBy += 1;
+            } else if (i == 14) {
+                t.timing.appealDecideSec += 1;
+            } else if (i == 15) {
+                t.disclosureHash = keccak256(abi.encode(keccak256("Disclosure(string level)"), keccak256("private")));
+            } else if (i == 16) {
+                t.remedyHash = keccak256("other remedy");
+            } else if (i == 17) {
+                t.seller = seller;
+            } // an EOA: the blob is not its signature
+            else if (i == 18) {
+                t.nonce = f.nonceSeed;
+            } // the seed itself, not the derived nonce
+            else if (i == 19) {
+                t.rulebookHash = keccak256("other rulebook");
+            } else if (i == 20) {
+                t.clubIdHash = keccak256("other club");
+            } else {
+                t.schemaVersionHash = keccak256("0.9");
+            }
             _expectTakeRefused(t, blob, _badSignature());
+        }
+        // Fields the rules contract refuses before the seller's check (token, maxSubmissions, appealWindowSec), and the
+        // rest of the timing: the seller contract itself answers no for each.
+        for (uint256 i; i < 9; ++i) {
+            H.Terms memory t = ss.termsOf(o, f);
+            if (i == 0) t.token = makeAddr("other token");
+            else if (i == 1) t.timing.offerExpiresAt += 1;
+            else if (i == 2) t.timing.fundBy += 1;
+            else if (i == 3) t.timing.judgeBy += 1;
+            else if (i == 4) t.timing.appealWindowSec += 1;
+            else if (i == 5) t.timing.maxSubmissions += 1;
+            else if (i == 6) t.timing.disputeBy += 1;
+            else if (i == 7) t.timing.disputeJudgeSec += 1;
+            else t.timing.disputeFallbackSec += 1;
+            assertEq(ss.isValidSignature(rules.typedDataHash(hx.id(t)), blob), NO);
         }
         // The terms the contract builds fund.
         _take(o, sig, f);
@@ -103,7 +156,12 @@ contract StandingSellerAttackTest is StandingSellerBase {
         assertEq(ss2.isValidSignature(rules.typedDataHash(hx.id(t2)), _blob(TAKE, o, sigForSs, f)), NO);
         _expectTakeRefused(t2, _blob(TAKE, o, sigForSs, f), _badSignature());
         // The same template, signed for the second contract, funds there.
-        assertEq(ss2.isValidSignature(rules.typedDataHash(hx.id(t2)), _blob(TAKE, o, _offerSigFor(address(ss2), o, KEY_PK), f)), YES);
+        assertEq(
+            ss2.isValidSignature(
+                rules.typedDataHash(hx.id(t2)), _blob(TAKE, o, _offerSigFor(address(ss2), o, KEY_PK), f)
+            ),
+            YES
+        );
     }
 
     /// attack.take-replayed: one commitment ID funds once.
@@ -113,7 +171,9 @@ contract StandingSellerAttackTest is StandingSellerBase {
         IS.Fill memory f = _fill(1);
         (H.Terms memory t,) = _take(o, sig, f);
         _expectTakeRefused(
-            t, _blob(TAKE, o, sig, f), abi.encodeWithSelector(IHoldbackRules.WrongStage.selector, IHoldbackRules.Stage.Held)
+            t,
+            _blob(TAKE, o, sig, f),
+            abi.encodeWithSelector(IHoldbackRules.WrongStage.selector, IHoldbackRules.Stage.Held)
         );
     }
 
@@ -124,7 +184,9 @@ contract StandingSellerAttackTest is StandingSellerBase {
         bytes memory sig = _offerSig(o, KEY_PK);
         IS.Fill memory f = _fill(1);
         f.createdAt = uint64(block.timestamp - o.timing.offerExpiresAt);
-        _expectTakeRefused(ss.termsOf(o, f), _blob(TAKE, o, sig, f), abi.encodePacked(IHoldbackRules.DeadlinePassed.selector));
+        _expectTakeRefused(
+            ss.termsOf(o, f), _blob(TAKE, o, sig, f), abi.encodePacked(IHoldbackRules.DeadlinePassed.selector)
+        );
         f.createdAt += 1;
         (H.Terms memory t,) = _take(o, sig, f);
         assertGe(t.timing.deliverBy - block.timestamp, o.timing.deliverBy - o.timing.offerExpiresAt, "time to deliver");
@@ -168,6 +230,55 @@ contract StandingSellerAttackTest is StandingSellerBase {
         d.timing.offerExpiresAt = type(uint64).max;
         vm.expectRevert(IS.Unrepresentable.selector);
         ss.termsOf(d, f);
+    }
+
+    /// attack.template-names-a-hostile-rules-address (red team H-1, T-548 review): the key signs a template whose
+    /// `rules` is a contract that answers any digest, with a standing delivery, then revokes it and retires. The seller
+    /// contract builds the rules digest itself and calls no code at `rules`, so the template approves nothing the
+    /// real rules contract asks: no refund by agreement on a delivered deal, no offer paying a thief, no delivery.
+    function test_attack_templateNamesAHostileRulesAddress() public {
+        HostileRules hostile = new HostileRules();
+        IS.StandingOffer memory p = _offer();
+        p.rules = address(hostile);
+        bytes memory sigP = _offerSig(p, KEY_PK);
+        // A real deal of the seller, delivered.
+        IS.StandingOffer memory o = _offer();
+        bytes memory sig = _offerSig(o, KEY_PK);
+        IS.Fill memory f = _fill(1);
+        (H.Terms memory t, bytes32 id) = _take(o, sig, f);
+        rules.deliver(t, _standingDelivery(o), _blob(STANDING_DELIVERY, o, sig, f));
+        _revoke(p);
+        vm.prank(key);
+        ss.retire("");
+        bytes memory poison = _blob(STANDING_DELIVERY, p, sigP, _fill(9));
+        // A refund by agreement with the poisoned blob as the seller's signature.
+        H.Mutual memory m;
+        m.hasDelivery = true;
+        m.deliveryHash = rules.deliveryHashOf(id);
+        m.payouts = new H.Payout[](1);
+        m.payouts[0] = H.Payout({to: t.buyerPaymentAddress, amount: PRICE});
+        m.releaseKey = false;
+        m.nonce = keccak256("poisoned refund");
+        m.expiresAt = uint64(block.timestamp + 1 hours);
+        bytes32 mh = hx.mutual(id, t.token, m);
+        hostile.set(rules.typedDataHash(mh));
+        assertEq(ss.isValidSignature(rules.typedDataHash(mh), poison), NO);
+        m.buyerSignature = _sign(BUYER_PK, mh);
+        m.sellerSignature = poison;
+        H.KeyProof memory k;
+        H.Delivery memory dv = _standingDelivery(o);
+        vm.expectRevert(IHoldbackRules.BadSignature.selector);
+        rules.mutualSettle(t, m, dv, k);
+        // An offer paying a thief, with the poisoned blob as the seller's signature.
+        H.Terms memory forged = _terms();
+        forged.seller = address(ss);
+        forged.sellerPayoutAddress = makeAddr("thief");
+        hostile.set(rules.typedDataHash(hx.id(forged)));
+        assertEq(ss.isValidSignature(rules.typedDataHash(hx.id(forged)), poison), NO);
+        _expectTakeRefused(forged, poison, _badSignature());
+        // The take blob of the poisoned template, before the revoke would have mattered, answers no as well.
+        assertEq(ss.isValidSignature(rules.typedDataHash(hx.id(forged)), _blob(TAKE, p, sigP, _fill(9))), NO);
+        assertEq(uint8(_stage(id)), uint8(IHoldbackRules.Stage.Delivered), "the real deal is untouched");
     }
 
     // ------------------------------------------------------------ the standing delivery

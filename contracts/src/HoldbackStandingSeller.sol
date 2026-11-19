@@ -1,10 +1,9 @@
 // SPDX-License-Identifier: MIT
 pragma solidity 0.8.28;
 
+import {ECDSA} from "solady/utils/ECDSA.sol";
 import {EIP712} from "solady/utils/EIP712.sol";
-import {SignatureCheckerLib} from "solady/utils/SignatureCheckerLib.sol";
 
-import {IHoldbackRules} from "./IHoldbackRules.sol";
 import {IHoldbackStandingSeller} from "./IHoldbackStandingSeller.sol";
 import {HoldbackTypes as H} from "./HoldbackTypes.sol";
 
@@ -55,6 +54,14 @@ contract HoldbackStandingSeller is EIP712, IHoldbackStandingSeller {
     bytes32 internal constant REVOKE_TYPEHASH = keccak256("Revoke(bytes32 templateHash)");
     bytes32 internal constant RETIRE_TYPEHASH = keccak256("Retire()");
 
+    /// @dev The rules contract's EIP-712 domain, name "Holdback" and version "0.8" (as in
+    ///      `HoldbackRules._domainNameAndVersion`), rebuilt for the template's `rules` address so that no code at that
+    ///      address is called (red team H-1).
+    bytes32 internal constant DOMAIN_TYPEHASH =
+        keccak256("EIP712Domain(string name,string version,uint256 chainId,address verifyingContract)");
+    bytes32 internal constant RULES_NAME_HASH = keccak256("Holdback");
+    bytes32 internal constant RULES_VERSION_HASH = keccak256("0.8");
+
     /// @dev The struct hash of the terms' `Disclosure("public")`: standing offers are public deals (ADR-0040 §7).
     bytes32 internal constant PUBLIC_DISCLOSURE_HASH =
         keccak256(abi.encode(keccak256("Disclosure(string level)"), keccak256("public")));
@@ -69,7 +76,7 @@ contract HoldbackStandingSeller is EIP712, IHoldbackStandingSeller {
     /// @inheritdoc IHoldbackStandingSeller
     function isValidSignature(bytes32 hash, bytes calldata signature) external view returns (bytes4) {
         if (signature.length == 64 || signature.length == 65) {
-            return SignatureCheckerLib.isValidSignatureNowCalldata(KEY, hash, signature) ? YES : NO;
+            return ECDSA.tryRecoverCalldata(hash, signature) == KEY ? YES : NO;
         }
         (uint8 kind, StandingOffer memory offer, bytes memory keySignature, Fill memory fill) =
             abi.decode(signature, (uint8, StandingOffer, bytes, Fill));
@@ -81,11 +88,10 @@ contract HoldbackStandingSeller is EIP712, IHoldbackStandingSeller {
         } else if (kind != STANDING_DELIVERY || offer.delivery.length == 0) {
             return NO;
         }
-        // The key's signature first: only then is the template's rules address, the key's choice, called.
-        if (!SignatureCheckerLib.isValidSignatureNow(KEY, _hashTypedData(th), keySignature)) return NO;
+        if (ECDSA.tryRecover(_hashTypedData(th), keySignature) != KEY) return NO;
         bytes32 structHash = this.commitmentId(_termsOf(offer, fill, th));
         if (kind == STANDING_DELIVERY) structHash = this.deliveryHash(structHash, _delivery(offer.delivery[0]));
-        return hash == IHoldbackRules(offer.rules).typedDataHash(structHash) ? YES : NO;
+        return hash == _rulesDigest(offer.rules, structHash) ? YES : NO;
     }
 
     // The key's two writes
@@ -247,11 +253,16 @@ contract HoldbackStandingSeller is EIP712, IHoldbackStandingSeller {
         });
     }
 
-    /// @dev Requires `KEY`'s signature over `structHash` under this contract's domain. Reverts `BadSignature`.
+    /// @dev The digest the rules deployment at `rules` signs `structHash` under: its EIP-712 domain on this chain.
+    function _rulesDigest(address rules, bytes32 structHash) internal view returns (bytes32) {
+        bytes32 domain =
+            keccak256(abi.encode(DOMAIN_TYPEHASH, RULES_NAME_HASH, RULES_VERSION_HASH, block.chainid, rules));
+        return keccak256(abi.encodePacked("\x19\x01", domain, structHash));
+    }
+
+    /// @dev Requires `KEY`'s ECDSA signature over `structHash` under this contract's domain. Reverts `BadSignature`.
     function _requireKey(bytes32 structHash, bytes calldata keySignature) internal view {
-        if (!SignatureCheckerLib.isValidSignatureNowCalldata(KEY, _hashTypedData(structHash), keySignature)) {
-            revert BadSignature();
-        }
+        if (ECDSA.tryRecoverCalldata(_hashTypedData(structHash), keySignature) != KEY) revert BadSignature();
     }
 
     /// @dev The EIP-712 domain: name "HoldbackStandingSeller", version "1".

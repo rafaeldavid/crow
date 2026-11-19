@@ -129,7 +129,10 @@ contract StandingOfferVectorsTest is Test {
     }
 
     function test_revoke_and_retire_digests_matchCore() public pure {
-        assertEq(_sellerDigest(keccak256(abi.encode(keccak256("Revoke(bytes32 templateHash)"), TEMPLATE_HASH))), REVOKE_DIGEST);
+        assertEq(
+            _sellerDigest(keccak256(abi.encode(keccak256("Revoke(bytes32 templateHash)"), TEMPLATE_HASH))),
+            REVOKE_DIGEST
+        );
         assertEq(_sellerDigest(keccak256(abi.encode(keccak256("Retire()")))), RETIRE_DIGEST);
     }
 

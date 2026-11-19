@@ -100,6 +100,39 @@ contract StandingSellerTest is StandingSellerBase {
         assertEq(ss.isValidSignature(digest, _signRaw(OTHER_PK, digest)), NO);
     }
 
+    /// The key is checked by ECDSA alone (red team Info-1): if the key's address later has code (an EIP-7702
+    /// delegation, say), nothing asks that code, and a funded take still gets its standing delivery.
+    function test_keyWithCode_stillAnswersByEcdsa() public {
+        IS.StandingOffer memory o = _offer();
+        bytes memory sig = _offerSig(o, KEY_PK);
+        IS.Fill memory f = _fill(1);
+        (H.Terms memory t,) = _take(o, sig, f);
+        vm.etch(key, hex"60006000fd"); // code that reverts on every call
+        rules.deliver(t, _standingDelivery(o), _blob(STANDING_DELIVERY, o, sig, f));
+        bytes32 digest = keccak256("anything the key signs");
+        assertEq(ss.isValidSignature(digest, _signRaw(KEY_PK, digest)), YES);
+    }
+
+    /// The seller contract builds the rules digest itself from the rules contract's domain (red team H-1). This pins
+    /// that domain to the rules contract's own, so a change of its name or version fails here.
+    function test_rulesDigest_isTheRulesContractsOwn() public {
+        (, string memory name, string memory version, uint256 chainId, address verifying,,) = rules.eip712Domain();
+        assertEq(name, "Holdback");
+        assertEq(version, "0.8");
+        assertEq(chainId, block.chainid);
+        assertEq(verifying, address(rules));
+        IS.StandingOffer memory o = _offer();
+        bytes memory sig = _offerSig(o, KEY_PK);
+        IS.Fill memory f = _fill(1);
+        bytes32 id = hx.id(ss.termsOf(o, f));
+        assertEq(ss.isValidSignature(rules.typedDataHash(id), _blob(TAKE, o, sig, f)), YES);
+        // On another chain the same take answers for that chain's digest only.
+        bytes32 here = rules.typedDataHash(id);
+        vm.chainId(11155111);
+        assertEq(ss.isValidSignature(here, _blob(TAKE, o, _offerSig(o, KEY_PK), f)), NO);
+        assertEq(ss.isValidSignature(rules.typedDataHash(id), _blob(TAKE, o, _offerSig(o, KEY_PK), f)), YES);
+    }
+
     // ------------------------------------------------------------ the take's terms
 
     /// `termsOf` fills the template: the seller contract as seller, the buyer's five fields, the derived nonce, public
@@ -173,7 +206,9 @@ contract StandingSellerTest is StandingSellerBase {
         IS.StandingOffer memory o = _offer();
         IS.Fill memory f = _fill(1);
         H.Terms memory t = ss.termsOf(o, f);
-        _expectTakeRefused(t, _blob(TAKE, o, _offerSig(o, OTHER_PK), f), abi.encodeWithSelector(IHoldbackRules.BadSignature.selector));
+        _expectTakeRefused(
+            t, _blob(TAKE, o, _offerSig(o, OTHER_PK), f), abi.encodeWithSelector(IHoldbackRules.BadSignature.selector)
+        );
     }
 
     /// The approval names the digest: any other hash, the commitment ID itself among them, answers no.
@@ -243,7 +278,9 @@ contract StandingSellerTest is StandingSellerBase {
         (H.Terms memory t1, bytes32 id1) = _take(o, sig, f);
         _revoke(o);
         IS.Fill memory f2 = _fill(2);
-        _expectTakeRefused(ss.termsOf(o, f2), _blob(TAKE, o, sig, f2), abi.encodeWithSelector(IHoldbackRules.BadSignature.selector));
+        _expectTakeRefused(
+            ss.termsOf(o, f2), _blob(TAKE, o, sig, f2), abi.encodeWithSelector(IHoldbackRules.BadSignature.selector)
+        );
         rules.deliver(t1, _standingDelivery(o), _blob(STANDING_DELIVERY, o, sig, f));
         rules.decide(t1, _primary(t1, id1, H.OUTCOME_ACCEPT), _noDelivery(), "");
         assertEq(usdc.balanceOf(payout), PRICE);

@@ -184,7 +184,9 @@ abstract contract StandingSellerBase is Base {
     }
 
     function _revokeSig(bytes32 th, uint256 pk) internal view returns (bytes memory) {
-        return _signRaw(pk, _sellerDigestOf(address(ss), keccak256(abi.encode(keccak256("Revoke(bytes32 templateHash)"), th))));
+        return _signRaw(
+            pk, _sellerDigestOf(address(ss), keccak256(abi.encode(keccak256("Revoke(bytes32 templateHash)"), th)))
+        );
     }
 
     function _retireSig(uint256 pk) internal view returns (bytes memory) {
