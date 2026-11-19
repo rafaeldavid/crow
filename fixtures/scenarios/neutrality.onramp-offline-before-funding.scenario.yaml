@@ -1,0 +1,38 @@
+# @settlement sim @judges recorded @mode guaranteed_on_decision @seed 558
+name: neutrality.onramp-offline-before-funding
+description: >-
+  T-558. Atlas pays from its own payment address, atlas-wallet, which an on-ramp outside the protocol was to top
+  up to $2,050. The on-ramp goes offline after Atlas agrees and before it funds, so the address still holds only
+  $1,000. Settlement sees no on-ramp: it refuses Atlas's funding as insufficient and holds nothing. The deal waits
+  only until its fundBy deadline; then anyone expires it, and every balance is what it was at the start.
+fails: atlas-buyer
+club: fixtures/clubs/data-services-v1.yaml
+terms: fixtures/terms/clean-customers-2000.yaml
+parties:
+  buyer: atlas-buyer
+  seller: tidewater-seller
+  buyer_payment: atlas-wallet
+adjudicators:
+  primary: bench-a
+  fallback: bench-b
+  appeal: bench-c
+operators: [op-1, op-2]
+faucet:
+  atlas-wallet: "1000000000"                         # the top-up to 2,050 tUSD never arrives
+  bench-a: "25000000000"
+  bench-b: "25000000000"
+  bench-c: "25000000000"
+steps:
+  - offer:              { by: seller, via: op-1 }
+  - adjudicator_accept: { via: op-1 }
+  - agree_and_fund:     { by: buyer, via: op-1 }       # agree ok; fund refused: 1,000 tUSD is below 2,050 tUSD
+  - advance_clock:      { seconds: 1800 }              # past fundBy (createdAt + 1,800 s)
+  - expire:             { via: op-2 }
+expect:
+  terminal: Expired
+  balances:
+    atlas-buyer: "0"
+    atlas-wallet: "1000000000"
+    tidewater-seller: "0"
+    bench-a: "25000000000"
+    escrow: "0"
