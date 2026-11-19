@@ -403,10 +403,12 @@ describe("the agents' tools hold their limits", () => {
     expect(tools.specs.find((s) => s.name === 'run_command')!.description).toContain('echo (prints what it got)');
     expect(((tools.specs.find((s) => s.name === "run_command")!.input as { properties: { command: { enum: string[] } } }).properties.command.enum)).toEqual(['check-delivery', 'echo']);
     expect((await tools.call('run_command', { command: 'buy-with-signer', args: ['resume', 'x'] })).content).toMatch(/^Refused: "buy-with-signer" is not one of your company's installed commands: check-delivery, echo/);
-    const ok = await tools.call('run_command', { command: 'echo', args: ['hello'] });
-    process.env['HOLDBACK_AGENT_ANTHROPIC_API_KEY'] = saved.a; process.env['HOLDBACK_ANTHROPIC_API_KEY'] = saved.j;
-    if (saved.a === undefined) delete process.env['HOLDBACK_AGENT_ANTHROPIC_API_KEY'];
-    if (saved.j === undefined) delete process.env['HOLDBACK_ANTHROPIC_API_KEY'];
+    let ok;
+    try {
+      ok = await tools.call('run_command', { command: 'echo', args: ['hello'] });
+    } finally {
+      for (const [k, x] of [['HOLDBACK_AGENT_ANTHROPIC_API_KEY', saved.a], ['HOLDBACK_ANTHROPIC_API_KEY', saved.j]] as const) { if (x === undefined) delete process.env[k]; else process.env[k] = x; }
+    }
     expect(ok.isError).toBe(false);
     const out = JSON.parse(ok.content.split('\n')[2]!);
     expect(out.extra).toBe('set by the company');
@@ -435,7 +437,8 @@ describe("the agents' tools hold their limits", () => {
     expect(make({ commands: { 'deal-record': { script, check } } })).toThrow(/own commands/);
     expect(make({ commands: { 'adapter-log': { script, check } } })).toThrow(/own commands/);
     expect(make({ commands: { __proto__x: { script, check } } })).toThrow(/lowercase/);
-    for (const k of ['HOLDBACK_OPERATORS', 'PATH', 'HOLDBACK_KEY', 'NODE_OPTIONS']) expect(make({ commands: {}, env: { [k]: 'x' } })).toThrow(/may not set/);
+    for (const k of ['HOLDBACK_OPERATORS', 'PATH', 'HOLDBACK_KEY', 'NODE_OPTIONS', 'DYLD_INSERT_LIBRARIES', 'LD_PRELOAD']) expect(make({ commands: {}, env: { [k]: 'x' } })).toThrow(/may not set/);
+    expect(make({ commands: {}, secretEnv: { PIN: 'short1234' } })).toThrow(/under 12 characters/);
     expect(make({ commands: {}, repository: ['seal'] })).toThrow(/not one of the buyer's own commands/);
     // A script inside the agent's own folder is refused: the agent writes there.
     const { work } = box({ role: 'buyer' });

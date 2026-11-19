@@ -693,7 +693,7 @@ export class Toolbox {
 
 /** The variables every command's environment sets, and those that would change how Node runs: no installed env sets them. */
 const BASE_ENV = ['PATH', 'HOME', 'TMPDIR', 'HOLDBACK_OPERATORS', 'NO_COLOR', 'DUET_FETCH_LOG', 'HOLDBACK_KEY'];
-const NODE_ENV = /^NODE_|^npm_/i;
+const NODE_ENV = /^NODE_|^npm_|^DYLD_|^LD_/i;
 
 /**
  * The company's installed commands, checked once when the toolbox is made: each script an absolute path to a file
@@ -705,10 +705,13 @@ function checkInstalled(i: Installed, role: 'buyer' | 'seller', work: string): v
   for (const [name, c] of Object.entries(i.commands)) {
     if (!/^[a-z][a-z0-9-]{0,39}$/.test(name)) throw new Error(`installed command name ${JSON.stringify(name).slice(0, 60)} is not lowercase letters, digits and dashes`);
     if (own.includes(name)) throw new Error(`installed command ${name} has the name of one of the ${role}'s own commands`);
-    if (!isAbsolute(c.script) || !existsSync(c.script) || !lstatSync(c.script).isFile()) throw new Error(`installed command ${name}: its script must be an absolute path to a file`);
+    if (!isAbsolute(c.script) || !existsSync(c.script)) throw new Error(`installed command ${name}: its script must be an absolute path to a file`);
+    if (lstatSync(c.script).isSymbolicLink() || !lstatSync(c.script).isFile()) throw new Error(`installed command ${name}: its script must be a plain file, not a link or a folder`);
     const real = realpathSync(c.script), home = realpathSync(work);
     if (real === home || real.startsWith(home + sep)) throw new Error(`installed command ${name}: its script is inside the agent's folder, which the agent can write`);
   }
+  // The secret list ignores values under 12 characters, so a shorter secret would not be scrubbed.
+  for (const [k, v] of Object.entries(i.secretEnv ?? {})) if (String(v).length < 12) throw new Error(`installed secretEnv ${k} is under 12 characters: the run cannot scrub a value that short`);
   for (const k of [...Object.keys(i.env ?? {}), ...Object.keys(i.secretEnv ?? {})]) if (BASE_ENV.includes(k) || NODE_ENV.test(k)) throw new Error(`installed env may not set ${k}: the toolbox sets it, or it changes how Node runs`);
   for (const r of i.repository ?? []) if (!COMMANDS[role].includes(r)) throw new Error(`installed.repository names ${r}, which is not one of the ${role}'s own commands`);
 }
