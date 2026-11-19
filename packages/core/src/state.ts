@@ -199,6 +199,16 @@ export type SettlementProfile = 'full' | 'phase_one';
 
 const NO_PARTY_APPEAL = 'phase one has no party appeal: the first decision is final (ADR-0031)';
 
+/**
+ * T-540: two decision fields the phase-one rules contract refuses with `InvalidMessage` (T-529), named here so an
+ * adjudicator learns why before a relay simulates the call. Undefined when the decision carries neither.
+ */
+export function phaseOneDecisionProblem(m: Decision, escalated: boolean): string | undefined {
+  if (m.role === 'primary' && m.beacon) return "a primary adjudicator's decision carries no beacon: its seed is the one its acceptance committed to (ADR-0018), and the phase-one rules contract refuses a primary decision with beacon fields";
+  if (escalated && m.appealGround !== undefined) return 'a decision on an escalation carries no appeal ground: phase one has no party appeal (ADR-0031), and the phase-one rules contract refuses one';
+  return undefined;
+}
+
 const ms = (ts: Timestamp): number => Date.parse(ts);
 const before = (at: Timestamp, deadline: Timestamp): boolean => ms(at) < ms(deadline);
 const reached = (at: Timestamp, deadline: Timestamp): boolean => ms(at) >= ms(deadline);
@@ -492,6 +502,8 @@ function firstInstance(
   const named = namesTheDelivery(m, s.delivery);
   if (!named.ok) return named;
   if (m.appealGround !== undefined) return fail('invalid_terms', 'appealGround belongs to appeal decisions only');
+  const signed = profile === 'phase_one' ? phaseOneDecisionProblem(m, false) : undefined;
+  if (signed) return fail('invalid_terms', signed);
   // ADR-0018: the primary reveals its committed seed; the fallback takes the beacon seed for judgeBy.
   if (role === 'primary' && keccak256(m.seed) !== s.acceptance.seedCommitment) return fail('seed_mismatch', 'seed does not hash to the acceptance seedCommitment');
   const seeded = beaconSeed(s, m, beacon, marginSec);
@@ -517,7 +529,7 @@ function firstInstance(
   return ok(m.outcome === 'accept' ? { ...base, kind: 'Released', via } : { ...base, kind: 'Refunded', via });
 }
 
-function escalationDecision(s: Extract<EscrowState, { kind: 'Escalated' }>, m: Decision, at: Timestamp, beacon: BeaconFact | null | undefined, marginSec: number): R {
+function escalationDecision(s: Extract<EscrowState, { kind: 'Escalated' }>, m: Decision, at: Timestamp, beacon: BeaconFact | null | undefined, profile: SettlementProfile, marginSec: number): R {
   if (m.role !== 'appeal') return fail('not_your_turn', "it is the appeal adjudicator's turn");
   const bound = decisionBindings(s, m, at, s.terms.adjudication.appealAdjudicator, s.escalation.appealDecideBy);
   if (!bound.ok) return bound;
@@ -525,6 +537,8 @@ function escalationDecision(s: Extract<EscrowState, { kind: 'Escalated' }>, m: D
   if (!attempt.ok) return attempt;
   const named = namesTheDelivery(m, s.delivery);
   if (!named.ok) return named;
+  const signed = profile === 'phase_one' ? phaseOneDecisionProblem(m, true) : undefined;
+  if (signed) return fail('invalid_terms', signed);
   const seeded = beaconSeed(s, m, beacon, marginSec);
   if (!seeded.ok) return seeded;
   if (m.outcome === 'escalate') return fail('invalid_terms', 'the appeal adjudicator decides accept or reject; it cannot escalate');
@@ -736,7 +750,7 @@ export function step(s: EscrowState, e: EscrowEvent, profile: SettlementProfile 
       }
       break;
     case 'Escalated':
-      if (e.type === 'decide') return escalationDecision(s, e.message, e.at, e.beacon, beaconMarginSec);
+      if (e.type === 'decide') return escalationDecision(s, e.message, e.at, e.beacon, profile, beaconMarginSec);
       if (e.type === 'trigger_default') {
         if (!reached(e.at, s.escalation.appealDecideBy)) return tooEarly(s.escalation.appealDecideBy);
         return ok({ kind: 'Defaulted', id: s.id, terms: s.terms, beaconSource: s.beaconSource, acceptance: s.acceptance, hold: s.hold, from: s.kind, defaultedAt: e.at });

@@ -1253,6 +1253,36 @@ describe('phase_one profile', () => {
     }
   });
 
+  // T-540, from T-529's red team: the phase-one rules contract refuses both with InvalidMessage; core names why.
+  it("refuses a primary's decision that carries a beacon, which the full protocol ignores", () => {
+    const delivered = phaseOne(toDeliveredP1);
+    const withBeacon = ev.decide('primary', 'accept', T.decide, { beacon: { source: 'sim', round: 1, value: ZERO32 } });
+    const r = step(delivered, withBeacon, 'phase_one');
+    expect(r.ok).toBe(false);
+    if (!r.ok) {
+      expect(r.error.type).toBe('invalid_terms');
+      expect(r.error.detail).toContain('carries no beacon');
+    }
+    expect(step(delivered, ev.decide('primary', 'accept', T.decide), 'phase_one').ok).toBe(true);
+    const full = run(toDelivered);
+    expect(step(full, withBeacon).ok).toBe(true);
+  });
+
+  it('refuses a decision on an escalation that names an appeal ground, which the full protocol ignores', () => {
+    const escalated = phaseOne([...toDeliveredP1, ev.decide('primary', 'escalate', escalatedAt)]);
+    const at = escalationDecideBy.replace('10:06', '10:02');
+    const grounded = fill(escalated, ev.decide('appeal', 'accept', at, { appealGround: 'wrong-outcome' }));
+    const r = step(escalated, grounded, 'phase_one');
+    expect(r.ok).toBe(false);
+    if (!r.ok) {
+      expect(r.error.type).toBe('invalid_terms');
+      expect(r.error.detail).toContain('carries no appeal ground');
+    }
+    expect(phaseOne([ev.decide('appeal', 'accept', at)], escalated).kind).toBe('Released');
+    const full = run(toEscalated);
+    expect(step(full, fill(full, ev.decide('appeal', 'accept', T.fallbackDecide, { appealGround: 'wrong-outcome' }))).ok).toBe(true);
+  });
+
   it('an escalation is still decided by the appeal adjudicator, finally', () => {
     const s = phaseOne([...toDeliveredP1, ev.decide('primary', 'escalate', escalatedAt), ev.decide('appeal', 'accept', escalationDecideBy.replace('10:06', '10:02'))]);
     expect(s.kind).toBe('Released');
