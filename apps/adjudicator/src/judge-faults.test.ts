@@ -327,7 +327,7 @@ describe('T-570: a malformed answer never re-runs the panel (red team H1)', () =
     expect(first.refused).toEqual([]);
     expect(first.decided).toEqual([{ commitmentId: w.id, role: 'primary', outcome: 'reject' }]);
     expect(w.calls).toEqual([]);
-    expect([...w.records.values()][0]!.deterministic.some((d) => d.detail?.includes('\uFFFD'))).toBe(true);
+    expect([...w.records.values()][0]!.deterministic.every((d) => !/\p{Cs}/u.test(d.detail ?? ''))).toBe(true);
   });
   it('the same header with the check not required: the panel runs once across two passes', async () => {
     const acceptance = { ...ACCEPTANCE, deterministicChecks: ACCEPTANCE.deterministicChecks.map((c) => (c.id === 'cols' ? { ...c, required: false } : c)) };

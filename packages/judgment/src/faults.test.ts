@@ -9,6 +9,7 @@
 //     fault is not a filter abstention (ONE_FAMILY_REJECT_AT_AGG3);
 //   - an answer whose text is not a string makes runPipeline throw, so the adjudicator retries and calls the panel again.
 import { canonicalJson } from '@holdback/core';
+import fc from 'fast-check';
 import { describe, expect, it } from 'vitest';
 import { ADJUDICATOR, delivery, fakeUnwrap, GOOD_CSV, NONCES, POLICY, RUBRIC, seal, utf8 } from './_helpers.js';
 import { intake } from './intake.js';
@@ -187,7 +188,8 @@ describe('T-570: no seat\'s output aborts the panel (red team H1)', () => {
     const draft = await run({ complete: async (req) => (calls.push(req.judgeId), answer('pass')) }, {}, csv);
     expect(draft.aggregate.decision).toBe('reject');
     expect(calls).toEqual([]);
-    expect(draft.deterministic[0]!.detail).toContain('\uFFFD');
+    // The check cuts on a code point now, so the detail ends before the emoji.
+    expect(draft.deterministic[0]!.detail).not.toMatch(/\p{Cs}/u);
     expect(() => canonicalJson(draft)).not.toThrow();
   });
 
@@ -239,5 +241,70 @@ describe('T-570: no seat\'s output aborts the panel (red team H1)', () => {
     const draft = await run(provider, { kept });
     expect(draft.panel.members.find((m) => m.judgeId === 'gpt-a')!.status).toBe('error');
     expect(draft.aggregate.validCount).toBe(2);
+  });
+});
+
+describe('T-570: for any delivered text, runPipeline never throws and its draft always hashes (property)', () => {
+  // Deliverables are untrusted. Lone surrogates cannot arrive as raw bytes (the delivery is UTF-8), but they come back
+  // from JSON escapes, and a cut at a fixed length can split a pair that arrived whole. Each run feeds runPipeline a CSV
+  // or a JSON document built from arbitrary code units, with an emoji placed around the 297-unit cut of a check detail,
+  // and asserts the result is a value or a refusal, never a throw, and that canonical JSON (RFC 8785) accepts it.
+  // fast-check prints the seed and the path of any failure, so a failure can be replayed exactly.
+  const SEED = 5702;
+  const judges: JudgeProvider = { complete: async (req) => (req.judgeId === 'gpt-a' ? answer('fail') : answer('pass')) };
+  const unit = fc.oneof(fc.string({ unit: 'binary', maxLength: 40 }), fc.constantFrom('\u{1F600}', '\ud83d', '\ude00', '\u0000', '\u001b', '​', '‮', ',', '"', '\n'));
+  const text = fc.array(unit, { maxLength: 30 }).map((xs) => xs.join(''));
+  // An emoji whose first half lands at, just before or just after the last unit a 300-unit detail keeps.
+  const aroundCut = fc.record({ pad: fc.integer({ min: 270, max: 300 }), tail: text }).map(({ pad, tail }) => `${'a'.repeat(pad)}\u{1F600}${tail}`);
+  const long = fc.integer({ min: 1000, max: 20000 }).map((n) => '\u{1F600}x'.repeat(n));
+
+  async function judge(mime: 'text/csv' | 'application/json', body: string, acceptance: JudgmentAcceptance) {
+    const pt = utf8(body);
+    const ct = seal(pt);
+    const intaken = await intake({ delivery: delivery(pt, ct, { plaintextMime: mime }), ciphertext: ct, recipient: ADJUDICATOR, unwrapKey: fakeUnwrap });
+    if (!intaken.ok) return null;
+    return runPipeline({
+      intake: intaken.value,
+      acceptance,
+      deliverable: { description: 'Untrusted work.' },
+      policy: POLICY,
+      seats: SEATS,
+      provider: judges,
+      nonces: (_s, i) => ({ boundary: NONCES.boundary.replace(/.$/, String(i)), canary: NONCES.canary.replace(/.$/, String(i)) }),
+    });
+  }
+
+  it('CSV: an arbitrary header and cells, with required and optional checks', async () => {
+    const csvChecks: JudgmentAcceptance = {
+      deterministicChecks: [
+        { id: 'cols', type: 'csv_columns_exact', required: false, columns: ['customer_id', 'name', 'email', 'signup_date', 'email_valid'] },
+        { id: 'emails', type: 'regex_match_rate_min', required: false, column: 'email', pattern: '^[^@\\s]+@[^@\\s]+$', minBps: 9700 },
+      ],
+      rubric: RUBRIC,
+    };
+    const required: JudgmentAcceptance = { ...csvChecks, deterministicChecks: csvChecks.deterministicChecks.map((c) => ({ ...c, required: true })) };
+    await fc.assert(
+      fc.asyncProperty(fc.oneof(aroundCut, text, long), fc.array(text, { maxLength: 5 }), fc.boolean(), async (header, rows, req) => {
+        const r = await judge('text/csv', [header, ...rows].join('\n'), req ? required : csvChecks);
+        if (r?.ok) expect(() => canonicalJson(r.value)).not.toThrow();
+      }),
+      { seed: SEED, numRuns: 150 },
+    );
+  });
+
+  it('JSON: arbitrary keys and values, lone surrogates included, against a closed schema', async () => {
+    const closed: JudgmentAcceptance = {
+      deterministicChecks: [{ id: 'shape', type: 'json_schema', required: false, schema: { type: 'object', properties: { ok: { type: 'integer' } }, additionalProperties: false } }],
+      rubric: RUBRIC,
+    };
+    const required: JudgmentAcceptance = { ...closed, deterministicChecks: closed.deterministicChecks.map((c) => ({ ...c, required: true })) };
+    await fc.assert(
+      fc.asyncProperty(fc.array(fc.tuple(fc.oneof(aroundCut, text), fc.oneof(text, fc.integer())), { maxLength: 6 }), fc.boolean(), async (entries, req) => {
+        // JSON.stringify writes a lone surrogate as an escape, which JSON.parse turns back into the lone surrogate.
+        const r = await judge('application/json', JSON.stringify(Object.fromEntries([['ok', 1], ...entries])), req ? required : closed);
+        if (r?.ok) expect(() => canonicalJson(r.value)).not.toThrow();
+      }),
+      { seed: SEED, numRuns: 150 },
+    );
   });
 });
