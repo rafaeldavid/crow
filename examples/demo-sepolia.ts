@@ -27,7 +27,7 @@ import { existsSync, mkdirSync, readdirSync, readFileSync, writeFileSync } from 
 import { join } from 'node:path';
 import { fileURLToPath, pathToFileURL } from 'node:url';
 import { generatePrivateKey } from 'viem/accounts';
-import { reason, Round, Run, short } from './e2e-run.ts';
+import { reason, Round, Run, short, sleep } from './e2e-run.ts';
 import { pick } from './e2e-scenarios.ts';
 import { Refusal } from './verify.ts';
 
@@ -70,9 +70,24 @@ function panelLine(j: J | null): string {
   const seats = members.map((m) => `${m.model} ${m.verdict?.overall ?? m.status}`).join(', ');
   return `${j.role} adjudicator decided ${j.aggregate?.decision ?? 'unknown'}${members.length ? `; panel of ${members.length}: ${seats}` : '; no panel ran'}`;
 }
-const scripted = (j: J | null) => (j?.panel?.members ?? []).some((m: J) => String(m.model).startsWith('placeholder-') || String(m.verdict?.rationale ?? '').startsWith('[fake judge'));
+/**
+ * A scripted seat: its rationale starts with the demo's mark "[fake judge, no model ran]" (or, offline, a placeholder
+ * model). Scripted seats still name the live models and families, so only the mark tells them apart.
+ */
+const marked = (m: J) => String(m.model).startsWith('placeholder-') || String(m.verdict?.rationale ?? '').startsWith('[fake judge');
+const scripted = (j: J | null) => (j?.panel?.members ?? []).some(marked);
+/** One panel's kind: live when no seat is marked, scripted when any is (a mixed panel is not live), none when no panel ran. */
+export function panelKind(j: J | null): { role: string; kind: 'live' | 'scripted' | 'none'; seats: number; marked: number } {
+  const members: J[] = j?.panel?.members ?? [];
+  const n = members.filter(marked).length;
+  return { role: String(j?.role ?? 'unknown'), kind: members.length === 0 ? 'none' : n > 0 ? 'scripted' : 'live', seats: members.length, marked: n };
+}
+const kindLine = (panels: J[]) => panels.map((j) => {
+  const k = panelKind(j);
+  return `${k.role} panel ${k.kind === 'scripted' ? `scripted (${k.marked} of ${k.seats} seats marked)` : k.kind === 'live' ? `live (${k.seats} seats)` : 'none ran'}`;
+}).join('; ') || 'no judgment record seen';
 
-interface Played { beat: Beat; result: J; state: string; judgment: J | null; seconds: number }
+interface Played { beat: Beat; result: J; state: string; judgment: J | null; panels: J[]; seconds: number }
 
 /**
  * One beat: its own round with its own seed, the scenario, then the deal's state and judgment record. It never throws:
@@ -85,27 +100,51 @@ async function play(beat: Beat, seed: string, ops: string[], log: (l: string) =>
   try {
     const round = await Round.open({ operators: ops, seed, rpcUrl: process.env['SEPOLIA_RPC_URL'] || PUBLIC_RPC, homepage: false, log });
     const r = new Run(round, beat.scenario, scenario!.title);
+    const buyer = round.agent('buyer');
+    // The operators serve only a deal's latest judgment record, so after an escalation the primary's is gone. A light
+    // watch, one read every 3 s while the beat runs, keeps each role's record so every panel can be labelled.
+    const records = new Map<string, J>();
+    const readRecord = async () => {
+      const id = r.deals[0]?.id;
+      const j = id ? await buyer.call('GET', `/v1/commitments/${id}/judgment`).catch(() => null) : null;
+      if (j?.role) records.set(String(j.role), j);
+      return j;
+    };
+    let running = true;
+    const watch = (async () => {
+      while (running) {
+        await readRecord();
+        await sleep(3000);
+      }
+    })();
     try {
       await scenario!.run(r);
     } catch (e) {
       r.error = reason(e);
       r.say(`stopped at ${r.step}: ${r.error}`);
+    } finally {
+      running = false;
+      await watch;
     }
     const ended = new Date().toISOString();
     const id = r.deals[0]?.id;
-    const buyer = round.agent('buyer');
     const view = id ? await buyer.call('GET', `/v1/commitments/${id}`).catch(() => null) : null;
-    const judgment = id ? await buyer.call('GET', `/v1/commitments/${id}/judgment`).catch(() => null) : null;
-    // Live judges are the point of the Sepolia demo: a scripted panel there fails the beat. Scenario 1 checks its own
-    // panel; 5b only notes whether its appeal panel ran live, so the escalation's check is added here.
-    if (round.pin.domain.chainId === SEPOLIA_CHAIN_ID && beat.name === 'escalate') r.check('a live panel of pinned models judged', judgment !== null && !scripted(judgment), panelLine(judgment));
+    const judgment = await readRecord();
+    const panels = ['primary', 'fallback', 'appeal'].map((role) => records.get(role)).filter((j): j is J => j !== undefined);
+    // Live judges are the point of the Sepolia demo: any marked seat in any panel fails the beat. Scenario 1 checks its
+    // own deciding panel; this check covers every panel seen, the escalation's primary panel included.
+    if (round.pin.domain.chainId === SEPOLIA_CHAIN_ID && beat.calls > 0) {
+      const ran = panels.filter((j) => panelKind(j).kind !== 'none');
+      const missed = beat.name === 'escalate' && !records.has('primary') ? "; the primary's record was not seen before the appeal replaced it" : '';
+      r.check('every panel that ran was live (no seat marked "[fake judge, no model ran]")', ran.length > 0 && ran.every((j) => !scripted(j)) && !missed, `${kindLine(panels)}${missed}`);
+    }
     // A stopped deal that still holds the buyer's money closes by its timeouts, which the operators send themselves.
     if (view && !['Released', 'Refunded'].includes(view.escrowState)) r.say(`the deal is still ${view.escrowState}; the operators send its timeout when it falls due (deadlines ${JSON.stringify(view.deadlines ?? {})})`);
-    played = { beat, result: r.result(ended), state: view?.escrowState ?? 'none', judgment, seconds: Math.round((Date.now() - started) / 1000) };
+    played = { beat, result: r.result(ended), state: view?.escrowState ?? 'none', judgment, panels, seconds: Math.round((Date.now() - started) / 1000) };
   } catch (e) {
     log(`[${beat.scenario}] start     stopped before the first deal: ${reason(e)}`);
     const at = new Date().toISOString();
-    played = { beat, result: { scenario: beat.scenario, title: scenario!.title, status: 'error', startedAt: new Date(started).toISOString(), endedAt: at, stoppedAt: 'start', error: reason(e), checks: [], deals: [], notes: [] }, state: 'none', judgment: null, seconds: Math.round((Date.now() - started) / 1000) };
+    played = { beat, result: { scenario: beat.scenario, title: scenario!.title, status: 'error', startedAt: new Date(started).toISOString(), endedAt: at, stoppedAt: 'start', error: reason(e), checks: [], deals: [], notes: [] }, state: 'none', judgment: null, panels: [], seconds: Math.round((Date.now() - started) / 1000) };
   }
   save(played);
   return played;
@@ -115,6 +154,8 @@ async function play(beat: Beat, seed: string, ops: string[], log: (l: string) =>
 const beatRecord = (p: Played) => ({
   beat: p.beat.name, scenario: p.beat.scenario, state: p.state, seconds: p.seconds,
   judgment: p.judgment ? { role: p.judgment.role, decision: p.judgment.aggregate?.decision, reasons: p.judgment.aggregate?.reasons ?? [], panel: (p.judgment.panel?.members ?? []).map((m: J) => ({ model: m.model, overall: m.verdict?.overall ?? m.status })) } : null,
+  panels: p.panels.map((j) => ({ ...panelKind(j), decision: j.aggregate?.decision ?? null, members: (j.panel?.members ?? []).map((m: J) => ({ model: m.model, family: m.family ?? null, overall: m.verdict?.overall ?? m.status, marked: marked(m) })) })),
+  live: p.panels.some((j) => panelKind(j).kind !== 'none') ? p.panels.every((j) => panelKind(j).kind !== 'scripted') : null,
   result: p.result,
 });
 
@@ -226,13 +267,14 @@ async function main(args: string[]): Promise<number> {
     const held = p.result.checks.filter((c: J) => c.ok).length;
     say(`${p.beat.name.padEnd(8)}  ${p.state.padEnd(9)}  ${String(p.seconds).padStart(3)} s  ${held} of ${p.result.checks.length} checks held${p.result.error ? `; stopped: ${p.result.error}` : ''}`);
     say(`          ${p.result.deals[0] ? `deal ${p.result.deals[0].id}; ` : ''}${panelLine(p.judgment)}`);
+    if (p.beat.calls > 0) say(`          judges: ${kindLine(p.panels)}`);
   }
   say(`${beats.length === BEATS.length ? 'all three beats' : `the ${beats[0]!.name} beat`}: ${total} s from the start of the command to the last beat's end, ${total <= LIMIT_SEC ? 'within' : 'over'} the ${LIMIT_SEC} s limit`);
   const after: J = await read().catch(() => null);
   if (onSepolia && after) say(`live judge calls today (UTC): ${discovery.demo?.judges?.liveCallsToday} before, ${after.demo?.judges?.liveCallsToday} after; other deals in the same minutes count too`);
   say(`timeline and records: ${folder}`);
 
-  writeFileSync(join(folder, 'run.json'), `${JSON.stringify({ startedAt: new Date(t0).toISOString(), seconds: total, limitSec: LIMIT_SEC, operators: ops, chainId, rules, ...(rerunAfter ? { rerunAfter } : {}), judgeCalls: { before: discovery?.demo?.judges?.liveCallsToday ?? null, after: after?.demo?.judges?.liveCallsToday ?? null }, beats: played.map((p) => ({ name: p.beat.name, scenario: p.beat.scenario, state: p.state, seconds: p.seconds, status: p.result.status, deal: p.result.deals[0]?.id ?? null })) }, null, 2)}\n`);
+  writeFileSync(join(folder, 'run.json'), `${JSON.stringify({ startedAt: new Date(t0).toISOString(), seconds: total, limitSec: LIMIT_SEC, operators: ops, chainId, rules, ...(rerunAfter ? { rerunAfter } : {}), judgeCalls: { before: discovery?.demo?.judges?.liveCallsToday ?? null, after: after?.demo?.judges?.liveCallsToday ?? null }, beats: played.map((p) => ({ name: p.beat.name, scenario: p.beat.scenario, state: p.state, seconds: p.seconds, status: p.result.status, panels: p.panels.map((j) => panelKind(j)), deal: p.result.deals[0]?.id ?? null })) }, null, 2)}\n`);
   writeFileSync(join(folder, 'timeline.md'), `# Crow demo, ${new Date(t0).toISOString().slice(0, 19)}Z\n\n\`\`\`\n${lines.join('\n')}\n\`\`\`\n`);
   return played.every((p) => p.result.status === 'pass') ? 0 : 1;
 }

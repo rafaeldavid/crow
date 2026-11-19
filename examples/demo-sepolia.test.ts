@@ -7,7 +7,7 @@ import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { generatePrivateKey } from 'viem/accounts';
 import { afterAll, beforeAll, describe, expect, it } from 'vitest';
-import { BEATS, judgeCallsLeft, rejectedRelease, timelineLine } from './demo-sepolia.ts';
+import { BEATS, judgeCallsLeft, panelKind, rejectedRelease, timelineLine } from './demo-sepolia.ts';
 import { expectNoSecrets, simWorld, type Served } from './e2e-world.ts';
 
 type J = any; // eslint-disable-line @typescript-eslint/no-explicit-any
@@ -38,6 +38,14 @@ describe('demo-sepolia.ts', () => {
     expect(judgeCallsLeft({ judges: { panel: 'live', liveCallsPerDay: 30, liveCallsToday: 31 } })).toBe(0);
     expect(judgeCallsLeft({ judges: { panel: 'scripted' } })).toBe(0);
     expect(judgeCallsLeft(undefined)).toBe(0);
+  });
+
+  it('labels a panel scripted when any seat carries the fake-judge mark, even when the seats name live models', () => {
+    const seat = (rationale: string) => ({ model: 'claude-opus-5-5@2026-09-21', family: 'claude', verdict: { overall: 'pass', rationale } });
+    expect(panelKind({ role: 'primary', panel: { members: [seat('Faithful.'), seat('Fluent.')] } })).toEqual({ role: 'primary', kind: 'live', seats: 2, marked: 0 });
+    expect(panelKind({ role: 'appeal', panel: { members: [seat('Faithful.'), seat('[fake judge, no model ran] pass')] } })).toEqual({ role: 'appeal', kind: 'scripted', seats: 2, marked: 1 });
+    expect(panelKind({ role: 'primary', panel: { ran: false, members: [] } }).kind).toBe('none');
+    expect(panelKind(null).kind).toBe('none');
   });
 
   it('answers --help and refuses an unknown beat, before any network call', async () => {
@@ -120,6 +128,7 @@ describe('demo-sepolia.ts', () => {
       expect(r.out).toMatch(/^ +\d+ s +escalate +escalate +(Escalated|Released|Refunded)/m);
       expect(r.out).toMatch(/^ {10}deal 0x[0-9a-f]{64}; appeal adjudicator decided (accept|reject); panel of 5: /m);
       expect(r.out).toMatch(/^release +Released +\d+ s +\d+ of \d+ checks held/m);
+      expect(r.out).toMatch(/^ {10}judges: primary panel scripted \(3 of 3 seats marked\)$/m);
       expect(r.out).toMatch(/^reject +Refunded +\d+ s/m);
       expect(r.out).toMatch(/^escalate +(Released|Refunded) +\d+ s/m);
       expect(r.out).toMatch(/^all three beats: \d+ s from the start of the command to the last beat.s end, within the 300 s limit$/m);
@@ -132,6 +141,8 @@ describe('demo-sepolia.ts', () => {
       expect(release.result.status).toBe('fail');
       expect(release.result.checks.filter((c: J) => !c.ok).map((c: J) => c.name)).toEqual(['a live panel judged']);
       expect(release.judgment.decision).toBe('accept');
+      expect(release.live).toBe(false);
+      expect(release.panels[0]).toMatchObject({ role: 'primary', kind: 'scripted', seats: 3, marked: 3 });
       for (const name of ['reject', 'escalate']) expect(JSON.parse(readFileSync(join(folder!, `${name}.json`), 'utf8')).result.status, name).toBe('pass');
       const run = JSON.parse(readFileSync(join(folder!, 'run.json'), 'utf8')) as J;
       expect(run.beats.map((b: J) => [b.name, b.state])).toEqual([['release', 'Released'], ['reject', 'Refunded'], ['escalate', expect.stringMatching(/^(Released|Refunded)$/)]]);

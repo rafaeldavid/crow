@@ -41,7 +41,7 @@ The bar, from the roadmap's stage 2: "one script plays release, reject and an es
 
 ## Evidence
 
-**Plan of the measurement, set before run 2 (coordinator, 2026-11-19):** five runs of the good path on Sepolia, all recorded, none dropped. Runs 1 and 2 are full runs on 2026-11-19. After 00:00 UTC, run 3 is a full run, and runs 4 and 5 play the release beat alone (`--beat release`), because the demo's live judge cap cannot cover five full runs in a day (below). A run whose panel was scripted does not count, and its row says so.
+**Plan of the measurement, set before run 2 (coordinator, 2026-11-19):** five runs of the good path on Sepolia, all recorded, none dropped. Runs 1 and 2 are full runs on 2026-11-19. After 00:00 UTC, run 3 is a full run, and runs 4 and 5 play the release beat alone (`--beat release`), because the demo's live judge cap cannot cover five full runs in a day (below). A run counts only if every panel in every judged beat was live. A panel is scripted when any seat's rationale starts with "[fake judge, no model ran]", since scripted seats still name the live models. From run 3 on, the command labels each panel live or scripted in its summary and its records (`panels`, `live`). It reads the judgment record every 3 s while a beat runs, because the operators serve only a deal's latest record, and the escalation's primary panel would otherwise be gone. Runs 1 and 2 were checked after the fact: every seat of their deciding panels has a model's own rationale and no mark (measured, the operators' judgment records).
 
 ### The five runs (every number measured)
 
