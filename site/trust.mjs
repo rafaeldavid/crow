@@ -266,6 +266,8 @@ code { font: .9em var(--mono); overflow-wrap: anywhere; }
 .doc h2 { margin: 64px 0 0; padding-bottom: 8px; border-bottom: 1px solid var(--hair); font-size: var(--size-note); font-weight: var(--weight-strong); letter-spacing: .06em; text-transform: uppercase; color: var(--ink-2); }
 .qa { padding: 24px 0 0; scroll-margin-top: 72px; }
 .qa h3 { margin: 0; font-family: var(--display); font-size: var(--size-lede); line-height: 1.3; font-weight: var(--weight-bold); letter-spacing: -.01em; text-wrap: balance; }
+/* the legal notice's section heads (T-564): h2 in the outline, the answers' look on the page */
+.doc .qa h2 { margin: 0; padding: 0; border: 0; font-family: var(--display); font-size: var(--size-lede); line-height: 1.3; font-weight: var(--weight-bold); letter-spacing: -.01em; text-transform: none; color: var(--ink); text-wrap: balance; }
 .qa p, .qa ul { max-width: 68ch; margin: 8px 0 0; text-wrap: pretty; }
 .qa ul { padding-left: 1.25em; }
 .qa li { margin-top: 4px; }
@@ -312,6 +314,7 @@ ${sectionHead({ eyebrow: 'Trust', title: 'How Crow handles money, keys and data'
 ${notice(COMING_SOON)}
 ${sourceLine(comingSoonSources())}
 <p class="alt">The same answers in plain text: <a href="${base}trust.txt">${esc(site)}trust.txt</a></p>
+<p class="alt">Crow runs on a test network only and has no legal entity yet: <a href="${base}legal">the legal notice</a> says what applies until one exists.</p>
 ${toc(groups)}
 ${groups.map((g) => `<h2>${esc(g.group)}</h2>\n${g.questions.map(qaHtml).join('\n')}`).join('\n')}
 <p class="checked">Each answer was checked against its source on ${TRUST_CHECKED}. The addresses, the chain and the request log’s retention come from the deployment record and the code each time the site is built.</p>
@@ -337,7 +340,82 @@ export function trustText({ site = 'https://crow.direct/', facts = trustFacts() 
     `${COMING_SOON.title}: ${plain(COMING_SOON.text)}`,
     src_(comingSoonSources()),
     '',
+    `Legal notice: Crow runs on a test network only and has no legal entity yet. ${site}legal says what applies until one exists.`,
+    '',
     ...groups.flatMap((g) => [`## ${g.group}`, '', ...g.questions.flatMap((x) => [`### ${plain(x.q)}`, '', plain(x.a), ...(x.list ? x.list.map((i) => `- ${plain(i)}`) : []), ...(x.after ? [plain(x.after)] : []), src_(x.sources), ''])]),
+  ].join('\n');
+}
+
+/** The day the legal notice last changed (T-564). The page says it at the top, as such notices do. */
+export const LEGAL_UPDATED = '2026-11-19';
+
+/**
+ * The legal notice, /legal (T-564, Rafa 2026-11-19: "test network only", a placeholder until Crow has a legal entity).
+ * A plain notice, not a contract: what Crow is, who runs it, what applies while there are no terms, what is kept, how
+ * to reach Crow and when the page changes. It names no entity, address, jurisdiction or governing law, because none
+ * exists. The order follows the placeholder notices that test-network and single-maintainer projects publish (the
+ * task file, docs/tasks/T-564-legal-page.md, lists the pages read). Each section is { id, h, a: [HTML sentences], sources }.
+ */
+export function legalSections(f = trustFacts()) {
+  const file = (path, section, anchor) => [section ? `${path}, “${section}”` : path, src(path, anchor)];
+  const limits = ['crow.direct/ref/limits.txt, “Honest limits”', 'https://crow.direct/ref/limits.txt'];
+  return [
+    { id: 'what-crow-is', h: 'What Crow is',
+      a: [`Crow is a test service for escrow between AI agents. It runs only on Ethereum Sepolia, a public test network, with tUSDC, a test token that anyone can mint and that is worth nothing. No real money can enter Crow. Nothing on this site is an offer of financial, payment or custody services, and test tokens are not for sale.`],
+      sources: [file('docs/operations.md', 'Sepolia contracts (T-206)', 'sepolia-contracts-t-206'), limits] },
+    { id: 'who-runs-crow', h: 'Who runs Crow',
+      a: [`One maintainer builds and runs Crow. Crow has no company or other legal entity yet. When one exists, this page will name it, and its terms will replace this notice.`],
+      sources: [['GitHub: rafaeldavid/holdback', CODE_URL]] },
+    { id: 'terms-today', h: 'Terms that apply today',
+      a: [`Crow has no terms of service yet. The software is open source under the Apache License 2.0, which provides it “as is”, without warranties or conditions of any kind, and limits liability (sections 7 and 8). The test service is offered the same way: it may change, stop or lose its data at any time, and you use it at your own risk.`,
+        `The contracts on Sepolia have no admin key, no pause and no upgrade path, so a step that settles cannot be undone by anyone. An outside firm’s automated scan of the contracts and its review of the fixes are published; neither is a line-by-line audit by human reviewers.`],
+      sources: [file('LICENSE'), file('docs/audit/scope.md'), file('docs/audit/outside-scan.md')] },
+    { id: 'what-crow-keeps', h: 'What Crow keeps about you',
+      a: [`Each operator writes one line per request: its ID, the time, the method, the route, the status and the duration, with no body, no header, no IP address and no path. The operator deletes each line after ${f.requestLogDays} days. Cloudflare’s Workers Logs keep the operators’ summaries and error lines for 7 days. A problem report sent to <code>POST /v1/feedback</code> is kept for 90 days. An early-access sign-up keeps the email address, the time and the page it came from, and has no deletion date yet.`],
+      sources: [file('docs/operations.md', 'Telemetry (T-031)', 'telemetry-t-031'), file('docs/operations.md', 'Feedback triage (T-032)', 'feedback-triage-t-032'), file('apps/early-access/worker.js'), file('docs/privacy-baseline.md')] },
+    { id: 'deals-are-public', h: 'Deals are public',
+      a: [`Every deal on the test service is public. Anyone can read its terms, its amounts, its deadlines and its addresses from the operators. The chain keeps the amounts, the addresses and the time of each step for good. The delivered work stays encrypted, but its size, its time and its fingerprint are public. Use fresh keys and addresses for each deal, and put nothing in a deal that you need to keep to yourself.`],
+      sources: [file('docs/privacy-baseline.md', 'The answer', 'the-answer')] },
+    { id: 'contact', h: 'How to reach Crow',
+      a: [`Send a report to either operator at <code>POST /v1/feedback</code>, or open a public issue on Crow’s GitHub repository. Report a security problem privately, through the advisory form that security.txt names. Crow has no email address or postal address yet.`],
+      sources: [['crow.direct/ref/limits.txt, “Reporting a problem”', 'https://crow.direct/ref/limits.txt'], ['GitHub: issues', `${CODE_URL}/issues`], ['crow.direct/.well-known/security.txt', 'https://crow.direct/.well-known/security.txt']] },
+    { id: 'changes', h: 'Changes to this page',
+      a: [`This page will change when Crow has a legal entity, terms of service, a privacy policy or real money. The date at the top says when it last changed.`],
+      sources: [['site/trust.mjs, LEGAL_UPDATED', src('site/trust.mjs')]] },
+  ];
+}
+
+const LEGAL_LEDE = 'Crow runs on a test network only, and has no legal entity yet. This notice says what applies until one exists. It is not a contract and not legal advice.';
+
+/** The legal notice, /legal. */
+export function legalPage({ site = 'https://crow.direct/', base = '/', facts = trustFacts() } = {}) {
+  return `${head({ site, base, card: CARDS.legal, alternate: { type: 'text/plain', title: 'This notice in plain text (legal.txt)', path: 'legal.txt' } })}
+<main class="doc">
+${sectionHead({ eyebrow: 'Legal', title: 'Test network only', lede: LEGAL_LEDE })}
+<p class="alt">Last updated ${LEGAL_UPDATED}. The same notice in plain text: <a href="${base}legal.txt">${esc(site)}legal.txt</a></p>
+${legalSections(facts).map((x) => `<section class="qa" id="${x.id}">
+<h2>${esc(x.h)}</h2>
+${x.a.map((p) => `<p>${p}</p>`).join('\n')}
+${sourceLine(x.sources)}
+</section>`).join('\n')}
+</main>
+${footerHtml({ base, current: 'legal' })}
+<script>
+${drawerScript()}
+</script>
+</body>
+</html>
+`;
+}
+
+/** /legal.txt: the legal notice in plain text, from the same data. */
+export function legalText({ site = 'https://crow.direct/', facts = trustFacts() } = {}) {
+  return [
+    '# Crow legal notice: test network only',
+    '',
+    `> ${LEGAL_LEDE} Last updated ${LEGAL_UPDATED}. The same notice as a page: ${site}legal.`,
+    '',
+    ...legalSections(facts).flatMap((x) => [`## ${x.h}`, '', ...x.a.map(plain), `Source: ${x.sources.map(([label, url]) => `${plain(label)}, ${url}`).join('; ')}`, '']),
   ].join('\n');
 }
 

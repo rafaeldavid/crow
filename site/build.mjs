@@ -22,7 +22,7 @@ import { CARDS, cardTags, FOOTER_CSS, footerHtml } from './footer.ts';
 import { headerBar, ICON_FILES, iconBytes, iconLinks, iconTags, kitCss, listRows, sectionHead, TOKENS } from './brand/kit.mjs';
 import { writeInlineHashes } from './csp.mjs';
 import { guideFiles, guideSource } from './guides.mjs';
-import { PAGES_CSS, securityTxt, statusJson, statusPage, trustFacts, trustPage, trustText } from './trust.mjs';
+import { legalPage, legalText, PAGES_CSS, securityTxt, statusJson, statusPage, trustFacts, trustPage, trustText } from './trust.mjs';
 
 export const SITE_URL = 'https://crow.direct/';
 /** The path the site is served under ('/' on crow.direct); every link is absolute from it. */
@@ -1106,7 +1106,10 @@ if (import.meta.url === `file://${process.argv[1]}`) {
     writeFileSync(here('pages.css'), PAGES_CSS);
     writeFileSync(here('trust.txt'), trustText({ site: SITE_URL }));
     writeFileSync(here('status.json'), statusJson({ site: SITE_URL }));
-    console.log(`wrote site/try.mjs (sha256 ${trySha256()}), site/buy.mjs (sha256 ${buySha256()}), ${Object.keys(goals).map((n) => `site/${n}.mjs (sha256 ${goalSha256(n)})`).join(', ')}, site/setup.mjs (sha256 ${setupSha256()}), site/index.html, site/home.css, site/home.js, site/404.html, site/trust.html, site/trust.txt, site/status.html, site/status.json and site/pages.css`);
+    // T-564: the legal notice and its plain-text copy.
+    writeFileSync(here('legal.html'), legalPage({ site: SITE_URL, base: BASE }));
+    writeFileSync(here('legal.txt'), legalText({ site: SITE_URL }));
+    console.log(`wrote site/try.mjs (sha256 ${trySha256()}), site/buy.mjs (sha256 ${buySha256()}), ${Object.keys(goals).map((n) => `site/${n}.mjs (sha256 ${goalSha256(n)})`).join(', ')}, site/setup.mjs (sha256 ${setupSha256()}), site/index.html, site/home.css, site/home.js, site/404.html, site/trust.html, site/trust.txt, site/status.html, site/status.json, site/legal.html, site/legal.txt and site/pages.css`);
   } else {
     // Publish exactly the committed bundle, and only while it is current: the sha256 below is of that file.
     if (readFileSync(here('try.mjs'), 'utf8') !== bundle) throw new Error('site/try.mjs is stale against examples/: run node site/build.mjs, commit, then publish');
@@ -1131,6 +1134,8 @@ if (import.meta.url === `file://${process.argv[1]}`) {
     writeFileSync(join(out, 'pages.css'), PAGES_CSS);
     writeFileSync(join(out, 'trust.txt'), trustText({ site: SITE_URL }));
     writeFileSync(join(out, 'status.json'), statusJson({ site: SITE_URL }));
+    writeFileSync(join(out, 'legal.html'), legalPage({ site: SITE_URL, base: BASE }));
+    writeFileSync(join(out, 'legal.txt'), legalText({ site: SITE_URL }));
     writeFileSync(join(out, 'security.txt'), securityTxt(new Date(), SITE_URL));
     writeFileSync(join(out, 'try.mjs'), readFileSync(here('try.mjs')));
     writeFileSync(join(out, 'buy.mjs'), readFileSync(here('buy.mjs')));
