@@ -1,6 +1,6 @@
 # Architecture
 
-How Crow's system is built on `main`, after the phase-one cutover of 2026-11-13. Every chain deployment runs the phase-one contracts: no party appeals, no bonds, one token, and two money addresses per deal (ADR-0031, ADR-0032 and ADR-0033). SimChain keeps the full protocol, party appeals and bonds included, as its reference. The full protocol's extra parts are in one section near the end, "SimChain's full protocol: appeals and bonds"; elsewhere, text marked "SimChain only" describes them.
+How Crow's system is built on `main`. Every chain deployment runs the phase-one contracts: no party appeals, no bonds, one token, and two money addresses per deal (ADR-0031, ADR-0032 and ADR-0033). SimChain keeps the full protocol, party appeals and bonds included, as its reference. The full protocol's extra parts are in one section near the end, "SimChain's full protocol: appeals and bonds"; elsewhere, text marked "SimChain only" describes them.
 
 `docs/decisions-today.md` and `docs/decisions/` record every decision and ADR; where this page and an ADR disagree, the newer ADR holds. The judgment pipeline and its defenses are in [`judgment-and-defenses.md`](judgment-and-defenses.md); the HTTP API is in [`api.md`](api.md).
 
@@ -8,7 +8,7 @@ How Crow's system is built on `main`, after the phase-one cutover of 2026-11-13.
 
 | Settlement layer | Protocol | Where it runs |
 | --- | --- | --- |
-| The phase-one contracts (`contracts/src/`) on a chain | Phase one: the first decision by the primary or the fallback adjudicator is final; the appeal adjudicator decides escalations only; no bond | Ethereum Sepolia for the public demo, since 2026-11-13 (addresses and the deployed commit: `contracts/deployments/sepolia.json`); a local chain in tests (`pnpm snap --settlement=local`) |
+| The phase-one contracts (`contracts/src/`) on a chain | Phase one: the first decision by the primary or the fallback adjudicator is final; the appeal adjudicator decides escalations only; no bond | Ethereum Sepolia for the public demo: the fixed build, tag `contracts-phase-one-2`, since 2026-11-19, after the first build of 2026-11-13 (addresses and the deployed commit: `contracts/deployments/sepolia.json`); a local chain in tests (`pnpm snap --settlement=local`) |
 | SimChain, phase-one profile | The same rules as the contracts, in process | `pnpm sim`, and a new SimChain world of the public demo unless it is created with the full protocol (`simProfile` in `apps/demo-cloud/src/world.ts`) |
 | SimChain, full protocol | Phase one plus party appeals, bonds and their postings | `pnpm demo`, `pnpm snap` on SimChain, and the SimChain-only fixtures in `LOCAL_EXCLUSIONS` (`packages/testkit/src/runner.ts`) |
 
@@ -116,7 +116,7 @@ Each row names the standard, what Crow uses it for and where to read the code. A
 | **Foundry** tests, including fuzzing and differential tests against earlier builds | The contracts' unit, attack and differential tests | `contracts/test/`; `(cd contracts && forge test)` |
 | Differential testing across settlement layers | Each scenario fixture runs on SimChain and on a local chain, and the two must agree | `packages/testkit/src/runner.ts`; `pnpm snap` |
 | Secret scanning (**gitleaks**), code scanning (**CodeQL**), dependency alerts | Every pull request runs gitleaks and CodeQL; the default branch gets dependency alerts | `.github/workflows/` |
-| Outside review | The phase-one contracts were scanned, and their fixes reviewed, by an outside security firm; the known issues an auditor reads are listed in one page | `docs/audit/known-issues.md` |
+| Outside review | The first phase-one build was scanned by an outside security firm, and the fixes in the build deployed on 2026-11-19 were reviewed by the same firm; the known issues an auditor reads are listed in one page | `docs/audit/known-issues.md` |
 
 ## Shape of the system
 
@@ -151,7 +151,7 @@ flowchart LR
   RAMP -- deal token to the buyer's address --> BA
 ```
 
-**Settlement layer.** Escrow plus rules, with no owner. **SimChain** is an in-process, deterministic implementation of the rules; it was the only settlement layer in Phase 1. Since Phase 2 the rules also run as EVM contracts on a local chain and on a testnet (ADR-0003, ADR-0004). The public demo has settled on Ethereum Sepolia since 2026-11-03 (D41, ADR-0028), on the phase-one contracts since 2026-11-13. One `Settlement` interface covers both, and the scenario fixtures run against each (differential testing), except the SimChain-only fixtures in `LOCAL_EXCLUSIONS` (`packages/testkit/src/runner.ts`), which use party appeals or bonds.
+**Settlement layer.** Escrow plus rules, with no owner. **SimChain** is an in-process, deterministic implementation of the rules; it was the only settlement layer in Phase 1. Since Phase 2 the rules also run as EVM contracts on a local chain and on a testnet (ADR-0003, ADR-0004). The public demo has settled on Ethereum Sepolia since 2026-11-03 (D41, ADR-0028), on the phase-one contracts since 2026-11-13, and on their fixed build (tag `contracts-phase-one-2`) since 2026-11-19. One `Settlement` interface covers both, and the scenario fixtures run against each (differential testing), except the SimChain-only fixtures in `LOCAL_EXCLUSIONS` (`packages/testkit/src/runner.ts`), which use party appeals or bonds.
 
 **Operator node.** Exposes the REST API, verifies and relays signed messages, sponsors gas, indexes events and serves receipts. Anyone can run one. An operator adds speed and convenience, never authority.
 
