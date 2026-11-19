@@ -239,7 +239,7 @@ describe('three ways a deal ends (T-427): live test deals under the player', () 
     expect(ENDINGS_SCRIPT).toContain("setAttribute('role','tabpanel')");
   });
   it("gives each card its rule, the record's own times and amounts, and links to its public record and transaction", () => {
-    const want: Record<string, [string, string]> = { passes: ['41 s', '40 test dollars'], fails: ['51 s', '40 test dollars'], silent: ['5 min 21 s', '41 test dollars'] };
+    const want: Record<string, [string, string]> = { passes: ['57 s', '40 test dollars'], fails: ['45 s', '40 test dollars'], silent: ['5 min 21 s', '41 test dollars'] };
     for (const x of ENDINGS.endings) {
       const cardHtml = html.slice(html.indexOf(`id="ending-${x.key}"`), html.indexOf('</article>', html.indexOf(`id="ending-${x.key}"`)));
       expect(cardHtml).toContain(`<dd>${want[x.key]![0]}</dd>`);
@@ -251,7 +251,7 @@ describe('three ways a deal ends (T-427): live test deals under the player', () 
     expect(silent.how).toContain(`${seconds(silent.deliverBy!, silent.endedAt)} seconds after that deadline`);
     // deliverBy counts from the settlement time the offer was prepared at, a second before the record's offer event.
     expect(silent.how).toContain(`${Math.round(seconds(silent.offeredAt, silent.deliverBy!) / 60)} minutes from the offer`);
-    expect(readerText(html)).toContain('17 November 2026');
+    expect(readerText(html)).toContain('19 November 2026');
   });
   it('shows the security-review deal of the pilot\'s kind: the repository, the commit, the files, the price, the five checks and their limits (T-500)', () => {
     const text = readerText(html);
