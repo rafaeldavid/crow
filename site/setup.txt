@@ -1,6 +1,7 @@
 # Set up Crow
 
 %% T-472: the setup's one page. site/build.mjs fills the one placeholder with the pinned command; site/check.mjs holds the published page to SETUP_MAX_BYTES (site/guides.mjs).
+%% T-568: `deliver` took its bytes from the check's "fix what a failed line names", which each failed line says, "the file is not minified", and how --payout changes before the first deal, which the seller command handles.
 %% T-543: "The person's own work" is the template path; its bytes came from the check's and the status's descriptions, which each command's own lines carry.
 %% T-486 (D76): "The list" is the setup's listing step. Its four sentences on what an entry means are the command's own (examples/setup-list.ts, ENTRY_MEANS).
 One page for an AI assistant whose person said: "Read https://crow.direct/setup.txt and set up Crow for me as a seller." You run one pinned file, `setup.mjs`. It makes one folder on this machine, checks it, asks once for the person's website, and sells one job to Crow's test buyer. If the person named no role, ask which. This version sets up a seller; a buyer starts at https://crow.direct/buy.txt.
@@ -39,15 +40,15 @@ Add `--payout <address>` or `--payout this-key` at the end. Without it the comma
 - `template.json`, the deal template, and `crow.json`, the state.
 - A draft card in `~/.crow/seller-card`, apart from the keys.
 
-It sends nothing. It takes an empty folder only. It refuses a folder inside a git work tree or a synced folder, and names the flag that overrides each; it knows common names only, so a sync service under another name passes. Run again after a stop, it continues and makes no second key. Before the first deal, the same command with another `--payout` changes the answer. It ends with the check: one line per check, `"ok": true` on each.
+It sends nothing. It takes an empty folder only. It refuses a folder inside a git work tree or a synced folder, and names the flag that overrides each; it knows common names only, so a sync service under another name passes. Run again after a stop, it continues and makes no second key. It ends with the check: one line per check, `"ok": true` on each.
 
-`node ~/.crow/setup.mjs check` runs that check alone, and sends nothing to a Crow-run host. Fix what a failed line names, then run it again.
+`node ~/.crow/setup.mjs check` runs that check alone, and sends nothing to a Crow-run host.
 
 `node ~/.crow/setup.mjs status` prints the folder's state and its open deals.
 
 The sample is `squares.csv` for 1 tUSDC.
 
-**The person's own work.** `seller --template <file>` sells work a JSON file describes; `seller` with no flag prints its shape. `--file <path>` adds finished work, delivered once the deal is funded. Without it `first-deal` exits 0 at `"state": "Held"` with `workPath` and `deliverBy`: put the work there and run it again. It delivers work that passes the agreed checks and names each failing check; `check --work <file>` runs them on a sample. Their own API: https://crow.direct/sell.txt.
+**The person's own work.** `seller --template <file>` sells work a JSON file describes; `seller` with no flag prints its shape. `--file <path>` adds finished work, delivered once the deal is funded. Without it `first-deal` exits 0 at `"state": "Held"` with `workPath` and `deliverBy`: put the work there. `deliver` delivers each funded deal of the folder (exit 4: work is due); `deliver --schedule` prints the scheduler entry that runs it every 5 minutes. Both deliver work that passes the agreed checks and name each failing check; `check --work <file>` runs them on a sample. Their own API: https://crow.direct/sell.txt.
 
 ## The list
 
@@ -99,7 +100,7 @@ The SHA-256 in the command stops a file that differs from the one this page name
 curl -fsSL https://raw.githubusercontent.com/rafaeldavid/holdback/main/site/setup.mjs | shasum -a 256
 ```
 
-The file is not minified. Its sources are `examples/setup.ts` and the files beside it in https://github.com/rafaeldavid/holdback.
+Its sources are `examples/setup.ts` and the files beside it in https://github.com/rafaeldavid/holdback.
 
 ## Not in this version
 

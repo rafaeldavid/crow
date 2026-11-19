@@ -13,11 +13,11 @@ import { buyerBriefDirect, ITEM, scenario, sellerBriefDirect } from './scenarios
 import { limitsFor, overLimits } from './tickets.ts';
 import { checkEndings, ENDINGS, ENDINGS_CSS, ENDINGS_SCRIPT, endingsSection, seconds } from './endings.ts';
 import { CHECK_WORDS, REPOSITORY, REVIEW_CHECK_IDS, REVIEW_SCOPE } from './review.ts';
-import { CROW_MARK, EARLY_ACCESS, ENGINEERS, forPublishing, HERO, JOIN, PITCH, replayPage } from './replay.ts';
+import { CROW_MARK, EARLY_ACCESS, ENGINEERS, forPublishing, HERO, JOIN, PITCH, PUBLIC_LINK, replayPage } from './replay.ts';
 import { startWorld } from './world.ts';
 import { runAgent } from './loop.ts';
 import { anthropic, liveProvider, openaiCompatible, scripted, VendorError, type Provider, type Turn } from './providers.ts';
-import { Recorder, Secrets } from './record.ts';
+import { Recorder, Secrets, type Event } from './record.ts';
 import { ephemeralFirst, pickAdapterPort, REPO, runDuet } from './run.ts';
 import { Toolbox, type ToolboxOptions } from './tools.ts';
 
@@ -158,7 +158,16 @@ describe('three scenarios, scripted, on the local phase-one world', () => {
       const published = replayPage(events, s, { publish: true });
       expect(published).toContain('href="/#join-form"');
       expect(published).not.toContain(EARLY_ACCESS);
-      expect(published).not.toMatch(/\/(Users|home|private|var)\/|0x[0-9a-fA-F]{40}/);
+      // T-574: the endings' record and transaction links keep their hex whole; nothing else on the page does.
+      expect(published.match(PUBLIC_LINK)?.length ?? 0).toBeGreaterThan(0);
+      expect(published.replace(PUBLIC_LINK, '')).not.toMatch(/\/(Users|home|private|var)\/|0x[0-9a-fA-F]{40}/);
+      // An agent's text shaped like a public link is escaped on the page (its quote becomes &#34;), so its hex is cut.
+      const secret = 'be'.repeat(32);
+      const turn = events.find((e) => e.kind === 'model.turn') ?? events.at(-1)!;
+      const crafted = replayPage([...events, { ...turn, kind: 'model.turn', role: 'buyer', text: `see href="${ENDINGS.explorer}0x${secret}" and href="${ENDINGS.record}0x${secret}"` } as Event], s, { publish: true });
+      expect(crafted).not.toContain(secret);
+      expect(crafted).toContain('0xbebebe…bebe');
+      expect(crafted.match(PUBLIC_LINK)).toEqual(published.match(PUBLIC_LINK));
       expect(r.leaks(published)).toBe(false);
       expect(banned(readerText(published))).toEqual([]);
       expect(readerText(published)).not.toMatch(/\bowners?\b/i);
@@ -702,6 +711,20 @@ describe('the published page', () => {
   it('cuts local paths to the run\'s own part and long hex strings to their ends', () => {
     const html = `<pre>approve /Users/someone/x/reports/scratch/duet/run/buyer/company/keys 0x${'ab'.repeat(32)} and /private/var/tmp/file.txt 0x${'cd'.repeat(20)}</pre>`;
     expect(forPublishing(html)).toBe('<pre>approve …/buyer/company/keys 0xababab…abab and …/file.txt 0xcdcdcd…cdcd</pre>');
+  });
+
+  // T-574: the publish shortened the hex in the endings' record and transaction links too, so each led nowhere.
+  it('keeps every link of the endings section whole, and still cuts the same hex in the text', () => {
+    const section = endingsSection();
+    const hrefs = [...section.matchAll(/href="([^"]*)"/g)].map((m) => m[1]);
+    expect(hrefs.filter((h) => /0x[0-9a-f]{64}/.test(h!)).length).toBeGreaterThan(0);
+    const published = forPublishing(section);
+    expect([...published.matchAll(/href="([^"]*)"/g)].map((m) => m[1])).toEqual(hrefs);
+    const id = `0x${'ab'.repeat(32)}`;
+    expect(forPublishing(`<a href="https://api.crow.direct/v1/commitments/${id}">deal ${id}</a>`)).toBe(`<a href="https://api.crow.direct/v1/commitments/${id}">deal 0xababab…abab</a>`);
+    expect(forPublishing('<a href="/Users/someone/x/run/buyer/out.txt">x</a>')).toBe('<a href="…/buyer/out.txt">x</a>');
+    // Any other link is cut as before.
+    expect(forPublishing(`<a href="https://example.test/${id}">x</a>`)).toBe('<a href="https://example.test/0xababab…abab">x</a>');
   });
 });
 
