@@ -77,6 +77,7 @@ describe('demo-sepolia.ts', () => {
       expect(r.out).not.toMatch(/^ +\d+ s +(reject|escalate) +\S+ +FAIL /m);
       expect(r.out).toMatch(/^ +\d+ s +release +outcome +Released: decision accept/m);
       expect(r.out).toMatch(/^ +\d+ s +reject +deliver +Delivered/m);
+      expect(r.out).toMatch(/^ +\d+ s +reject +outcome +ok +the deal ends Refunded: Refunded/m);
       // On SimChain the appeal adjudicator decides before the first poll, so the first state seen may be the last.
       expect(r.out).toMatch(/^ +\d+ s +escalate +escalate +(Escalated|Released|Refunded)/m);
       expect(r.out).toMatch(/^ {10}deal 0x[0-9a-f]{64}; appeal adjudicator decided (accept|reject); panel of 5: /m);

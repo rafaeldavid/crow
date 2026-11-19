@@ -125,9 +125,10 @@ async function main(args: string[]): Promise<number> {
     lines.push(l);
     console.log(l);
   };
-  // Passed checks go to the records; the timeline keeps the steps, the states, the links and any failed check.
+  // Passed checks go to the records; the timeline keeps the steps, the states, the links, each deal's end and any
+  // failed check.
   const log = (l: string) => {
-    if (!/^\[\w+\] \S+ +ok {2}/.test(l)) say(timelineLine(l, Date.now() - t0));
+    if (!/^\[\w+\] \S+ +ok {2}/.test(l) || /^\[\w+\] \S+ +ok +the deal (ends|is Escalated)/.test(l)) say(timelineLine(l, Date.now() - t0));
   };
 
   const discovery: J = await fetch(`${ops[0]}/.well-known/holdback.json`).then((r) => r.json());
