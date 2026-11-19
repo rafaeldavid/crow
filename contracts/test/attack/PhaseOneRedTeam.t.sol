@@ -231,19 +231,7 @@ contract PhaseOneRedTeamTest is Base {
 
     // ------------------------------------------------------------ issues
 
-    /// Finding RT-2 (Info): the appeal adjudicator's decision on an escalation may carry any `appealGround`. The
-    /// first-instance check (`_firstInstance`) refuses a nonempty ground; `_escalationDecision` checks nothing. The
-    /// state model's §8.3 verdict 8 says phase one enforces it empty for every role. Money and key are unaffected.
-    function test_issue_escalationDecisionAcceptsAnyAppealGround() public {
-        (H.Terms memory t, bytes32 id) = _funded();
-        uint64 at = _escalateByPrimary(t, id);
-        vm.warp(at + 1);
-        H.Decision memory m = _beaconDecision(id, H.ROLE_APPEAL, H.OUTCOME_REJECT, at + 1);
-        m.appealGroundHash = keccak256("the buyer appealed and won");
-        m = _signDecision(t, id, m, appealAdj, AP_PK);
-        rules.decide(t, m, _noDelivery(), "");
-        assertEq(uint8(_stage(id)), uint8(IHoldbackRules.Stage.Refunded), "accepted with a nonempty appeal ground");
-    }
+    // Finding RT-2 (an escalation decision with an appeal ground) is fixed by T-529: test/unit/SignedFieldsRefused.t.sol.
 
     /// Finding RT-1 (Low): the stored word does not record who decided. A primary's accept (§9.3 row P06, fee to the
     /// primary) and an appeal adjudicator's accept of the primary's escalation (row P10, fee to the appeal
