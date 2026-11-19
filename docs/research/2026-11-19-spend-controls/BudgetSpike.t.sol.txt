@@ -1,0 +1,284 @@
+// SPDX-License-Identifier: MIT
+pragma solidity 0.8.28;
+
+// SPIKE (not for merge): measures whether a buyer's payment address can be a small contract that funds a deal only
+// inside its owner's caps, against the unchanged rules contract. Two mechanisms:
+//   W, the wrapper: the budget exposes `agreeAndFund` with the rules contract's own signature, checks and counts, sets a
+//      transient approval of the exact ERC-3009 digest, and forwards the call verbatim.
+//   P, the ERC-6492 prepare hook: the funding signature carries a prepare call to the budget, which CPP's collector
+//      runs (through Multicall3) before receiveWithAuthorization; the deal is already Held then.
+
+import {AuthCaptureEscrow} from "commerce-payments/AuthCaptureEscrow.sol";
+import {IERC3009} from "commerce-payments/interfaces/IERC3009.sol";
+
+import {Base} from "../unit/Base.sol";
+import {IHoldbackRules} from "../../src/IHoldbackRules.sol";
+import {HoldbackRules} from "../../src/HoldbackRules.sol";
+import {HoldbackTypes as H} from "../../src/HoldbackTypes.sol";
+
+contract SpikeBudget {
+    error Stopped();
+    error NotThisBudget();
+    error NotTheAgent();
+    error SellerNotListed();
+    error OverPerDeal();
+    error OverPerDay();
+    error TooManyOpen();
+    error OverOpenTotal();
+    error NotFunding();
+    error NotOwner();
+
+    bytes32 internal constant RECEIVE_WITH_AUTHORIZATION_TYPEHASH =
+        0xd099cc98ef71107a616c4f0f941f04c322d8e254fe26b3c6668db87aae413de8;
+
+    HoldbackRules public immutable RULES;
+    AuthCaptureEscrow public immutable ESCROW;
+    address public immutable COLLECTOR;
+    address public immutable TOKEN;
+    address public immutable OWNER;
+    address public immutable AGENT;
+
+    uint256 public maxPerDeal;
+    uint256 public maxPerDay;
+    uint256 public maxOpenDeals;
+    uint256 public maxOpenTotal;
+    bool public stopped;
+    mapping(address seller => address payout) public payoutOf;
+    mapping(uint256 day => uint256 total) public spentOn;
+    bytes32[] public openIds;
+    mapping(bytes32 id => uint256) public holdOf;
+    mapping(bytes32 id => uint256) public expiryOf;
+    uint256 public openTotal;
+    mapping(bytes32 id => bool) public counted; // P only
+
+    bytes32 transient approved;
+
+    constructor(HoldbackRules rules, address owner, address agent) {
+        RULES = rules;
+        ESCROW = rules.ESCROW();
+        COLLECTOR = rules.ERC3009_COLLECTOR();
+        TOKEN = rules.TOKEN();
+        OWNER = owner;
+        AGENT = agent;
+    }
+
+    modifier onlyOwner() {
+        if (msg.sender != OWNER) revert NotOwner();
+        _;
+    }
+
+    function set(uint256 perDeal, uint256 perDay, uint256 openDeals, uint256 openTotal_) external onlyOwner {
+        (maxPerDeal, maxPerDay, maxOpenDeals, maxOpenTotal) = (perDeal, perDay, openDeals, openTotal_);
+    }
+
+    function setSeller(address seller, address payout) external onlyOwner {
+        payoutOf[seller] = payout;
+    }
+
+    function stop() external onlyOwner {
+        stopped = true;
+    }
+
+    // W: the wrapper, same selector and encoding as the rules contract's agreeAndFund.
+    function agreeAndFund(
+        H.Terms calldata t,
+        bytes calldata sellerSignature,
+        H.Acceptance calldata acc,
+        H.Agree calldata ag,
+        H.Funding calldata f
+    ) external returns (bytes32 id) {
+        id = H.commitmentId(t);
+        _count(t, id);
+        approved = _digest(t, id);
+        id = RULES.agreeAndFund(t, sellerSignature, acc, ag, f);
+        approved = 0;
+    }
+
+    // P: the prepare hook. Callable by anyone; it says yes only for a deal the rules contract has already marked Held.
+    function prepare(H.Terms calldata t) external {
+        bytes32 id = H.commitmentId(t);
+        if (RULES.dealOf(id).stage != IHoldbackRules.Stage.Held || counted[id]) revert NotFunding();
+        counted[id] = true;
+        _count(t, id);
+        approved = _digest(t, id);
+    }
+
+    function isValidSignature(bytes32 hash, bytes calldata) external view returns (bytes4) {
+        bytes32 a = approved;
+        return a != 0 && hash == a ? bytes4(0x1626ba7e) : bytes4(0xffffffff);
+    }
+
+    function _count(H.Terms calldata t, bytes32 id) internal {
+        if (stopped) revert Stopped();
+        if (t.buyerPaymentAddress != address(this)) revert NotThisBudget();
+        if (t.buyer != AGENT) revert NotTheAgent();
+        address payout = payoutOf[t.seller];
+        if (payout == address(0) || payout != t.sellerPayoutAddress) revert SellerNotListed();
+        uint256 total = t.price + t.fee;
+        if (total > maxPerDeal) revert OverPerDeal();
+        // Sweep the deals that ended: a final stage, or past the escrow's expiry (no capture can follow).
+        for (uint256 i = openIds.length; i > 0; i--) {
+            bytes32 o = openIds[i - 1];
+            if (uint8(RULES.dealOf(o).stage) >= uint8(IHoldbackRules.Stage.Released) || block.timestamp >= expiryOf[o]) {
+                openTotal -= holdOf[o];
+                openIds[i - 1] = openIds[openIds.length - 1];
+                openIds.pop();
+            }
+        }
+        if (openIds.length + 1 > maxOpenDeals) revert TooManyOpen();
+        if (openTotal + total > maxOpenTotal) revert OverOpenTotal();
+        uint256 day = block.timestamp / 1 days;
+        if (spentOn[day] + total > maxPerDay) revert OverPerDay();
+        spentOn[day] += total;
+        openIds.push(id);
+        holdOf[id] = total;
+        expiryOf[id] = uint256(t.timing.fallbackBy) + t.timing.appealDecideSec + RULES.EXPIRY_MARGIN();
+        openTotal += total;
+    }
+
+    function _digest(H.Terms calldata t, bytes32 id) internal view returns (bytes32) {
+        uint48 expiry = uint48(uint256(t.timing.fallbackBy) + t.timing.appealDecideSec + RULES.EXPIRY_MARGIN());
+        AuthCaptureEscrow.PaymentInfo memory pi = AuthCaptureEscrow.PaymentInfo({
+            operator: address(RULES),
+            payer: address(0), // the collector's nonce is the payer-agnostic hash
+            receiver: t.sellerPayoutAddress,
+            token: TOKEN,
+            maxAmount: uint120(t.price + t.fee),
+            preApprovalExpiry: uint48(t.timing.fundBy),
+            authorizationExpiry: expiry,
+            refundExpiry: expiry,
+            minFeeBps: 0,
+            maxFeeBps: 10_000,
+            feeReceiver: address(0),
+            salt: uint256(id)
+        });
+        bytes32 structHash = keccak256(
+            abi.encode(
+                RECEIVE_WITH_AUTHORIZATION_TYPEHASH,
+                address(this),
+                COLLECTOR,
+                uint256(pi.maxAmount),
+                uint256(0),
+                uint256(pi.preApprovalExpiry),
+                ESCROW.getHash(pi)
+            )
+        );
+        return keccak256(abi.encodePacked("\x19\x01", IERC3009(TOKEN).DOMAIN_SEPARATOR(), structHash));
+    }
+}
+
+contract BudgetSpikeTest is Base {
+    bytes32 internal constant MAGIC_6492 = 0x6492649264926492649264926492649264926492649264926492649264926492;
+    uint256 internal constant OWNER_PK = 0x0A11;
+    SpikeBudget internal budget;
+
+    function setUp() public override {
+        super.setUp();
+        vm.etch(MULTICALL3, MULTICALL3_CODE); // the canonical Multicall3 runtime, copied from contracts/test/crosscheck/Erc6492Prepare.t.sol (left out of this copy)
+        budget = new SpikeBudget(rules, vm.addr(OWNER_PK), buyer);
+        vm.startPrank(vm.addr(OWNER_PK));
+        budget.set(PRICE + FEE, 3 * (PRICE + FEE), 2, 2 * (PRICE + FEE));
+        budget.setSeller(seller, seller);
+        vm.stopPrank();
+        usdc.mint(address(budget), 1_000_000_000);
+    }
+
+    function _bterms() internal returns (H.Terms memory t) {
+        t = _terms();
+        t.buyerPaymentAddress = address(budget);
+    }
+
+    function _wrap(H.Terms memory t) internal returns (bytes32) {
+        vm.prank(relayer);
+        return budget.agreeAndFund(
+            t, _sellerSig(t, SELLER_PK), _acceptance(t, ADJ_PK), _agree(t, BUYER_PK), H.Funding({signature: ""})
+        );
+    }
+
+    function _p6492(H.Terms memory t) internal returns (bytes32) {
+        bytes memory inner = abi.encode(address(budget), abi.encodeCall(SpikeBudget.prepare, (t)), bytes(""));
+        vm.prank(relayer);
+        return rules.agreeAndFund(
+            t,
+            _sellerSig(t, SELLER_PK),
+            _acceptance(t, ADJ_PK),
+            _agree(t, BUYER_PK),
+            H.Funding({signature: abi.encodePacked(inner, MAGIC_6492)})
+        );
+    }
+
+    function test_W_insideCaps_funds() public {
+        H.Terms memory t = _bterms();
+        uint256 before = usdc.balanceOf(address(budget));
+        uint256 g = gasleft();
+        bytes32 id = _wrap(t);
+        emit log_named_uint("W gas, agreeAndFund through the budget", g - gasleft());
+        assertEq(uint8(_stage(id)), uint8(IHoldbackRules.Stage.Held));
+        assertEq(before - usdc.balanceOf(address(budget)), PRICE + FEE);
+    }
+
+    function test_plain_fund_gas() public {
+        H.Terms memory t = _terms();
+        uint256 g = gasleft();
+        _fund(t);
+        emit log_named_uint("plain gas, agreeAndFund from an EOA", g - gasleft());
+    }
+
+    function test_W_overPerDeal_refused() public {
+        H.Terms memory t = _bterms();
+        t.price = PRICE + 1;
+        bytes memory s = _sellerSig(t, SELLER_PK);
+        H.Acceptance memory a = _acceptance(t, ADJ_PK);
+        H.Agree memory ag = _agree(t, BUYER_PK);
+        vm.expectRevert(SpikeBudget.OverPerDeal.selector);
+        budget.agreeAndFund(t, s, a, ag, H.Funding({signature: ""}));
+    }
+
+    function test_W_thirdOpen_refused_thenReleasedFrees() public {
+        _wrap(_bterms());
+        (H.Terms memory t2) = _bterms();
+        _wrap(t2);
+        H.Terms memory t3 = _bterms();
+        bytes memory s = _sellerSig(t3, SELLER_PK);
+        H.Acceptance memory a = _acceptance(t3, ADJ_PK);
+        H.Agree memory ag = _agree(t3, BUYER_PK);
+        vm.expectRevert(SpikeBudget.TooManyOpen.selector);
+        budget.agreeAndFund(t3, s, a, ag, H.Funding({signature: ""}));
+    }
+
+    function test_W_directToRules_refused() public {
+        // A funding sent straight to the rules contract never gets the budget's approval.
+        H.Terms memory t = _bterms();
+        bytes memory s = _sellerSig(t, SELLER_PK);
+        H.Acceptance memory a = _acceptance(t, ADJ_PK);
+        H.Agree memory ag = _agree(t, BUYER_PK);
+        vm.expectRevert();
+        rules.agreeAndFund(t, s, a, ag, H.Funding({signature: ""}));
+    }
+
+    function test_P_insideCaps_funds() public {
+        H.Terms memory t = _bterms();
+        uint256 g = gasleft();
+        bytes32 id = _p6492(t);
+        emit log_named_uint("P gas, agreeAndFund with the 6492 prepare", g - gasleft());
+        assertEq(uint8(_stage(id)), uint8(IHoldbackRules.Stage.Held));
+        assertTrue(budget.counted(id));
+    }
+
+    function test_P_prepareOutsideFunding_refused() public {
+        H.Terms memory t = _bterms();
+        vm.expectRevert(SpikeBudget.NotFunding.selector);
+        budget.prepare(t);
+    }
+
+    function test_P_overPerDeal_refused() public {
+        H.Terms memory t = _bterms();
+        t.price = PRICE + 1;
+        bytes memory inner = abi.encode(address(budget), abi.encodeCall(SpikeBudget.prepare, (t)), bytes(""));
+        bytes memory s = _sellerSig(t, SELLER_PK);
+        H.Acceptance memory a = _acceptance(t, ADJ_PK);
+        H.Agree memory ag = _agree(t, BUYER_PK);
+        vm.expectRevert(); // the prepare's revert is swallowed by tryAggregate; the token refuses the signature
+        rules.agreeAndFund(t, s, a, ag, H.Funding({signature: abi.encodePacked(inner, MAGIC_6492)}));
+    }
+}

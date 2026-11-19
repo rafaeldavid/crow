@@ -1,0 +1,115 @@
+// SPIKE (not for merge): does the operators' view follow a deal whose payment address is a budget contract that
+// funds through its own `agreeAndFund` (the rules contract's selector and encoding), with no node change?
+import { existsSync, readFileSync } from 'node:fs';
+import { join } from 'node:path';
+import { wholeSecond, type AdjudicatorAcceptance, type Address, type Club } from '@holdback/core';
+import { encodeFunctionData, type Abi, type Hex } from 'viem';
+import { foundry } from 'viem/chains';
+import { afterAll, beforeAll, describe, expect, it } from 'vitest';
+import type { Genesis } from '../sim/simchain.js';
+import type { Submission } from '../src/interface.js';
+import { acceptanceView, agreeView, termsView } from './encode.js';
+import { EvmSettlement } from './evm-settlement.js';
+import { LiveChain, type DeploymentFile } from './live.js';
+import { ChainSync, type Cursor } from './sync.js';
+import { evmCast, evmGenesis, EvmDeal, testActor, type TestActor } from './testing.js';
+import { anvilAvailable, EvmWorld } from './world.js';
+
+const root = join(import.meta.dirname, '..', '..', '..');
+const artifact = join(root, 'contracts', 'out', 'BudgetSpike.t.sol', 'SpikeBudget.json');
+const ready = anvilAvailable() && existsSync(artifact);
+const RELAYER: Hex = '0x59c6995e998f97a5a0044966f0945389dc9e86dae88c7a8412f4603b6b78690d';
+
+describe.skipIf(!ready)('a budget contract as the payment address, on anvil', () => {
+  let anvil: EvmWorld;
+  let chain: LiveChain;
+  let genesis: Genesis;
+  let club: Club;
+  const cast = evmCast();
+  const owner = testActor('budget-owner');
+
+  beforeAll(async () => {
+    anvil = await EvmWorld.start(root, { blockTimeSec: 1, token: 'test-usdc' });
+    const d = anvil.deployment;
+    const deployment: DeploymentFile = {
+      chainId: anvil.chainId,
+      fromBlock: Number(d.fromBlock),
+      token: { address: d.token, name: anvil.tokenDomain.name, version: anvil.tokenDomain.version, symbol: 'tUSDC', decimals: 6 },
+      escrow: d.escrow,
+      erc3009Collector: d.erc3009Collector,
+      multicall: d.multicall,
+      rules: d.rules,
+      beacon: d.beacon,
+      expiryMarginSec: Number(anvil.expiryMargin),
+    };
+    chain = new LiveChain({ deployment, rpcUrls: [anvil.rpcUrl], relayerKey: RELAYER, pollMs: 100, rebroadcastMs: 10_000, mintBatchMs: 50 });
+    for (const a of [...chain.lanes.map((l) => l.address), ...Object.values(cast).map((a) => a.address), owner.address]) await anvil.rpc('anvil_setBalance', [a, '0x56bc75e2d63100000']);
+    ({ genesis, club } = await evmGenesis({ cast, token: d.token.toLowerCase() as Address, chainId: anvil.chainId, rules: d.rules, start: wholeSecond(Date.now()), buyer: 0n }));
+    genesis = { ...genesis, simSeed: `0x${'00'.repeat(32)}` };
+    await chain.mint(cast.seller.address, 10n ** 10n);
+  }, 180_000);
+  afterAll(async () => {
+    await anvil?.stop();
+  });
+
+  async function head(): Promise<Cursor> {
+    const n = await chain.publicClient.getBlockNumber({ cacheTime: 0 });
+    return { block: n.toString(), hash: (await chain.publicClient.getBlock({ blockNumber: n })).hash! };
+  }
+  const ok = async (s: EvmSettlement, sub: Submission) => {
+    const r = await s.submit(sub, { via: 'op-1' });
+    if (!r.ok) throw new Error(`${sub.kind}: ${r.problem.type}: ${r.problem.detail}`);
+    return r;
+  };
+
+  it('funds through the budget inside its caps, is followed by the node, and ends Released; above the cap it reverts', async () => {
+    const json = JSON.parse(readFileSync(artifact, 'utf8')) as { abi: Abi; bytecode: { object: Hex } };
+    const ow = anvil.wallet(owner.key);
+    const deployHash = await ow.deployContract({ account: ow.account!, chain: foundry, abi: json.abi, bytecode: json.bytecode.object, args: [chain.deployment.rules, owner.address, cast.buyer.address] });
+    const budget = (await anvil.receipt(deployHash)).contractAddress! as Address;
+    const send = async (fn: string, args: readonly unknown[]) => {
+      const h = await ow.sendTransaction({ account: ow.account!, chain: foundry, to: budget, data: encodeFunctionData({ abi: json.abi, functionName: fn, args }) });
+      expect((await anvil.receipt(h)).status).toBe('success');
+    };
+    const price = 2_000_000_000n, fee = 50_000_000n;
+    await send('set', [price + fee, 3n * (price + fee), 2n, 2n * (price + fee)]);
+    await send('setSeller', [cast.seller.address, cast.seller.address]);
+    await chain.mint(budget, 10n ** 11n);
+
+    const s = await EvmSettlement.restore(chain, genesis, undefined, () => Date.now());
+    const sync = new ChainSync(s, await head());
+    // The budget's address stands in as the payment "actor"; its key signs a funding nobody checks.
+    const payment: TestActor = { name: 'budget', key: testActor('unused-funding-key').key, address: budget };
+    const fundThroughBudget = async (d: EvmDeal) => {
+      await ok(s, await d.offer());
+      await ok(s, await d.accept());
+      const served = s.log().find((e) => e.commitmentId === d.id && e.type === 'adjudicator.accepted')!.payload['acceptance'] as AdjudicatorAcceptance;
+      const sellerSignature = s.log().find((e) => e.commitmentId === d.id && e.type === 'commitment.offered')!.payload['sellerSignature'] as Hex;
+      const af = await d.agreeAndFund();
+      if (af.kind !== 'agree_and_fund') throw new Error('unreachable');
+      const data = encodeFunctionData({ abi: chain.abis.rules, functionName: 'agreeAndFund', args: [termsView(d.terms), sellerSignature, acceptanceView(served), agreeView(af.agree), { signature: af.funding.signature }] });
+      const agent = anvil.wallet(cast.buyer.key);
+      const h = await agent.sendTransaction({ account: agent.account!, chain: foundry, to: budget, data, gas: 3_000_000n });
+      return { hash: h, receipt: await anvil.receipt(h) };
+    };
+
+    // Above the cap per deal: the budget reverts, nothing is held.
+    const over = new EvmDeal(s, cast, club, 'budget-over', price + 1n, fee, { payment, payout: cast.seller.address });
+    const refused = await fundThroughBudget(over);
+    expect(refused.receipt.status).toBe('reverted');
+
+    // Inside the caps: funded through the budget, followed by the node, delivered and accepted: Released.
+    const d = new EvmDeal(s, cast, club, 'budget-inside', price, fee, { payment, payout: cast.seller.address });
+    const before = await s.tokenBalance(budget, true);
+    const funded = await fundThroughBudget(d);
+    expect(funded.receipt.status).toBe('success');
+    const pass = await sync.pass();
+    expect(pass).toMatchObject({ applied: 1, behind: 0 });
+    expect((await s.state(d.id))!.escrowState).toBe('Held');
+    expect(before - (await s.tokenBalance(budget, true))).toBe(price + fee);
+    await ok(s, await d.deliver());
+    await ok(s, await d.decide('primary', 'accept'));
+    expect((await s.state(d.id))!.escrowState).toBe('Released');
+    console.log(JSON.stringify({ budget, refusedTx: refused.hash, fundedTx: funded.hash, fundGas: funded.receipt.gasUsed.toString() }));
+  }, 120_000);
+});

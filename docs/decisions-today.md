@@ -1581,6 +1581,25 @@ Today a seller with its own API reads 13 files of 98,462 bytes and runs 22 comma
 **Litmus tests.** Neutrality: an on-ramp acts before the hold and an off-ramp after the deal ends, so neither can stop a valid deal. The spend-controls contract has no Crow key. The hold: unchanged; card and bank rails stay funding and payout adapters. Defended judgment: unchanged.
 
 **Open.**
-- The contract's design, its fee and who may deploy it. The spend-controls session (`local_223ae056`) writes the ADR, and it gets its own decision entry.
+- The contract's design, its fee and who may deploy it. Answered by D84 (ADR-0041): spend controls are a protocol of their own, and their design goes in its own record.
 - The research's five decisions (crow-private, part 7.2). One of them is whether to leave the funding service of ADR-0026 part 3 unbuilt.
 - Real money stays forbidden (hard rule 1).
+
+## D84. Spend controls are a protocol of their own, and Holdback sees only a funded payer (ADR-0041, T-554)
+
+**Status:** decided, 2026-11-19.
+
+**Why now.** D83 put an agent's spend controls into a contract its owner holds, and left the contract's design, its fee and who may deploy it open. Building that contract inside Holdback would put an owner's wallet beside the escrow's settlement code.
+
+**Decided by Rafa, 2026-11-19:** spend controls are a separate protocol, in a repository of their own, private to begin with. His words: "we should classify this as a separate protocol. Holdback is escrow, but this we should call something else and add in another repo. We shouldn't entangle them but make them modular." He added that the principal "needs to be able to claw back money, and intervene", and that the vault "needs to be able to have approved merchants, but still use Crow (since you an prove money can go to end agent)". He approved the boundary record's outline the same day ("ok continue, looks good").
+
+**The record** (ADR-0041; research in `docs/research/2026-11-19-spend-controls.md`):
+- **Holdback does not change:** contracts, API, schemas and operators stay as they are. A payment address that is a contract already funds a hold by a direct call, and the operators follow it: a spike budget contract funded inside its caps against the unchanged rules contract, refused above them by name, and its deal ended Released on anvil with no node change [measured].
+- **The dependency points one way.** The protocol relies on six facts of Holdback's funding, listed in ADR-0041 section 2; a Holdback change that breaks one needs its own ADR. Holdback never calls the protocol.
+- **Taking money back stops at the hold.** The principal withdraws anything not yet in a hold and stops its agent at once; money in a hold returns only by the deal's terms.
+- **Approved merchants stay hard through the escrow,** because a hold pays out only to the terms' payout address or back to the payment address (`contracts/src/HoldbackRules.sol:400`) [measured].
+- **The mandate stays as ADR-0038 made it;** both apply and the tighter one wins.
+
+**Open, for Rafa:** the operators relaying a budget's funding; reading a contract buyer and its longer signature, for stepping in on funded deals; Crow-paid creation on request; the owner's guide in a current page; the fee, with none recommended now. The protocol's base, name and design go in its own record.
+
+**Litmus tests.** Neutrality: no owner, controller, module or factory of the protocol can stop a funded deal or move a hold; on a fork of Sepolia the owner emptied its budget after a funding and the deal still ended Released [measured by the design research]. The hold: unchanged. Defended judgment: unchanged.
