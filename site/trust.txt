@@ -2,8 +2,8 @@
 
 > Due-diligence answers about Crow for an agent or a security team. Each answer stands alone and ends with its source. The same answers as a page: https://crow.direct/trust. Checked against the sources on 2026-11-14.
 
-Coming soon: An outside audit of Crow's own contracts, a penetration test, a certification such as SOC 2 or ISO 27001, a bug bounty, and deals with real money. Today Crow runs on a test network, with test tokens only.
-Source: SECURITY.md, "Status", https://github.com/rafaeldavid/holdback/blob/main/SECURITY.md#status; docs/audit/scope.md, https://github.com/rafaeldavid/holdback/blob/main/docs/audit/scope.md
+Coming soon: An outside audit of Crow's own contracts by human reviewers, with further reviews over time as partners ask, a penetration test, a certification such as SOC 2 or ISO 27001, a bug bounty, and deals with real money. Today Crow runs on a test network, with test tokens only.
+Source: SECURITY.md, "Status", https://github.com/rafaeldavid/holdback/blob/main/SECURITY.md#status; docs/audit/outside-scan.md, https://github.com/rafaeldavid/holdback/blob/main/docs/audit/outside-scan.md
 
 ## Money
 
@@ -149,10 +149,10 @@ Source: apps/early-access/worker.js, https://github.com/rafaeldavid/holdback/blo
 Yes. Cantina reviewed the escrow contract twice in April 2025 and found one critical issue, which was fixed before release. In July 2026, Cantina reviewed the contract's last code change, PR 90, at the exact commit Crow deploys, and found three informational issues. One later change, the renames in PR 71, has no review.
 Source: docs/reviews/2026-11-03-public-audit-crosscheck.md, https://github.com/rafaeldavid/holdback/blob/main/docs/reviews/2026-11-03-public-audit-crosscheck.md; contracts/lib/commerce-payments/, https://github.com/rafaeldavid/holdback/tree/main/contracts/lib/commerce-payments; docs/decisions/ADR-0003-escrow-contract-base.md, https://github.com/rafaeldavid/holdback/blob/main/docs/decisions/ADR-0003-escrow-contract-base.md
 
-### Has the rules contract had an external audit?
+### Has the rules contract had an outside review?
 
-No. Crow's rules contract (HoldbackRules), which decides when the escrow pays out, has had no outside audit yet. Models from two AI families reviewed it, and the scope an auditor would need is written.
-Source: docs/operations.md, "Sepolia contracts (T-206)", https://github.com/rafaeldavid/holdback/blob/main/docs/operations.md#sepolia-contracts-t-206; docs/audit/scope.md, https://github.com/rafaeldavid/holdback/blob/main/docs/audit/scope.md
+Yes, by AI. The contracts behind Crow's settlement were reviewed by Zero Cool's AI deep scan on 2026-11-18, and the fixes by its fix review on 2026-11-19. Zero Cool reports first places in Sherlock audit contests and a second place in a Cantina contest. The scan rated nothing Critical or High. Three Informational items stay open, and the fixed version is not deployed yet. Every finding and its status is published. Further reviews will follow over time, guided by partner feedback.
+Source: docs/audit/outside-scan.md, https://github.com/rafaeldavid/holdback/blob/main/docs/audit/outside-scan.md; Zero Cool, https://zerocool.ai/; docs/audit/known-issues.md, https://github.com/rafaeldavid/holdback/blob/main/docs/audit/known-issues.md
 
 ### What testing does Crow run?
 
