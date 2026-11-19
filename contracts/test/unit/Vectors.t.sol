@@ -5,6 +5,7 @@ import {Test} from "forge-std/Test.sol";
 import {HoldbackRules} from "../../src/HoldbackRules.sol";
 import {HoldbackTypes as H} from "../../src/HoldbackTypes.sol";
 import {TypesHarness} from "./Base.sol";
+import {SimBeacon} from "../../script/SimBeacon.sol";
 
 /// Cross-language vectors: the values `packages/core` (eip712.ts, viem) computes for spec/examples, with every
 /// token identifier set to the address 0x…beef (ADR-0025). The contract must rebuild the same commitment ID,
@@ -84,6 +85,8 @@ contract VectorsTest is Test {
         vm.chainId(31337);
         // The constructor: escrow, collector, expiry margin, beacon, token, beacon margin (ADR-0032). The digest
         // depends on the domain alone, so the addresses are placeholders, non-zero as the constructor requires (T-380).
+        // The beacon placeholder holds a sim beacon's code, because the constructor asks it for a round (T-527).
+        vm.etch(address(0xBE), address(new SimBeacon(bytes32(0))).code);
         bytes memory args = abi.encode(address(0xE5), address(0xC0), uint64(0), address(0xBE), TOKEN, uint64(0));
         deployCodeTo("HoldbackRules.sol:HoldbackRules", args, VERIFYING);
         bytes32 core = 0x2bb88f88c30641ab49ab6823d4cf2e692d1772f9137f681191123f4c19b46724;

@@ -5,7 +5,7 @@ import {Test} from "forge-std/Test.sol";
 import {DrandQuicknetBeacon} from "../../src/DrandQuicknetBeacon.sol";
 
 /// Opens the beacon's internal constants to the test below. A test contract only: it is never deployed elsewhere.
-contract BeaconConstants is DrandQuicknetBeacon {
+contract BeaconConstants is DrandQuicknetBeacon(250_000) {
     function publicKey() external pure returns (bytes memory) {
         return _publicKey();
     }
@@ -30,7 +30,7 @@ contract BeaconConstants is DrandQuicknetBeacon {
         return abi.encodePacked(DST_A, DST_B, DST_LEN);
     }
 
-    function precompiles() external pure returns (address, address, address, address, uint256) {
+    function precompiles() external view returns (address, address, address, address, uint256) {
         return (MODEXP, G1ADD, PAIRING_CHECK, MAP_FP_TO_G1, PAIRING_GAS);
     }
 }
@@ -104,7 +104,7 @@ contract DrandVerifierReviewTest is Test {
     DrandQuicknetBeacon internal beacon;
 
     function setUp() public {
-        beacon = new DrandQuicknetBeacon();
+        beacon = new DrandQuicknetBeacon(250_000);
     }
 
     function _call(uint64 round, bytes memory s, uint256 gasGiven)

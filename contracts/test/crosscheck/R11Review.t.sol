@@ -178,32 +178,8 @@ contract R11ReviewTest is Base {
 
     // ------------------------------------------------------------ recorded findings, as the contract stands
 
-    /// Finding (Low): the state model's register (section 8.3, rows 2 to 4) gives the three dispute fields the verdict
-    /// "enforce: refuse nonzero"; `agreeAndFund` compares none of them. The schema forbids them in this settlement
-    /// mode and core encodes their absence as 0, so such terms reach the contract only when sent to it directly, and
-    /// the deal then has an ID no operator can rebuild. No money moves outside the terms.
-    function test_r11_issue_disputeFieldsAreSignedAndNotRefused() public {
-        H.Terms memory t = _terms();
-        t.timing.disputeBy = t.timing.fallbackBy + 1;
-        t.timing.disputeJudgeSec = 2;
-        t.timing.disputeFallbackSec = 3;
-        bytes32 id = _fund(t);
-        assertEq(uint8(_stage(id)), uint8(IHoldbackRules.Stage.Held), "terms with dispute fields fund");
-    }
-
-    /// Finding (Info): the register's row 11 gives a primary's beacon fields the verdict "enforce empty"; `decide`
-    /// reads them for the fallback and the appeal adjudicator only. A primary can sign beacon data nobody proved.
-    function test_r11_issue_primaryDecisionMayCarryUnprovenBeaconFields() public {
-        (H.Terms memory t, bytes32 id) = _funded();
-        _deliver(t, id);
-        H.Decision memory m = _decision(H.ROLE_PRIMARY, H.OUTCOME_ACCEPT);
-        m.beaconSourceHash = keccak256("drand-quicknet");
-        m.beaconRound = 123;
-        m.beaconValue = keccak256("not a beacon value");
-        m.beaconSignature = hex"deadbeef";
-        rules.decide(t, _signDecision(t, id, m, adjudicator, ADJ_PK), _noDelivery(), "");
-        assertEq(uint8(_stage(id)), uint8(IHoldbackRules.Stage.Released), "accepted with beacon fields nothing checked");
-    }
+    // T-529 fixed the two register findings that stood here (the dispute fields, and a primary's beacon fields): their
+    // refusals are tested in test/unit/SignedFieldsRefused.t.sol.
 
     /// Finding (Low): a call that carries the buyer's envelope publishes it in its calldata whether or not it lands.
     /// Here a settlement both parties signed, with `releaseKey`, is sent when the default is due; the default lands
