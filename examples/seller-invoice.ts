@@ -4,13 +4,15 @@
 //        [--issue-date <YYYY-MM-DD>] [--supply-date <YYYY-MM-DD>] [--tax <rate in basis points>|reverse-charge|none] [--tax-note <text>]
 //        [--rate <decimal> --currency <code> --rate-source <text> --rate-date <YYYY-MM-DD>] [--out <directory>]
 //
-// The deal record is the file `examples/deal-record.ts` writes. The command reruns the record's offline checks (the
-// terms hash to the commitment ID, the seller's signature recovers to the seller under a pinned domain), requires every
-// check the record ran to have passed, and refuses an unfinished or unverifiable deal by name. Then it writes, in the
+// The deal record is the file `examples/deal-record.ts` writes. The command recomputes two of the record's checks (the
+// terms hash to the commitment ID, the seller's signature recovers to the seller under a pinned domain), checks that the
+// record's outcome, settling step, times and payouts agree, requires every other check the record ran to have passed as
+// written (the events and receipts behind them are not in the record), and refuses an unfinished or unverifiable deal
+// by name. Then it writes, in the
 // output directory (the record's own by default), `<number>.json`, the document with stable field names, and
 // `<number>.html`, a plain page to print or send.
 //
-// Rails, not a record-keeper: every deal fact comes from the checked record. Every other fact comes from the seller:
+// Rails, not a record-keeper: every deal fact comes from the record, checked as above. Every other fact comes from the seller:
 // its name, address and tax number, its numbering, the tax treatment it states, the buyer's details as the buyer gave
 // them (`--buyer`), and any fiat rate with its source and date. The command decides no tax rate, no tax treatment and no
 // duty to register, looks up no rate, and makes no network call. Its only arithmetic: it splits a tax the seller states
@@ -18,8 +20,8 @@
 //
 // Numbering: the seller details file holds the next number of each series and a register of every document the command
 // wrote. A document takes the next number only when it is written; running again on the same deal rewrites the same
-// document with the same number and date, and refuses if it would now differ. So a series never repeats or skips a
-// number through this command. Exit 0: written; 1: refused (the record, the deal or the inputs), nothing written;
+// document with the same number and date, and refuses if it would now differ. So the command never repeats a number,
+// takes none for a refused run, and warns when the seller's `next` leaves a gap. Exit 0: written; 1: refused (the record, the deal or the inputs), nothing written;
 // 2: could not run.
 import { createHash } from 'node:crypto';
 import { closeSync, existsSync, openSync, readFileSync, renameSync, unlinkSync, writeFileSync } from 'node:fs';
@@ -39,6 +41,8 @@ const DATE = /^[0-9]{4}-[0-9]{2}-[0-9]{2}$/;
 const TIME = /^[0-9]{4}-[0-9]{2}-[0-9]{2}T[0-9:.]+Z$/;
 const DECIMAL = /^[0-9]{1,18}(\.[0-9]{1,18})?$/;
 const PREFIX = /^[A-Za-z0-9][A-Za-z0-9._-]{0,31}$|^$/;
+/** A document number as this command writes it: a prefix and digits. It names the output files. */
+const NUMBER = /^[A-Za-z0-9][A-Za-z0-9._-]{0,47}$/;
 /** Longest text the command takes for one field, and for the description of the work. */
 const TEXT_MAX = 300;
 const DESCRIPTION_MAX = 6000;
@@ -66,6 +70,8 @@ function usage(m: string): never {
 export const REQUIRED_CHECKS = ['all operators answered', 'every read answered', 'domain is pinned', 'commitment ID', "seller's terms signature", 'termsHash in events', 'event hashes', 'operator receipts', 'hold is price plus fee', 'operator fee'] as const;
 /** A settlement's split comes from its payouts, so a Settled deal needs these two as well. */
 const SPLIT_CHECKS = ['postings conserve the hold', 'postings follow the outcome'] as const;
+/** The steps that settle a deal, one of which a finished deal's record holds. */
+const SETTLING = ['settlement.released', 'settlement.refunded', 'settlement.reclaimed', 'commitment.settled'];
 
 export type Amount = { base: string; decimal: string | null };
 export type Deal = {
@@ -127,7 +133,7 @@ export async function dealOf(r: J): Promise<Deal> {
   if (!ID.test(id)) refuse('the record names no commitment ID');
   const t = r.terms?.signed;
   if (!t || typeof t !== 'object') refuse('the record holds no signed terms');
-  await termsChecked(r, id);
+  const pin = await termsChecked(r, id);
   // Nothing is due for a price of 0 whatever else the record says. On SimChain the record's "postings follow the
   // outcome" check fails for such a release, which posts no transfer of 0 (T-565 Handoff), so this comes first.
   if (BigInt(t.price.amount) === 0n) refuse("the deal's price is 0, so the seller was paid nothing and no seller's invoice or credit note is due for it. The adjudication fee the buyer paid is the adjudicator's to invoice");
@@ -144,20 +150,41 @@ export async function dealOf(r: J): Promise<Deal> {
     if (runs.length === 0 || runs.some((c) => c.ok !== true)) refuse(`the record's check "${name}" ${runs.length === 0 ? 'is missing' : `did not run (${plain(String(runs.find((c) => c.ok !== true)?.why ?? 'no reason given')).slice(0, 160)})`}: an invoice needs it to have passed`);
   }
 
-  const pin = await termsChecked(r, id);
+  // What the record states about the outcome must agree with itself: the outcome, the step that settled the deal, its
+  // time, the payouts and who was paid. These catch an edited or inconsistent record; the events and receipts behind
+  // them are not in the record, so their checks above are taken as the record wrote them (T-565 review, H1).
+  const steps: J[] = Array.isArray(r.steps) ? r.steps : [];
+  const settling = steps.filter((x) => SETTLING.includes(x?.step));
+  const step = settling[0]?.step;
+  const expected = outcome === 'Released' ? ['settlement.released'] : outcome === 'Refunded' ? ['settlement.refunded', 'settlement.reclaimed'] : ['commitment.settled'];
   const settledAt = String(r.row?.settledAt ?? '');
-  if (!TIME.test(settledAt)) refuse('the record has no settlement time');
+  const why =
+    r.row?.outcome !== outcome ? `its outcome says ${plain(String(outcome))} and its row says ${plain(String(r.row?.outcome)).slice(0, 40)}`
+    : settling.length !== 1 || !expected.includes(step) ? `its outcome is ${outcome} but the steps that settle it are ${settling.map((x) => plain(String(x.step)).slice(0, 40)).join(', ') || 'none'}`
+    : (step === 'settlement.reclaimed') !== (r.outcome?.reclaimed === true) ? 'its reclaimed flag does not match its steps'
+    : !(settledAt.length <= 40 && TIME.test(settledAt)) || settling[0].at !== settledAt || (r.outcome?.settledAt ?? settledAt) !== settledAt ? 'its settlement times do not agree'
+    : null;
+  if (why) refuse(`the record does not agree with itself: ${why}. Write the record again`);
   const price = BigInt(t.price.amount);
   const payout = lc(t.sellerPayoutAddress ?? t.seller);
+  const payment = lc(t.buyerPaymentAddress ?? t.buyer);
   let sellerShare = 0n;
   if (outcome === 'Released') sellerShare = price;
   else if (outcome === 'Settled') {
-    // The payouts both parties signed, as the settled event records them; the record checked they sum to the price.
+    // The payouts both parties signed, as the settled event records them: each a whole number above 0 in the price's
+    // token, to the seller's payout address or the buyer's payment address, together the price.
     const postings: J[] = Array.isArray(r.settlement?.postings) ? r.settlement.postings : [];
-    sellerShare = postings.filter((p) => lc(p?.to) === payout).reduce((a, p) => a + BigInt(p.amount.amount), 0n);
-    const total = postings.reduce((a, p) => a + BigInt(p?.amount?.amount ?? 0), 0n);
-    if (total !== price || sellerShare > price) refuse(`the record's settlement pays out ${total} base units against a price of ${price}`);
+    const bad = postings.find((x) => !(typeof x?.amount?.amount === 'string' && /^[1-9][0-9]{0,77}$/.test(x.amount.amount) && x.amount.token === t.price.token && [payout, payment].includes(lc(x.to))));
+    if (bad || postings.length === 0) refuse('the record does not agree with itself: a settlement payout is not a whole amount above 0 to the seller\'s payout address or the buyer\'s payment address. Write the record again');
+    sellerShare = postings.filter((x) => lc(x.to) === payout).reduce((a, x) => a + BigInt(x.amount.amount), 0n);
+    const total = postings.reduce((a, x) => a + BigInt(x.amount.amount), 0n);
+    if (total !== price) refuse(`the record does not agree with itself: its settlement pays out ${total} base units against a price of ${price}`);
   }
+  // Who received money, where the record says: the seller's payout address when the seller had a share, the buyer's
+  // payment address when part of the price went back. A chain's record may leave both null (no postings).
+  const paidTo = r.row?.paidTo ?? null, refundedTo = r.row?.refundedTo ?? null;
+  if ((paidTo !== null && (lc(paidTo) !== payout || sellerShare === 0n)) || (refundedTo !== null && (lc(refundedTo) !== payment || sellerShare === price))) refuse('the record does not agree with itself: who it says was paid does not match its outcome. Write the record again');
+  if (outcome === 'Settled' && ((paidTo !== null) !== (sellerShare > 0n) || (refundedTo !== null) !== (sellerShare < price))) refuse('the record does not agree with itself: who it says was paid does not match its settlement. Write the record again');
   const txs: J[] = Array.isArray(r.settlement?.transactions) ? r.settlement.transactions : [];
   const txOf = (steps: string[]) => {
     const x = txs.find((e) => steps.includes(e?.step) && ID.test(lc(e.tx)));
@@ -167,10 +194,10 @@ export async function dealOf(r: J): Promise<Deal> {
   return {
     commitmentId: id, outcome, reclaimed: r.outcome?.reclaimed === true, settledAt, pin, terms: t, price, sellerShare,
     // A token's address is lowercased; SimChain's token is a name, kept as it is.
-    token: { id: /^0x/i.test(String(t.price.token)) ? lc(t.price.token) : plain(String(t.price.token)).slice(0, 64), symbol: known ? pin.token.symbol : null, decimals: known ? pin.token.decimals : null },
+    token: { id: (/^0x/i.test(String(t.price.token)) ? lc(t.price.token) : plain(String(t.price.token))).slice(0, 64), symbol: known ? pin.token.symbol : null, decimals: known ? pin.token.decimals : null },
     funding: txOf(['hold.funded']),
     // A decision's transaction carries the release or the refund, and the record lists it under its first step.
-    settlement: txOf(['settlement.released', 'settlement.refunded', 'settlement.reclaimed', 'commitment.settled', 'judgment.decided', 'appeal.decided', 'escalation.decided']),
+    settlement: txOf([step]) ?? txOf(['judgment.decided', 'appeal.decided', 'escalation.decided']),
     operators: (Array.isArray(r.operators) ? r.operators : []).filter((o: J) => o?.answered).map((o: J) => plain(String(o.api)).slice(0, 120)),
     party: r.party === 'buyer' ? 'buyer' : 'seller',
   };
@@ -181,7 +208,7 @@ export async function dealOf(r: J): Promise<Deal> {
 
 export type Tax = { treatment: 'rate'; rateBps: number } | { treatment: 'reverse-charge' } | { treatment: 'none' };
 export type Series = { prefix: string; next: number; digits: number };
-export type Issued = { number: string; series: 'invoice' | 'creditNote'; kind: 'invoice' | 'credit-note'; commitmentId: string; credits: string | null; issueDate: string; sha256: string };
+export type Issued = { number: string; series: 'invoice' | 'creditNote'; kind: 'invoice' | 'credit-note'; commitmentId: string; credits: string | null; issueDate: string; sha256: string; recordSha256?: string };
 export type Seller = {
   name: string; address: string[]; country: string | null; taxId: string | null; lines: string[]; email: string | null;
   tax: Tax; taxNote: string | null;
@@ -242,7 +269,7 @@ function issuedOf(v: unknown): Issued[] {
   if (v === undefined) return [];
   if (!Array.isArray(v)) usage('seller file: issued must be the list this command writes');
   return (v as J[]).map((e, i) => {
-    const ok = e && typeof e.number === 'string' && ['invoice', 'creditNote'].includes(e.series) && ['invoice', 'credit-note'].includes(e.kind) && ID.test(String(e.commitmentId)) && DATE.test(String(e.issueDate)) && /^[0-9a-f]{64}$/.test(String(e.sha256)) && (e.credits === null || typeof e.credits === 'string');
+    const ok = e && typeof e.number === 'string' && ['invoice', 'creditNote'].includes(e.series) && ['invoice', 'credit-note'].includes(e.kind) && ID.test(String(e.commitmentId)) && DATE.test(String(e.issueDate)) && /^[0-9a-f]{64}$/.test(String(e.sha256)) && (e.credits === null || typeof e.credits === 'string') && NUMBER.test(String(e.number)) && (e.recordSha256 === undefined || /^[0-9a-f]{64}$/.test(String(e.recordSha256)));
     if (!ok) usage(`seller file: issued entry ${i + 1} is not one this command wrote; restore the file from your copy`);
     return e as Issued;
   });
@@ -339,16 +366,24 @@ export async function make(record: J, o: Options): Promise<Made> {
   const { kind, amount } = kindOf(d, o.credits);
   const tax = o.tax ?? o.seller.tax;
   const taxNote = o.taxNote ?? o.seller.taxNote;
-  if (tax.treatment === 'reverse-charge' && !o.seller.taxId) refuse('the tax treatment is reverse charge, which an invoice states with both parties\' VAT numbers, and the seller file gives none for you (taxId). Add it, or state another treatment with --tax');
-  if (tax.treatment === 'reverse-charge' && !o.buyer.taxId) refuse('the tax treatment is reverse charge, which an invoice states with the buyer\'s VAT number, and the buyer file gives none (taxId). Ask the buyer for it, or state another treatment with --tax');
+  if (tax.treatment === 'reverse-charge' && !o.seller.taxId) refuse('this command writes a reverse-charge document only with both parties\' VAT numbers, and the seller file gives none for you (taxId). Add it, or state another treatment with --tax');
+  if (tax.treatment === 'reverse-charge' && !o.buyer.taxId) refuse('this command writes a reverse-charge document only with both parties\' VAT numbers, and the buyer file gives none for the buyer (taxId). Ask the buyer for it, or state another treatment with --tax');
   for (const [k, v] of [['issue date', o.issueDate], ['supply date', o.supplyDate], ['credited invoice date', o.credits?.issueDate], ['rate date', o.fiat?.date]] as const) {
     if (v !== undefined && (!DATE.test(v) || Number.isNaN(Date.parse(`${v}T00:00:00Z`)) || new Date(`${v}T00:00:00Z`).toISOString().slice(0, 10) !== v)) usage(`the ${k} must be a date as YYYY-MM-DD`);
   }
 
+  // One invoice or one credit note per deal (T-565 review, M1). A credit note corrects an invoice for the whole price
+  // issued earlier, elsewhere; this command's own invoices are for what the seller was paid, so none of them is credited.
+  const credits = o.credits?.number ?? null;
+  const mine = o.seller.issued.filter((e) => e.commitmentId === d.commitmentId);
+  const other = mine.find((e) => e.kind !== kind);
+  if (other) refuse(kind === 'credit-note' ? `this command issued ${other.number} for this deal, an invoice for only what you were paid, so the refunded part was never invoiced and no credit note is due` : `this command issued credit note ${other.number} for this deal, crediting the refunded part of invoice ${other.credits}, which already covers what you were paid`);
+  const named = credits === null ? undefined : o.seller.issued.find((e) => e.number === credits);
+  if (named && (named.commitmentId !== d.commitmentId || named.kind !== 'invoice')) refuse(`${credits} in your register is ${named.kind === 'invoice' ? 'an invoice for another deal' : 'a credit note'}: a credit note for this deal names the invoice for this deal's full price`);
+  const prior = mine.find((e) => e.kind === kind);
+  if (prior && prior.credits !== credits) refuse(`credit note ${prior.number} already credits this deal's refund against invoice ${prior.credits}: a refund is credited once`);
   // The number: the one already issued for this deal and document, or the next in its series.
   const key: 'invoice' | 'creditNote' = kind === 'credit-note' && o.seller.numbering.creditNote ? 'creditNote' : 'invoice';
-  const credits = o.credits?.number ?? null;
-  const prior = o.seller.issued.find((e) => e.commitmentId === d.commitmentId && e.kind === kind && e.credits === credits);
   let number: string;
   let issueDate = o.issueDate;
   let gap = 0;
@@ -391,7 +426,7 @@ export async function make(record: J, o: Options): Promise<Made> {
     buyer: { ...o.buyer, source: 'as the buyer disclosed them to the seller; null where it did not', signingAddress: lc(t.buyer), paymentAddress: lc(t.buyerPaymentAddress) },
     deal: {
       commitmentId: d.commitmentId, outcome: d.outcome, reclaimed: d.reclaimed, settledAt: d.settledAt,
-      description, descriptionSource: "the seller's words in the signed terms", deliverableKind: t.deliverable?.kind ?? null, format: t.deliverable?.format ?? null,
+      description, descriptionSource: "the seller's words in the signed terms", deliverableKind: t.deliverable?.kind == null ? null : plain(String(t.deliverable.kind)).slice(0, 64), format: t.deliverable?.format == null ? null : plain(String(t.deliverable.format)).slice(0, 128),
       price: amt(d.price), sellerShare: amt(d.sellerShare), refunded: amt(d.price - d.sellerShare),
       network: { chainId, name: network, rulesContract: lc(d.pin.domain.verifyingContract) },
       transactions: { funding: { hash: d.funding, explorer: explorer(d.funding) }, settlement: { hash: d.settlement, explorer: explorer(d.settlement) } },
@@ -402,12 +437,15 @@ export async function make(record: J, o: Options): Promise<Made> {
     tax: { treatment: tax.treatment, rateBps: tax.treatment === 'rate' ? tax.rateBps : null, note: taxNote, source: o.tax ? 'seller, for this document' : 'seller file', split: tax.treatment === 'rate' ? 'the buyer paid the price, so the tax is inside it: net = total × 10000 / (10000 + rate in basis points), rounded half up; tax = total − net' : null },
     fiat,
     payment,
-    source: { record: basename(o.recordFile), recordSha256: createHash('sha256').update(o.recordBytes).digest('hex'), writtenBy: d.party, operators: d.operators, checks: `every check the record ran passed; this command recomputed the commitment ID from the signed terms and recovered the seller's signature under the pinned domain` },
+    source: { record: basename(o.recordFile), recordSha256: createHash('sha256').update(o.recordBytes).digest('hex'), writtenBy: d.party, operators: d.operators, checks: "this command recomputed two of the record's checks, the commitment ID from the signed terms and the seller's terms signature under the pinned domain, and checked that the record's outcome, settling step, times and payouts agree; the record's other checks, of the events and the operators' receipts, passed as the record wrote them" },
     notice: NOTICE,
   };
   const json = `${JSON.stringify(doc, null, 2)}\n`;
   const sha256 = createHash('sha256').update(json).digest('hex');
-  if (prior && prior.sha256 !== sha256) refuse(`${number} was issued for this deal on ${prior.issueDate} with other content (SHA-256 ${prior.sha256.slice(0, 16)}…). An issued document is not changed: credit it with a credit note, then issue a new invoice. To write the same document again, give the same inputs`);
+  if (prior && prior.sha256 !== sha256) {
+    const record = doc.source.recordSha256;
+    refuse(`${number} was issued for this deal on ${prior.issueDate} with other content (SHA-256 ${prior.sha256.slice(0, 16)}…). ${prior.recordSha256 && prior.recordSha256 !== record ? `The deal record differs from the one it was made from (SHA-256 ${prior.recordSha256.slice(0, 16)}…): use that file, under the same name, to write it again` : 'To write the same document again, give the same inputs'}. An issued document is not changed: this command does not write a correction of it yet, so make that in your own books`);
+  }
   return { doc, json, sha256, html: page(doc, sha256), number, series: key, reused: Boolean(prior), gap };
 }
 
@@ -436,7 +474,7 @@ function page(doc: J, sha: string): string {
     '</div>',
   ].join('\n');
   const tx = (x: J) => (x.hash ? `<code>${esc(x.hash)}</code>${x.explorer ? ` (<a href="${esc(x.explorer)}">explorer</a>)` : ''}` : '<span class="no">not in the record</span>');
-  const taxLine = doc.tax.treatment === 'rate' ? `Tax at ${esc((doc.tax.rateBps / 100).toFixed(2))} %, as the seller states it` : doc.tax.treatment === 'reverse-charge' ? 'Reverse charge' : 'No tax charged, as the seller states it';
+  const taxLine = doc.tax.treatment === 'rate' ? `Tax at ${Math.trunc(doc.tax.rateBps / 100)}.${String(doc.tax.rateBps % 100).padStart(2, '0')} %, as the seller states it` : doc.tax.treatment === 'reverse-charge' ? 'Reverse charge' : 'No tax charged, as the seller states it';
   const f = doc.fiat;
   const rows = [
     ['Number', esc(doc.number)],
@@ -466,7 +504,7 @@ footer { margin-top: 28px; padding-top: 10px; border-top: 1px solid #bbb; font-s
 </head>
 <body>
 <h1>${esc(title)}</h1>
-<p class="sub">${credit ? 'A credit note: it corrects the invoice it names by the amount below.' : 'Paid in full through escrow before this invoice was issued.'} Network: ${esc(doc.deal.network.name)} (chain ${esc(doc.deal.network.chainId)}).</p>
+<p class="sub">${credit ? 'A credit note: it corrects the invoice it names by the amount below.' : `Paid in full through escrow on ${esc(doc.payment.settledAt.slice(0, 10))}.`} Network: ${esc(doc.deal.network.name)} (chain ${esc(doc.deal.network.chainId)}).</p>
 <div class="parties">
 ${party(doc.seller, 'seller')}
 ${party(doc.buyer, 'buyer')}
@@ -519,6 +557,9 @@ export async function main(argv: readonly string[], io = { out: (s: string) => c
     return 0;
   }
   let lock: string | null = null;
+  /** Temporary files this run wrote, removed on any failure; and the number once the register holds it. */
+  const temps: string[] = [];
+  let committed: string | null = null;
   try {
     const [recordFile, sellerFile, ...rest] = argv;
     if (!recordFile || !sellerFile || recordFile.startsWith('--') || sellerFile.startsWith('--')) usage('give the deal record, then the seller details file');
@@ -573,16 +614,18 @@ export async function main(argv: readonly string[], io = { out: (s: string) => c
     const dir = f['--out'] ?? dirname(recordFile);
     const out = [join(dir, `${made.number}.json`), join(dir, `${made.number}.html`)];
     const tmp = out.map((p) => `${p}.${process.pid}.tmp`);
+    temps.push(...tmp, `${sellerFile}.${process.pid}.tmp`);
     writeFileSync(tmp[0]!, made.json);
     writeFileSync(tmp[1]!, made.html);
     if (!made.reused) {
       // The commit point: the register and the next number move together, in one rename. A crash after it leaves the
       // number in the register, and the next run writes the same document again.
-      const entry: Issued = { number: made.number, series: made.series, kind: made.doc.kind, commitmentId: made.doc.deal.commitmentId, credits: made.doc.credits?.number ?? null, issueDate: made.doc.issueDate, sha256: made.sha256 };
+      const entry: Issued = { number: made.number, series: made.series, kind: made.doc.kind, commitmentId: made.doc.deal.commitmentId, credits: made.doc.credits?.number ?? null, issueDate: made.doc.issueDate, sha256: made.sha256, recordSha256: made.doc.source.recordSha256 };
       const numbering = { ...raw.numbering, [made.series]: { ...raw.numbering[made.series], next: (seller.numbering[made.series] ?? seller.numbering.invoice).next + 1 } };
       const next = { ...raw, numbering, issued: [...seller.issued, entry] };
       writeFileSync(`${sellerFile}.${process.pid}.tmp`, `${JSON.stringify(next, null, 2)}\n`);
       renameSync(`${sellerFile}.${process.pid}.tmp`, sellerFile);
+      committed = made.number;
     }
     renameSync(tmp[0]!, out[0]!);
     renameSync(tmp[1]!, out[1]!);
@@ -595,7 +638,9 @@ export async function main(argv: readonly string[], io = { out: (s: string) => c
       io.err(`seller-invoice: ${e.message}.${e.code === 2 ? `\n${USAGE}` : ''}\nseller-invoice: wrote nothing.`);
       return e.code;
     }
-    io.err(`seller-invoice: could not run: ${plain(e instanceof Error ? e.message : String(e)).slice(0, 300)}. Nothing was issued.`);
+    for (const f of temps) if (existsSync(f)) unlinkSync(f);
+    const why = plain(e instanceof Error ? e.message : String(e)).slice(0, 300);
+    io.err(committed ? `seller-invoice: ${committed} is in your register, but writing its files failed: ${why}. Run the same command again to write the same document.` : `seller-invoice: could not run: ${why}. Nothing was issued.`);
     return 2;
   } finally {
     if (lock && existsSync(lock)) unlinkSync(lock);

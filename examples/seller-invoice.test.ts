@@ -2,7 +2,7 @@
 // settlement both parties signed with a split, and a deal with a price of 0. The records come from
 // examples/deal-record.ts run against the in-process SimChain world, as the seller would write them; the command itself
 // must make no network call.
-import { existsSync, mkdtempSync, readdirSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
+import { existsSync, mkdirSync, mkdtempSync, readdirSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { startSimWorld, type SimWorld } from '@holdback/operator';
@@ -163,6 +163,9 @@ describe("seller-invoice: the seller's invoice and credit note from a deal recor
     expect(page).toContain('25.00 tUSD');
     expect(page).toContain('SimChain, a local simulation');
     expect(page).toContain('gives no tax or legal advice');
+    expect(page).toContain(`Paid in full through escrow on ${records.released.row.settledAt.slice(0, 10)}.`);
+    expect(page).toContain('Tax at 19.00 %, as the seller states it');
+    expect(d.source.checks).toMatch(/recomputed two of the record's checks/);
     expect(f.sellerNow().numbering.invoice.next).toBe(2);
     expect(f.sellerNow().issued).toEqual([expect.objectContaining({ number: 'INV-2026-0001', kind: 'invoice', commitmentId: records.released.commitmentId, issueDate: '2026-11-19' })]);
   });
@@ -190,22 +193,44 @@ describe("seller-invoice: the seller's invoice and credit note from a deal recor
     expect(r.code, r.out).toBe(0);
     expect(f.doc('INV-2026-0001')).toMatchObject({ kind: 'invoice', deal: { outcome: 'Settled', price: { base: PRICE }, sellerShare: { base: '7500000' }, refunded: { base: '17500000' } }, totals: { net: { base: '7500000' }, tax: { base: '0' }, total: { base: '7500000', decimal: '7.50' } }, tax: { treatment: 'reverse-charge', note: 'Customer to account for the VAT' } });
     expect(f.html('INV-2026-0001')).toContain('Reverse charge. Customer to account for the VAT');
-    const c = await f.run(records.split, ['--credits', 'INV-2026-0009', '--credits-date', '2026-11-01'], { buyer: BUYER });
+    // The share invoice covers only what the seller was paid: no credit note on top of it.
+    const over = await f.run(records.split, ['--credits', 'INV-2026-0001', '--credits-date', '2026-11-19'], { buyer: BUYER });
+    expect(over.code).toBe(1);
+    expect(over.out).toMatch(/this command issued INV-2026-0001 for this deal, an invoice for only what you were paid, so the refunded part was never invoiced/);
+
+    // A seller that invoiced the full price elsewhere credits the 70 % instead, once.
+    const g = folder({ ...SELLER, tax: { treatment: 'reverse-charge', note: 'Customer to account for the VAT' } });
+    const c = await g.run(records.split, ['--credits', 'OLD-0009', '--credits-date', '2026-11-01'], { buyer: BUYER });
     expect(c.code, c.out).toBe(0);
     // No credit-note series in this file: the credit note takes the next invoice number.
-    expect(f.doc('INV-2026-0002')).toMatchObject({ kind: 'credit-note', totals: { total: { base: '17500000' } }, credits: { number: 'INV-2026-0009' } });
+    expect(g.doc('INV-2026-0001')).toMatchObject({ kind: 'credit-note', totals: { total: { base: '17500000' } }, credits: { number: 'OLD-0009' } });
+    const twice = await g.run(records.split, ['--credits', 'OLD-0042', '--credits-date', '2026-11-02'], { buyer: BUYER });
+    expect(twice.code).toBe(1);
+    expect(twice.out).toMatch(/credit note INV-2026-0001 already credits this deal's refund against invoice OLD-0009: a refund is credited once/);
+    // And no share invoice after that credit: the earlier invoice already covers the share.
+    const share = await g.run(records.split, [], { buyer: BUYER });
+    expect(share.code).toBe(1);
+    expect(share.out).toMatch(/issued credit note INV-2026-0001 for this deal, crediting the refunded part of invoice OLD-0009/);
+    // A credit note naming an invoice of another deal in the register is refused.
+    const h = folder();
+    expect((await h.run(records.released, [], { name: 'a' })).code).toBe(0);
+    const wrong = await h.run(records.refunded, ['--credits', 'INV-2026-0001', '--credits-date', '2026-11-19'], { name: 'b' });
+    expect(wrong.code).toBe(1);
+    expect(wrong.out).toMatch(/INV-2026-0001 in your register is an invoice for another deal/);
+    expect(g.documents()).toEqual(['INV-2026-0001.html', 'INV-2026-0001.json']);
+    expect(g.sellerNow().numbering.invoice.next).toBe(2);
   });
 
   it('reverse charge without the buyer\'s VAT number is refused by name', async () => {
     const f = folder();
     const r = await f.run(records.released, ['--tax', 'reverse-charge'], { buyer: { name: 'Buyer Ltd' } });
     expect(r.code).toBe(1);
-    expect(r.out).toMatch(/reverse charge.*VAT number.*taxId/);
+    expect(r.out).toMatch(/reverse-charge document only with both parties' VAT numbers, and the buyer file gives none for the buyer \(taxId\)/);
     // The seller's own VAT number too (EU Article 226(3) and (4); Germany §14a UStG; Peppol rule BR-AE-02).
     const g = folder({ ...SELLER, taxId: undefined });
     const s = await g.run(records.released, ['--tax', 'reverse-charge'], { buyer: BUYER });
     expect(s.code).toBe(1);
-    expect(s.out).toMatch(/both parties' VAT numbers, and the seller file gives none for you \(taxId\)/);
+    expect(s.out).toMatch(/only with both parties' VAT numbers, and the seller file gives none for you \(taxId\)/);
     expect(f.documents()).toEqual([]);
     expect(g.documents()).toEqual([]);
   });
@@ -234,7 +259,8 @@ describe("seller-invoice: the seller's invoice and credit note from a deal recor
       ['operators that disagree', (r) => (r.disagreements = [{ section: 'settlement', operators: ['a', 'b'] }]), /different answers for settlement/],
       ['an unfinished deal', (r) => (r.outcome.escrowState = 'Held'), /has not finished: its state in the record is Held/],
       ['a deal not final', (r) => (r.outcome.finalAt = null), /not final yet/],
-      ['a split that does not add up', (r) => (r.outcome.escrowState = 'Settled'), /check "postings conserve the hold" is missing|settlement pays out/],
+      ['an outcome that its row contradicts', (r) => (r.outcome.escrowState = 'Settled'), /does not agree with itself: its outcome says Settled and its row says Released/],
+      ['settlement times that differ', (r) => (r.row.settledAt = '2026-01-01T00:00:00Z'), /does not agree with itself: its settlement times do not agree/],
       ['another file', (r) => (r.record = 'holdback-evidence/1'), /not a deal record/],
       ['another deployment', (r) => r.operators.forEach((o: J) => (o.domain.verifyingContract = '0x3be45128565abbc35dbd4660716b703ff489f1b4')), /does not pin \(rules contract 0x3be45128565abbc35dbd4660716b703ff489f1b4\)\. For a deal on an earlier deployment, set HOLDBACK_DEPLOYMENT/],
     ];
@@ -248,6 +274,20 @@ describe("seller-invoice: the seller's invoice and credit note from a deal recor
     const split = clone(records.split);
     split.settlement.postings[0].amount.amount = '1';
     expect((await f.run(split)).out).toMatch(/settlement pays out/);
+    // A payout below 0 that keeps the sum: refused.
+    const negative = clone(records.split);
+    const [a, b] = negative.settlement.postings;
+    a.amount.amount = '-5';
+    b.amount.amount = String(BigInt(PRICE) + 5n);
+    expect((await f.run(negative, ['--credits', 'X-1', '--credits-date', '2026-11-01'])).out).toMatch(/a settlement payout is not a whole amount above 0/);
+    // A Refunded deal edited to read Released, one field at a time: each step of the edit is caught (T-565 review, H1).
+    const flip = clone(records.refunded);
+    flip.outcome.escrowState = 'Released';
+    expect((await f.run(flip)).out).toMatch(/its outcome says Released and its row says Refunded/);
+    flip.row.outcome = 'Released';
+    expect((await f.run(flip)).out).toMatch(/its outcome is Released but the steps that settle it are settlement.refunded/);
+    flip.steps.find((x: J) => x.step === 'settlement.refunded').step = 'settlement.released';
+    expect((await f.run(flip)).out).toMatch(/who it says was paid does not match its outcome/);
     expect(f.documents()).toEqual([]);
     expect(f.sellerNow().numbering.invoice.next).toBe(1);
     expect(f.sellerNow().issued).toBeUndefined();
@@ -350,6 +390,31 @@ describe("seller-invoice: the seller's invoice and credit note from a deal recor
     expect(ahead.code, ahead.out).toBe(0);
     expect(ahead.out).toMatch(/2 numbers before INV-2026-0007 in this series were not issued by this command/);
   }, 60_000);
+
+  it('says a number is in the register when writing its files failed after it, and the next run writes them', async () => {
+    const f = folder();
+    mkdirSync(join(f.dir, 'INV-2026-0001.json')); // a directory where the document goes: the rename fails
+    const r = await f.run(records.released);
+    expect(r.code).toBe(2);
+    expect(r.out).toMatch(/INV-2026-0001 is in your register, but writing its files failed: .*Run the same command again/);
+    expect(readdirSync(f.dir).filter((x) => x.endsWith('.tmp'))).toEqual([]);
+    expect(existsSync(`${f.sellerFile}.lock`)).toBe(false);
+    rmSync(join(f.dir, 'INV-2026-0001.json'), { recursive: true });
+    const again = await f.run(records.released);
+    expect(again.code, again.out).toBe(0);
+    expect(again.out).toContain('Wrote invoice INV-2026-0001 again');
+    expect(f.sellerNow().numbering.invoice.next).toBe(2);
+  });
+
+  it('names a re-fetched deal record as the reason a rerun differs', async () => {
+    const f = folder();
+    expect((await f.run(records.released)).code).toBe(0);
+    const refetched = { ...clone(records.released), writtenAt: '2026-11-20T00:00:00.000Z' };
+    const r = await f.run(refetched);
+    expect(r.code).toBe(1);
+    expect(r.out).toMatch(/The deal record differs from the one it was made from .*use that file, under the same name, to write it again/);
+    expect(r.out).toMatch(/does not write a correction of it yet/);
+  });
 
   it('refuses a second run while another holds the seller file', async () => {
     const f = folder();
