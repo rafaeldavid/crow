@@ -36,6 +36,9 @@ const EXEMPT: Record<string, string> = {
   'examples/setup-list.test.ts': 'one case gated on not being root and not Windows: both hold on the CI runners',
   // T-486: one case makes a certificate with openssl, which the CI runners' image carries.
   'tests/listing-check.test.ts': 'one case gated on openssl being present: the CI runners carry it',
+  // T-555: two cases compare the published scan with Crow's private originals and private names list, which no public
+  // runner may hold; the redaction's public checks (UUIDs, emails, removed fields, the table) run in the test shards.
+  'tests/outside-scan.test.ts': "two cases need Crow's private repository, which CI must not have; the public checks run in the shards",
   // A wall-clock run at 10 MB, off unless HOLDBACK_PERF=1: tests do not assert on wall-clock time (docs/team.md).
   'packages/judgment/src/redteam.test.ts': 'an opt-in performance run (HOLDBACK_PERF=1), off by design',
 };
