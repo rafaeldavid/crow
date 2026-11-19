@@ -688,6 +688,38 @@ describe('live judges (T-028), with a stand-in for the models', () => {
     for (const m of scripted.panel.members) expect(m.verdict.rationale).toMatch(/^\[fake judge, no model ran\]/);
   }, 90_000);
 
+  // T-574, from T-570's red team (H2): each call chose live or scripted, so a live seat's retry after an HTTP 503 went to
+  // the scripted judge once the day's budget ran out, and that scripted pass counted as the second model family.
+  it('chooses live or scripted once per panel: a retry after a 503 stays live and is counted, and the next panel is scripted', async () => {
+    const inner = markerFake();
+    const calls: string[] = [];
+    let refused = false;
+    const provider = {
+      complete: async (r: Parameters<typeof inner.complete>[0]) => {
+        calls.push(r.judgeId);
+        if (!refused && r.judgeId.startsWith('deepseek')) {
+          refused = true;
+          return { kind: 'error' as const, transport: true, detail: 'HTTP 503' };
+        }
+        return inner.complete(r);
+      },
+    };
+    const { urls } = await serve({ judgeProvider: provider, liveCallsPerDay: 3 });
+    const marked = (j: J) => j.panel.members.filter((m: J) => /^\[fake judge, no model ran\]/.test(m.verdict.rationale)).length;
+    const first = await rubricDeal(urls, DIFF);
+    const record = (await first.buyer.call('GET', `/v1/commitments/${first.id}/judgment`)) as J;
+    expect(refused).toBe(true);
+    // Every seat live, the retry included, and the retry counted: 4 calls against a budget of 3.
+    expect([record.panel.members.length, marked(record)]).toEqual([3, 0]);
+    expect(calls).toHaveLength(4);
+    expect(((await (await fetch(`${urls[0]}/`)).json()) as J).demo.judges.liveCallsToday).toBe(4);
+    // Nothing left today: the next panel is scripted as a whole, and every member says so.
+    const second = await rubricDeal(urls, DIFF);
+    const scripted = (await second.buyer.call('GET', `/v1/commitments/${second.id}/judgment`)) as J;
+    expect(marked(scripted)).toBe(scripted.panel.members.length);
+    expect(calls).toHaveLength(4);
+  }, 90_000);
+
   it('keeps the count across a rebuild from storage', async () => {
     const storage = new MemoryStorage();
     const { provider } = standIn();
