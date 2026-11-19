@@ -6,7 +6,7 @@
 - **Depends on:** nothing new: the check runner of `packages/judgment` and `examples/try-sell.ts` as they are on `main`
 - **Paths this task may touch:** `fixtures/terms/telemetry-run.yaml` (new), `fixtures/data/telemetry-run/` (new), `tests/telemetry-run-template.test.ts` (new), `site/ref/checks.txt` (one short section), this file
 - **Human gate:** no (test tokens only; the site change needs a deploy, which is Rafa's)
-- **Status:** review, in pull request (opened 2026-11-19)
+- **Status:** done with the merge of pull request 718 on 2026-11-19, after CI passed and the review's findings were fixed
 - **Agent/session:** the T-572 session, 2026-11-19, branch `t-572-telemetry-template`
 - **Roadmap row:** N167
 
