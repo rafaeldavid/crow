@@ -1,39 +1,11 @@
-# Crow legal notice: test network only
+# Test network only
 
-> Crow runs on a test network only, and has no legal entity yet. This notice says what applies until one exists. It is not a contract and not legal advice. Last updated 2026-11-19. The same notice as a page: https://crow.direct/legal.
+Last updated 19 November 2026.
 
-## What Crow is
+Crow is a demo. It runs on Ethereum Sepolia, a public test network, with test tokens that are worth nothing. No real money moves through Crow, and nothing here is an offer of financial services.
 
-Crow is a test service for escrow between AI agents. It runs only on Ethereum Sepolia, a public test network, with tUSDC, a test token that anyone can mint and that is worth nothing. No real money can enter Crow. Nothing on this site is an offer of financial, payment or custody services, and test tokens are not for sale.
-Source: docs/operations.md, "Sepolia contracts (T-206)", https://github.com/rafaeldavid/holdback/blob/main/docs/operations.md#sepolia-contracts-t-206; crow.direct/ref/limits.txt, "Honest limits", https://crow.direct/ref/limits.txt
+One maintainer runs Crow, which has no company yet. There are no terms of service yet. The code is open source under the [Apache License 2.0](https://github.com/rafaeldavid/holdback/blob/main/LICENSE) and comes as is, without warranty, so use the demo at your own risk.
 
-## Who runs Crow
+When you request early access, Crow keeps your email address, the time and the page you came from, to contact you about early access.
 
-One maintainer builds and runs Crow. Crow has no company or other legal entity yet. When one exists, this page will name it, and its terms will replace this notice.
-Source: GitHub: rafaeldavid/holdback, https://github.com/rafaeldavid/holdback
-
-## Terms that apply today
-
-Crow has no terms of service yet. The software is open source under the Apache License 2.0, which provides it "as is", without warranties or conditions of any kind, and limits liability (sections 7 and 8). The test service is offered the same way: it may change, stop or lose its data at any time, and you use it at your own risk.
-The contracts on Sepolia have no admin key, no pause and no upgrade path, so a step that settles cannot be undone by anyone. An outside firm's automated scan of the contracts and its review of the fixes are published; neither is a line-by-line audit by human reviewers.
-Source: LICENSE, https://github.com/rafaeldavid/holdback/blob/main/LICENSE; docs/audit/scope.md, https://github.com/rafaeldavid/holdback/blob/main/docs/audit/scope.md; docs/audit/outside-scan.md, https://github.com/rafaeldavid/holdback/blob/main/docs/audit/outside-scan.md
-
-## What Crow keeps about you
-
-Each operator writes one line per request: its ID, the time, the method, the route, the status and the duration, with no body, no header, no IP address and no path. The operator deletes each line after 7 days. Cloudflare's Workers Logs keep the operators' summaries and error lines for 7 days. A problem report sent to POST /v1/feedback is kept for 90 days. An early-access sign-up keeps the email address, the time and the page it came from, and has no deletion date yet.
-Source: docs/operations.md, "Telemetry (T-031)", https://github.com/rafaeldavid/holdback/blob/main/docs/operations.md#telemetry-t-031; docs/operations.md, "Feedback triage (T-032)", https://github.com/rafaeldavid/holdback/blob/main/docs/operations.md#feedback-triage-t-032; apps/early-access/worker.js, https://github.com/rafaeldavid/holdback/blob/main/apps/early-access/worker.js; docs/privacy-baseline.md, https://github.com/rafaeldavid/holdback/blob/main/docs/privacy-baseline.md
-
-## Deals are public
-
-Every deal on the test service is public. Anyone can read its terms, its amounts, its deadlines and its addresses from the operators. The chain keeps the amounts, the addresses and the time of each step for good. The delivered work stays encrypted, but its size, its time and its fingerprint are public. Use fresh keys and addresses for each deal, and put nothing in a deal that you need to keep to yourself.
-Source: docs/privacy-baseline.md, "The answer", https://github.com/rafaeldavid/holdback/blob/main/docs/privacy-baseline.md#the-answer
-
-## How to reach Crow
-
-Send a report to either operator at POST /v1/feedback, or open a public issue on Crow's GitHub repository. Report a security problem privately, through the advisory form that security.txt names. Crow has no email address or postal address yet.
-Source: crow.direct/ref/limits.txt, "Reporting a problem", https://crow.direct/ref/limits.txt; GitHub: issues, https://github.com/rafaeldavid/holdback/issues; crow.direct/.well-known/security.txt, https://crow.direct/.well-known/security.txt
-
-## Changes to this page
-
-This page will change when Crow has a legal entity, terms of service, a privacy policy or real money. The date at the top says when it last changed.
-Source: site/trust.mjs, LEGAL_UPDATED, https://github.com/rafaeldavid/holdback/blob/main/site/trust.mjs
+Everything else, from what the demo logs to how to reach Crow, is on the [trust page](https://crow.direct/trust).

@@ -123,7 +123,7 @@ expect(mdLinks.some((u) => u.host === 'github.com' && u.pathname === '/rafaeldav
 // The home page (the enterprise look, Rafa 2026-11-12, as on the demo page): a slim header with Crow's mark and the
 // links to the demo, the agent docs and early access; the hero (the tagline, the headline's three lines, the lede,
 // early access, the demo link); the six value props, each with an icon; then the footer and the agent docs link.
-expect(!/\{\{/.test(html) && /<header class="ck-bar"><div class="ck-bar-in">\s*<a class="ck-brand" href="\/"><span class="ck-mark" aria-hidden="true"><\/span>Crow<\/a>[\s\S]*?<a class="ck-nav" href="\/llms\.txt">[^<]+<\/a>\s*<a class="ck-btn ck-btn-out ck-btn-s" href="\/demo\/">[^<]+<\/a>\s*<\/div><\/header>\s*<main class="page">\s*<section class="hero">\s*<div id="stream-b" class="stream" aria-hidden="true"><\/div>\s*<div id="stream-s" class="stream" aria-hidden="true"><\/div>\s*<p class="ck-eyebrow">[^<]+<\/p>\s*<h1>\s*<span class="sr">[^<]+<\/span>\s*<span class="line" aria-hidden="true"><span class="verb">(<span class="v[^"]*">[^<]+<\/span>){3}<\/span><\/span>\s*<\/h1>\s*<p class="lede">[^<]+<\/p>\s*<form class="signup" id="join-form"[\s\S]*?<\/form>\s*<a class="demo-link" href="\/demo\/">[^<]+<\/a>\s*<\/section>\s*<section class="props"[^>]*>(\s*<div class="prop"><svg class="icon"[\s\S]*?<\/svg><h2>[\s\S]*?<\/h2><p>[^<]+<\/p><\/div>){6}\s*<\/section>\s*<\/main>\s*<footer class="ck-foot">\s*<div class="ck-foot-row"><a class="ck-brand"[\s\S]*?<nav class="ck-foot-nav"[^>]*>[\s\S]*?<a href="\/llms\.txt">[^<]+<\/a>[\s\S]*?<button class="copy" id="copy"[\s\S]*?<\/nav><\/div>\s*<div class="ck-foot-bar"><span>© 2026 Crow · Verifiable settlement for AI commerce<\/span><\/div>[\s\S]*<\/footer>/.test(html), 'index.html must be the header with the mark, the agent docs link and the Watch Demo button, the hero with the code streams, the three headlines and early access, six value props each with an icon, and the footer with the agent docs link, the copy-the-prompt button and the bar with the tagline');
+expect(!/\{\{/.test(html) && /<header class="ck-bar"><div class="ck-bar-in">\s*<a class="ck-brand" href="\/"><span class="ck-mark" aria-hidden="true"><\/span>Crow<\/a>[\s\S]*?<a class="ck-nav" href="\/llms\.txt">[^<]+<\/a>\s*<a class="ck-btn ck-btn-out ck-btn-s" href="\/demo\/">[^<]+<\/a>\s*<\/div><\/header>\s*<main class="page">\s*<section class="hero">\s*<div id="stream-b" class="stream" aria-hidden="true"><\/div>\s*<div id="stream-s" class="stream" aria-hidden="true"><\/div>\s*<a class="ck-pill live" href="\/legal">[^<]+<\/a>\s*<p class="ck-eyebrow">[^<]+<\/p>\s*<h1>\s*<span class="sr">[^<]+<\/span>\s*<span class="line" aria-hidden="true"><span class="verb">(<span class="v[^"]*">[^<]+<\/span>){3}<\/span><\/span>\s*<\/h1>\s*<p class="lede">[^<]+<\/p>\s*<form class="signup" id="join-form"[\s\S]*?<\/form>\s*<a class="demo-link" href="\/demo\/">[^<]+<\/a>\s*<\/section>\s*<section class="props"[^>]*>(\s*<div class="prop"><svg class="icon"[\s\S]*?<\/svg><h2>[\s\S]*?<\/h2><p>[^<]+<\/p><\/div>){6}\s*<\/section>\s*<\/main>\s*<footer class="ck-foot">\s*<div class="ck-foot-row"><a class="ck-brand"[\s\S]*?<nav class="ck-foot-nav"[^>]*>[\s\S]*?<a href="\/llms\.txt">[^<]+<\/a>[\s\S]*?<button class="copy" id="copy"[\s\S]*?<\/nav><\/div>\s*<div class="ck-foot-bar"><span>© 2026 Crow · Verifiable settlement for AI commerce<\/span><\/div>[\s\S]*<\/footer>/.test(html), 'index.html must be the header with the mark, the agent docs link and the Watch Demo button, the hero with the code streams, the demo line, the three headlines and early access, six value props each with an icon, and the footer with the agent docs link, the copy-the-prompt button and the bar with the tagline');
 expect(!/%%|CONFIRM/.test(html) && !/^%% /m.test(strip(md)), 'an editor note reached index.html');
 expect(!/127\.0\.0\.1|localhost/.test(md + html), 'a local address is in the site');
 for (const [p, text] of guides) if (!['llms.txt', 'sell.txt'].includes(p)) expect(!/127\.0\.0\.1|localhost/.test(text), `${p} has a local address`);
@@ -453,7 +453,8 @@ expect(typeof siteBuild.demoPage === 'function', 'site/build.mjs exports no demo
 const footed = new Map([...built, ...(typeof siteBuild.demoPage === 'function' ? [['demo/index.html (published)', siteBuild.demoPage(read('demo/index.html'))]] : [])]);
 for (const [path, h] of footed) {
   if (path === 'demo/index.html') continue; // the committed replay; the publish build swaps in the site's footer (demoPage)
-  for (const p of ['trust', 'status', 'legal']) expect(h.includes(`href="${BASE}${p}"`), `${path}'s footer does not link ${BASE}${p} (site/footer.ts)`);
+  // The home page links the legal notice from its demo line instead of its footer (T-564), checked below.
+  for (const p of ['trust', 'status', ...(path === 'index.html' ? [] : ['legal'])]) expect(h.includes(`href="${BASE}${p}"`), `${path}'s footer does not link ${BASE}${p} (site/footer.ts)`);
 }
 for (const file of ['trust.html', 'status.html', 'legal.html']) expect(built.has(file), `${file} is not among the pages whose card and footer group 5 checks`);
 const shownText = (h) => {
@@ -533,16 +534,21 @@ if (existsSync(here('trust.html'))) {
   const record = JSON.parse(read('../contracts/deployments/sepolia.json'));
   for (const a of [record.escrow, record.rules, record.token.address]) expect(t.includes(`https://sepolia.etherscan.io/address/${a}`), `site/trust.html does not link ${a} from contracts/deployments/sepolia.json`);
 }
-// The legal notice (T-564): a placeholder that says what is true while Crow has no legal entity. It states its date,
-// says it is not legal advice, links its plain-text copy and the trust page links it; it names no invented entity,
-// jurisdiction or governing law, and claims no compliance.
+// The legal notice (T-564): a short placeholder that says what is true while Crow has no company. It says it is a
+// demo on a test network with no real money, states its date, links words (never a bare address) and few of them,
+// names no entity, jurisdiction or email address that does not exist, and claims no compliance. The trust page and
+// the home page's demo line link it.
 if (existsSync(here('legal.html')) && existsSync(here('legal.txt'))) {
-  const l = shownText(read('legal.html')), lt = read('legal.txt');
-  for (const w of ['test network', 'no legal entity', 'not legal advice', 'Apache License 2.0', `Last updated ${trust.LEGAL_UPDATED}`]) expect(l.includes(w) && lt.includes(w), `site/legal.html or site/legal.txt no longer says "${w}"`);
+  const lh = read('legal.html'), l = shownText(lh), lt = read('legal.txt');
+  for (const w of ['test network', 'No real money', 'no company yet', 'Apache License 2.0', 'Last updated']) expect(l.includes(w) && lt.includes(w), `site/legal.html or site/legal.txt no longer says "${w}"`);
   for (const w of [/governing law/i, /jurisdiction/i, /\b(?:GmbH|Inc\.|Ltd\.?|LLC|S\.A\.)\b/, /complian/i, /@[a-z0-9-]+\.[a-z]/i]) expect(!w.test(l) && !w.test(lt), `site/legal.html or site/legal.txt says ${w}: the notice names no entity, jurisdiction or email address that does not exist, and claims no compliance`);
-  expect(read('legal.html').includes(`href="${BASE}legal.txt"`), 'site/legal.html does not link its plain-text copy');
+  const body = /<main[\s\S]*<\/main>/.exec(lh)?.[0] ?? '';
+  expect(!/https?:\/\//.test(shownText(body)), 'site/legal.html shows a bare address: link words instead');
+  expect((body.match(/<a /g) ?? []).length <= 3, 'site/legal.html links more than 3 times: keep its links few');
+  expect(Buffer.byteLength(lt) <= 1200, `site/legal.txt is ${Buffer.byteLength(lt)} bytes, over 1,200: the notice stays short`);
+  expect(lh.includes(`href="${BASE}legal.txt"`), 'site/legal.html does not link its plain-text copy');
   expect(existsSync(here('trust.html')) && read('trust.html').includes(`href="${BASE}legal"`) && read('trust.txt').includes(`${SITE_URL}legal`), 'the trust page or trust.txt does not link the legal notice');
-  for (const block of lt.split(/^## /m).slice(1)) expect(/\nSource: .*https:\/\//.test(block), `site/legal.txt: "${block.split('\n')[0]}" has no Source line with a full link`);
+  expect(html.includes(`<a class="ck-pill live" href="${BASE}legal">`), 'the home page has no demo line linking the legal notice (site/build.mjs, LIVE_LINE)');
 }
 if (existsSync(here('status.html'))) {
   const st = read('status.html'), script = /<script\b[^>]*>([\s\S]*?)<\/script\b[^>]*>/i.exec(st)?.[1] ?? '';

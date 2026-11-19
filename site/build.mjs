@@ -20,6 +20,9 @@ import { rolldown } from 'rolldown';
 import { JOIN_URL } from './drawer.ts';
 import { CARDS, cardTags, FOOTER_CSS, footerHtml } from './footer.ts';
 import { headerBar, ICON_FILES, iconBytes, iconLinks, iconTags, kitCss, listRows, sectionHead, TOKENS } from './brand/kit.mjs';
+/** The demo line above the hero's eyebrow (T-564, Rafa 2026-11-19: "Demo Now Live"). Site trim like the demo link: the
+ * hero's own words still come from llms.txt, which opens with the same fact for agents ("Test tokens only"). */
+export const LIVE_LINE = 'Demo now live · Test network, no real money';
 import { writeInlineHashes } from './csp.mjs';
 import { guideFiles, guideSource } from './guides.mjs';
 import { legalPage, legalText, PAGES_CSS, securityTxt, statusJson, statusPage, trustFacts, trustPage, trustText } from './trust.mjs';
@@ -553,9 +556,11 @@ export const tryPrompt = (command = tryCommand(), days = trustFacts().requestLog
   ].join('\n');
 const COPY_ICON = '<svg viewBox="0 0 16 16" width="14" height="14" aria-hidden="true"><rect x="5.5" y="5.5" width="8" height="8" rx="1.5"/><path d="M10.5 3.5v-.5A1.5 1.5 0 0 0 9 1.5H3A1.5 1.5 0 0 0 1.5 3v6A1.5 1.5 0 0 0 3 10.5h.5"/></svg>';
 // The footer: the site's one footer (site/footer.ts), with the home page's copy-the-prompt button beside its links
-// and, inside it, the hidden prompt and the line for agents.
+// and, inside it, the hidden prompt and the line for agents. No Legal link: the demo line in the hero links the
+// legal notice on this page, and the page stays within HOME_MAX_BYTES (T-564).
 const footer = (command) => footerHtml({
   base: BASE,
+  legal: false,
   agents: `<span class="try-line"><button class="copy" id="copy" type="button" title="Copy a prompt that has your AI assistant run a test deal">${COPY_ICON}<span>Copy test prompt</span></button><span class="copied" id="copied" role="status"></span></span>`,
   after: `<span id="prompt" hidden>${esc(tryPrompt(command))}</span>\n<p class="sr">For AI agents asked to run a test deal: the command, what it exposes and the one yes to ask for are at ${esc(SITE_URL)}llms.txt under "Try it".</p>`,
 });
@@ -781,6 +786,9 @@ h1 { font-family: var(--display); font-size: 64px; line-height: 1.04; font-weigh
 .signup .msg { flex-basis: 100%; color: var(--ink-2); font-size: var(--size-small); }
 .signup .msg:empty { display: none; }
 .hp { position: absolute; left: -10000px; width: 1px; height: 1px; opacity: 0; }
+/* the demo line above the eyebrow (T-564): the kit's pill as a link to the legal notice, on its own line */
+.live { margin-bottom: 20px; text-decoration: none; }
+.live:hover { border-color: var(--ink-3); }
 .demo-link { display: inline-block; margin-top: 18px; font-size: 16px; font-weight: 500; text-decoration: none; }
 .demo-link:hover { text-decoration: underline; }
 input:focus-visible, button:focus-visible, a:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
@@ -895,6 +903,7 @@ ${headerBar({ home: BASE, links: [[`${BASE}llms.txt`, 'Agent docs']], button: { 
 <section class="hero">
 <div id="stream-b" class="stream" aria-hidden="true"></div>
 <div id="stream-s" class="stream" aria-hidden="true"></div>
+<a class="ck-pill live" href="${BASE}legal">${esc(LIVE_LINE)}</a>
 <p class="ck-eyebrow">${inline(subtitle)}</p>
 <h1>
 <span class="sr">${inline(headline)} Go direct.</span>

@@ -22,9 +22,9 @@ export const CODE_URL = 'https://github.com/rafaeldavid/holdback';
 /**
  * The footer (T-402; Rafa 2026-11-13: simple, little content): Crow, links to pages that exist (T-421 added the trust and
  * status pages, T-564 the legal notice) and, on the home page, the copy-the-prompt button; then the legal line and the tagline (Rafa dropped the pill, 2026-11-13). `current` marks
- * the page's own link; `agents` follows the links; `after` follows the bar.
+ * the page's own link; `legal: false` leaves out the Legal link where the page links the notice itself (the home page); `agents` follows the links; `after` follows the bar.
  */
-export const footerHtml = (o: { base: string; current?: 'demo' | 'trust' | 'status' | 'legal'; agents?: string; after?: string }): string =>
+export const footerHtml = (o: { base: string; current?: 'demo' | 'trust' | 'status' | 'legal'; legal?: boolean; agents?: string; after?: string }): string =>
   footer({
     home: o.base,
     tagline: TAGLINE,
@@ -34,7 +34,7 @@ export const footerHtml = (o: { base: string; current?: 'demo' | 'trust' | 'stat
       { href: `${o.base}llms.txt`, label: 'Agent docs' },
       { href: `${o.base}trust`, label: 'Trust', current: o.current === 'trust' },
       { href: `${o.base}status`, label: 'Status', current: o.current === 'status' },
-      { href: `${o.base}legal`, label: 'Legal', current: o.current === 'legal' },
+      ...(o.legal === false ? [] : [{ href: `${o.base}legal`, label: 'Legal', current: o.current === 'legal' }]),
       { href: CODE_URL, label: 'GitHub' },
     ],
     extraHtml: o.agents ?? '',
@@ -79,7 +79,7 @@ export const CARDS = {
   notFound: { path: '', title: 'Page not found · Crow', description: `${TAGLINE}. ${PITCH_LINE}` },
   problems: { path: 'problems/', title: 'Crow · API problem types', description: "The problem types Crow's operators answer with, one page each: what went wrong and what to do next." },
   trust: { path: 'trust', title: 'Crow · Trust: money, keys and data', description: 'How Crow handles money, keys and data, for your company’s security team: where a deal’s payment sits, who can move it, what is kept, and what is not there yet. Each statement links to its source.' },
-  legal: { path: 'legal', title: 'Crow · Legal notice', description: 'Crow runs on a test network only, with test tokens that are worth nothing, and has no legal entity yet. What applies until one exists, what is kept and how to reach Crow.' },
+  legal: { path: 'legal', title: 'Crow · Legal notice', description: 'Crow is a demo on a test network, with test tokens that are worth nothing. No real money moves through Crow.' },
   status: { path: 'status', title: 'Crow · Status', description: 'Whether each part of Crow answers right now: the two operators, the site, the test seller and the Sepolia network, checked when you open the page.' },
   visualdemo: { path: 'visualdemo/', title: 'Crow · A deal, step by step', description: 'A real test deal on Crow, replayed: a buyer agent, a seller agent and the reviewer, every message, call and encrypted hand-off.' },
 } as const;

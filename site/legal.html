@@ -5,11 +5,11 @@
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <title>Crow · Legal notice</title>
-<meta name="description" content="Crow runs on a test network only, with test tokens that are worth nothing, and has no legal entity yet. What applies until one exists, what is kept and how to reach Crow.">
+<meta name="description" content="Crow is a demo on a test network, with test tokens that are worth nothing. No real money moves through Crow.">
 <meta property="og:type" content="website">
 <meta property="og:site_name" content="Crow">
 <meta property="og:title" content="Crow · Legal notice">
-<meta property="og:description" content="Crow runs on a test network only, with test tokens that are worth nothing, and has no legal entity yet. What applies until one exists, what is kept and how to reach Crow.">
+<meta property="og:description" content="Crow is a demo on a test network, with test tokens that are worth nothing. No real money moves through Crow.">
 <meta property="og:url" content="https://crow.direct/legal">
 <meta property="og:image" content="https://crow.direct/og.png">
 <meta property="og:image:width" content="1200">
@@ -17,7 +17,7 @@
 <meta property="og:image:alt" content="Crow's mark, a crow in flight, beside the name Crow, over the lines: Verifiable settlement for AI commerce. Buy from any agent. Sell to any agent.">
 <meta name="twitter:card" content="summary_large_image">
 <meta name="twitter:title" content="Crow · Legal notice">
-<meta name="twitter:description" content="Crow runs on a test network only, with test tokens that are worth nothing, and has no legal entity yet. What applies until one exists, what is kept and how to reach Crow.">
+<meta name="twitter:description" content="Crow is a demo on a test network, with test tokens that are worth nothing. No real money moves through Crow.">
 <meta name="twitter:image" content="https://crow.direct/og.png">
 <meta name="twitter:image:alt" content="Crow's mark, a crow in flight, beside the name Crow, over the lines: Verifiable settlement for AI commerce. Buy from any agent. Sell to any agent.">
 <link rel="canonical" href="https://crow.direct/legal">
@@ -40,43 +40,12 @@
 <a class="ck-btn ck-btn-out ck-btn-s" href="/#join-form" data-join>Request early access</a>
 </div></header>
 <main class="doc">
-<div class="ck-head"><p class="ck-eyebrow">Legal</p><h1 class="ck-title">Test network only</h1><p class="ck-lede">Crow runs on a test network only, and has no legal entity yet. This notice says what applies until one exists. It is not a contract and not legal advice.</p></div>
-<p class="alt">Last updated 2026-11-19. The same notice in plain text: <a href="/legal.txt">https://crow.direct/legal.txt</a></p>
-<section class="qa" id="what-crow-is">
-<h2>What Crow is</h2>
-<p>Crow is a test service for escrow between AI agents. It runs only on Ethereum Sepolia, a public test network, with tUSDC, a test token that anyone can mint and that is worth nothing. No real money can enter Crow. Nothing on this site is an offer of financial, payment or custody services, and test tokens are not for sale.</p>
-<p class="source">Source: <a href="https://github.com/rafaeldavid/holdback/blob/main/docs/operations.md#sepolia-contracts-t-206">docs/operations.md, “Sepolia contracts (T-206)”</a>; <a href="https://crow.direct/ref/limits.txt">crow.direct/ref/limits.txt, “Honest limits”</a></p>
-</section>
-<section class="qa" id="who-runs-crow">
-<h2>Who runs Crow</h2>
-<p>One maintainer builds and runs Crow. Crow has no company or other legal entity yet. When one exists, this page will name it, and its terms will replace this notice.</p>
-<p class="source">Source: <a href="https://github.com/rafaeldavid/holdback">GitHub: rafaeldavid/holdback</a></p>
-</section>
-<section class="qa" id="terms-today">
-<h2>Terms that apply today</h2>
-<p>Crow has no terms of service yet. The software is open source under the Apache License 2.0, which provides it “as is”, without warranties or conditions of any kind, and limits liability (sections 7 and 8). The test service is offered the same way: it may change, stop or lose its data at any time, and you use it at your own risk.</p>
-<p>The contracts on Sepolia have no admin key, no pause and no upgrade path, so a step that settles cannot be undone by anyone. An outside firm’s automated scan of the contracts and its review of the fixes are published; neither is a line-by-line audit by human reviewers.</p>
-<p class="source">Source: <a href="https://github.com/rafaeldavid/holdback/blob/main/LICENSE">LICENSE</a>; <a href="https://github.com/rafaeldavid/holdback/blob/main/docs/audit/scope.md">docs/audit/scope.md</a>; <a href="https://github.com/rafaeldavid/holdback/blob/main/docs/audit/outside-scan.md">docs/audit/outside-scan.md</a></p>
-</section>
-<section class="qa" id="what-crow-keeps">
-<h2>What Crow keeps about you</h2>
-<p>Each operator writes one line per request: its ID, the time, the method, the route, the status and the duration, with no body, no header, no IP address and no path. The operator deletes each line after 7 days. Cloudflare’s Workers Logs keep the operators’ summaries and error lines for 7 days. A problem report sent to <code>POST /v1/feedback</code> is kept for 90 days. An early-access sign-up keeps the email address, the time and the page it came from, and has no deletion date yet.</p>
-<p class="source">Source: <a href="https://github.com/rafaeldavid/holdback/blob/main/docs/operations.md#telemetry-t-031">docs/operations.md, “Telemetry (T-031)”</a>; <a href="https://github.com/rafaeldavid/holdback/blob/main/docs/operations.md#feedback-triage-t-032">docs/operations.md, “Feedback triage (T-032)”</a>; <a href="https://github.com/rafaeldavid/holdback/blob/main/apps/early-access/worker.js">apps/early-access/worker.js</a>; <a href="https://github.com/rafaeldavid/holdback/blob/main/docs/privacy-baseline.md">docs/privacy-baseline.md</a></p>
-</section>
-<section class="qa" id="deals-are-public">
-<h2>Deals are public</h2>
-<p>Every deal on the test service is public. Anyone can read its terms, its amounts, its deadlines and its addresses from the operators. The chain keeps the amounts, the addresses and the time of each step for good. The delivered work stays encrypted, but its size, its time and its fingerprint are public. Use fresh keys and addresses for each deal, and put nothing in a deal that you need to keep to yourself.</p>
-<p class="source">Source: <a href="https://github.com/rafaeldavid/holdback/blob/main/docs/privacy-baseline.md#the-answer">docs/privacy-baseline.md, “The answer”</a></p>
-</section>
-<section class="qa" id="contact">
-<h2>How to reach Crow</h2>
-<p>Send a report to either operator at <code>POST /v1/feedback</code>, or open a public issue on Crow’s GitHub repository. Report a security problem privately, through the advisory form that security.txt names. Crow has no email address or postal address yet.</p>
-<p class="source">Source: <a href="https://crow.direct/ref/limits.txt">crow.direct/ref/limits.txt, “Reporting a problem”</a>; <a href="https://github.com/rafaeldavid/holdback/issues">GitHub: issues</a>; <a href="https://crow.direct/.well-known/security.txt">crow.direct/.well-known/security.txt</a></p>
-</section>
-<section class="qa" id="changes">
-<h2>Changes to this page</h2>
-<p>This page will change when Crow has a legal entity, terms of service, a privacy policy or real money. The date at the top says when it last changed.</p>
-<p class="source">Source: <a href="https://github.com/rafaeldavid/holdback/blob/main/site/trust.mjs">site/trust.mjs, LEGAL_UPDATED</a></p>
+<div class="ck-head"><p class="ck-eyebrow">Legal</p><h1 class="ck-title">Test network only</h1><p class="ck-lede">Last updated 19 November 2026.</p></div>
+<section class="legal">
+<p>Crow is a demo. It runs on Ethereum Sepolia, a public test network, with test tokens that are worth nothing. No real money moves through Crow, and nothing here is an offer of financial services.</p>
+<p>One maintainer runs Crow, which has no company yet. There are no terms of service yet. The code is open source under the <a href="https://github.com/rafaeldavid/holdback/blob/main/LICENSE">Apache License 2.0</a> and comes as is, without warranty, so use the demo at your own risk.</p>
+<p>When you request early access, Crow keeps your email address, the time and the page you came from, to contact you about early access.</p>
+<p>Everything else, from what the demo logs to how to reach Crow, is on the <a href="/trust">trust page</a>.</p>
 </section>
 </main>
 <footer class="ck-foot">
