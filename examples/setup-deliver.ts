@@ -149,43 +149,56 @@ async function admission(id: string, x: { reader: Agent; pin: Pin; sellers: Arra
 const shellWord = (s: string): string => `'${s.replace(/'/g, `'\\''`)}'`;
 const xmlText = (s: string): string => s.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;');
 
+/**
+ * The crontab entry that runs `command` every EVERY_MINUTES minutes, or undefined when one of `words` (the paths and
+ * flag values in it, before quoting) holds % or a backslash. cron reads % as a line break and a backslash before it as
+ * an escape, which implementations read differently, so such an entry is refused, never escaped. The words are tested,
+ * not the command: the quoting of a single quote ('\'') writes a backslash of its own.
+ */
+export function cronEntry(words: readonly string[], command: string): string | undefined {
+  return words.some((w) => /[%\\]/.test(w)) ? undefined : `*/${EVERY_MINUTES} * * * * ${command}`;
+}
+
 /** `deliver --schedule`: the entry for this machine's scheduler, printed. It installs nothing and sends nothing. */
 function schedule(c: Call, state: State): number {
-  const file = process.argv[1] === undefined ? undefined : realPath(resolve(process.argv[1]));
-  if (file === undefined) throw new Error('this process names no file of its own, so no schedule can name it');
+  // Node's own path is argv[0], and this file's argv[1].
+  const [nodePath, self] = process.argv;
+  const file = self === undefined ? undefined : realPath(resolve(self));
+  if (nodePath === undefined || file === undefined) throw new Error('this process names no file of its own, so no schedule can name it');
   const given = c.flags.get('--operators');
-  const args = ['deliver', '--folder', shellWord(c.folder), ...(c.testWorld ? ['--test-world'] : []), ...(given === undefined ? [] : ['--operators', shellWord(c.operators.join(','))])];
+  const operators = given === undefined ? undefined : c.operators.join(',');
   const log = join(c.folder, 'deliver.log');
+  // The words the entry takes from this machine and the flags, before any quoting.
+  const words = [nodePath, file, c.folder, log, ...(operators === undefined ? [] : [operators])];
+  const args = ['deliver', '--folder', shellWord(c.folder), ...(c.testWorld ? ['--test-world'] : []), ...(operators === undefined ? [] : ['--operators', shellWord(operators)])];
   // Node starts without the settings the setup refuses, by its full path. Each pass replaces the log, so it holds the
   // last pass's lines; the journal and deals/ keep the history.
-  const command = `/usr/bin/env ${NODE_SETTINGS.map((n) => `-u ${n}`).join(' ')} ${shellWord(process.execPath)} ${shellWord(file)} ${args.join(' ')} > ${shellWord(log)} 2>&1`;
+  const command = `/usr/bin/env ${NODE_SETTINGS.map((n) => `-u ${n}`).join(' ')} ${shellWord(nodePath)} ${shellWord(file)} ${args.join(' ')} > ${shellWord(log)} 2>&1`;
   // A line break would end a crontab entry and start another: no path or flag in the entry may hold a control character.
-  if (/[\x00-\x1f\x7f]/.test(command)) {
+  if (words.some((w) => /[\x00-\x1f\x7f]/.test(w))) {
     c.say({ step: 'schedule', ok: false, detail: 'A path or a flag in the entry holds a line break or another control character, which a scheduler entry cannot carry. Move the folder or this file to a path without one. Nothing was printed to install.' });
     return 1;
   }
   const line = { step: 'schedule', ok: true, everyMinutes: EVERY_MINUTES, command, log, sent: 'nothing', installed: 'nothing' };
-  const node = `It runs this Node, ${process.execPath}, by its path: print the entry again after moving or removing it.`;
+  const node = `It runs this Node, ${nodePath}, by its path: print the entry again after moving or removing it.`;
   if (process.platform === 'darwin') {
     const label = `direct.crow.deliver.${plain(state.name, 40).replace(/[^a-z0-9-]/g, '')}-${createHash('sha256').update(c.folder).digest('hex').slice(0, 8)}`;
     const plist = join(homedir(), 'Library', 'LaunchAgents', `${label}.plist`);
-    const uid = process.getuid?.() ?? 0;
     c.say({
       ...line, scheduler: 'launchd', file: plist,
-      plist: `<?xml version="1.0" encoding="UTF-8"?><!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd"><plist version="1.0"><dict><key>Label</key><string>${label}</string><key>ProgramArguments</key><array><string>/bin/sh</string><string>-c</string><string>${xmlText(command)}</string></array><key>StartInterval</key><integer>${EVERY_MINUTES * 60}</integer><key>RunAtLoad</key><true/></dict></plist>`,
-      load: `launchctl bootstrap gui/${uid} ${shellWord(plist)}`,
+      plist: `<?xml version="1.0" encoding="UTF-8"?><plist version="1.0"><dict><key>Label</key><string>${label}</string><key>ProgramArguments</key><array><string>/bin/sh</string><string>-c</string><string>${xmlText(command)}</string></array><key>StartInterval</key><integer>${EVERY_MINUTES * 60}</integer><key>RunAtLoad</key><true/></dict></plist>`,
+      load: `launchctl bootstrap gui/$(id -u) ${shellWord(plist)}`,
       detail: `Save plist as ${plist}, making the folder if it is not there, then run load: launchd runs the pass every ${EVERY_MINUTES} minutes while this user is logged in. launchctl bootout with the same arguments stops it. ${node}`,
     });
   } else if (process.platform === 'win32') {
     c.say({ ...line, scheduler: 'none', detail: `This version prints an entry for cron and launchd only. Run deliver every ${EVERY_MINUTES} minutes with this machine's own scheduler.` });
   } else {
-    // cron reads % as a line break and a backslash before it as an escape, which implementations read differently:
-    // an entry that holds either is refused, never escaped.
-    if (/[%\\]/.test(command)) {
+    const entry = cronEntry(words, command);
+    if (entry === undefined) {
       c.say({ step: 'schedule', ok: false, detail: 'A path or a flag in the entry holds % or a backslash, which cron reads as a line break or an escape. Move the folder or this file to a path without one. Nothing was printed to install.' });
       return 1;
     }
-    c.say({ ...line, scheduler: 'cron', entry: `*/${EVERY_MINUTES} * * * * ${command}`, detail: `Add entry as one line with crontab -e. Deleting the line stops it. ${node}` });
+    c.say({ ...line, scheduler: 'cron', entry, detail: `Add entry as one line with crontab -e. Deleting the line stops it. ${node}` });
   }
   return 0;
 }

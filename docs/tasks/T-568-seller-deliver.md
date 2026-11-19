@@ -64,7 +64,8 @@ Read in `docs/what-a-deal-can-do.md`, `docs/api.md` and the code at `10322887`.
 ### The kind's local checks (agent docs and reference tools), on base `c20ba520`
 
 - `node site/build.mjs && node site/check.mjs`: PASS [measured, 2026-11-19]. The published `setup.txt` is 9,974 of 10,000 bytes; before this task it was 9,999 [measured]. The seller's first-deal path (llms.txt and sell.txt) is unchanged at 18,013 bytes [measured].
-- `site/buy.mjs` (sha256 `b87e478b…`) and `site/try.mjs` (`71634a90…`) keep their hashes; `site/setup.mjs` is now `d02df4e6…` [measured].
+- `site/buy.mjs` (sha256 `b87e478b…`) and `site/try.mjs` (`71634a90…`) keep their hashes; `site/setup.mjs` is now `0c0499ff…` [measured].
+- CI at `4d4845cf` failed two tests [measured]. `examples/setup-deliver.test.ts`: the cron guard tested the quoted command, and quoting a single quote (`'\''`) writes a backslash, so the test's folder `it's a folder` was refused on Linux and passed on macOS, which prints launchd. The guard now tests the paths and flag values before quoting (`cronEntry`), with a unit test that runs on every platform. `tests/site-bundles.test.ts`, which pins what `setup.mjs` reaches: the schedule read `process.execPath` and `process.getuid` and named `www.apple.com`. It now takes Node's path from `argv[0]`, prints `gui/$(id -u)` for the person's shell, and writes the plist without its DOCTYPE line, so the test's list is unchanged. Every test under `tests/` passes locally: 1,204, with 19 skipped [measured].
 - CodeQL on the pull request: 2 High, "Incomplete string escaping" at the cron entry (`setup-deliver.ts`) and its copy in `site/setup.mjs` [measured]. The entry escaped `%` and not the backslash, so a path holding `\%` read differently under different crons. Fixed at the cause: a cron entry with `%` or a backslash is refused, never escaped; a test checks it on Linux, where CI runs, and that launchd takes both on macOS [measured locally on macOS].
 - `pnpm exec vitest run` on `examples/setup-deliver.test.ts`, `examples/setup-bundle.test.ts`, `setup-check`, `setup-list`, `setup-work-api`, `apps/test-agents/src/setup.test.ts`, `setup-template.test.ts`, `tests/site-guides.test.ts` and `tests/metrics/one-click-setup.test.ts`: 162 of 162 pass, 9 of them new in `setup-deliver.test.ts` [measured]. No snapshot fixture is involved.
 - `pnpm typecheck` and `eslint` on the four changed source files: no error [measured].
@@ -121,7 +122,7 @@ Built `site/setup.mjs` from this branch, a fresh folder under `reports/scratch/`
 
 **Done.** `node ~/.crow/setup.mjs deliver` and `deliver --schedule`, with their tests, the page line and the rebuilt bundle. Measured in the local test world and on Sepolia (Evidence). The pull request merges with no gate.
 
-**What Rafa must deploy.** The site deploy that publishes the new pinned `site/setup.mjs` (sha256 `d02df4e61aeadfd07aa1f14c9afd61f95f568acd71a3a3dfed5998e189988a53`) with `site/setup.txt`, whose command carries that hash. Until then crow.direct serves the old file and its hash, and `deliver` is not in it.
+**What Rafa must deploy.** The site deploy that publishes the new pinned `site/setup.mjs` (sha256 `0c0499ff993dc220c177ef1a38acea67031a8c1f698118333fd437bec9244a6f`) with `site/setup.txt`, whose command carries that hash. Until then crow.direct serves the old file and its hash, and `deliver` is not in it.
 
 **For T-552 (the standing seller's contract).**
 - Add the contract's address to `sellerAddressesOf` (`examples/setup-deliver.ts`) with a kind of its own, and give `signedBy` its check: ERC-1271, since no key recovers for a contract.

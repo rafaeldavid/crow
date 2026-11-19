@@ -16,7 +16,7 @@ import { MemoryStorage, PublicWorld } from '@holdback/demo-cloud';
 import { generatePrivateKey, privateKeyToAccount } from 'viem/accounts';
 import { afterAll, beforeAll, describe, expect, it } from 'vitest';
 import { loadConfig, startSellerAdapter } from './seller-adapter.ts';
-import { withDeadline } from './setup-deliver.ts';
+import { cronEntry, withDeadline } from './setup-deliver.ts';
 import { startWorkApi, workAddresses, WORK_CREDENTIAL_ENV } from './setup-work-api.ts';
 import { serveTwoOrigins, type TwoOrigins } from './two-origins.ts';
 import { knownPins } from './verify.ts';
@@ -386,7 +386,7 @@ describe('site/setup.mjs deliver: one pass over the funded deals (T-568)', () =>
     expect(command).toContain(`--test-world --operators '${recorded.urls.join(',')}'`);
     expect(command).toContain(`> '${join(odd, 'deliver.log').replace(/'/g, `'\\''`)}' 2>&1`);
     if (process.platform === 'darwin') {
-      expect(line).toMatchObject({ scheduler: 'launchd', file: expect.stringMatching(/\/Library\/LaunchAgents\/direct\.crow\.deliver\.[a-z0-9-]+\.plist$/), load: expect.stringMatching(/^launchctl bootstrap gui\/\d+ '/) });
+      expect(line).toMatchObject({ scheduler: 'launchd', file: expect.stringMatching(/\/Library\/LaunchAgents\/direct\.crow\.deliver\.[a-z0-9-]+\.plist$/), load: expect.stringMatching(/^launchctl bootstrap gui\/\$\(id -u\) '/) });
       expect(line.plist).toContain('<integer>300</integer>');
       expect(line.plist).toContain('<string>/bin/sh</string>');
     } else {
@@ -411,6 +411,14 @@ describe('site/setup.mjs deliver: one pass over the funded deals (T-568)', () =>
     expect(run.code).toBe(1);
     expect(jsonLines(run.out)).toEqual([expect.objectContaining({ step: 'schedule', ok: false, detail: expect.stringContaining('line break') })]);
   }, 60_000);
+
+  // On every machine, whatever its platform: a quoted single quote passes, % and a backslash in a word do not.
+  it("the cron entry takes a path with a single quote, and refuses one with % or a backslash", () => {
+    const quoted = "'/usr/bin/node' '/home/a/it'\\''s a folder/setup.mjs' deliver";
+    expect(cronEntry(['/usr/bin/node', "/home/a/it's a folder/setup.mjs"], quoted)).toBe(`*/5 * * * * ${quoted}`);
+    expect(cronEntry(['/usr/bin/node', '/home/a/50% done/setup.mjs'], 'x')).toBeUndefined();
+    expect(cronEntry(['/usr/bin/node', '/home/a/back\\slash/setup.mjs'], 'x')).toBeUndefined();
+  });
 
   // cron reads % as a line break and a backslash as an escape (CodeQL, incomplete escaping): its entry refuses both.
   it('--schedule refuses % or a backslash in a cron entry, and launchd takes them as they are', async () => {

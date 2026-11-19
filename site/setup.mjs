@@ -61346,21 +61346,38 @@ async function admission(id, x) {
 /** A shell word: the text in single quotes, each single quote in it closed, escaped and opened again. */
 const shellWord = (s) => `'${s.replace(/'/g, `'\\''`)}'`;
 const xmlText = (s) => s.replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;");
+/**
+* The crontab entry that runs `command` every EVERY_MINUTES minutes, or undefined when one of `words` (the paths and
+* flag values in it, before quoting) holds % or a backslash. cron reads % as a line break and a backslash before it as
+* an escape, which implementations read differently, so such an entry is refused, never escaped. The words are tested,
+* not the command: the quoting of a single quote ('\'') writes a backslash of its own.
+*/
+function cronEntry(words, command) {
+	return words.some((w) => /[%\\]/.test(w)) ? void 0 : `*/${EVERY_MINUTES} * * * * ${command}`;
+}
 /** `deliver --schedule`: the entry for this machine's scheduler, printed. It installs nothing and sends nothing. */
 function schedule(c, state) {
-	const file = process.argv[1] === void 0 ? void 0 : realPath(resolve(process.argv[1]));
-	if (file === void 0) throw new Error("this process names no file of its own, so no schedule can name it");
-	const given = c.flags.get("--operators");
+	const [nodePath, self] = process.argv;
+	const file = self === void 0 ? void 0 : realPath(resolve(self));
+	if (nodePath === void 0 || file === void 0) throw new Error("this process names no file of its own, so no schedule can name it");
+	const operators = c.flags.get("--operators") === void 0 ? void 0 : c.operators.join(",");
+	const log = join(c.folder, "deliver.log");
+	const words = [
+		nodePath,
+		file,
+		c.folder,
+		log,
+		...operators === void 0 ? [] : [operators]
+	];
 	const args = [
 		"deliver",
 		"--folder",
 		shellWord(c.folder),
 		...c.testWorld ? ["--test-world"] : [],
-		...given === void 0 ? [] : ["--operators", shellWord(c.operators.join(","))]
+		...operators === void 0 ? [] : ["--operators", shellWord(operators)]
 	];
-	const log = join(c.folder, "deliver.log");
-	const command = `/usr/bin/env ${NODE_SETTINGS$1.map((n) => `-u ${n}`).join(" ")} ${shellWord(process.execPath)} ${shellWord(file)} ${args.join(" ")} > ${shellWord(log)} 2>&1`;
-	if (/[\x00-\x1f\x7f]/.test(command)) {
+	const command = `/usr/bin/env ${NODE_SETTINGS$1.map((n) => `-u ${n}`).join(" ")} ${shellWord(nodePath)} ${shellWord(file)} ${args.join(" ")} > ${shellWord(log)} 2>&1`;
+	if (words.some((w) => /[\x00-\x1f\x7f]/.test(w))) {
 		c.say({
 			step: "schedule",
 			ok: false,
@@ -61377,17 +61394,16 @@ function schedule(c, state) {
 		sent: "nothing",
 		installed: "nothing"
 	};
-	const node = `It runs this Node, ${process.execPath}, by its path: print the entry again after moving or removing it.`;
+	const node = `It runs this Node, ${nodePath}, by its path: print the entry again after moving or removing it.`;
 	if (process.platform === "darwin") {
 		const label = `direct.crow.deliver.${plain$1(state.name, 40).replace(/[^a-z0-9-]/g, "")}-${createHash("sha256").update(c.folder).digest("hex").slice(0, 8)}`;
 		const plist = join(homedir(), "Library", "LaunchAgents", `${label}.plist`);
-		const uid = process.getuid?.() ?? 0;
 		c.say({
 			...line,
 			scheduler: "launchd",
 			file: plist,
-			plist: `<?xml version="1.0" encoding="UTF-8"?><!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd"><plist version="1.0"><dict><key>Label</key><string>${label}</string><key>ProgramArguments</key><array><string>/bin/sh</string><string>-c</string><string>${xmlText(command)}</string></array><key>StartInterval</key><integer>300</integer><key>RunAtLoad</key><true/></dict></plist>`,
-			load: `launchctl bootstrap gui/${uid} ${shellWord(plist)}`,
+			plist: `<?xml version="1.0" encoding="UTF-8"?><plist version="1.0"><dict><key>Label</key><string>${label}</string><key>ProgramArguments</key><array><string>/bin/sh</string><string>-c</string><string>${xmlText(command)}</string></array><key>StartInterval</key><integer>300</integer><key>RunAtLoad</key><true/></dict></plist>`,
+			load: `launchctl bootstrap gui/$(id -u) ${shellWord(plist)}`,
 			detail: `Save plist as ${plist}, making the folder if it is not there, then run load: launchd runs the pass every ${EVERY_MINUTES} minutes while this user is logged in. launchctl bootout with the same arguments stops it. ${node}`
 		});
 	} else if (process.platform === "win32") c.say({
@@ -61396,7 +61412,8 @@ function schedule(c, state) {
 		detail: `This version prints an entry for cron and launchd only. Run deliver every ${EVERY_MINUTES} minutes with this machine's own scheduler.`
 	});
 	else {
-		if (/[%\\]/.test(command)) {
+		const entry = cronEntry(words, command);
+		if (entry === void 0) {
 			c.say({
 				step: "schedule",
 				ok: false,
@@ -61407,7 +61424,7 @@ function schedule(c, state) {
 		c.say({
 			...line,
 			scheduler: "cron",
-			entry: `*/${EVERY_MINUTES} * * * * ${command}`,
+			entry,
 			detail: `Add entry as one line with crontab -e. Deleting the line stops it. ${node}`
 		});
 	}
