@@ -2,6 +2,7 @@
 // the Settlement (packages/settlement/src/interface.ts) plus SimChain's reads; _sim.ts implements it
 // for unit tests that inject failures.
 import type {
+  SignerCheck,
   AdjudicatorAcceptance,
   AdjudicatorPolicy,
   AdjudicatorRegistration,
@@ -104,4 +105,10 @@ export interface AdjudicatorSettlement {
    * appeal adjudicator reads the bound one here. null when none is kept. Absent: only the latest registration is read.
    */
   policy?(hash: Hex32): Promise<AdjudicatorPolicy | null>;
+  /**
+   * The settlement layer's contract-signer rule (ADR-0040 §5, D84), which this service uses for the seller's delivery
+   * signature instead of an ECDSA recovery (ADR-0040 §6): a key's signature, or a contract seller's ERC-1271 answer.
+   * Absent: ECDSA only, so a contract seller's delivery is refused.
+   */
+  signerCheck?(): SignerCheck;
 }

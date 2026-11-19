@@ -2,11 +2,15 @@
 // stalled the whole pass, so every later deal went unjudged. Every read the pass awaits now has a time limit
 // (`storeReadTimeoutMs`). Past it, the deal is refused as an unreadable delivery is: nothing is judged, signed or
 // published, it is never reported as declined, the pass goes on, and the deal is tried again on a later pass.
+//
+// T-574: the tests that bound how long a pass waits run on fake timers (`onFakeTime`), so each bound counts the
+// milliseconds the pass's own time limits waited, not the machine's speed. One failed at a load average of 36
+// (238 ms against 160 ms) on the wall clock.
 import { readFileSync } from 'node:fs';
 import type { Commitment, Hex32 } from '@holdback/core';
 import { fakeProvider, loadRegistry, type JudgeRequest, type JudgmentCheck, type RegistryDoc } from '@holdback/judgment';
 import { keccak256 } from 'viem';
-import { describe, expect, it } from 'vitest';
+import { afterEach, describe, expect, it, vi } from 'vitest';
 import { demoCsv, DOMAIN, makeCommitment, party, TestSettlement, tusd } from './_sim.js';
 import { defaultPolicy, policyHashOf } from './policy.js';
 import { Adjudicator, DEFAULT_STORE_READ_TIMEOUT_MS, PASS_WAIT_LIMITS, STORE_READ_RETIRE_LIMITS, type RunReport } from './service.js';
@@ -64,6 +68,7 @@ const recipients = () => [A, B, C, BUYER].map((p) => ({ recipient: p.address, pu
 
 /** A pass that must return within `ms`: today's hung read would leave it pending, and the test fails with a reason. */
 async function pass(adj: Adjudicator, ms = 2_000): Promise<RunReport> {
+  if (vi.isFakeTimers()) return driven(adj.runOnce(), ms);
   let timer: ReturnType<typeof setTimeout> | undefined;
   const stalled = new Promise<never>((_, reject) => (timer = setTimeout(() => reject(new Error(`the pass did not return within ${ms} ms: a store read stalled it`)), ms)));
   try {
@@ -71,6 +76,38 @@ async function pass(adj: Adjudicator, ms = 2_000): Promise<RunReport> {
   } finally {
     clearTimeout(timer);
   }
+}
+
+/**
+ * T-574: fakes the clock the time limits read (setTimeout and Date) for one test, from a fixed instant. Time moves only
+ * when a pass's timer fires, so `Date.now()` before and after a pass gives the milliseconds it waited, whatever the load.
+ */
+function onFakeTime() {
+  vi.useFakeTimers({ toFake: ['setTimeout', 'clearTimeout', 'Date'], now: Date.parse('2026-11-01T10:00:00Z') });
+}
+afterEach(() => void vi.useRealTimers());
+
+/**
+ * On fake timers: runs a pass to its end, firing its timers in order. It fails when the pass waits on what no timer ends,
+ * or past `ms`. It assumes every store read settles in promise steps or never, as TestSettlement's in-memory reads do:
+ * a healthy read that waited on real I/O would have its time limit fired early here (review of T-574, Low 2).
+ */
+async function driven<T>(run: Promise<T>, ms: number): Promise<T> {
+  let settled = false;
+  const result = run.finally(() => (settled = true));
+  const started = Date.now();
+  while (!settled) {
+    // No timer is due: the pass is doing real work (hashing, decryption), so give it real turns of the event loop
+    // (setImmediate is not faked). A pass that neither ends nor sets a timer for 10,000 turns waits on nothing.
+    for (let turns = 0; !settled && vi.getTimerCount() === 0; turns++) {
+      if (turns === 10_000) throw new Error('the pass waits on a read no time limit ends: a store read stalled it');
+      await new Promise<void>((r) => setImmediate(r));
+    }
+    if (settled) break;
+    await vi.advanceTimersToNextTimerAsync();
+    if (!settled && Date.now() - started > ms) throw new Error(`the pass did not return within ${ms} ms: a store read stalled it`);
+  }
+  return result;
 }
 
 /** `n` funded, delivered deals with one primary, in task-list order. Returns their ciphertext URIs too. */
@@ -154,7 +191,7 @@ describe('a store read that never returns (T-372)', () => {
   });
 
   it('many stuck deals: a later pass waits for none of their reads again, asks the store once each, and judges the healthy deal first', async () => {
-    // A longer limit here, so the second pass's own work is small beside the waits it no longer makes.
+    onFakeTime();
     const limit = 200;
     const { s, a, cs, uris } = await deals(6, CHECKS_ONLY, limit);
     const stuck = new Set(uris.slice(0, 5));
@@ -164,8 +201,9 @@ describe('a store read that never returns (T-372)', () => {
     expect(first.decided.map((d) => d.commitmentId)).toEqual([cs[5]!.id]);
     const started = Date.now();
     const second = await pass(a.adj);
-    // Each read still in flight from the first pass is joined, not asked again, and it has already used its limit.
-    expect(Date.now() - started).toBeLessThan(limit * 5);
+    // Each read still in flight from the first pass is joined, not asked again: the second pass waits at most what is
+    // left of one limit (the last read cut short by the first pass's spent wait), never five limits.
+    expect(Date.now() - started).toBeLessThanOrEqual(limit);
     expect(second.refused).toHaveLength(5);
     for (const uri of stuck) expect(reads.get(uri)).toBe(1);
   });
@@ -231,31 +269,35 @@ describe('a store read that never returns (T-372)', () => {
   });
 
   it('a registration read that never answers is asked once for every deal in the pass, and waited out once (red team M1)', async () => {
+    onFakeTime();
     const { s, a, cs } = await deals(5);
     let calls = 0;
     s.registration = () => (calls++, never());
     const started = Date.now();
     const report = await pass(a.adj);
-    expect(Date.now() - started).toBeLessThan(LIMIT_MS * 4);
+    // One limit waited for five deals, not one each.
+    expect(Date.now() - started).toBe(LIMIT_MS);
     expect(report.refused.map((r) => r.commitmentId).sort()).toEqual(cs.map((c) => c.id).sort());
     expect(report.decided).toEqual([]);
     expect(calls).toBe(1);
   });
 
   it('a pass waits out at most PASS_WAIT_LIMITS limits on stuck reads; the rest wait a tenth, and a healthy deal behind them is judged (red team M1)', async () => {
+    onFakeTime();
     const limit = 500;
     const { s, a, cs, uris } = await deals(6, CHECKS_ONLY, limit);
     hang(s, new Set(uris.slice(0, 5)));
     const started = Date.now();
     const report = await pass(a.adj, 5_000);
     const took = Date.now() - started;
-    // 2 full waits (1,000 ms) and 3 short ones (150 ms), not 5 full waits (2,500 ms).
-    expect(took).toBeLessThan(limit * (PASS_WAIT_LIMITS + 2));
+    // 2 full waits (1,000 ms) and 3 short ones of a tenth (150 ms), not 5 full waits (2,500 ms).
+    expect(took).toBe(limit * PASS_WAIT_LIMITS + 3 * (limit / 10));
     expect(report.refused).toHaveLength(5);
     expect(report.decided.map((d) => d.commitmentId)).toEqual([cs[5]!.id]);
   });
 
   it('offers come after the turns with a deadline: stuck offers do not delay a delivered deal (red team M1)', async () => {
+    onFakeTime();
     const { s, a, cs } = await deals(1);
     const ref = s.store(new TextEncoder().encode('customer_id,email\n100000,customer0@example.com'));
     // One reference under a URI of its own per offer, so no read joins another.
@@ -274,9 +316,8 @@ describe('a store read that never returns (T-372)', () => {
     const report = await pass(a.adj);
     expect(report.decided.map((d) => d.commitmentId)).toEqual([cs[0]!.id]);
     expect(report.refused).toHaveLength(late.length);
-    // Before any offer's read could time out.
-    expect(judgedAfter).toBeGreaterThanOrEqual(0);
-    expect(judgedAfter).toBeLessThan(LIMIT_MS);
+    // Before any wait at all, so before any offer's read could time out.
+    expect(judgedAfter).toBe(0);
   });
 
   it('the limit is a setting: the default is DEFAULT_STORE_READ_TIMEOUT_MS, and a limit that is not a positive number is refused at start', () => {
