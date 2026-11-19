@@ -49,8 +49,8 @@ Seconds are wall time on this machine for each beat, from opening its round to i
 
 | Run | Start (UTC) | Commit | Release: state, s, checks | Reject: state, s, checks | Escalate: state, s, checks | All, s | Within 300 s | Good path accepted | Live calls (before → after) |
 | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- |
-| 1 | 2026-11-19 21:35:33 | `3ade3ec` | Released, 113, 11 of 11 | Refunded, 80, 11 of 11 | Released, 142, 22 of 22 | 142 | yes | yes, live panel | 8 → 19 |
-| 2 | 2026-11-19 21:39:50 | `8622ffd` | Released, 170, 11 of 11 | Refunded, 159, 11 of 11 | Released, 182, 22 of 22 | 183 | yes | yes, live panel | 19 → 30 |
+| 1 | 2026-11-19 21:35:33 | `3ade3ec` (rebased as `f76d041`) | Released, 113, 11 of 11 | Refunded, 80, 11 of 11 | Released, 142, 22 of 22 | 142 | yes | yes, live panel | 8 → 19 |
+| 2 | 2026-11-19 21:39:50 | `8622ffd` (rebased as `3299fb5`) | Released, 170, 11 of 11 | Refunded, 159, 11 of 11 | Released, 182, 22 of 22 | 183 | yes | yes, live panel | 19 → 30 |
 | 3 | | | | | | | | | |
 | 4 | | | (release beat only) | not played | not played | | n/a | | |
 | 5 | | | (release beat only) | not played | not played | | n/a | | |
@@ -77,6 +77,7 @@ Accepted so far: 2 of 2 (measured). The table closes at 5.
 
 ### Tests and checks (measured)
 
+- `/verify` for this kind (2026-11-19, after the rebase on `origin/main` at `22dd494`): `pnpm exec vitest run examples/demo-sepolia.test.ts examples/examples.test.ts tests/design-map.test.ts` passed 54 of 54 in 3 files; `pnpm -s typecheck` passed; `eslint` on both new files passed; `node scripts/id-check.mjs` passed ("names T-569"). No snapshot changed.
 - `pnpm exec vitest run examples/demo-sepolia.test.ts`: 8 of 8 passed. They cover the three beats against the demo's own world on SimChain, the dry run, the re-roll refusal and `--rerun-after`, and a beat that cannot open its round. They also check that no seed or derived key is printed or written.
 - `pnpm -s typecheck` and `eslint` on both files: no errors.
 - `pnpm -s demo:sepolia --dry-run` against the live operators: exit 0; it printed the plan and "22 live calls left today (UTC); this run needs about 11" at 21:34 UTC.
