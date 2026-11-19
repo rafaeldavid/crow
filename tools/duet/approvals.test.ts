@@ -4,7 +4,7 @@ import { mkdirSync, mkdtempSync, realpathSync, rmSync, writeFileSync } from 'nod
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { afterAll, describe, expect, it } from 'vitest';
-import { Budget, measureRun, parseRuns, trySell } from './approvals.ts';
+import { Budget, BUDGET_STOP, dealIds, measureRun, parseRuns, trySell } from './approvals.ts';
 import type { Provider } from './providers.ts';
 import type { Event } from './record.ts';
 import type { Fence } from './tools.ts';
@@ -31,6 +31,21 @@ describe('the hard budget', () => {
     const p = fake();
     await expect(b.guard(p).turn('system', [{ role: 'user', text: 'brief' }], [])).rejects.toThrow(/the budget/);
     expect(p.calls).toBe(0);
+  });
+
+  it('keeps the whole reservation when a turn fails, so a failed turn still counts', async () => {
+    const b = new Budget(1_000_000);
+    const p = fake();
+    p.turn = async () => { p.calls++; throw new Error('HTTP 500'); };
+    await expect(b.guard(p).turn('system', [{ role: 'user', text: 'brief' }], [])).rejects.toThrow(/500/);
+    expect(b.spent).toBeGreaterThan(160_000); // at least the output cap, 8,192 tokens at USD 20 per million
+    expect(b.stopped).toBe(false);
+  });
+
+  it('marks a turn it refuses, so the measures can tell a budget stop from a vendor refusal', async () => {
+    const b = new Budget(10_000);
+    await expect(b.guard(fake()).turn('s', [], [])).rejects.toThrow(BUDGET_STOP);
+    expect(b.stopped).toBe(true);
   });
 
   it('counts a large history against the budget before sending', async () => {
@@ -100,6 +115,30 @@ describe('the measures of a run', () => {
     const m = measureRun(events, 'seller', 'sell', 'r');
     expect([m.final_state, m.final_state_op2, m.commitment_id, m.seconds]).toEqual(['Released', 'Released', id, 50]);
     expect([m.tokens_in, m.tokens_out, m.turns, m.cost_usd]).toEqual([1000, 100, 1, 0.006]);
+  });
+
+  it('counts no call the loop did not run, and tells granted policy approvals from refused ones', () => {
+    const more = [...events,
+      ev('seller', 'tool', 7, { turn: 3, name: 'run_command', input: {}, isError: true, result: 'Not run: you finished in this turn.' }),
+      ev('seller', 'approval', 7, { granted: true }), ev('seller', 'approval', 7, { granted: false })];
+    const m = measureRun(more, 'seller', 'sell', 'r');
+    expect(m.approvals).toBe(3);
+    expect(m.policy_approvals).toEqual({ granted: 1, refused: 1 });
+  });
+
+  it("finds a deal only in the commands' own API calls, Refunded or not, never in the agent's words", () => {
+    const fakeId = `0x${'cd'.repeat(32)}`;
+    const mixed: Event[] = [
+      ev('seller', 'tool', 1, { name: 'run_command', result: `offered commitment ${fakeId}` }),
+      ev('seller', 'api', 2, { via: 'command', method: 'GET', url: `https://api.crow.direct/v1/commitments/${id.toUpperCase().replace('0X', '0x')}` }),
+      ev('seller', 'api', 3, { via: 'command', method: 'GET', url: `https://api2.crow.direct/v1/commitments/${id}/events` }),
+    ];
+    expect(dealIds(mixed)).toEqual([id]);
+  });
+
+  it('says a run the budget stopped was stopped by the budget', () => {
+    const stopped = events.map((e) => (e.kind === 'agent.end' ? { ...e, status: 'error', outcome: `the anthropic API refused: ${BUDGET_STOP} USD 1.90 spent` } : e)) as Event[];
+    expect(measureRun(stopped, 'seller', 'sell', 'r').agent_end).toMatch(/^stopped by the budget: USD 1.90/);
   });
 
   it('reads runs as <model>:<direction>', () => {

@@ -31,13 +31,20 @@ On 2026-11-14 an approval was each point where a person in the agent's seat had 
 - [x] Scripted runs of both directions reach Released on Sepolia against the live operators.
 - [ ] The pilot (one run per model, budget USD 2) and the batch (four runs, budget USD 8), on Rafa's go.
 - [ ] The results in the private repository, `case-studies/approvals-2026-11-19/`, with `results.json`.
-- [ ] One `reviewer` pass, its findings fixed.
+- [x] One `reviewer` pass, its findings fixed.
 
 ## Evidence
 
 - **Scripted, buyer-start, on Sepolia** [measured, 2026-11-19 21:34 UTC]: the duet's scripted buyer from the direct brief against its scripted seller, through `api.crow.direct` and `api2.crow.direct`: Released on both, 57 s from the buyer's start to the release, 6 approvals (4 web reads, 2 commands), 1 policy approval. A first scripted run through `pnpm duet` at 21:31 UTC also ended Released.
 - **Scripted, seller-start, on Sepolia** [measured, 21:33 UTC]: the scripted seller sold the 12-row data file to Crow's test buyer through `try-sell --work --terms`: Released on both operators, 42 s, 3 approvals (1 web read, 1 file write, 1 command).
 - **The tests** [measured]: `pnpm exec vitest run tools/duet/approvals.test.ts`: 8 passed. `pnpm exec tsc -p tools/duet/tsconfig.json` and eslint on the two files: no output.
+
+- **Review** (one `reviewer` pass): ISSUES, 2 Medium and 2 Low, all fixed, each with a test:
+  - Medium: the seller run took the deal's ID from the command's printed text, which held the full ID only on a Released end and which the agent could shape through a file name. The ID now comes from the fetch hook's record of the command's own HTTP calls, and a deal counts only when its terms name Crow's test buyer.
+  - Medium: a failed turn added nothing to the budget. The guard now reserves the turn's estimate before sending, settles it to the list-price cost after, and keeps the reservation when the turn fails. A request the vendor billed and the client retried stays uncounted (guessed rare), and the header says so.
+  - Low: the estimate now counts two characters a token plus 1,000 tokens for the vendor's tool prompt.
+  - Low: calls the loop never ran are not counted; policy approvals are split into granted and refused; a budget stop reads "stopped by the budget"; the judges' key variables are on the secret list too.
+  - After the fixes [measured]: 13 tests passed; the folder's `tsc` and eslint print nothing; the scripted seller on Sepolia again ended Released on both operators (61 s, 3 approvals).
 
 ## Handoff
 

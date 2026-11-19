@@ -13,15 +13,18 @@
 // the agent sells its company's own data file to Crow's test buyer through the front door's sell command, run as
 // `node examples/try-sell.ts`, with --work and --terms only.
 //
-// The budget is hard and covers every run of one invocation: before each model turn the runner adds the most that
-// turn can cost (its whole input at the dearest input price, plus the output cap) to what was spent, and sends no turn
-// that could pass the budget. Keys: HOLDBACK_AGENT_ANTHROPIC_API_KEY for claude; HOLDBACK_AGENT_OPENAI_COMPATIBLE_API_KEY
+// The budget is hard and covers every run of one invocation. Before each model turn the runner reserves an estimate of
+// the most that turn can cost, with a margin: the whole request at two characters a token plus 1,000 tokens for the
+// vendor's own tool prompt, every token at the dearest input price, plus the output cap. It sends no turn whose
+// reservation would pass the budget, settles the reservation to the turn's list-price cost when it is back, and keeps
+// the whole reservation when the turn fails. Not counted: a request the vendor billed and the client retried (the
+// providers retry on network errors, 429 and 5xx), guessed to be rare. Keys: HOLDBACK_AGENT_ANTHROPIC_API_KEY for claude; HOLDBACK_AGENT_OPENAI_COMPATIBLE_API_KEY
 // and HOLDBACK_AGENT_OPENAI_COMPATIBLE_BASE_URL (https) for deepseek. They are scrubbed from everything written.
 import { appendFileSync, mkdirSync, readFileSync, realpathSync, writeFileSync } from 'node:fs';
 import { join, resolve } from 'node:path';
 import { masterPrompt, runAgent, type Caps } from './loop.ts';
 import { inputPrice, priceOf } from './measures.ts';
-import { KEY_ENV, liveProvider, MAX_OUTPUT_TOKENS, pinnedModel, scripted, type Provider, type ScriptStep } from './providers.ts';
+import { JUDGE_KEY_ENV, KEY_ENV, liveProvider, MAX_OUTPUT_TOKENS, pinnedModel, scripted, type Provider, type ScriptStep } from './providers.ts';
 import { Recorder, Secrets, type Event } from './record.ts';
 import { CROW_SITE, REPO, runDuet } from './run.ts';
 import { Toolbox, type Allow, type Installed } from './tools.ts';
@@ -48,6 +51,8 @@ export function parseRuns(list: string): RunSpec[] {
 /** The hard budget, in micro-USD, shared by every run of one invocation. */
 export class Budget {
   spent = 0;
+  /** Whether the budget refused a turn. */
+  stopped = false;
   readonly limit: number;
   constructor(limit: number) { this.limit = limit; }
   /** A provider that refuses a turn that could pass the budget, and adds each turn's list-price cost once it is back. */
@@ -59,19 +64,20 @@ export class Budget {
       model: p.model,
       ping: (s) => p.ping(s),
       turn: async (system, history, tools, signal) => {
-        if (prices) {
-          // The whole request at three characters a token, every token at the dearest input price, plus the output cap.
-          const input = Math.ceil((system.length + JSON.stringify(history).length + JSON.stringify(tools).length) / 3);
-          const worst = Math.ceil((input * prices.input + MAX_OUTPUT_TOKENS * prices.output) / 1_000_000);
-          if (this.spent + worst > this.limit) throw new Error(`the budget: USD ${usd(this.spent)} spent, this turn could cost up to USD ${usd(worst)}, the budget is USD ${usd(this.limit)}`);
-        }
+        if (!prices) return p.turn(system, history, tools, signal);
+        const input = Math.ceil((system.length + JSON.stringify(history).length + JSON.stringify(tools).length) / 2) + 1000;
+        const worst = Math.ceil((input * prices.input + MAX_OUTPUT_TOKENS * prices.output) / 1_000_000);
+        if (this.spent + worst > this.limit) { this.stopped = true; throw new Error(`${BUDGET_STOP} USD ${usd(this.spent)} spent, this turn could cost up to USD ${usd(worst)}, the budget is USD ${usd(this.limit)}`); }
+        this.spent += worst; // reserved; a failed turn keeps the reservation
         const a = await p.turn(system, history, tools, signal);
-        if (prices) this.spent += priceOf(p.model, a.usage) ?? 0;
+        this.spent += (priceOf(p.model, a.usage) ?? worst) - worst;
         return a;
       },
     };
   }
 }
+/** How a turn the budget refused begins: the loop records it as the vendor's refusal, so the measures look for it. */
+export const BUDGET_STOP = 'stopped by the budget:';
 const usd = (micro: number) => (micro / 1_000_000).toFixed(2);
 
 /** The most one run can cost at its caps: every token at the dearest input price, plus every turn's output cap. */
@@ -153,17 +159,31 @@ async function sellRun(dir: string, provider: Provider, secrets: Secrets): Promi
   try {
     await runAgent({ role: 'seller', provider, brief: sellBrief(), system: masterPrompt('seller', 'Enterprise Sales Agent'), tools, caps: CAPS, rec, signal: stop.signal });
   } finally { clearTimeout(whole); stop.abort('the run ended'); await tools.close(); }
-  // The deal is the one the sell command opened: its ID from the command's own output, its state from the operators.
-  const ids = new Set<string>();
-  for (const e of rec.events) if (e.kind === 'tool' && e['name'] === 'run_command') for (const m of String(e['result'] ?? '').matchAll(/commitment\s+(0x[0-9a-f]{64})/g)) ids.add(m[1]!);
-  await chainAccount(rec, [...ids]);
+  // The deals are those the sell command itself called the operators about (the fetch hook's record of the command's
+  // own HTTP calls, which the agent cannot write), kept only when their terms name Crow's test buyer.
+  const ids = dealIds(rec.events);
+  let buyer: string | null = null;
+  try { buyer = String(((await (await fetch(`${CROW_SITE}/agents/test-buyer/agent.json`, { signal: AbortSignal.timeout(15_000) })).json()) as J)?.buyer ?? '').toLowerCase() || null; } catch (e) { rec.add('runner', 'chain.error', { error: `the test buyer's card: ${(e as Error).message}` }); }
+  await chainAccount(rec, ids, buyer);
   rec.add('runner', 'run.end', {});
   return rec.events;
 }
 
-async function chainAccount(rec: Recorder, ids: string[]): Promise<void> {
+/** The commitment IDs the agent's commands called the operators about, from the fetch hook's record of their own calls. */
+export function dealIds(events: readonly Event[]): string[] {
+  const ids = new Set<string>();
+  for (const e of events) if (e.kind === 'api' && e['via'] === 'command') { const m = /\/v1\/commitments\/(0x[0-9a-fA-F]{64})/.exec(String(e['url'] ?? '')); if (m) ids.add(m[1]!.toLowerCase()); }
+  return [...ids];
+}
+
+async function chainAccount(rec: Recorder, ids: string[], buyer: string | null): Promise<void> {
   for (const id of ids) for (const op of OPERATORS) {
     try {
+      if (op === OPERATORS[0]) {
+        const tr: J = await (await fetch(`${op}/v1/commitments/${id}/terms`, { signal: AbortSignal.timeout(30_000) })).json().catch(() => ({}));
+        const named = String((tr?.terms ?? tr)?.buyer?.address ?? (tr?.terms ?? tr)?.buyer ?? '').toLowerCase();
+        if (!buyer || named !== buyer) { rec.add('runner', 'chain.skipped', { commitmentId: id, reason: "its terms do not name Crow's test buyer" }); break; }
+      }
       const st: J = await (await fetch(`${op}/v1/commitments/${id}`, { signal: AbortSignal.timeout(30_000) })).json();
       rec.add('runner', 'chain.state', { commitmentId: id, operator: op, escrowState: st?.escrowState ?? null, finalAt: st?.finalAt ?? null });
       if (op !== OPERATORS[0]) continue;
@@ -177,7 +197,7 @@ async function chainAccount(rec: Recorder, ids: string[]): Promise<void> {
 
 export interface Result {
   model: string; vendor: string; direction: Direction; approvals: number; approvals_by_step: Array<{ turn: number; tool: string; what: string }>;
-  policy_approvals: number; turns: number; tokens_in: number; tokens_out: number; cache_read: number; cost_usd: number; seconds: number | null;
+  policy_approvals: { granted: number; refused: number }; turns: number; tokens_in: number; tokens_out: number; cache_read: number; cost_usd: number; seconds: number | null;
   final_state: string | null; final_state_op2: string | null; commitment_id: string | null; agent_end: string; refusals: number; failed_calls: number; date: string; run: string;
 }
 
@@ -188,7 +208,7 @@ export function measureRun(events: readonly Event[], role: 'buyer' | 'seller', d
   const mine = events.filter((e) => e.role === role);
   const turns = mine.filter((e) => e.kind === 'model.turn');
   const tools = mine.filter((e) => e.kind === 'tool');
-  const asks = tools.filter((e) => ASKS[String(e['name'])]);
+  const asks = tools.filter((e) => ASKS[String(e['name'])] && !String(e['result'] ?? '').startsWith('Not run:'));
   const model = String(mine.find((e) => e.kind === 'agent.start')?.['model'] ?? 'unknown');
   const cost = turns.reduce((s, t) => s + (priceOf(model, { input: Number(t['tokensIn']), output: Number(t['tokensOut']), cacheRead: Number(t['cacheRead'] ?? 0), cacheWrite: Number(t['cacheWrite'] ?? 0) }) ?? 0), 0);
   const states = events.filter((e) => e.kind === 'chain.state');
@@ -203,7 +223,7 @@ export function measureRun(events: readonly Event[], role: 'buyer' | 'seller', d
     model, vendor: String(mine.find((e) => e.kind === 'agent.start')?.['vendor'] ?? 'unknown'), direction,
     approvals: asks.length,
     approvals_by_step: asks.map((e) => ({ turn: Number(e['turn']), tool: String(e['name']), what: short(e['input']) })),
-    policy_approvals: events.filter((e) => e.kind === 'approval').length,
+    policy_approvals: { granted: events.filter((e) => e.kind === 'approval' && e['granted'] === true).length, refused: events.filter((e) => e.kind === 'approval' && e['granted'] !== true).length },
     turns: turns.length,
     tokens_in: turns.reduce((s, t) => s + Number(t['tokensIn']), 0),
     tokens_out: turns.reduce((s, t) => s + Number(t['tokensOut']), 0),
@@ -211,7 +231,7 @@ export function measureRun(events: readonly Event[], role: 'buyer' | 'seller', d
     cost_usd: Math.round(cost) / 1_000_000,
     seconds: Number.isFinite(first) && finalEvent !== undefined ? Math.round((finalEvent - first) / 1000) : null,
     final_state: stateAt(OPERATORS[0]!), final_state_op2: stateAt(OPERATORS[1]!), commitment_id: id,
-    agent_end: `${String(end?.['status'] ?? 'none')}: ${String(end?.['outcome'] ?? '').slice(0, 200)}`,
+    agent_end: String(end?.['outcome'] ?? '').includes(BUDGET_STOP) ? `stopped by the budget: ${String(end?.['outcome']).split(BUDGET_STOP)[1]!.trim().slice(0, 200)}` : `${String(end?.['status'] ?? 'none')}: ${String(end?.['outcome'] ?? '').slice(0, 200)}`,
     refusals: mine.filter((e) => e.kind === 'refused').length,
     failed_calls: tools.filter((e) => e['isError']).length,
     date: new Date().toISOString().slice(0, 10),
@@ -241,7 +261,7 @@ async function main(): Promise<void> {
   const env = process.env as Record<string, string | undefined>;
   const secrets = new Secrets();
   const modelSecrets: string[] = [];
-  for (const k of [...Object.values(KEY_ENV), 'HOLDBACK_AGENT_OPENAI_COMPATIBLE_BASE_URL']) if (env[k]) { secrets.add(env[k]!); modelSecrets.push(env[k]!); }
+  for (const k of [...Object.values(KEY_ENV), ...JUDGE_KEY_ENV, 'HOLDBACK_AGENT_OPENAI_COMPATIBLE_BASE_URL']) if (env[k]) { secrets.add(env[k]!); modelSecrets.push(env[k]!); }
   const providers: Record<string, Provider> = {};
   for (const m of new Set(runs.map((r) => r.model))) {
     if (m === 'scripted') continue;
