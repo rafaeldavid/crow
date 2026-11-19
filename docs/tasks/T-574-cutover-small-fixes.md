@@ -5,7 +5,7 @@
 - **Depends on:** T-563, the cutover to the fixed phase-one contracts; T-559, the operators' early refusals
 - **Paths this task may touch:** `apps/adjudicator/src/hung-read.test.ts`, `apps/adjudicator/src/drand-fork.test.ts`, `apps/demo-cloud/src/limits.attack.test.ts`, `apps/demo-cloud/src/worker.ts` and its test, `apps/operator/src/server.ts` (the JSON body reader) and `apps/operator/src/body-limit.test.ts`, `packages/core/src/parse.ts`, `packages/core/src/state.ts`, `packages/core/src/validators-codegen.ts` and the generated `validators.generated.ts`, new tests in `packages/core/src/`, `packages/settlement/evm/evm-settlement.ts` (the decide case only) and `packages/settlement/evm/appeal-ground.test.ts`, `tools/duet/replay.ts` and `tools/duet/duet.test.ts`; `site/setup.mjs`, rebuilt for item 3 only, in its own pull request held for a deliberate re-pin (the coordinator, 2026-11-19); for item 6, `apps/demo-cloud/src/judges.ts`, `apps/demo-cloud/src/world.ts` (the adjudicators' construction and pass) and their tests; this file
 - **Human gate:** no for the merges. The operator deploy that carries items 2, 5 and 6 is Rafa's; the coordinator arranges it.
-- **Status:** review
+- **Status:** done
 - **Agent/session:** the T-574 session, started by the coordinator on 2026-11-19 ("Start all seven")
 - **Roadmap row:** N211
 
@@ -86,7 +86,7 @@ The driver gives the pass real turns of the event loop while no timer is due, an
 
 ## Handoff
 
-**Done.** Five items are fixed, four of them merged and items 2 and 5 with pull request 726; item 3 is fixed and waits; none was dropped. Pull requests: 721 (item 1, merged as `9b732e63`), 727 (item 4, merged as `8065d37b`), 728 (item 6, merged as `cf60e083`), 726 (items 2 and 5), and item 3's own pull request from branch `t-574-message-error`, not to be merged until a deliberate re-pin of `site/setup.mjs`.
+**Done.** Five items are fixed and merged: pull request 726 merged as `40d6026b` on 2026-11-19. Item 3 is fixed and waits in draft pull request 732; none was dropped. Pull requests: 721 (item 1, merged as `9b732e63`), 727 (item 4, merged as `8065d37b`), 728 (item 6, merged as `cf60e083`), 726 (items 2 and 5), and item 3's own pull request from branch `t-574-message-error`, not to be merged until a deliberate re-pin of `site/setup.mjs`.
 
 **Item 3 waits for the re-pin.** It changes the pinned `site/setup.mjs` (Evidence, item 3). Pull request 714 (the deliver command), merged on 2026-11-19, already changes `setup.mjs`, so the next site deploy carries a deliberate re-pin. If item 3's pull request is green and reviewed before that deploy, the coordinator decides whether it rides along; if not, it waits for the re-pin after. To resume: bring `origin/main` into `t-574-message-error`, run `node packages/core/scripts/validators.ts` and `node site/build.mjs`, and check the new `setup.mjs` hash in `site/llms.txt`. Each had a reviewer subagent; items 2(b) and 6 also had a red-teamer. Every Medium was fixed, with a test where a test can show it.
 
