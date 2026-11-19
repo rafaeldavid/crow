@@ -1468,7 +1468,7 @@ Today a seller with its own API reads 13 files of 98,462 bytes and runs 22 comma
 
 ## D78. Changing a funded deal by agreement: a waiver first, a replacement in one transaction for new terms, one signed note for both, no contract change (ADR-0039, T-524)
 
-**Status:** needs Rafa, 2026-11-18.
+**Status:** decided, 2026-11-19.
 
 **Why now.** Both pilot deals so far had a finished report refused by the deal's signed checks while the deal was `Held`. Each fix took four moves: new terms, a seller redeploy, a second deal that takes over the job (T-501), and a full refund both parties sign (T-503) [measured, the private record]. Rafa, 2026-11-18: amendments both parties agree to "need to be a normal path of trade". The gate before signing (the checks run on one real delivery first) would have caught the first case. It would not have caught the second, whose report had shapes the first real report lacked [inferred].
 
@@ -1487,11 +1487,12 @@ Today a seller with its own API reads 13 files of 98,462 bytes and runs 22 comma
 - the contract reads the nonce only inside the signed hash;
 - a reader recovers it from the call data.
 
-**Open points for Rafa:**
-1. The order: recommended, waiver first, then replacement, with the variation only if measured; or the replacement as the one path.
-2. The hosted seller's waiver: recommended, offer it on every refused check and sign on the ready credential; or sign at once, so the buyer's yes is the only step.
-3. The note's text on chain: recommended, in the same transaction by default; or the hash on chain and the text only in the receipt.
-4. The buyer's stop: recommended, the principal's yes on every waiver and replacement; or skip it for a replacement whose checks are only stricter.
+**Decided by Rafa, 2026-11-19, the four points that were open:**
+1. **The order.** His words: "Waiver first, replacement second --- but agent should be able to decide. Waiver I think would be the default choice to start." Both paths are offered, the waiver is the default, and the agent chooses.
+2. **The hosted seller's waiver.** His words: "The seller signs at once, so the buyer's yes is the only step". This is the alternative, not the recommendation: the hosted seller signs the waiver when a check refuses, with no credential step.
+3. **The note's text on chain.** His words: "In the same transaction, public by default".
+4. **The buyer's stop.** His words: "Skip, assume agent will have their own configuration requiring signature, this is not for Crow to decide". Crow's tools require no yes from the principal; a buyer's own configuration may (D32: each party carries its own checks).
+The build is not started; it opens as its own task on Rafa's word.
 
 **Litmus tests.** Neutrality: no single actor waives or replaces, and an operator that refuses is bypassed. The hold: a waiver or a refund needs both signatures and pays only the two money addresses; if a replacement's batch fails, the old hold stays as it was [measured]. Defended judgment: the checks run first and their failures are what a buyer waives; no replacement after a delivery is posted.
 
