@@ -37,6 +37,7 @@
 //   as the relay was, with the messages the row holds (the delivery's envelopes, the decision's keys), and its
 //   Idempotency-Key answers a retry with the mined result (`recover`).
 import {
+  APPEAL_GROUND_APPEAL_ONLY,
   beaconRoundFor,
   canonicalKeccak,
   commitmentId as commitmentIdOf,
@@ -1038,6 +1039,10 @@ export class EvmSettlement implements Settlement {
       case 'decide': {
         const m = s.message;
         const book = this.bookOf(m.commitmentId);
+        // A primary's or a fallback's decision carries no appeal ground. The contract reverts one that does at both roles
+        // (appealGroundHash must be keccak256("")) as InvalidMessage, which names no reason, so core's reason is given
+        // here, before any simulation or transaction (T-559). A ground the contract takes, the empty string, passes on.
+        if (m.role !== 'appeal' && (m.appealGround ?? '') !== '') refuse('invalid_terms', APPEAL_GROUND_APPEAL_ONLY);
         const carry = this.carrying(book);
         // An outside scan's finding (G1): a call that carries the delivery re-checks the seller inside it, so the seller
         // can make it revert after its calldata has published the primary's seed, then deliver again knowing the seed.

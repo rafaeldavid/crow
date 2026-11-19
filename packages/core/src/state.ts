@@ -453,6 +453,9 @@ function decisionBindings(s: Pick<Base, 'id' | 'terms'>, m: Decision, at: Timest
   return ok(true);
 }
 
+/** Core's reason for refusing a primary's or a fallback's decision that carries an appeal ground; the EVM relay names it too (T-559). */
+export const APPEAL_GROUND_APPEAL_ONLY = 'appealGround belongs to appeal decisions only';
+
 function firstInstance(
   s: Extract<EscrowState, { kind: 'Delivered' | 'FallbackJudging' }>,
   m: Decision,
@@ -476,7 +479,7 @@ function firstInstance(
   if (!attempt.ok) return attempt;
   const named = namesTheDelivery(m, s.delivery);
   if (!named.ok) return named;
-  if (m.appealGround !== undefined) return fail('invalid_terms', 'appealGround belongs to appeal decisions only');
+  if (m.appealGround !== undefined) return fail('invalid_terms', APPEAL_GROUND_APPEAL_ONLY);
   // ADR-0018: the primary reveals its committed seed; the fallback takes the beacon seed for judgeBy.
   if (role === 'primary' && keccak256(m.seed) !== s.acceptance.seedCommitment) return fail('seed_mismatch', 'seed does not hash to the acceptance seedCommitment');
   const seeded = beaconSeed(s, m, beacon, marginSec);
