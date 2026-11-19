@@ -25,7 +25,8 @@ The test's client and runner live in the Crest repository (its thin client, `cli
 
 ## Evidence
 
-- The new toolbox test passes, with the rest of the toolbox suite [measured, local; CI is the gate].
+- The two installed-command tests pass, with the whole duet suite (42 of 42) [measured, local]. A review found three medium holes in the first version and some smaller gaps: an unchecked script path, `--help` skipping the check, and the environment's secrets. Each is fixed with a test, and a re-review passed.
+- Stage 1 ran with this option on 2026-11-19 [measured]. Claude Opus 5.5 and DeepSeek V4 Pro each made 18 purchases across ten scenarios through the installed payment command, on anvil with this repository's contracts and operators. All 20 scenario runs ended as expected, for USD 2.05 at list prices. The installed command's fence refused every call outside it, and no key reached a model or the record.
 
 ## Handoff
 
