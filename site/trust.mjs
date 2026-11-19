@@ -162,9 +162,9 @@ export function trustFaq(f = trustFacts()) {
       { id: 'escrow-external-review', q: 'Has Coinbase’s escrow contract had an external review?',
         a: `Yes. Cantina reviewed the escrow contract twice in April 2025 and found one critical issue, which was fixed before release. In July 2026, Cantina reviewed the contract’s last code change, PR 90, at the exact commit Crow deploys, and found three informational issues. One later change, the renames in PR 71, has no review.`,
         sources: [file('docs/reviews/2026-11-03-public-audit-crosscheck.md'), file('contracts/lib/commerce-payments/'), adr3] },
-      { id: 'rules-contract-audit', q: 'Has the rules contract had an external audit?',
-        a: `No. Crow’s rules contract (HoldbackRules), which decides when the escrow pays out, has had no outside audit yet. Models from two AI families reviewed it, and the scope an auditor would need is written.`,
-        sources: [sepolia, file('docs/audit/scope.md')] },
+      { id: 'rules-contract-audit', q: 'Has the rules contract had an outside review?',
+        a: `Yes, by AI. The contracts behind Crow’s settlement were reviewed by Zero Cool’s AI deep scan on 2026-11-18, and the fixes by its fix review on 2026-11-19. Zero Cool reports first places in Sherlock audit contests and a second place in a Cantina contest. The scan rated nothing Critical or High. Three Informational items stay open, and the fixed version is not deployed yet. Every finding and its status is published. Further reviews will follow over time, guided by partner feedback.`,
+        sources: [file('docs/audit/outside-scan.md'), ['Zero Cool', 'https://zerocool.ai/'], file('docs/audit/known-issues.md')] },
       { id: 'what-testing-crow-runs', q: 'What testing does Crow run?',
         a: `Unit, fuzz and invariant tests of the contracts, a TLA+ model of a deal’s states, and attack and neutrality scenarios for the judging and the operators.`,
         sources: [file('contracts/test/'), file('formal/'), file('fixtures/scenarios/')] },
@@ -212,8 +212,8 @@ export function trustFaq(f = trustFacts()) {
 }
 
 /** The page's notice: what is not there yet. */
-const COMING_SOON = { title: 'Coming soon', text: 'An outside audit of Crow’s own contracts, a penetration test, a certification such as SOC 2 or ISO 27001, a bug bounty, and deals with real money. Today Crow runs on a test network, with test tokens only.' };
-const comingSoonSources = () => [['SECURITY.md, “Status”', `${SECURITY_POLICY}#status`], ['docs/audit/scope.md', src('docs/audit/scope.md')]];
+const COMING_SOON = { title: 'Coming soon', text: 'An outside audit of Crow’s own contracts by human reviewers, with further reviews over time as partners ask, a penetration test, a certification such as SOC 2 or ISO 27001, a bug bounty, and deals with real money. Today Crow runs on a test network, with test tokens only.' };
+const comingSoonSources = () => [['SECURITY.md, “Status”', `${SECURITY_POLICY}#status`], ['docs/audit/outside-scan.md', src('docs/audit/outside-scan.md')]];
 
 /** A Source line: each source's label linked to its full address. */
 const sourceLine = (list) => `<p class="source">Source: ${list.map(([label, url]) => `<a href="${esc(url)}">${esc(label)}</a>`).join('; ')}</p>`;
