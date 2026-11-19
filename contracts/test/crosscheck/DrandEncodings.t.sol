@@ -18,7 +18,7 @@ contract DrandEncodingsTest is Test {
     DrandQuicknetBeacon internal beacon;
 
     function setUp() public {
-        beacon = new DrandQuicknetBeacon();
+        beacon = new DrandQuicknetBeacon(250_000);
     }
 
     /// The beacon's cap on PAIRING_CHECK. A failing precompile burns all the gas it was given, so a refusal that costs

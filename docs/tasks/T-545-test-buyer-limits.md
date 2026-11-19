@@ -5,7 +5,7 @@
 - **Depends on:** T-239 (the test buyer)
 - **Paths this task may touch:** `apps/test-agents/src/buyer-rules.ts`, `apps/test-agents/src/buyer.ts`, `apps/test-agents/src/buyer.test.ts`, `site/ref/intake.txt` ("Sell to Crow's test buyer"), `site/check.mjs` (its check of that section), comments in `examples/try-sell.ts` and `tools/duet/review.ts` that state the old cap, this file. Not `examples/setup*.ts`, `site/setup.txt`, `site/sell.txt` or `site/setup.mjs` (another session is building there).
 - **Human gate:** yes, for the deploy only: the test agents' deploy and the site deploy are Rafa's. Everything before them is in the repository.
-- **Status:** review
+- **Status:** done
 - **Agent/session:** the T-545 session, started from the `journeys` session, 2026-11-18, branch `t-545-test-buyer-limits`.
 - **Roadmap row:** N196
 - **Change kind:** 4 (agent code with its tests), with kind 1 for the intake guide's paragraph.

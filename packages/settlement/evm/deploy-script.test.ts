@@ -171,6 +171,7 @@ describe.skipIf(!ready)(`the deploy script on a local chain (T-383)${ready ? '' 
     expect(r.deployedAt).toMatch(/^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}Z$/);
     expect(r.expiryMarginSec).toBe(86_400);
     expect(r.contracts.HoldbackRules.args).toEqual([r.escrow, r.erc3009Collector, '86400', r.beacon, r.token.address, '29']);
+    expect(r.contracts.DrandQuicknetBeacon.args).toEqual(['250000']); // T-528: the beacon's pairing gas
     expect(Object.keys(r.contracts).sort()).toEqual(['AuthCaptureEscrow', 'DrandQuicknetBeacon', 'ERC3009PaymentCollector', 'HoldbackRules']);
   });
 
@@ -397,11 +398,11 @@ describe.skipIf(!ready)(`the deploy script on a local chain (T-383)${ready ? '' 
         mode === 'after' ? `  forge "$@" >/dev/null 2>&1; ${underpriced}; exit 1` : '',
         mode === 'before' ? `  ${underpriced}; exit 1` : '',
         mode === 'foreign' ? `  cast send '${chain.address}' --value 1 --keystore '${chain.keystore}' --password-file '${chain.passwordFile}' --rpc-url '${chain.rpc}' >/dev/null || exit 9` : '',
-        // Another contract's code at this creation's nonce: the beacon's, which takes no constructor argument.
+        // Another contract's code at this creation's nonce: the beacon's, with the pairing gas the deploy script sets (T-528).
         ...(mode === 'wrong'
           ? [
               `  n=$(sed -E 's/.*--nonce ([0-9]+).*/\\1/' <<<"$*")`,
-              `  cast send --nonce "$n" --keystore '${chain.keystore}' --password-file '${chain.passwordFile}' --rpc-url '${chain.rpc}' --create "$(forge inspect --root '${join(root, 'contracts')}' 'src/DrandQuicknetBeacon.sol:DrandQuicknetBeacon' bytecode)" >/dev/null || exit 9`,
+              `  cast send --nonce "$n" --keystore '${chain.keystore}' --password-file '${chain.passwordFile}' --rpc-url '${chain.rpc}' --create "$(forge inspect --root '${join(root, 'contracts')}' 'src/DrandQuicknetBeacon.sol:DrandQuicknetBeacon' bytecode)$(cast abi-encode 'constructor(uint256)' 250000 | sed 's/^0x//')" >/dev/null || exit 9`,
               `  ${underpriced}; exit 1`,
             ]
           : []),
@@ -410,7 +411,7 @@ describe.skipIf(!ready)(`the deploy script on a local chain (T-383)${ready ? '' 
           ? [
               `  n=$(sed -E 's/.*--nonce ([0-9]+).*/\\1/' <<<"$*")`,
               `  cast rpc evm_setAutomine false --rpc-url '${chain.rpc}' >/dev/null || exit 9`,
-              `  cast send --nonce "$n" --async --keystore '${chain.keystore}' --password-file '${chain.passwordFile}' --rpc-url '${chain.rpc}' --create "$(forge inspect --root '${join(root, 'contracts')}' 'src/DrandQuicknetBeacon.sol:DrandQuicknetBeacon' bytecode)" >/dev/null || { cast rpc evm_setAutomine true --rpc-url '${chain.rpc}' >/dev/null; exit 9; }`,
+              `  cast send --nonce "$n" --async --keystore '${chain.keystore}' --password-file '${chain.passwordFile}' --rpc-url '${chain.rpc}' --create "$(forge inspect --root '${join(root, 'contracts')}' 'src/DrandQuicknetBeacon.sol:DrandQuicknetBeacon' bytecode)$(cast abi-encode 'constructor(uint256)' 250000 | sed 's/^0x//')" >/dev/null || { cast rpc evm_setAutomine true --rpc-url '${chain.rpc}' >/dev/null; exit 9; }`,
               `  ( sleep 4; cast rpc evm_setAutomine true --rpc-url '${chain.rpc}'; cast rpc evm_mine --rpc-url '${chain.rpc}' ) >/dev/null 2>&1 &`,
               `  ${underpriced}; exit 1`,
             ]
