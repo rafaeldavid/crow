@@ -214,12 +214,16 @@ export interface Offer extends MessageBase {
   type: 'Offer';
   commitmentId: Hex32;
   seller: Address;
+  /** A party's signature (v0.12): a key's, or a contract's ERC-1271 bytes. */
+  signature: PartySignature;
 }
 
 export interface Agree extends MessageBase {
   type: 'Agree';
   commitmentId: Hex32;
   buyer: Address;
+  /** A party's signature (v0.12): a key's, or a contract's ERC-1271 bytes. */
+  signature: PartySignature;
 }
 
 export interface AdjudicatorAcceptance extends MessageBase {
@@ -268,6 +272,8 @@ export interface EarlyAccept extends MessageBase {
   type: 'EarlyAccept';
   commitmentId: Hex32;
   buyer: Address;
+  /** A party's signature (v0.12): a key's, or a contract's ERC-1271 bytes. */
+  signature: PartySignature;
   attempt: number;
   /** ADR-0029: deliveryHash() of the delivery the buyer opened; settlement refuses any other. */
   deliveryHash: Hex32;
@@ -315,6 +321,8 @@ export interface Dispute extends MessageBase {
   type: 'Dispute';
   commitmentId: Hex32;
   buyer: Address;
+  /** A party's signature (v0.12): a key's, or a contract's ERC-1271 bytes. */
+  signature: PartySignature;
   attempt: number;
   grounds: string;
   bond: TokenAmount;
@@ -451,7 +459,7 @@ export interface MutualSettlement {
   nonce: Hex32;
   expiresAt: Timestamp;
   buyerSignature: PartySignature;
-  sellerSignature: Signature;
+  sellerSignature: PartySignature;
 }
 
 /** Buyer and seller raise the disclosure level by agreement (ADR-0020); raising only is checked by settlement. */
@@ -462,7 +470,7 @@ export interface Publish {
   nonce: Hex32;
   expiresAt: Timestamp;
   buyerSignature: PartySignature;
-  sellerSignature: Signature;
+  sellerSignature: PartySignature;
 }
 
 /** Messages both parties sign over the identical struct. */

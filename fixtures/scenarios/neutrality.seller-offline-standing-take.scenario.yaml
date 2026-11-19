@@ -1,0 +1,40 @@
+# @settlement sim @judges recorded @mode guaranteed_on_decision @seed 550
+name: neutrality.seller-offline-standing-take
+description: >-
+  T-550, ADR-0040 section 2. Tidewater sells a finished file. At setup it signs the offer and one standing delivery,
+  with envelopes for the three adjudicators and none for the buyer, and then goes offline for good. Atlas funds and
+  posts that delivery itself (the runner signs it with Tidewater's key, as Tidewater did at setup). Atlas's early accept
+  is refused with the reason: the delivery holds no envelope for the buyer, so the buyer's key comes only with an
+  adjudicator's accept. Bench A judges and accepts, its decision wraps the content key to the buyer's terms key, and
+  Atlas opens the file. The deal settles by its terms with the seller offline from setup on.
+fails: tidewater-seller
+club: fixtures/clubs/data-services-v1.yaml
+terms: fixtures/terms/clean-customers-2000.yaml
+parties:
+  buyer: atlas-buyer
+  seller: tidewater-seller
+adjudicators:
+  primary: bench-a
+  fallback: bench-b
+  appeal: bench-c
+operators: [op-1, op-2]
+faucet:
+  atlas-buyer: "10000000000"
+  bench-a: "25000000000"
+  bench-b: "25000000000"
+  bench-c: "25000000000"
+steps:
+  - offer:              { by: seller, via: op-1 }
+  - offline:            { actor: tidewater-seller }
+  - adjudicator_accept: { via: op-1 }
+  - agree_and_fund:     { by: buyer, via: op-1 }
+  - deliver:            { by: seller, via: op-1, file: data/dataset-cleaning/customers.clean.csv, buyer_envelope: none }   # no call: the seller is offline
+  - deliver:            { by: buyer, via: op-2, file: data/dataset-cleaning/customers.clean.csv, buyer_envelope: none }
+  - early_accept:       { by: buyer, via: op-2 }   # refused: no envelope for the buyer in a standing delivery
+  - judge:              { adjudicator: bench-a }
+  - verify_key_release: { by: buyer, via: op-2 }
+expect:
+  terminal: Released
+  balances:
+    tidewater-seller: "2000000000"     # the price, with the seller offline
+    escrow: "0"

@@ -37,6 +37,7 @@
 //   as the relay was, with the messages the row holds (the delivery's envelopes, the decision's keys), and its
 //   Idempotency-Key answers a retry with the mined result (`recover`).
 import {
+  APPEAL_GROUND_APPEAL_ONLY,
   beaconRoundFor,
   canonicalKeccak,
   commitmentId as commitmentIdOf,
@@ -1057,6 +1058,12 @@ export class EvmSettlement implements Settlement {
       case 'decide': {
         const m = s.message;
         const book = this.bookOf(m.commitmentId);
+        // A primary's or a fallback's decision carries no appeal ground. The contract reverts one that does at both roles
+        // (appealGroundHash must be keccak256("")) as InvalidMessage, which names no reason, so core's reason is given
+        // here, before any simulation or transaction (T-559). A ground the contract takes, the empty string, passes on.
+        // Core checks the ground after the turn, so a ground sent out of turn reads invalid_terms here, not_your_turn on
+        // SimChain; both refuse it and send nothing.
+        if (m.role !== 'appeal' && (m.appealGround ?? '') !== '') refuse('invalid_terms', APPEAL_GROUND_APPEAL_ONLY);
         // T-540: the rules contract refuses these fields with a bare InvalidMessage; say why before anything is sent.
         const why = phaseOneDecisionProblem(m, book.state.kind === 'Escalated');
         if (why) refuse('invalid_terms', why);

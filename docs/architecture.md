@@ -252,6 +252,8 @@ Resubmission after a reject is not supported in Phase 1 (`maxSubmissions = 1`): 
 3. The adjudicator decrypts, verifies the plaintext hash and judges.
 4. On accept in `guaranteed_on_decision`, the decision transaction carries `K` encrypted to the buyer's public key. Settlement and key release are one atomic step on the settlement layer.
 5. On early acceptance, no adjudicator acts, so the delivery also carries `K` encrypted to the buyer, and the settlement layer releases it with the payment.
+   - Core and the operators require envelopes for the three adjudicators and accept a delivery without one for the buyer (ADR-0040 section 2). A seller's standing offer leaves the buyer's envelope out, so that one delivery of a finished file serves every buyer who takes the offer.
+   - Without the buyer's envelope, the buyer gets `K` only with an adjudicator's accept (step 4). Core refuses an early accept and a settlement that releases the key on such a delivery, with the reason, so SimChain refuses them. On a chain the rules contract's simulation reverts both (`BadKeyProof`) before the operator sends anything. A settlement that keeps the key stays open.
 6. On reject, `K` is never released to the buyer.
 7. The settlement layer cannot check that the released `K` decrypts the committed plaintext. On a chain no appeal can carry `K`: the buyer holds the signed decision and the judgment record as its evidence (D26). On SimChain only, a missing or wrong key is an appeal ground, and an appeal decision may carry `K` to the buyer.
 
@@ -289,7 +291,7 @@ Keys go only to those who need them. Whoever wants judgment carries the key; the
 | Path | Content key and record key |
 | --- | --- |
 | Mutual settlement | The parties only |
-| Early acceptance | The buyer, with the payment |
+| Early acceptance | The buyer, with the payment; not open on a standing delivery, which holds no buyer envelope |
 | Optimistic mode | The buyer at delivery. A `Dispute` carries keys for all three adjudicators |
 | Guaranteed mode, primary | At delivery |
 | Fallback | Released on takeover: SimChain holds the envelope in Phase 1; time-locked to the fallback's beacon round later, with T-207's private-deal slices (Phase 8) |
