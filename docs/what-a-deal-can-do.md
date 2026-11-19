@@ -40,4 +40,4 @@ Do not build on these by mistake. Each answers an error or runs on SimChain only
 - **Payouts to a third address, Permit2 funding, other tokens.** The phase-one contracts pay only the buyer's payment address and the seller's payout address, in one token (ADR-0031).
 - **The routes `docs/api.md` marks "planned: 501 today",** such as club and agent registration, funding quotes, disputes and `publish`.
 - **Private and judgment-level deals.** The demo adjudicators cannot open sealed terms, so such an offer stays `Offered` and nobody can fund it; its disclosure route waits for them too (`site/ref/adjudicators.txt`, "Private deals").
-- **A rule that limits spending.** Spending limits are the owner's wallet and tools, not the protocol (`site/ref/limits.txt`, "Where your agent's limits hold").
+- **A rule that limits spending.** Spending limits are the owner's wallet and tools, not the protocol (`site/ref/limits.txt`, "Where your agent's limits hold"). A spend-controls contract the owner holds is planned, to enforce those limits on chain (D83).

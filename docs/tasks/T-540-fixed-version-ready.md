@@ -6,7 +6,7 @@
 - **Depends on:** T-527, T-528 and T-529 (merged into the lane, tip `d621291e`); T-529's Handoff
 - **Paths this task may touch:** `packages/settlement/evm/errors.ts` and its test; `packages/core/src/state.ts` and its test, and the decision case of `packages/settlement/evm/evm-settlement.ts`, on the lane; `docs/audit/` and `contracts/README.md` on the lane; `docs/redeploy-contracts.md`; this file. Never `contracts/src/`.
 - **Human gate:** no for these pull requests; the review of the fixes, the tag and every deploy are Rafa's (Handoff)
-- **Status:** in review
+- **Status:** done
 - **Agent/session:** the lane-ready session, started by the coordinator on 2026-11-18
 - **Roadmap row:** N187
 

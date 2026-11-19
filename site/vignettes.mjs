@@ -173,7 +173,7 @@ function balance() {
   );
 }
 
-// 5. Your Existing Rails: coin, the oldest rail. A stack, and one coin leaning on it.
+// 5. Spend Controls: coin, a budget counted out. A stack, and one coin leaning on it.
 function coins() {
   const r = rng(53), RX = 12.6, RY = 3.9, H = 3.1, base = 55, xs = [24.6, 25.4, 24.2, 25.2, 24.8];
   let out = '', defs = '';

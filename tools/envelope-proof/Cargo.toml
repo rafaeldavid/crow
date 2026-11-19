@@ -1,0 +1,12 @@
+# T-541: a seller's zero-knowledge proof that the buyer's key envelope opens the held work. Optional, not wired into
+# any Crow tool. See README.md.
+[workspace]
+resolver = "2"
+members = ["host", "methods", "statement"]
+
+[profile.release]
+debug = 1
+lto = true
+
+[profile.dev]
+opt-level = 3

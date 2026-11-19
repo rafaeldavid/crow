@@ -1533,3 +1533,88 @@ Today a seller with its own API reads 13 files of 98,462 bytes and runs 22 comma
 - **What stays.** ADR-0031 red team H-2 is still an accepted limit: a seller can still hand the case to the fallback by breaking the primary's envelope. The notice makes that visible; it does not stop it.
 - **For the rebuilt contracts (roadmap row N26), not now.** An on-chain signal that an adjudicator could not open its envelope would make the steer harder: a signed message the primary sends, which the contract records and the terms can give a consequence. It is a protocol step and a signed type, so it needs an ADR and a schema version, and it waits for the rebuild. Not decided here: its shape and what it changes.
 - **Litmus tests.** Neutrality: no party gains a way to stop a deal; the fallback and the default stay. The hold: unchanged. Defended judgment: no verdict is signed on work the adjudicator could not read.
+
+## D82. A seller makes a standing offer through a small contract of its own; the rules contract stays as it is (ADR-0040, T-544)
+
+**Status:** decided, 2026-11-19.
+
+**Why now.** Today every offer names one buyer and five fixed dates, and the seller signs the hash of the whole terms, so a seller needs a program that is always on to sign for each buyer [measured, `contracts/src/HoldbackTypes.sol:36-70`]. Rafa, 2026-11-18: "I think we need to fix this now so that there can be standing offers, instead of buyer-specific constraints".
+
+**Decided by Rafa, 2026-11-18, the direction:** a small contract on the seller's side, with the rules contract unchanged, which Crow may deploy for a seller. His words: "let's go with this, since Crow can also offer deploying this on behalf of sellers anyways as a service / by default during setup". ADR-0040 works it out; the two open points below are his.
+
+**The record** (ADR-0040; research in `docs/research/2026-11-18-standing-offers.md`):
+- **The seller contract** answers ERC-1271 yes to three things: its key's own signature, a take of a template the key signed (the buyer fills its address, payment address, encryption key, a nonce seed and the take's time; the dates count from the take), and the template's standing delivery. It rebuilds the terms itself, derives each take's nonce from the template's hash, and holds no money; `retire()` ends every new take, one-way. A spike passed 10 of 10 tests against the unchanged rules contract, and the red team's attack on it, a revoked template's file delivered on a new template's take, is closed by the derived nonce [measured].
+- **The rules contract adds what the seller contract leaves out:** one commitment ID funds once, so a replayed take reverts; its offer expiry bounds how far a buyer can backdate a take [measured].
+- **Many offers, one seller:** one contract serves any number of templates, each with a signed `offerId` equal to the card's `offers[].id`, so a catalog entry and a standing offer are one object (the T-543 session's input). Unit pricing waits with buyer input (open point 1).
+- **A fixed file stands entirely:** one ciphertext and one delivery serve every take, so the seller acts once at setup. This needs one core rule change: a delivery may leave out the buyer's envelope, and the buyer's key then comes only with an adjudicator's accept [measured paths].
+- **Work done per buyer after funding** still needs the seller once per deal, to work and deliver, and nothing before funding.
+- **Deployment:** through the public deterministic deployer, at one address computed from the seller's key, whoever pays; the first take's relay deploys it in its own transaction just before funding. Crow paying gives Crow nothing, and no Crow-run host is needed [measured: the deployer has code on Sepolia].
+- **Off chain:** the operators, the reference adjudicator and a new buyer command (`site/take.mjs`; `buy.mjs` and `try.mjs` unchanged) read a contract seller. **This needs schema v0.12:** `signatures.seller` and the seller's delivery signature widen beyond 65 bytes. The contract, the EIP-712 domain and the signed encoding stay.
+- **Public deals only,** since sealed terms need the seller at each take and private deals stay deferred (D70).
+- **Correction to the design study:** the rules contract has 4,074 bytes of size headroom (T-499's measurement), so a new rules-contract function would fit. It was declined for the audit and the custody code, not for size.
+- **The build:** T-548 to T-552, about 6 pull requests and 1.1 million tokens [guessed]. None started before these points were answered; both are answered since 2026-11-19, and the build starts on Rafa's word.
+
+**Decided by Rafa, 2026-11-19, the two points that were open:**
+1. **Work that depends on the buyer's input** (the pilot's security review names the buyer's commit and files in its terms). His words: "If seller offer requires change / additional info from buyer, then it follows normal flow." Such sellers keep a per-buyer signer, as recommended; slots a buyer fills wait for measured demand.
+2. **The seller's check of each buyer.** A template signs for buyers the seller never sees. His words: "Yes, waive it", to "Standing offers: waive the seller's own check of each buyer and keep the operators' check?". A standing offer waives the seller's own check of each buyer's mandate, and the operators' check before they relay remains (D32). The rule on signed messages in `CLAUDE.md` gains one sentence saying so; that file changes on his word, and the sentence waits for it.
+
+**Litmus tests.** Neutrality: an operator that refuses is bypassed through another operator, a missing deployment is made by the seller or the first buyer, and an offline seller's fixed file is delivered by anyone. The hold: the rules contract is unchanged, and each take is one ID funded once. Defended judgment: checks and panel unchanged, each take judged on its own seed, and no buyer-filled scope.
+
+## D83. Card and bank money goes through regulated third parties, and an agent spends from a budget its owner loads, under hard spend controls (T-542)
+
+**Status:** decided, 2026-11-19.
+
+**Why now.** Once money is real, a buyer or a seller with no crypto has no path in or out. The private research on it is crow-private `strategy/2026-11-18-card-and-bank-money.md`. Agent owners also want hard limits on what their agents spend. Products that sell to them call it spend controls: Stripe Issuing, Link, Ramp, Brex and Privacy.com among them [documented, the desk pass in `docs/tasks/T-542-spend-controls.md`].
+
+**Decided by Rafa:**
+- **2026-11-18, card and bank steps.** Regulated third parties carry every card and bank step. Crow holds no balance and runs no checkout. His words: "Yes, we should assume this is the case and begin sourcing the right solution for it".
+- **2026-11-19, hard controls.** Spend controls become hard controls in a contract that Crow deploys for a buyer or a seller, paying the gas, for a nominal fee. His words: "look at Link, Stripe, Ramp, etc. spend control frameworks in detailed research and then transfer that into smart-contract deployments with gas we cover, for a nominal fee etc. So it's hard controls."
+- **2026-11-19, the home page.** The value prop "Your Existing Rails" becomes "Spend Controls", marked soon: "Cap each purchase and each day, how many at once, and who your agent pays." (PR 681).
+
+**What it means:**
+- **The owner loads, the agent spends.** The agent's payment address is its budget, like a prepaid card. The owner loads it, and the agent spends only what it holds. With real money the owner loads it by card or bank at a regulated on-ramp of its choice, which sends USDC to that address.
+- **No on-ramp is named in public pages** until an adviser has answered whether naming one is a crypto financial promotion in the United Kingdom. That is the research's decision 1, still open.
+- **A seller is paid at an address its owner sets,** such as a deposit address at the owner's own exchange or payout account. The selling agent holds no login there.
+- **v01's controls.** For a buyer: the most per deal and per day, how many deals are open at once, the approved sellers with their payout addresses, and a stop. For a seller: the payout address, sales per day and at once, and a stop. `examples/signer.ts` enforces the same rules off chain today, but only while the signer's machine stays out of the agent's reach (`site/ref/limits.txt`).
+- **Crow pays the gas and holds no key.** The contract is the owner's own, and Crow gets no control over it or the funds, as D82 says of the seller contract.
+
+**Litmus tests.** Neutrality: an on-ramp acts before the hold and an off-ramp after the deal ends, so neither can stop a valid deal. The spend-controls contract has no Crow key. The hold: unchanged; card and bank rails stay funding and payout adapters. Defended judgment: unchanged.
+
+**Open.**
+- The contract's design, its fee and who may deploy it. Answered by D84 (ADR-0041): spend controls are a protocol of their own, and their design goes in its own record.
+- The research's five decisions (crow-private, part 7.2). One of them is whether to leave the funding service of ADR-0026 part 3 unbuilt.
+- Real money stays forbidden (hard rule 1).
+
+## D84. Spend controls are a protocol of their own, and Holdback sees only a funded payer (ADR-0041, T-554)
+
+**Status:** decided, 2026-11-19.
+
+**Why now.** D83 put an agent's spend controls into a contract its owner holds, and left the contract's design, its fee and who may deploy it open. Building that contract inside Holdback would put an owner's wallet beside the escrow's settlement code.
+
+**Decided by Rafa, 2026-11-19:** spend controls are a separate protocol, in a repository of their own, private to begin with. His words: "we should classify this as a separate protocol. Holdback is escrow, but this we should call something else and add in another repo. We shouldn't entangle them but make them modular." He added that the principal "needs to be able to claw back money, and intervene", and that the vault "needs to be able to have approved merchants, but still use Crow (since you an prove money can go to end agent)". He approved the boundary record's outline the same day ("ok continue, looks good").
+
+**The record** (ADR-0041; research in `docs/research/2026-11-19-spend-controls.md`):
+- **Holdback does not change:** contracts, API, schemas and operators stay as they are. A payment address that is a contract already funds a hold by a direct call, and the operators follow it: a spike budget contract funded inside its caps against the unchanged rules contract, refused above them by name, and its deal ended Released on anvil with no node change [measured].
+- **The dependency points one way.** The protocol relies on six facts of Holdback's funding, listed in ADR-0041 section 2; a Holdback change that breaks one needs its own ADR. Holdback never calls the protocol.
+- **Taking money back stops at the hold.** The principal withdraws anything not yet in a hold and stops its agent at once; money in a hold returns only by the deal's terms.
+- **Approved merchants stay hard through the escrow,** because a hold pays out only to the terms' payout address or back to the payment address (`contracts/src/HoldbackRules.sol:400`) [measured].
+- **The mandate stays as ADR-0038 made it;** both apply and the tighter one wins.
+
+**Open, for Rafa:** the operators relaying a budget's funding; reading a contract buyer and its longer signature, for stepping in on funded deals; Crow-paid creation on request; the owner's guide in a current page; the fee, with none recommended now. The protocol's base, name and design go in its own record.
+
+**Litmus tests.** Neutrality: no owner, controller, module or factory of the protocol can stop a funded deal or move a hold; on a fork of Sepolia the owner emptied its budget after a funding and the deal still ended Released [measured by the design research]. The hold: unchanged. Defended judgment: unchanged.
+
+## D85. Two findings of the fix review stay known limits in phase one, and the next contract version fixes both (T-553)
+
+**Status:** decided, 2026-11-19.
+
+**Why now.** The outside fix review of the phase-one contracts (T-553) left two findings open. The reviewers asked Crow to choose how each one closes. Both are rated Informational, and each harm stays within one deal.
+
+**Decided by Rafa, 2026-11-19:** both stay known limits for phase one, and both are fixed in the next version of the contracts. His words: "Accept both as known limits. Include in next version of contracts. Seller and Buyer also have options to wrap additional controls on their contract execution and this would be very advanced usage of the protocol."
+
+- **A seller can make a decision that carries its delivery revert after the decision's calldata is public** (known issues OS-1 and OS-2). The seller then sees the panel seed and a decision that is not an accept, and can deliver again. Crow's operators carry a delivery only in an accept (T-526, D79). The contract keeps the carried path for anyone who relays directly. **Next version:** the contract refuses a carried delivery in any decision that is not an accept.
+- **A validator operator with a run of n block slots, colluding with a party, gets n − 2 known panel draws** (the BR-6 residual and known issue OS-4; ADR-0032 section 6, residual 1). **Next version:** the escalation's round is fixed by state, not by the block it lands in. ADR-0032's alternative I is the reviewers' suggestion. Its cost, that an escalation waits for its deadline, is weighed when that version is designed.
+
+**What the parties can do now (D32).** A party can put its own controls around how its messages reach the chain. Examples: a relayer that carries a delivery only in an accept, or an adjudicator that sends its escalation after a private random delay. Both attacks need very advanced use of the protocol: a contract wallet that changes its answer, or collusion with a validator operator that proposes several slots in a row.
+
+**Litmus tests.** Neutrality: unchanged. No party can move a hold outside the terms; the worst case is one deal decided by the fallback or the default, or a better chance at one deal's panel. The hold: unchanged. Defended judgment: the panel seed stays unknown to anyone who does not attack, and both attacks leave a signed, public record (D26).

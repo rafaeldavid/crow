@@ -8,7 +8,7 @@ import { privateKeyToAccount } from 'viem/accounts';
 import { afterAll, beforeAll, describe, expect, it } from 'vitest';
 import { testAccount } from './accounts.js';
 import type { Prepared } from './prepare.js';
-import { startSimWorld, type SimInfo, type SimWorld } from './sim-world.js';
+import { SIM_MAX_CIPHERTEXT_BYTES, startSimWorld, type SimInfo, type SimWorld } from './sim-world.js';
 
 let world: SimWorld;
 let api: string;
@@ -194,6 +194,15 @@ describe('operator API: prepare, sign, submit', () => {
     expect(new Uint8Array(await res.arrayBuffer())).toEqual(bytes);
     const noKey = await fetch(`${api}/v1/ciphertext`, { method: 'POST', body: bytes });
     expect(noKey.status).toBe(400);
+  });
+
+  it('stores at most the test service\'s 1 MiB: a 2 MiB delivery is refused as the live operators refuse it (T-547)', async () => {
+    const d = (await call('GET', '/.well-known/holdback.json')).body;
+    expect(d.limits.maxCiphertextBytes).toBe(SIM_MAX_CIPHERTEXT_BYTES);
+    expect(SIM_MAX_CIPHERTEXT_BYTES).toBe(1_048_576);
+    expect((await call('POST', '/v1/ciphertext', new Uint8Array(SIM_MAX_CIPHERTEXT_BYTES).fill(7))).status).toBe(200);
+    const over = await call('POST', '/v1/ciphertext', new Uint8Array(2 * SIM_MAX_CIPHERTEXT_BYTES).fill(7));
+    expect([over.status, over.body.type, over.body.maxBytes]).toEqual([413, 'payload_too_large', SIM_MAX_CIPHERTEXT_BYTES]);
   });
 
   it('answers unknown prepare kinds and bad inputs with problems', async () => {

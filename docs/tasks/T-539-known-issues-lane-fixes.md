@@ -6,7 +6,7 @@
 - **Depends on:** T-533 (the page by kind), T-527, T-528 and T-529 (the contract fixes on the lane), the operators' deploy of 2026-11-18
 - **Paths this task may touch:** `docs/audit/known-issues.md`, `docs/decisions-today.md` (D80), `docs/tasks/T-536-duet-adapter-port.md` and `docs/tasks/T-537-envelope-notice.md` (their status), this file
 - **Human gate:** no
-- **Status:** in review
+- **Status:** done
 - **Agent/session:** scan-fixes-main, on the coordinator's word of 2026-11-18
 - **Roadmap row:** N192
 

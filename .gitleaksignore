@@ -105,3 +105,7 @@ c85147df56fd5e69dbb18cc8d750068e4ed11791:tests/metrics/fixtures/discovery.json:g
 3a9d04260c21a9197e0b5ce16912f08137ec7606:contracts/deployments/sepolia-2026-11-04T0830Z-domain-0.7.json:generic-api-key:47
 3a9d04260c21a9197e0b5ce16912f08137ec7606:examples/deployments.ts:generic-api-key:89
 3a9d04260c21a9197e0b5ce16912f08137ec7606:site/try.mjs:generic-api-key:60
+
+# T-541: the RISC Zero guest's Cargo.lock lists the crate name `crypto_secretbox` in a dependency list, which the
+# generic API-key rule reads as a key. A crate name, no secret. Allowed by Rafa on 2026-11-19.
+d7715672aa47ef45f33ac0878b076ed4b7e14189:tools/envelope-proof/methods/guest/Cargo.lock:generic-api-key:510

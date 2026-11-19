@@ -83,7 +83,7 @@ export function trustFaq(f = trustFacts()) {
           'the buyer signs an early accept;',
           'both parties sign a settlement;',
           'the seller misses its delivery deadline, which refunds the buyer;',
-          'no adjudicator decides in time, and the default outcome applies, which on the live service refunds the buyer.',
+          'no adjudicator decides in time, and the default outcome applies, which on the live service refunds the buyer the price and the adjudication fee. The live service pays the seller nothing on a default; bond compensation is the full protocol on SimChain only (docs/architecture.md).',
         ],
         after: `The backstop: if funds are still held ${f.expiryMarginHours} hours after the deal’s last decision deadline, the buyer’s payment address can take them back directly from the escrow.`,
         sources: [neutralityTest, file('docs/audit/scope.md', 'In scope', 'in-scope'), ['The rules contract on Etherscan', etherscan(f.rules)], file('contracts/src/HoldbackRules.sol', '_escrowExpiry')] },
@@ -152,8 +152,8 @@ export function trustFaq(f = trustFacts()) {
         a: `As long as the contracts the deal settles on are in use. The terms, the events and the receipts start over only when the contracts are deployed again, and the chain keeps its part for good. Keep your own copy of the terms you sign.`,
         sources: [limits] },
       { id: 'are-problem-reports-stored', q: 'Does an operator store problem reports?',
-        a: `No. The live operators’ report route, <code>POST /v1/feedback</code>, is switched off, so the operators keep no problem reports.`,
-        sources: [feedback] },
+        a: `Yes, when you send one. Each live operator keeps a report sent to <code>POST /v1/feedback</code> for 90 days in its private store, with its log line for the report’s <code>requestId</code>. A report is not encrypted, and the live operators take no sealed reports yet, so leave out keys, the work and terms.`,
+        sources: [feedback, ['crow.direct/ref/limits.txt, “Reporting a problem”', 'https://crow.direct/ref/limits.txt']] },
       { id: 'what-early-access-stores', q: 'What does the early-access sign-up store?',
         a: `The email address, the time and the page the sign-up came from, with no IP address and no cookie. The sign-up has no deletion date yet.`,
         sources: [file('apps/early-access/worker.js')] },
@@ -162,9 +162,9 @@ export function trustFaq(f = trustFacts()) {
       { id: 'escrow-external-review', q: 'Has Coinbase’s escrow contract had an external review?',
         a: `Yes. Cantina reviewed the escrow contract twice in April 2025 and found one critical issue, which was fixed before release. In July 2026, Cantina reviewed the contract’s last code change, PR 90, at the exact commit Crow deploys, and found three informational issues. One later change, the renames in PR 71, has no review.`,
         sources: [file('docs/reviews/2026-11-03-public-audit-crosscheck.md'), file('contracts/lib/commerce-payments/'), adr3] },
-      { id: 'rules-contract-audit', q: 'Has the rules contract had an external audit?',
-        a: `No. Crow’s rules contract (HoldbackRules), which decides when the escrow pays out, has had no outside audit yet. Models from two AI families reviewed it, and the scope an auditor would need is written.`,
-        sources: [sepolia, file('docs/audit/scope.md')] },
+      { id: 'rules-contract-audit', q: 'Has the rules contract had an outside review?',
+        a: `Yes, by AI. The contracts behind Crow’s settlement were reviewed by Zero Cool’s AI deep scan on 2026-11-18, and the fixes by its fix review on 2026-11-19. Zero Cool reports first places in Sherlock audit contests and a second place in a Cantina contest. The scan rated nothing Critical or High. Three Informational items stay open, and the fixed version is not deployed yet. Every finding and its status is published. Further reviews will follow over time, guided by partner feedback.`,
+        sources: [file('docs/audit/outside-scan.md'), ['Zero Cool', 'https://zerocool.ai/'], file('docs/audit/known-issues.md')] },
       { id: 'what-testing-crow-runs', q: 'What testing does Crow run?',
         a: `Unit, fuzz and invariant tests of the contracts, a TLA+ model of a deal’s states, and attack and neutrality scenarios for the judging and the operators.`,
         sources: [file('contracts/test/'), file('formal/'), file('fixtures/scenarios/')] },
@@ -190,12 +190,20 @@ export function trustFaq(f = trustFacts()) {
         sources: [policy] },
     ] },
     { group: 'Reporting a problem', questions: [
+      { id: 'contact-crow', q: 'How do I contact Crow?',
+        a: `Three ways, by what you send:`,
+        list: [
+          `A report to either operator: <code>POST /v1/feedback</code>, the route discovery names as <code>feedback</code>. A report is not encrypted, and the live operators take no sealed reports yet, so leave out keys, the work and terms.`,
+          `A public issue on Crow’s GitHub repository, with a GitHub account.`,
+          `A security problem: privately, through the advisory form that security.txt names.`,
+        ],
+        sources: [['crow.direct/ref/limits.txt, “Reporting a problem”', 'https://crow.direct/ref/limits.txt'], ['GitHub: issues', `${CODE_URL}/issues`], ['crow.direct/.well-known/security.txt', 'https://crow.direct/.well-known/security.txt']] },
       { id: 'report-a-security-problem', q: 'Where do I report a security problem?',
         a: `Privately, through GitHub’s private vulnerability reporting for Crow’s repository. Crow acknowledges each report within 3 business days and takes no legal action over research that follows the security policy.`,
         sources: [['GitHub: report a vulnerability', SECURITY_CONTACT], policy, ['crow.direct/.well-known/security.txt', 'https://crow.direct/.well-known/security.txt']] },
       { id: 'report-another-problem', q: 'Where do I report any other problem?',
-        a: `In a public issue on Crow’s GitHub repository. Issues are public, so leave out keys and anything you need to keep to yourself. The operators’ own report route, <code>POST /v1/feedback</code>, is not switched on yet.`,
-        sources: [['GitHub: issues', `${CODE_URL}/issues`], feedback] },
+        a: `To either operator, at <code>POST /v1/feedback</code> (crow.direct/ref/limits.txt, “Reporting a problem”, says how), or in a public issue on Crow’s GitHub repository. Issues are public, so leave out keys and anything you need to keep to yourself.`,
+        sources: [['crow.direct/ref/limits.txt, “Reporting a problem”', 'https://crow.direct/ref/limits.txt'], ['GitHub: issues', `${CODE_URL}/issues`], feedback] },
       { id: 'is-crow-up', q: 'How do I check whether Crow is up?',
         a: `Open https://crow.direct/status. The status page checks each part of Crow when it is opened, and https://crow.direct/status.json lists what it checks.`,
         sources: [['crow.direct/status', 'https://crow.direct/status'], ['crow.direct/status.json', 'https://crow.direct/status.json']] },
@@ -204,8 +212,8 @@ export function trustFaq(f = trustFacts()) {
 }
 
 /** The page's notice: what is not there yet. */
-const COMING_SOON = { title: 'Coming soon', text: 'An outside audit of Crow’s own contracts, a penetration test, a certification such as SOC 2 or ISO 27001, a bug bounty, and deals with real money. Today Crow runs on a test network, with test tokens only.' };
-const comingSoonSources = () => [['SECURITY.md, “Status”', `${SECURITY_POLICY}#status`], ['docs/audit/scope.md', src('docs/audit/scope.md')]];
+const COMING_SOON = { title: 'Coming soon', text: 'An outside audit of Crow’s own contracts by human reviewers, with further reviews over time as partners ask, a penetration test, a certification such as SOC 2 or ISO 27001, a bug bounty, and deals with real money. Today Crow runs on a test network, with test tokens only.' };
+const comingSoonSources = () => [['SECURITY.md, “Status”', `${SECURITY_POLICY}#status`], ['docs/audit/outside-scan.md', src('docs/audit/outside-scan.md')]];
 
 /** A Source line: each source's label linked to its full address. */
 const sourceLine = (list) => `<p class="source">Source: ${list.map(([label, url]) => `<a href="${esc(url)}">${esc(label)}</a>`).join('; ')}</p>`;

@@ -16,6 +16,7 @@ Labels: **measured** (produced by the named command), **documented** (stated in 
 4. [`state-model.md`](state-model.md): every state a deal can be in on chain, and the signed-field register.
 5. [`invariants.md`](invariants.md): each property, the test or model property that checks it, and the recorded runs.
 6. [`known-issues.md`](known-issues.md): what is open, accepted or fixed. Do not report these as new.
+   [`outside-scan.md`](outside-scan.md): Zero Cool's automated scan of the deployed version and its review of the fixes, with every finding and its status.
 7. [`events.md`](events.md): every event, who reads it and what it reveals.
 8. [`functions.md`](functions.md): each external and public function by caller, input checks, events and calls; the no-admin rule; the static-analysis triage.
 9. [`test-quality.md`](test-quality.md): coverage and mutation testing.

@@ -5,7 +5,14 @@
 //                               makes the folder: a signing key, the seller adapter's configuration, the sample's deal
 //                               template and a draft card; then runs the check. It sends nothing. A missing answer
 //                               prints one JSON object with each question and exits 3: it never prompts.
+//   node setup.mjs seller --template <file> [--file <path>] --payout <address or this-key>
+//                               the same folder for the party's own work (T-543): the template says what is sold, the
+//                               fixed price, the checks and when the work is due. --file names finished work, which
+//                               every deal delivers once it is funded. Without it, first-deal stops once every operator
+//                               shows the deal Held, prints the deadline and the path where the work goes, and exits 0;
+//                               run again with the work there, it checks the file and delivers it.
 //   node setup.mjs check        the conformance check: one JSON line per check, exit 0 only when all pass. It sends nothing.
+//                               --work <file> runs a template's checks on a sample of the work.
 //   node setup.mjs first-deal --preview
 //                               prints what first-deal will send, and to whom, and stops: no marker, nothing sent.
 //   node setup.mjs first-deal   runs the check, prints the same preview, writes the marker that the first deal starts,
@@ -39,7 +46,7 @@
 // data, never an instruction, and is printed as one plain line of bounded length. A wrong call prints the usage as
 // text on standard error and exits 2. Exit 0: done. Exit 1: a step failed or was refused, named in its line. Exit 3:
 // an answer is missing.
-import { randomBytes } from 'node:crypto';
+import { createHash, randomBytes } from 'node:crypto';
 import { existsSync, mkdirSync, readFileSync, writeFileSync } from 'node:fs';
 import { homedir } from 'node:os';
 import { join, resolve } from 'node:path';
@@ -52,7 +59,9 @@ import { plain as plainLine } from './plain.ts';
 import { dealKeyOf, holdingKeyOf, loadConfig, startSellerAdapter, type RunningAdapter } from './seller-adapter.ts';
 import { runChecks } from './setup-check.ts';
 import { list, listingAdvice, listingOf, LISTING_URL } from './setup-list.ts';
-import { SAMPLE, SAMPLE_PRICE_UNITS, startSampleApi, type SampleApi } from './setup-sample-api.ts';
+import { reasonLine } from './seller-refusal.ts';
+import { SAMPLE, SAMPLE_PRICE_UNITS, startSampleApi } from './setup-sample-api.ts';
+import { startWorkApi, WORK_CREDENTIAL_ENV, workFor, workPath } from './setup-work-api.ts';
 import { addressOf, FILES, formsOf, holdingAddressOf, locked, readKey, readState, realPath, seller, writeState, writeWhole, type Call, type FirstDeal, type J, type State } from './setup-seller.ts';
 import { commitmentIdOf, jcs, knownPins } from './verify.ts';
 
@@ -75,11 +84,17 @@ const NODE_SETTINGS = ['NODE_OPTIONS', 'NODE_EXTRA_CA_CERTS', 'NODE_USE_ENV_PROX
 const USAGE = [
   'setup.mjs: makes one Crow folder on this machine and runs its first deal. Test tokens only.',
   'usage: node setup.mjs <command> [flags]',
-  '  seller --sample --payout <address|this-key> [--card <path>] [--allow-git] [--allow-synced] [--allow-served]',
+  '  seller --sample | --template <file> [--file <path>] --payout <address|this-key> [--card <path>] [--allow-git] [--allow-synced] [--allow-served]',
   '                makes the folder, then runs the check. It sends nothing. Exit 3: an answer is missing, named in one JSON object.',
-  '  check         runs the conformance check: one JSON line per check, exit 0 only when all pass. It sends nothing.',
+  "                --sample sells Crow's sample. --template sells your own work: a JSON file with the deliverable, the price,",
+  '                the checks and deliverWithinSec; --file names finished work, delivered once a deal is funded.',
+  '  check [--work <file>]',
+  '                runs the conformance check: one JSON line per check, exit 0 only when all pass. It sends nothing.',
+  "                --work runs a template's checks on a sample of the work.",
   '  first-deal [--preview] [--again] [--buyer <url>]',
-  "                prints what it sends and to whom, then sells one sample job to Crow's test buyer and follows it to its end.",
+  "                prints what it sends and to whom, then sells one job to Crow's test buyer and follows it to its end.",
+  '                From a template with no finished work, it stops once the deal is funded and prints where the work goes;',
+  '                run again with the work there, it delivers.',
   '                --preview prints that and stops. --again offers a new deal after one that ended without a release.',
   "  status        prints the folder's state. It reads no key and sends nothing.",
   '  list --website <https URL> | --skip [--list-at <url>]',
@@ -102,8 +117,8 @@ class WrongCall extends Error {}
 
 const COMMON = { values: ['--folder', '--name', '--operators'], switches: ['--test-world'] };
 const OWN: Record<string, { values: string[]; switches: string[] }> = {
-  seller: { values: ['--payout', '--card'], switches: ['--sample', '--allow-git', '--allow-synced', '--allow-served'] },
-  check: { values: [], switches: [] },
+  seller: { values: ['--payout', '--card', '--template', '--file'], switches: ['--sample', '--allow-git', '--allow-synced', '--allow-served'] },
+  check: { values: ['--work'], switches: [] },
   'first-deal': { values: ['--buyer'], switches: ['--again', '--preview'] },
   status: { values: [], switches: [] },
   list: { values: ['--website', '--list-at'], switches: ['--skip'] },
@@ -171,9 +186,14 @@ function status(c: Call): number {
     // no journal yet: no deal has started
   }
   const deal = (d: FirstDeal | undefined) => (d === undefined ? null : Object.fromEntries(Object.entries(d).filter(([k]) => k !== 'journalBefore').map(([k, v]) => [k, plain(v, 300)])));
-  c.say({ step: 'status', folder: c.folder, exists: true, role: plain(state.role, 20), sells: plain(state.sells, 20), name: plain(state.name, 40), steps: Object.keys(state.steps).map((s) => plain(s, 40)), address: state.address === undefined ? null : plain(state.address, 42), payout: state.payout ? { address: plain(state.payout.address, 42), thisKey: state.payout.thisKey === true } : null, card: state.card === undefined ? null : plain(state.card, 300), firstDeal: deal(state.firstDeal), ended: (state.ended ?? []).map(deal), openDeals: open, listing: shown(listingOf(state)), ...(failedListingOf(state) ? { listingFailed: shown(failedListingOf(state)) } : {}) });
+  c.say({ step: 'status', folder: c.folder, exists: true, role: plain(state.role, 20), sells: plain(state.sells, 20), name: plain(state.name, 40), steps: Object.keys(state.steps).map((s) => plain(s, 40)), address: state.address === undefined ? null : plain(state.address, 42), payout: state.payout ? { address: plain(state.payout.address, 42), thisKey: state.payout.thisKey === true } : null, card: state.card === undefined ? null : plain(state.card, 300), ...(state.sells === 'template' ? { work: shown(state.work), workPath: openWorkPath(c.folder, state) } : {}), firstDeal: deal(state.firstDeal), ended: (state.ended ?? []).map(deal), openDeals: open, listing: shown(listingOf(state)), ...(failedListingOf(state) ? { listingFailed: shown(failedListingOf(state)) } : {}) });
   return 0;
 }
+/** Where the work of the folder's open first deal goes, for a folder that sells from a template; null when no deal is open. */
+const openWorkPath = (folder: string, state: State): string | null => {
+  const id = state.firstDeal?.state === undefined ? state.firstDeal?.commitmentId : undefined;
+  return state.work && typeof id === 'string' && /^0x[0-9a-f]{64}$/.test(id) && ['text/csv', 'application/json', 'text/plain', 'text/markdown'].includes(state.work.format) ? workPath(folder, id, state.work.format) : null;
+};
 /** A record from the state file as plain values of bounded length; null when there is none. A value that is no text, number or truth value is left out. */
 const shown = (record: object | undefined): Record<string, unknown> | null =>
   record === undefined ? null : Object.fromEntries(Object.entries(record).filter(([, v]) => ['string', 'number', 'boolean'].includes(typeof v) || v === null).map(([k, v]) => [plain(k, 40), typeof v === 'string' ? plain(v, 300) : v]));
@@ -200,7 +220,7 @@ async function listStep(c: Call): Promise<number> {
 }
 
 async function check(c: Call): Promise<number> {
-  const results = await runChecks(c.folder);
+  const results = await runChecks(c.folder, { work: c.flags.get('--work') });
   for (const r of results) c.say({ step: 'check', ...r });
   return results.every((r) => r.ok) ? 0 : 1;
 }
@@ -383,7 +403,10 @@ async function runFirstDeal(c: Call, state: State, buyerUrl: string, again: bool
   c.note({ step: 'marker', file: marker, startedAtMs: markerTimeOf(marker), detail: 'The first deal starts: the next requests are the first that name this folder to the operators and the test buyer.' });
   save({ buyer: buyerUrl });
 
-  let api: SampleApi | undefined;
+  // A folder that sells from a template (T-543): the party's own work, at its fixed price, with no scope.
+  const work = state.sells === 'template' ? state.work : undefined;
+  if (state.sells === 'template' && !work) throw new Error(`${FILES.state} names no price for the work: run the seller command with --template again. Nothing was sent`);
+  let api: { close(): Promise<void> } | undefined;
   let adapter: RunningAdapter | undefined;
   try {
     // 4. The settlement layer, as every operator serves it, against the ones this file pins. Never the operator's word.
@@ -403,9 +426,14 @@ async function runFirstDeal(c: Call, state: State, buyerUrl: string, again: bool
     const credential = randomBytes(24).toString('base64url');
     c.hide(credential, true);
     const config = { ...loadConfig(join(c.folder, FILES.configuration)), journal: join(c.folder, FILES.journal), quoteAuth: { kind: 'bearer' as const, env: 'CROW_SETUP_QUOTE' }, log: (line: string) => c.note({ step: 'adapter', log: line }) };
-    api = await startSampleApi(pin!.token.id, Number(new URL(String(config.sellerApi.quote)).port)); // the check held the address to the sample's
+    const port = Number(new URL(String(config.sellerApi.quote)).port); // the check held the address to the folder's own API
+    // The work API answers only with a credential made for this run: the folder is closed to other accounts on this
+    // machine, and the port would otherwise hand them the unpaid work.
+    const workCredential = randomBytes(24).toString('base64url');
+    c.hide(workCredential, true);
+    api = work ? await startWorkApi({ token: pin!.token.id, price: work.price, folder: c.folder, format: work.format, credential: workCredential, port }) : await startSampleApi(pin!.token.id, port);
     // The key goes to the adapter in this object only: not into process.env, a command line or a file.
-    adapter = await startSellerAdapter(config, { HOLDBACK_KEY: key, HOLDBACK_OPERATORS: c.operators.join(','), CROW_SETUP_QUOTE: credential });
+    adapter = await startSellerAdapter(config, { HOLDBACK_KEY: key, HOLDBACK_OPERATORS: c.operators.join(','), CROW_SETUP_QUOTE: credential, ...(work ? { [WORK_CREDENTIAL_ENV]: workCredential } : {}) });
     c.say({ step: 'adapter', ok: true, quote: `${adapter.url}/quote`, sells: state.sells });
 
     // 6. The offer: one for the first deal. The folder continues a deal only by its own commitment ID: the one in its
@@ -422,7 +450,7 @@ async function runFirstDeal(c: Call, state: State, buyerUrl: string, again: bool
     const resumed = id !== undefined;
     if (id === undefined) {
       save({ journalBefore: journal().map((d) => d.id) });
-      const answer = await fetch(`${adapter.url}/quote`, { method: 'POST', headers: { 'content-type': 'application/json', authorization: `Bearer ${credential}` }, body: JSON.stringify({ buyer: card.buyer, buyerEncryptionPublicKey: card.encryptionPublicKey, scope: SAMPLE.firstScope }), signal: AbortSignal.timeout(300_000) });
+      const answer = await fetch(`${adapter.url}/quote`, { method: 'POST', headers: { 'content-type': 'application/json', authorization: `Bearer ${credential}` }, body: JSON.stringify({ buyer: card.buyer, buyerEncryptionPublicKey: card.encryptionPublicKey, scope: work ? {} : SAMPLE.firstScope }), signal: AbortSignal.timeout(300_000) });
       const quote = (await answer.json().catch(() => null)) as J;
       if (answer.status !== 200 || !/^0x[0-9a-f]{64}$/.test(String(quote?.commitmentId))) throw new Error(`the adapter made no offer (status ${answer.status}): ${plain(quote?.detail ?? quote?.type, 400)}`);
       id = quote.commitmentId as Hex;
@@ -475,7 +503,7 @@ async function runFirstDeal(c: Call, state: State, buyerUrl: string, again: bool
         ['payout address', lc(terms.sellerPayoutAddress), payout.address],
         ['seller', lc(terms.seller), addressOf(dealKeyOf(key, terms.nonce as Hex))],
         ['buyer', lc(terms.buyer), card.buyer], ['buyer payment address', lc(terms.buyerPaymentAddress), card.buyer], ['buyer encryption key', terms.buyerEncryptionPublicKey, card.encryptionPublicKey],
-        ['price', jcs({ token: lc(terms.price?.token), amount: terms.price?.amount }), jcs({ token: lc(pin!.token.id), amount: SAMPLE_PRICE_UNITS })],
+        ['price', jcs({ token: lc(terms.price?.token), amount: terms.price?.amount }), jcs({ token: lc(pin!.token.id), amount: work ? work.price : SAMPLE_PRICE_UNITS })],
       ];
       const wrong = expected.find(([, got, want]) => got !== want);
       if (wrong) return giveUp('Withheld', `The signed offer's ${wrong[0]} is ${plain(wrong[1], 120)}, not ${plain(wrong[2], 120)}: the commitment ID was not sent to the buyer, and the offer expires by itself. Run check first.`);
@@ -494,7 +522,31 @@ async function runFirstDeal(c: Call, state: State, buyerUrl: string, again: bool
     let end = ended;
     for (const stop = Date.now() + (c.testWorld ? 120_000 : 1_200_000); end === undefined; await sleep(c.testWorld ? 250 : 3000)) {
       ({ states: now, ended: end } = await standing());
-      if (end === undefined && Date.now() > stop) throw new Error(`the deal is still ${now.map((s) => plain(s, 40)).join(' / ')} after ${c.testWorld ? 120 : 1200} s`);
+      if (end !== undefined) break;
+      const live = journal().find((d) => d.id === id);
+      if (work && live?.stage === 'closed') return giveUp('SetAside', `The adapter closed the deal${live.note ? `: ${plain(live.note, 300)}` : ''}.`);
+      if (work && live && now.every((s) => s === 'Held') && ['offered', 'starting', 'started', 'refused'].includes(live.stage)) {
+        // The deal is funded, and the work is the party's own (T-543). With no work in the folder the command stops
+        // here, with the deadline and the path, and exits 0: the same command, run again, continues this deal.
+        const found = workFor(c.folder, id, work.format);
+        const held = { step: 'first-deal', state: 'Held', commitmentId: id, deliverBy: plain(live.terms?.timing?.deliverBy, 40), workPath: found.path };
+        const rerun = 'then run the same command again: it runs the agreed checks on the file and delivers it when they pass';
+        if (found.problem) {
+          c.say({ ...held, ok: false, detail: `The deal is funded, and the work cannot be delivered as it is: ${plain(found.problem, 400)}. Put the work at ${found.path} before ${held.deliverBy}, ${rerun}.` });
+          return 1;
+        }
+        if (!found.bytes) {
+          c.say({ ...held, ok: true, detail: `The deal is funded and waits for the work. Put the finished work at ${found.path} before ${held.deliverBy}, ${rerun}. Nothing is delivered until then; after the deadline the buyer may take its money back.` });
+          return 0;
+        }
+        if (live.stage === 'refused' && live.refusedSha256 === createHash('sha256').update(found.bytes).digest('hex')) {
+          // The adapter ran the agreed checks on these bytes and holds the delivery: each failing check, by name.
+          const failed = (live.reason?.checks ?? []).map((k) => ({ check: plain(k.checkId, 60), required: k.required, outcome: k.outcome, message: plain(k.message, 300) }));
+          c.say({ ...held, ok: false, failed, detail: `The work at ${found.from} was not delivered: ${live.reason ? plain(reasonLine(live.reason), 600) : 'the adapter refused it'}. Correct the file before ${held.deliverBy}, ${rerun}.` });
+          return 1;
+        }
+      }
+      if (Date.now() > stop) throw new Error(`the deal is still ${now.map((s) => plain(s, 40)).join(' / ')} after ${c.testWorld ? 120 : 1200} s`);
     }
     await adapter.close(); // the step in progress finishes; the journal keeps the deal as delivered
     adapter = undefined;

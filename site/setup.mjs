@@ -4,7 +4,7 @@
 // site/setup-entry.mjs, from examples/ (agent.ts, check-delivery.ts, deal-record.ts, deployments.ts, entry.ts,
 // goal-kit.ts, help.ts, plain.ts, report-converter.ts, seller-adapter-api.ts, seller-adapter-core.ts,
 // seller-adapter.ts, seller-refusal.ts, setup-check.ts, setup-list.ts, setup-sample-api.ts, setup-seller.ts,
-// setup.ts, verify.ts) and from the built packages/ (core, judgment, settlement, testkit).
+// setup-work-api.ts, setup.ts, verify.ts) and from the built packages/ (core, judgment, settlement, testkit).
 // It differs from those files in two ways. The own command lines of seller-adapter.ts, check-delivery.ts and
 // report-converter.ts are left out, so only setup's runs. One field of the deployment record, the escrow's token store,
 // which no command here reads, is left out. Not minified, so you can read it before you run it.
@@ -29,7 +29,7 @@ Object.defineProperty(globalThis, 'crowEntry', { value: 'setup', enumerable: fal
 import { createRequire } from "node:module";
 import * as nc from "node:crypto";
 import { createHash, createHmac, randomBytes, randomUUID, timingSafeEqual } from "node:crypto";
-import { appendFileSync, chmodSync, existsSync, lstatSync, mkdirSync, readFileSync, readdirSync, realpathSync, renameSync, rmSync, statSync, writeFileSync } from "node:fs";
+import { appendFileSync, chmodSync, closeSync, constants, existsSync, fstatSync, lstatSync, mkdirSync, openSync, readFileSync, readSync, readdirSync, realpathSync, renameSync, rmSync, statSync, writeFileSync } from "node:fs";
 import { homedir } from "node:os";
 import { basename, dirname, isAbsolute, join, relative, resolve, sep } from "node:path";
 import { fileURLToPath, pathToFileURL } from "node:url";
@@ -56068,7 +56068,7 @@ async function body(res, what, cap) {
 	}
 	return new Uint8Array(Buffer.concat(chunks));
 }
-function json$1(bytes, what) {
+function json$2(bytes, what) {
 	try {
 		return JSON.parse(new TextDecoder("utf-8", { fatal: true }).decode(bytes));
 	} catch {
@@ -56535,7 +56535,7 @@ function sellerApiClient(api, env, fields, fetcher) {
 		async quote(v) {
 			const { status: code, bytes } = await send(quote, v);
 			okFor("the quote", code);
-			const a = json$1(bytes, "the quote");
+			const a = json$2(bytes, "the quote");
 			const read = (k) => pick(a, quoteRead[k]);
 			const quoteId = read("quoteId");
 			let amount = unitsAt === void 0 ? read("amount") : void 0;
@@ -56561,7 +56561,7 @@ function sellerApiClient(api, env, fields, fetcher) {
 		async start(v) {
 			const { status: code, bytes } = await send(start, v, { [idem.toLowerCase()]: v.commitmentId });
 			okFor("the start", code);
-			const id = pick(json$1(bytes, "the start"), startRead["jobId"]);
+			const id = pick(json$2(bytes, "the start"), startRead["jobId"]);
 			if (typeof id === "string" && /^[\x21-\x7e]{1,200}$/.test(id)) return id;
 			if (Number.isSafeInteger(id) && id >= 0) return String(id);
 			throw new Error("the seller API's start answer has no usable jobId");
@@ -56589,7 +56589,7 @@ function sellerApiClient(api, env, fields, fetcher) {
 				if (!status.done.includes(code)) throw new Error(`the seller API answered ${code} to the result`);
 			} else {
 				ok2xx("the result", code);
-				const word = pick(json$1(bytes, "the result"), status.pointer);
+				const word = pick(json$2(bytes, "the result"), status.pointer);
 				const w = typeof word === "string" || typeof word === "number" || typeof word === "boolean" ? String(word) : void 0;
 				if (w !== void 0 && status.running.includes(w)) return {
 					state: "running",
@@ -56650,7 +56650,7 @@ function sellerApiClient(api, env, fields, fetcher) {
 				done = second.bytes;
 			}
 			if (reportAt) {
-				const x = pick(json$1(done, reportCall ? "the report call" : "the result"), reportAt);
+				const x = pick(json$2(done, reportCall ? "the report call" : "the result"), reportAt);
 				if (x === void 0) throw new Error(`the seller API's result answer has nothing at ${plain$4(rm.report)}`);
 				done = new TextEncoder().encode(typeof x === "string" ? x : JSON.stringify(x));
 			}
@@ -56827,7 +56827,7 @@ function checkColumns(check) {
 	}
 	return out;
 }
-const HIDDEN = /^over the limit for [a-zA-Z]+(?:, [a-zA-Z]+)* \([a-zA-Z]+ \d+(?:, [a-zA-Z]+ \d+)*\)$/;
+const HIDDEN$1 = /^over the limit for [a-zA-Z]+(?:, [a-zA-Z]+)* \([a-zA-Z]+ \d+(?:, [a-zA-Z]+ \d+)*\)$/;
 /** The judgment writes a share as a count of a total (`3/40`) and a limit in basis points (`500 bps`). */
 const PCT = "\\d+/\\d+";
 const BPS = "\\d+ bps";
@@ -56855,7 +56855,7 @@ function safeCheckMessage(check, detail) {
 	if (detail.startsWith("check invalid: ")) return { message: "the check itself is invalid" };
 	if (check?.type === "json_schema") return safeSchemaMessage(detail, check.schema);
 	if (check?.type === "csv_columns_exact" && !detail.startsWith("csv_columns_exact needs")) return { message: "the columns are not the agreed columns" };
-	if (check?.type === "hidden_characters_max") return { message: HIDDEN.test(detail) ? detail : GENERIC_CHECK };
+	if (check?.type === "hidden_characters_max") return { message: HIDDEN$1.test(detail) ? detail : GENERIC_CHECK };
 	const notFound = /^column (.+) not found$/.exec(detail);
 	if (notFound) return { message: checkColumns(check).has(notFound[1]) && NAME.test(notFound[1]) ? detail : "a column the check names is not found" };
 	return { message: TABLE_PHRASES.some((p) => p.test(detail)) ? detail : GENERIC_CHECK };
@@ -57202,7 +57202,7 @@ var Refused$1 = class extends Error {
 		this.headers = headers;
 	}
 };
-const BASE_UNITS = /^(0|[1-9][0-9]{0,77})$/;
+const BASE_UNITS$1 = /^(0|[1-9][0-9]{0,77})$/;
 /** `{{name}}` or `{{name.length}}`; with a backslash before it, `\{{name}}`, it is the text `{{name}}`. */
 const PLACEHOLDER = /(\\?)\{\{([A-Za-z][A-Za-z0-9]*)(\.length)?\}\}/g;
 const WHOLE_PLACEHOLDER = /^\{\{([A-Za-z][A-Za-z0-9]*)(\.length)?\}\}$/;
@@ -57289,7 +57289,7 @@ function loadTemplate(c, token, readText) {
 	if (!template.deliverable || !Array.isArray(template.checks)) throw new Error(`${c.template} needs "deliverable" and "checks"`);
 	checkPlaceholders(c.template, template, c.scope);
 	const fee = template.fee;
-	if (fee !== void 0 && !(isRecord$1(fee) && typeof fee.amount === "string" && BASE_UNITS.test(fee.amount) && (fee.token === void 0 || typeof fee.token === "string"))) throw new Error(`${c.template}: fee must be {amount} or {token, amount}, with the amount in base units as a decimal string`);
+	if (fee !== void 0 && !(isRecord$1(fee) && typeof fee.amount === "string" && BASE_UNITS$1.test(fee.amount) && (fee.token === void 0 || typeof fee.token === "string"))) throw new Error(`${c.template}: fee must be {amount} or {token, amount}, with the amount in base units as a decimal string`);
 	if (fee?.token !== void 0 && fee.token.toLowerCase() !== token.id.toLowerCase()) throw new Error(`${c.template}: fee names the token ${plain$4(fee.token).slice(0, 80)}, and these operators settle in ${token.id} (${token.symbol}) only: name that token, or leave the token out to take it from discovery`);
 	if (fee !== void 0) template.fee = {
 		token: token.id,
@@ -58235,7 +58235,7 @@ async function createSellerAdapter(c, env, io) {
 			...quoted?.price,
 			token: token.id
 		};
-		if (!price || typeof price.token !== "string" || typeof price.amount !== "string" || !BASE_UNITS.test(price.amount)) {
+		if (!price || typeof price.token !== "string" || typeof price.amount !== "string" || !BASE_UNITS$1.test(price.amount)) {
 			log("Quote refused: the seller API's price is not {token, amount} with the amount in base units as a decimal string.");
 			throw new Refused$1(502, "seller_api_failed", "the seller could not price this scope");
 		}
@@ -59693,7 +59693,7 @@ function sampleResult(scope) {
 	for (let n = 1; n <= scope.rows; n++) lines.push(`${n},${n * n}`);
 	return new TextEncoder().encode(`${lines.join("\n")}\n`);
 }
-async function json(req) {
+async function json$1(req) {
 	const chunks = [];
 	let size = 0;
 	for await (const c of req) {
@@ -59736,7 +59736,7 @@ async function startSampleApi(token, port = 0) {
 		(async () => {
 			const path = new URL(req.url ?? "/", "http://sample").pathname;
 			if (req.method === "POST" && path === "/quote") {
-				const rows = rowsOf((await json(req)).scope);
+				const rows = rowsOf((await json$1(req)).scope);
 				return send(200, {
 					quoteId: `sample-${rows}`,
 					price: {
@@ -59747,7 +59747,7 @@ async function startSampleApi(token, port = 0) {
 			}
 			if (req.method === "POST" && path === "/jobs") {
 				if (!String(req.headers["idempotency-key"] ?? "")) return send(400, { detail: "POST /jobs needs an Idempotency-Key" });
-				return send(200, { jobId: `squares-${rowsOf((await json(req)).scope)}` });
+				return send(200, { jobId: `squares-${rowsOf((await json$1(req)).scope)}` });
 			}
 			const result = /^\/jobs\/squares-([1-9][0-9]?)\/result$/.exec(path);
 			if (req.method === "GET" && result) return res.writeHead(200, { "content-type": "text/csv" }).end(sampleResult({ rows: rowsOf({ rows: Number(result[1]) }) }));
@@ -59763,6 +59763,266 @@ async function startSampleApi(token, port = 0) {
 	return {
 		url: `http://127.0.0.1:${bound}`,
 		api: sampleAddresses(bound),
+		close: () => new Promise((resolve) => {
+			server.closeAllConnections();
+			server.close(() => resolve());
+		})
+	};
+}
+
+// examples/setup-work-api.ts
+/** The folder's directory for work, and the name of the finished work a seller named with --file. */
+const WORK_DIR = "work";
+const READY = "ready";
+/** The formats a delivery may have (spec/schemas/commitment.schema.json), each with its file extension. */
+const FORMATS = Object.freeze({
+	"text/csv": "csv",
+	"application/json": "json",
+	"text/plain": "txt",
+	"text/markdown": "md"
+});
+/** What a refusal says of a delivery's limits: the four formats and the size the live operators take. */
+const DELIVERY_LIMITS = `a delivery is CSV, JSON, plain text or Markdown (${Object.keys(FORMATS).join(", ")}) and at most ${DELIVERY_CAP_BYTES.toLocaleString("en-US")} bytes (1 MiB)`;
+/** The work is due 23 hours after the offer when the template names no window: Crow's test buyer takes work due within 86,400 s of the post. */
+const DEFAULT_DELIVER_WITHIN_SEC = 82800;
+/** The largest template file the setup reads. */
+const MAX_TEMPLATE_BYTES = 65536;
+/** The variable, in the adapter's `env` argument only, that carries this run's credential for the work API. */
+const WORK_CREDENTIAL_ENV = "CROW_SETUP_WORK";
+const BASE_UNITS = /^(0|[1-9][0-9]{0,77})$/;
+const COMMITMENT_ID = /^0x[0-9a-f]{64}$/;
+/** A template to show a person: 5.00 of a 6-decimal test token for a CSV with two named columns. */
+const TEMPLATE_EXAMPLE = "{\"deliverable\": {\"kind\": \"dataset\", \"description\": \"What the buyer gets, in a sentence.\", \"format\": \"text/csv\"}, \"price\": \"5000000\", \"checks\": [{\"id\": \"cols\", \"type\": \"csv_columns_exact\", \"required\": true, \"columns\": [\"name\", \"url\"]}], \"deliverWithinSec\": 82800}";
+/**
+* Throws when `path` names an environment file, by its own name or through a link: the setup reads none, whatever flag
+* names it. The real path is the one the file system resolves, every link followed, in the case the disk keeps.
+*/
+function refuseEnvFile(path, flag) {
+	const names = [basename(path)];
+	try {
+		names.push(basename(realpathSync.native(path)));
+	} catch {}
+	const env = names.find((n) => /^\.env/i.test(n));
+	if (env !== void 0) throw new Error(`${flag} names ${plain$4(env).slice(0, 80)}${env === names[0] ? "" : " through a link"}, an environment file: the setup reads no .env file. Nothing was made or sent`);
+}
+/** The folder's key file, by device and inode: no work is ever that file, under any name or link. */
+const keyFileOf = (folder) => join(folder, "keys", "signing.key");
+const sameFile = (a, path) => {
+	try {
+		const b = statSync(path);
+		return a.dev === b.dev && a.ino === b.ino;
+	} catch {
+		return false;
+	}
+};
+/**
+* A plain file's bytes, at most `max`, or why not; undefined when nothing is there. Opened non-blocking, so a FIFO or a
+* device never holds the process; `followLink` false refuses a symbolic link at the path and a file with a second
+* hard link; `keyFile` is a file no read may return.
+*/
+function readPlain(path, o) {
+	let fd;
+	try {
+		fd = openSync(path, constants.O_RDONLY | (constants.O_NONBLOCK ?? 0) | (o.followLink ? 0 : constants.O_NOFOLLOW ?? 0));
+	} catch (e) {
+		const code = e.code;
+		if (code === "ENOENT") return void 0;
+		return { problem: code === "ELOOP" || code === "EMLINK" ? "is a symbolic link: the setup reads no work through a link. Put the file itself there" : `cannot be read (${plain$4(String(code))})` };
+	}
+	try {
+		const stat = fstatSync(fd);
+		if (!stat.isFile()) return { problem: "is not a plain file" };
+		if (o.keyFile !== void 0 && sameFile(stat, o.keyFile)) return { problem: "is the folder's signing key: a key is never work" };
+		if (!o.followLink && stat.nlink > 1) return { problem: "has a second hard link: the setup reads no work that is also a file elsewhere. Put a copy of the file itself there" };
+		if (stat.size === 0) return { problem: "is empty: a delivery holds 1 byte or more" };
+		if (stat.size > o.max) return { problem: `is ${stat.size.toLocaleString("en-US")} bytes` };
+		const buffer = Buffer.alloc(o.max + 1);
+		let length = 0;
+		for (let n; length <= o.max && (n = readSync(fd, buffer, length, o.max + 1 - length, null)) > 0;) length += n;
+		if (length === 0 || length > o.max) return { problem: `changed while it was read` };
+		return { bytes: new Uint8Array(buffer.subarray(0, length)) };
+	} finally {
+		closeSync(fd);
+	}
+}
+/**
+* The template in `file`, checked for its shape. The commitment schema checks the rest (setup-check.ts, `template`).
+* It refuses only what cannot become an offer: a price or a window that is no whole number, a format no delivery has,
+* a field this version does not take. Nothing in it runs.
+*/
+function readWorkTemplate(file) {
+	refuseEnvFile(file, "--template");
+	const where = plain$4(file).slice(0, 200);
+	const read = readPlain(file, {
+		followLink: true,
+		max: MAX_TEMPLATE_BYTES
+	});
+	if (!read?.bytes) throw new Error(`--template: ${where} ${read === void 0 ? "is not there" : /^is \d/.test(read.problem ?? "") ? `${read.problem}; a template is at most ${MAX_TEMPLATE_BYTES}` : read.problem}. Nothing was made or sent`);
+	const text = Buffer.from(read.bytes).toString("utf8");
+	let t;
+	try {
+		t = JSON.parse(text);
+	} catch {
+		throw new Error(`--template: ${where} is not JSON. A template looks like ${TEMPLATE_EXAMPLE}`);
+	}
+	const isRecord = (v) => v !== null && typeof v === "object" && !Array.isArray(v);
+	if (!isRecord(t)) throw new Error(`--template: ${where} must hold one JSON object, like ${TEMPLATE_EXAMPLE}`);
+	for (const k of Object.keys(t)) if (![
+		"deliverable",
+		"price",
+		"checks",
+		"deliverWithinSec"
+	].includes(k)) throw new Error(`--template: ${where} has a field this version does not take: ${plain$4(k).slice(0, 60)}. It takes deliverable, price, checks and deliverWithinSec`);
+	if (!isRecord(t.deliverable) || typeof t.deliverable.description !== "string" || typeof t.deliverable.kind !== "string") throw new Error(`--template: ${where} needs deliverable: {"kind", "description", "format"}`);
+	if (!Object.hasOwn(FORMATS, String(t.deliverable.format))) throw new Error(`--template: the format ${plain$4(String(t.deliverable.format)).slice(0, 60)} is none a delivery can have: ${DELIVERY_LIMITS}`);
+	if (typeof t.price !== "string" || !BASE_UNITS.test(t.price)) throw new Error(`--template: price must be base units of the test token as a decimal string, such as "5000000" for 5.00 of a 6-decimal token`);
+	if (!Array.isArray(t.checks)) throw new Error(`--template: checks must be a list of declarative checks; it may be empty, and a buyer may then refuse the offer`);
+	const within = t.deliverWithinSec ?? 82800;
+	if (!Number.isSafeInteger(within) || within < 0) throw new Error("--template: deliverWithinSec must be a whole number of seconds, 0 or more");
+	const opens = (node) => typeof node === "string" ? /(^|[^\\])\{\{/.test(node) : node !== null && typeof node === "object" ? Object.entries(node).some(([k, v]) => opens(k) || opens(v)) : false;
+	if (opens({
+		d: t.deliverable,
+		c: t.checks
+	})) throw new Error("--template: the text {{ starts a placeholder, and this version takes none: write \\\\{{ in the JSON file for the text {{");
+	return {
+		deliverable: t.deliverable,
+		price: t.price,
+		checks: t.checks,
+		deliverWithinSec: within
+	};
+}
+/** Characters a person does not see on a screen (plain.ts's class): text in the terms that nobody reviewing them reads. */
+const HIDDEN = /[\u061c\u200b-\u200f\u202a-\u202e\u2060-\u2069\ufeff]|[\u{e0000}-\u{e007f}]/gu;
+/** How many hidden characters the template's deliverable and checks carry: advice only (D31), since a party may mean them. */
+const hiddenCharacters = (t) => (JSON.stringify({
+	d: t.deliverable,
+	c: t.checks
+}).match(HIDDEN) ?? []).length;
+/**
+* Work's bytes, or why it is not work that can be delivered; undefined when nothing is there. `keyFile` is the folder's
+* key file, which no read returns. A path the person named (`followLink`) may be a link; one in work/ may not.
+*/
+function readWorkFile(path, followLink = false, keyFile) {
+	const read = readPlain(path, {
+		followLink,
+		max: DELIVERY_CAP_BYTES,
+		...keyFile === void 0 ? {} : { keyFile }
+	});
+	return read?.problem && /^(is \d|changed)/.test(read.problem) ? { problem: `${read.problem}: ${DELIVERY_LIMITS}` } : read;
+}
+/** Where a deal's work goes, and where the finished work of --file is kept. */
+const workPath = (folder, commitmentId, format) => join(folder, WORK_DIR, `${commitmentId}.${FORMATS[format]}`);
+const readyPath = (folder, format) => join(folder, WORK_DIR, `${READY}.${FORMATS[format]}`);
+/**
+* The work for one deal: `path` is where it goes; `bytes` is set when it is there and can be delivered, read from
+* `from` (the deal's own file, or the folder's finished work); `problem` says why a file that is there cannot be.
+*/
+function workFor(folder, commitmentId, format) {
+	if (!COMMITMENT_ID.test(commitmentId) || !Object.hasOwn(FORMATS, format)) throw new Error("not a deal of this folder");
+	const path = workPath(folder, commitmentId, format);
+	let dir;
+	try {
+		dir = lstatSync(join(folder, WORK_DIR));
+	} catch {
+		return { path };
+	}
+	if (dir.isSymbolicLink() || !dir.isDirectory()) return {
+		path,
+		problem: `${WORK_DIR}/ is ${dir.isSymbolicLink() ? "a symbolic link" : "not a folder"}: the setup reads no work through a link. Make ${WORK_DIR}/ a plain folder`
+	};
+	for (const from of [path, readyPath(folder, format)]) {
+		const read = readWorkFile(from, false, keyFileOf(folder));
+		if (read?.problem) return {
+			path,
+			from,
+			problem: `${from} ${read.problem}`
+		};
+		if (read?.bytes) return {
+			path,
+			from,
+			bytes: read.bytes
+		};
+	}
+	return { path };
+}
+/** The work API's addresses on `port`, as the adapter's `sellerApi` setting takes them: every call under one base URL, with the run's credential. */
+const workAddresses = (port) => ({
+	baseUrl: `http://127.0.0.1:${port}/`,
+	auth: {
+		env: WORK_CREDENTIAL_ENV,
+		header: "authorization",
+		prefix: "Bearer "
+	},
+	quote: `http://127.0.0.1:${port}/quote`,
+	start: `http://127.0.0.1:${port}/jobs`,
+	result: `http://127.0.0.1:${port}/jobs/{jobId}/result`
+});
+async function json(req) {
+	const chunks = [];
+	let size = 0;
+	for await (const c of req) {
+		size += c.length;
+		if (size > 65536) throw new Error("the request is over 65,536 bytes");
+		chunks.push(c);
+	}
+	return JSON.parse(Buffer.concat(chunks).toString("utf8"));
+}
+/**
+* Starts the work API on the loopback address. `token` is the settlement layer's token ID and `price` the template's
+* fixed price; `folder` holds work/; `credential` is the one every call must carry; `port` is the folder's own
+* (adapter.json names it), or 0 for a port the system picks. A port another program holds stops the start, naming it.
+*/
+async function startWorkApi(o) {
+	if (!BASE_UNITS.test(o.price) || !Object.hasOwn(FORMATS, o.format) || o.credential.length < 16) throw new Error("the work API needs a price in base units, a delivery format and a credential");
+	const digest = (s) => createHash("sha256").update(s, "utf8").digest();
+	const wanted = digest(`Bearer ${o.credential}`);
+	const server = createServer((req, res) => {
+		const send = (status, body) => res.writeHead(status, {
+			"content-type": "application/json",
+			"cache-control": "no-store"
+		}).end(JSON.stringify(body));
+		(async () => {
+			if (!timingSafeEqual(digest(String(req.headers.authorization ?? "")), wanted)) {
+				req.resume();
+				return send(401, { detail: "this API answers only the setup's own adapter" });
+			}
+			const path = new URL(req.url ?? "/", "http://127.0.0.1").pathname;
+			if (req.method === "POST" && path === "/quote") {
+				const scope = (await json(req))?.scope;
+				if (scope === null || typeof scope !== "object" || Array.isArray(scope) || Object.keys(scope).length) return send(400, { detail: "a template takes an empty scope" });
+				return send(200, {
+					quoteId: "template",
+					price: {
+						token: o.token,
+						amount: o.price
+					}
+				});
+			}
+			if (req.method === "POST" && path === "/jobs") {
+				if (!String(req.headers["idempotency-key"] ?? "")) return send(400, { detail: "POST /jobs needs an Idempotency-Key" });
+				const id = String((await json(req))?.commitmentId);
+				if (!COMMITMENT_ID.test(id)) return send(400, { detail: "POST /jobs needs the commitment ID" });
+				return send(200, { jobId: id });
+			}
+			const result = /^\/jobs\/(0x[0-9a-f]{64})\/result$/.exec(path);
+			if (req.method === "GET" && result) {
+				const work = workFor(o.folder, result[1], o.format);
+				if (!work.bytes) return send(202, { state: "running" });
+				return res.writeHead(200, {
+					"content-type": o.format,
+					"cache-control": "no-store"
+				}).end(work.bytes);
+			}
+			return send(404, { detail: "not found" });
+		})().catch((e) => send(400, { detail: plain$4(e.message).slice(0, 200) }));
+	});
+	const port = o.port ?? 0;
+	await new Promise((resolve, reject) => {
+		server.once("error", (e) => reject(e.code === "EADDRINUSE" ? /* @__PURE__ */ new Error(`port ${port} on the loopback address is in use, and the work API needs it: stop the program that holds it, or another run of this command`) : e));
+		server.listen(port, "127.0.0.1", resolve);
+	});
+	return {
+		url: `http://127.0.0.1:${server.address().port}`,
 		close: () => new Promise((resolve) => {
 			server.closeAllConnections();
 			server.close(() => resolve());
@@ -59978,7 +60238,7 @@ async function locked(folder, waitMs, body) {
 	}
 }
 const QUESTIONS = {
-	"--sample": "This version sells Crow's sample product only: pass --sample to sell it. Your own API comes with a later version.",
+	"--sample": `What do you sell? Pass --sample for Crow's sample product. For your own work pass --template <file>, a JSON file such as ${TEMPLATE_EXAMPLE}: price is base units of the test token (5000000 is 5.00 tUSDC), checks are the declarative checks of the commitment schema, ${DELIVERY_LIMITS}, and deliverWithinSec, the seconds from the offer to the delivery deadline, may be left out. Add --file <path> when the work is finished: every deal then delivers it once it is funded.`,
 	"--payout": "Where are you paid? Give an address whose key is not on this machine (--payout 0x...), or answer this-key (--payout this-key) to be paid at this folder's own standing address."
 };
 /** A refusal with its own line: the folder is not one the setup may make or continue. */
@@ -59989,9 +60249,13 @@ async function seller(c) {
 	const before = readState(folder);
 	const kept = before !== void 0 && before.steps["payout"] !== void 0 && before.steps["key"] !== void 0 && before.address !== void 0 && before.payout !== void 0 && at(join(folder, FILES.key))?.isFile() === true;
 	const name = c.flags.get("--name") ?? (kept ? before.name : void 0) ?? "seller";
+	const templateGiven = c.flags.get("--template"), fileGiven = c.flags.get("--file");
+	if (templateGiven !== void 0 && c.flags.has("--sample")) throw new Error("give --sample or --template, not both. Nothing was made or sent");
+	const sells = templateGiven !== void 0 ? "template" : c.flags.has("--sample") ? "sample" : kept ? before.sells : void 0;
+	if (fileGiven !== void 0 && sells !== "template") throw new Error("--file names finished work for a folder that sells from a template: give --template <file> with it. Nothing was made or sent");
 	const card = realPath(c.flags.get("--card") ?? (kept ? before.card : void 0) ?? `${folder}-card`);
 	const payoutGiven = c.flags.get("--payout");
-	const missing = [...c.flags.has("--sample") || kept ? [] : ["--sample"], ...payoutGiven !== void 0 || kept ? [] : ["--payout"]];
+	const missing = [...sells !== void 0 ? [] : ["--sample"], ...payoutGiven !== void 0 || kept ? [] : ["--payout"]];
 	if (missing.length) {
 		c.say({
 			step: "seller",
@@ -60015,6 +60279,16 @@ async function seller(c) {
 		if (!ok) throw new Error("--payout takes this-key, or an address: 0x and 40 hex characters, with a valid checksum if in mixed case");
 		if (payoutGiven.toLowerCase() === ZERO_ADDRESS) throw new Error(`--payout ${ZERO_ADDRESS} is the zero address, which nobody holds: a payment there is lost. Give an address whose key the person holds, or this-key`);
 	}
+	const template = templateGiven === void 0 ? void 0 : readWorkTemplate(templateGiven);
+	const format = template?.deliverable.format ?? (kept ? before.work?.format : void 0);
+	let finished;
+	if (fileGiven !== void 0) {
+		refuseEnvFile(fileGiven, "--file");
+		const read = readWorkFile(fileGiven, true, keyFileOf(folder));
+		if (!read?.bytes) throw new Error(`--file: ${realPath(fileGiven)} ${read?.problem ?? "is not there"}. Nothing was made or sent`);
+		if (format === void 0) throw new Error("--file needs the template that says what format the work has: give --template <file> with it. Nothing was made or sent");
+		finished = read.bytes;
+	}
 	const problems = placeProblems(folder, card).filter((p) => !c.flags.has(p.flag));
 	if (problems.length) {
 		for (const p of problems) c.say({
@@ -60037,10 +60311,12 @@ async function seller(c) {
 			const linked = keyPlaceProblem(folder);
 			if (linked) throw new Refused(linked);
 			chmodSync(folder, 448);
+			if (state && state.sells !== sells) throw new Refused(`${folder} sells ${state.sells === "sample" ? "Crow's sample" : "work from a template"}, and a folder sells one kind for good. Make another folder for ${sells === "sample" ? "the sample" : "your own work"} with --folder or --name`);
+			if (template && state?.firstDeal?.commitmentId !== void 0 && state.firstDeal.state === void 0) throw new Refused(`this folder's open deal ${state.firstDeal.commitmentId} was offered from the template it has: run first-deal to finish it, then give a new template`);
 			state ??= {
 				crow: "setup/1",
 				role: "seller",
-				sells: "sample",
+				sells,
 				name,
 				createdAt: (/* @__PURE__ */ new Date()).toISOString(),
 				steps: {}
@@ -60085,22 +60361,58 @@ async function seller(c) {
 			if (changed && existsSync(join(folder, FILES.marker))) throw new Refused(`this folder's first deal started, and its offer names ${earlier.address} as the payout address. For another payout address, make a new folder (--folder)`);
 			state.payout = payout;
 			done("payout");
-			if (!existsSync(join(folder, FILES.template))) writeWhole$1(join(folder, FILES.template), `${JSON.stringify(SAMPLE.template, null, 2)}\n`);
+			if (sells === "sample") {
+				if (!existsSync(join(folder, FILES.template))) writeWhole$1(join(folder, FILES.template), `${JSON.stringify(SAMPLE.template, null, 2)}\n`);
+			} else if (template) {
+				writeWhole$1(join(folder, FILES.template), `${JSON.stringify({
+					deliverable: template.deliverable,
+					checks: template.checks
+				}, null, 2)}\n`);
+				state.work = {
+					price: template.price,
+					format: template.deliverable.format,
+					deliverWithinSec: template.deliverWithinSec
+				};
+				writeState(folder, state);
+			} else if (!state.work || !existsSync(join(folder, FILES.template))) throw new Refused(`${folder} sells from a template, and ${FILES.template} or its price in ${FILES.state} is gone: run the seller command with --template <file> again`);
 			done("template");
+			if (finished) {
+				const dir = join(folder, WORK_DIR);
+				if (at(dir)?.isSymbolicLink() || at(dir) && !at(dir).isDirectory()) throw new Refused(`${WORK_DIR}/ is not a plain folder: the setup writes no work through a link. Remove it; the setup makes ${WORK_DIR}/ itself`);
+				mkdirSync(dir, {
+					recursive: true,
+					mode: 448
+				});
+				writeWhole$1(readyPath(folder, state.work.format), finished);
+			} else if (template) for (const ext of Object.values(FORMATS)) rmSync(join(folder, WORK_DIR, `ready.${ext}`), { force: true });
 			const configFile = join(folder, FILES.configuration);
 			const there = existsSync(configFile) ? readFileSync(configFile) : void 0;
 			if (there && sha256(there) !== state.files?.configuration) throw new Refused(`${FILES.configuration} is not the file this setup wrote: it was changed, or another program put it there. The seller command keeps no configuration it did not write. Move that file away, then run the same command again to have it written anew`);
-			if (!there || changed) {
+			if (!there || changed || template) {
 				const port = there ? Number(new URL(JSON.parse(there.toString("utf8")).sellerApi.quote).port) : await freePort();
+				const own = sells === "template" ? {
+					sellerApi: workAddresses(port),
+					scope: {},
+					timing: {
+						...TIMING,
+						deliverWithinSec: state.work.deliverWithinSec
+					},
+					redelivery: { refetchEverySec: 0 }
+				} : {
+					sellerApi: sampleAddresses(port),
+					scope: SAMPLE.scope,
+					timing: TIMING
+				};
 				const text = `${JSON.stringify({
 					port: 0,
-					sellerApi: sampleAddresses(port),
+					sellerApi: own.sellerApi,
 					template: FILES.template,
-					scope: SAMPLE.scope,
+					scope: own.scope,
 					signingKey: "per-deal",
 					payoutAddress: payout.address,
-					timing: TIMING,
-					pollMs: 3e3
+					timing: own.timing,
+					pollMs: 3e3,
+					..."redelivery" in own ? { redelivery: own.redelivery } : {}
 				}, null, 2)}\n`;
 				state.files = {
 					...state.files,
@@ -60111,19 +60423,37 @@ async function seller(c) {
 			}
 			done("configuration");
 			mkdirSync(card, { recursive: true });
-			if (!existsSync(join(card, "agent.json"))) writeWhole$1(join(card, CARD_FILE), `${JSON.stringify({
-				type: "crow-agent",
-				status: "draft: not published, and no quote address yet",
-				name,
-				sells: [{
+			const draft = () => {
+				try {
+					return String(JSON.parse(readFileSync(join(card, CARD_FILE), "utf8")).status).startsWith("draft");
+				} catch {
+					return false;
+				}
+			};
+			if (!existsSync(join(card, "agent.json")) || template && draft()) {
+				const sold = sells === "template" ? {
+					deliverable: JSON.parse(readFileSync(join(folder, FILES.template), "utf8")).deliverable,
+					amount: state.work.price,
+					scope: {}
+				} : {
 					deliverable: SAMPLE.template.deliverable,
-					price: {
-						amount: SAMPLE_PRICE_UNITS,
-						unit: "base units of the settlement layer's test token"
-					},
+					amount: SAMPLE_PRICE_UNITS,
 					scope: SAMPLE.scope
-				}]
-			}, null, 2)}\n`, 420);
+				};
+				writeWhole$1(join(card, CARD_FILE), `${JSON.stringify({
+					type: "crow-agent",
+					status: "draft: not published, and no quote address yet",
+					name,
+					sells: [{
+						deliverable: sold.deliverable,
+						price: {
+							amount: sold.amount,
+							unit: "base units of the settlement layer's test token"
+						},
+						scope: sold.scope
+					}]
+				}, null, 2)}\n`, 420);
+			}
 			done("card");
 			c.say({
 				step: "seller",
@@ -60134,6 +60464,15 @@ async function seller(c) {
 				payout: payout.address,
 				keys: `${FILES.key} holds the signing key, mode 0600, on this machine only. Never read, print or copy it.`,
 				...payout.thisKey ? { payoutNote: `Every deal names this folder's standing address ${address} as its payout address in its public terms, which links this folder's deals to one another. Its key is on this machine, in ${FILES.key}.` } : { payoutNote: `Every deal names ${payout.address} as its payout address in its public terms, which links this folder's deals to one another.` },
+				...template && hiddenCharacters(template) > 0 ? { templateWarning: `The template's deliverable or checks carry ${hiddenCharacters(template)} characters a person does not see on a screen. They become part of the public terms, which a buyer's agent and the adjudicators read. Remove them unless you mean them.` } : {},
+				...sells === "template" ? {
+					sells: "template",
+					work: {
+						...state.work,
+						ready: existsSync(readyPath(folder, state.work.format)) ? readyPath(folder, state.work.format) : null
+					},
+					workNote: existsSync(readyPath(folder, state.work.format)) ? `Every deal of this folder delivers ${readyPath(folder, state.work.format)} once it is funded and the file passes the deal's checks.` : `No work is finished yet: first-deal stops once the deal is funded and prints where the work goes and when it is due. To test the checks first, run check --work <a sample of the work>.`
+				} : {},
 				sent: "nothing",
 				next: "Next, the listing step: list --website <https URL> sends your website to Crow's list of who uses it, and list --skip declines. No deal depends on it. Then first-deal."
 			});
@@ -60163,6 +60502,8 @@ function modeProblem(folder) {
 // examples/setup-check.ts
 /** The largest file the secrets check reads: 16 MiB. A key file is 67 bytes; a larger file is named, not read. */
 const MAX_SCANNED_BYTES = 16777216;
+/** A check's result that is advice, not a pass: thrown by a check's body and recorded with `ok: true`. */
+var Advice = class extends Error {};
 const plain$2 = (s, max = 600) => plain$4(String(s ?? "")).slice(0, max);
 /** A stand-in for the settlement layer's token: the check posts nothing, so no operator names the real one. */
 const STAND_IN_TOKEN = "tUSD";
@@ -60329,8 +60670,11 @@ function dealKeysOf(folder, key) {
 	}
 	return deals.map((d) => d?.terms?.nonce).filter((n) => typeof n === "string" && /^0x[0-9a-f]{64}$/.test(n)).map((n) => dealKeyOf(key, n));
 }
-/** Runs every check on the folder and returns the results in order. Writes only under the folder's sample/. */
-async function runChecks(folder) {
+/**
+* Runs every check on the folder and returns the results in order. Writes only under the folder's sample/. `work`
+* names a sample of the party's own work, for a folder that sells from a template.
+*/
+async function runChecks(folder, options = {}) {
 	const results = [];
 	const run = async (check, body) => {
 		try {
@@ -60340,7 +60684,12 @@ async function runChecks(folder) {
 				detail: await body()
 			});
 		} catch (e) {
-			results.push({
+			results.push(e instanceof Advice ? {
+				check,
+				ok: true,
+				advisory: true,
+				detail: plain$2(e.message)
+			} : {
 				check,
 				ok: false,
 				detail: plain$2(e.message)
@@ -60348,6 +60697,7 @@ async function runChecks(folder) {
 		}
 	};
 	const state = readState(folder);
+	const own = state?.sells === "template";
 	await run("folder", () => {
 		if (!state) throw new Error(`${folder} has no ${FILES.state}: run the seller command first`);
 		const wrong = modeProblem(folder);
@@ -60378,10 +60728,29 @@ async function runChecks(folder) {
 				"adjudicators"
 			]) if (written[field] !== void 0) throw new Error(`${FILES.configuration} sets ${field}, which a folder that sells the sample does not use: remove it`);
 		}
+		if (own) {
+			const api = written.sellerApi;
+			const port = typeof api?.quote === "string" && URL.canParse(api.quote) ? Number(new URL(api.quote).port) : 0;
+			if (!(port > 0) || JSON.stringify(api) !== JSON.stringify(workAddresses(port))) throw new Error(`${FILES.configuration} does not name the work API at one port on the loopback address for all three calls, as the seller command wrote it: a job would start somewhere else`);
+			if (JSON.stringify(written.scope) !== "{}") throw new Error(`${FILES.configuration} sets a scope, and a folder that sells from a template takes none: run the seller command with --template again`);
+			if (!state?.work || !Object.hasOwn(FORMATS, state.work.format)) throw new Error(`${FILES.state} names no price and format for the work: run the seller command with --template again`);
+			for (const field of [
+				"alerts",
+				"quoteAuth",
+				"reportMapping",
+				"reportSalt",
+				"options",
+				"termsRules",
+				"mandate",
+				"clubId",
+				"adjudicators",
+				"events"
+			]) if (written[field] !== void 0) throw new Error(`${FILES.configuration} sets ${field}, which a folder that sells from a template does not use: remove it`);
+		}
 		config = loaded;
 		return `the adapter's own loader takes ${FILES.configuration}, which pays ${state.payout.address}`;
 	});
-	const scope = SAMPLE.firstScope;
+	const scope = own ? {} : SAMPLE.firstScope;
 	await run("template", () => {
 		if (!config) throw new Error(NOT_RUN);
 		const t = filledTerms(config, scope);
@@ -60394,7 +60763,7 @@ async function runChecks(folder) {
 			clubId: "stand-in-club",
 			deliverable: t.deliverable,
 			acceptance: t.acceptance,
-			price: money(SAMPLE_PRICE_UNITS),
+			price: money(own ? state.work.price : SAMPLE_PRICE_UNITS),
 			adjudication: {
 				policyId: "stand-in-policy",
 				fee: money(typeof t.fee?.amount === "string" ? t.fee.amount : "1000000")
@@ -60411,11 +60780,48 @@ async function runChecks(folder) {
 			disclosure: { level: "public" }
 		};
 		parseTermsYaml(JSON.stringify(terms), FILES.template);
-		return "the template, filled with the sample scope, passes the bundled commitment schema";
+		return own ? "the template passes the bundled commitment schema" : "the template, filled with the sample scope, passes the bundled commitment schema";
 	});
 	let result;
 	let format = "";
-	await run("sample", async () => {
+	if (own) {
+		const ready = state?.work && Object.hasOwn(FORMATS, state.work.format) ? readyPath(folder, state.work.format) : void 0;
+		const named = options.work ?? (ready !== void 0 && existsSync(ready) ? ready : void 0);
+		await run("work", () => {
+			if (!config) throw new Error(NOT_RUN);
+			if (named === void 0) throw new Advice("The checks have never run on real work. To run them on a sample of it, run check --work <file>; nothing depends on it, and the adapter runs them on the finished work before it delivers.");
+			refuseEnvFile(named, "--work");
+			const t = filledTerms(config, scope);
+			format = String(t.deliverable?.format);
+			const read = readWorkFile(named, options.work !== void 0, keyFileOf(folder));
+			if (!read?.bytes) throw new Error(`${plain$2(named, 300)} ${read?.problem ?? "is not there"}`);
+			mkdirSync(join(folder, "sample"), { recursive: true });
+			writeWhole(join(folder, FILES.sampleTerms), `${JSON.stringify({
+				deliverable: t.deliverable,
+				acceptance: t.acceptance
+			}, null, 2)}\n`);
+			const r = checkDelivery({
+				terms: join(folder, FILES.sampleTerms),
+				file: named
+			});
+			if (r.exitCode !== 0) throw new Error(`the checks refuse ${plain$2(named, 300)}: the adapter would not deliver it. ${r.lines.filter((l) => /^Result|^ {2}FAIL|^ {2}OPEN/.test(l)).join(" ")}`);
+			result = read.bytes;
+			return `${read.bytes.length} bytes in ${plain$2(named, 300)}. ${r.lines[0] ?? ""}`;
+		});
+		if (named !== void 0) await run("required-field", () => {
+			if (!result) throw new Error("not run: there is no sample of the work that passes");
+			const cut = withoutAField(result, format);
+			if (!cut) throw new Advice(`not run: a ${plain$2(format, 60)} file has no field this check can remove`);
+			const file = join(folder, "sample", `work-with-a-field-removed.${FORMATS[format] ?? "txt"}`);
+			writeWhole(file, cut.bytes);
+			if (checkDelivery({
+				terms: join(folder, FILES.sampleTerms),
+				file
+			}).exitCode === 0) throw new Advice(`The work with ${cut.what} removed still passes the checks: they do not check that it is there. That is yours to decide; a buyer reads the checks before it agrees.`);
+			return `the work with ${cut.what} removed fails the checks`;
+		});
+	}
+	if (!own) await run("sample", async () => {
 		if (!config) throw new Error(NOT_RUN);
 		const t = filledTerms(config, scope);
 		format = String(t.deliverable?.format);
@@ -60434,7 +60840,7 @@ async function runChecks(folder) {
 		result = bytes;
 		return `${bytes.length} bytes from the sample API. ${r.lines[0] ?? ""}`;
 	});
-	await run("required-field", () => {
+	if (!own) await run("required-field", () => {
 		if (!result) throw new Error("not run: there is no sample result that passes");
 		const cut = withoutAField(result, format);
 		if (!cut) throw new Error(`a ${plain$2(format, 60)} result has no field this check can remove`);
@@ -60763,11 +61169,17 @@ const NODE_SETTINGS = [
 const USAGE = [
 	"setup.mjs: makes one Crow folder on this machine and runs its first deal. Test tokens only.",
 	"usage: node setup.mjs <command> [flags]",
-	"  seller --sample --payout <address|this-key> [--card <path>] [--allow-git] [--allow-synced] [--allow-served]",
+	"  seller --sample | --template <file> [--file <path>] --payout <address|this-key> [--card <path>] [--allow-git] [--allow-synced] [--allow-served]",
 	"                makes the folder, then runs the check. It sends nothing. Exit 3: an answer is missing, named in one JSON object.",
-	"  check         runs the conformance check: one JSON line per check, exit 0 only when all pass. It sends nothing.",
+	"                --sample sells Crow's sample. --template sells your own work: a JSON file with the deliverable, the price,",
+	"                the checks and deliverWithinSec; --file names finished work, delivered once a deal is funded.",
+	"  check [--work <file>]",
+	"                runs the conformance check: one JSON line per check, exit 0 only when all pass. It sends nothing.",
+	"                --work runs a template's checks on a sample of the work.",
 	"  first-deal [--preview] [--again] [--buyer <url>]",
-	"                prints what it sends and to whom, then sells one sample job to Crow's test buyer and follows it to its end.",
+	"                prints what it sends and to whom, then sells one job to Crow's test buyer and follows it to its end.",
+	"                From a template with no finished work, it stops once the deal is funded and prints where the work goes;",
+	"                run again with the work there, it delivers.",
 	"                --preview prints that and stops. --again offers a new deal after one that ended without a release.",
 	"  status        prints the folder's state. It reads no key and sends nothing.",
 	"  list --website <https URL> | --skip [--list-at <url>]",
@@ -60795,7 +61207,12 @@ const COMMON = {
 };
 const OWN = {
 	seller: {
-		values: ["--payout", "--card"],
+		values: [
+			"--payout",
+			"--card",
+			"--template",
+			"--file"
+		],
 		switches: [
 			"--sample",
 			"--allow-git",
@@ -60804,7 +61221,7 @@ const OWN = {
 		]
 	},
 	check: {
-		values: [],
+		values: ["--work"],
 		switches: []
 	},
 	"first-deal": {
@@ -60898,6 +61315,10 @@ function status(c) {
 			thisKey: state.payout.thisKey === true
 		} : null,
 		card: state.card === void 0 ? null : plain(state.card, 300),
+		...state.sells === "template" ? {
+			work: shown(state.work),
+			workPath: openWorkPath(c.folder, state)
+		} : {},
 		firstDeal: deal(state.firstDeal),
 		ended: (state.ended ?? []).map(deal),
 		openDeals: open,
@@ -60906,6 +61327,16 @@ function status(c) {
 	});
 	return 0;
 }
+/** Where the work of the folder's open first deal goes, for a folder that sells from a template; null when no deal is open. */
+const openWorkPath = (folder, state) => {
+	const id = state.firstDeal?.state === void 0 ? state.firstDeal?.commitmentId : void 0;
+	return state.work && typeof id === "string" && /^0x[0-9a-f]{64}$/.test(id) && [
+		"text/csv",
+		"application/json",
+		"text/plain",
+		"text/markdown"
+	].includes(state.work.format) ? workPath(folder, id, state.work.format) : null;
+};
 /** A record from the state file as plain values of bounded length; null when there is none. A value that is no text, number or truth value is left out. */
 const shown = (record) => record === void 0 ? null : Object.fromEntries(Object.entries(record).filter(([, v]) => [
 	"string",
@@ -60936,7 +61367,7 @@ async function listStep(c) {
 	});
 }
 async function check(c) {
-	const results = await runChecks(c.folder);
+	const results = await runChecks(c.folder, { work: c.flags.get("--work") });
 	for (const r of results) c.say({
 		step: "check",
 		...r
@@ -61222,6 +61653,8 @@ async function runFirstDeal(c, state, buyerUrl, again) {
 		detail: "The first deal starts: the next requests are the first that name this folder to the operators and the test buyer."
 	});
 	save({ buyer: buyerUrl });
+	const work = state.sells === "template" ? state.work : void 0;
+	if (state.sells === "template" && !work) throw new Error(`${FILES.state} names no price for the work: run the seller command with --template again. Nothing was sent`);
 	let api;
 	let adapter;
 	try {
@@ -61256,11 +61689,22 @@ async function runFirstDeal(c, state, buyerUrl, again) {
 				log: line
 			})
 		};
-		api = await startSampleApi(pin.token.id, Number(new URL(String(config.sellerApi.quote)).port));
+		const port = Number(new URL(String(config.sellerApi.quote)).port);
+		const workCredential = randomBytes(24).toString("base64url");
+		c.hide(workCredential, true);
+		api = work ? await startWorkApi({
+			token: pin.token.id,
+			price: work.price,
+			folder: c.folder,
+			format: work.format,
+			credential: workCredential,
+			port
+		}) : await startSampleApi(pin.token.id, port);
 		adapter = await startSellerAdapter(config, {
 			HOLDBACK_KEY: key,
 			HOLDBACK_OPERATORS: c.operators.join(","),
-			CROW_SETUP_QUOTE: credential
+			CROW_SETUP_QUOTE: credential,
+			...work ? { [WORK_CREDENTIAL_ENV]: workCredential } : {}
 		});
 		c.say({
 			step: "adapter",
@@ -61289,7 +61733,7 @@ async function runFirstDeal(c, state, buyerUrl, again) {
 				body: JSON.stringify({
 					buyer: card.buyer,
 					buyerEncryptionPublicKey: card.encryptionPublicKey,
-					scope: SAMPLE.firstScope
+					scope: work ? {} : SAMPLE.firstScope
 				}),
 				signal: AbortSignal.timeout(3e5)
 			});
@@ -61401,7 +61845,7 @@ async function runFirstDeal(c, state, buyerUrl, again) {
 					}),
 					jcs({
 						token: lc(pin.token.id),
-						amount: SAMPLE_PRICE_UNITS
+						amount: work ? work.price : SAMPLE_PRICE_UNITS
 					})
 				]
 			].find(([, got, want]) => got !== want);
@@ -61434,7 +61878,57 @@ async function runFirstDeal(c, state, buyerUrl, again) {
 		let end = ended;
 		for (const stop = Date.now() + (c.testWorld ? 12e4 : 12e5); end === void 0; await sleep(c.testWorld ? 250 : 3e3)) {
 			({states: now, ended: end} = await standing());
-			if (end === void 0 && Date.now() > stop) throw new Error(`the deal is still ${now.map((s) => plain(s, 40)).join(" / ")} after ${c.testWorld ? 120 : 1200} s`);
+			if (end !== void 0) break;
+			const live = journal().find((d) => d.id === id);
+			if (work && live?.stage === "closed") return giveUp("SetAside", `The adapter closed the deal${live.note ? `: ${plain(live.note, 300)}` : ""}.`);
+			if (work && live && now.every((s) => s === "Held") && [
+				"offered",
+				"starting",
+				"started",
+				"refused"
+			].includes(live.stage)) {
+				const found = workFor(c.folder, id, work.format);
+				const held = {
+					step: "first-deal",
+					state: "Held",
+					commitmentId: id,
+					deliverBy: plain(live.terms?.timing?.deliverBy, 40),
+					workPath: found.path
+				};
+				const rerun = "then run the same command again: it runs the agreed checks on the file and delivers it when they pass";
+				if (found.problem) {
+					c.say({
+						...held,
+						ok: false,
+						detail: `The deal is funded, and the work cannot be delivered as it is: ${plain(found.problem, 400)}. Put the work at ${found.path} before ${held.deliverBy}, ${rerun}.`
+					});
+					return 1;
+				}
+				if (!found.bytes) {
+					c.say({
+						...held,
+						ok: true,
+						detail: `The deal is funded and waits for the work. Put the finished work at ${found.path} before ${held.deliverBy}, ${rerun}. Nothing is delivered until then; after the deadline the buyer may take its money back.`
+					});
+					return 0;
+				}
+				if (live.stage === "refused" && live.refusedSha256 === createHash("sha256").update(found.bytes).digest("hex")) {
+					const failed = (live.reason?.checks ?? []).map((k) => ({
+						check: plain(k.checkId, 60),
+						required: k.required,
+						outcome: k.outcome,
+						message: plain(k.message, 300)
+					}));
+					c.say({
+						...held,
+						ok: false,
+						failed,
+						detail: `The work at ${found.from} was not delivered: ${live.reason ? plain(reasonLine(live.reason), 600) : "the adapter refused it"}. Correct the file before ${held.deliverBy}, ${rerun}.`
+					});
+					return 1;
+				}
+			}
+			if (Date.now() > stop) throw new Error(`the deal is still ${now.map((s) => plain(s, 40)).join(" / ")} after ${c.testWorld ? 120 : 1200} s`);
 		}
 		await adapter.close();
 		adapter = void 0;
