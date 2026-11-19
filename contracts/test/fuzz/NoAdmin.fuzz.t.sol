@@ -42,7 +42,7 @@ contract NoAdminFuzzTest is Base {
             address(collectorPermit2), // no longer deployed by the settlement (SC-2); the test world still has it
             escrow.tokenStoreImplementation(),
             store,
-            address(new DrandQuicknetBeacon()),
+            address(new DrandQuicknetBeacon(250_000)),
             address(sim),
             address(new TestUSDC())
         ];
@@ -122,12 +122,15 @@ contract NoAdminFuzzTest is Base {
             s[0] = "authCaptureEscrow()";
             s[1] = "sendTokens(address,address,uint256)";
         } else if (i == 6) {
-            s = new string[](5);
+            // T-528: MIN_PAIRING_GAS (a constant) and PAIRING_GAS (an immutable) are read-only values set at deploy.
+            s = new string[](7);
             s[0] = "GENESIS()";
             s[1] = "PERIOD()";
             s[2] = "beaconValue(uint64,bytes)";
             s[3] = "hashToG1(bytes32)";
             s[4] = "roundAt(uint256)";
+            s[5] = "MIN_PAIRING_GAS()";
+            s[6] = "PAIRING_GAS()";
         } else if (i == 7) {
             s = new string[](3);
             s[0] = "SIM_SEED()";
