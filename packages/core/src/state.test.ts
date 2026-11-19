@@ -1320,8 +1320,8 @@ describe('phase_one profile', () => {
     }
 
     it('a decision with "" and the same decision without the field are one signed message', () => {
-      const d = decision('primary', 'accept');
-      const { appealGround: _none, ...without } = d;
+      const without = { ...decision('primary', 'accept') };
+      delete without.appealGround;
       const domain = holdbackDomain(31337, outsider);
       expect(messageDigest(domain, { ...without, appealGround: '' as NonNullable<Decision['appealGround']> })).toBe(messageDigest(domain, without));
       expect(messageDigest(domain, { ...without, appealGround: 'wrong-outcome' })).not.toBe(messageDigest(domain, without));

@@ -18,6 +18,8 @@ const detail = (m: unknown) => {
   return r.ok ? '' : r.error.detail;
 };
 const signature = `0x${'ab'.repeat(48)}` as const;
+/** A copy of `m` without the field `k`. */
+const without = (m: Record<string, unknown>, k: string) => Object.fromEntries(Object.entries(m).filter(([f]) => f !== k));
 const fallback = (beacon: Record<string, unknown>) => ({ ...decision, role: 'fallback', beacon });
 
 describe('a refused message is told why by its own type (T-574)', () => {
@@ -40,8 +42,7 @@ describe('a refused message is told why by its own type (T-574)', () => {
       const type = m['type'] as string;
       expect(Object.hasOwn(messageFields, type), file).toBe(true);
       for (const field of messageFields[type]!.required.filter((f) => f !== 'type')) {
-        const { [field]: _gone, ...rest } = m;
-        expect(detail(rest), `${file} without ${field}`).toBe(`messages: / must have required property '${field}'`);
+        expect(detail(without(m, field)), `${file} without ${field}`).toBe(`messages: / must have required property '${field}'`);
       }
     }
   });
@@ -59,7 +60,6 @@ describe('a refused message is told why by its own type (T-574)', () => {
 
   it('a type that names no message is told so, and a message with no type keeps the schema text', () => {
     expect(detail({ ...decision, type: 'Decisions' })).toBe('messages: /type is not a message type');
-    const { type: _t, ...untyped } = decision;
-    expect(detail(untyped)).toMatch(/^messages: \//);
+    expect(detail(without(decision, 'type'))).toMatch(/^messages: \//);
   });
 });
