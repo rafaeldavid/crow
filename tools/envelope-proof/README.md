@@ -1,6 +1,6 @@
 # Envelope proof: the buyer's key opens the held work (T-541)
 
-**State: an optional prototype, not wired into any Crow tool, to harden before any use (roadmap row N200).** It answers one gap that case study 3 found in the waiver (ADR-0039 section 2). A buyer that countersigns a waiver has not seen the work, and cannot check before it pays that its key envelope opens it. The contract only checks that the released envelope is the one the delivery committed to (`contracts/src/HoldbackRules.sol`, `_requireKeyProof`).
+**State: an optional prototype, not wired into any Crow tool, to harden before any use (roadmap row N200).** Rafa stopped it where it is on 2026-11-19. It is part of nothing deployed. Its Rust lockfiles carry known advisories, from RISC Zero's own dependencies, that the dependency scan lets through until the end dates in `osv-scanner.toml` and `methods/guest/osv-scanner.toml` (T-576). It answers one gap that case study 3 found in the waiver (ADR-0039 section 2). A buyer that countersigns a waiver has not seen the work, and cannot check before it pays that its key envelope opens it. The contract only checks that the released envelope is the one the delivery committed to (`contracts/src/HoldbackRules.sol`, `_requireKeyProof`).
 
 ## What it proves
 
