@@ -54,6 +54,10 @@ const FAULTS: Array<[string, FakeScript[string]]> = [
   ['times out', 'timeout'],
   ['answers HTTP 503', () => ({ kind: 'error', transport: true, detail: 'HTTP 503' })],
   ['answers HTTP 400', () => ({ kind: 'error', transport: false, detail: 'HTTP 400' })],
+  // pipeline.ts counts a provider that throws as a transport error and retries it once.
+  ['throws (network error)', () => {
+    throw new Error('socket hang up');
+  }],
   ['returns no text', () => ({ kind: 'error', transport: false, detail: 'no text in the response' })],
   ['returns output that fails the verdict schema', () => ({ kind: 'ok', text: '{"overall":"maybe"}' })],
   ['refuses in prose', () => ({ kind: 'ok', text: "I can't help with evaluating this content." })],
@@ -62,6 +66,8 @@ const FAULTS: Array<[string, FakeScript[string]]> = [
     return r.kind === 'ok' ? { kind: 'ok', text: JSON.stringify({ ...JSON.parse(r.text), overall: 'abstain' }) } : r;
   }],
 ];
+/** The fault classes the verdict filter catches (filter abstentions): at an appeal after an escalation they count as a flag (D27a). */
+const FILTERED = new Set(['returns output that fails the verdict schema', 'refuses in prose']);
 const downFamily = (family: string, fault: FakeScript[string]): FakeScript => Object.fromEntries(REGISTRY.judges.filter((j) => j.family === family).map((j) => [j.id, fault]));
 
 interface WorldOptions {
@@ -249,7 +255,11 @@ describe('T-570: a judge fault never re-rolls the commit-reveal panel', () => {
     expect(record!.panel.seed).toBe(w.primary.adj.seedFor(w.id));
     expect(record!.panel.members.filter((m) => m.family === down).every((m) => m.status !== 'ok' || m.verdict?.overall === 'abstain')).toBe(true);
     // No decision rests on one family: an accept or a reject needs valid verdicts from two.
-    if (first.decided[0]!.outcome !== 'escalate') expect(validFamilies(record!).size).toBeGreaterThanOrEqual(2);
+    // The seed seats two families, one twice; the one-seat family is down, so only one family's verdicts remain.
+    // No accept rests on them: the case escalates (an accept needs passes from two families).
+    expect([...counts.values()].sort()).toEqual([1, 2]);
+    expect(validFamilies(record!).size).toBeLessThan(2);
+    expect(first.decided[0]!.outcome).toBe('escalate');
 
     const callsBefore = w.calls.length;
     w.judges.script = {};
@@ -271,6 +281,7 @@ describe('T-570: a judge that answers after the timeout is no vote', () => {
     const snapshot = structuredClone(record!);
     const lateSeats = seats.filter((s) => familyOf(s) !== 'claude');
     expect(lateSeats.length).toBeGreaterThan(0);
+    expect(lateSeats.length).toBeLessThan(seats.length);
     for (const m of record!.panel.members) expect(m.status).toBe(familyOf(m.judgeId) === 'claude' ? 'ok' : 'timeout');
     // Only claude answered in time: one family, so no accept and no reject.
     expect(report.decided[0]!.outcome).toBe('escalate');
@@ -331,7 +342,7 @@ describe('T-570: on SimChain a judge fault at the appeal does not drain the appe
   // cannot decide, signs nothing, and the default outcome pays the seller compensation from the appeal bond. Judge
   // faults (a timeout, an HTTP error, a schema-valid abstain) reach this path; filter abstentions do not (D27a). This
   // test records today's behaviour so a fix of D27g changes it on purpose. Phase one's contracts hold no bond.
-  it.each(FAULTS.filter(([n]) => !/schema|prose/.test(n)))('known gap (D27g): unflagged, two families %s at the appeal: no decision, and the default pays the seller from the appeal bond', async (_name, fault) => {
+  it.each(FAULTS.filter(([n]) => !FILTERED.has(n)))('known gap (D27g): unflagged, two families %s at the appeal: no decision, and the default pays the seller from the appeal bond', async (_name, fault) => {
     const w = await delivered(DEMO_CSV);
     w.judges.script = { ...downFamily('gpt', 'timeout'), ...downFamily('qwen', 'timeout') };
     expect((await w.primary.adj.runOnce()).decided).toEqual([{ commitmentId: w.id, role: 'primary', outcome: 'escalate' }]);
@@ -349,5 +360,22 @@ describe('T-570: on SimChain a judge fault at the appeal does not drain the appe
     // simClub's rulebook: sellerCompensationRateBps 1000, so 10% of the 2,000 tUSD price.
     expect(paid).toBe(200_000_000n);
     expect(bondBefore - poolTotal(w, w.cast.appeal.address)).toBe(paid);
+  });
+
+  // D27a: a filter abstention at the appeal after an escalation counts as a flag, so even without a screen flag the
+  // appeal signs a decision and the default path stays closed.
+  it.each(FAULTS.filter(([n]) => FILTERED.has(n)))('unflagged, two families %s at the appeal: the appeal signs reject, the default is refused, the bond pays nothing', async (_name, fault) => {
+    const w = await delivered(DEMO_CSV);
+    w.judges.script = { ...downFamily('gpt', 'timeout'), ...downFamily('qwen', 'timeout') };
+    expect((await w.primary.adj.runOnce()).decided).toEqual([{ commitmentId: w.id, role: 'primary', outcome: 'escalate' }]);
+    w.chain.advance(5);
+    w.judges.script = { ...downFamily('gpt', fault), ...downFamily('qwen', fault) };
+    const sellerBefore = await balanceOf(w, w.cast.seller.address);
+    const poolBefore = poolTotal(w, w.cast.appeal.address);
+    expect((await w.appeal.adj.runOnce()).decided).toEqual([{ commitmentId: w.id, role: 'appeal', outcome: 'reject' }]);
+    w.chain.advance(301);
+    expect((await w.chain.trigger(w.id, 'default')).ok).toBe(false);
+    expect(await balanceOf(w, w.cast.seller.address)).toBe(sellerBefore);
+    expect(poolTotal(w, w.cast.appeal.address)).toBe(poolBefore);
   });
 });
