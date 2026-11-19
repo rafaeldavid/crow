@@ -370,13 +370,19 @@ describe("the agents' tools hold their limits", () => {
   it('runs an installed command through its own fence, with its environment built from nothing plus what the company set', async () => {
     const dir = tmp('installed');
     const script = join(dir, 'echo-env.mjs');
-    writeFileSync(script, "console.log(JSON.stringify({ args: process.argv.slice(2), env: Object.keys(process.env).sort(), extra: process.env.EXTRA_SETTING })); process.exit(process.argv[2] === 'stop' ? 3 : 0);\n");
+    writeFileSync(script, "console.log(JSON.stringify({ args: process.argv.slice(2), env: Object.keys(process.env).sort(), extra: process.env.EXTRA_SETTING, secret: process.env.COMPANY_SECRET })); process.exit(process.argv[2] === 'stop' ? 3 : 0);\n");
     const seen: string[][] = [];
+    const secret = `0x${'cd'.repeat(32)}`;
+    // The model keys in this process's environment must not reach the child.
+    const saved = { a: process.env['HOLDBACK_AGENT_ANTHROPIC_API_KEY'], j: process.env['HOLDBACK_ANTHROPIC_API_KEY'] };
+    process.env['HOLDBACK_AGENT_ANTHROPIC_API_KEY'] = 'sk-ant-agent-test';
+    process.env['HOLDBACK_ANTHROPIC_API_KEY'] = 'sk-ant-judge-test';
     const { tools, rec } = box({
       role: 'buyer',
       installed: {
         repository: ['check-delivery'],
         env: { EXTRA_SETTING: 'set by the company' },
+        secretEnv: { COMPANY_SECRET: secret },
         commands: {
           echo: {
             script,
@@ -398,16 +404,47 @@ describe("the agents' tools hold their limits", () => {
     expect(((tools.specs.find((s) => s.name === "run_command")!.input as { properties: { command: { enum: string[] } } }).properties.command.enum)).toEqual(['check-delivery', 'echo']);
     expect((await tools.call('run_command', { command: 'buy-with-signer', args: ['resume', 'x'] })).content).toMatch(/^Refused: "buy-with-signer" is not one of your company's installed commands: check-delivery, echo/);
     const ok = await tools.call('run_command', { command: 'echo', args: ['hello'] });
+    process.env['HOLDBACK_AGENT_ANTHROPIC_API_KEY'] = saved.a; process.env['HOLDBACK_ANTHROPIC_API_KEY'] = saved.j;
+    if (saved.a === undefined) delete process.env['HOLDBACK_AGENT_ANTHROPIC_API_KEY'];
+    if (saved.j === undefined) delete process.env['HOLDBACK_ANTHROPIC_API_KEY'];
     expect(ok.isError).toBe(false);
     const out = JSON.parse(ok.content.split('\n')[2]!);
     expect(out.extra).toBe('set by the company');
-    expect(out.env).not.toContain('ANTHROPIC_API_KEY');
-    expect(out.env).toContain('HOLDBACK_OPERATORS');
+    // Exactly the base environment plus the company's two settings: no model key, nothing inherited.
+    expect(out.env.filter((k: string) => !['__CF_USER_TEXT_ENCODING'].includes(k))).toEqual(['COMPANY_SECRET', 'DUET_FETCH_LOG', 'EXTRA_SETTING', 'HOLDBACK_OPERATORS', 'HOME', 'NO_COLOR', 'PATH', 'TMPDIR']);
+    // A secret the company passes in the environment is scrubbed from the result and the record.
+    expect(out.secret).not.toBe(secret);
+    expect(ok.content).not.toContain('cd'.repeat(32));
+    expect(JSON.stringify(rec.events)).not.toContain('cd'.repeat(32));
     // An exit the command names as a stop is not an error; every other non-zero exit is.
     expect((await tools.call('run_command', { command: 'echo', args: ['stop'] })).isError).toBe(false);
+    // A usage question goes through the check too: one that refuses is refused, and the script never runs.
     for (const args of [['bad'], ['url', 'https://evil.example/'], ['file', '../outside'], ['file', '-x']]) expect((await tools.call('run_command', { command: 'echo', args })).content).toMatch(/^Refused/);
-    expect(seen.length).toBe(6);
-    expect(rec.events.filter((e) => e.kind === 'command' && e['command'] === 'echo').length).toBe(2);
+    expect((await tools.call('run_command', { command: 'echo', args: ['--help'] })).content).toContain('"args":["--help"]');
+    expect(seen.length).toBe(7);
+    expect(rec.events.filter((e) => e.kind === 'command' && e['command'] === 'echo').length).toBe(3);
+  });
+
+  it('refuses an installed command the agent could rewrite, a name clash, a setting that changes the base environment, and a bad approval', async () => {
+    const dir = tmp('installed-bad');
+    const script = join(dir, 'ok.mjs');
+    writeFileSync(script, 'console.log(1)\n');
+    const check = (a: string[]) => a;
+    const make = (installed: NonNullable<ToolboxOptions['installed']>) => () => box({ role: 'buyer', installed });
+    expect(make({ commands: { tool: { script: 'client/run.mjs', check } } })).toThrow(/absolute path/);
+    expect(make({ commands: { 'deal-record': { script, check } } })).toThrow(/own commands/);
+    expect(make({ commands: { 'adapter-log': { script, check } } })).toThrow(/own commands/);
+    expect(make({ commands: { __proto__x: { script, check } } })).toThrow(/lowercase/);
+    for (const k of ['HOLDBACK_OPERATORS', 'PATH', 'HOLDBACK_KEY', 'NODE_OPTIONS']) expect(make({ commands: {}, env: { [k]: 'x' } })).toThrow(/may not set/);
+    expect(make({ commands: {}, repository: ['seal'] })).toThrow(/not one of the buyer's own commands/);
+    // A script inside the agent's own folder is refused: the agent writes there.
+    const { work } = box({ role: 'buyer' });
+    const inside = join(work, 'run.mjs');
+    writeFileSync(inside, 'console.log(1)\n');
+    expect(() => box({ role: 'buyer', work, installed: { commands: { tool: { script: inside, check } } } })).toThrow(/inside the agent's folder/);
+    // The approval fence takes a commitment ID and base units only.
+    const { tools } = box({ role: 'buyer', installed: { commands: { pay: { script, check: async (a, fence) => { await fence.approve(`0x${'11'.repeat(32)}`, a[0]!, {}); return a; } } } } });
+    for (const max of ['', '-5', '0x10', ' 99 ']) expect((await tools.call('run_command', { command: 'pay', args: [max] })).content).toMatch(/^Refused: the most you pay is base units/);
   });
 
   it("refuses the argument shift: a file named like a flag, or a --mime value that is a path (the red team's finding)", async () => {
