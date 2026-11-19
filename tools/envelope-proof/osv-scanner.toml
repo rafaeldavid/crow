@@ -5,7 +5,9 @@
 # None can be fixed by a bump: each fixed version, where one exists, is outside a range that risc0-zkvm 3.1.0's own
 # dependencies pin. No released RISC Zero version moves them either (crates.io index, 2026-11-19): rzup 0.6.0 still
 # requires rsa ^0.9, and risc0-groth16 5.0.0-rc.1 still requires ark-groth16 ^0.5, which brings tracing-subscriber 0.2.
-# Ignoring an ID also ignores its aliases (osv-scanner's docs); the GHSA entry below is kept as a plain record.
+# The scan reports the tracing-subscriber finding under its GHSA ID, so the GHSA entry is the one that matches and the
+# RUSTSEC entry shows as unused (measured, PR 725's scan). Both stay, in case the advisory database changes which ID
+# it reports.
 
 [[IgnoredVulns]]
 id = "RUSTSEC-2023-0071"

@@ -20,7 +20,7 @@ What cannot be fixed gets the narrowest ignore the scanner allows, each with a r
 - [x] Each finding is either bumped, with `cargo check` passing, or recorded with the parent crate that pins it and its reachability, each labelled measured or inferred.
 - [x] Ignores are scoped to the two lockfiles only, by ID, and each has a reason and an end date no later than 2027-01-18. There is no folder-wide ignore.
 - [x] `tools/envelope-proof/README.md` and `docs/audit/known-issues.md` say that the prototype is stopped, is part of nothing deployed, and carries these advisories until their dates.
-- [ ] The dependency scan passes on this pull request.
+- [x] The dependency scan passes on this pull request.
 - [x] No `.github/` change; the missing trigger is in the Handoff for Rafa.
 
 ## Evidence
@@ -46,6 +46,10 @@ The paths below come from `cargo tree -i <crate>`, run in each lockfile's folder
 | RUSTSEC-2024-0436, unmaintained | `paste` 1.0.15 | host, guest | none | No fixed version | Compile-time only: a proc-macro, from `ark-ff` 0.5.0 |
 
 **No released upgrade fixes them (measured, crates.io index, 2026-11-19, from the review).** There is no `risc0-zkvm` 4.x. In 5.0.0-rc.1, `rzup` 0.6 still requires `rsa ^0.9`, and `risc0-groth16` still requires `ark-groth16 ^0.5`, which brings `tracing-subscriber` 0.2 back. The fix needs `rzup` on `rsa` 0.10 and `risc0-groth16` on `ark-groth16` 0.6, neither released. Any upgrade would also change the guest's image ID, which a buyer pins (README, "Pin the image ID"), and need a new proof, the last of which took 2,813 s. No lockfile changed, so there is no `cargo check` to show.
+
+### The scan on this pull request (measured)
+
+Run 44628705771 at `b279a9dc`: "Loaded filter from" the root `osv-scanner.toml`, `tools/envelope-proof/osv-scanner.toml` and `tools/envelope-proof/methods/guest/osv-scanner.toml`; "Filtered 11 vulnerabilities from output"; "No issues found". So each file applies to its own lockfile. The scan reported the `tracing-subscriber` finding under GHSA-xwfj-jgwm-7wp5, and listed the RUSTSEC-2025-0055 entries as unused; both stay, in case the database changes which ID it reports. The root file's GHSA-fc5q-39xc-vjpf (picomatch, T-518) also shows as unused, which is T-518's to check.
 
 ### Changes
 

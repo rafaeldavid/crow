@@ -3,6 +3,9 @@
 # entries cover no other lockfile. The host's lockfile has its own file in tools/envelope-proof/, with the same
 # reasons at more length. tools/envelope-proof is a research prototype (T-541), part of nothing deployed, stopped where
 # it is by Rafa on 2026-11-19. Each entry ends on 2027-01-18, when the scan asks again.
+# The scan reports the tracing-subscriber finding under its GHSA ID, so the GHSA entry is the one that matches and the
+# RUSTSEC entry shows as unused (measured, PR 725's scan). Both stay, in case the advisory database changes which ID
+# it reports.
 
 [[IgnoredVulns]]
 id = "RUSTSEC-2025-0055"
