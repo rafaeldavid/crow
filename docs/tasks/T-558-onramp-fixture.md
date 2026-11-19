@@ -51,7 +51,7 @@ All on 2026-11-19, in the T-558 worktree from `origin/main` `d9da8a00`.
 - **Measured:** `node scripts/id-check.mjs` with this PR's title, branch and `Closes T-558`: pass.
 - **Measured, the snapshot (read before committing):** step 3 agree is ok and the deal is Agreed; step 3 fund is refused with `insufficient_funds` ("balance 1000000000 is below 2050000000"); at 30:04 (sim) anyone expires the deal through op-2 and it is Expired. The balances table has one row, the faucet: atlas-wallet 1,000 tUSD, escrow 0 tUSD, and nothing moves. Replay of 4 SimChain submissions matches; every applicable invariant holds.
 - **Measured, the gap:** a scratch fixture (deleted, never committed) ran `agree_and_fund` twice on an underfunded address. The second run re-signs Agree, and settlement refuses it with `invalid_state` ("agree is not allowed in Agreed"), so no step funds an agreed deal after a refused funding.
-- Anvil run (`--settlement local`): see Handoff.
+- **Measured:** `snap --settlement local` on anvil (chain ID 31337), with `neutrality.adjudicator-never-accepts` as the reference: 2 passed, 0 failed. Both transcripts match SimChain's, and each fixture sends 0 transactions: the refused funding never reaches the chain.
 
 ## Decisions
 
@@ -81,6 +81,6 @@ One red-team read (the `red-teamer` subagent), 2026-11-19. It found one blocking
 
 Before writing that fixture, check one more thing: a top-up that arrives between `offerExpiresAt` and `fundBy` funds on SimChain but not on a chain, so the fixture should top up before `offerExpiresAt`.
 
-**Not measured:** the `--settlement local` run on anvil. The contract build had not finished on a loaded machine when the PR merged, and CI runs SimChain only. Inferred to pass: the contract refuses a short funding with `insufficient_funds` (`error.concurrent-overdraft`), and the adapter records the expiry of an agreed, unfunded deal.
+**On the contract:** the fixture passes `--settlement local` with the same transcript as SimChain (Evidence). CI runs SimChain only.
 
 **For the coordinator:** `docs/plan.md`'s scenario index needs a row for `neutrality.onramp-offline-before-funding` (exists), and `neutrality.onramp-refuses` stays planned for the reasons above.
