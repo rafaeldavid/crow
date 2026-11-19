@@ -1267,6 +1267,8 @@ export class EvmSettlement implements Settlement {
     if (book.state.kind !== 'Held') return problem('invalid_state', `a carried delivery needs a held commitment; it is ${book.state.kind}`);
     // The decision or early accept that carries it would revert InvalidMessage; core names this refusal.
     if (d.attempt !== 1) return problem('submission_limit_reached', `attempt ${d.attempt} exceeds maxSubmissions ${book.state.terms.timing.maxSubmissions}`);
+    const long = oversizedPartySignature({ kind: 'deliver', delivery: d });
+    if (long) return problem('payload_too_large', long);
     if (!(await verifyMessage(this.domain, { ...d, type: 'Delivery' }, book.state.terms.seller, this.signerCheck()))) return problem('invalid_signature', 'the delivery is not signed by the seller');
     book.carried = d;
     this.dirty.add(d.commitmentId);
