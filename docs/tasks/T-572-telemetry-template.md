@@ -61,7 +61,14 @@ The template's run: 10 s at 100 Hz, so 1,000 rows and `t_ms` from 0 to 9,990 in 
 
 ## Evidence
 
-(to be filled)
+**Local checks (measured, 2026-11-19, from the worktree at `origin/main` commit `46b590c6`, after `pnpm install --frozen-lockfile && pnpm build`):**
+- `pnpm vitest run tests/telemetry-run-template.test.ts`: 20 of 20 passed, 2.0 s.
+- `pnpm typecheck` and `pnpm lint`: exit 0.
+- `node site/build.mjs && node site/check.mjs`: PASS. The first-deal paths are unchanged, since `ref/checks.txt` is on neither: buyer 4,881 of 5,000 tokens, seller 4,504 of 5,000 (estimate, bytes divided by four).
+- `pnpm vitest run packages/testkit/src/fixture-files.test.ts apps/operator/src/guide-pointers.test.ts tests/design-map.test.ts`, the tests that read `fixtures/terms/` or `ref/checks.txt`: 79 of 79 passed.
+- The diff holds none of the terms in the private deny list (measured with `grep -F -f`).
+
+**The synthetic files (measured):** `run.csv`, 1,000 rows and 35,390 bytes, a 10 s sine sweep of one joint; `run.gap.csv`, the same without the row at 5,000 ms, 35,358 bytes. A scratch script made both; the test pins `run.gap.csv` to `run.csv` less that one row.
 
 ## Decisions
 
