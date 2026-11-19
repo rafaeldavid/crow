@@ -26854,9 +26854,9 @@ function schemaValidators(formats) {
 																													if (valid57) {
 																														if (data77.buyer !== void 0) {
 																															let data79 = data77.buyer;
-																															const _errs224 = errors;
 																															const _errs225 = errors;
-																															if (errors === _errs225) {
+																															const _errs226 = errors;
+																															if (errors === _errs226) {
 																																if (typeof data79 === "string") {
 																																	if (!pattern26.test(data79)) {
 																																		validate29.errors = [{
@@ -26878,10 +26878,10 @@ function schemaValidators(formats) {
 																																	}];
 																																	return false;
 																																}
-																																if (errors === _errs225) {}
+																																if (errors === _errs226) {}
 																															}
-																															if (_errs225 === errors) {}
-																															var valid57 = _errs224 === errors;
+																															if (_errs226 === errors) {}
+																															var valid57 = _errs225 === errors;
 																														} else var valid57 = true;
 																														if (valid57) {}
 																													}
@@ -26904,7 +26904,7 @@ function schemaValidators(formats) {
 																								if (valid13) {
 																									if (data.adjudicatorAcceptance !== void 0) {
 																										let data80 = data.adjudicatorAcceptance;
-																										const _errs227 = errors;
+																										const _errs229 = errors;
 																										if (!validate86(data80, {
 																											instancePath: instancePath + "/adjudicatorAcceptance",
 																											parentData: data,
@@ -26915,13 +26915,13 @@ function schemaValidators(formats) {
 																											vErrors = vErrors === null ? validate86.errors : vErrors.concat(validate86.errors);
 																											errors = vErrors.length;
 																										}
-																										var valid13 = _errs227 === errors;
+																										var valid13 = _errs229 === errors;
 																									} else var valid13 = true;
 																									if (valid13) {
 																										if (data.disclosure !== void 0) {
 																											let data81 = data.disclosure;
-																											const _errs228 = errors;
-																											if (errors === _errs228) {
+																											const _errs230 = errors;
+																											if (errors === _errs230) {
 																												if (data81 && typeof data81 == "object" && !Array.isArray(data81)) {
 																													let missing22;
 																													if (data81.level === void 0 && (missing22 = "level")) {
@@ -26934,7 +26934,7 @@ function schemaValidators(formats) {
 																														}];
 																														return false;
 																													} else {
-																														const _errs230 = errors;
+																														const _errs232 = errors;
 																														for (const key13 in data81) if (!(key13 === "level")) {
 																															validate29.errors = [{
 																																instancePath: instancePath + "/disclosure",
@@ -26945,11 +26945,11 @@ function schemaValidators(formats) {
 																															}];
 																															return false;
 																														}
-																														if (_errs230 === errors) {
+																														if (_errs232 === errors) {
 																															if (data81.level !== void 0) {
 																																let data82 = data81.level;
-																																const _errs231 = errors;
-																																const _errs232 = errors;
+																																const _errs233 = errors;
+																																const _errs234 = errors;
 																																schema10.enum;
 																																if (!(data82 === "private" || data82 === "judgment" || data82 === "public")) {
 																																	validate29.errors = [{
@@ -26961,9 +26961,9 @@ function schemaValidators(formats) {
 																																	}];
 																																	return false;
 																																}
-																																if (errors === _errs232) {}
-																																if (_errs232 === errors) {}
-																																var valid60 = _errs231 === errors;
+																																if (errors === _errs234) {}
+																																if (_errs234 === errors) {}
+																																var valid60 = _errs233 === errors;
 																															} else var valid60 = true;
 																															if (valid60) {}
 																														}
@@ -26978,14 +26978,14 @@ function schemaValidators(formats) {
 																													}];
 																													return false;
 																												}
-																												if (errors === _errs228) {}
+																												if (errors === _errs230) {}
 																											}
-																											var valid13 = _errs228 === errors;
+																											var valid13 = _errs230 === errors;
 																										} else var valid13 = true;
 																										if (valid13) {
 																											if (data.privateTerms !== void 0) {
 																												let data83 = data.privateTerms;
-																												const _errs233 = errors;
+																												const _errs235 = errors;
 																												if (!validate90(data83, {
 																													instancePath: instancePath + "/privateTerms",
 																													parentData: data,
@@ -26996,7 +26996,7 @@ function schemaValidators(formats) {
 																													vErrors = vErrors === null ? validate90.errors : vErrors.concat(validate90.errors);
 																													errors = vErrors.length;
 																												}
-																												var valid13 = _errs233 === errors;
+																												var valid13 = _errs235 === errors;
 																											} else var valid13 = true;
 																											if (valid13) {}
 																										}
@@ -28155,20 +28155,20 @@ function schemaValidators(formats) {
 										if (data.sellerSignature !== void 0) {
 											let data6 = data.sellerSignature;
 											if (typeof data6 === "string") {
-												if (!pattern14.test(data6)) {
+												if (!pattern26.test(data6)) {
 													validate101.errors = [{
 														instancePath: instancePath + "/sellerSignature",
-														schemaPath: "common.schema.json#/$defs/Signature/pattern",
+														schemaPath: "common.schema.json#/$defs/PartySignature/pattern",
 														keyword: "pattern",
-														params: { pattern: "^0x[0-9a-f]{130}$" },
-														message: "must match pattern \"^0x[0-9a-f]{130}$\""
+														params: { pattern: "^0x([0-9a-f]{2})+$" },
+														message: "must match pattern \"^0x([0-9a-f]{2})+$\""
 													}];
 													return false;
 												}
 											} else {
 												validate101.errors = [{
 													instancePath: instancePath + "/sellerSignature",
-													schemaPath: "common.schema.json#/$defs/Signature/type",
+													schemaPath: "common.schema.json#/$defs/PartySignature/type",
 													keyword: "type",
 													params: { type: "string" },
 													message: "must be string"
@@ -38259,8 +38259,8 @@ function schemaValidators(formats) {
 															if (valid0) {
 																if (data.encryptedKeys !== void 0) {
 																	let data10 = data.encryptedKeys;
-																	const _errs25 = errors;
-																	if (errors === _errs25) {
+																	const _errs26 = errors;
+																	if (errors === _errs26) {
 																		if (Array.isArray(data10)) {
 																			if (data10.length < 3) {
 																				validate59.errors = [{
@@ -38276,7 +38276,7 @@ function schemaValidators(formats) {
 																				const len0 = data10.length;
 																				for (let i0 = 0; i0 < len0; i0++) {
 																					let data11 = data10[i0];
-																					const _errs27 = errors;
+																					const _errs28 = errors;
 																					if (!validate50(data11, {
 																						instancePath: instancePath + "/encryptedKeys/" + i0,
 																						parentData: data10,
@@ -38287,7 +38287,7 @@ function schemaValidators(formats) {
 																						vErrors = vErrors === null ? validate50.errors : vErrors.concat(validate50.errors);
 																						errors = vErrors.length;
 																					}
-																					var valid6 = _errs27 === errors;
+																					var valid6 = _errs28 === errors;
 																					if (!valid6) break;
 																				}
 																				if (valid6) {}
@@ -38302,9 +38302,9 @@ function schemaValidators(formats) {
 																			}];
 																			return false;
 																		}
-																		if (errors === _errs25) {}
+																		if (errors === _errs26) {}
 																	}
-																	var valid0 = _errs25 === errors;
+																	var valid0 = _errs26 === errors;
 																} else var valid0 = true;
 																if (valid0) {}
 															}
@@ -38372,7 +38372,7 @@ function schemaValidators(formats) {
 			"nonce": { "$ref": "common.schema.json#/$defs/Hex32" },
 			"expiresAt": { "$ref": "common.schema.json#/$defs/Timestamp" },
 			"buyerSignature": { "$ref": "common.schema.json#/$defs/PartySignature" },
-			"sellerSignature": { "$ref": "common.schema.json#/$defs/Signature" }
+			"sellerSignature": { "$ref": "common.schema.json#/$defs/PartySignature" }
 		},
 		"if": {
 			"type": "object",
@@ -38860,34 +38860,34 @@ function schemaValidators(formats) {
 													if (valid3) {
 														if (data.sellerSignature !== void 0) {
 															let data10 = data.sellerSignature;
-															const _errs33 = errors;
 															const _errs34 = errors;
-															if (errors === _errs34) {
+															const _errs35 = errors;
+															if (errors === _errs35) {
 																if (typeof data10 === "string") {
-																	if (!pattern14.test(data10)) {
+																	if (!pattern26.test(data10)) {
 																		validate64.errors = [{
 																			instancePath: instancePath + "/sellerSignature",
-																			schemaPath: "common.schema.json#/$defs/Signature/pattern",
+																			schemaPath: "common.schema.json#/$defs/PartySignature/pattern",
 																			keyword: "pattern",
-																			params: { pattern: "^0x[0-9a-f]{130}$" },
-																			message: "must match pattern \"^0x[0-9a-f]{130}$\""
+																			params: { pattern: "^0x([0-9a-f]{2})+$" },
+																			message: "must match pattern \"^0x([0-9a-f]{2})+$\""
 																		}];
 																		return false;
 																	}
 																} else {
 																	validate64.errors = [{
 																		instancePath: instancePath + "/sellerSignature",
-																		schemaPath: "common.schema.json#/$defs/Signature/type",
+																		schemaPath: "common.schema.json#/$defs/PartySignature/type",
 																		keyword: "type",
 																		params: { type: "string" },
 																		message: "must be string"
 																	}];
 																	return false;
 																}
-																if (errors === _errs34) {}
+																if (errors === _errs35) {}
 															}
-															if (_errs34 === errors) {}
-															var valid3 = _errs33 === errors;
+															if (_errs35 === errors) {}
+															var valid3 = _errs34 === errors;
 														} else var valid3 = true;
 														if (valid3) {}
 													}
@@ -39085,20 +39085,20 @@ function schemaValidators(formats) {
 										if (data.sellerSignature !== void 0) {
 											let data6 = data.sellerSignature;
 											if (typeof data6 === "string") {
-												if (!pattern14.test(data6)) {
+												if (!pattern26.test(data6)) {
 													validate69.errors = [{
 														instancePath: instancePath + "/sellerSignature",
-														schemaPath: "common.schema.json#/$defs/Signature/pattern",
+														schemaPath: "common.schema.json#/$defs/PartySignature/pattern",
 														keyword: "pattern",
-														params: { pattern: "^0x[0-9a-f]{130}$" },
-														message: "must match pattern \"^0x[0-9a-f]{130}$\""
+														params: { pattern: "^0x([0-9a-f]{2})+$" },
+														message: "must match pattern \"^0x([0-9a-f]{2})+$\""
 													}];
 													return false;
 												}
 											} else {
 												validate69.errors = [{
 													instancePath: instancePath + "/sellerSignature",
-													schemaPath: "common.schema.json#/$defs/Signature/type",
+													schemaPath: "common.schema.json#/$defs/PartySignature/type",
 													keyword: "type",
 													params: { type: "string" },
 													message: "must be string"

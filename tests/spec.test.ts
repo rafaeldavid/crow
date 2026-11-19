@@ -104,11 +104,11 @@ describe('spec/', () => {
     ['a Dispute', 'messages', () => example('messages.dispute'), ['signature']],
     ['the buyer on a MutualSettlement', 'messages', () => example('messages.mutual-settlement'), ['buyerSignature']],
     ['the buyer on a Publish', 'messages', () => example('messages.publish'), ['buyerSignature']],
+    ['the seller on a MutualSettlement', 'messages', () => example('messages.mutual-settlement'), ['sellerSignature']],
+    ['the seller on a Publish', 'messages', () => example('messages.publish'), ['sellerSignature']],
     ['an appeal', 'appeal', () => example('appeal'), ['signature']],
   ];
   const keySites: Site[] = [
-    ['the seller on a MutualSettlement', 'messages', () => example('messages.mutual-settlement'), ['sellerSignature']],
-    ['the seller on a Publish', 'messages', () => example('messages.publish'), ['sellerSignature']],
     ['a Decision', 'messages', () => example('messages.decision'), ['signature']],
     ['an AdjudicatorAcceptance', 'messages', () => example('messages.acceptance'), ['signature']],
     ['the ERC-3009 funding authorization', 'messages', () => example('messages.funding'), ['signature']],

@@ -772,7 +772,7 @@
           "$ref": "common.schema.json#/$defs/PartySignature"
         },
         "sellerSignature": {
-          "$ref": "common.schema.json#/$defs/Signature"
+          "$ref": "common.schema.json#/$defs/PartySignature"
         }
       },
       "if": {
@@ -831,7 +831,7 @@
           "$ref": "common.schema.json#/$defs/PartySignature"
         },
         "sellerSignature": {
-          "$ref": "common.schema.json#/$defs/Signature"
+          "$ref": "common.schema.json#/$defs/PartySignature"
         }
       }
     },
