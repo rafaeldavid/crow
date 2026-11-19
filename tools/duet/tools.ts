@@ -78,6 +78,44 @@ export interface ToolboxOptions {
   alias?: { from: string; to: string };
   /** Ends a running command when the run ends (SIGTERM, then SIGKILL after 3 s). */
   signal?: AbortSignal;
+  /**
+   * Commands the company installed from outside this checkout, beside the repository's own, and the environment they
+   * need. Each command brings its own fence: `check` sees every argument and refuses what it does not accept. Its
+   * environment is still built from nothing (`env()`), with `env` added: no model key reaches it unless put here.
+   */
+  installed?: Installed;
+}
+
+/** A command from outside this checkout, with its own argument fence. */
+export interface InstalledCommand {
+  /** The script's absolute path, run as `node <script> <args>` from the agent's folder. */
+  script: string;
+  /** One line for the run tool's description. */
+  describe?: string;
+  /** The arguments as the command will get them, or a throw whose message the agent reads as the refusal. */
+  check(args: string[], fence: Fence): string[] | Promise<string[]>;
+  /** Whether this call gets the long time limit. Default: the short one. */
+  long?(args: string[]): boolean;
+  /** Exit codes besides 0 that are not errors, such as a stop that waits for approval. */
+  okExits?: number[];
+}
+
+export interface Installed {
+  commands: Record<string, InstalledCommand>;
+  /** Added to every command's environment, this role's own and the repository's alike. */
+  env?: Record<string, string>;
+  /** The repository's own commands this company installed, a part of its role's list. Left out: all of them. */
+  repository?: string[];
+}
+
+/** What an installed command's check may use: the toolbox's own fences. */
+export interface Fence {
+  /** The URL if it is on the allowlist; else a refusal. */
+  url(raw: string): URL;
+  /** The absolute path if it is inside the agent's folder; else a refusal. A file argument never starts with "-". */
+  file(p: string, what: string, mustExist?: boolean): string;
+  /** The company's pre-set approval policy, applied to `offer`; a refusal names every reason. */
+  approve(commitmentId: string, max: string, offer: unknown): Promise<void>;
 }
 
 /** What a tool call returns to the loop: the text the model reads, and whether it failed. */
@@ -120,7 +158,32 @@ export class Toolbox {
 
   constructor(o: ToolboxOptions) {
     this.o = o;
-    this.specs = specs(o.role);
+    this.specs = specs(o.role, Object.entries(o.installed?.commands ?? {}), this.repositoryCommands);
+  }
+
+  /** The repository's commands this company installed: its role's list, or the part of it `installed.repository` names. */
+  private get repositoryCommands(): string[] {
+    const all = COMMANDS[this.o.role as 'buyer' | 'seller'];
+    const only = this.o.installed?.repository;
+    return only ? all.filter((c) => only.includes(c)) : all;
+  }
+
+  /** The commands this agent may run: the repository's, then the installed ones. */
+  private get commands(): string[] {
+    return [...this.repositoryCommands, ...Object.keys(this.o.installed?.commands ?? {})];
+  }
+
+  /** The fences an installed command's check may use. */
+  private fence(command: string): Fence {
+    return {
+      url: (raw) => this.allowed(raw),
+      file: (p, what, mustExist = true) => {
+        if (!p) throw new Refused(`${command} needs ${what}`);
+        if (p.startsWith('-')) throw new Refused(`${what} is a file name, and a file name here does not start with "-": rename it`);
+        return this.inside(p, { mustExist });
+      },
+      approve: (id, max, offer) => this.approval(id.toLowerCase(), max, offer),
+    };
   }
 
   /** Runs one tool call. A refusal or an error is a result the model reads, never a throw. */
@@ -238,8 +301,8 @@ export class Toolbox {
   // ---- The client commands ----
 
   private async run(command: string, args: string[]): Promise<ToolResult> {
-    const role = this.o.role;
-    if (!COMMANDS[role].includes(command)) throw new Refused(`${JSON.stringify(command).slice(0, 80)} is not one of your company's installed commands: ${COMMANDS[role].join(', ')}`);
+    const commands = this.commands;
+    if (!commands.includes(command)) throw new Refused(`${JSON.stringify(command).slice(0, 80)} is not one of your company's installed commands: ${commands.join(', ')}`);
     if (args.length > 12 || args.some((a) => a.length > 20_000)) throw new Refused('at most 12 arguments of at most 20,000 characters each');
     if (args.some((a) => a.includes('\0'))) throw new Refused('an argument with a NUL character is refused');
     // An agent that asks a command for its usage gets the command's own answer: each client command answers --help
@@ -249,6 +312,12 @@ export class Toolbox {
       return this.exec(command, ['--help'], 'short');
     }
     if (command === 'adapter-log') return this.adapterLog();
+    const extra = this.o.installed?.commands[command];
+    if (extra && Object.hasOwn(this.o.installed!.commands, command)) {
+      let checked: string[];
+      try { checked = await extra.check(args, this.fence(command)); } catch (e) { throw e instanceof Refused ? e : new Refused((e as Error).message); }
+      return this.exec(command, checked, extra.long?.(args) ? 'long' : 'short');
+    }
     const checked = await this.check(command, args);
     if (command === 'seller-adapter') return this.startAdapter(checked);
     return this.exec(command, checked, command === 'buy-with-signer' && ['approve', 'resume'].includes(args[0] ?? '') ? 'long' : 'short');
@@ -371,10 +440,10 @@ export class Toolbox {
    * budget, the required checks, a delivery no later than the company accepts, every other deadline within the judging
    * slack after it, and a createdAt inside the band around settlement time.
    */
-  private async approval(id: string, max: string): Promise<void> {
+  private async approval(id: string, max: string, offer?: unknown): Promise<void> {
     const policy = this.o.policy;
     if (!policy) throw new Refused('your company has set no approval policy: nothing is approved');
-    const shown = this.shownOffer(id);
+    const shown = offer ?? this.shownOffer(id);
     const why: string[] = [];
     if (!shown) why.push(`no stop showed ${id} with a key in your key store`);
     else {
@@ -493,12 +562,14 @@ export class Toolbox {
     const env: Record<string, string> = { PATH: process.env['PATH'] ?? '/usr/bin:/bin', HOME: this.o.work, TMPDIR: join(this.o.work, '.tmp'), HOLDBACK_OPERATORS: this.o.operators.join(','), NO_COLOR: '1', DUET_FETCH_LOG: this.fetchLog };
     mkdirSync(env['TMPDIR']!, { recursive: true });
     if (this.o.role === 'seller' && this.o.sellerKey) env['HOLDBACK_KEY'] = this.o.sellerKey;
+    Object.assign(env, this.o.installed?.env ?? {});
     return env;
   }
 
   private exec(command: string, args: string[], kind: 'short' | 'long'): Promise<ToolResult> {
     const timeout = (this.o.timeoutMs ?? { short: 180_000, long: 1_200_000 })[kind];
-    const script = join(this.o.repo, SCRIPTS[command]!);
+    const extra = this.o.installed && Object.hasOwn(this.o.installed.commands, command) ? this.o.installed.commands[command] : undefined;
+    const script = extra ? extra.script : join(this.o.repo, SCRIPTS[command]!);
     const started = Date.now();
     return new Promise((done) => {
       const child = spawn(process.execPath, node(script, args), { cwd: this.o.work, env: this.env(), stdio: ['ignore', 'pipe', 'pipe'] });
@@ -528,7 +599,7 @@ export class Toolbox {
           }
         }
         const timedOut = signal === 'SIGTERM' && Date.now() - started >= timeout;
-        done({ content: `exit ${code ?? signal}${timedOut ? ` (stopped after ${Math.round(timeout / 1000)} s)` : ''}\n--- stdout\n${out}\n--- stderr\n${err}`, isError: code !== 0 && !(command === 'buy-with-signer' && code === 3) });
+        done({ content: `exit ${code ?? signal}${timedOut ? ` (stopped after ${Math.round(timeout / 1000)} s)` : ''}\n--- stdout\n${out}\n--- stderr\n${err}`, isError: code !== 0 && !(command === 'buy-with-signer' && code === 3) && !(code !== null && extra?.okExits?.includes(code)) });
       });
     });
   }
@@ -600,11 +671,12 @@ export class Toolbox {
 }
 
 /** The tools as each model is told about them. The run tool's list is the company's installed commands. */
-function specs(role: 'buyer' | 'seller'): ToolSpec[] {
-  const commands = COMMANDS[role];
+function specs(role: 'buyer' | 'seller', installed: Array<[string, InstalledCommand]> = [], repository: string[] = COMMANDS[role]): ToolSpec[] {
+  const commands = [...repository, ...installed.map(([n]) => n)];
+  const said = (c: string) => installed.find(([n]) => n === c)?.[1].describe;
   return [
     { name: 'fetch_url', description: 'GET a URL and read the answer: status, content type and body (up to 60,000 characters; pass offset to read further). Only URLs on your company\'s allowlist; redirects are not followed. GET only: anything that changes state goes through your company\'s commands.', input: { type: 'object', properties: { url: { type: 'string' }, offset: { type: 'integer', minimum: 0 } }, required: ['url'] } },
-    { name: 'run_command', description: `Run one of the client commands your company installed from Crow's public repository, as \`node examples/<command>.ts <args>\`, from your folder, and read its exit code, stdout and stderr. Installed: ${commands.map((c) => (c === 'adapter-log' ? 'adapter-log (the new lines the background seller adapter has logged)' : c === 'seller-adapter' ? 'seller-adapter (starts in the background)' : c)).join(', ')}. Pass the arguments as the docs give them, one per array item, with no shell quoting. Your company has set the environment these commands need (HOLDBACK_OPERATORS${role === 'seller' ? ', and HOLDBACK_KEY with your signing key' : ''}); you never see a key.`, input: { type: 'object', properties: { command: { type: 'string', enum: commands }, args: { type: 'array', items: { type: 'string' } } }, required: ['command', 'args'] } },
+    { name: 'run_command', description: `Run one of the client commands your company installed from Crow's public repository, as \`node examples/<command>.ts <args>\`, from your folder, and read its exit code, stdout and stderr. Installed: ${commands.map((c) => (said(c) ? `${c} (${said(c)})` : c === 'adapter-log' ? 'adapter-log (the new lines the background seller adapter has logged)' : c === 'seller-adapter' ? 'seller-adapter (starts in the background)' : c)).join(', ')}. Pass the arguments as the docs give them, one per array item, with no shell quoting. Your company has set the environment these commands need (HOLDBACK_OPERATORS${role === 'seller' ? ', and HOLDBACK_KEY with your signing key' : ''}); you never see a key.`, input: { type: 'object', properties: { command: { type: 'string', enum: commands }, args: { type: 'array', items: { type: 'string' } } }, required: ['command', 'args'] } },
     { name: 'read_file', description: 'Read a text file in your folder (up to 60,000 characters; pass offset to read further).', input: { type: 'object', properties: { path: { type: 'string' }, offset: { type: 'integer', minimum: 0 } }, required: ['path'] } },
     { name: 'write_file', description: 'Write a text file in your folder (at most 1 MB), making folders as needed.', input: { type: 'object', properties: { path: { type: 'string' }, content: { type: 'string' } }, required: ['path', 'content'] } },
     { name: 'list_files', description: 'List a folder inside your folder.', input: { type: 'object', properties: { path: { type: 'string' } } } },

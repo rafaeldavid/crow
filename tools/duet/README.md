@@ -61,6 +61,8 @@ Each tool is a fence enforced in `tools.ts`, not a rule in a prompt.
 | `read_file`, `write_file`, `list_files` | Inside the agent's own folder, never through a symbolic link |
 | `wait`, `finish` | 1 to 30 s; end and report |
 
+**Commands from outside this checkout.** A runner that builds its own `Toolbox` may pass `installed`: commands a company installed from elsewhere, each an absolute script path with its own argument check, the environment they need, and which of the repository's own commands this company installed (`repository`, a part of the role's list). A check refuses by throwing, and it may use the toolbox's own fences: the allowlist, the agent's folder, and the company's approval policy applied to an offer. Each command still runs as `node <script>` from the agent's folder, with the environment built from nothing plus `installed.env`, the fetch hook preloaded, and its output scrubbed and recorded like any other. `pnpm duet` itself installs nothing extra.
+
 The keys stay out of the agents' reach:
 
 - The buyer's key store sits in its company's folder, beside its own folder, where no file tool reaches.

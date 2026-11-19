@@ -367,6 +367,49 @@ describe("the agents' tools hold their limits", () => {
     expect(rec.events.filter((e) => e.kind === 'refused').length).toBe(5);
   });
 
+  it('runs an installed command through its own fence, with its environment built from nothing plus what the company set', async () => {
+    const dir = tmp('installed');
+    const script = join(dir, 'echo-env.mjs');
+    writeFileSync(script, "console.log(JSON.stringify({ args: process.argv.slice(2), env: Object.keys(process.env).sort(), extra: process.env.EXTRA_SETTING })); process.exit(process.argv[2] === 'stop' ? 3 : 0);\n");
+    const seen: string[][] = [];
+    const { tools, rec } = box({
+      role: 'buyer',
+      installed: {
+        repository: ['check-delivery'],
+        env: { EXTRA_SETTING: 'set by the company' },
+        commands: {
+          echo: {
+            script,
+            describe: 'prints what it got',
+            okExits: [3],
+            check: (args, fence) => {
+              seen.push(args);
+              if (args[0] === 'url') fence.url(args[1] ?? '');
+              if (args[0] === 'file') fence.file(args[1] ?? '', 'the file');
+              if (args[0] === 'bad') throw new Error('this command does not take "bad"');
+              return args;
+            },
+          },
+        },
+      },
+    });
+    // The company installed check-delivery from the repository and echo from outside it; buy-with-signer is not installed.
+    expect(tools.specs.find((s) => s.name === 'run_command')!.description).toContain('echo (prints what it got)');
+    expect(((tools.specs.find((s) => s.name === "run_command")!.input as { properties: { command: { enum: string[] } } }).properties.command.enum)).toEqual(['check-delivery', 'echo']);
+    expect((await tools.call('run_command', { command: 'buy-with-signer', args: ['resume', 'x'] })).content).toMatch(/^Refused: "buy-with-signer" is not one of your company's installed commands: check-delivery, echo/);
+    const ok = await tools.call('run_command', { command: 'echo', args: ['hello'] });
+    expect(ok.isError).toBe(false);
+    const out = JSON.parse(ok.content.split('\n')[2]!);
+    expect(out.extra).toBe('set by the company');
+    expect(out.env).not.toContain('ANTHROPIC_API_KEY');
+    expect(out.env).toContain('HOLDBACK_OPERATORS');
+    // An exit the command names as a stop is not an error; every other non-zero exit is.
+    expect((await tools.call('run_command', { command: 'echo', args: ['stop'] })).isError).toBe(false);
+    for (const args of [['bad'], ['url', 'https://evil.example/'], ['file', '../outside'], ['file', '-x']]) expect((await tools.call('run_command', { command: 'echo', args })).content).toMatch(/^Refused/);
+    expect(seen.length).toBe(6);
+    expect(rec.events.filter((e) => e.kind === 'command' && e['command'] === 'echo').length).toBe(2);
+  });
+
   it("refuses the argument shift: a file named like a flag, or a --mime value that is a path (the red team's finding)", async () => {
     const { tools, work, owner } = box({ role: 'buyer' });
     writeFileSync(join(work, 'terms.json'), '{}');
