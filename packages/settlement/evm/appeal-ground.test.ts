@@ -5,7 +5,7 @@
 // keeps T-540's reason (phaseOneDecisionProblem).
 import { existsSync } from 'node:fs';
 import { join } from 'node:path';
-import { APPEAL_GROUND_APPEAL_ONLY } from '@holdback/core';
+import { APPEAL_GROUND_APPEAL_ONLY, type Decision } from '@holdback/core';
 import { afterAll, beforeAll, describe, expect, it } from 'vitest';
 import type { Submission } from '../src/interface.js';
 import type { EvmSettlement } from './evm-settlement.js';
@@ -58,6 +58,25 @@ describe.skipIf(!ready)(`a first decider's appeal ground on anvil (T-559)${ready
     }
     expect(chain.escrowState(carried.id)?.kind).toBe('Held');
     expect((await chain.stage(carried.id)).stage).toBe('Held');
+  }, 120_000);
+
+  // T-574: the empty string is no ground, by core's one rule (carriesAppealGround), as the contract reads it. Before,
+  // the relay passed it and the contract accepted it, but core's state machine, which the relay mirrors, refused it.
+  it('takes a decision whose appeal ground is the empty string as one with no ground, on chain and in the mirror', async () => {
+    const { chain, cast, club } = await newSettlement(world);
+    const d = await funded(chain, cast, club, 'ground-empty');
+    await must(chain, cast, d.deliver());
+    await must(chain, cast, d.decide('primary', 'accept', undefined, { appealGround: '' as NonNullable<Decision['appealGround']> }));
+    expect(chain.escrowState(d.id)?.kind).toBe('Released');
+    expect((await chain.stage(d.id)).stage).toBe('Released');
+    // The escalation's decision too, which T-540's reason refused for "" before.
+    const e = await funded(chain, cast, club, 'ground-empty-escalated');
+    await must(chain, cast, e.deliver());
+    await must(chain, cast, e.decide('primary', 'escalate', undefined, { appealGround: '' as NonNullable<Decision['appealGround']> }));
+    const at = Math.floor(Date.parse(chain.now()) / 1000) - 1;
+    chain.advance(2);
+    await must(chain, cast, e.decide('appeal', 'accept', at + 1, { appealGround: '' as NonNullable<Decision['appealGround']> }));
+    expect([chain.escrowState(e.id)?.kind, (await chain.stage(e.id)).stage]).toEqual(['Released', 'Released']);
   }, 120_000);
 
   it("refuses a fallback's decision with an appeal ground by core's reason", async () => {

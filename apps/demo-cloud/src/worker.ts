@@ -237,6 +237,10 @@ export class World {
   }
 }
 
+/** Where the site serves security.txt (apps/site/worker.js, written by site/build.mjs). */
+export const SECURITY_TXT_URL = 'https://crow.direct/.well-known/security.txt';
+const SECURITY_TXT_PATH = '/.well-known/security.txt';
+
 export default {
   // T-451: every answer leaves through secured() (headers.ts), the one place the security headers are set.
   async fetch(request: Request, env: Env): Promise<Response> {
@@ -250,6 +254,9 @@ async function forward(request: Request, env: Env): Promise<Response> {
   // client follows with the same method and body or not at all, so nothing sent over plain HTTP reaches the World.
   // Local runs (127.0.0.1, localhost) stay on HTTP.
   if (url.protocol === 'http:' && !isLocal(url.hostname)) return Response.redirect(`https://${url.host}${url.pathname}${url.search}`, request.method === 'GET' || request.method === 'HEAD' ? 301 : 308);
+  // T-574: SECURITY.md names the API hostnames in scope, so they answer security.txt (RFC 9116) too, by a redirect to
+  // the site's file: its Expires is set by the site's build alone, so there is one date to keep current.
+  if ((request.method === 'GET' || request.method === 'HEAD') && url.pathname === SECURITY_TXT_PATH) return Response.redirect(SECURITY_TXT_URL, 301);
   const headers = new Headers(request.headers);
   const settlement = settlementOf(env.SETTLEMENT);
   if (!settlement) return unconfigured(env.SETTLEMENT !== undefined);
