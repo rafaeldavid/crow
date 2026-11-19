@@ -5,7 +5,7 @@
 - **Depends on:** T-421 (the trust page)
 - **Paths this task may touch:** `site/trust.mjs`, `site/footer.ts`, `site/build.mjs`, `site/check.mjs`, the pages they build (`site/*.html`, `site/*.txt`, `site/pages.css`), this file
 - **Human gate:** yes: Rafa reads the exact words before merge; the page goes live only with a site deploy, which is his word
-- **Status:** review
+- **Status:** done
 - **Agent/session:** t-564-legal-page
 - **Roadmap row:** N202
 
