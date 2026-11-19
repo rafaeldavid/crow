@@ -1,7 +1,7 @@
 // The adjudicator service on T-006's real SimChain, through the settlement adapter: the demo's cleaned
 // customer CSV is offered, accepted by the service, funded, delivered sealed, judged and released; the
 // seller is paid and the buyer opens the key the decision released.
-import { commitmentId, DRAND_QUICKNET_CHAIN_HASH, holdbackDomain, parseJudgment, SIM_BEACON, signTerms, type Address, type AdjudicatorRegistration, type Commitment, type CommitmentTerms, type Delivery, type Judgment, type Rulebook } from '@holdback/core';
+import { commitmentId, DRAND_QUICKNET_CHAIN_HASH, holdbackDomain, parseJudgment, SIM_BEACON, signTerms, verifyMessage, type Address, type AdjudicatorRegistration, type Commitment, type CommitmentTerms, type Delivery, type Judgment, type Rulebook } from '@holdback/core';
 import { encodePublicKey, encryptionKeyPairFromSecretKey, open, seal, unwrapKey, wrapKeyForRecipients, type EncryptionKeyPair } from '@holdback/core/crypto';
 import { fakeProvider, loadRegistry, type FakeScript, type JudgeProvider, type JudgeRequest, type RegistryDoc } from '@holdback/judgment';
 import { SIM_CHAIN_ID, SIM_RULEBOOK, SimChain, sign, simCast, simClub, simGenesis, tusd, type SimActor } from '@holdback/settlement/sim';
@@ -36,20 +36,22 @@ const encKeys = (n: number): EncryptionKeyPair => encryptionKeyPairFromSecretKey
 interface WorldOptions {
   rulebook?: Rulebook;
   drand?: RandomnessSource;
+  /** T-549: the seller's address is a SimChain wallet that the seller's key signs for (ADR-0040 §5). */
+  contractSeller?: Address;
 }
 
 async function world(bonds = { primary: 10_000_000_000n, fallback: 10_000_000_000n, appeal: 10_000_000_000n }, o: WorldOptions = {}) {
-  const cast = simCast('t009-e2e');
+  const keyed = simCast('t009-e2e');
+  const cast = o.contractSeller ? { ...keyed, seller: { ...keyed.seller, address: o.contractSeller } } : keyed;
   const club = simClub(cast.appeal.address, o.rulebook);
-  const chain = new SimChain(
-    await simGenesis({
-      cast,
-      club,
-      start: START,
-      balances: { buyer: 10_000_000_000n, seller: 1_000_000_000n },
-      bonds,
-    }),
-  );
+  const genesis = await simGenesis({
+    cast,
+    club,
+    start: START,
+    balances: { buyer: 10_000_000_000n, seller: 1_000_000_000n },
+    bonds,
+  });
+  const chain = new SimChain(o.contractSeller ? { ...genesis, contracts: [{ address: o.contractSeller, kind: 'wallet', owner: keyed.seller.address }] } : genesis);
   const blobs = new Map<string, Uint8Array>();
   const records = new Map<string, Judgment>();
   const registrations = new Map<string, AdjudicatorRegistration>();
@@ -229,6 +231,22 @@ describe('the adjudicator service on the real SimChain (T-006)', () => {
     const again = await w.primary.adj.runOnce();
     expect(again.decided).toEqual([]);
     expect(w.calls).toHaveLength(3);
+  });
+
+  it("T-549: a contract seller's delivery is checked by the settlement layer's contract-signer rule, judged and paid to its address", async () => {
+    const wallet: Address = '0x00000000000000000000000000000000000c0de1';
+    const w = await delivered(undefined, { contractSeller: wallet });
+    const { chain, id } = w;
+    // Without the rule, an ECDSA recovery never reaches the wallet's address (ADR-0040 §6).
+    const task = (await w.settlement.tasks(w.cast.primary.address)).find((t) => t.commitment.id === id)!;
+    expect(await verifyMessage(DOMAIN, { ...task.delivery, type: 'Delivery' }, wallet)).toBe(false);
+    expect(await verifyMessage(DOMAIN, { ...task.delivery, type: 'Delivery' }, wallet, w.settlement.signerCheck())).toBe(true);
+    const sellerBefore = await sellerBalance(w);
+    const report = await w.primary.adj.runOnce();
+    expect(report.refused).toEqual([]);
+    expect(report.decided).toEqual([{ commitmentId: id, role: 'primary', outcome: 'accept' }]);
+    await expectReleased(w, sellerBefore);
+    expect(chain.escrowState(id)?.kind).toBe('Released');
   });
 
   it('a silent primary: the fallback triggers the takeover at judgeBy, opens only its released key, seeds from the beacon and settles', async () => {
