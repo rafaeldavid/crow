@@ -1603,3 +1603,18 @@ Today a seller with its own API reads 13 files of 98,462 bytes and runs 22 comma
 **Open, for Rafa:** the operators relaying a budget's funding; reading a contract buyer and its longer signature, for stepping in on funded deals; Crow-paid creation on request; the owner's guide in a current page; the fee, with none recommended now. The protocol's base, name and design go in its own record.
 
 **Litmus tests.** Neutrality: no owner, controller, module or factory of the protocol can stop a funded deal or move a hold; on a fork of Sepolia the owner emptied its budget after a funding and the deal still ended Released [measured by the design research]. The hold: unchanged. Defended judgment: unchanged.
+
+## D85. Two findings of the fix review stay known limits in phase one, and the next contract version fixes both (T-553)
+
+**Status:** decided, 2026-11-19.
+
+**Why now.** The outside fix review of the phase-one contracts (T-553) left two findings open. The reviewers asked Crow to choose how each one closes. Both are rated Informational, and each harm stays within one deal.
+
+**Decided by Rafa, 2026-11-19:** both stay known limits for phase one, and both are fixed in the next version of the contracts. His words: "Accept both as known limits. Include in next version of contracts. Seller and Buyer also have options to wrap additional controls on their contract execution and this would be very advanced usage of the protocol."
+
+- **A seller can make a decision that carries its delivery revert after the decision's calldata is public** (known issues OS-1 and OS-2). The seller then sees the panel seed and a decision that is not an accept, and can deliver again. Crow's operators carry a delivery only in an accept (T-526, D79). The contract keeps the carried path for anyone who relays directly. **Next version:** the contract refuses a carried delivery in any decision that is not an accept.
+- **A validator operator with a run of n block slots, colluding with a party, gets n − 2 known panel draws** (the BR-6 residual and known issue OS-4; ADR-0032 section 6, residual 1). **Next version:** the escalation's round is fixed by state, not by the block it lands in. ADR-0032's alternative I is the reviewers' suggestion. Its cost, that an escalation waits for its deadline, is weighed when that version is designed.
+
+**What the parties can do now (D32).** A party can put its own controls around how its messages reach the chain. Examples: a relayer that carries a delivery only in an accept, or an adjudicator that sends its escalation after a private random delay. Both attacks need very advanced use of the protocol: a contract wallet that changes its answer, or collusion with a validator operator that proposes several slots in a row.
+
+**Litmus tests.** Neutrality: unchanged. No party can move a hold outside the terms; the worst case is one deal decided by the fallback or the default, or a better chance at one deal's panel. The hold: unchanged. Defended judgment: the panel seed stays unknown to anyone who does not attack, and both attacks leave a signed, public record (D26).

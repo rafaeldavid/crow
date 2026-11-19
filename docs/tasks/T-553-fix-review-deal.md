@@ -42,7 +42,7 @@ All measured on 2026-11-19 unless marked.
   - whole run: 28 model calls and 1,187,621 tokens, mostly cache reads;
   - the deal record: 15 checks passed, 0 failed, 5 not run, no disagreement between the operators.
 - **The judgment:** all five required checks passed; the rubric is empty, so no panel ran. The screen flagged the review's own wording, and under the default rules that does not stop an accept.
-- **The review:** nothing is rated above Informational. Five changes close their findings. The beacon probe closes its finding only in part, and the review reports what is left as a new Informational finding. Two earlier findings stay open for Rafa's choice. The findings stay private until they are addressed.
+- **The review:** nothing is rated above Informational. Five changes close their findings. The beacon probe closes its finding only in part, and the review reports what is left as a new Informational finding. Two earlier findings stayed open for Rafa's choice. He kept both as known limits for phase one and put their fixes in the next contract version (D85). The findings stay private until they are addressed.
 - **The seller's deploy:** "Crow's own seller, pilot-scan-2, sells a fix review" in `docs/operations.md`, Deploy record.
 
 ## Handoff
