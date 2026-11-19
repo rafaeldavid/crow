@@ -373,7 +373,7 @@ function deliver(s: Extract<EscrowState, { kind: 'Held' }>, e: Extract<EscrowEve
   // may be left out (ADR-0040 §2): a standing delivery serves every take of one template, and only a holder of the
   // content key can seal to each buyer. Without it the buyer's key comes only with an adjudicator's accept, which
   // wraps the content key to the terms' encryption key, and core refuses an early accept and a settlement that
-  // releases the key (`withBuyerEnvelope`), as the contract does (HoldbackRules :344, :380-381).
+  // releases the key (`withBuyerEnvelope`), as the contract does (HoldbackRules :360, :396-397).
   const { adjudicator, fallbackAdjudicator, appealAdjudicator } = terms.adjudication;
   for (const recipient of [adjudicator, fallbackAdjudicator, appealAdjudicator]) {
     if (!d.encryptedKeys.some((k) => sameAddress(k.recipient, recipient))) return fail('invalid_terms', `no content key for ${recipient}`);
@@ -386,8 +386,8 @@ export const holdsBuyerEnvelope = (d: Pick<Delivery, 'encryptedKeys'>, buyer: st
 
 /**
  * ADR-0040 §2: a path that releases the buyer's key from the delivery itself (an early accept, a settlement with
- * releaseKey) needs the buyer's envelope in it; the contract's key proof reverts BadKeyProof without one (:344,
- * :381). Refused here, with the reason, before anything is relayed.
+ * releaseKey) needs the buyer's envelope in it; the contract's key proof reverts BadKeyProof without one (:360,
+ * :397). Refused here, with the reason, before anything is relayed.
  */
 function withBuyerEnvelope(d: Delivery, buyer: string, path: string): R<true> {
   if (holdsBuyerEnvelope(d, buyer)) return ok(true);

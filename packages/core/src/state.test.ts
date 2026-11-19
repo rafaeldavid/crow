@@ -1005,7 +1005,7 @@ describe('late-work settlement in Held (SC-5b)', () => {
 // T-550, ADR-0040 §2: a standing delivery serves every take of one template, so it holds envelopes for the three
 // adjudicators and none for the deal's own buyer. Core takes it; the buyer's key then comes only with an adjudicator's
 // accept, and core refuses, with the reason, every path that would release the key from the delivery itself, as the
-// contract does (HoldbackRules :344 and :380-381, BadKeyProof).
+// contract does (HoldbackRules :360 and :396-397, BadKeyProof).
 describe('a standing delivery without the buyer envelope (ADR-0040 §2)', () => {
   const standing = delivery({ encryptedKeys: delivery().encryptedKeys.filter((k) => k.recipient !== buyer) });
   const SDH = deliveryHash(standing);
@@ -1033,8 +1033,8 @@ describe('a standing delivery without the buyer envelope (ADR-0040 §2)', () => 
   });
 
   it.each<[string, EscrowEvent[], EscrowEvent]>([
-    ['an early accept (BadKeyProof, :344)', toStanding, ev.earlyAccept(T.decide, buyer, { deliveryHash: SDH })],
-    ['a settlement that releases the key in Delivered (BadKeyProof, :381)', toStanding, ev.mutual(T.decide, { deliveryHash: SDH, releaseKey: true })],
+    ['an early accept (BadKeyProof, :360)', toStanding, ev.earlyAccept(T.decide, buyer, { deliveryHash: SDH })],
+    ['a settlement that releases the key in Delivered (BadKeyProof, :397)', toStanding, ev.mutual(T.decide, { deliveryHash: SDH, releaseKey: true })],
     ['the same during fallback judging', [...toStanding, ev.at('trigger_fallback', T.judgeBy)], ev.mutual(T.fallbackDecide, { deliveryHash: SDH, releaseKey: true })],
     ['the same while escalated', [...toStanding, ev.decide('primary', 'escalate', T.decide, { deliveryHash: SDH })], ev.mutual(T.fallbackDecide, { deliveryHash: SDH, releaseKey: true })],
   ])('refuses %s, with the reason, and changes nothing', (_name, path, event) => {
