@@ -25,7 +25,7 @@ contract DrandBeaconTest is Test {
 
     function setUp() public {
         vm.chainId(31337);
-        beacon = new DrandQuicknetBeacon();
+        beacon = new DrandQuicknetBeacon(250_000);
     }
 
     // ------------------------------------------------------------ valid rounds

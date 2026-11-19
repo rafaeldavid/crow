@@ -87,15 +87,19 @@ Steps 0 to 6, then 8, then 7, then 11.1, 9, 10 and the rest of 11. The site depl
 
 5. **It holds `main`:** `git -C $W merge-base --is-ancestor origin/main HEAD; echo $?` prints `0`. A `1` means `main` has commits the lane lacks: bring `main` into the lane by a pull request first. That moves the lane's tip, so then repeat step 0 from 0.1.
 6. **The tools answer:** `forge --version`, `cast --version`, `jq --version`, `node --version`, `npx wrangler@4.151.3 whoami` (Rafa's Cloudflare login).
-7. **The deployer has test ETH.** Reusing the live record's deployer (`jq -r .deployer $W/contracts/deployments/sepolia.json`) or a new throwaway key is Rafa's call. Size the budget from the live deployment's own creations, then the gas price:
+7. **The deployer has test ETH.** Reusing the live record's deployer (`jq -r .deployer $W/contracts/deployments/sepolia.json`) or a new key used only on Sepolia is Rafa's call. Size the budget from the live deployment's own creations, then the gas price:
 
    ```sh
-   for tx in $(jq -r '.contracts[].tx, .token.tx' $W/contracts/deployments/sepolia.json); do cast receipt $tx gasUsed --rpc-url $R; done
+   for tx in $(jq -r '.contracts[].tx, .token.tx' $W/contracts/deployments/sepolia.json); do cast receipt $tx gasUsed --rpc-url $D; done
    cast gas-price --rpc-url $R
    cast balance <deployer address> --ether --rpc-url $R
    ```
 
+   The receipts come from `D`: on 2026-11-19 the public node answered `null` for each of the first deployment's five creations, six days old, and `cast receipt` waited on it without end; Tenderly's gateway returned all five [measured].
+
    Keep at least twice the sum at today's gas price, with room for the price to move: a stopped run is rerun whole, because the script does not resume (its header says so). A fix that grows the contracts costs more.
+
+   Old receipts price the old rules of the chain. When Sepolia's gas rules may have changed, estimate the five creations afresh, without sending: `eth_simulateV1` on `R` for the first four in order (a node caps a whole simulation's gas, near 50M on the public node, so the fifth runs out there), then `eth_estimateGas` for the rules contract with the deployer's nonce at 4 and the other four's simulated code at their predicted addresses (`cast compute-address --nonce <n> <deployer>`) as state overrides. On 2026-11-19 the estimates were within 3% of 2026-11-13's receipts, and no per-transaction cap stopped the 32.7M-gas rules creation [measured, T-563]. That day Rafa chose a new deployer key used only on Sepolia, which sessions may pass by path to step 2.3; the record names it.
 8. **The relayer's funding lane has test ETH:** `cast balance $(curl -s https://api.crow.direct/.well-known/holdback.json | jq -r .demo.relayer.fundingLane) --ether --rpc-url $R`. The new world keeps the relayer key and its lanes. Do not run `apps/demo-cloud/scripts/relayer.mjs` or `apps/test-agents/scripts/seed.mjs`: both secrets stay as they are.
 9. **The rollback targets,** each Worker's live version. Write each version ID down; later deploys replace them:
 
@@ -177,11 +181,13 @@ Steps 0 to 6, then 8, then 7, then 11.1, 9, 10 and the rest of 11. The site depl
 **It must show:** the record's `commit` equals `git -C $W rev-parse HEAD`; it has `beaconMarginSec` and `deployedAt`. On the fixed build and later, the beacon takes one constructor argument, its pairing gas: the script sets it (`PAIRING_GAS` in `contracts/script/deploy-sepolia.sh`), passes it, reads it back on chain (its `beacon PAIRING_GAS` check, which stops the run on a difference) and writes it into the record. `jq -c .contracts.DrandQuicknetBeacon.args $W/contracts/deployments/sepolia.json` prints that value, and `cast call $(jq -r .beacon $W/contracts/deployments/sepolia.json) 'PAIRING_GAS()(uint256)' --rpc-url $R` prints the same.
 **Rollback:** `git -C $W checkout -- contracts/deployments/sepolia.json` and delete the dated copy. The cost is test ETH.
 
-## Step 3. The record and every pin, in one commit; Sourcify
+## Step 3. The record and every pin, in two commits; Sourcify
 
 The record, the world's name and every copy move together: each Worker names its Sepolia world by the record's rules address, and a world refuses to open against another rules contract.
 
 1. **Write the copies:** run the `--old` line step 2.2 printed. It substitutes the new values, rebuilds the site, then sweeps every tracked file outside the history list at the top of `scripts/record-copies.mjs`. It must end `record-copies: pass: …`. It prints the paths it did not read, with the reason: look at any path that is not history, the submodule or a binary image. Any line it names is a pin to fix by hand; then rerun it.
+
+   Then commit the record, its dated copy and the copies, run `node $W/site/build.mjs`, and commit the rebuilt `site/try.mjs` and `site/index.html` on their own. `site/build.mjs` names the bundle's source commit only once `examples/` is committed (T-496); while the copies are uncommitted it writes "Source commit: none", and `examples/try.test.ts` then fails in step 3.4 [measured on the fork rehearsal of 2026-11-19, T-563: it failed, and passed after this order]. A later commit that leaves `examples/` alone keeps the bundle current.
 2. **Check the deployment, read-only:**
 
    ```sh
@@ -224,7 +230,7 @@ The record, the world's name and every copy move together: each Worker names its
 
    `pnpm test` runs for many minutes: run it in the background.
 5. **The cut-feature list:** `pnpm -C $W exec vitest run tests/cut-feature-alignment.test.ts -u`, then read its diff: only removals.
-6. **One commit, one pull request** from `cutover-$T` into `main`. Do not merge it before step 11.1. Expect CodeQL to report alerts in test and check files that came from the lane, because pull requests into the lane run no CodeQL: fix what is real, and list the rest for Rafa's dismissal.
+6. **The two commits of step 3.1, and the docs that name the live version, in one pull request** from `cutover-$T` into `main`. Do not merge it before step 11.1. Expect CodeQL to report alerts in test and check files that came from the lane, because pull requests into the lane run no CodeQL: fix what is real, and list the rest for Rafa's dismissal.
 7. **gitleaks.** The record holds public values that gitleaks flags: on 2026-11-13 it flagged the escrow's `tokenStoreImplementation` address in four files [measured]. The gitleaks action scans only a few commits of a pull request with many, so a pass on a large pull request proves little [measured on PR 475]. Scan the whole range locally, then Rafa adds the lines for the record's commit to `.gitleaksignore`:
 
    ```sh

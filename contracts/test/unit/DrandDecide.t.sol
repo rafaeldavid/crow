@@ -27,7 +27,7 @@ contract DrandDecideTest is Base {
 
     function setUp() public override {
         super.setUp();
-        drand = new DrandQuicknetBeacon();
+        drand = new DrandQuicknetBeacon(250_000);
         rules = new HoldbackRules(escrow, address(collector3009), MARGIN, drand, address(usdc), DRAND_MARGIN);
     }
 

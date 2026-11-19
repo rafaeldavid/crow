@@ -13,7 +13,7 @@ contract DrandAllRoundsTest is Test {
     DrandQuicknetBeacon internal beacon;
 
     function setUp() public {
-        beacon = new DrandQuicknetBeacon();
+        beacon = new DrandQuicknetBeacon(250_000);
     }
 
     function _verifies(uint64 round, bytes memory s) internal view returns (bool ok) {

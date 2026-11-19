@@ -55,6 +55,10 @@ EXPIRY_MARGIN=86400 # T-206 review §7: one day, the value the local EVM world a
 # choice can still be made, two block slots on Sepolia. The constructor refuses 0 on any chain but the local one. This
 # is the one place the script names it: the create line, the creation-code check, the wiring check and the record.
 BEACON_MARGIN=29
+# The gas the beacon forwards to the pairing precompile, its one constructor argument (T-528). Two pairs cost 102,900
+# under EIP-2537 today, the beacon's floor; 250,000 keeps phase one's value. The create line, the creation-code check,
+# the runtime-hash check, the read-back and the record name it.
+PAIRING_GAS=250000
 
 # drand quicknet round 1000, and the same signature plus an order-3 curve point outside G1 (T-206 audit cross-check).
 SIG_1000=0xb44679b9a59af2ec876b1a6b1ad52ea9b1615fc3982b19576350f93447cb1125e342b73a8dd2bacbe47e4b6b63ed5e39
@@ -450,7 +454,7 @@ if [ "$MODE" = deploy ]; then
   ESCROW="$CREATED_ADDRESS" ESCROW_TX="$CREATED_TX"
   create ERC3009PaymentCollector "$C3009_ID" 'constructor(address,address)' "$ESCROW" "$MULTICALL3"
   C3009="$CREATED_ADDRESS" C3009_TX="$CREATED_TX"
-  create DrandQuicknetBeacon "$BEACON_ID"
+  create DrandQuicknetBeacon "$BEACON_ID" 'constructor(uint256)' "$PAIRING_GAS"
   BEACON="$CREATED_ADDRESS" BEACON_TX="$CREATED_TX"
   # The demo's open-mint test token. A deployment serves one token, fixed in the rules contract's constructor
   # (ADR-0031 §2, SC-1), so the token comes first.
@@ -527,7 +531,7 @@ if [ "$MODE" = deploy ]; then
 fi
 creation_matches "$ESCROW_ID" "$ESCROW_TX"
 creation_matches "$C3009_ID" "$C3009_TX" 'constructor(address,address)' "$ESCROW" "$MULTICALL3"
-creation_matches "$BEACON_ID" "$BEACON_TX"
+creation_matches "$BEACON_ID" "$BEACON_TX" 'constructor(uint256)' "$PAIRING_GAS"
 creation_matches "$RULES_ID" "$RULES_TX" 'constructor(address,address,uint64,address,address,uint64)' \
   "$ESCROW" "$C3009" "$EXPIRY_MARGIN" "$BEACON" "$TOKEN" "$BEACON_MARGIN"
 
@@ -564,13 +568,16 @@ fi
 expect "ERC-3009 collector escrow" "$ESCROW" call "$C3009" 'authCaptureEscrow()(address)'
 expect "ERC-3009 collector multicall3" "$MULTICALL3" call "$C3009" 'multicall3()(address)'
 
-# The beacon's runtime is deterministic (its one immutable is a constant), so an agent can check
+# The beacon's runtime is deterministic (its immutables are a constant and the pairing gas), so an agent can check
 # rules.BEACON().codehash against this value before signing (backlog: which beacon a rules contract uses).
 BEACON_INIT="$(forge inspect --root "$ROOT" "$BEACON_ID" bytecode)"
+BEACON_ARGS="$(cast abi-encode 'constructor(uint256)' "$PAIRING_GAS")" || fail "encoding the beacon's pairing gas failed"
+BEACON_INIT="$BEACON_INIT${BEACON_ARGS#0x}"
 BEACON_RUNTIME="$(cast call --rpc-url "$RPC" --create "$BEACON_INIT")"
 BEACON_CODEHASH="$(cast keccak "$BEACON_RUNTIME")"
 BEACON_GOT="$(codehash "$BEACON")"
 [ "$BEACON_GOT" = "$BEACON_CODEHASH" ] || fail "beacon code differs from the compiled DrandQuicknetBeacon"
+expect "beacon PAIRING_GAS" "$PAIRING_GAS" call "$BEACON" 'PAIRING_GAS()(uint256)'
 # beaconValue reverts unless the BLS proof verifies, so a returned value is the proof check passing on this chain's
 # EIP-2537 precompiles.
 VALUE_1000="$(call "$BEACON" 'beaconValue(uint64,bytes)(bytes32)' 1000 "$SIG_1000")"
@@ -624,7 +631,7 @@ RECORD="$(jq -n \
   --arg rules "$RULES" --arg rulesTx "$RULES_TX" --argjson rulesBlock "$RULES_BLOCK" \
   --arg value1000 "$VALUE_1000" --arg beaconCodeHash "$BEACON_CODEHASH" \
   --arg multicall "$MULTICALL3" --arg multicallCodeHash "$MULTICALL3_CODEHASH" \
-  --argjson expiryMarginSec "$EXPIRY_MARGIN" --argjson beaconMarginSec "$BEACON_MARGIN" \
+  --argjson expiryMarginSec "$EXPIRY_MARGIN" --argjson beaconMarginSec "$BEACON_MARGIN" --argjson pairingGas "$PAIRING_GAS" \
   --argjson chainId "$CHAIN" \
   --argjson token "$TOKEN_JSON" --arg tokenAddress "$TOKEN" \
   '{
@@ -654,7 +661,7 @@ RECORD="$(jq -n \
       AuthCaptureEscrow: {address: $escrow, tx: $escrowTx, block: $escrowBlock, args: [],
         tokenStoreImplementation: $tokenStoreImplementation},
       ERC3009PaymentCollector: {address: $c3009, tx: $c3009Tx, block: $c3009Block, args: [$escrow, $multicall]},
-      DrandQuicknetBeacon: {address: $beacon, tx: $beaconTx, block: $beaconBlock, args: []},
+      DrandQuicknetBeacon: {address: $beacon, tx: $beaconTx, block: $beaconBlock, args: [($pairingGas | tostring)]},
       HoldbackRules: {address: $rules, tx: $rulesTx, block: $rulesBlock,
         args: [$escrow, $c3009, ($expiryMarginSec | tostring), $beacon, $tokenAddress, ($beaconMarginSec | tostring)]}
     }
