@@ -240,7 +240,7 @@ Without the binding, `/v1/feedback` answers 404 `not_found` and discovery has no
 
 ## Sepolia contracts (T-206)
 
-The phase-one contracts are deployed on Ethereum Sepolia, a public testnet whose coins are worthless; the record's `chainId` names the chain. Models from two families reviewed them; no one has audited them (`docs/audit/scope.md`). Addresses, transaction hashes, blocks, constructor arguments, the commit and the compiler settings are in `contracts/deployments/sepolia.json`. Read them from there, not from this page. The live demo settles on them (T-213, behind the `SETTLEMENT` flag).
+The fixed version of the phase-one contracts is deployed on Ethereum Sepolia since 2026-11-19, a public testnet whose coins are worthless; the record's `chainId` names the chain. Models from two families reviewed them; an outside firm's automated scan read the first version and its fix review read the fixed version; no human audit has run (`docs/audit/scope.md`, `docs/audit/outside-scan.md`). Addresses, transaction hashes, blocks, constructor arguments, the commit and the compiler settings are in `contracts/deployments/sepolia.json`. Read them from there, not from this page. The live demo settles on them (T-213, behind the `SETTLEMENT` flag).
 
 - **What the script deploys** (the phase-one contracts, ADR-0031, ADR-0032 and ADR-0033):
   - Commerce Payments' `AuthCaptureEscrow` with its ERC-3009 collector, the only funding path (ADR-0031 §3).
@@ -262,7 +262,7 @@ The phase-one contracts are deployed on Ethereum Sepolia, a public testnet whose
   - writes the JSON.
 - **Check it.** `contracts/script/deploy-sepolia.sh --check <rpc-url>` deploys nothing and is read-only. It runs the same checks from the recorded addresses and the checkout's build. It ties each address to the transaction that created it. Then it fails unless the record it derives equals `contracts/deployments/sepolia.json`. Run it from a checkout whose build inputs equal the recorded commit's. Every check fails closed: an RPC error is a failure, never a pass.
 - **Rehearse first** on a fork: `anvil --fork-url <sepolia-rpc> --fork-block-number <a recent block> --hardfork prague`. Without `--hardfork prague` the fork lacks EIP-2537 and the beacon check fails.
-- **The deployer.** A throwaway key, whose address is in the JSON. It sits in an encrypted Foundry keystore at `~/.foundry/keystores/`, outside the repository, with its password in a 0600 file next to it. It only pays gas. Never print the key or the password, and never put either in `.env*`.
+- **The deployer.** A key used only on Sepolia, whose address is in the JSON. Since 2026-11-19 it is a new key (Rafa: "New key"), in an encrypted Foundry keystore in a 0700 folder outside every repository on Rafa's Mac, with its password in a 0600 file next to it; a session may pass both to the deploy script by path, never read them. The first version's deployer stays in `~/.foundry/keystores/`, Rafa's own. It only pays gas. Never print the key or the password, and never put either in `.env*`.
 - **Source verification.** `contracts/script/deploy-sepolia.sh --verify <rpc-url>` runs `--check` first, then verifies the five contracts' source on Sourcify through its API v2 (`scripts/sourcify-verify.mjs`, T-410), with no key and no account. `VERIFY_DRY_RUN=1` runs the check and sends nothing. Etherscan is not part of `--verify`: forge 1.0.0 names only Etherscan's retired API, and the script no longer calls it. The steps and what each must show are in [`redeploy-contracts.md`](redeploy-contracts.md), step 3. The deployment of 2026-11-04 is not verified. The JSON records the commit and compiler settings, so anyone can rebuild and compare the bytecode.
 - **Redeploying.** A contract fix ships as a new deployment that new deals opt into. Deals already open keep the contracts they started with. Deploying again, to Sepolia or anywhere else, is a gate (below), and follows [`redeploy-contracts.md`](redeploy-contracts.md).
 - **Earlier deployments** keep their records beside `sepolia.json` under dated names (`sepolia-<date>-domain-<version>.json`). To check one, copy it over `sepolia.json` in a checkout at its `commit` and run `deploy-sepolia.sh --check`. The dated record below says when each went live.
@@ -306,6 +306,38 @@ The maintainers keep the notes on agent sessions and permission prompts privatel
 ## Deploy record
 
 Each entry records one deploy as it ran: the date and time in UTC, the commit, each Worker's new version and its rollback target, and what was measured after it. The deploy scripts print the entry's first line (`pnpm demo-cloud:deploy`, `pnpm site:deploy`, `node apps/test-agents/scripts/deploy.mjs`). The values are true for their date: for what runs now, read "What is live" above and each node's discovery.
+
+### The fixed contract version: new contracts, a new world (deployed 2026-11-19, T-563)
+
+The fixed version of the phase-one contracts, with an outside scan's fixes, replaced the first version on Sepolia by `docs/redeploy-contracts.md`. Rafa's word was "You need to deplot the fixed version of the contracts and update the piping and everything to point to the fixed contracts", and for the deployer "New key". The session ran every step from the worktree `t-563-cutover`, after `pnpm install --frozen-lockfile` and `pnpm build`. Every value here is measured unless marked.
+
+- **The frozen commit:** `1adfa55b7b6dabe94325b7731cbd3760f518e01d`, the lane's tip after pull request 690 brought `main` into it. `contracts/src` tree `c4edcfb1185a34f5a205d9170e0ae690c758c157`, the same as `d621291e`, which the outside firm's fix review read. Runtime hashes at that commit and on chain: HoldbackRules 20,786 bytes `208704ee…2721`, DrandQuicknetBeacon 3,491 bytes `5b99156c…d8d8`.
+- **The rehearsals:** on anvil, 8 steps passed. On a fork of Sepolia, from the live first-build record to a fixed-build record, every check passed once the copies were committed before the site rebuild: `site/try.mjs` names its source commit only then (the runbook now says so, step 3.1).
+- **The deployer:** a new key used only on Sepolia, `0xa27Cd8A0cF6D15559aF9E6Ff9ebd885da57C3E6a`, funded with 0.5 ETH by Rafa from the previous deployer (transaction `0x84a64b86…3b1a`). Fresh estimates on live Sepolia matched the receipts of 2026-11-13 within 3%.
+- **The contracts,** created from block 12,169,902, 62,076,765 gas in all (about 0.0055 ETH): rules `0xaAF8A86e54B1Cb867c00BD452c78981664153d56`, beacon `0xae2742A788C4c4689A75fCd25d54d12641A14a57` (`PAIRING_GAS` 250,000, read back on chain), token `0xf1A4B68b201e9Eddef8a054FB6a931b849d18504`, escrow `0x7FaE06D96c739F6DA6F40610b34998d8cf83D5d9`, collector `0x54169Df23Be4B7De17dc6b7B47B9B09394443D8A`. `--check` matched the chain and the build; all five are an exact match on Sourcify, runtime and creation. No orphan contract.
+- **The old world:** rules `0x3BE45128565ABBc35DbD4660716b703Ff489f1b4`, record kept as `contracts/deployments/sepolia-2026-11-13T0532Z-domain-0.8.json`. Its storage stays for a rollback. Left on it: four offers from T-399's postdated case (`0x41e1508f…`, `0x82bfcadd…`, `0x5d9bf6b1…`, `0xb28a359b…`), accepted by the primary, never agreed or funded, expiring in 2031; nothing is held for them. Its rules contract emitted no event in the 500 blocks before the switch.
+- **The quiet:** at 18:22 UTC `head.eventSeq` stayed 883 on both nodes for 30 s, and every seller read `open: 0`.
+
+**Deploy 2026-11-19 18:22 UTC, commit `81f8ea2` on branch `cutover-contracts-phase-one-2`: pass.** holdback-op1 `ac7bde81-d718-4735-aa08-3bd04869b74c` (rollback target `b9e5d82e-d929-4bf8-b9cf-b723c878174e`), holdback-op2 `cb68f2b0-4d4c-48e7-86a5-a680358e0892` (rollback target `35c7b17d-8861-4d0e-991e-658db56e8bf2`). Smoke deal `0x30a1ced18c1ebbf3d31113219422b76cf65b09591d762edd6f29ff5002f446ed` Released in 45 s.
+
+Gas on Sepolia: fund 581,630, deliver 173,940, decide 525,183, total 1,280,753
+
+**Test seller deploy 2026-11-19 18:24 UTC, commit `81f8ea2`: pass.** crow-test-agents `a94bf8db-b454-4be4-99eb-014f8a0d66fa` (rollback target `135683f8-e481-4c2d-8657-c4967126f047`).
+
+**Hosted seller pilot-scan-1 deploy 2026-11-19 18:28 UTC, commit `81f8ea2` on branch `cutover-contracts-phase-one-2`: pass.** crow-seller-pilot-scan-1 `42a4ca54-af35-481e-8151-8ed72b98db14` (rollback target `2e297344-58c2-4905-9910-6fdb2b0114fe`).
+
+**Hosted seller pilot-scan-2 deploy 2026-11-19 18:29 UTC, commit `81f8ea2` on branch `cutover-contracts-phase-one-2`: pass.** crow-seller-pilot-scan-2 `14902608-9a18-4b51-a2b7-3c914ef5ab3f` (rollback target `30b5e98f-2fc2-4c13-b72b-e296c589422c`).
+
+**Site deploy 2026-11-19 19:11 UTC, commit `978aa38` on a detached HEAD: pass.** crow-site `ec794cfa-c95f-41e7-949e-85f1f17039f2` (rollback target `1d90ca19-101f-4d1e-ba1e-5d0dcda82328`).
+
+After the deploys:
+
+- **Discovery** on both nodes names chain 11155111, rules `0xaaf8…3d56`, domain 0.8, schema 0.11, the new token and build `81f8ea29`. The club's `rulebookHash` is new, and the three demo adjudicators are new, each with bond `none`.
+- **Deals on the new world:** the test seller sold to a buyer running the new `try.mjs` from an empty folder, `0xdda3276f0dadd1ec667938707072b477c997a0eabc19fe1c600b15d21dcb75c5` Released and `0x6e4273973d66dc125e7c41a52d6a64fbed1b1499269bc4db4977e6e2248e23d2` Refunded; a sale to the test buyer, `0xd83ae52796d955b387d40c2dfb809ac4758f93dfc17ef651506028b7224805dc`, released. The live rounds ran with a throwaway seed made in memory, since 1Password is not set up on the Mac: 5b (an escalation, decided by the appeal adjudicator's five-seat panel), `0x1cc5f352c946290ab4c8a989b6c546223f6a12e105246232ceb4a7d0319764e2` Released; 12 (two money addresses), `0xad6f3c4c821bdd14c412a6e56731200b611be7bd3d4358537b5212a803ee1211` Released and `0x78ffbb44cae8e7a9fe92b35e452f472369f6d9800771f30e864f1dc374ff349c` Refunded, once its payment address took its tokens from the faucet (pull request 706). The first try of round 12 left one unfunded offer, `0x4ce4ab77…494a`.
+- **The newly refused message:** both operators answered 400 `invalid_terms` "a primary adjudicator's decision carries no beacon …" to a primary decision with a beacon, before any transaction.
+- **The hosted sellers** read `operational`, `open: 0`, with the new token in their folders: configuration SHA-256 `86c53a74…` (pilot-scan-1) and `9e8e090d…` (pilot-scan-2).
+- **The site:** `try.mjs` and `buy.mjs` match their hashes live and name the new rules contract and token, not the old; the home page is 7,890 bytes and names `/llms.txt` in its head; the three guides match the build. The demo page's three ending deals were on the old world, so their record links answered 404: they were recorded again on the new world and published with these records (`tools/duet/endings.json`).
+- **Not run:** `pnpm verify` (step 3.8): CI ran its parts on the merged commit. `drand-fork.test.ts` could not fork the public node ("block not found"), and passed through the gateway, as the runbook says.
 
 ### Crow's own seller, pilot-scan-2, sells a fix review (deployed 2026-11-19, 08:13 UTC)
 
