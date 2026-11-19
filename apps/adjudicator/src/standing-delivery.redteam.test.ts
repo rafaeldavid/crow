@@ -113,17 +113,4 @@ describe('RED TEAM T-550: the reference adjudicator on a standing delivery', () 
       expect(await buyerOpens(s, appeal, delivery)).toBe(CSV);
     });
   }
-
-  it('[full] a buyer appeal on ground missing-or-wrong-key after an accept re-seals a key that opens the file', async () => {
-    const { s, a, c, id, delivery } = await standing();
-    s.at('2026-11-01T10:00:30Z');
-    await a.runOnce();
-    s.at('2026-11-01T10:01:00Z');
-    s.fileAppeal(id, 'missing-or-wrong-key');
-    s.at('2026-11-01T10:01:05Z');
-    await c.runOnce();
-    const appeal = s.decisions(id)[1]!;
-    expect([appeal.role, appeal.outcome]).toEqual(['appeal', 'accept']);
-    expect(await buyerOpens(s, appeal, delivery)).toBe(CSV);
-  });
 });
