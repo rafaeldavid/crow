@@ -104,7 +104,7 @@ Unchanged. ADR-0040's seller contract fixes the payout address in each template 
 ## Open points for Rafa
 
 1. **The operators relaying a budget's funding,** so an agent needs no ETH: a change in operator behaviour, with no route or schema change.
-2. **Stepping in on funded deals:** reading a contract buyer (T-227) and the buyer's longer signature in the standing-offer schema version.
+2. **Stepping in on funded deals:** reading a contract buyer (T-227) and the buyer's longer signature in the standing-offer schema version. **Answered in part by Rafa, 2026-11-19, to "Should a vault that buys (a contract as the buyer) go into the same schema change as standing offers?": "Yes, same change".** Schema v0.12 (ADR-0040) carries the buyer's longer signature beside the seller's, and the operators and the reference adjudicator read a contract buyer in the same build (T-549). He gave the same answer the same day to the standing-offers build: "Yes, add it". T-549 builds the reading only. **Answered by Rafa, 2026-11-19, to "May a vault's owner stop or replace its agent's signature on a deal that is already funded?": "Yes, the owner may".** A contract buyer's own code decides who signs for it, so a vault's owner may stop its agent's signing on a funded deal or sign in its place; the hold still pays out only by the deal's terms. Holdback builds no stop for this.
 3. **Crow-paid creation on request:** a field or a route on an operator service.
 4. **The owner's guide** in `site/ref/buyer-signer.txt` or `site/ref/limits.txt`, with one pointer and no new page.
 5. **The fee:** none now is recommended.

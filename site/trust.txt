@@ -5,6 +5,8 @@
 Coming soon: An outside audit of Crow's own contracts by human reviewers, with further reviews over time as partners ask, a penetration test, a certification such as SOC 2 or ISO 27001, a bug bounty, and deals with real money. Today Crow runs on a test network, with test tokens only.
 Source: SECURITY.md, "Status", https://github.com/rafaeldavid/holdback/blob/main/SECURITY.md#status; docs/audit/outside-scan.md, https://github.com/rafaeldavid/holdback/blob/main/docs/audit/outside-scan.md
 
+Legal notice: Crow is a demo on a test network, with no company yet. https://crow.direct/legal.txt
+
 ## Money
 
 ### Does Crow hold the funds of a deal?
