@@ -78,4 +78,6 @@ Measured on 2026-11-19 in the branch's worktree, on the machine of the T-550 ses
 - Anyone may post the standing delivery, so the command can post it itself after funding (`POST /v1/commitments/{id}/deliveries` with the seller-signed body).
 - A settlement on such a deal may only keep the key (`releaseKey: false`).
 
+**For triage, not this task:** `apps/adjudicator/src/hung-read.test.ts`, "a registration read that never answers is asked once for every deal in the pass", asserts a wall-clock bound. It failed locally at a load average of about 36 (238 ms against 160 ms), on deliveries this change does not alter [measured locally; the cause inferred]. Likewise `apps/demo-cloud/src/limits.attack.test.ts:343` (`attack.t422-known-key-cpu`) times two request loops one after the other: 15.3 ms against 12.3 ms at a load average of about 130, and 12 of 12 passed alone [measured].
+
 **Scenario runner:** `deliver` now takes `buyer_envelope: none` (a standing delivery) and `by: buyer` (the buyer posts the delivery the seller signed at setup; only with `buyer_envelope: none`).
