@@ -53711,7 +53711,18 @@ function isNullish(c) {
 	return end - start <= 16 && NULL_TOKENS.has(chars.slice(start, end).join("").toLowerCase());
 }
 const DETAIL_MAX = 300;
-const cap = (s) => s.length > DETAIL_MAX ? `${s.slice(0, 297)}...` : s;
+/**
+* A detail cut to DETAIL_MAX UTF-16 units, never inside a surrogate pair. Details quote delivered text (a CSV header,
+* a JSON key), and half a pair left at the cut made the judgment record's RFC 8785 hash throw (T-570, red team of
+* PR 722). runPipeline's well-forming pass stays as the net under this.
+*/
+function cap(s) {
+	if (s.length <= DETAIL_MAX) return s;
+	let end = 297;
+	const last = s.charCodeAt(end - 1);
+	if (last >= 55296 && last <= 56319) end -= 1;
+	return `${s.slice(0, end)}...`;
+}
 /** Display only; decisions use integer cross-multiplication. */
 const pct = (count, total) => total ? `${count}/${total}` : "0/0";
 const bps = (b) => `${b} bps`;

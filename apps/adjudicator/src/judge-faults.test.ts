@@ -75,6 +75,8 @@ interface WorldOptions {
   delays?: Record<string, number>;
   /** Wraps the judges in the adjudicator's own judge timeout (providers/timeout.ts). */
   timeoutMs?: number;
+  /** The terms' acceptance, when a case needs other checks than the example's. */
+  acceptance?: Commitment['acceptance'];
 }
 
 async function world(o: WorldOptions = {}) {
@@ -147,7 +149,7 @@ async function world(o: WorldOptions = {}) {
     buyerPaymentAddress: cast.buyer.address,
     sellerPayoutAddress: cast.seller.address,
     deliverable: EXAMPLE.deliverable,
-    acceptance: ACCEPTANCE,
+    acceptance: o.acceptance ?? ACCEPTANCE,
     price: tusd('2000000000'),
     adjudication: {
       adjudicator: cast.primary.address,
@@ -266,6 +268,77 @@ describe('T-570: a judge fault never re-rolls the commit-reveal panel', () => {
     expect((await w.primary.adj.runOnce()).decided).toEqual([]);
     expect(w.calls).toHaveLength(callsBefore);
     expect(w.records.size).toBe(1);
+  });
+});
+
+describe('T-570: a malformed answer never re-runs the panel (red team H1)', () => {
+  // Before the fix, an ok answer whose text was not a string made runPipeline throw; the service kept no record and
+  // called the whole panel again on its next pass. Now the seat is an error, the panel decides once, and a second pass
+  // calls no judge.
+  const SHAPES: Array<[string, unknown]> = [
+    ['text null', { kind: 'ok', text: null }],
+    ['text an array', { kind: 'ok', text: [{ type: 'text', text: 'x' }] }],
+    ['text a number', { kind: 'ok', text: 7 }],
+    ['text an object', { kind: 'ok', text: { overall: 'pass' } }],
+    ['no response object', undefined],
+  ];
+  /** A schema-valid verdict whose rationale ends in a lone UTF-16 surrogate, which canonical JSON cannot hash. */
+  const loneSurrogate = (req: JudgeRequest): JudgeResponse => {
+    const r = honestVerdict(req, 'pass');
+    return r.kind === 'ok' ? { kind: 'ok', text: r.text.replace('"rationale":"', '"rationale":"\\ud800 ') } : r;
+  };
+  it('a lone surrogate in a verdict from every judge of one family: each seated judge is called once across two passes, and the verdict stays a vote', async () => {
+    const w = await delivered(DEMO_CSV);
+    const seats = primaryPanel(w);
+    const family = familyOf(seats[0]!);
+    w.judges.script = Object.fromEntries(REGISTRY.judges.filter((j) => j.family === family).map((j) => [j.id, loneSurrogate]));
+    const first = await w.primary.adj.runOnce();
+    expect(first.refused).toEqual([]);
+    expect(first.decided).toHaveLength(1);
+    w.judges.script = {};
+    expect((await w.primary.adj.runOnce()).decided).toEqual([]);
+    expect(w.calls.map((c) => c.judgeId).sort()).toEqual([...seats].sort());
+    const [record] = [...w.records.values()];
+    for (const m of record!.panel.members) expect(m.status).toBe('ok');
+    expect(JSON.stringify(record!.panel.members.filter((m) => familyOf(m.judgeId) === family).map((m) => m.verdict))).toContain('\uFFFD');
+  });
+  it.each(SHAPES)('%s from every judge of one family: each seated judge is called once across two passes, and the seat is an error', async (_name, shape) => {
+    const w = await delivered(DEMO_CSV);
+    const seats = primaryPanel(w);
+    const family = familyOf(seats[0]!);
+    w.judges.script = Object.fromEntries(REGISTRY.judges.filter((j) => j.family === family).map((j) => [j.id, () => shape as JudgeResponse]));
+    const first = await w.primary.adj.runOnce();
+    expect(first.refused).toEqual([]);
+    expect(first.decided).toHaveLength(1);
+    w.judges.script = {};
+    expect((await w.primary.adj.runOnce()).decided).toEqual([]);
+    expect(w.calls.map((c) => c.judgeId).sort()).toEqual([...seats].sort());
+    const [record] = [...w.records.values()];
+    for (const m of record!.panel.members) expect(m.status).toBe(familyOf(m.judgeId) === family ? 'error' : 'ok');
+  });
+
+  // The seller's own text can carry the same character: csv_columns_exact copies the delivered header into its detail
+  // and cuts it, so an emoji at the cut leaves half a pair (red team of PR 722). The record must still hash.
+  const csvWithHeader = (header: string, extra = '') => [header, ...DEMO_CSV.split('\n').slice(1).map((l) => l + extra)].join('\n');
+  it('a delivered header that leaves half an emoji in a required check\'s detail: the primary rejects on its first pass, with no judge called', async () => {
+    // "columns are [" is 13 units, so 283 more put the emoji's high surrogate at the last unit the detail keeps.
+    const w = await delivered(csvWithHeader(`${'a'.repeat(283)}\u{1F600},name,email,signup_date,email_valid`));
+    const first = await w.primary.adj.runOnce();
+    expect(first.refused).toEqual([]);
+    expect(first.decided).toEqual([{ commitmentId: w.id, role: 'primary', outcome: 'reject' }]);
+    expect(w.calls).toEqual([]);
+    expect([...w.records.values()][0]!.deterministic.every((d) => !/\p{Cs}/u.test(d.detail ?? ''))).toBe(true);
+  });
+  it('the same header with the check not required: the panel runs once across two passes', async () => {
+    const acceptance = { ...ACCEPTANCE, deterministicChecks: ACCEPTANCE.deterministicChecks.map((c) => (c.id === 'cols' ? { ...c, required: false } : c)) };
+    const header = `customer_id,name,email,signup_date,email_valid,${'a'.repeat(283 - 'customer_id, name, email, signup_date, email_valid, '.length)}\u{1F600}`;
+    const w = await delivered(csvWithHeader(header, ',x'), { acceptance });
+    const seats = primaryPanel(w);
+    const first = await w.primary.adj.runOnce();
+    expect(first.refused).toEqual([]);
+    expect(first.decided).toHaveLength(1);
+    expect((await w.primary.adj.runOnce()).decided).toEqual([]);
+    expect(w.calls.map((c) => c.judgeId).sort()).toEqual([...seats].sort());
   });
 });
 
