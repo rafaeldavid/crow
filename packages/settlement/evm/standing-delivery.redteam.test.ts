@@ -56,13 +56,14 @@ describe.skipIf(!ready)(`RED TEAM T-550: a standing delivery on anvil${ready ? '
     return r.ok ? `ok: ${r.state.escrowState}` : `${r.problem.type}: ${r.problem.detail}`;
   };
 
-  it('attack: during the fallback takeover, settle with the key. Expected: refused by the contract (BadKeyProof), no divergence; the fallback accept settles with the key', async () => {
+  it('attack: during the fallback takeover, settle with the key. Expected: refused with the reason core gives, before any transaction, no divergence; the fallback accept settles with the key', async () => {
     const { chain, cast, d } = await posted('rt-fallback');
     chain.advanceTo(d.terms.timing.judgeBy);
     await must(chain, cast, d.trigger('fallback'));
     expect(chain.escrowState(d.id)?.kind).toBe('FallbackJudging');
     const r = await refusal(chain, cast, await d.mutual(BigInt(d.terms.price.amount), true));
-    expect(r).toBe('invalid_terms: contract revert BadKeyProof()');
+    // T-549 steps core first for a delivery with no buyer envelope (T-550's hand-over): core's reason, nothing sent.
+    expect(r).toMatch(/^invalid_terms: .*no envelope for the buyer .* a settlement that releases the key/);
     expect((await chain.stage(d.id)).stage).toBe('FallbackJudging');
     expect(await chain.keysFor(d.id, cast.buyer.address)).toEqual([]);
     await must(chain, cast, d.decide('fallback', 'accept', secs(d.terms.timing.judgeBy)));
@@ -71,13 +72,14 @@ describe.skipIf(!ready)(`RED TEAM T-550: a standing delivery on anvil${ready ? '
     expect(await chain.replayCheck()).toMatchObject({ ok: true });
   }, 60_000);
 
-  it('attack: after an escalation, settle with the key. Expected: refused (BadKeyProof); the appeal accept settles with the key', async () => {
+  it('attack: after an escalation, settle with the key. Expected: refused with the reason core gives; the appeal accept settles with the key', async () => {
     const { chain, cast, d } = await posted('rt-escalated');
     await must(chain, cast, d.decide('primary', 'escalate'));
     const s = chain.escrowState(d.id)!;
     if (s.kind !== 'Escalated') throw new Error(`expected Escalated, got ${s.kind}`);
     const r = await refusal(chain, cast, await d.mutual(BigInt(d.terms.price.amount), true));
-    expect(r).toBe('invalid_terms: contract revert BadKeyProof()');
+    // T-549 steps core first for a delivery with no buyer envelope (T-550's hand-over): core's reason, nothing sent.
+    expect(r).toMatch(/^invalid_terms: .*no envelope for the buyer .* a settlement that releases the key/);
     chain.advanceTo(new Date((secs(s.escalation.at) + 1) * 1000).toISOString());
     await must(chain, cast, d.decide('appeal', 'accept', secs(s.escalation.at) + 1));
     expect((await chain.stage(d.id)).stage).toBe('Released');
@@ -93,8 +95,8 @@ describe.skipIf(!ready)(`RED TEAM T-550: a standing delivery on anvil${ready ? '
     const late = await standing(chain, cast, d);
     const before = chain.transactions().length;
     const r = await refusal(chain, cast, await d.mutual(BigInt(d.terms.price.amount), true, late));
-    // Measured: the contract's simulation answers first, so the agent sees the revert, not core's stated reason.
-    expect(r).toBe('invalid_terms: contract revert BadKeyProof()');
+    // T-549 steps core first for a delivery with no buyer envelope (T-550's hand-over): core's reason, nothing sent.
+    expect(r).toBe('invalid_terms: the carried delivery has no envelope for the buyer, so there is no key to release');
     expect(chain.transactions().length).toBe(before);
     expect((await chain.stage(d.id)).stage).toBe('Held');
     // Info: both parties sign a settlement paying the seller the whole price for late work and keeping the key.

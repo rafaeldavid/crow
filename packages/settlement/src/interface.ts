@@ -4,6 +4,7 @@
 // Every state change arrives as a message a party or adjudicator signed, or as a permissionless trigger.
 // The settlement layer never authors a party's message.
 import type {
+  SignerCheck,
   AdjudicatorAcceptance,
   Agree,
   Address,
@@ -122,4 +123,10 @@ export interface Settlement {
   balances(addresses: readonly Address[]): Promise<Record<Address, TokenAmount>>;
   /** Content-key envelopes the settlement layer has released to a recipient for a commitment (ADR-0020). */
   keysFor(commitmentId: Hex32, recipient: Address): Promise<EncryptedKey[]>;
+  /**
+   * The contract-signer rule over this layer's reads (ADR-0040 §5, D84), for a buyer's or a seller's signature checked
+   * outside `submit`: the reference adjudicator's check of a delivery, an operator's check of a Publish. ECDSA for an
+   * address with no code, ERC-1271 for a contract. Absent: callers check by ECDSA only.
+   */
+  signerCheck?(): SignerCheck;
 }

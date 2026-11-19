@@ -276,6 +276,15 @@ export class Adjudicator {
       // Joined too: every deal of a pass asks for the same few registrations (red team M1).
       registration: (a) => this.#read('the registration read', () => p.registration(a), `registration|${a.toLowerCase()}`),
       ...(p.policy ? { policy: (h: Hex32) => this.#read('the policy read', () => p.policy!(h), `policy|${h}`) } : {}),
+      // ADR-0040 §6: the seller's signature is read by the settlement layer's contract-signer rule, each read under the limit.
+      ...(p.signerCheck
+        ? {
+            signerCheck: () => {
+              const check = p.signerCheck!();
+              return (digest, signature, signer) => this.#read('the signature read', () => check(digest, signature, signer));
+            },
+          }
+        : {}),
       triggerFallback: (id) => p.triggerFallback(id),
       // SimChain only: party appeals and bonds stay in the full protocol (ADR-0031 §8).
       expireAppeal: (id) => p.expireAppeal(id),
@@ -857,7 +866,7 @@ export class Adjudicator {
     if (task.delivery.commitmentId !== id) {
       return err(problem('invalid_terms', `the delivery handed to this adjudicator is for commitment ${task.delivery.commitmentId}, not ${id}; refusing before judging`));
     }
-    if (!(await verifyMessage(this.#cfg.domain, { ...task.delivery, type: 'Delivery' }, commitment.seller))) {
+    if (!(await verifyMessage(this.#cfg.domain, { ...task.delivery, type: 'Delivery' }, commitment.seller, this.#port.signerCheck?.()))) {
       return err(problem('invalid_signature', `the delivery handed to this adjudicator is not signed by the seller ${commitment.seller}; refusing before judging`));
     }
     // Key-wrapping prerequisites: the buyer's key (accept) and, for roles that may escalate, the appeal adjudicator's.
