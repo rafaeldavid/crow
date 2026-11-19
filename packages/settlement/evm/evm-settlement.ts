@@ -1042,6 +1042,8 @@ export class EvmSettlement implements Settlement {
         // A primary's or a fallback's decision carries no appeal ground. The contract reverts one that does at both roles
         // (appealGroundHash must be keccak256("")) as InvalidMessage, which names no reason, so core's reason is given
         // here, before any simulation or transaction (T-559). A ground the contract takes, the empty string, passes on.
+        // Core checks the ground after the turn, so a ground sent out of turn reads invalid_terms here, not_your_turn on
+        // SimChain; both refuse it and send nothing.
         if (m.role !== 'appeal' && (m.appealGround ?? '') !== '') refuse('invalid_terms', APPEAL_GROUND_APPEAL_ONLY);
         const carry = this.carrying(book);
         // An outside scan's finding (G1): a call that carries the delivery re-checks the seller inside it, so the seller

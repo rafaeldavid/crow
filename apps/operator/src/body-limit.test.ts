@@ -4,7 +4,10 @@
 import { Agent, request } from 'node:http';
 import { afterAll, beforeAll, describe, expect, it } from 'vitest';
 import { MAX_CIPHERTEXT_BYTES } from '@holdback/core/store';
+import { simActor } from '@holdback/settlement/sim';
 import { MAX_REPORT_BYTES, MemoryFeedbackStore } from './feedback.js';
+import { fetchHandler } from './fetch.js';
+import { Operator, simRegistry } from './index.js';
 import { MAX_REGISTRATION_BYTES } from './registrations.js';
 import { world, type World } from './_world.js';
 
@@ -65,6 +68,7 @@ describe('an oversized JSON body (T-559)', () => {
     });
   }
 
+  // A boundary check, not evidence of the fix: a 16 KiB body arrives in one chunk, so the old reader passed this too.
   it('still refuses a body at exactly the limit plus one byte, and accepts one at the limit as a body to parse', async () => {
     const agent = new Agent({ keepAlive: true, maxSockets: 1 });
     try {
@@ -78,15 +82,26 @@ describe('an oversized JSON body (T-559)', () => {
     }
   });
 
-  it('cuts a body past the fixed ceiling off, as a ciphertext upload past the protocol ceiling is', async () => {
-    const agent = new Agent({ keepAlive: true, maxSockets: 1 });
-    try {
-      const huge = await send(agent, 'POST', '/v1/feedback', jsonOf(MAX_CIPHERTEXT_BYTES + 1024 * 1024)).catch((e: NodeJS.ErrnoException) => e);
-      // Past the ceiling the node stops reading: the client sees the 413 or a reset, never a hung request.
-      if (!(huge instanceof Error)) expect([huge.status, huge.body.type]).toEqual([413, 'payload_too_large']);
-      else expect(huge.code).toMatch(/ECONNRESET|EPIPE/);
-    } finally {
-      agent.destroy();
+  // The cost of refusing is bounded: a body far past the ceiling is read up to the ceiling and no further, then refused
+  // with the same 413. Counted at the source, through the Worker's fetch entry. The body ends 4 MiB past the ceiling, so
+  // a reader with no ceiling reads all of it and fails the count instead of hanging.
+  it('stops reading a body far past the fixed ceiling at the ceiling and refuses it with the same 413', async () => {
+    const op = new Operator({ settlement: w.chain, registry: simRegistry(w.chain), signerKey: simActor('op-ceiling', 'operator').key, operatorId: 'op-ceiling', env: {}, baseUrl: 'https://op.example.test', feedback: { store: new MemoryFeedbackStore() } });
+    const chunk = new Uint8Array(64 * 1024).fill(0x61);
+    for (const [path, limit] of [['/v1/feedback', MAX_REPORT_BYTES], ['/v1/commitments', 1_048_576]] as const) {
+      let pulled = 0;
+      const endless = new ReadableStream<Uint8Array>({
+        pull(c) {
+          if (pulled >= MAX_CIPHERTEXT_BYTES + 4 * 1024 * 1024) return c.close();
+          pulled += chunk.length;
+          c.enqueue(chunk);
+        },
+      }, { highWaterMark: 0 });
+      const r = await fetchHandler(op)(new Request(`https://op.example.test${path}`, { method: 'POST', headers: { 'content-type': 'application/json', 'idempotency-key': 'endless' }, body: endless, duplex: 'half' } as RequestInit));
+      expect([r.status, ((await r.json()) as { maxBytes: number }).maxBytes], path).toEqual([413, limit]);
+      // Read past the limit, to the ceiling, and stopped within a chunk or two of it.
+      expect(pulled, path).toBeGreaterThan(MAX_CIPHERTEXT_BYTES);
+      expect(pulled, path).toBeLessThanOrEqual(MAX_CIPHERTEXT_BYTES + 2 * chunk.length);
     }
   });
 });
