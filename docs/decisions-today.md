@@ -1573,7 +1573,9 @@ Today a seller with its own API reads 13 files of 98,462 bytes and runs 22 comma
 
 **What it means:**
 - **The owner loads, the agent spends.** The agent's payment address is its budget, like a prepaid card. The owner loads it, and the agent spends only what it holds. With real money the owner loads it by card or bank at a regulated on-ramp of its choice, which sends USDC to that address.
-- **No on-ramp is named in public pages** until an adviser has answered whether naming one is a crypto financial promotion in the United Kingdom. That is the research's decision 1, still open.
+- **Public pages name the requirements and example providers, never as partners.** Rafa, 2026-11-19: "Name requirements and example providers, don't frame as integrated partners or business partners". The guide-lines task (T-556) writes it into the guides.
+- **Crow signs no on-ramp or off-ramp agreement and takes no partner key, and the funding service of ADR-0026 part 3 stays unbuilt.** Rafa, 2026-11-19: "yes, correct".
+- **One sandbox account at an on-ramp, test money only, for a top-up case study:** yes, "once we know which test token it delivers" (Rafa, 2026-11-19). Opening it is Rafa's step.
 - **A seller is paid at an address its owner sets,** such as a deposit address at the owner's own exchange or payout account. The selling agent holds no login there.
 - **v01's controls.** For a buyer: the most per deal and per day, how many deals are open at once, the approved sellers with their payout addresses, and a stop. For a seller: the payout address, sales per day and at once, and a stop. `examples/signer.ts` enforces the same rules off chain today, but only while the signer's machine stays out of the agent's reach (`site/ref/limits.txt`).
 - **Crow pays the gas and holds no key.** The contract is the owner's own, and Crow gets no control over it or the funds, as D82 says of the seller contract.
@@ -1582,7 +1584,7 @@ Today a seller with its own API reads 13 files of 98,462 bytes and runs 22 comma
 
 **Open.**
 - The contract's design, its fee and who may deploy it. Answered by D84 (ADR-0041): spend controls are a protocol of their own, and their design goes in its own record.
-- The research's five decisions (crow-private, part 7.2). One of them is whether to leave the funding service of ADR-0026 part 3 unbuilt.
+- Two of the research's five decisions (crow-private, part 7.2): an on-ramp top-up and a payout to an exchange in the capped mainnet test, and a brief for an adviser before the mainnet gate.
 - Real money stays forbidden (hard rule 1).
 
 ## D84. Spend controls are a protocol of their own, and Holdback sees only a funded payer (ADR-0041, T-554)
