@@ -27,7 +27,7 @@ const root = resolve(here, '../../..');
 const corpusDir = resolve(here, '../2026-11-18-report-corpus');
 const [corpus, outDir] = process.argv.slice(2);
 if (!corpus || !outDir) {
-  console.error('usage: node count.mjs <corpus folder> <out folder>');
+  console.error('usage: node count.mjs <corpus folder> <out folder> [--reuse]');
   process.exit(2);
 }
 const J = await import(pathToFileURL(join(root, 'packages/judgment/dist/index.js')).href);
@@ -228,7 +228,7 @@ const rows = [];
 for (const it of items) {
   const s = screenOne(it.bytes, it.mime);
   const sha256 = createHash('sha256').update(it.bytes).digest('hex');
-  rows.push({ id: it.id, set: it.set, shape: it.shape, mime: it.mime, sha256, chars: it.bytes.length, ...(it.findings !== undefined ? { findings: it.findings } : {}), ...s });
+  rows.push({ id: it.id, set: it.set, shape: it.shape, mime: it.mime, sha256, bytes: it.bytes.length, ...(it.findings !== undefined ? { findings: it.findings } : {}), ...s });
   const one = s.byVersion?.['screen-1'];
   console.log(`${it.id.padEnd(13)} ${it.set.padEnd(12)} ${it.shape.padEnd(9)} ${one ? (one.flagged ? `flagged ${one.signals.map((x) => x.kind).join(',')}` : 'clean') : `refused ${s.refused}`}${s.mismatch?.length ? '  ATTRIBUTION MISMATCH' : ''}`);
 }
@@ -287,8 +287,8 @@ for (const [g, rs] of Object.entries(groups)) summary[g] = Object.fromEntries(ve
 const mismatches = rows.filter((x) => x.mismatch?.length).map((x) => ({ id: x.id, shape: x.shape, mismatch: x.mismatch }));
 
 // The per-report record: counts and short matched phrases only.
-const record = rows.map(({ id, set, shape, mime, sha256, chars, findings, refused, removed, byVersion, phrases, nfkc, hidden, whatIfNfkcLetters }) => ({
-  id, set, shape, mime, sha256, chars, ...(findings !== undefined ? { findings } : {}), ...(refused ? { refused } : {}), removed,
+const record = rows.map(({ id, set, shape, mime, sha256, bytes, findings, refused, removed, byVersion, phrases, nfkc, hidden, whatIfNfkcLetters }) => ({
+  id, set, shape, mime, sha256, bytes, ...(findings !== undefined ? { findings } : {}), ...(refused ? { refused } : {}), removed,
   flagged: byVersion && Object.fromEntries(versions.map((v) => [v, byVersion[v].flagged])),
   signals: byVersion && byVersion['screen-1'].signals.map((s) => ({ kind: s.kind, family: family(s), detail: s.detail })),
   phrases: phrases && Object.fromEntries(Object.entries(phrases).map(([w, hs]) => [w, [...new Set(hs.map((h) => `${h.id}${h.weak ? ' (weak)' : ''} [${h.view}]: "${h.phrase}"`))]])),
