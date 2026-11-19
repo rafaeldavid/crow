@@ -37,3 +37,7 @@ The same line is in `site/setup.mjs`, `site/try-judged.mjs`, `site/try-reclaim.m
 ## Action
 
 No code change. The pinned bundles and their hashes are unchanged. Upgrading `@noble/curves` would not change this line's meaning and would need a re-pin, a separate decision. The alert was dismissed through `gh api` with the reason "false positive" and a comment pointing to this note.
+
+## If the alert returns
+
+A re-pin of `site/try.mjs` can move the line, and code scanning may then open a new alert under the same rule. Check that it points at `const char = hex[hi] + hex[hi + 1];` inside the `@noble/curves` `abstract/utils.js` section of the bundle. If it does, and the package is still `@noble/curves` 1.9.1 or the same `hexToBytes` code, the reasoning above holds: dismiss the new alert as a false positive with a comment pointing to this note. If the flagged code is different, this note does not cover it.
