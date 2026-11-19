@@ -3,9 +3,9 @@
 - **Lane:** api and settlement (`apps/operator`, `packages/settlement/evm`, one constant in `packages/core`)
 - **Phase:** 2
 - **Depends on:** T-547 (the ciphertext route's read-on refusal), T-540 (its finds 1 and 3)
-- **Paths this task may touch:** `apps/operator/src/server.ts` (the JSON body reader) and a new test beside it, `packages/settlement/evm/evm-settlement.ts` (the `decide` case), `packages/settlement/evm/errors.ts` and its test, `packages/settlement/evm/testing.ts`, a new anvil test in `packages/settlement/evm/`, `packages/core/src/state.ts` (the reason as a named constant), this file
+- **Paths this task may touch:** `apps/operator/src/server.ts` (the JSON body reader) and a new test beside it, `packages/settlement/evm/evm-settlement.ts` (the `decide` case), `packages/settlement/evm/errors.ts` and its test, `packages/settlement/evm/testing.ts`, a new anvil test in `packages/settlement/evm/`, `packages/settlement/evm/sync.test.ts` (one intermittent test, found after the cutover), `packages/core/src/state.ts` (the reason as a named constant), this file
 - **Human gate:** no for the merge. The operator deploy that carries the change is Rafa's.
-- **Status:** in review (waits for the T-563 merge freeze)
+- **Status:** in review
 - **Agent/session:** the T-559 session, started by the coordinator on 2026-11-19
 - **Roadmap row:** N202
 
@@ -58,9 +58,24 @@ All measured on 2026-11-19 in this worktree, at `origin/main` `d9da8a00` plus th
 
 **Red team** (one red-teamer, 2026-11-19): no Critical, High or Medium. Rate-limit and idempotency counts match `main`'s (measured): three 413s then a 429 on unknown keys; two 413s then two 429s on a known key. No refusal stores an idempotency key. Its two Lows are in the Handoff.
 
+**After the cutover** (2026-11-19, about 20:30 to 21:10 Berlin). The branch merged `origin/main` at `978aa38d` (`contracts-phase-one-2`, the fixed contracts), then `5f4b8154` (T-563's records).
+- **Conflicts:** three, in this task's own files.
+  - The relay keeps both early refusals: T-559's first-decider ground first, then T-540's `phaseOneDecisionProblem`.
+  - Core keeps the named constant beside T-540's check.
+  - The test helper keeps the explicit `undefined` test.
+- **The fixed contract refuses a ground on the escalation's decision too** (`_escalationDecision`). The third anvil test now expects T-540's reason there ("carries no appeal ground"), with nothing sent; the same decision without a ground lands. The primary and fallback refusals are unchanged: `_firstInstance` still requires `appealGroundHash == keccak256("")`.
+- **Checks, with `contracts/out` rebuilt from the fixed sources:**
+  - `vitest run packages/settlement packages/core`: 1,376 of 1,377 passed. The one failure was intermittent: `sync.test.ts`, "a relayed fee bundle whose receipt the node missed" (below). With that fixed, `sync.test.ts` and `appeal-ground.test.ts` passed 52 of 52.
+  - `apps/operator` and `apps/demo-cloud`: 492 passed. The one failure was `t422-replay-cpu` at a load average of 34 to 39 (the wall-clock test above).
+  - `pnpm lint` and `tsc -b` passed.
+- **The intermittent test, root-caused.**
+  - **Symptom:** the hasty relay (1 ms receipt timeout) is meant to miss its receipt. It passed 3 of 3 when run alone [measured].
+  - **Cause:** `LiveChain.fly` polls for the receipt before it checks the deadline, and the suite's anvil mines a block every second. On a loaded machine the first poll came after the next block, found the receipt and resolved [inferred from the code and the timing].
+  - **Fix:** the test pauses interval mining around that one submit, as other tests in the file do. Test only; no code change.
+
 ## Handoff
 
-**Done:** items 1 to 3. The pull request waits for the merge freeze of the fixed-contracts deploy (T-563). After the tag, bring `origin/main` into this branch, rerun the anvil suites against the new deployment record, and merge by hand once every check passes.
+**Done:** items 1 to 3, merged onto the fixed contracts (above). Merge by hand once every check passes at the branch's head.
 
 **What an operator deploy would carry:** `apps/operator/src/server.ts` and `packages/settlement/evm/evm-settlement.ts` are in the operators' Worker.
 - A JSON body over a route's limit gets the same 413 at the end of the body.
@@ -74,5 +89,5 @@ All measured on 2026-11-19 in this worktree, at `origin/main` `d9da8a00` plus th
   - A per-route ceiling such as `min(MAX_CIPHERTEXT_BYTES, limit + 1 MiB)` would bound it nearer the limit. Bodies past that cap would reset again.
 - **A client that stops sending past the limit is held until Node's 300 s `requestTimeout` instead of answered at once (Low; red team).** `main` already holds one that stops just under the limit, so the bound per connection is unchanged.
 - **A refusal sent before the body is read still resets an upload (Info).** For example, a 429 at entry gives EPIPE (measured). T-559 fixes only the 413 path.
-- **Core refuses `appealGround: ""`, which the relay and the contract accept (Info, before this change).** The schema's enum stops it at the API. A direct `submit` that skips the schema would land on chain and then hit core's mirror as a divergence.
+- **Core refuses `appealGround: ""`, which the contract accepts (Info, before this change).** The schema's enum stops it at the API. A direct `submit` that skips the schema would land on chain and then hit core's mirror as a divergence. On the fixed contracts T-540's escalation check also refuses `""` (`appealGround !== undefined`), which `_escalationDecision` accepts: the same gap, on the relay side.
 - **`limits.attack.test.ts`'s two timing tests fail under heavy load (Info).** They assert wall-clock thresholds, which a loaded Mac breaks (above). CI runs them on an unloaded runner.
