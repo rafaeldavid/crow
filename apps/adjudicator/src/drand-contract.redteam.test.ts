@@ -162,7 +162,8 @@ describe.runIf(ready)('the local check against DrandQuicknetBeacon on anvil (red
     }
     const art = JSON.parse(readFileSync(ARTIFACT, 'utf8')) as { abi: Abi; bytecode: { object: Hex } };
     const wallet = createWalletClient({ chain: foundry, transport, account: privateKeyToAccount(KEY) });
-    const hash = await wallet.deployContract({ abi: art.abi, bytecode: art.bytecode.object });
+    // The pairing gas the deploy script sets on Sepolia (T-528): 250,000.
+    const hash = await wallet.deployContract({ abi: art.abi, bytecode: art.bytecode.object, args: [250_000n] });
     const address = (await pub.waitForTransactionReceipt({ hash })).contractAddress as Address;
     call = async (fn, args) => {
       try {

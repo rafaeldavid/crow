@@ -4,6 +4,18 @@ For each external and public function of the phase-one contracts: who may call i
 
 This page is a dated record: the audit-readiness review (T-499) read the code on 2026-11-17 with Slither 0.11.6 and Aderyn 0.6.8. Labels: **measured** (read in the file or produced by the command), **inferred** (concluded from reading). What it found that a next version could fix is in [`known-issues.md`](known-issues.md), section 10.
 
+## The fixed build
+
+On the lane `contracts-audit-ready` the contracts carry an outside scan's fixes (T-527, T-528 and T-529). The tables below stay the record of the tag; on the fixed build these rows differ [measured: `git diff contracts-phase-one-1 contracts-audit-ready -- contracts/src`]:
+
+- **`HoldbackRules` constructor:** it also refuses a beacon that does not answer `roundAt` (no code, or the call reverts or returns no round) with `BadBeacon` (T-527).
+- **`agreeAndFund`:** it also refuses terms whose `disputeBy`, `disputeJudgeSec` or `disputeFallbackSec` is not 0 (`InvalidMessage`; T-529).
+- **`decide`:** it also refuses a primary's decision with any beacon field set (`beaconSourceHash` not `keccak256("")`, a round, a value or a signature), and the appeal adjudicator's decision on an escalation with an appeal ground (`InvalidMessage`; T-529).
+- **`DrandQuicknetBeacon` constructor:** it takes `pairingGas`, the gas forwarded to the pairing precompile, and refuses a value below `MIN_PAIRING_GAS` = 102,900 with `PairingGasBelowFloor`. It sets two immutables, `PAIRING_GAS` and `P_LO` (T-528). The deploy script passes 250,000, reads it back and records it (`contracts.DrandQuicknetBeacon.args`).
+- **`beaconValue`:** the pairing gets `PAIRING_GAS`, read with the public getters `PAIRING_GAS()` and `MIN_PAIRING_GAS()`. A call that runs short of gas before the proof is judged reverts with `NotEnoughGas`, not `InvalidSignature` (T-528).
+
+Line numbers on the lane differ from the tag's.
+
 ## Every external and public function
 
 Authority never comes from `msg.sender`: every row is "anyone", and the signature column says whose EIP-712 signature (domain "Holdback", "0.8", chain ID, this contract) the call needs. `t` is the settlement view; the commitment ID `id = H.commitmentId(t)` is recomputed in every call, so altered terms name another deal. All signature checks use Solady `SignatureCheckerLib.isValidSignatureNowCalldata` (`HoldbackRules.sol:567-571`): ECDSA for an address without code, ERC-1271 for one with code, and always false for `address(0)` (`solady/src/utils/SignatureCheckerLib.sol:85`) [measured].
@@ -34,7 +46,7 @@ Authority never comes from `msg.sender`: every row is "anyone", and the signatur
 | --- | --- | --- | --- | --- | --- |
 | `constructor` (`:71-73`) | deployer | none | none | sets immutable `P_LO` | No parameters: key, genesis, period are constants |
 | `roundAt(uint256)` (`:76`, public pure) | anyone | none; returns 0 before genesis | none | none | `uint64` cast cannot truncate for any `t` the rules contract passes: at most about 2^64 + 2^38 s, giving a round near 6.1·10^18 < 2^64 [inferred] |
-| `beaconValue(uint64, bytes)` (`:83-91`, external view) | anyone | length 48; compressed flag set, infinity flag clear; `x < p`; `x^3 + 4` is a square; sign bit picks `y`; one pairing check with capped gas `PAIRING_GAS` = 250,000; every precompile output length checked (`InvalidSignature`) | none | staticcalls to 0x02, 0x05, 0x0b, 0x0f, 0x10 only | The encoding is unique (flags fixed, `x < p`, sign bit fixed by `y`), so `sha256(signature)` is unique per round [inferred]. Subgroup membership is left to the pairing precompile, which fails for a point outside G1 |
+| `beaconValue(uint64, bytes)` (`:83-91`, external view) | anyone | length 48; compressed flag set, infinity flag clear; `x < p`; `x^3 + 4` is a square; sign bit picks `y`; one pairing check with capped gas `PAIRING_GAS` = 250,000, a constant at the tag and a constructor argument on the fixed build (above); every precompile output length checked (`InvalidSignature`) | none | staticcalls to 0x02, 0x05, 0x0b, 0x0f, 0x10 only | The encoding is unique (flags fixed, `x < p`, sign bit fixed by `y`), so `sha256(signature)` is unique per round [inferred]. Subgroup membership is left to the pairing precompile, which fails for a point outside G1 |
 | `hashToG1(bytes32)` (`:98-103`, public view) | anyone | none | none | staticcalls 0x02, 0x05, 0x10, 0x0b | |
 | `GENESIS`, `PERIOD` (constants) | anyone | none | none | none | |
 
@@ -83,9 +95,9 @@ Every error (11) and every event (15) declared in `IHoldbackRules.sol` is used [
 | `MUTUAL_FEE_SHARE_BPS = 0` | `HoldbackRules.sol:37`; `IHoldbackRules.sol:297` | constant read by no code (I-2 remnant) | Kept as a public getter so the ABI stays (I-2, T-334); `Postings.fuzz.t.sol` fails if it leaves 0 |
 | `Acceptance.bondReserved` | `HoldbackTypes.sol:77`; `ACCEPTANCE_TYPEHASH` `:229`; check `HoldbackRules.sol:160` | bond remnant | Part of the signed `AdjudicatorAcceptance` that `eip712.ts` signs; required to be 0 |
 | `Timing.appealWindowSec` | `HoldbackTypes.sol:28`; check `HoldbackRules.sol:169` | party-appeal remnant | Signed format; required to be 0 |
-| `Timing.disputeBy`, `disputeJudgeSec`, `disputeFallbackSec` | `HoldbackTypes.sol:31-33` | signed only, read by no check | Signed format shared with core |
-| `Decision.appealGroundHash` | `HoldbackTypes.sol:124`; check `HoldbackRules.sol:282` | party-appeal remnant | Must be `keccak256("")` for the primary and the fallback; signed only for the appeal adjudicator |
-| `Decision.encryptedKeysHash`, `beaconSourceHash`, `nonce`; the primary's beacon fields | `HoldbackTypes.sol:125-130` | signed only | Signed format |
+| `Timing.disputeBy`, `disputeJudgeSec`, `disputeFallbackSec` | `HoldbackTypes.sol:31-33` | signed only, read by no check at the tag; the fixed build requires 0 (T-529) | Signed format shared with core |
+| `Decision.appealGroundHash` | `HoldbackTypes.sol:124`; check `HoldbackRules.sol:282` | party-appeal remnant | Must be `keccak256("")` for the primary and the fallback; signed only for the appeal adjudicator at the tag, and `keccak256("")` at every role on the fixed build (T-529) |
+| `Decision.encryptedKeysHash`, `beaconSourceHash`, `nonce`; the primary's beacon fields | `HoldbackTypes.sol:125-130` | signed only; on the fixed build the primary's beacon fields must be empty (T-529) | Signed format |
 | `Money` library, one constant `ALL_BPS` | `HoldbackTypes.sol:477-479` | used once (`HoldbackRules.sol:136`) | A library for one constant; the bond and split helpers left with SC-7 |
 | `Deal.t1` written on a first-instance accept or reject | `HoldbackRules.sol:290` | write that no later code reads (the deal is closed) | Read only by `dealOf`; documented in `IHoldbackRules.sol:108-110` |
 | Single-line wrappers `_capture`, `_void`, `_releaseKey`, `_escalationRound` | `HoldbackRules.sol:500-563` | not dead; each is called | Names the money and key moves in one place |
