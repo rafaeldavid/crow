@@ -80,8 +80,9 @@ export class JudgeBudget {
   }
 
   /**
-   * Counts one call of a panel already chosen live, even past the day's budget (T-574). A live panel finishes live: its
-   * retries are counted, so the next panel sees what they cost. It can pass the budget by at most its own retries.
+   * Counts one call of a panel already chosen live (T-574). A live panel finishes live, and its retries are counted, so
+   * the next panel sees what they cost. It never passes the budget: a panel is chosen live only when the budget holds
+   * twice its size, a first call and one retry for every seat (`PanelConfig.panel`).
    */
   async charge(): Promise<void> {
     (await this.load()).calls++;
@@ -129,7 +130,8 @@ export interface PanelConfig {
   allowLive: boolean;
   /**
    * Runs one panel (one decision task) live or scripted as a whole (T-574): live when `allowLive` is set and today's
-   * budget still holds `size` calls, chosen once before any call. Every call inside it, a retry included, goes the same
+   * budget still holds `2 * size` calls, chosen once before any call. Each seat calls once and retries at most once
+   * after a transport error (packages/judgment, pipeline.ts), so a live panel never passes the day's cap. Every call inside it, a retry included, goes the same
    * way, and a live call is counted. A call outside any panel is scripted. Panels run one at a time: a panel asked for
    * while another is open waits for it (T-574 red team L1), so no panel's end can change another's choice.
    */
@@ -176,7 +178,7 @@ export function panelConfig(o: PanelOptions): PanelConfig {
     },
     panel: (size, run) => {
       const turn = queue.then(async () => {
-        mode = cfg.allowLive && (await budget.remaining()) >= size ? 'live' : 'scripted';
+        mode = cfg.allowLive && (await budget.remaining()) >= 2 * size ? 'live' : 'scripted';
         try {
           return await run();
         } finally {

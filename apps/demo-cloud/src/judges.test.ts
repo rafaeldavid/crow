@@ -31,22 +31,24 @@ function world(perDay: number) {
 const seats = ['claude-a', 'claude-b', 'deepseek-a'];
 
 describe('the demo panel chooses live or scripted once (T-574)', () => {
-  it("a live panel's retry stays live and is counted, past the day's budget; the next panel is scripted", async () => {
-    const { cfg, live, how } = world(3);
+  it("a live panel's retry stays live and is counted; a panel is live only when the budget holds twice its size", async () => {
+    const { cfg, live, how } = world(6);
     const first = await cfg.panel(3, async () => [...(await Promise.all(seats.map((s) => how(request(s))))), await how(request('deepseek-a'))]);
     expect(first).toEqual(['live', 'live', 'live', 'live']);
     expect((await cfg.budget.used()).calls).toBe(4);
+    // 2 calls left, fewer than the 6 a panel of 3 may need with its retries.
     const second = await cfg.panel(3, () => Promise.all(seats.map((s) => how(request(s)))));
     expect(second).toEqual(['scripted', 'scripted', 'scripted']);
     expect(live).toHaveLength(4);
   });
 
   it('a second panel in the same pass, with budget for fewer seats than it has, is scripted as a whole', async () => {
-    const { cfg, live, how } = world(5);
+    const { cfg, live, how } = world(8);
     expect(await cfg.panel(3, () => Promise.all(seats.map((s) => how(request(s)))))).toEqual(['live', 'live', 'live']);
-    // Two calls left: before T-574, the first seat of this panel went live and the other two scripted.
+    // Five calls left, fewer than the 6 a panel of 3 may need with its retries: scripted as a whole, so it can never
+    // start live and finish scripted.
     expect(await cfg.panel(3, () => Promise.all(seats.map((s) => how(request(s)))))).toEqual(['scripted', 'scripted', 'scripted']);
-    expect([live.length, await cfg.budget.remaining()]).toEqual([3, 2]);
+    expect([live.length, await cfg.budget.remaining()]).toEqual([3, 5]);
   });
 
   it('a call outside any panel, or in a pass not allowed live, is scripted and costs nothing', async () => {
