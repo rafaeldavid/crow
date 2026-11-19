@@ -69,6 +69,27 @@ Non-goals: no change to `setup.txt` (published at 9,999 of its 10,000 bytes), to
   - It found the two ways to cap spending, through the rules line.
   - Its notes, none blocking: `sell.txt` points to the checks and does not list them; it is unclear what an escalation is without party appeals; `ref/limits.txt` has two sections on limits that overlap.
 
+### The second pull request: example providers
+
+The first pull request is holdback PR 691, merged as `184b92cb`. Rafa then answered the naming question, 2026-11-19, in the coordinator's thread: "Name requirements and example providers, don't frame as integrated partners or business partners".
+
+- **Where:** `ref/limits.txt`, "Spend controls: what to tell your principal". `buy.txt` and `sell.txt` already point there, so no first-deal path gains a word.
+- **Which names:** the routes in the private research `strategy/2026-11-18-card-and-bank-money.md`, parts 1.2, 2.2 and 6.1, that a person can use with no integration. Each one was checked against the research's own source pages on 2026-11-19 (measured):
+  - **MoonPay:** its page `moonpay.com/buy/usdc` asks for the buyer's USDC wallet address and names Ethereum. Kept.
+  - **Ramp Network:** its page `rampnetwork.com/buy` says crypto goes to the buyer's wallet, with an option to paste an address. Kept.
+  - **Kraken:** its deposit page lists USDC on Ethereum and says a deposit below the minimum fails. Its withdrawal-holds page names a hold on some new card purchases. Kept.
+  - **Stripe's link:** left out. Stripe's own page says the onramp needs an application and approval, so a person cannot use it with no integration.
+  - **Coinbase:** left out. Its pages answered HTTP 403 to automated reads, and the research marks its Coinbase facts as summary only, so neither could verify them.
+  - **Converting payout addresses** (the business-payout services in part 2.3): left out. Each is a business integration, not a route a person opens alone.
+- **Wording:** each name follows "for example". The page does not say "partner", "integrated", "supported by" or "recommended". It carries no fee figure and no country list. One sentence says that Crow has no agreement with any provider named, does not hold or move the money on those steps, and that availability, fees and limits are each provider's own and change.
+- **Budgets** (measured, as bytes divided by four):
+
+  | Path | Before | After | Limit |
+  | --- | --- | --- | --- |
+  | Buyer | 4,881 tokens | 4,881 tokens | 5,000 |
+  | Seller | 4,508 tokens | 4,508 tokens | 5,000 |
+  | Plain-HTTP buyer | 9,450 tokens | 9,450 tokens | 9,450 |
+
 ## Decisions
 
 - The payout checks are in `ref/limits.txt`, "Spend controls: what to tell your principal", the one section both guides already cite. `sell.txt` step 9 carries one sentence and the pointer, and costs the seller's path nothing net.
@@ -77,3 +98,5 @@ Non-goals: no change to `setup.txt` (published at 9,999 of its 10,000 bytes), to
 ## Handoff
 
 Done when the pull request merges. A site deploy would publish four pages: `buy.txt`, `sell.txt`, `ref/limits.txt` and `ref/buyer-signer.txt`, plus the combined `reference.txt`, which holds every `ref/` page. No bundle changes (`buy.mjs`, `try.mjs` and `setup.mjs` keep their hashes), so no install command changes. Left for later: the same payout pointer in `setup.txt` once it has bytes free, and a price-0 line on the plain-HTTP path once it has tokens free.
+
+The second pull request changes `ref/limits.txt` only, so a deploy would carry `ref/limits.txt` and `reference.txt`. Coinbase and Stripe's link could join the examples once a reader can check their pages, and once Stripe's link works for a person with no application.
