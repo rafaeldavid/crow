@@ -1,5 +1,9 @@
 # T-518: known findings the dependency scan (.github/workflows/dependency-scan.yml) lets through. Each entry names
 # the advisory, an end date and the reason, and is reviewed in its pull request. Remove it once a fix is installed.
+#
+# osv-scanner reads the osv-scanner.toml beside each lockfile it scans, so this file covers the lockfiles in the
+# repository's root. The Rust lockfiles of tools/envelope-proof, a stopped research prototype, have their own files
+# beside them (T-576).
 
 [[IgnoredVulns]]
 id = "GHSA-fc5q-39xc-vjpf"
