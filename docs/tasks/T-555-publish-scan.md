@@ -6,7 +6,7 @@
 - **Depends on:** T-523 (the triage), T-527 to T-529 (the fixes on `contracts-audit-ready`, tip `d621291e` for the review), T-553 (the fix review's deal)
 - **Paths this task may touch:** `docs/audit/outside-scan.md`, `docs/audit/outside-scan/`, `docs/audit/known-issues.md`, `docs/audit/README.md`, `site/trust.mjs` and the files `site/build.mjs` renders from it (`site/trust.txt`, `site/trust.html`), `tests/outside-scan.test.ts`, this file. Never `contracts/src/`, the lane, `spec/schemas/`, `.github/` or the pinned bundles.
 - **Human gate:** yes: publishing the reviewers' output and naming them (Rafa's answers, 2026-11-19), and the site deploy
-- **Status:** in review
+- **Status:** done
 - **Agent/session:** the T-555 session, started by the coordinator on 2026-11-19
 - **Roadmap row:** N193
 
@@ -37,7 +37,7 @@ Publish what the outside firm did to Crow's contracts, in words that claim no mo
 - [x] `docs/audit/outside-scan.md` states what was reviewed, by what process, on which commits and when, and gives the result. Then every finding, what stays open and why, and how to check it.
 - [x] The redacted data files are written by `docs/audit/outside-scan/redact.mjs` and checked by `tests/outside-scan.test.ts`.
 - [x] `known-issues.md` and the trust page match, and "Coming soon" no longer lists a review that has happened.
-- [ ] Rafa's go on the diff. Then the pull request, merged by hand once every check passes.
+- [x] Rafa's go on the diff ("Yes, go", 2026-11-19). Then pull request 686, merged by hand once every check passed: 14 passed and 4 skipped at `4d102e5a`, merged as `81ccce23` at 14:51:28 UTC.
 
 ## Evidence
 
@@ -53,7 +53,8 @@ Publish what the outside firm did to Crow's contracts, in words that claim no mo
 
 ## Handoff
 
-- **Waiting for Rafa:** his go on this diff, and then, separately, the site deploy that carries the trust page.
+- **Deployed** on Rafa's word ("go ahead and deploy when ready"). **Site deploy 2026-11-19 14:52 UTC, commit `81ccce2` on a detached HEAD: pass.** crow-site `1d90ca19-101f-4d1e-ba1e-5d0dcda82328` (rollback target `ed7a837e-21b0-440f-bdb5-1d0896b3c207`). https://crow.direct/trust.txt serves the new words [measured, 14:53 UTC].
+- **CI found two defects at `b9077cca`, both fixed in `4d102e5a`:** CodeQL flagged a table cell that did not escape a backslash, and `tests/ci-gated.test.ts` needed the redaction test's two private-copy cases exempted, with the reason.
 - **Not done here:**
   - the threat model's TA-7 and contract-signer row, which the fix review finds still wrong for `696fcaca`;
   - the fix review's text items (the `_call` NatSpec, `IHoldbackBeacon`'s declarations). Both belong to the open choices in `outside-scan.md`.
