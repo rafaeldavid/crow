@@ -9,7 +9,7 @@
   - This file.
   - It changes nothing in `examples/seller-adapter-core.ts` or `examples/seller-adapter-api.ts`, nothing under `apps/operator`, `apps/demo-cloud`, `packages/`, `spec/schemas/` or `contracts/`, no existing test, and no generated bundle but `site/setup.mjs`.
 - **Human gate:** yes, for the site deploy that publishes the new pinned `setup.mjs` and the two pages. The merge is not gated.
-- **Status:** review (merged when CI passes)
+- **Status:** done
 - **Agent/session:** `sell-from-template`, started by the `journeys` session on 2026-11-18
 - **Roadmap row:** N195, N160
 
@@ -119,6 +119,7 @@ Run on 2026-11-18 between 20:29 and 20:32 UTC with the branch's built `site/setu
 - `pnpm typecheck` and `npx eslint` on the changed files: no error [measured].
 - The full `pnpm verify` was not run: the recipe keeps it for before a deploy. CI is the gate.
 
+- **After merging `origin/main` on 2026-11-19** (T-547, T-545, T-544 and others): one conflict, in `site/sell.txt`, resolved by keeping both changes. `node site/build.mjs && node site/check.mjs` passes; the seller's first-deal path is 18,036 bytes, 4,509 of 5,000 estimated tokens, and the buyer's 4,865 of 5,000 [measured]. The rebuild left `site/setup.mjs` as this branch re-pinned it, and `site/buy.mjs`, `site/try.mjs` and the other pinned bundles equal `main` [measured]. The 8 setup, bundle and guide test files pass, 101 of 101 [measured].
 - Snapshot diffs: none; the task changes no scenario fixture.
 - Metrics: none recorded.
 
@@ -155,6 +156,6 @@ Choices made inside this task. None changes architecture, a contract or a defens
 - A failing `work/ready.<ext>` fails `first-deal`'s check even when the deal's own file passes.
 - Several days with no result were read in the code and not run.
 - `status` shows `workPath` for the first deal only, as this version runs one deal at a time.
-- The test buyer's wider limits (1,000 tUSDC and 7 days) are another task; when they land, the default window can grow with them.
+- The test buyer now takes work due within 7 days (T-545, merged into this branch on 2026-11-19). The default window stays 82,800 s; raising it is a one-line change in `examples/setup-work-api.ts` if a case study needs it.
 
 **How to resume:** the worktree is `.worktrees/t-543-sell-from-template`. `node site/build.mjs` rebuilds the bundle the tests run; the tests are the three files named under Evidence.
