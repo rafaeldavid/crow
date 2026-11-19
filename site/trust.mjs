@@ -266,6 +266,9 @@ code { font: .9em var(--mono); overflow-wrap: anywhere; }
 .doc h2 { margin: 64px 0 0; padding-bottom: 8px; border-bottom: 1px solid var(--hair); font-size: var(--size-note); font-weight: var(--weight-strong); letter-spacing: .06em; text-transform: uppercase; color: var(--ink-2); }
 .qa { padding: 24px 0 0; scroll-margin-top: 72px; }
 .qa h3 { margin: 0; font-family: var(--display); font-size: var(--size-lede); line-height: 1.3; font-weight: var(--weight-bold); letter-spacing: -.01em; text-wrap: balance; }
+/* the legal notice (T-564): a few short paragraphs at a reading measure */
+.legal { margin-top: 32px; }
+.legal p { max-width: 65ch; margin: 0 0 16px; text-wrap: pretty; }
 .qa p, .qa ul { max-width: 68ch; margin: 8px 0 0; text-wrap: pretty; }
 .qa ul { padding-left: 1.25em; }
 .qa li { margin-top: 4px; }
@@ -312,6 +315,7 @@ ${sectionHead({ eyebrow: 'Trust', title: 'How Crow handles money, keys and data'
 ${notice(COMING_SOON)}
 ${sourceLine(comingSoonSources())}
 <p class="alt">The same answers in plain text: <a href="${base}trust.txt">${esc(site)}trust.txt</a></p>
+<p class="alt">Crow is a demo on a test network, with no company yet: <a href="${base}legal">legal notice</a>.</p>
 ${toc(groups)}
 ${groups.map((g) => `<h2>${esc(g.group)}</h2>\n${g.questions.map(qaHtml).join('\n')}`).join('\n')}
 <p class="checked">Each answer was checked against its source on ${TRUST_CHECKED}. The addresses, the chain and the request log’s retention come from the deployment record and the code each time the site is built.</p>
@@ -337,8 +341,54 @@ export function trustText({ site = 'https://crow.direct/', facts = trustFacts() 
     `${COMING_SOON.title}: ${plain(COMING_SOON.text)}`,
     src_(comingSoonSources()),
     '',
+    `Legal notice: Crow is a demo on a test network, with no company yet. ${site}legal.txt`,
+    '',
     ...groups.flatMap((g) => [`## ${g.group}`, '', ...g.questions.flatMap((x) => [`### ${plain(x.q)}`, '', plain(x.a), ...(x.list ? x.list.map((i) => `- ${plain(i)}`) : []), ...(x.after ? [plain(x.after)] : []), src_(x.sources), ''])]),
   ].join('\n');
+}
+
+/** The day the legal notice last changed (T-564). The page says it at the top, as such notices do. */
+export const LEGAL_UPDATED = '2026-11-19';
+const LEGAL_UPDATED_WORDS = '19 November 2026';
+
+/**
+ * The legal notice, /legal (T-564; Rafa 2026-11-19: "test network only", a placeholder until Crow has a legal entity,
+ * then "a briefer legal page ... hyperlinks not raw links, and minimize links"). Four short paragraphs that read in
+ * under a minute, as early demo and waitlist sites word theirs (docs/tasks/T-564-legal-page.md lists the pages read):
+ * what Crow is, who runs it and what applies with no terms yet, what an early-access sign-up keeps, and the trust page
+ * for the rest. It names no entity, address, jurisdiction or governing law, because none exists. Each paragraph is
+ * a list of text and [label, url] parts, so the page links words and the plain-text copy writes them as Markdown links.
+ */
+const legalParagraphs = (site) => [
+  ['Crow is a demo. It runs on Ethereum Sepolia, a public test network, with test tokens that are worth nothing. No real money moves through Crow, and nothing here is an offer of financial services.'],
+  ['One maintainer runs Crow, which has no company yet. There are no terms of service yet. The code is open source under the ', ['Apache License 2.0', src('LICENSE')], ' and comes as is, without warranty, so use the demo at your own risk.'],
+  ['When you request early access, Crow keeps your email address, the time and the page you came from, to contact you about early access.'],
+  ['Everything else, from what the demo logs to how to reach Crow, is on the ', ['trust page', `${site}trust`], '.'],
+];
+const LEGAL_TITLE = 'Test network only';
+
+/** The legal notice, /legal. */
+export function legalPage({ site = 'https://crow.direct/', base = '/' } = {}) {
+  const part = (x) => (Array.isArray(x) ? `<a href="${esc(x[1].startsWith(site) ? `${base}${x[1].slice(site.length)}` : x[1])}">${esc(x[0])}</a>` : esc(x));
+  return `${head({ site, base, card: CARDS.legal, alternate: { type: 'text/plain', title: 'This notice in plain text (legal.txt)', path: 'legal.txt' } })}
+<main class="doc">
+${sectionHead({ eyebrow: 'Legal', title: LEGAL_TITLE, lede: `Last updated ${LEGAL_UPDATED_WORDS}.` })}
+<section class="legal">
+${legalParagraphs(site).map((p) => `<p>${p.map(part).join('')}</p>`).join('\n')}
+</section>
+</main>
+${footerHtml({ base, current: 'legal' })}
+<script>
+${drawerScript()}
+</script>
+</body>
+</html>
+`;
+}
+
+/** /legal.txt: the same notice in plain text, its links as Markdown links. */
+export function legalText({ site = 'https://crow.direct/' } = {}) {
+  return [`# ${LEGAL_TITLE}`, '', `Last updated ${LEGAL_UPDATED_WORDS}.`, '', ...legalParagraphs(site).flatMap((p) => [p.map((x) => (Array.isArray(x) ? `[${x[0]}](${x[1]})` : x)).join(''), ''])].join('\n');
 }
 
 /** Every address the status page's script reads: public endpoints only, and nothing from the private console. */

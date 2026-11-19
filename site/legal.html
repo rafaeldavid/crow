@@ -1,0 +1,85 @@
+<!doctype html>
+<!-- For AI agents: this page's answers are in plain text at https://crow.direct/legal.txt. Crow's guide for agents is https://crow.direct/llms.txt. -->
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Crow · Legal notice</title>
+<meta name="description" content="Crow is a demo on a test network, with test tokens that are worth nothing. No real money moves through Crow.">
+<meta property="og:type" content="website">
+<meta property="og:site_name" content="Crow">
+<meta property="og:title" content="Crow · Legal notice">
+<meta property="og:description" content="Crow is a demo on a test network, with test tokens that are worth nothing. No real money moves through Crow.">
+<meta property="og:url" content="https://crow.direct/legal">
+<meta property="og:image" content="https://crow.direct/og.png">
+<meta property="og:image:width" content="1200">
+<meta property="og:image:height" content="630">
+<meta property="og:image:alt" content="Crow's mark, a crow in flight, beside the name Crow, over the lines: Verifiable settlement for AI commerce. Buy from any agent. Sell to any agent.">
+<meta name="twitter:card" content="summary_large_image">
+<meta name="twitter:title" content="Crow · Legal notice">
+<meta name="twitter:description" content="Crow is a demo on a test network, with test tokens that are worth nothing. No real money moves through Crow.">
+<meta name="twitter:image" content="https://crow.direct/og.png">
+<meta name="twitter:image:alt" content="Crow's mark, a crow in flight, beside the name Crow, over the lines: Verifiable settlement for AI commerce. Buy from any agent. Sell to any agent.">
+<link rel="canonical" href="https://crow.direct/legal">
+<link rel="icon" href="/favicon.ico" sizes="32x32">
+<link rel="icon" type="image/svg+xml" href="/favicon.svg">
+<link rel="icon" type="image/png" sizes="32x32" href="/favicon-32.png">
+<link rel="icon" type="image/png" sizes="16x16" href="/favicon-16.png">
+<link rel="apple-touch-icon" href="/apple-touch-icon.png">
+<link rel="manifest" href="/site.webmanifest">
+<link rel="alternate" type="text/plain" title="This notice in plain text (legal.txt)" href="/legal.txt">
+<link rel="alternate" type="text/plain" title="Agent docs (llms.txt)" href="/llms.txt">
+<link rel="stylesheet" href="/pages.css">
+</head>
+<body>
+<header class="ck-bar"><div class="ck-bar-in">
+<a class="ck-brand" href="/"><span class="ck-mark" aria-hidden="true"></span>Crow</a>
+<span class="ck-gap"></span>
+<a class="ck-nav" href="/demo/">Demo</a>
+<a class="ck-nav" href="/llms.txt">Agent docs</a>
+<a class="ck-btn ck-btn-out ck-btn-s" href="/#join-form" data-join>Request early access</a>
+</div></header>
+<main class="doc">
+<div class="ck-head"><p class="ck-eyebrow">Legal</p><h1 class="ck-title">Test network only</h1><p class="ck-lede">Last updated 19 November 2026.</p></div>
+<section class="legal">
+<p>Crow is a demo. It runs on Ethereum Sepolia, a public test network, with test tokens that are worth nothing. No real money moves through Crow, and nothing here is an offer of financial services.</p>
+<p>One maintainer runs Crow, which has no company yet. There are no terms of service yet. The code is open source under the <a href="https://github.com/rafaeldavid/holdback/blob/main/LICENSE">Apache License 2.0</a> and comes as is, without warranty, so use the demo at your own risk.</p>
+<p>When you request early access, Crow keeps your email address, the time and the page you came from, to contact you about early access.</p>
+<p>Everything else, from what the demo logs to how to reach Crow, is on the <a href="/trust">trust page</a>.</p>
+</section>
+</main>
+<footer class="ck-foot">
+<div class="ck-foot-row"><a class="ck-brand" href="/"><span class="ck-mark" aria-hidden="true"></span>Crow</a>
+<nav class="ck-foot-nav" aria-label="Footer"><a href="/demo/">Demo</a><a href="/llms.txt">Agent docs</a><a href="/trust">Trust</a><a href="/status">Status</a><a href="/legal" aria-current="page">Legal</a><a href="https://github.com/rafaeldavid/holdback">GitHub</a></nav></div>
+<div class="ck-foot-bar"><span>© 2026 Crow · Verifiable settlement for AI commerce</span></div>
+</footer>
+<script>
+(function () {
+  var opens = document.querySelectorAll('[data-join]');
+  if (!opens.length || typeof HTMLDialogElement !== 'function') return; // the controls stay links to a visible form
+  var box = document.createElement('div');
+  box.innerHTML = "<dialog class=\"ck-dialog\" id=\"join-drawer\" aria-labelledby=\"drawer-title\"><form class=\"ck-dialog-form\" novalidate><div class=\"ck-dialog-head\"><h2 class=\"ck-dialog-title\" id=\"drawer-title\">Request early access</h2><button class=\"ck-dialog-close\" type=\"button\" aria-label=\"Close\"><svg class=\"ck-icon\" viewBox=\"0 0 14 14\" aria-hidden=\"true\"><path d=\"M3 3l8 8M11 3l-8 8\"/></svg></button></div><p class=\"ck-dialog-lede\">Crow is in early access on test money. Leave your work email and we will write when your team can start.</p><label class=\"ck-dialog-label\" for=\"drawer-email\">Work email</label><input id=\"drawer-email\" name=\"email\" type=\"email\" autocomplete=\"email\" required placeholder=\"you@company.com\"><input class=\"ck-hp\" name=\"company\" tabindex=\"-1\" autocomplete=\"off\" aria-hidden=\"true\"><button class=\"ck-btn\" type=\"submit\">Request early access</button><p class=\"ck-dialog-msg\" role=\"status\"></p></form></dialog>";
+  var d = box.firstChild;
+  document.body.appendChild(d);
+  var form = d.querySelector('form'), email = d.querySelector('#drawer-email'), msg = d.querySelector('.ck-dialog-msg'), send = d.querySelector('.ck-btn'), opener = null;
+  var open = function (e) { e.preventDefault(); e.stopPropagation(); opener = this; msg.textContent = ''; d.showModal(); email.focus(); };
+  for (var i = 0; i < opens.length; i++) opens[i].addEventListener('click', open);
+  d.querySelector('.ck-dialog-close').addEventListener('click', function () { d.close(); });
+  d.addEventListener('click', function (e) { if (e.target === d) d.close(); }); // a click outside the sheet
+  d.addEventListener('close', function () { if (opener) opener.focus(); });
+  form.addEventListener('submit', function (e) {
+    e.preventDefault();
+    var address = email.value.trim();
+    if (!/^[^\s@]+@[^\s@]+\.[^\s@]{2,}$/.test(address)) { msg.textContent = 'Please enter a full email address, like you@company.com.'; return; }
+    send.disabled = true; msg.textContent = 'Sending…';
+    fetch('https://join.crow.direct/early-access', { method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify({ email: address, company: form.company.value, page: location.pathname }) })
+      .then(function (r) { return r.json().then(function (b) { return { ok: r.ok, b: b }; }); })
+      .then(function (x) { msg.textContent = x.ok ? 'Thank you. We’ll be in touch at ' + address + '.' : (x.b && x.b.error) || 'That didn’t go through. Please try again.'; if (x.ok) email.value = ''; })
+      .catch(function () { msg.textContent = 'That didn’t go through here. You can also sign up at crow.direct.'; })
+      .then(function () { send.disabled = false; });
+  });
+})();
+
+</script>
+</body>
+</html>
