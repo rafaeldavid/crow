@@ -2,12 +2,12 @@
 // only. Here the operators are the demo's own world (apps/demo-cloud) on SimChain, served in this process on two
 // origins, with scripted judges; the live run is the task's Evidence.
 import { spawn } from 'node:child_process';
-import { mkdtempSync, readdirSync, readFileSync } from 'node:fs';
+import { mkdirSync, mkdtempSync, readdirSync, readFileSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { generatePrivateKey } from 'viem/accounts';
 import { afterAll, beforeAll, describe, expect, it } from 'vitest';
-import { BEATS, judgeCallsLeft, timelineLine } from './demo-sepolia.ts';
+import { BEATS, judgeCallsLeft, rejectedRelease, timelineLine } from './demo-sepolia.ts';
 import { expectNoSecrets, simWorld, type Served } from './e2e-world.ts';
 
 type J = any; // eslint-disable-line @typescript-eslint/no-explicit-any
@@ -65,6 +65,44 @@ describe('demo-sepolia.ts', () => {
       expect(demo.requests.slice(before).filter((q) => !q.startsWith('GET '))).toEqual([]);
     });
 
+    it('refuses the release beat after a live panel rejected its honest work on the same rules contract, unless --rerun-after names the fix', async () => {
+      const rules = ((await (await fetch(`${demo.urls[0]}/.well-known/holdback.json`)).json()) as J).domain.verifyingContract as string;
+      const out = mkdtempSync(join(tmpdir(), 'demo-sepolia-reroll-'));
+      const earlier = (verifyingContract: string) => ({ result: { domain: { verifyingContract }, checks: [{ name: 'the deal ends Released', ok: false }, { name: 'a live panel judged', ok: true }] } });
+      mkdirSync(join(out, '2026-11-19T000000Z'));
+      writeFileSync(join(out, '2026-11-19T000000Z', 'release.json'), JSON.stringify(earlier('0x00000000000000000000000000000000000000aa')));
+      expect(rejectedRelease(out, rules), 'a reject on another rules contract does not count').toBeNull();
+      mkdirSync(join(out, '2026-11-19T000100Z'));
+      writeFileSync(join(out, '2026-11-19T000100Z', 'release.json'), JSON.stringify(earlier(rules.toUpperCase().replace(/^0X/, '0x'))));
+      const env = { HOLDBACK_OPERATORS: demo.urls.join(',') };
+      const before = demo.requests.length;
+      const refused = await command(['--out', out], env);
+      expect(refused.code, refused.out).toBe(3);
+      expect(refused.out).toMatch(/^refused: refusing to start: a live panel rejected the release beat's honest work on this rules contract \(.*2026-11-19T000100Z.release\.json\)\. A panel verdict is never re-rolled/m);
+      expect(demo.requests.slice(before)).toEqual([]);
+      // The other beats do not re-judge the release delivery, so they may still run alone.
+      expect((await command(['--out', out, '--beat', 'reject', '--dry-run'], env)).code).toBe(0);
+      const after = await command(['--out', out, '--dry-run', '--rerun-after', 'pinned a new judge registry'], env);
+      expect(after.code, after.out).toBe(0);
+      expect(after.out).toMatch(/^run again after: pinned a new judge registry \(an earlier live reject: /m);
+    });
+
+    it('records a beat that cannot open its round as stopped, and still plays and writes the other two', async () => {
+      const out = mkdtempSync(join(tmpdir(), 'demo-sepolia-stop-'));
+      const seeds = ['0xnot-a-seed', generatePrivateKey(), generatePrivateKey()];
+      const r = await command(['--out', out], { HOLDBACK_OPERATORS: demo.urls.join(','), DEMO_SEPOLIA_SEEDS: seeds.join(',') });
+      expect(r.code, r.out).toBe(1);
+      expect(r.out).toMatch(/^the seeds come from DEMO_SEPOLIA_SEEDS \(for the tests only\): these keys are not fresh$/m);
+      expect(r.out).toMatch(/^ +\d+ s +release +start +stopped before the first deal: /m);
+      expect(r.out).toMatch(/^release +none +\d+ s +0 of 0 checks held; stopped: /m);
+      const [folder] = readdirSync(out).map((d) => join(out, d));
+      expect(readdirSync(folder!).sort()).toEqual(['escalate.json', 'reject.json', 'release.json', 'run.json', 'timeline.md']);
+      const rec = (name: string) => JSON.parse(readFileSync(join(folder!, `${name}.json`), 'utf8')) as J;
+      expect(rec('release').result).toMatchObject({ status: 'error', stoppedAt: 'start' });
+      expect(rec('reject').result.status).toBe('pass');
+      expect(rec('escalate').result.status).toBe('pass');
+    }, 300_000);
+
     it('plays the three beats with fresh keys, prints the timeline and writes it with one record per beat', async () => {
       const out = mkdtempSync(join(tmpdir(), 'demo-sepolia-'));
       // The test names the three seeds so it can look for them; a person's run makes them fresh in memory.
@@ -84,7 +122,7 @@ describe('demo-sepolia.ts', () => {
       expect(r.out).toMatch(/^release +Released +\d+ s +\d+ of \d+ checks held/m);
       expect(r.out).toMatch(/^reject +Refunded +\d+ s/m);
       expect(r.out).toMatch(/^escalate +(Released|Refunded) +\d+ s/m);
-      expect(r.out).toMatch(/^all three beats: \d+ s from the first offer to the last settlement/m);
+      expect(r.out).toMatch(/^all three beats: \d+ s from the start of the command to the last beat.s end, within the 300 s limit$/m);
       const [folder] = readdirSync(out).map((d) => join(out, d));
       const files = readdirSync(folder!).sort();
       expect(files).toEqual(['escalate.json', 'reject.json', 'release.json', 'run.json', 'timeline.md']);

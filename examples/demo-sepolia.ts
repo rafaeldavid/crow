@@ -17,11 +17,13 @@
 // It prints a timeline (the seconds since the start, the beat, the step, what happened, with Etherscan links once a
 // deal settles), then one line per beat, and writes the same with one JSON record per beat to
 // demo/out/sepolia/<UTC time>/ (or --out <dir>). Exit 0 when every beat's checks held, 3 when it refuses, 1 otherwise.
+// Like round 1, it refuses to play the release beat again once a live panel has rejected its honest work on the same
+// rules contract (no re-rolls), unless --rerun-after names the fix.
 //
-//   pnpm demo:sepolia [--beat release|reject|escalate] [--out <dir>] [--dry-run]
+//   pnpm demo:sepolia [--beat release|reject|escalate] [--out <dir>] [--dry-run] [--rerun-after <the fix>]
 //   HOLDBACK_OPERATORS=<url>,<url>   other operators (the tests: the demo's own world on SimChain)
 //   SEPOLIA_RPC_URL=<url>            another Sepolia node for the chain reads (default a public node)
-import { mkdirSync, writeFileSync } from 'node:fs';
+import { existsSync, mkdirSync, readdirSync, readFileSync, writeFileSync } from 'node:fs';
 import { join } from 'node:path';
 import { fileURLToPath, pathToFileURL } from 'node:url';
 import { generatePrivateKey } from 'viem/accounts';
@@ -45,7 +47,7 @@ export const BEATS = [
 ] as const;
 type Beat = (typeof BEATS)[number];
 
-const USAGE = 'usage: pnpm demo:sepolia [--beat release|reject|escalate] [--out <dir>] [--dry-run]';
+const USAGE = 'usage: pnpm demo:sepolia [--beat release|reject|escalate] [--out <dir>] [--dry-run] [--rerun-after <the fix>]';
 
 /** Live judge calls the demo has left today (UTC), from discovery's demo.judges; 0 when its panel is not live. */
 export function judgeCallsLeft(demo: J): number {
@@ -72,26 +74,70 @@ const scripted = (j: J | null) => (j?.panel?.members ?? []).some((m: J) => Strin
 
 interface Played { beat: Beat; result: J; state: string; judgment: J | null; seconds: number }
 
-async function play(beat: Beat, seed: string, ops: string[], log: (l: string) => void): Promise<Played> {
+/**
+ * One beat: its own round with its own seed, the scenario, then the deal's state and judgment record. It never throws:
+ * a beat that cannot even open its round is recorded as stopped, so the other beats still finish and are written.
+ */
+async function play(beat: Beat, seed: string, ops: string[], log: (l: string) => void, save: (p: Played) => void): Promise<Played> {
   const started = Date.now();
-  const round = await Round.open({ operators: ops, seed, rpcUrl: process.env['SEPOLIA_RPC_URL'] || PUBLIC_RPC, homepage: false, log });
   const [scenario] = pick([beat.scenario]);
-  const r = new Run(round, beat.scenario, scenario!.title);
+  let played: Played;
   try {
-    await scenario!.run(r);
+    const round = await Round.open({ operators: ops, seed, rpcUrl: process.env['SEPOLIA_RPC_URL'] || PUBLIC_RPC, homepage: false, log });
+    const r = new Run(round, beat.scenario, scenario!.title);
+    try {
+      await scenario!.run(r);
+    } catch (e) {
+      r.error = reason(e);
+      r.say(`stopped at ${r.step}: ${r.error}`);
+    }
+    const ended = new Date().toISOString();
+    const id = r.deals[0]?.id;
+    const buyer = round.agent('buyer');
+    const view = id ? await buyer.call('GET', `/v1/commitments/${id}`).catch(() => null) : null;
+    const judgment = id ? await buyer.call('GET', `/v1/commitments/${id}/judgment`).catch(() => null) : null;
+    // Live judges are the point of the Sepolia demo: a scripted panel there fails the beat. Scenario 1 checks its own
+    // panel; 5b only notes whether its appeal panel ran live, so the escalation's check is added here.
+    if (round.pin.domain.chainId === SEPOLIA_CHAIN_ID && beat.name === 'escalate') r.check('a live panel of pinned models judged', judgment !== null && !scripted(judgment), panelLine(judgment));
+    // A stopped deal that still holds the buyer's money closes by its timeouts, which the operators send themselves.
+    if (view && !['Released', 'Refunded'].includes(view.escrowState)) r.say(`the deal is still ${view.escrowState}; the operators send its timeout when it falls due (deadlines ${JSON.stringify(view.deadlines ?? {})})`);
+    played = { beat, result: r.result(ended), state: view?.escrowState ?? 'none', judgment, seconds: Math.round((Date.now() - started) / 1000) };
   } catch (e) {
-    r.error = reason(e);
-    r.say(`stopped at ${r.step}: ${r.error}`);
+    log(`[${beat.scenario}] start     stopped before the first deal: ${reason(e)}`);
+    const at = new Date().toISOString();
+    played = { beat, result: { scenario: beat.scenario, title: scenario!.title, status: 'error', startedAt: new Date(started).toISOString(), endedAt: at, stoppedAt: 'start', error: reason(e), checks: [], deals: [], notes: [] }, state: 'none', judgment: null, seconds: Math.round((Date.now() - started) / 1000) };
   }
-  const ended = new Date().toISOString();
-  const id = r.deals[0]?.id;
-  const buyer = round.agent('buyer');
-  const view = id ? await buyer.call('GET', `/v1/commitments/${id}`).catch(() => null) : null;
-  const judgment = id ? await buyer.call('GET', `/v1/commitments/${id}/judgment`).catch(() => null) : null;
-  // Live judges are the point of the Sepolia demo: a scripted panel there fails the beat. Scenario 1 checks its own
-  // panel; 5b only notes whether its appeal panel ran live, so the escalation's check is added here.
-  if (round.pin.domain.chainId === SEPOLIA_CHAIN_ID && beat.name === 'escalate') r.check('a live panel of pinned models judged', judgment !== null && !scripted(judgment), panelLine(judgment));
-  return { beat, result: r.result(ended), state: view?.escrowState ?? 'none', judgment, seconds: Math.round((Date.now() - started) / 1000) };
+  save(played);
+  return played;
+}
+
+/** One beat's record file: the beat, its state, its time, the judgment in short, and the scenario's full result. */
+const beatRecord = (p: Played) => ({
+  beat: p.beat.name, scenario: p.beat.scenario, state: p.state, seconds: p.seconds,
+  judgment: p.judgment ? { role: p.judgment.role, decision: p.judgment.aggregate?.decision, reasons: p.judgment.aggregate?.reasons ?? [], panel: (p.judgment.panel?.members ?? []).map((m: J) => ({ model: m.model, overall: m.verdict?.overall ?? m.status })) } : null,
+  result: p.result,
+});
+
+/**
+ * No re-rolls (CLAUDE.md, as round 1's rerollGuard): once a live panel has rejected the release beat's honest work on
+ * this rules contract, another run to get a pass is a re-roll. Returns the earlier record that shows it, or null.
+ */
+export function rejectedRelease(root: string, rules: string): string | null {
+  if (!existsSync(root)) return null;
+  for (const dir of readdirSync(root).sort()) {
+    const file = join(root, dir, 'release.json');
+    if (!existsSync(file)) continue;
+    let rec: J;
+    try {
+      rec = JSON.parse(readFileSync(file, 'utf8'));
+    } catch {
+      continue;
+    }
+    const checks: J[] = rec?.result?.checks ?? [];
+    const rejected = checks.some((c) => c.name === 'the deal ends Released' && !c.ok) && checks.some((c) => c.name === 'a live panel judged' && c.ok);
+    if (rejected && String(rec.result?.domain?.verifyingContract ?? '').toLowerCase() === rules.toLowerCase()) return file;
+  }
+  return null;
 }
 
 async function main(args: string[]): Promise<number> {
@@ -101,7 +147,7 @@ async function main(args: string[]): Promise<number> {
   };
   for (let i = 0; i < args.length; i++) {
     if (args[i] === '--dry-run') continue;
-    if ((args[i] === '--beat' || args[i] === '--out') && args[i + 1] !== undefined) {
+    if (['--beat', '--out', '--rerun-after'].includes(args[i]!) && args[i + 1] !== undefined) {
       i++;
       continue;
     }
@@ -118,6 +164,8 @@ async function main(args: string[]): Promise<number> {
   // The tests name the seeds so they can look for them in the output; a person's run makes them fresh, in memory only.
   const given = process.env['DEMO_SEPOLIA_SEEDS']?.split(',');
   const seeds = BEATS.map((_, i) => given?.[i] ?? generatePrivateKey());
+  const rerunAfter = option('--rerun-after');
+  const root = option('--out') ?? OUT;
 
   const t0 = Date.now();
   const lines: string[] = [];
@@ -131,8 +179,18 @@ async function main(args: string[]): Promise<number> {
     if (!/^\[\w+\] \S+ +ok {2}/.test(l) || /^\[\w+\] \S+ +ok +the deal (ends|is Escalated)/.test(l)) say(timelineLine(l, Date.now() - t0));
   };
 
-  const discovery: J = await fetch(`${ops[0]}/.well-known/holdback.json`).then((r) => r.json());
-  const chainId = Number(discovery?.domain?.chainId);
+  const read = async (): Promise<J> => {
+    const url = `${ops[0]}/.well-known/holdback.json`;
+    const res = await fetch(url).catch((e: Error) => {
+      throw new Error(`${url} did not answer (${e.message})`);
+    });
+    const body: J = res.ok ? await res.json().catch(() => null) : null;
+    if (!body?.domain?.chainId || !body.domain.verifyingContract) throw new Error(`${url} answered ${res.status} with no discovery document (domain.chainId and domain.verifyingContract)`);
+    return body;
+  };
+  const discovery: J = await read();
+  const chainId = Number(discovery.domain.chainId);
+  const rules = String(discovery.domain.verifyingContract);
   const onSepolia = chainId === SEPOLIA_CHAIN_ID;
   const need = beats.reduce((s, b) => s + b.calls, 0);
   const left = judgeCallsLeft(discovery?.demo);
@@ -141,6 +199,12 @@ async function main(args: string[]): Promise<number> {
   say(`judges: ${discovery?.demo?.judges?.panel ?? 'unknown'} panel, ${(discovery?.demo?.judges?.models ?? []).join(', ') || 'models not listed'}; ${left} live calls left today (UTC); this run needs about ${need}`);
   say('beats, played at once, each with its own fresh buyer and seller:');
   for (const b of beats) say(`  ${b.name.padEnd(8)}  round scenario ${b.scenario}: ${b.says}`);
+  if (given) say('the seeds come from DEMO_SEPOLIA_SEEDS (for the tests only): these keys are not fresh');
+  const earlier = beats.some((b) => b.name === 'release') ? rejectedRelease(root, rules) : null;
+  if (earlier && !rerunAfter) {
+    throw new Refusal(`refusing to start: a live panel rejected the release beat's honest work on this rules contract (${earlier}). A panel verdict is never re-rolled; record it as a finding. After a fix, run again with --rerun-after "<the fix>"`);
+  }
+  if (earlier) say(`run again after: ${rerunAfter} (an earlier live reject: ${earlier})`);
   if (args.includes('--dry-run')) {
     say('dry run: no deal opened, nothing signed');
     return 0;
@@ -149,10 +213,11 @@ async function main(args: string[]): Promise<number> {
     throw new Refusal(`refusing to start: the demo has ${left} live judge calls left today and this run needs about ${need}; past the budget its panels are scripted. Run after 00:00 UTC, or one beat with --beat`);
   }
 
-  const folder = join(option('--out') ?? OUT, new Date().toISOString().replace(/\.\d+Z$/, 'Z').replace(/:/g, ''));
+  const folder = join(root, new Date().toISOString().replace(/\.\d+Z$/, 'Z').replace(/:/g, ''));
   mkdirSync(folder, { recursive: true });
   say('');
-  const played = await Promise.all(beats.map((b) => play(b, seeds[BEATS.indexOf(b)]!, ops, log)));
+  const save = (p: Played) => writeFileSync(join(folder, `${p.beat.name}.json`), `${JSON.stringify(beatRecord(p), null, 2)}\n`);
+  const played = await Promise.all(beats.map((b) => play(b, seeds[BEATS.indexOf(b)]!, ops, log, save)));
   const total = Math.round((Date.now() - t0) / 1000);
 
   say('');
@@ -162,13 +227,12 @@ async function main(args: string[]): Promise<number> {
     say(`${p.beat.name.padEnd(8)}  ${p.state.padEnd(9)}  ${String(p.seconds).padStart(3)} s  ${held} of ${p.result.checks.length} checks held${p.result.error ? `; stopped: ${p.result.error}` : ''}`);
     say(`          ${p.result.deals[0] ? `deal ${p.result.deals[0].id}; ` : ''}${panelLine(p.judgment)}`);
   }
-  say(`${beats.length === BEATS.length ? 'all three beats' : `the ${beats[0]!.name} beat`}: ${total} s from the first offer to the last settlement, ${total <= LIMIT_SEC ? 'within' : 'over'} the ${LIMIT_SEC} s limit`);
-  const after: J = await fetch(`${ops[0]}/.well-known/holdback.json`).then((r) => r.json()).catch(() => null);
-  if (onSepolia && after) say(`live judge calls today (UTC): ${discovery.demo.judges.liveCallsToday} before, ${after.demo?.judges?.liveCallsToday} after; other deals in the same minutes count too`);
+  say(`${beats.length === BEATS.length ? 'all three beats' : `the ${beats[0]!.name} beat`}: ${total} s from the start of the command to the last beat's end, ${total <= LIMIT_SEC ? 'within' : 'over'} the ${LIMIT_SEC} s limit`);
+  const after: J = await read().catch(() => null);
+  if (onSepolia && after) say(`live judge calls today (UTC): ${discovery.demo?.judges?.liveCallsToday} before, ${after.demo?.judges?.liveCallsToday} after; other deals in the same minutes count too`);
   say(`timeline and records: ${folder}`);
 
-  for (const p of played) writeFileSync(join(folder, `${p.beat.name}.json`), `${JSON.stringify({ beat: p.beat.name, scenario: p.beat.scenario, state: p.state, seconds: p.seconds, judgment: p.judgment ? { role: p.judgment.role, decision: p.judgment.aggregate?.decision, reasons: p.judgment.aggregate?.reasons ?? [], panel: (p.judgment.panel?.members ?? []).map((m: J) => ({ model: m.model, overall: m.verdict?.overall ?? m.status })) } : null, result: p.result }, null, 2)}\n`);
-  writeFileSync(join(folder, 'run.json'), `${JSON.stringify({ startedAt: new Date(t0).toISOString(), seconds: total, limitSec: LIMIT_SEC, operators: ops, chainId, judgeCalls: { before: discovery?.demo?.judges?.liveCallsToday ?? null, after: after?.demo?.judges?.liveCallsToday ?? null }, beats: played.map((p) => ({ name: p.beat.name, scenario: p.beat.scenario, state: p.state, seconds: p.seconds, status: p.result.status, deal: p.result.deals[0]?.id ?? null })) }, null, 2)}\n`);
+  writeFileSync(join(folder, 'run.json'), `${JSON.stringify({ startedAt: new Date(t0).toISOString(), seconds: total, limitSec: LIMIT_SEC, operators: ops, chainId, rules, ...(rerunAfter ? { rerunAfter } : {}), judgeCalls: { before: discovery?.demo?.judges?.liveCallsToday ?? null, after: after?.demo?.judges?.liveCallsToday ?? null }, beats: played.map((p) => ({ name: p.beat.name, scenario: p.beat.scenario, state: p.state, seconds: p.seconds, status: p.result.status, deal: p.result.deals[0]?.id ?? null })) }, null, 2)}\n`);
   writeFileSync(join(folder, 'timeline.md'), `# Crow demo, ${new Date(t0).toISOString().slice(0, 19)}Z\n\n\`\`\`\n${lines.join('\n')}\n\`\`\`\n`);
   return played.every((p) => p.result.status === 'pass') ? 0 : 1;
 }

@@ -41,7 +41,46 @@ The bar, from the roadmap's stage 2: "one script plays release, reject and an es
 
 ## Evidence
 
-(filled in as the runs are made)
+**Plan of the measurement, set before run 2 (coordinator, 2026-11-19):** five runs of the good path on Sepolia, all recorded, none dropped. Runs 1 and 2 are full runs on 2026-11-19. After 00:00 UTC, run 3 is a full run, and runs 4 and 5 play the release beat alone (`--beat release`), because the demo's live judge cap cannot cover five full runs in a day (below). A run whose panel was scripted does not count, and its row says so.
+
+### The five runs (every number measured)
+
+Seconds are wall time on this machine for each beat, from opening its round to its last read; "all" is the whole command, from start to end. Each run's timeline and records are under `demo/out/sepolia/<UTC time>/` in the run's checkout (not committed); each deal's transactions are on Etherscan.
+
+| Run | Start (UTC) | Commit | Release: state, s, checks | Reject: state, s, checks | Escalate: state, s, checks | All, s | Within 300 s | Good path accepted | Live calls (before → after) |
+| --- | --- | --- | --- | --- | --- | --- | --- | --- | --- |
+| 1 | 2026-11-19 21:35:33 | `3ade3ec` | Released, 113, 11 of 11 | Refunded, 80, 11 of 11 | Released, 142, 22 of 22 | 142 | yes | yes, live panel | 8 → 19 |
+| 2 | 2026-11-19 21:39:50 | `8622ffd` | Released, 170, 11 of 11 | Refunded, 159, 11 of 11 | Released, 182, 22 of 22 | 183 | yes | yes, live panel | 19 → 30 |
+| 3 | | | | | | | | | |
+| 4 | | | (release beat only) | not played | not played | | n/a | | |
+| 5 | | | (release beat only) | not played | not played | | n/a | | |
+
+Accepted so far: 2 of 2 (measured). The table closes at 5.
+
+**The deals and their panels (measured):**
+- Run 1, release `0xa66055182b03d8be6318547f225a75b869fb4283f6386618b9c2425391f0a016`. The primary's panel: deepseek-flash@2026-11-01 pass, claude-opus-5-5@2026-09-21 pass, deepseek-v4-pro@2026-11-01 pass. Decision accept.
+- Run 1, reject `0x45df3064aee1882889664559a48deef697daa8aa1204d0279253da7a646de45e`. The `rows` check failed; decision reject; no panel ran.
+- Run 1, escalate `0x58323c6352233b72fad8a39a5f39c971c7c3f31706ef06ff09fa3f80f315e2a9`. The screen flagged the hidden characters, so the primary escalated (its panel of 3: deepseek-flash, claude-opus-5-5, deepseek-v4-pro, all pass). The appeal adjudicator's panel of 5 (deepseek-v4-pro, claude-sonnet-5, claude-sonnet-5-5, claude-opus-5-5, deepseek-flash, all pass) accepted unanimously; Released.
+- Run 2, release `0xa97529114fbf1c8e4c070d8a62c13f37ff503c0800a494e912b587b190b87921`. The primary's panel: claude-sonnet-5@2026-06-29 pass, claude-opus-5-5@2026-09-21 pass, deepseek-v4-pro@2026-11-01 pass. Decision accept.
+- Run 2, reject `0xb8a0e3784c8888262b952e91b015be82b4f0b34c690b69d72f3f7bf720d00f4c`. The `rows` check failed; decision reject.
+- Run 2, escalate `0x61ad4e33b28e8d3584ad46068c4c65609bd11a957b956bdbe9041c228d20768c`. The primary escalated on the screen flag (its panel: claude-sonnet-5-5, claude-opus-5-5, deepseek-v4-pro, all pass). The appeal adjudicator's panel of 5 (deepseek-flash, deepseek-v4-pro, claude-sonnet-5, claude-opus-5-5, claude-sonnet-5-5, all pass) accepted unanimously; Released.
+
+**Who decides the escalation (documented).** The contracts name it the appeal adjudicator, `ROLE_APPEAL`, "which in phase one hears escalations only" (`contracts/src/HoldbackTypes.sol`). Both operators' `judgment.decided` events name `0x0cfd32...d796` with role `appeal`, and the adjudication fee of 1 tUSDC went to it (measured, run 2's escalate record). The fallback adjudicator (`ROLE_FALLBACK`) takes over only when the primary misses its deadline, which these runs do not show.
+
+### The live judge cap (measured 2026-11-19)
+
+- The operators allow 30 live judge calls per UTC day across the whole demo (`demo.judges.liveCallsPerDay` in discovery; the setting `LIVE_JUDGE_CALLS_PER_DAY`, default `DEFAULT_LIVE_CALLS_PER_DAY` in `apps/demo-cloud/src/judges.ts`).
+- A full run used 11 calls each time: 3 for the release beat's panel and 8 for the escalation (the primary's 3 and the appeal adjudicator's 5). Discovery read 8, 19, then 30 calls around runs 1 and 2.
+- So the cap covers about 2.5 full runs a day. Past it, every demo panel is scripted until 00:00 UTC, for every user and session. After run 2 the cap was spent for 2026-11-19.
+- Tokens: the two full runs used 19,405 input and 4,461 output tokens together (discovery's `tokensToday`, 7,015 / 1,537 before run 1 and 26,420 / 5,998 after run 2, with no other calls in between). That is about 9,700 input and 2,200 output tokens per full run, at about 880 input tokens per call (measured). At list prices that is a few US cents per run (guessed).
+- Raising the cap for a demo day is a change to `LIVE_JUDGE_CALLS_PER_DAY` on the operators plus an operator deploy. That is Rafa's call; this task changes nothing there.
+
+### Tests and checks (measured)
+
+- `pnpm exec vitest run examples/demo-sepolia.test.ts`: 8 of 8 passed. They cover the three beats against the demo's own world on SimChain, the dry run, the re-roll refusal and `--rerun-after`, and a beat that cannot open its round. They also check that no seed or derived key is printed or written.
+- `pnpm -s typecheck` and `eslint` on both files: no errors.
+- `pnpm -s demo:sepolia --dry-run` against the live operators: exit 0; it printed the plan and "22 live calls left today (UTC); this run needs about 11" at 21:34 UTC.
+- The appeal beat on SimChain: `pnpm exec vitest run examples/e2e-scenarios-appeal.test.ts` passed (2 passed, 1 skipped: the anvil variant, which needs anvil). That covers scenarios 3c, 6 and 7, the party appeals and the bond-paid overturn.
 
 ## Handoff
 
