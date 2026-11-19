@@ -109,3 +109,10 @@ c85147df56fd5e69dbb18cc8d750068e4ed11791:tests/metrics/fixtures/discovery.json:g
 # T-541: the RISC Zero guest's Cargo.lock lists the crate name `crypto_secretbox` in a dependency list, which the
 # generic API-key rule reads as a key. A crate name, no secret. Allowed by Rafa on 2026-11-19.
 d7715672aa47ef45f33ac0878b076ed4b7e14189:tools/envelope-proof/methods/guest/Cargo.lock:generic-api-key:510
+# False positives: the public Sepolia address of Commerce Payments' token store implementation, keyed
+# `tokenStoreImplementation`, in the fixed version's deployment record of 2026-11-19, its pinned copy, and the kept
+# record of 2026-11-13, all in the cutover's commit 42254eb. Each equals the escrow's tokenStoreImplementation() on
+# chain [measured, T-563]. Under Rafa's go for the T-563 cutover, 2026-11-19.
+42254ebbf34a894948a6fef757575169f6caafde:contracts/deployments/sepolia.json:generic-api-key:45
+42254ebbf34a894948a6fef757575169f6caafde:examples/deployments.ts:generic-api-key:91
+42254ebbf34a894948a6fef757575169f6caafde:contracts/deployments/sepolia-2026-11-13T0532Z-domain-0.8.json:generic-api-key:45
