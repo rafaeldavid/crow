@@ -60,6 +60,7 @@ Measured on 2026-11-19, branch `t-548-standing-seller-contract`, Foundry 1.0.0, 
 | Deployment through the proxy | | 2,548,708 gas | |
 
   The take's blob is 1,568 bytes. ADR-0040 §4 guessed about 1.9 million gas for a deployment; the measured 2,548,708 gas replaces it [measured].
+- **After the merge freeze** (T-563, tag `contracts-phase-one-2`): `origin/main` merged into the branch. Main's rules constructor now asks the beacon for a round, so the vectors suite etches a sim beacon as `Vectors.t.sol` does; then 51 of 51 standing-seller tests pass, and the rules sources' diff against `origin/main` is 0 lines [measured]. A one-off check, not committed, put main's rules contract at the deployment record's `rules` address on chain 11155111: its domain is "Holdback", "0.8", and the seller contract answered yes for a take and its standing delivery there [measured]. No test ran against Sepolia itself; the repository has no fork tests and no RPC endpoint.
 - **Reviews**: a red-team pass and one review, each given `CLAUDE.md`, ADR-0040, the threat model and the related ADRs, not the implementer's conclusions. Findings and what was done are in Decisions.
 
 ## Decisions

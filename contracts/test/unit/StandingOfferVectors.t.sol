@@ -6,6 +6,7 @@ import {HoldbackRules} from "../../src/HoldbackRules.sol";
 import {HoldbackStandingSeller} from "../../src/HoldbackStandingSeller.sol";
 import {IHoldbackStandingSeller as IS} from "../../src/IHoldbackStandingSeller.sol";
 import {HoldbackTypes as H} from "../../src/HoldbackTypes.sol";
+import {SimBeacon} from "../../script/SimBeacon.sol";
 
 /// T-548: cross-language vectors for the seller contract (ADR-0040 §1). The generator is
 /// `packages/core/src/eip712.vectors.test.ts`, which computes each value with viem from spec/examples, the way a wallet
@@ -34,7 +35,9 @@ contract StandingOfferVectorsTest is Test {
     function setUp() public {
         vm.chainId(31337);
         // As in Vectors.t.sol: the rules contract's digest depends on its domain alone, so its constructor's addresses
-        // are placeholders.
+        // are placeholders. The beacon placeholder holds a sim beacon's code, because the constructor asks it for a
+        // round (T-527).
+        vm.etch(address(0xBE), address(new SimBeacon(bytes32(0))).code);
         bytes memory args = abi.encode(address(0xE5), address(0xC0), uint64(0), address(0xBE), TOKEN, uint64(0));
         deployCodeTo("HoldbackRules.sol:HoldbackRules", args, RULES);
         deployCodeTo("HoldbackStandingSeller.sol:HoldbackStandingSeller", abi.encode(vm.addr(KEY_PK)), SELLER);
