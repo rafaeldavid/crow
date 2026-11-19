@@ -307,6 +307,22 @@ The maintainers keep the notes on agent sessions and permission prompts privatel
 
 Each entry records one deploy as it ran: the date and time in UTC, the commit, each Worker's new version and its rollback target, and what was measured after it. The deploy scripts print the entry's first line (`pnpm demo-cloud:deploy`, `pnpm site:deploy`, `node apps/test-agents/scripts/deploy.mjs`). The values are true for their date: for what runs now, read "What is live" above and each node's discovery.
 
+### The test agents, the site and both operators at one commit (deployed 2026-11-19, 05:24 to 05:31 UTC)
+
+Rafa's word for these was "Yes, after it merges", to "Run the deploy round once the template change has merged?"; pull request 673 (T-543) merged at 05:23 UTC. The coordinator ran each script from a clean worktree of `main` at that merge, after `pnpm install --frozen-lockfile` and `pnpm build`, one after the other. Before the operators' deploy, the two hosted sellers, the test seller and the test buyer each read `operational` with `open: 0` [measured 05:25 UTC], and no judging code had changed since the operators' last build.
+
+**Test seller deploy 2026-11-19 05:24 UTC, commit `b177167`: pass.** crow-test-agents `135683f8-e481-4c2d-8657-c4967126f047` (rollback target `bba72a2f-54aa-410d-a965-ffca3875aa47`).
+
+The seller read `operational` and served its agent card, and the buyer read `operational`, 1 s after the upload [measured by the script]. The test buyer now pays up to 1,000 tUSDC for work due within 7 days (T-545).
+
+**Site deploy 2026-11-19 05:24 UTC, commit `b177167` on a detached HEAD: pass.** crow-site `59feed8a-d0a0-4cb1-ad09-2f1040954681` (rollback target `db0fbf7b-b0f7-48f3-924e-9855e18dfba9`).
+
+The live site served the built `llms.txt` and the pinned `try.mjs` 0 s after the upload [measured by the script]. Afterwards `sell.txt`, `trust.txt`, `setup.mjs`, `ref/intake.txt` and `ref/checks.txt` each had the SHA-256 of the file at the commit, and the live `setup.txt` named the live `setup.mjs`'s SHA-256 [measured 05:32 UTC]. The site now carries T-547 (the seller's guide, the agent guide, the trust page's contact answer and three references), T-543 (the setup command sells work from a template; a new pinned `setup.mjs`), T-545's `ref/intake.txt` and T-538's command in the agent docs.
+
+**Deploy 2026-11-19 05:25 UTC, commit `b177167` on a detached HEAD: pass.** holdback-op1 `b9e5d82e-d929-4bf8-b9cf-b723c878174e` (rollback target `2e88e9df-1999-4b9e-902c-f5b005ed7aa3`), holdback-op2 `35c7b17d-8861-4d0e-991e-658db56e8bf2` (rollback target `15e6d48f-3544-4597-a942-b38fd9e4e22e`). Smoke deal `0x40b0828362f59392d0d1615eccc6eab891ec2e72c02b264bc93ebace22b48574` Released in 46 s, against commit `b177167` (both nodes' discovery named it 285 s after /v1/status answered).
+
+The deal guard checked 4 open deals at the demo adjudicators against the new build's kept policies; none would lose its judge [measured by the script]. Both nodes' discovery named the commit and a delivery limit of 1,048,576 bytes [measured 05:32 UTC]. The operators now carry T-540's first item (the beacon's errors reach an agent by name) and T-547's upload fix (an oversized delivery is read to the protocol's ceiling, kept past no node's limit and refused, so the connection is no longer reset).
+
 ### The site, the sign-up Worker, the test agents and both operators at one commit (deployed 2026-11-18, 17:39 to 17:48 UTC)
 
 Rafa's word for these was "go ahead, merge all ready, deploy all ready". The coordinator ran each script from a clean worktree of `main`, one after the other. Before the operators' deploy, the two hosted sellers and the test seller each read `open: 0` [measured 17:41 UTC], and the judging screen's version had not changed since the operators' last build.
