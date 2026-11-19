@@ -5,7 +5,7 @@
 - **Depends on:** T-544 (ADR-0040). It can run beside T-548.
 - **Paths this task may touch:** `packages/core/src/state.ts`, `packages/core/src/` tests, `apps/operator/src/prepare.ts`, `packages/settlement/sim/`, `apps/adjudicator/src/`, `fixtures/` (the fixtures below), `docs/architecture.md` (the two-sided hold's delivery step), this file.
 - **Human gate:** no
-- **Status:** in review: the pull request waits for the merge freeze of 2026-11-19 (T-563) to lift
+- **Status:** done with the merge of pull request 703 on 2026-11-19, after every check passed at its head and the review's findings were fixed or handed off
 - **Agent/session:** the T-550 session, 2026-11-19, branch `t-550-standing-delivery`
 - **Roadmap row:** N196
 - **Change kind:** 5, settlement and judgment code.
@@ -65,7 +65,7 @@ Measured on 2026-11-19 in the branch's worktree, on the machine of the T-550 ses
 
 ## Handoff
 
-**State:** the change is complete and in review, on branch `t-550-standing-delivery`. The pull request waits for the merge freeze of 2026-11-19 (T-563, the fixed contracts' deployment). After the coordinator says the deployment's tag is pushed: merge `origin/main` into the branch, rerun the suites against the new deployment record, and merge by hand once every check has passed.
+**State:** done with PR 703. The branch took `main` after the fixed contracts (tag `contracts-phase-one-2`) and the seller contract (T-548, PR 693). At that head the kind's local checks passed: 2,175 tests passed and 1 skipped, and all 51 scenarios passed [measured]. The operators need a deploy to take a standing delivery; the coordinator batches it.
 
 **For T-549** (contract-seller checks, schema v0.12, `packages/settlement/evm/`, `docs/neutrality.md`):
 1. In `evm-settlement.ts`, step core before the simulation for `early_accept`, and for `mutual_settle` with `releaseKey`, when the delivery holds no envelope for the buyer (`keyProof` returns undefined). Then the agent gets core's reason, not `contract revert BadKeyProof()`. Do it as the phase-one payout check at `:1064-1068` does. Then change the two assertions in `packages/settlement/evm/standing-delivery.test.ts` from the revert to core's reason.
