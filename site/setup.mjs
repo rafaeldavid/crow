@@ -12473,7 +12473,7 @@ function schemaValidators(formats) {
 	exports.adjudicator = validate0;
 	const schema0 = {
 		"$schema": "https://json-schema.org/draft/2020-12/schema",
-		"$id": "https://holdback.dev/schemas/v0.11/adjudicator.schema.json",
+		"$id": "https://holdback.dev/schemas/v0.12/adjudicator.schema.json",
 		"title": "Adjudicator registration",
 		"type": "object",
 		"required": [
@@ -14972,7 +14972,7 @@ function schemaValidators(formats) {
 	exports.agent = validate7;
 	const schema29 = {
 		"$schema": "https://json-schema.org/draft/2020-12/schema",
-		"$id": "https://holdback.dev/schemas/v0.11/agent.schema.json",
+		"$id": "https://holdback.dev/schemas/v0.12/agent.schema.json",
 		"title": "Agent registration",
 		"type": "object",
 		"required": [
@@ -15708,7 +15708,7 @@ function schemaValidators(formats) {
 	exports.appeal = validate13;
 	const schema40 = {
 		"$schema": "https://json-schema.org/draft/2020-12/schema",
-		"$id": "https://holdback.dev/schemas/v0.11/appeal.schema.json",
+		"$id": "https://holdback.dev/schemas/v0.12/appeal.schema.json",
 		"title": "Appeal",
 		"type": "object",
 		"required": [
@@ -15732,9 +15732,10 @@ function schemaValidators(formats) {
 			},
 			"bond": { "$ref": "common.schema.json#/$defs/TokenAmount" },
 			"filedAt": { "$ref": "common.schema.json#/$defs/Timestamp" },
-			"signature": { "$ref": "common.schema.json#/$defs/Signature" }
+			"signature": { "$ref": "common.schema.json#/$defs/PartySignature" }
 		}
 	};
+	const pattern26 = new RegExp("^0x([0-9a-f]{2})+$", "u");
 	function validate14(data, { instancePath = "", parentData, parentDataProperty, rootData = data, dynamicAnchors = {} } = {}) {
 		let vErrors = null;
 		const evaluated0 = validate14.evaluated;
@@ -16034,20 +16035,20 @@ function schemaValidators(formats) {
 													const _errs17 = errors;
 													if (errors === _errs17) {
 														if (typeof data6 === "string") {
-															if (!pattern14.test(data6)) {
+															if (!pattern26.test(data6)) {
 																validate13.errors = [{
 																	instancePath: instancePath + "/signature",
-																	schemaPath: "common.schema.json#/$defs/Signature/pattern",
+																	schemaPath: "common.schema.json#/$defs/PartySignature/pattern",
 																	keyword: "pattern",
-																	params: { pattern: "^0x[0-9a-f]{130}$" },
-																	message: "must match pattern \"^0x[0-9a-f]{130}$\""
+																	params: { pattern: "^0x([0-9a-f]{2})+$" },
+																	message: "must match pattern \"^0x([0-9a-f]{2})+$\""
 																}];
 																return false;
 															}
 														} else {
 															validate13.errors = [{
 																instancePath: instancePath + "/signature",
-																schemaPath: "common.schema.json#/$defs/Signature/type",
+																schemaPath: "common.schema.json#/$defs/PartySignature/type",
 																keyword: "type",
 																params: { type: "string" },
 																message: "must be string"
@@ -16091,7 +16092,7 @@ function schemaValidators(formats) {
 	exports.club = validate16;
 	const schema47 = {
 		"$schema": "https://json-schema.org/draft/2020-12/schema",
-		"$id": "https://holdback.dev/schemas/v0.11/club.schema.json",
+		"$id": "https://holdback.dev/schemas/v0.12/club.schema.json",
 		"title": "Club and rulebook",
 		"type": "object",
 		"required": [
@@ -18411,7 +18412,7 @@ function schemaValidators(formats) {
 	exports["commitment-state"] = validate20;
 	const schema62 = {
 		"$schema": "https://json-schema.org/draft/2020-12/schema",
-		"$id": "https://holdback.dev/schemas/v0.11/commitment-state.schema.json",
+		"$id": "https://holdback.dev/schemas/v0.12/commitment-state.schema.json",
 		"title": "Commitment state (read model)",
 		"type": "object",
 		"required": [
@@ -19760,7 +19761,7 @@ function schemaValidators(formats) {
 	exports.commitment = validate29;
 	const schema74 = {
 		"$schema": "https://json-schema.org/draft/2020-12/schema",
-		"$id": "https://holdback.dev/schemas/v0.11/commitment.schema.json",
+		"$id": "https://holdback.dev/schemas/v0.12/commitment.schema.json",
 		"title": "Commitment (terms + EIP-712 signatures)",
 		"type": "object",
 		"required": [
@@ -20061,8 +20062,8 @@ function schemaValidators(formats) {
 				"additionalProperties": false,
 				"required": ["seller"],
 				"properties": {
-					"seller": { "$ref": "common.schema.json#/$defs/Signature" },
-					"buyer": { "$ref": "common.schema.json#/$defs/Signature" }
+					"seller": { "$ref": "common.schema.json#/$defs/PartySignature" },
+					"buyer": { "$ref": "common.schema.json#/$defs/PartySignature" }
 				}
 			},
 			"adjudicatorAcceptance": {
@@ -26825,20 +26826,20 @@ function schemaValidators(formats) {
 																														const _errs222 = errors;
 																														if (errors === _errs222) {
 																															if (typeof data78 === "string") {
-																																if (!pattern14.test(data78)) {
+																																if (!pattern26.test(data78)) {
 																																	validate29.errors = [{
 																																		instancePath: instancePath + "/signatures/seller",
-																																		schemaPath: "common.schema.json#/$defs/Signature/pattern",
+																																		schemaPath: "common.schema.json#/$defs/PartySignature/pattern",
 																																		keyword: "pattern",
-																																		params: { pattern: "^0x[0-9a-f]{130}$" },
-																																		message: "must match pattern \"^0x[0-9a-f]{130}$\""
+																																		params: { pattern: "^0x([0-9a-f]{2})+$" },
+																																		message: "must match pattern \"^0x([0-9a-f]{2})+$\""
 																																	}];
 																																	return false;
 																																}
 																															} else {
 																																validate29.errors = [{
 																																	instancePath: instancePath + "/signatures/seller",
-																																	schemaPath: "common.schema.json#/$defs/Signature/type",
+																																	schemaPath: "common.schema.json#/$defs/PartySignature/type",
 																																	keyword: "type",
 																																	params: { type: "string" },
 																																	message: "must be string"
@@ -26857,20 +26858,20 @@ function schemaValidators(formats) {
 																															const _errs225 = errors;
 																															if (errors === _errs225) {
 																																if (typeof data79 === "string") {
-																																	if (!pattern14.test(data79)) {
+																																	if (!pattern26.test(data79)) {
 																																		validate29.errors = [{
 																																			instancePath: instancePath + "/signatures/buyer",
-																																			schemaPath: "common.schema.json#/$defs/Signature/pattern",
+																																			schemaPath: "common.schema.json#/$defs/PartySignature/pattern",
 																																			keyword: "pattern",
-																																			params: { pattern: "^0x[0-9a-f]{130}$" },
-																																			message: "must match pattern \"^0x[0-9a-f]{130}$\""
+																																			params: { pattern: "^0x([0-9a-f]{2})+$" },
+																																			message: "must match pattern \"^0x([0-9a-f]{2})+$\""
 																																		}];
 																																		return false;
 																																	}
 																																} else {
 																																	validate29.errors = [{
 																																		instancePath: instancePath + "/signatures/buyer",
-																																		schemaPath: "common.schema.json#/$defs/Signature/type",
+																																		schemaPath: "common.schema.json#/$defs/PartySignature/type",
 																																		keyword: "type",
 																																		params: { type: "string" },
 																																		message: "must be string"
@@ -27053,7 +27054,7 @@ function schemaValidators(formats) {
 	exports.delivery = validate97;
 	const schema277 = {
 		"$schema": "https://json-schema.org/draft/2020-12/schema",
-		"$id": "https://holdback.dev/schemas/v0.11/delivery.schema.json",
+		"$id": "https://holdback.dev/schemas/v0.12/delivery.schema.json",
 		"title": "Delivery (encrypted work + escrowed key)",
 		"type": "object",
 		"required": [
@@ -27110,10 +27111,13 @@ function schemaValidators(formats) {
 				"type": "array",
 				"minItems": 3,
 				"items": { "$ref": "common.schema.json#/$defs/EncryptedKey" },
-				"description": "The content key encrypted to the primary, fallback and appeal adjudicators, and to the buyer for early acceptance (ADR-0012, ADR-0016)"
+				"description": "The content key encrypted to the primary, fallback and appeal adjudicators (required), and optionally to the buyer for early acceptance (ADR-0012, ADR-0016). A delivery without the buyer's envelope, such as a standing delivery, cannot be accepted early or settled with releaseKey; the buyer's key then comes with an adjudicator's accept (since v0.12, ADR-0040 §2)"
 			},
 			"submittedAt": { "$ref": "common.schema.json#/$defs/Timestamp" },
-			"signature": { "$ref": "common.schema.json#/$defs/Signature" }
+			"signature": {
+				"$ref": "common.schema.json#/$defs/PartySignature",
+				"description": "The seller's signature over the delivery: a key's 65-byte signature, or a contract seller's ERC-1271 signature (since v0.12, ADR-0040 §5)"
+			}
 		}
 	};
 	function validate98(data, { instancePath = "", parentData, parentDataProperty, rootData = data, dynamicAnchors = {} } = {}) {
@@ -27929,20 +27933,20 @@ function schemaValidators(formats) {
 														const _errs30 = errors;
 														if (errors === _errs30) {
 															if (typeof data12 === "string") {
-																if (!pattern14.test(data12)) {
+																if (!pattern26.test(data12)) {
 																	validate97.errors = [{
 																		instancePath: instancePath + "/signature",
-																		schemaPath: "common.schema.json#/$defs/Signature/pattern",
+																		schemaPath: "common.schema.json#/$defs/PartySignature/pattern",
 																		keyword: "pattern",
-																		params: { pattern: "^0x[0-9a-f]{130}$" },
-																		message: "must match pattern \"^0x[0-9a-f]{130}$\""
+																		params: { pattern: "^0x([0-9a-f]{2})+$" },
+																		message: "must match pattern \"^0x([0-9a-f]{2})+$\""
 																	}];
 																	return false;
 																}
 															} else {
 																validate97.errors = [{
 																	instancePath: instancePath + "/signature",
-																	schemaPath: "common.schema.json#/$defs/Signature/type",
+																	schemaPath: "common.schema.json#/$defs/PartySignature/type",
 																	keyword: "type",
 																	params: { type: "string" },
 																	message: "must be string"
@@ -28125,20 +28129,20 @@ function schemaValidators(formats) {
 									if (data.buyerSignature !== void 0) {
 										let data5 = data.buyerSignature;
 										if (typeof data5 === "string") {
-											if (!pattern14.test(data5)) {
+											if (!pattern26.test(data5)) {
 												validate101.errors = [{
 													instancePath: instancePath + "/buyerSignature",
-													schemaPath: "common.schema.json#/$defs/Signature/pattern",
+													schemaPath: "common.schema.json#/$defs/PartySignature/pattern",
 													keyword: "pattern",
-													params: { pattern: "^0x[0-9a-f]{130}$" },
-													message: "must match pattern \"^0x[0-9a-f]{130}$\""
+													params: { pattern: "^0x([0-9a-f]{2})+$" },
+													message: "must match pattern \"^0x([0-9a-f]{2})+$\""
 												}];
 												return false;
 											}
 										} else {
 											validate101.errors = [{
 												instancePath: instancePath + "/buyerSignature",
-												schemaPath: "common.schema.json#/$defs/Signature/type",
+												schemaPath: "common.schema.json#/$defs/PartySignature/type",
 												keyword: "type",
 												params: { type: "string" },
 												message: "must be string"
@@ -28559,7 +28563,7 @@ function schemaValidators(formats) {
 	exports.event = validate103;
 	const schema300 = {
 		"$schema": "https://json-schema.org/draft/2020-12/schema",
-		"$id": "https://holdback.dev/schemas/v0.11/event.schema.json",
+		"$id": "https://holdback.dev/schemas/v0.12/event.schema.json",
 		"title": "Settlement event (hash-chained)",
 		"type": "object",
 		"required": [
@@ -30565,7 +30569,7 @@ function schemaValidators(formats) {
 	exports["judge-verdict"] = validate121;
 	const schema321 = {
 		"$schema": "https://json-schema.org/draft/2020-12/schema",
-		"$id": "https://holdback.dev/schemas/v0.11/judge-verdict.schema.json",
+		"$id": "https://holdback.dev/schemas/v0.12/judge-verdict.schema.json",
 		"title": "Judge verdict (enforced on model output)",
 		"type": "object",
 		"required": [
@@ -30922,7 +30926,7 @@ function schemaValidators(formats) {
 	exports.judgment = validate122;
 	const schema322 = {
 		"$schema": "https://json-schema.org/draft/2020-12/schema",
-		"$id": "https://holdback.dev/schemas/v0.11/judgment.schema.json",
+		"$id": "https://holdback.dev/schemas/v0.12/judgment.schema.json",
 		"title": "Judgment record",
 		"type": "object",
 		"required": [
@@ -34393,20 +34397,20 @@ function schemaValidators(formats) {
 									if (data.signature !== void 0) {
 										let data5 = data.signature;
 										if (typeof data5 === "string") {
-											if (!pattern14.test(data5)) {
+											if (!pattern26.test(data5)) {
 												validate36.errors = [{
 													instancePath: instancePath + "/signature",
-													schemaPath: "common.schema.json#/$defs/Signature/pattern",
+													schemaPath: "common.schema.json#/$defs/PartySignature/pattern",
 													keyword: "pattern",
-													params: { pattern: "^0x[0-9a-f]{130}$" },
-													message: "must match pattern \"^0x[0-9a-f]{130}$\""
+													params: { pattern: "^0x([0-9a-f]{2})+$" },
+													message: "must match pattern \"^0x([0-9a-f]{2})+$\""
 												}];
 												return false;
 											}
 										} else {
 											validate36.errors = [{
 												instancePath: instancePath + "/signature",
-												schemaPath: "common.schema.json#/$defs/Signature/type",
+												schemaPath: "common.schema.json#/$defs/PartySignature/type",
 												keyword: "type",
 												params: { type: "string" },
 												message: "must be string"
@@ -34589,20 +34593,20 @@ function schemaValidators(formats) {
 									if (data.signature !== void 0) {
 										let data5 = data.signature;
 										if (typeof data5 === "string") {
-											if (!pattern14.test(data5)) {
+											if (!pattern26.test(data5)) {
 												validate38.errors = [{
 													instancePath: instancePath + "/signature",
-													schemaPath: "common.schema.json#/$defs/Signature/pattern",
+													schemaPath: "common.schema.json#/$defs/PartySignature/pattern",
 													keyword: "pattern",
-													params: { pattern: "^0x[0-9a-f]{130}$" },
-													message: "must match pattern \"^0x[0-9a-f]{130}$\""
+													params: { pattern: "^0x([0-9a-f]{2})+$" },
+													message: "must match pattern \"^0x([0-9a-f]{2})+$\""
 												}];
 												return false;
 											}
 										} else {
 											validate38.errors = [{
 												instancePath: instancePath + "/signature",
-												schemaPath: "common.schema.json#/$defs/Signature/type",
+												schemaPath: "common.schema.json#/$defs/PartySignature/type",
 												keyword: "type",
 												params: { type: "string" },
 												message: "must be string"
@@ -35574,20 +35578,20 @@ function schemaValidators(formats) {
 											if (data.signature !== void 0) {
 												let data7 = data.signature;
 												if (typeof data7 === "string") {
-													if (!pattern14.test(data7)) {
+													if (!pattern26.test(data7)) {
 														validate47.errors = [{
 															instancePath: instancePath + "/signature",
-															schemaPath: "common.schema.json#/$defs/Signature/pattern",
+															schemaPath: "common.schema.json#/$defs/PartySignature/pattern",
 															keyword: "pattern",
-															params: { pattern: "^0x[0-9a-f]{130}$" },
-															message: "must match pattern \"^0x[0-9a-f]{130}$\""
+															params: { pattern: "^0x([0-9a-f]{2})+$" },
+															message: "must match pattern \"^0x([0-9a-f]{2})+$\""
 														}];
 														return false;
 													}
 												} else {
 													validate47.errors = [{
 														instancePath: instancePath + "/signature",
-														schemaPath: "common.schema.json#/$defs/Signature/type",
+														schemaPath: "common.schema.json#/$defs/PartySignature/type",
 														keyword: "type",
 														params: { type: "string" },
 														message: "must be string"
@@ -37937,7 +37941,7 @@ function schemaValidators(formats) {
 			"fee": { "$ref": "common.schema.json#/$defs/TokenAmount" },
 			"nonce": { "$ref": "common.schema.json#/$defs/Hex32" },
 			"expiresAt": { "$ref": "common.schema.json#/$defs/Timestamp" },
-			"signature": { "$ref": "common.schema.json#/$defs/Signature" },
+			"signature": { "$ref": "common.schema.json#/$defs/PartySignature" },
 			"encryptedKeys": {
 				"type": "array",
 				"minItems": 3,
@@ -38227,20 +38231,20 @@ function schemaValidators(formats) {
 																const _errs23 = errors;
 																if (errors === _errs23) {
 																	if (typeof data9 === "string") {
-																		if (!pattern14.test(data9)) {
+																		if (!pattern26.test(data9)) {
 																			validate59.errors = [{
 																				instancePath: instancePath + "/signature",
-																				schemaPath: "common.schema.json#/$defs/Signature/pattern",
+																				schemaPath: "common.schema.json#/$defs/PartySignature/pattern",
 																				keyword: "pattern",
-																				params: { pattern: "^0x[0-9a-f]{130}$" },
-																				message: "must match pattern \"^0x[0-9a-f]{130}$\""
+																				params: { pattern: "^0x([0-9a-f]{2})+$" },
+																				message: "must match pattern \"^0x([0-9a-f]{2})+$\""
 																			}];
 																			return false;
 																		}
 																	} else {
 																		validate59.errors = [{
 																			instancePath: instancePath + "/signature",
-																			schemaPath: "common.schema.json#/$defs/Signature/type",
+																			schemaPath: "common.schema.json#/$defs/PartySignature/type",
 																			keyword: "type",
 																			params: { type: "string" },
 																			message: "must be string"
@@ -38367,7 +38371,7 @@ function schemaValidators(formats) {
 			},
 			"nonce": { "$ref": "common.schema.json#/$defs/Hex32" },
 			"expiresAt": { "$ref": "common.schema.json#/$defs/Timestamp" },
-			"buyerSignature": { "$ref": "common.schema.json#/$defs/Signature" },
+			"buyerSignature": { "$ref": "common.schema.json#/$defs/PartySignature" },
 			"sellerSignature": { "$ref": "common.schema.json#/$defs/Signature" }
 		},
 		"if": {
@@ -38828,20 +38832,20 @@ function schemaValidators(formats) {
 														const _errs31 = errors;
 														if (errors === _errs31) {
 															if (typeof data9 === "string") {
-																if (!pattern14.test(data9)) {
+																if (!pattern26.test(data9)) {
 																	validate64.errors = [{
 																		instancePath: instancePath + "/buyerSignature",
-																		schemaPath: "common.schema.json#/$defs/Signature/pattern",
+																		schemaPath: "common.schema.json#/$defs/PartySignature/pattern",
 																		keyword: "pattern",
-																		params: { pattern: "^0x[0-9a-f]{130}$" },
-																		message: "must match pattern \"^0x[0-9a-f]{130}$\""
+																		params: { pattern: "^0x([0-9a-f]{2})+$" },
+																		message: "must match pattern \"^0x([0-9a-f]{2})+$\""
 																	}];
 																	return false;
 																}
 															} else {
 																validate64.errors = [{
 																	instancePath: instancePath + "/buyerSignature",
-																	schemaPath: "common.schema.json#/$defs/Signature/type",
+																	schemaPath: "common.schema.json#/$defs/PartySignature/type",
 																	keyword: "type",
 																	params: { type: "string" },
 																	message: "must be string"
@@ -39055,20 +39059,20 @@ function schemaValidators(formats) {
 									if (data.buyerSignature !== void 0) {
 										let data5 = data.buyerSignature;
 										if (typeof data5 === "string") {
-											if (!pattern14.test(data5)) {
+											if (!pattern26.test(data5)) {
 												validate69.errors = [{
 													instancePath: instancePath + "/buyerSignature",
-													schemaPath: "common.schema.json#/$defs/Signature/pattern",
+													schemaPath: "common.schema.json#/$defs/PartySignature/pattern",
 													keyword: "pattern",
-													params: { pattern: "^0x[0-9a-f]{130}$" },
-													message: "must match pattern \"^0x[0-9a-f]{130}$\""
+													params: { pattern: "^0x([0-9a-f]{2})+$" },
+													message: "must match pattern \"^0x([0-9a-f]{2})+$\""
 												}];
 												return false;
 											}
 										} else {
 											validate69.errors = [{
 												instancePath: instancePath + "/buyerSignature",
-												schemaPath: "common.schema.json#/$defs/Signature/type",
+												schemaPath: "common.schema.json#/$defs/PartySignature/type",
 												keyword: "type",
 												params: { type: "string" },
 												message: "must be string"
@@ -41550,7 +41554,7 @@ function schemaValidators(formats) {
 	exports["operator-status"] = validate131;
 	const schema351 = {
 		"$schema": "https://json-schema.org/draft/2020-12/schema",
-		"$id": "https://holdback.dev/schemas/v0.11/operator-status.schema.json",
+		"$id": "https://holdback.dev/schemas/v0.12/operator-status.schema.json",
 		"title": "Operator status (GET /v1/status, ADR-0017)",
 		"type": "object",
 		"additionalProperties": false,
@@ -42998,7 +43002,7 @@ function schemaValidators(formats) {
 	exports.projection = validate135;
 	const schema360 = {
 		"$schema": "https://json-schema.org/draft/2020-12/schema",
-		"$id": "https://holdback.dev/schemas/v0.11/projection.schema.json",
+		"$id": "https://holdback.dev/schemas/v0.12/projection.schema.json",
 		"title": "Settlement projection (what anyone may read about a private deal)",
 		"description": "GET /v1/commitments/{id}/terms without a ReadToken at disclosure level private or judgment (ADR-0024 §3, §8): the fields settlement enforces in the clear and hashes of the rest, enough to check coverage and trigger any timeout. With per-deal keys the addresses name no long-term identity. disclosed carries a body only once its key was published and checked against its hash.",
 		"type": "object",

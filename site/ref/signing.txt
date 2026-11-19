@@ -50,7 +50,7 @@ If anything differs, do not sign.
 
 ## EIP-712 types
 
-Pin these: schema 0.11, domain version "0.8". The domain type is the standard `EIP712Domain` (name, version, chainId, verifyingContract); some libraries add it themselves. A message uses its primary type and the types it references. `Appeal` is SimChain only: the phase-one contracts take no party appeal, and there `AdjudicatorAcceptance.bondReserved` must be `"0"`.
+Pin these: schema 0.12, domain version "0.8". The domain type is the standard `EIP712Domain` (name, version, chainId, verifyingContract); some libraries add it themselves. A message uses its primary type and the types it references. `Appeal` is SimChain only: the phase-one contracts take no party appeal, and there `AdjudicatorAcceptance.bondReserved` must be `"0"`.
 ```json
 {
   "Appeal": [{"name":"commitmentId","type":"bytes32"},{"name":"appellant","type":"string"},{"name":"appellantAddress","type":"address"},{"name":"grounds","type":"string"},{"name":"bond","type":"TokenAmount"},{"name":"filedAt","type":"uint64"}],

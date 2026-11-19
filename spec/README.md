@@ -12,7 +12,7 @@ Validation as of November 3, 2026 (measured, `pnpm validate:spec`): all 33 examp
 - a model ID containing "latest";
 - an extra field in a judge verdict.
 
-The `$id` URLs (`https://holdback.dev/schemas/v0.11/…`) are namespaces for resolving `$ref` between files. They are not hosted. Replace the domain if the project gets one.
+The `$id` URLs (`https://holdback.dev/schemas/v0.12/…`) are namespaces for resolving `$ref` between files. They are not hosted. Replace the domain if the project gets one.
 
 ## Annotations
 
@@ -20,6 +20,13 @@ The `$id` URLs (`https://holdback.dev/schemas/v0.11/…`) are namespaces for res
 - **Every free-text string is marked or constrained.** A string with no `date-time` format, pattern, enum or const must carry the marker. URIs count as free text: they are marked and capped at 2048 characters. Identifiers instead get a pattern: club IDs, token IDs, and `Ident` for judge, provider, family, model and version labels. `tests/spec.test.ts` lints this, with an empty allowlist.
 
 ## Changelog
+
+- **v0.12 (2026-11-19, D82, D84, ADR-0040, ADR-0041), widens the parties' signatures:** every `$id`, the `Holdback-Schema-Version` header and the OpenAPI `x-holdback-schema-version` move to 0.12. No typed-data struct changes, so the EIP-712 domain version and `commitment.schemaVersion` stay 0.8, and no signature or commitment ID moves.
+  - **`PartySignature`** (new in `common.schema.json`): any non-empty byte string as lowercase hex. A buyer or a seller may be a contract that answers ERC-1271, such as a standing seller's contract (ADR-0040) or a spend-controls vault that buys (ADR-0041), and the rules contract already checks both. A 65-byte signature from an address without code is checked by ECDSA recovery; any other by the signer's `isValidSignature`.
+  - **Where it applies:** the terms' `signatures.seller` and `signatures.buyer`; the seller's delivery `signature`; the `signature` of `Offer`, `Agree`, `EarlyAccept` and `Dispute`; `buyerSignature` in `MutualSettlement` and `Publish`; an appeal's `signature`, since the appellant may be the buyer.
+  - **What keeps the 65-byte `Signature`:** the seller's half of `MutualSettlement` and `Publish` (a standing seller's contract checks its key's 65-byte signature there); every adjudicator's, operator's, principal's and club operator's signature; the ERC-3009 `FundingAuthorization` and the operator fee's `TransferAuthorization`; `ReadToken` and `Delegation`, which a per-deal key or a long-term agent key signs in a private deal, and standing offers are public deals only (ADR-0040 §7).
+  - **Delivery:** `encryptedKeys` still needs the three adjudicators' envelopes; its description now says the buyer's envelope is optional (T-550, ADR-0040 §2). No shape change.
+  - **Old readers** refuse a contract signature, which is right, since they cannot check it. The operators' request-size limits bound its length.
 
 - **v0.11 (2026-11-12, D60, D62, ADR-0033), changes a signed struct:** every `$id`, the `Holdback-Schema-Version` header and the OpenAPI `x-holdback-schema-version` move to 0.11, and the EIP-712 domain version and `commitment.schemaVersion` move to 0.8. A 0.7 signature never verifies under 0.8, and every commitment ID moves.
   - **Commitment:** two required addresses after `seller`: `buyerPaymentAddress` funds the hold and receives every refund (the escrow's payer), and `sellerPayoutAddress` receives every payment to the seller (the escrow's receiver). `buyer` and `seller` stay the addresses that sign. Either may equal its signing address; tooling defaults to that.

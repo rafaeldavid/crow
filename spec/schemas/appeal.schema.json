@@ -1,6 +1,6 @@
 {
   "$schema": "https://json-schema.org/draft/2020-12/schema",
-  "$id": "https://holdback.dev/schemas/v0.11/appeal.schema.json",
+  "$id": "https://holdback.dev/schemas/v0.12/appeal.schema.json",
   "title": "Appeal",
   "type": "object",
   "required": [
@@ -38,7 +38,7 @@
       "$ref": "common.schema.json#/$defs/Timestamp"
     },
     "signature": {
-      "$ref": "common.schema.json#/$defs/Signature"
+      "$ref": "common.schema.json#/$defs/PartySignature"
     }
   }
 }

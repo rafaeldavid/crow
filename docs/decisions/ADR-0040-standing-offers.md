@@ -136,6 +136,8 @@ Leaving the two hashes open would let a buyer order any work at the template's p
 
 **The API contract.** `Signature` is exactly 65 bytes (`spec/schemas/common.schema.json:15-19`), so a take cannot travel in today's offer [measured]. Schema v0.12 adds `PartySignature`, any non-empty hex byte string, and uses it for `signatures.seller` in the commitment and for the seller's `signature` in a delivery. Everything else keeps `Signature`. Old readers refuse a standing offer, which is right, since they cannot check it. The request-size limits that operators already apply bound its length.
 
+**Amended 2026-11-19, the contract buyer (D84, ADR-0041; T-549).** Rafa put a buyer that is a contract, such as a spend-controls vault, in the same version: "Yes, same change" and "Yes, add it". So v0.12 uses `PartySignature` for every signature the buyer makes as well: `signatures.buyer` in the terms, and the `signature` of `Agree`, `EarlyAccept` and `Dispute`, the buyer's half of `MutualSettlement` and `Publish` (`buyerSignature`), and an appeal's `signature`. The `Offer` message carries the seller's terms signature, so it takes `PartySignature` too. Still 65 bytes: the seller's half of `MutualSettlement` and `Publish` (the seller contract checks its key's 65-byte signature there), every adjudicator's, operator's and principal's signature, the ERC-3009 funding and fee authorizations, and `ReadToken` and `Delegation`, which belong to private deals. The off-chain rule of this section applies to `terms.buyer` wherever the buyer's signature is checked, and the operators admit a contract buyer by the rules a key buyer gets today, its mandate included. Nothing else changes for it: no stop that reaches a vault buyer's funded deals, no relay of a vault's funding and no Crow-paid creation, since none is decided (D84). `spec/README.md` lists the version's changes.
+
 **The buyer.** `site/buy.mjs` and `site/try.mjs` stay pinned and unchanged (`docs/tasks/T-475-setup-buyer.md:25`); they keep refusing a seller signature that does not recover (`examples/buyer-signer.ts:792-793`). A new command, `examples/take.ts`, bundled as `site/take.mjs` with its own pinned hash, takes a standing offer:
 1. it reads the seller's card entry: the contract address, the key, the salt, the template and its signature;
 2. it checks the template's signature against the key, and that the address follows from the key and the salt;
@@ -187,7 +189,7 @@ What changes for it:
 | The rules contract, `HoldbackTypes.sol`, `IHoldbackRules.sol` | none | none: the deployed build and the audit's scope stay |
 | The EIP-712 domain ("Holdback", "0.8") and the terms' signed `schemaVersion` ("0.8") | none | none: no re-sign, no re-pin of `buy.mjs` or `try.mjs` |
 | A new contract, the seller contract | new, beside the rules contract; its own domain | its own version string |
-| `spec/schemas/` | `PartySignature` for the seller's terms and delivery signatures | **schema v0.12** (from v0.11), with this ADR |
+| `spec/schemas/` | `PartySignature` for the seller's terms and delivery signatures and, since the amendment of section 5, every signature the buyer makes (D84) | **schema v0.12** (from v0.11), with this ADR |
 | Core's delivery rule | the buyer's envelope becomes optional, with the consequences of section 2 | ships with v0.12 |
 | The card's schema (outside `spec/`) | an optional `standing` entry | the card's own version |
 | The formal model | none | none |

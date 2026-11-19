@@ -1,4 +1,4 @@
-// Hand-written types for spec/schemas v0.11 (signed encoding 0.8: the EIP-712 domain version in eip712.ts; ADR-0023,
+// Hand-written types for spec/schemas v0.12 (signed encoding 0.8: the EIP-712 domain version in eip712.ts; ADR-0023,
 // ADR-0024, ADR-0029, ADR-0033). Values reach these types only through the parsers in parse.ts, which validate against the
 // schema files. Phase 1 narrows the commitment to guaranteed_on_decision and maxSubmissions = 1 (ADR-0007).
 import type { TokenAmount } from './money/index.js';
@@ -9,6 +9,8 @@ export type { TokenAmount } from './money/index.js';
 export type Address = `0x${string}`;
 export type Hex32 = `0x${string}`;
 export type Signature = `0x${string}`;
+/** A buyer's or a seller's signature: 65 bytes from a key, or any non-empty bytes a contract signer checks by ERC-1271 (v0.12, ADR-0040 §5). */
+export type PartySignature = `0x${string}`;
 export type Sha256 = `sha256:${string}`;
 /** RFC 3339 date-time. */
 export type Timestamp = string;
@@ -187,7 +189,7 @@ export interface CommitmentTerms {
 
 export interface Commitment extends CommitmentTerms {
   id: Hex32;
-  signatures: { seller: Signature; buyer?: Signature };
+  signatures: { seller: PartySignature; buyer?: PartySignature };
   adjudicatorAcceptance?: AdjudicatorAcceptance;
 }
 
@@ -448,7 +450,7 @@ export interface MutualSettlement {
   releaseKey: boolean;
   nonce: Hex32;
   expiresAt: Timestamp;
-  buyerSignature: Signature;
+  buyerSignature: PartySignature;
   sellerSignature: Signature;
 }
 
@@ -459,7 +461,7 @@ export interface Publish {
   level: DisclosureLevel;
   nonce: Hex32;
   expiresAt: Timestamp;
-  buyerSignature: Signature;
+  buyerSignature: PartySignature;
   sellerSignature: Signature;
 }
 
@@ -478,7 +480,7 @@ export interface Delivery {
   plaintextMime: MimeType;
   encryptedKeys: EncryptedKey[];
   submittedAt: Timestamp;
-  signature: Signature;
+  signature: PartySignature;
 }
 
 // appeal.schema.json
@@ -489,7 +491,7 @@ export interface Appeal {
   grounds: string;
   bond: TokenAmount;
   filedAt: Timestamp;
-  signature: Signature;
+  signature: PartySignature;
 }
 
 // mandate.schema.json

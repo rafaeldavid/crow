@@ -1,6 +1,6 @@
 {
   "$schema": "https://json-schema.org/draft/2020-12/schema",
-  "$id": "https://holdback.dev/schemas/v0.11/commitment.schema.json",
+  "$id": "https://holdback.dev/schemas/v0.12/commitment.schema.json",
   "title": "Commitment (terms + EIP-712 signatures)",
   "type": "object",
   "required": [
@@ -389,10 +389,10 @@
       ],
       "properties": {
         "seller": {
-          "$ref": "common.schema.json#/$defs/Signature"
+          "$ref": "common.schema.json#/$defs/PartySignature"
         },
         "buyer": {
-          "$ref": "common.schema.json#/$defs/Signature"
+          "$ref": "common.schema.json#/$defs/PartySignature"
         }
       }
     },
