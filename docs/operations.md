@@ -307,6 +307,31 @@ The maintainers keep the notes on agent sessions and permission prompts privatel
 
 Each entry records one deploy as it ran: the date and time in UTC, the commit, each Worker's new version and its rollback target, and what was measured after it. The deploy scripts print the entry's first line (`pnpm demo-cloud:deploy`, `pnpm site:deploy`, `node apps/test-agents/scripts/deploy.mjs`). The values are true for their date: for what runs now, read "What is live" above and each node's discovery.
 
+### The day's merged changes after the contract cutover (deployed 2026-11-19, 20:50 to 21:13 UTC)
+
+Rafa's words for these were "Yes, go ahead and deploy when ready" and "Remember you need to redeploy everything once this round of updates is complete". The coordinator ran each script from a clean worktree of `main`, after `pnpm install --frozen-lockfile` and `pnpm build`, in two rounds. Each round ran at a commit whose own checks on `main` had all passed [measured].
+
+**Round 1, commit `fd24eb7`.** It carries the operators' two early refusals (T-559, pull request 702), the buyer guide's lines on example providers (T-556, 698), the seller's invoice and credit note pages (T-565, 701) and the legal notice with the home page's demo line (T-564, 705).
+
+**Deploy 2026-11-19 20:50 UTC, commit `fd24eb7` on a detached HEAD: pass.** holdback-op1 `685595fd-f7ad-4ae8-8de6-dcb1d61d536d` (rollback target `ac7bde81-d718-4735-aa08-3bd04869b74c`), holdback-op2 `f0e4b493-6d62-4923-a3da-e7cb801d1d04` (rollback target `cb68f2b0-4d4c-48e7-86a5-a680358e0892`). Smoke deal `0xc9afb4fca53b49b4a38123afe2f22989c3ff401e34f0f205c09711f1f81715da` Released in 51 s.
+
+**Test seller deploy 2026-11-19 20:56 UTC, commit `fd24eb7`: pass.** crow-test-agents `80b7d270-6218-40e2-bcee-175952947768` (rollback target `a94bf8db-b454-4be4-99eb-014f8a0d66fa`).
+
+**Site deploy 2026-11-19 20:57 UTC, commit `fd24eb7` on a detached HEAD: pass.** crow-site `0b288408-7a56-47f9-95fd-40cff9f81dd4` (rollback target `808f9744-2bc9-4787-af1b-f461495d4c74`).
+
+Afterwards [measured at about 20:58 UTC]: both nodes' discovery named `fd24eb75`; `/legal` and `/legal.txt` answered 200 and the home page carried "Available today for demo only"; `/ref/limits.txt`, `/sell.txt` and `/ref/after-funding.txt` answered 200; the test seller read `operational` with 0 open deals; a JSON body of 300,000 bytes posted to `/v1/feedback` got 413.
+
+**Round 2, commit `c20ba52`, the operators only.** It carries a standing delivery without the buyer's envelope (T-550, pull request 703), which changes core, the operators and the adjudicator and nothing on the site.
+
+**Deploy 2026-11-19 21:12 UTC, commit `c20ba52` on a detached HEAD: pass.** holdback-op1 `dae6100a-a9a5-40d9-83be-0fa5089fc60b` (rollback target `685595fd-f7ad-4ae8-8de6-dcb1d61d536d`), holdback-op2 `761b9dbb-a2ac-4176-aedf-bf5ba3b96306` (rollback target `f0e4b493-6d62-4923-a3da-e7cb801d1d04`). Smoke deal `0x869583e70ab663856128479be5a2314e61846e5d23356fed7ccc460aeaa69b31` Released in 47 s, against commit `c20ba52` (both nodes' discovery named it 284 s after /v1/status answered).
+
+Afterwards [measured at about 21:20 UTC]: both nodes' discovery named `c20ba520` and `/v1/status` answered 200; the test seller read `operational`.
+
+**Not deployed in these rounds:**
+- **The test agents in round 2.** The script refused before any upload, because `main` had moved past `c20ba52` by then and a detached checkout that lacks commits from `origin/main` can drop the custom domains. The test agents stay on round 1's build; pull request 703 does not touch their code [measured: `git diff --name-only fd24eb75 c20ba520 -- apps/test-agents examples site` prints nothing].
+- **The two hosted sellers.** No change merged since their deploy in the cutover touches `apps/hosted-sellers` or the seller adapter [measured with `git diff --name-only`].
+- **Schema v0.12** (T-549, pull request 713) merged after round 2 and is not live.
+
 ### The fixed contract version: new contracts, a new world (deployed 2026-11-19, T-563)
 
 The fixed version of the phase-one contracts, with an outside scan's fixes, replaced the first version on Sepolia by `docs/redeploy-contracts.md`. Rafa's word was "You need to deplot the fixed version of the contracts and update the piping and everything to point to the fixed contracts", and for the deployer "New key". The session ran every step from the worktree `t-563-cutover`, after `pnpm install --frozen-lockfile` and `pnpm build`. Every value here is measured unless marked.
