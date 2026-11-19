@@ -1,7 +1,7 @@
 # T-576: the dependency scan passes again after the proof prototype's Rust crates
 
 - **Roadmap row:** N181
-- **Status:** review
+- **Status:** done (merged by hand once every check passed, the dependency scan included)
 - **Kind:** 11-adjacent: dependency-scan configuration (`osv-scanner.toml` files) and docs; no `.github/` change, no code change, no lockfile change
 - **Started:** 2026-11-19, by the coordinator, after PR 720 (T-569) failed the dependency scan
 
