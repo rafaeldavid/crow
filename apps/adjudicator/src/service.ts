@@ -237,6 +237,12 @@ export class Adjudicator {
   readonly #account;
   /** Judged records by commitment|role|attempt, kept the moment the panel returns (no re-roll). */
   readonly #judged = new Map<string, Judged>();
+  /**
+   * The panel's result by commitment|role|attempt, kept the moment runPipeline returns and dropped once the record is
+   * built: a record that fails to build or hash is retried from this, and the judges are never called again for it
+   * (T-570, red team of PR 722). In memory only; `judgedStore` keeps the built record across a restart.
+   */
+  readonly #drafts = new Map<string, { draft: JudgmentDraft; deliveryHash: Hex32 }>();
   /** `settlement` with a time limit on every read (T-372); writes pass straight through. */
   readonly #port: AdjudicatorSettlement;
   readonly #limitMs: number;
@@ -988,7 +994,12 @@ export class Adjudicator {
         return err(problem('adjudicator_unavailable', `reference files unavailable from this adjudicator's store: ${describeUnavailable(loaded.unavailable)}${late ? ` (it did not answer within ${late.ms} ms)` : ''}; not judged, retrying (no record)`));
       }
       const references = loaded.references;
-      const run = await runPipeline({
+      const key = judgedKey(task);
+      const held = this.#drafts.get(key);
+      if (held && held.deliveryHash !== deliveryHash(task.delivery)) {
+        return err(problem('invalid_state', `this adjudicator's panel judged delivery ${held.deliveryHash} for this commitment, role and attempt; the task now carries ${deliveryHash(task.delivery)}, and it never judges an attempt twice`));
+      }
+      const run = held ? ok(held.draft) : await runPipeline({
         intake: intaken.value,
         acceptance: commitment.acceptance,
         deliverable: { description: commitment.deliverable.description, format: commitment.deliverable.format },
@@ -1013,13 +1024,21 @@ export class Adjudicator {
         ...(appeal ? { appealKind: task.firstOutcome ? ('party' as const) : ('escalated' as const) } : {}),
       });
       if (!run.ok) return run;
+      if (!held) this.#drafts.set(key, { draft: run.value, deliveryHash: deliveryHash(task.delivery) });
       draft = run.value;
     }
 
     // Map the panel's decision onto what the role may sign.
     // Party appeal: an undecided appeal panel leaves the first decision standing; after an escalation: no decision.
     const outcome: DecisionOutcome | null = impl.aggregation.signedOutcome(draft.aggregate.decision, { appeal, ...(task.firstOutcome ? { firstOutcome: task.firstOutcome } : {}) });
-    const record = await this.#record(task, { ...draft, panel: { ...panelBase, ran: draft.panel.ran, members: draft.panel.members } });
+    let record: Judgment;
+    try {
+      record = await this.#record(task, { ...draft, panel: { ...panelBase, ran: draft.panel.ran, members: draft.panel.members } });
+    } catch (e) {
+      // The panel's result is kept above, so the next pass builds the record again without calling a judge.
+      return err(problem('adjudicator_unavailable', `the judgment record could not be built (${errorClass(e)}); the panel's result is kept, no judge is called again, and the record is retried on the next pass`));
+    }
+    this.#drafts.delete(judgedKey(task));
     return ok({ record, outcome, published: false, ...(contentKey ? { contentKey } : {}) });
   }
 
