@@ -87,7 +87,11 @@ function onFakeTime() {
 }
 afterEach(() => void vi.useRealTimers());
 
-/** On fake timers: runs a pass to its end, firing its timers in order. It fails when the pass waits on what no timer ends, or past `ms`. */
+/**
+ * On fake timers: runs a pass to its end, firing its timers in order. It fails when the pass waits on what no timer ends,
+ * or past `ms`. It assumes every store read settles in promise steps or never, as TestSettlement's in-memory reads do:
+ * a healthy read that waited on real I/O would have its time limit fired early here (review of T-574, Low 2).
+ */
 async function driven<T>(run: Promise<T>, ms: number): Promise<T> {
   let settled = false;
   const result = run.finally(() => (settled = true));
