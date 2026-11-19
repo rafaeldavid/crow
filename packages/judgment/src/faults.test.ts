@@ -4,10 +4,9 @@
 //   - call only the seated judges, each at most twice (one retry on a transport error), and no substitute seat;
 //   - count the faulty seats as abstentions, never as votes (passCount, failCount and validCount leave them out);
 //   - decide nothing on verdicts from one family: the case escalates, and D27's default rules take it from there.
-// Two defects are recorded here as today's behaviour, with the fix that changes them (T-570's second PR):
-//   - aggregation agg-3 signs a reject on one family's verdicts when the faulty family holds one seat of three and its
-//     fault is not a filter abstention (ONE_FAMILY_REJECT_AT_AGG3);
-//   - an answer whose text is not a string makes runPipeline throw, so the adjudicator retries and calls the panel again.
+// These run under this build's newest aggregation, agg-4 (ADR-0043). Aggregation agg-3, kept for the deals bound to it,
+// still signs a reject on one family's verdicts when the faulty family holds one seat of three and its fault is not a
+// filter abstention (ONE_FAMILY_REJECT_AT_AGG3); the last describe block holds it there.
 import { canonicalJson } from '@holdback/core';
 import fc from 'fast-check';
 import { describe, expect, it } from 'vitest';
@@ -50,7 +49,7 @@ const FAULTS: Array<[string, (calls: number) => JudgeResponse | Promise<JudgeRes
   ['returns a schema-valid abstain', () => answer('abstain')],
 ];
 
-/** The faults after which agg-3 signs a one-family reject (the defect); the filter abstentions escalate already. */
+/** The faults after which agg-3 signs a one-family reject (the defect agg-4 fixes); the filter abstentions escalate already. */
 const ONE_FAMILY_REJECT_AT_AGG3 = new Set(['times out', 'answers HTTP 503 twice', 'answers HTTP 400', 'throws (network error)', 'returns no text', 'returns a schema-valid abstain']);
 
 async function run(provider: JudgeProvider, over: Partial<PipelineInput> = {}, text = GOOD_CSV) {
@@ -99,13 +98,11 @@ describe('T-570: a fault in one whole family never yields a one-family decision'
         expect(draft.panel.members.filter((m) => m.family === family).every((m) => m.status !== 'ok')).toBe(true);
       });
 
-      it.each(FAULTS)('%s: the other family failing unanimously escalates, and the faulty seats count as no vote', async (name, fault) => {
+      it.each(FAULTS)('%s: the other family failing unanimously escalates, and the faulty seats count as no vote', async (_name, fault) => {
         const f = faulty(family, fault, 'fail');
         const draft = await run(f.provider);
         const faulted = SEATS.filter((s) => s.family === family).length;
-        // Known defect at agg-3: with one gpt seat down, the two claude fails reach minValid and reject.
-        const atAgg3 = faulted === 1 && ONE_FAMILY_REJECT_AT_AGG3.has(name) ? 'reject' : 'escalate';
-        expect(draft.aggregate.decision).toBe(atAgg3);
+        expect(draft.aggregate.decision).toBe('escalate');
         expect(draft.aggregate.passCount).toBe(0);
         expect(draft.aggregate.failCount).toBe(SEATS.length - faulted);
         expect(draft.aggregate.validCount).toBe(SEATS.length - faulted);
@@ -306,5 +303,16 @@ describe('T-570: for any delivered text, runPipeline never throws and its draft 
       }),
       { seed: SEED, numRuns: 150 },
     );
+  });
+});
+
+describe('T-570: a deal bound to agg-3 keeps the rule it bound (ADR-0036)', () => {
+  const bound = (aggregationVersion: string) => ({ ...NEWEST_VERSIONS, aggregationVersion });
+  it.each(FAULTS.filter(([name]) => ONE_FAMILY_REJECT_AT_AGG3.has(name)))('%s on the one gpt seat: agg-3 signs the one-family reject, agg-4 escalates', async (_name, fault) => {
+    const under3 = await run(faulty('gpt', fault, 'fail').provider, { versions: bound('agg-3') });
+    const under4 = await run(faulty('gpt', fault, 'fail').provider, { versions: bound('agg-4') });
+    expect(under3.aggregate.decision).toBe('reject');
+    expect(under4.aggregate.decision).toBe('escalate');
+    expect(under4.aggregate.reasons).toEqual(['2 valid verdicts from 1 model family; a decision needs verdicts from 2']);
   });
 });

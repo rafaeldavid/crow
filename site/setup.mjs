@@ -52748,10 +52748,12 @@ function parseTermsYaml(source, file) {
 }
 
 // packages/judgment/dist/aggregate.js
-const AGGREGATION_VERSION = "agg-3";
+const AGGREGATION_VERSION$1 = "agg-4";
 /** Cross-family agreement required for accept (threat T8). Fixed by the rule, not by policy. */
-const MIN_PASS_FAMILIES = 2;
-const SCREEN_FLAGGED_REASON = "screen flagged; see screen.signals";
+const MIN_PASS_FAMILIES$1 = 2;
+/** Families the valid verdicts behind any accept or reject must come from (T-570). Fixed by the rule, not by policy. */
+const MIN_DECISION_FAMILIES = 2;
+const SCREEN_FLAGGED_REASON$1 = "screen flagged; see screen.signals";
 /**
 * What a role may sign for the panel's decision (the adjudicator service and the snap runner both call this).
 * The primary and fallback sign what aggregation decided, escalation included. At the appeal there is no
@@ -52759,13 +52761,13 @@ const SCREEN_FLAGGED_REASON = "screen flagged; see screen.signals";
 * (`firstOutcome`), and signs nothing after an escalation (null: the default outcome applies). A flag alone
 * no longer makes the appeal panel escalate (L3-1); `aggregate` with `appeal: true` decides it.
 */
-function signedOutcome(decision, role) {
+function signedOutcome$1(decision, role) {
 	if (role.appeal && decision === "escalate") return role.firstOutcome ?? null;
 	return decision;
 }
-const cap$1 = (s) => s.length > 200 ? `${s.slice(0, 197)}...` : s;
+const cap$2 = (s) => s.length > 200 ? `${s.slice(0, 197)}...` : s;
 /** The short circuits: whether the panel runs at all. */
-function preDecision(checks, rubric, inconclusive = []) {
+function preDecision$1(checks, rubric, inconclusive = []) {
 	const open = new Set(inconclusive);
 	if (checks.some((c) => c.required && !c.passed && !open.has(c.checkId))) return "reject";
 	if (open.size > 0) return "escalate";
@@ -52773,30 +52775,30 @@ function preDecision(checks, rubric, inconclusive = []) {
 	return "panel";
 }
 /** sum over the rubric of weight x score for one verdict (missing criteria score 0). */
-function weightedSum(v, rubric) {
+function weightedSum$1(v, rubric) {
 	return rubric.criteria.reduce((s, c) => s + c.weight * (v.criteria.find((k) => k.id === c.id)?.score ?? 0), 0);
 }
-const meets = (count, f, total) => count * f.denominator >= f.numerator * total;
-function aggregate(input) {
+const meets$1 = (count, f, total) => count * f.denominator >= f.numerator * total;
+function aggregate$1(input) {
 	const { checks, rubric, thresholds } = input;
 	const inconclusive = input.inconclusive ?? [];
-	const pre = preDecision(checks, rubric, inconclusive);
+	const pre = preDecision$1(checks, rubric, inconclusive);
 	if (pre === "reject") {
 		const failed = checks.filter((c) => c.required && !c.passed && !inconclusive.includes(c.checkId)).map((c) => c.checkId);
 		return {
 			decision: "reject",
 			weightedScore: null,
-			reasons: [cap$1(`required deterministic check failed: ${failed.join(", ")}`)]
+			reasons: [cap$2(`required deterministic check failed: ${failed.join(", ")}`)]
 		};
 	}
 	if (pre === "escalate") return {
 		decision: "escalate",
 		weightedScore: null,
-		reasons: [cap$1(`check work budget ran out: ${inconclusive.join(", ")}`)]
+		reasons: [cap$2(`check work budget ran out: ${inconclusive.join(", ")}`)]
 	};
 	if (pre === "accept") {
 		const reasons = ["all deterministic checks passed and the rubric is empty"];
-		if (input.screenFlagged) reasons.push(SCREEN_FLAGGED_REASON);
+		if (input.screenFlagged) reasons.push(SCREEN_FLAGGED_REASON$1);
 		return {
 			decision: "accept",
 			weightedScore: null,
@@ -52809,7 +52811,7 @@ function aggregate(input) {
 	const fail = valid.filter((v) => v.verdict.overall === "fail");
 	const passFamilies = [...new Set(pass.map((v) => v.family))].sort();
 	const totalWeight = rubric.criteria.reduce((s, c) => s + c.weight, 0);
-	const sumWS = valid.reduce((s, v) => s + weightedSum(v.verdict, rubric), 0);
+	const sumWS = valid.reduce((s, v) => s + weightedSum$1(v.verdict, rubric), 0);
 	const n = valid.length;
 	const stats = {
 		weightedScore: rubric.criteria.length && n ? Math.floor(sumWS * 100 / (totalWeight * n)) : null,
@@ -52824,7 +52826,7 @@ function aggregate(input) {
 	const sampled = (input.escalate?.length ?? 0) > filtered;
 	if (input.appeal === "escalated" && (input.screenFlagged || injection || filtered > 0 || sampled)) {
 		const flags = [
-			...input.screenFlagged ? [SCREEN_FLAGGED_REASON] : [],
+			...input.screenFlagged ? [SCREEN_FLAGGED_REASON$1] : [],
 			...injection ? ["a judge suspected injection"] : [],
 			...filtered > 0 ? [`${filtered} judge output${filtered === 1 ? "" : "s"} rejected by a filter`] : [],
 			...sampled ? ["the judges saw a sample of the deliverable, not all of it"] : []
@@ -52843,12 +52845,12 @@ function aggregate(input) {
 		if (missing.length === 0) return {
 			decision: "accept",
 			...stats,
-			reasons: [cap$1(`flagged appeal: ${pass.length} of ${seats} seats pass, from ${passFamilies.length} families, no injection suspected`), ...flags]
+			reasons: [cap$2(`flagged appeal: ${pass.length} of ${seats} seats pass, from ${passFamilies.length} families, no injection suspected`), ...flags]
 		};
 		return {
 			decision: "reject",
 			...stats,
-			reasons: [cap$1(`flagged appeal: rejected, a flagged case is accepted only unanimously (${missing.join("; ")})`), ...flags]
+			reasons: [cap$2(`flagged appeal: rejected, a flagged case is accepted only unanimously (${missing.join("; ")})`), ...flags]
 		};
 	}
 	if (input.screenFlagged) return {
@@ -52864,29 +52866,38 @@ function aggregate(input) {
 	if (input.escalate?.length) return {
 		decision: "escalate",
 		...stats,
-		reasons: input.escalate.slice(0, 5).map(cap$1)
+		reasons: input.escalate.slice(0, 5).map(cap$2)
 	};
 	if (n < thresholds.minValid || n === 0) return {
 		decision: "escalate",
 		...stats,
 		reasons: [`${n} valid verdicts; the policy needs ${Math.max(1, thresholds.minValid)}`]
 	};
-	const acceptShare = meets(pass.length, thresholds.acceptSupermajority, n) && pass.length > fail.length;
+	const validFamilies = new Set(valid.map((v) => v.family)).size;
+	if (validFamilies < 2) return {
+		decision: "escalate",
+		...stats,
+		reasons: [`${n} valid verdicts from ${validFamilies} model family; a decision needs verdicts from ${2}`]
+	};
+	const acceptShare = meets$1(pass.length, thresholds.acceptSupermajority, n) && pass.length > fail.length;
 	if (acceptShare && passFamilies.length >= 2 && scoreOk) return {
 		decision: "accept",
 		...stats,
-		reasons: [cap$1(`${pass.length} of ${n} valid verdicts pass, from ${passFamilies.length} families, score at or above ${rubric.passThreshold / 100}`)]
+		reasons: [cap$2(`${pass.length} of ${n} valid verdicts pass, from ${passFamilies.length} families, score at or above ${rubric.passThreshold / 100}`)]
 	};
-	if (meets(fail.length, thresholds.rejectSupermajority, n) && fail.length > pass.length) return {
+	const faulted = n < input.verdicts.length;
+	const failFamilies = new Set(fail.map((v) => v.family)).size;
+	const rejectShare = meets$1(fail.length, thresholds.rejectSupermajority, n) && fail.length > pass.length;
+	if (rejectShare && (!faulted || failFamilies >= 2)) return {
 		decision: "reject",
 		...stats,
-		reasons: [cap$1(`${fail.length} of ${n} valid verdicts fail`)]
+		reasons: [cap$2(`${fail.length} of ${n} valid verdicts fail`)]
 	};
-	const why = !acceptShare ? "no supermajority" : passFamilies.length < 2 ? `pass verdicts from ${passFamilies.length} family` : "score below the pass threshold";
+	const why = rejectShare ? `after a fault, fail verdicts from ${failFamilies} family` : !acceptShare ? "no supermajority" : passFamilies.length < 2 ? `pass verdicts from ${passFamilies.length} family` : "score below the pass threshold";
 	return {
 		decision: "escalate",
 		...stats,
-		reasons: [cap$1(`${pass.length} pass, ${fail.length} fail of ${n} valid: ${why}`)]
+		reasons: [cap$2(`${pass.length} pass, ${fail.length} fail of ${n} valid: ${why}`)]
 	};
 }
 
@@ -53715,7 +53726,7 @@ const DETAIL_MAX = 300;
 * a JSON key), and half a pair left at the cut made the judgment record's RFC 8785 hash throw (T-570, red team of
 * PR 722). runPipeline's well-forming pass stays as the net under this.
 */
-function cap(s) {
+function cap$1(s) {
 	if (s.length <= DETAIL_MAX) return s;
 	let end = 297;
 	const last = s.charCodeAt(end - 1);
@@ -53904,7 +53915,7 @@ function runChecks$1(checks, input, budget = new StepBudget(CHECK_BUDGET)) {
 				required: check.required,
 				passed: o.passed
 			};
-			if (o.detail !== void 0) out.detail = cap(o.detail);
+			if (o.detail !== void 0) out.detail = cap$1(o.detail);
 			return out;
 		}),
 		inconclusive
@@ -53994,6 +54005,149 @@ function decodePlaintext(plaintext, mime) {
 		},
 		mime
 	});
+}
+
+// packages/judgment/dist/kept/agg-3.js
+const AGGREGATION_VERSION = "agg-3";
+/** Cross-family agreement required for accept (threat T8). Fixed by the rule, not by policy. */
+const MIN_PASS_FAMILIES = 2;
+const SCREEN_FLAGGED_REASON = "screen flagged; see screen.signals";
+/**
+* What a role may sign for the panel's decision (the adjudicator service and the snap runner both call this).
+* The primary and fallback sign what aggregation decided, escalation included. At the appeal there is no
+* instance after it: an appeal panel that cannot decide leaves a party appeal's first decision standing
+* (`firstOutcome`), and signs nothing after an escalation (null: the default outcome applies). A flag alone
+* no longer makes the appeal panel escalate (L3-1); `aggregate` with `appeal: true` decides it.
+*/
+function signedOutcome(decision, role) {
+	if (role.appeal && decision === "escalate") return role.firstOutcome ?? null;
+	return decision;
+}
+const cap = (s) => s.length > 200 ? `${s.slice(0, 197)}...` : s;
+/** The short circuits: whether the panel runs at all. */
+function preDecision(checks, rubric, inconclusive = []) {
+	const open = new Set(inconclusive);
+	if (checks.some((c) => c.required && !c.passed && !open.has(c.checkId))) return "reject";
+	if (open.size > 0) return "escalate";
+	if (checks.every((c) => c.passed) && rubric.criteria.length === 0) return "accept";
+	return "panel";
+}
+/** sum over the rubric of weight x score for one verdict (missing criteria score 0). */
+function weightedSum(v, rubric) {
+	return rubric.criteria.reduce((s, c) => s + c.weight * (v.criteria.find((k) => k.id === c.id)?.score ?? 0), 0);
+}
+const meets = (count, f, total) => count * f.denominator >= f.numerator * total;
+function aggregate(input) {
+	const { checks, rubric, thresholds } = input;
+	const inconclusive = input.inconclusive ?? [];
+	const pre = preDecision(checks, rubric, inconclusive);
+	if (pre === "reject") {
+		const failed = checks.filter((c) => c.required && !c.passed && !inconclusive.includes(c.checkId)).map((c) => c.checkId);
+		return {
+			decision: "reject",
+			weightedScore: null,
+			reasons: [cap(`required deterministic check failed: ${failed.join(", ")}`)]
+		};
+	}
+	if (pre === "escalate") return {
+		decision: "escalate",
+		weightedScore: null,
+		reasons: [cap(`check work budget ran out: ${inconclusive.join(", ")}`)]
+	};
+	if (pre === "accept") {
+		const reasons = ["all deterministic checks passed and the rubric is empty"];
+		if (input.screenFlagged) reasons.push(SCREEN_FLAGGED_REASON);
+		return {
+			decision: "accept",
+			weightedScore: null,
+			reasons
+		};
+	}
+	const parsed = input.verdicts.filter((v) => v.verdict !== null);
+	const valid = parsed.filter((v) => v.verdict.overall !== "abstain");
+	const pass = valid.filter((v) => v.verdict.overall === "pass");
+	const fail = valid.filter((v) => v.verdict.overall === "fail");
+	const passFamilies = [...new Set(pass.map((v) => v.family))].sort();
+	const totalWeight = rubric.criteria.reduce((s, c) => s + c.weight, 0);
+	const sumWS = valid.reduce((s, v) => s + weightedSum(v.verdict, rubric), 0);
+	const n = valid.length;
+	const stats = {
+		weightedScore: rubric.criteria.length && n ? Math.floor(sumWS * 100 / (totalWeight * n)) : null,
+		passCount: pass.length,
+		failCount: fail.length,
+		validCount: n,
+		passFamilies
+	};
+	const injection = parsed.some((v) => v.verdict.injectionSuspected);
+	const filtered = input.filterAbstentions ?? 0;
+	const scoreOk = rubric.criteria.length === 0 || sumWS * 100 >= rubric.passThreshold * totalWeight * n;
+	const sampled = (input.escalate?.length ?? 0) > filtered;
+	if (input.appeal === "escalated" && (input.screenFlagged || injection || filtered > 0 || sampled)) {
+		const flags = [
+			...input.screenFlagged ? [SCREEN_FLAGGED_REASON] : [],
+			...injection ? ["a judge suspected injection"] : [],
+			...filtered > 0 ? [`${filtered} judge output${filtered === 1 ? "" : "s"} rejected by a filter`] : [],
+			...sampled ? ["the judges saw a sample of the deliverable, not all of it"] : []
+		];
+		const seats = input.verdicts.length;
+		const needFamilies = Math.max(2, input.appealFamilies ?? 2);
+		const missing = [
+			...seats === 0 ? ["no seat returned a verdict"] : [],
+			...n < seats ? [`${seats - n} of ${seats} seats returned no valid verdict`] : [],
+			...fail.length > 0 ? [`${fail.length} failed`] : [],
+			...passFamilies.length < needFamilies ? [`passes span ${passFamilies.length} of the ${needFamilies} families required`] : [],
+			...injection ? ["a judge suspected injection"] : [],
+			...!scoreOk ? ["score below the pass threshold"] : [],
+			...sampled ? ["the judges saw a sample, not all of the delivery"] : []
+		];
+		if (missing.length === 0) return {
+			decision: "accept",
+			...stats,
+			reasons: [cap(`flagged appeal: ${pass.length} of ${seats} seats pass, from ${passFamilies.length} families, no injection suspected`), ...flags]
+		};
+		return {
+			decision: "reject",
+			...stats,
+			reasons: [cap(`flagged appeal: rejected, a flagged case is accepted only unanimously (${missing.join("; ")})`), ...flags]
+		};
+	}
+	if (input.screenFlagged) return {
+		decision: "escalate",
+		...stats,
+		reasons: ["the screen flagged the delivery"]
+	};
+	if (injection) return {
+		decision: "escalate",
+		...stats,
+		reasons: ["a judge suspected injection"]
+	};
+	if (input.escalate?.length) return {
+		decision: "escalate",
+		...stats,
+		reasons: input.escalate.slice(0, 5).map(cap)
+	};
+	if (n < thresholds.minValid || n === 0) return {
+		decision: "escalate",
+		...stats,
+		reasons: [`${n} valid verdicts; the policy needs ${Math.max(1, thresholds.minValid)}`]
+	};
+	const acceptShare = meets(pass.length, thresholds.acceptSupermajority, n) && pass.length > fail.length;
+	if (acceptShare && passFamilies.length >= 2 && scoreOk) return {
+		decision: "accept",
+		...stats,
+		reasons: [cap(`${pass.length} of ${n} valid verdicts pass, from ${passFamilies.length} families, score at or above ${rubric.passThreshold / 100}`)]
+	};
+	if (meets(fail.length, thresholds.rejectSupermajority, n) && fail.length > pass.length) return {
+		decision: "reject",
+		...stats,
+		reasons: [cap(`${fail.length} of ${n} valid verdicts fail`)]
+	};
+	const why = !acceptShare ? "no supermajority" : passFamilies.length < 2 ? `pass verdicts from ${passFamilies.length} family` : "score below the pass threshold";
+	return {
+		decision: "escalate",
+		...stats,
+		reasons: [cap(`${pass.length} pass, ${fail.length} fail of ${n} valid: ${why}`)]
+	};
 }
 
 // packages/judgment/dist/kept/screen-0.js
@@ -55376,17 +55530,23 @@ const AGG_3 = {
 	aggregate,
 	signedOutcome
 };
+const AGG_4 = {
+	parseVerdict,
+	preDecision: preDecision$1,
+	aggregate: aggregate$1,
+	signedOutcome: signedOutcome$1
+};
 const KEPT = {
 	screens: /* @__PURE__ */ new Map([[SCREEN_VERSION$1, SCREEN_0], [SCREEN_VERSION, SCREEN_1]]),
 	templatePairs: [TEMPLATE_PAIR],
-	aggregations: /* @__PURE__ */ new Map([[AGGREGATION_VERSION, AGG_3]])
+	aggregations: /* @__PURE__ */ new Map([[AGGREGATION_VERSION, AGG_3], [AGGREGATION_VERSION$1, AGG_4]])
 };
 /** The newest version of each: what a new build offers as its default unless its kept-policies file says otherwise. */
 const NEWEST_VERSIONS = {
 	screenVersion: SCREEN_VERSION,
 	promptTemplateHash: TEMPLATE_PAIR.firstHash,
 	appealPromptTemplateHash: TEMPLATE_PAIR.appealHash,
-	aggregationVersion: AGGREGATION_VERSION
+	aggregationVersion: AGGREGATION_VERSION$1
 };
 
 // packages/judgment/dist/pipeline.js
@@ -55395,7 +55555,7 @@ const NEWEST_VERSIONS = {
 * they give without a panel. runPipeline calls this, and so does a seller's preflight (preflight.ts, T-316),
 * so both run the same code on the same text.
 */
-function stageOne(intake, acceptance, references, aggregation = { preDecision }) {
+function stageOne(intake, acceptance, references, aggregation = { preDecision: preDecision$1 }) {
 	const { outcomes: deterministic, inconclusive } = runChecks$1(acceptance.deterministicChecks, {
 		data: intake.raw,
 		mime: intake.mime,

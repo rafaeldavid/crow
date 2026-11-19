@@ -1652,7 +1652,9 @@ The build is not started; it opens as its own task on Rafa's word.
 
 ## D87. After a judge fault, no decision rests on one model family (ADR-0043, T-570)
 
-**Status:** decided by the coordinator, 2026-11-19, under the in-repository autonomy rule. Rafa may overrule any line.
+**Status:** adopted, 2026-11-19.
+
+**Who decided.** The coordinator, under the in-repository autonomy rule, after a research pass and a red team. Rafa may overrule any line.
 
 **Why now.** The roadmap's stage-2 judgment bar says no judge fault yields a one-family decision. T-570's tests showed that aggregation `agg-3` breaks it for reject: in a panel of two claude seats and one gpt seat, when the gpt seat times out, errors or abstains and both claude seats fail, `agg-3` signs a reject on claude's verdicts alone (6 of 54 fault cases, measured). On the live registry every first-instance panel has that shape.
 
