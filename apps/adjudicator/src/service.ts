@@ -1091,7 +1091,8 @@ export class Adjudicator {
           lost = `; the store of judged results did not keep the panel's result (${errorClass(w)}), so a restart before the record builds would run the panel again`;
         }
       }
-      return err(problem('adjudicator_unavailable', `this adjudicator could not build the judgment record (${errorClass(e)}); it keeps the panel's result, calls no judge again, and builds the record again on the next pass${lost}`));
+      const keeps = lost ? `it keeps the panel's result in memory and builds the record again on the next pass${lost}` : "it keeps the panel's result, calls no judge again, and builds the record again on the next pass";
+      return err(problem('adjudicator_unavailable', `this adjudicator could not build the judgment record (${errorClass(e)}); ${keeps}`));
     }
     this.#drafts.delete(key);
     return ok({ record, outcome, published: false, ...(contentKey ? { contentKey } : {}) });
