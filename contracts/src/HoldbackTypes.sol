@@ -18,7 +18,8 @@ library HoldbackTypes {
     /// @dev Enforced: `offerExpiresAt`, `fundBy`, `deliverBy`, `judgeBy` and `fallbackBy`, which `agreeAndFund`
     ///      requires strictly increasing; `appealDecideSec`, the appeal adjudicator's window after an escalation, at
     ///      least 1; `appealWindowSec`, which must be 0 (phase one has no party appeal); `maxSubmissions`, which must
-    ///      be 1. Signed only: `disputeBy`, `disputeJudgeSec` and `disputeFallbackSec`.
+    ///      be 1; and `disputeBy`, `disputeJudgeSec` and `disputeFallbackSec`, which must be 0 (optimistic mode only,
+    ///      which phase one does not run).
     struct Timing {
         uint64 offerExpiresAt;
         uint64 fundBy;
@@ -108,10 +109,11 @@ library HoldbackTypes {
     /// @notice A Decision. The adjudicator field is the one whose turn it is, so it is not carried.
     /// @dev Enforced: `attempt` and `deliveryHash` (the posted delivery's), `role` (the one whose turn it is),
     ///      `outcome`, `seed`, `keyCiphertext` (present exactly on an accept; emitted with `keyScheme`),
-    ///      `appealGroundHash` (must be keccak256("") for the primary and the fallback), `beaconRound`, `beaconValue` and
-    ///      `beaconSignature` (for the fallback and the appeal adjudicator), and `expiresAt`. Signed only:
-    ///      `judgmentRecordHash` (emitted), `beaconSourceHash`, `encryptedKeysHash` and `nonce`; the primary's beacon
-    ///      fields.
+    ///      `appealGroundHash` (must be keccak256("") for every role: phase one has no party appeal), `beaconRound`,
+    ///      `beaconValue` and `beaconSignature` (proven for the fallback and the appeal adjudicator), the primary's four
+    ///      beacon fields (must be empty: source keccak256(""), round 0, value 0, no proof), and `expiresAt`. Signed
+    ///      only: `judgmentRecordHash` (emitted), `encryptedKeysHash`, `nonce`, and the fallback's and the appeal
+    ///      adjudicator's `beaconSourceHash`.
     struct Decision {
         uint8 attempt;
         bytes32 deliveryHash; // the delivery judged: deliveryHash(id, dv) of the posted delivery (ADR-0029)
