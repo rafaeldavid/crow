@@ -470,23 +470,29 @@ export async function refreshBefore(run: Run, deal: Deal, address: string): Prom
 }
 
 /**
- * The payment address's tokens for one deal (ADR-0033, T-381), without moving any to the buyer's signing address: on
- * a chain the buyer's key mints them to it (tUSDC is open-mint; the buyer pays the gas in Sepolia ETH, not tokens); on
- * SimChain the faucet grants them to it.
+ * The payment address's tokens for one deal (ADR-0033, T-381), without moving any to the buyer's signing address: the
+ * operators' faucet grants them to it, on SimChain and on a chain alike, so the round needs no Sepolia ETH for this
+ * step (T-563). Only when the faucet leaves it short (its per-address window), on a chain, does the buyer's key mint
+ * the rest (tUSDC is open-mint; the buyer pays that gas in Sepolia ETH).
  */
 async function fundPayer(run: Run, deal: Deal, need: bigint): Promise<void> {
   const { round } = run;
   const payer = privateKeyToAccount(deal.payer!).address.toLowerCase();
   const held = BigInt((await holdingsNow(run, [payer]))[payer]!.token);
   if (held < need) {
-    if (round.chain) {
-      const minted = await round.chain.mint(round.key('buyer'), payer, need - held);
-      run.say(`minted ${round.amount(need - held)} to the payment address ${short(payer)} from the buyer's key: ${round.chain.link(minted.tx)} (${minted.gasUsed} gas)`);
-    } else {
+    let now = held;
+    try {
       const grant = await deal.buyer.call('POST', '/v1/faucet', { address: payer });
       run.say(`faucet: the payment address ${short(payer)} granted ${round.amount(grant.granted.amount)}`);
-      const now = BigInt((await holdingsNow(run, [payer]))[payer]!.token);
-      if (now < need) throw new Error(`the payment address holds ${round.amount(now)}, needs ${round.amount(need)}, and the faucet is spent`);
+      now = BigInt((await holdingsNow(run, [payer]))[payer]!.token);
+    } catch (e) {
+      if (!round.chain) throw e;
+      run.say(`faucet: no grant for the payment address ${short(payer)}: ${(e as Error).message.slice(0, 200)}`);
+    }
+    if (now < need) {
+      if (!round.chain) throw new Error(`the payment address holds ${round.amount(now)}, needs ${round.amount(need)}, and the faucet is spent`);
+      const minted = await round.chain.mint(round.key('buyer'), payer, need - now);
+      run.say(`minted ${round.amount(need - now)} to the payment address ${short(payer)} from the buyer's key: ${round.chain.link(minted.tx)} (${minted.gasUsed} gas)`);
     }
   }
   await refreshBefore(run, deal, payer);

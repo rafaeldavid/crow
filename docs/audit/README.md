@@ -2,7 +2,7 @@
 
 This page is where an outside auditor of Crow's phase-one contracts starts. Crow (protocol name Holdback) is escrow for AI agents: a buyer's funds are held, the seller delivers, an adjudicator the parties chose decides, and the funds are released or refunded. It runs on Ethereum Sepolia with test tokens only.
 
-The code to audit is `contracts/src/` at the git tag `contracts-phase-one-1`. Read these pages from `main`, which corrects them after the tag; `contracts/src/` and `contracts/test/` on `main` equal the tag's.
+The code to audit is `contracts/src/` at the git tag `contracts-phase-one-2`, the fixed version, deployed on Sepolia since 2026-11-19. Read these pages from `main`, which corrects them after the tag; `contracts/src/` and `contracts/test/` on `main` equal the tag's. The first version, the tag `contracts-phase-one-1`, was deployed on 2026-11-13; an outside firm's automated scan read it, and the firm's fix review read the fixed version ([`outside-scan.md`](outside-scan.md)).
 
 **The fixed build.** D80 (2026-11-18) has the outside audit read the next build, which carries an outside scan's contract fixes (T-527, T-528 and T-529) on the lane `contracts-audit-ready`. Its tag will be `contracts-phase-one-2`. On the lane, [`state-model.md`](state-model.md), [`threat-model.md`](threat-model.md) TA-11 and the deployer's row, and [`functions.md`](functions.md), "The fixed build", describe it; the dated sections stay records of the tag.
 
@@ -147,9 +147,17 @@ git -C holdback submodule update --init --recursive
 - **The audit engagement:** the repository owner, `rafaeldavid` on GitHub.
 - **A vulnerability:** GitHub's private vulnerability reporting, as [`SECURITY.md`](../../SECURITY.md) describes. Do not open a public issue.
 
-## Figures as of 2026-11-17 (T-499)
+## Figures as of 2026-11-19 (T-563): the fixed version
 
 This section is a dated record. The deployment record, [`contracts/deployments/sepolia.json`](../../contracts/deployments/sepolia.json), stays the source for every address and setting.
+
+- **Commits [measured]:** the record's `commit`, which the deploy built, is `1adfa55b7b6dabe94325b7731cbd3760f518e01d`; its `contracts/src` has the tree `c4edcfb1185a34f5a205d9170e0ae690c758c157`, the same as `d621291e`, the commit the fix review read. The tag `contracts-phase-one-2` points at the merge of the record into `main`.
+- **Files in scope [measured: `wc -l`]:** `HoldbackRules.sol` 593 lines, `HoldbackTypes.sol` 481, `IHoldbackRules.sol` 496, `DrandQuicknetBeacon.sol` 209, `IHoldbackBeacon.sol` 21; 1,800 in all.
+- **Deployment [measured: `sepolia.json`, Sourcify's API v2]:** five contracts, created on 2026-11-19 from block 12,169,902 by the deployer the record names. `deploy-sepolia.sh --check` printed that the record "matches the chain and the build at 1adfa55b…", and all five are an exact match on Sourcify, runtime and creation. `HoldbackRules` runtime: 20,839 bytes in the build artifact, against the EIP-170 limit of 24,576; its runtime hash with the immutables zeroed and the metadata cut equals the build's. The beacon takes its pairing gas, 250,000, as its constructor argument.
+
+## Figures as of 2026-11-17 (T-499): the first version
+
+This section is a dated record of the first version, deployed on 2026-11-13. The deployment record, [`contracts/deployments/sepolia.json`](../../contracts/deployments/sepolia.json), stays the source for every address and setting.
 
 ### Commits [measured]
 

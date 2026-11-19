@@ -5,7 +5,7 @@
 - **Depends on:** T-501 (a finished job delivered into a new deal), T-503 (a full refund both parties sign): the two workarounds the decision folds into one step
 - **Paths this task may touch:** `docs/decisions/ADR-0039-amend-a-funded-deal.md` (new), `docs/research/2026-11-18-amending-a-funded-deal.md` and its folder (new), `docs/research/README.md` (one row), `docs/decisions-today.md` (D78), this file. Private: `strategy/2026-11-18-amendment-cases.md` in crow-private.
 - **Human gate:** yes: ADR-0039's four open points are Rafa's. The record changes no code.
-- **Status:** done (merged as `aafc3011`, PR 650; the decision waits on Rafa, D78)
+- **Status:** done (merged as `aafc3011`, PR 650; Rafa answered D78's four points on 2026-11-19)
 - **Agent/session:** the T-524 session (`amend-decision`), 2026-11-18, branch `t-524-amend-decision`.
 - **Roadmap row:** N188
 - **Change kind:** 10, research and decisions.
@@ -74,5 +74,5 @@ A list a build session can start from, if Rafa takes the recommendation. All of 
 
 ## Handoff
 
-- **Resume:** after Rafa answers ADR-0039's open points, record his answers in D78 and open the build's step 1 as its own task.
+- **Resume:** Rafa answered ADR-0039's four open points on 2026-11-19 and D78 records his words. The build's step 1 opens as its own task on his word.
 - **For the coordinator:** roadmap row N188 and the daily log are yours to update. Rafa's directions for this task reached the session through the coordinator's messages and the private log.

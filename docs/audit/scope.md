@@ -2,7 +2,7 @@
 
 ## Summary
 
-Crow (protocol name Holdback) is escrow and verification for AI agents. It runs on Ethereum Sepolia (chain ID 11155111) with test tokens only. An audit covers the Solidity files in `contracts/src/` at the frozen commit, tagged `contracts-phase-one-1` and named by the `commit` field of [`contracts/deployments/sepolia.json`](../../contracts/deployments/sepolia.json), and how they drive Coinbase's Commerce Payments Protocol (CPP) escrow. Off-chain code holds no funds, but the components listed below shape the trust model.
+Crow (protocol name Holdback) is escrow and verification for AI agents. It runs on Ethereum Sepolia (chain ID 11155111) with test tokens only. An audit covers the Solidity files in `contracts/src/` at the frozen commit, tagged `contracts-phase-one-2` and named by the `commit` field of [`contracts/deployments/sepolia.json`](../../contracts/deployments/sepolia.json), and how they drive Coinbase's Commerce Payments Protocol (CPP) escrow. Off-chain code holds no funds, but the components listed below shape the trust model.
 
 Labels on this page:
 - **measured:** read from the named file in this checkout, or produced by the named command;
@@ -66,7 +66,7 @@ Relied on, not in scope: Commerce Payments' `AuthCaptureEscrow` and `ERC3009Paym
 
 | Item | Where to read it |
 | --- | --- |
-| Frozen commit | the tag `contracts-phase-one-1`; the record's `commit` |
+| Frozen commit | the tag `contracts-phase-one-2`; the record's `commit`. The first version, deployed on 2026-11-13, is the tag `contracts-phase-one-1` |
 | `HoldbackRules` runtime size | the length of `deployedBytecode` in `contracts/out/HoldbackRules.sol/HoldbackRules.json`, against the EIP-170 limit of 24,576 bytes |
 | The runtime hashes | SHA-256 of the code on chain with the immutables zeroed and the metadata tail cut ([`test-quality.md`](test-quality.md), "Runtime code"); the `onchain_hash` lines of the redeploy runbook, [`redeploy-contracts.md`](../redeploy-contracts.md), step 3, compute them from the record |
 | `ESCROW`, `ERC3009_COLLECTOR`, `BEACON`, `TOKEN` | the record's `escrow`, `erc3009Collector`, `beacon` and `token.address`; each creation transaction is under `contracts` |
@@ -82,7 +82,7 @@ The state machine and the settlement interface are in [`docs/architecture.md`](.
 
 ## The frozen commit and how to confirm it
 
-- **Commit:** the tag `contracts-phase-one-1` and the record's `commit` name two commits with the same build inputs. The record's `commit` is the commit the deploy built from; the tag points at the later merge commit, which adds only the deployment record under `contracts/deployments/`. `git diff --stat <record's commit> contracts-phase-one-1 -- contracts/src contracts/lib contracts/foundry.toml contracts/remappings.txt contracts/script/TestUSDC.sol` prints nothing [measured: T-499, 2026-11-17]. [`README.md`](README.md) gives both hashes as of that date. The compiler settings are in the same record, under `compiler` [measured: the record's fields; `contracts/foundry.toml` sets them].
+- **Commit:** the tag `contracts-phase-one-2` and the record's `commit` name two commits with the same build inputs. The record's `commit` is the commit the deploy built from; the tag points at the later merge into `main`, which adds the deployment record under `contracts/deployments/` and changes nothing the build reads. `git diff --stat <record's commit> contracts-phase-one-2 -- contracts/src contracts/lib contracts/foundry.toml contracts/remappings.txt contracts/script/TestUSDC.sol` prints nothing. The first version's tag, `contracts-phase-one-1`, held the same for its record [measured: T-499, 2026-11-17]. [`README.md`](README.md) gives both hashes as of that date. The compiler settings are in the same record, under `compiler` [measured: the record's fields; `contracts/foundry.toml` sets them].
 - **Confirm:** run [`contracts/script/deploy-sepolia.sh`](../../contracts/script/deploy-sepolia.sh) `--check <rpc-url>` from a checkout whose build inputs equal the frozen commit. It deploys nothing and only reads. It fails unless all of these hold [measured: read from the script on `main` after the cutover]:
   1. the RPC serves chain ID 11155111;
   2. `src`, `lib`, `foundry.toml`, `remappings.txt` and `script/TestUSDC.sol` equal the recorded commit, with no uncommitted change;
