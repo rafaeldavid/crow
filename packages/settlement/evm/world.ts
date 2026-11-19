@@ -173,6 +173,11 @@ export class EvmWorld implements EvmChain {
     await this.rpc('eth_call', [{ ...tx, gas: toHex(TX_GAS) }, 'pending']);
   }
 
+  async callAt(tx: { to: Address; data: Hex }, at: number): Promise<Hex> {
+    await this.rpc('evm_setNextBlockTimestamp', [at]);
+    return (await this.rpc('eth_call', [{ ...tx, gas: toHex(TX_GAS) }, 'pending'])) as Hex;
+  }
+
   /** Mines the transaction at the scenario second `at`, from `key` or the deployer. */
   async send(tx: { key?: Hex; to: Address; data: Hex; value?: bigint }, at?: number): Promise<Mined> {
     if (at !== undefined) await this.rpc('evm_setNextBlockTimestamp', [at]);

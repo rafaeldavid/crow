@@ -2,9 +2,9 @@
 // 127.0.0.1 only). The delivery holds envelopes for the three adjudicators and none for the buyer, and the buyer posts
 // it. The contract's simulation reverts an early accept and a settlement that releases the key (BadKeyProof), whether
 // the delivery was posted on chain or travels with the call, so nothing is sent; core's own step refuses both with its
-// reason (`coreSays`). The adapter simulates before it steps core, so on chain the agent reads the revert, not core's
-// reason (T-550 Handoff, for T-549). The primary's accept carries the buyer's key and settles. Needs `anvil` on PATH
-// and `forge build` output in contracts/out; skipped without.
+// reason (`coreSays`). Since T-549 the adapter steps core first when the delivery has no envelope for the buyer, so on
+// chain the agent reads core's reason, not the bare revert (T-550's hand-over). The primary's accept carries the
+// buyer's key and settles. Needs `anvil` on PATH and `forge build` output in contracts/out; skipped without.
 import { existsSync } from 'node:fs';
 import { join } from 'node:path';
 import { signMessage, step, type Delivery, type EscrowEvent } from '@holdback/core';
@@ -85,12 +85,14 @@ describe.skipIf(!ready)(`a standing delivery on anvil (T-550)${ready ? '' : ' (S
     const early = await d.earlyAccept();
     expect(coreSays(chain, d, early)).toMatch(NO_KEY);
     const e = await chain.submit(early, { via: 'op-1', sender: cast.buyer.key });
-    expect(e.ok ? 'ok' : [e.problem.type, e.problem.detail]).toEqual(['invalid_terms', 'contract revert BadKeyProof()']);
+    expect(e.ok ? 'ok' : e.problem.type).toBe('invalid_terms');
+    expect(e.ok ? 'ok' : e.problem.detail).toMatch(NO_KEY);
 
     const release = await d.mutual(BigInt(d.terms.price.amount), true);
     expect(coreSays(chain, d, release)).toMatch(/no envelope for the buyer .* a settlement that releases the key/);
     const m = await chain.submit(release, { via: 'op-1', sender: cast.operator.key });
-    expect(m.ok ? 'ok' : [m.problem.type, m.problem.detail]).toEqual(['invalid_terms', 'contract revert BadKeyProof()']);
+    expect(m.ok ? 'ok' : m.problem.type).toBe('invalid_terms');
+    expect(m.ok ? 'ok' : m.problem.detail).toMatch(/no envelope for the buyer .* a settlement that releases the key/);
 
     // Nothing moved: the deal waits for its adjudicator, and no key reached the buyer.
     expect((await chain.stage(d.id)).stage).toBe('Delivered');
@@ -112,7 +114,8 @@ describe.skipIf(!ready)(`a standing delivery on anvil (T-550)${ready ? '' : ' (S
     expect(await chain.carryDelivery(delivery)).toBeNull();
     chain.advance(1);
     const e = await chain.submit(await d.earlyAccept(), { via: 'op-1', sender: cast.buyer.key });
-    expect(e.ok ? 'ok' : [e.problem.type, e.problem.detail]).toEqual(['invalid_terms', 'contract revert BadKeyProof()']);
+    expect(e.ok ? 'ok' : e.problem.type).toBe('invalid_terms');
+    expect(e.ok ? 'ok' : e.problem.detail).toMatch(NO_KEY);
     expect((await chain.stage(d.id)).stage).toBe('Held');
     // The carried delivery still settles by the primary's accept, which carries it (D4's two transactions).
     await must(chain, cast, d.decide('primary', 'accept'));
