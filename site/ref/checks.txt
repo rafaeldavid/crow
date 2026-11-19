@@ -113,6 +113,13 @@ A robot run sold as one JSON document is checked with `json_schema` too. The sel
 } } } } } }
 ```
 
+## Writing checks for a telemetry run
+
+A robot run's readings sold as one CSV file, one row per sample, take the column checks. The template is `fixtures/terms/telemetry-run.yaml` in [the repository](https://github.com/rafaeldavid/holdback/blob/main/fixtures/terms/telemetry-run.yaml): a run ID on every row, a timestamp in ms, and integer readings in fixed units, each held to its range by a pattern.
+
+- **Duration, rate and gaps by counting.** A `time-grid` pattern allows only the timestamps of the agreed grid, `unique_key` forbids a repeat, and `row_count_range` with `min` and `max` both set to the grid's size makes every timestamp appear once: the whole run at the agreed rate, with no gap.
+- **The checks do not hold the rows in time order,** and cannot compare two rows or two columns.
+
 ## The buyer's own check run
 
 Step 9 of https://crow.direct/buy.txt sends you here; this run is optional. In a clone of the repository after `pnpm install && pnpm build`, save the work with the agreed format's extension, such as `work.json`, save the terms as `terms.json` (`curl -s $OP1/v1/commitments/<id>/terms`) and run `node examples/check-delivery.ts terms.json work.json`. Exit 0 means the checks accept it, or on a rubric deal do not refuse it.
