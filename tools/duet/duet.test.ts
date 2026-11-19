@@ -17,7 +17,7 @@ import { CROW_MARK, EARLY_ACCESS, ENGINEERS, forPublishing, HERO, JOIN, PITCH, P
 import { startWorld } from './world.ts';
 import { runAgent } from './loop.ts';
 import { anthropic, liveProvider, openaiCompatible, scripted, VendorError, type Provider, type Turn } from './providers.ts';
-import { Recorder, Secrets } from './record.ts';
+import { Recorder, Secrets, type Event } from './record.ts';
 import { ephemeralFirst, pickAdapterPort, REPO, runDuet } from './run.ts';
 import { Toolbox, type ToolboxOptions } from './tools.ts';
 
@@ -161,6 +161,13 @@ describe('three scenarios, scripted, on the local phase-one world', () => {
       // T-574: the endings' record and transaction links keep their hex whole; nothing else on the page does.
       expect(published.match(PUBLIC_LINK)?.length ?? 0).toBeGreaterThan(0);
       expect(published.replace(PUBLIC_LINK, '')).not.toMatch(/\/(Users|home|private|var)\/|0x[0-9a-fA-F]{40}/);
+      // An agent's text shaped like a public link is escaped on the page (its quote becomes &#34;), so its hex is cut.
+      const secret = 'be'.repeat(32);
+      const turn = events.find((e) => e.kind === 'model.turn') ?? events.at(-1)!;
+      const crafted = replayPage([...events, { ...turn, kind: 'model.turn', role: 'buyer', text: `see href="${ENDINGS.explorer}0x${secret}" and href="${ENDINGS.record}0x${secret}"` } as Event], s, { publish: true });
+      expect(crafted).not.toContain(secret);
+      expect(crafted).toContain('0xbebebe…bebe');
+      expect(crafted.match(PUBLIC_LINK)).toEqual(published.match(PUBLIC_LINK));
       expect(r.leaks(published)).toBe(false);
       expect(banned(readerText(published))).toEqual([]);
       expect(readerText(published)).not.toMatch(/\bowners?\b/i);

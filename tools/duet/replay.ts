@@ -278,7 +278,8 @@ export interface PageExtras {
   /**
    * For crow.direct/demo: early access goes to the home page's own sign-up form (same site), and every local path
    * and every long hex string (deal IDs, addresses) is shortened, so the published page names no folder on this
-   * machine and carries nothing a secret scanner reads as a key.
+   * machine and carries nothing a secret scanner reads as a key. A link to a deal's record or to its Sepolia
+   * transaction (PUBLIC_LINK) keeps its public ID whole (T-574).
    */
   publish?: boolean;
 }
@@ -286,8 +287,9 @@ export interface PageExtras {
 
 const escRe = (s: string) => s.replace(/[.*+?^${}()|[\]\\/]/g, '\\$&');
 /**
- * T-574: a link to a deal's record on the live service or to its transaction on Sepolia, the endings' two links. Each
- * names a public deal ID or transaction hash, so the publish keeps it whole: cut short, it led nowhere.
+ * T-574: a link the page writes to a deal's record on the live service or to a transaction on Sepolia: the endings'
+ * links and a Sepolia run's payment records. Each names a public deal ID or transaction hash, so the publish keeps it
+ * whole: cut short, it led nowhere. An agent's text never forms one, since the page escapes its quotes.
  */
 export const PUBLIC_LINK = new RegExp(`\\bhref="(?:${[ENDINGS.record, ENDINGS.explorer].map(escRe).join('|')})0x[0-9a-f]{64}"`, 'g');
 
