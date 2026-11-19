@@ -26,14 +26,14 @@ So the value prop is **Spend Controls**.
 
 ## Changes
 
-- `site/build.mjs`: the fifth value prop reads "Spend Controls · soon", "Set a ceiling per purchase and per day, how many at once, and who your agent pays." (Rafa, 2026-11-19: caps such as frequency, a purchase ceiling, periods and approved counterparties.) Each cap is in the signer's rules today [measured, `examples/signer.ts`: `maxPerDeal`, `maxPerDay`, `maxOpenDeals`, `sellers`]. The card icon and the coin drawing stay.
+- `site/build.mjs`: the fifth value prop reads "Spend Controls · soon", "Cap each purchase and each day, how many at once, and who your agent pays." (Rafa, 2026-11-19: caps such as frequency, a purchase ceiling, periods and approved counterparties.) Each cap is in the signer's rules today [measured, `examples/signer.ts`: `maxPerDeal`, `maxPerDay`, `maxOpenDeals`, `sellers`]. The card icon and the coin drawing stay.
 - `site/ref/limits.txt`: a new section, "Spend controls: what to tell your principal": the payment address as the budget, the hold, the faucet on the test service, loading by card or bank as coming with real money, and the seller's payout address with the three checks before naming one.
 - `site/buy.txt` step 6: a pointer to that section.
 
 ## Evidence
 
 - `node site/build.mjs && node site/check.mjs`: PASS [measured, 2026-11-19]. The buyer's first-deal path is 4,888 of 5,000 tokens, up from 4,865; the seller's is unchanged at 4,509 [measured, estimate by bytes].
-- Not checked: how the new line wraps at 1280 and 1920 px. The browser pane was hidden.
+- The new line wraps to 2 lines at 375, 1280, 1440 and 1920 px, as every other value prop does [measured, 2026-11-19, the built page served locally, each prop's text height over its line height]. The first wording, "Set a ceiling per purchase and per day, how many at once, and who your agent pays.", took 3 lines at 1280 px.
 
 ## Handoff
 
