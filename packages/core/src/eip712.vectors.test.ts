@@ -3,7 +3,7 @@
 // settlement view; this file is the generator, so a change to the signed encoding moves both pins together.
 import { readFileSync } from 'node:fs';
 import { join } from 'node:path';
-import { encodeAbiParameters, hashStruct, hashTypedData, keccak256 } from 'viem';
+import { encodeAbiParameters, hashStruct, hashTypedData, keccak256, type TypedData } from 'viem';
 import { describe, expect, it } from 'vitest';
 import {
   commitmentId,
@@ -102,7 +102,7 @@ describe('cross-language vectors (Vectors.t.sol)', () => {
 // are written out here.
 const SELLER_CONTRACT: Address = '0x00000000000000000000000000000000000000a2';
 const sellerDomain = { name: 'HoldbackStandingSeller', version: '1', chainId: 31337, verifyingContract: SELLER_CONTRACT } as const;
-const standingTypes = {
+const standingTypes: TypedData = {
   TokenAmount: eip712Types.TokenAmount,
   Adjudication: eip712Types.Adjudication,
   Remedy: eip712Types.Remedy,
@@ -135,7 +135,7 @@ const standingTypes = {
   ],
   Revoke: [{ name: 'templateHash', type: 'bytes32' }],
   Retire: [],
-} as const;
+};
 
 const typedTerms = typedTermsOf(terms) as Record<string, unknown> & { timing: Record<string, bigint>; createdAt: bigint };
 const at = typedTerms.createdAt;
