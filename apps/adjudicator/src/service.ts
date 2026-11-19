@@ -164,9 +164,21 @@ export interface KeptJudgment {
   published: boolean;
 }
 
+/**
+ * A panel's result whose record could not be built, as `judgedStore` keeps it under `<key>|draft` (T-570): the next
+ * pass, after a restart too, builds the record from it and calls no judge. It names the delivery and the seed it was
+ * judged under, so it is never used for another.
+ */
+export interface KeptDraft {
+  kind: 'draft';
+  draft: JudgmentDraft;
+  deliveryHash: Hex32;
+  seed: Hex32;
+}
+
 export interface JudgedStore {
-  get(key: string): Promise<KeptJudgment | null | undefined>;
-  put(key: string, value: KeptJudgment): Promise<void>;
+  get(key: string): Promise<KeptJudgment | KeptDraft | null | undefined>;
+  put(key: string, value: KeptJudgment | KeptDraft): Promise<void>;
 }
 
 /** A registry a build carries, with the provider that reaches its models. */
@@ -237,6 +249,12 @@ export class Adjudicator {
   readonly #account;
   /** Judged records by commitment|role|attempt, kept the moment the panel returns (no re-roll). */
   readonly #judged = new Map<string, Judged>();
+  /**
+   * The panel's result by commitment|role|attempt. This service keeps it the moment runPipeline returns and drops it
+   * once the record is built, or once the turn leaves a task list that was read in full. When the record fails to build, the service also writes it to `judgedStore`, so the next
+   * pass, after a restart too, builds the record from it and calls no judge (T-570, red team of PR 722).
+   */
+  readonly #drafts = new Map<string, Omit<KeptDraft, 'kind'>>();
   /** `settlement` with a time limit on every read (T-372); writes pass straight through. */
   readonly #port: AdjudicatorSettlement;
   readonly #limitMs: number;
@@ -437,7 +455,15 @@ export class Adjudicator {
         }
       }, seen);
     }
+    const unavailable = report.unavailable.length;
     const tasks = await this.#list('tasks', report, () => port.tasks(this.address));
+    // A turn that left the task list (decided, or past its deadline) needs its held panel result no more. Pruned only
+    // after a read that answered: a read that failed or timed out drops nothing, so it can never cost a second panel
+    // (T-570, red team of PR 729).
+    if (report.unavailable.length === unavailable) {
+      const listed = new Set(tasks.map((t) => judgedKey(t)));
+      for (const k of this.#drafts.keys()) if (!listed.has(k)) this.#drafts.delete(k);
+    }
     for (const task of this.#ordered(tasks, (t) => t.commitment.id)) {
       await this.#unit(task.commitment.id, async () => {
         try {
@@ -803,16 +829,34 @@ export class Adjudicator {
    * content key again: it is opened from this service's own envelope, never stored. A store that cannot be read refuses
    * the turn before any judge is called, so a store failure never runs the panel twice.
    */
+  /** The panel's result held for `key`: in memory, or written to `judgedStore` when its record failed to build. */
+  async #heldDraft(key: string): Promise<Result<Omit<KeptDraft, 'kind'> | null, Problem>> {
+    const inMemory = this.#drafts.get(key);
+    if (inMemory) return ok(inMemory);
+    const store = this.#cfg.judgedStore;
+    if (!store) return ok(null);
+    let kept: KeptJudgment | KeptDraft | null | undefined;
+    try {
+      kept = await this.#read('the store of judged results', () => store.get(`${key}|draft`));
+    } catch (e) {
+      return err(problem('adjudicator_unavailable', `the store of judged results did not answer (${errorClass(e)}); not judged, retrying (no record)`));
+    }
+    if (!kept || !('kind' in kept) || kept.kind !== 'draft') return ok(null);
+    const held = { draft: kept.draft, deliveryHash: kept.deliveryHash, seed: kept.seed };
+    this.#drafts.set(key, held);
+    return ok(held);
+  }
+
   async #restore(key: string, pre: Preflight): Promise<Result<Judged | null, Problem>> {
     const store = this.#cfg.judgedStore;
     if (!store) return ok(null);
-    let kept: KeptJudgment | null | undefined;
+    let kept: KeptJudgment | KeptDraft | null | undefined;
     try {
       kept = await this.#read('the store of judged results', () => store.get(key));
     } catch (e) {
       return err(problem('adjudicator_unavailable', `the store of judged results did not answer (${errorClass(e)}); not judged, retrying (no record)`));
     }
-    if (!kept) return ok(null);
+    if (!kept || !('record' in kept)) return ok(null);
     const judged: Judged = { record: kept.record, outcome: kept.outcome, published: kept.published, kept: true };
     if (kept.outcome === 'accept' || kept.outcome === 'escalate') {
       try {
@@ -920,6 +964,16 @@ export class Adjudicator {
     const id = commitment.id;
     const { policy, seed, beacon, impl } = pre;
     const { registry, provider } = pre.judges;
+    // T-570: a panel's result held from an earlier pass, in memory or written when its record failed to build. It is
+    // used only for the delivery and the seed it was judged under; anything else is refused before any read or judge.
+    const key = judgedKey(task);
+    const dHash = deliveryHash(task.delivery);
+    const held = await this.#heldDraft(key);
+    if (!held.ok) return held;
+    if (held.value && (held.value.deliveryHash !== dHash || held.value.seed !== seed)) {
+      const what = held.value.deliveryHash !== dHash ? `delivery ${held.value.deliveryHash}; the task now carries ${dHash}` : 'another panel seed than this turn names';
+      return err(problem('invalid_state', `this adjudicator's panel judged this commitment, role and attempt under ${what}, and it never judges an attempt twice`));
+    }
     let contentKey: ContentKey | undefined;
     // T-347: a ciphertext no store returns follows the rule for one that does not match its delivery (mapIntakeError).
     // The seller may never have uploaded it, or the store lost or withholds it, and this service cannot tell which.
@@ -988,7 +1042,7 @@ export class Adjudicator {
         return err(problem('adjudicator_unavailable', `reference files unavailable from this adjudicator's store: ${describeUnavailable(loaded.unavailable)}${late ? ` (it did not answer within ${late.ms} ms)` : ''}; not judged, retrying (no record)`));
       }
       const references = loaded.references;
-      const run = await runPipeline({
+      const run = held.value ? ok(held.value.draft) : await runPipeline({
         intake: intaken.value,
         acceptance: commitment.acceptance,
         deliverable: { description: commitment.deliverable.description, format: commitment.deliverable.format },
@@ -1013,13 +1067,34 @@ export class Adjudicator {
         ...(appeal ? { appealKind: task.firstOutcome ? ('party' as const) : ('escalated' as const) } : {}),
       });
       if (!run.ok) return run;
+      if (!held.value) this.#drafts.set(key, { draft: run.value, deliveryHash: dHash, seed });
       draft = run.value;
     }
 
     // Map the panel's decision onto what the role may sign.
     // Party appeal: an undecided appeal panel leaves the first decision standing; after an escalation: no decision.
     const outcome: DecisionOutcome | null = impl.aggregation.signedOutcome(draft.aggregate.decision, { appeal, ...(task.firstOutcome ? { firstOutcome: task.firstOutcome } : {}) });
-    const record = await this.#record(task, { ...draft, panel: { ...panelBase, ran: draft.panel.ran, members: draft.panel.members } });
+    let record: Judgment;
+    try {
+      record = await this.#record(task, { ...draft, panel: { ...panelBase, ran: draft.panel.ran, members: draft.panel.members } });
+    } catch (e) {
+      // The panel's result is held above. Written to the store too, the next pass builds the record from it, after a
+      // restart as well, and calls no judge.
+      const held = this.#drafts.get(key);
+      const store = this.#cfg.judgedStore;
+      let lost = '';
+      if (held && store) {
+        try {
+          await store.put(`${key}|draft`, { kind: 'draft', ...held });
+        } catch (w) {
+          // The result stays held in memory; only a restart before the record builds would lose it, and the refusal says so.
+          lost = `; the store of judged results did not keep the panel's result (${errorClass(w)}), so a restart before the record builds would run the panel again`;
+        }
+      }
+      const keeps = lost ? `it keeps the panel's result in memory and builds the record again on the next pass${lost}` : "it keeps the panel's result, calls no judge again, and builds the record again on the next pass";
+      return err(problem('adjudicator_unavailable', `this adjudicator could not build the judgment record (${errorClass(e)}); ${keeps}`));
+    }
+    this.#drafts.delete(key);
     return ok({ record, outcome, published: false, ...(contentKey ? { contentKey } : {}) });
   }
 

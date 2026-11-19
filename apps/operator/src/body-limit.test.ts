@@ -7,7 +7,7 @@ import { MAX_CIPHERTEXT_BYTES } from '@holdback/core/store';
 import { simActor } from '@holdback/settlement/sim';
 import { MAX_REPORT_BYTES, MemoryFeedbackStore } from './feedback.js';
 import { fetchHandler } from './fetch.js';
-import { Operator, simRegistry } from './index.js';
+import { BODY_READ_ON_BYTES, bodyCeiling, Operator, simRegistry } from './index.js';
 import { MAX_REGISTRATION_BYTES } from './registrations.js';
 import { world, type World } from './_world.js';
 
@@ -25,6 +25,7 @@ interface Answer {
   body: Record<string, unknown>;
   reused: boolean;
   port: number | undefined;
+  connection?: string | undefined;
 }
 
 /** One request on the given agent; resolves with the answer, rejects with the socket's error (a reset). */
@@ -33,7 +34,7 @@ function send(agent: Agent, method: string, path: string, body?: Buffer): Promis
     const req = request({ host: url.hostname, port: url.port, method, path, agent, headers: { 'content-type': 'application/json', 'idempotency-key': `k-${path}-${body?.length ?? 0}` } }, (res) => {
       const chunks: Buffer[] = [];
       res.on('data', (c: Buffer) => chunks.push(c));
-      res.on('end', () => resolve({ status: res.statusCode ?? 0, body: JSON.parse(Buffer.concat(chunks).toString('utf8') || '{}') as Record<string, unknown>, reused: req.reusedSocket, port: req.socket?.localPort }));
+      res.on('end', () => resolve({ status: res.statusCode ?? 0, body: JSON.parse(Buffer.concat(chunks).toString('utf8') || '{}') as Record<string, unknown>, reused: req.reusedSocket, port: req.socket?.localPort, connection: res.headers.connection }));
       res.on('error', reject);
     });
     req.on('error', reject);
@@ -68,6 +69,17 @@ describe('an oversized JSON body (T-559)', () => {
     });
   }
 
+  // T-574 review (Medium): past the route's ceiling the reader stops, so the upload is reset rather than answered, as
+  // past 10 MiB before. The trade: a refusal costs at most the ceiling to read. On a new connection, so the reset reaches
+  // no other request.
+  for (const route of ROUTES) {
+    it(`refuses ${route.name} past its ceiling with a reset or a 413, never an answer`, async () => {
+      const over = bodyCeiling(route.limit) + 1024 * 1024;
+      const refused = await send(false as unknown as Agent, 'POST', route.path, jsonOf(over)).then((a) => a.status, (e: NodeJS.ErrnoException) => e.code ?? 'error');
+      expect([413, 'ECONNRESET', 'EPIPE'], `${route.path} ${over}: ${String(refused)}`).toContain(refused);
+    });
+  }
+
   // A boundary check, not evidence of the fix: a 16 KiB body arrives in one chunk, so the old reader passed this too.
   it('still refuses a body at exactly the limit plus one byte, and accepts one at the limit as a body to parse', async () => {
     const agent = new Agent({ keepAlive: true, maxSockets: 1 });
@@ -82,13 +94,17 @@ describe('an oversized JSON body (T-559)', () => {
     }
   });
 
-  // The cost of refusing is bounded: a body far past the ceiling is read up to the ceiling and no further, then refused
-  // with the same 413. Counted at the source, through the Worker's fetch entry. The body ends 4 MiB past the ceiling, so
-  // a reader with no ceiling reads all of it and fails the count instead of hanging.
-  it('stops reading a body far past the fixed ceiling at the ceiling and refuses it with the same 413', async () => {
+  // The cost of refusing is bounded by the route's own limit (T-574): a body far past it is read up to the route's
+  // ceiling, its limit plus BODY_READ_ON_BYTES, and no further, then refused with the same 413. Before, every JSON route
+  // read on to the ciphertext ceiling (10 MiB). Counted at the source, through the Worker's fetch entry. The body ends
+  // 4 MiB past the ciphertext ceiling, so a reader with no ceiling reads all of it and fails the count instead of hanging.
+  it('stops reading a body far past its limit at the route\'s own ceiling and refuses it with the same 413', async () => {
     const op = new Operator({ settlement: w.chain, registry: simRegistry(w.chain), signerKey: simActor('op-ceiling', 'operator').key, operatorId: 'op-ceiling', env: {}, baseUrl: 'https://op.example.test', feedback: { store: new MemoryFeedbackStore() } });
     const chunk = new Uint8Array(64 * 1024).fill(0x61);
-    for (const [path, limit] of [['/v1/feedback', MAX_REPORT_BYTES], ['/v1/commitments', 1_048_576]] as const) {
+    for (const { path, limit } of ROUTES) {
+      const ceiling = bodyCeiling(limit);
+      expect(ceiling, path).toBe(Math.min(MAX_CIPHERTEXT_BYTES, limit + BODY_READ_ON_BYTES));
+      expect(ceiling, path).toBeLessThan(MAX_CIPHERTEXT_BYTES);
       let pulled = 0;
       const endless = new ReadableStream<Uint8Array>({
         pull(c) {
@@ -99,9 +115,9 @@ describe('an oversized JSON body (T-559)', () => {
       }, { highWaterMark: 0 });
       const r = await fetchHandler(op)(new Request(`https://op.example.test${path}`, { method: 'POST', headers: { 'content-type': 'application/json', 'idempotency-key': 'endless' }, body: endless, duplex: 'half' } as RequestInit));
       expect([r.status, ((await r.json()) as { maxBytes: number }).maxBytes], path).toEqual([413, limit]);
-      // Read past the limit, to the ceiling, and stopped within a chunk or two of it.
-      expect(pulled, path).toBeGreaterThan(MAX_CIPHERTEXT_BYTES);
-      expect(pulled, path).toBeLessThanOrEqual(MAX_CIPHERTEXT_BYTES + 2 * chunk.length);
+      // Read past the limit, to the route's ceiling, and stopped within a chunk or two of it.
+      expect(pulled, path).toBeGreaterThan(ceiling);
+      expect(pulled, path).toBeLessThanOrEqual(ceiling + 2 * chunk.length);
     }
   });
 });

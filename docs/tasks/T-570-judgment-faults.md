@@ -5,7 +5,7 @@
 - **Depends on:** none
 - **Paths this task may touch:** `packages/judgment/src/*.test.ts`, `apps/adjudicator/src/*.test.ts` (new files only), `fixtures/scenarios/`, `docs/tasks/T-570-judgment-faults.md`. With the coordinator's word of 2026-11-19, for the defects the proofs found: `packages/judgment/src/pipeline.ts` and `checks/index.ts` (PR 722); `apps/adjudicator/src/service.ts` (PR 729); for `agg-4` (PR 730), `packages/judgment/src/aggregate.ts`, `kept.ts` and `kept/agg-3.ts`, the `agg-4` entry in `apps/adjudicator/src/kept-policies.json` (agreed with T-549's lane), `fixtures/replay/kept-policies.json`, `packages/testkit/src/runner.test.ts`, `site/setup.mjs` (rebuilt), ADR-0043, D87 in `docs/decisions-today.md`, and the matching lines of `docs/judgment-and-defenses.md` and `docs/neutrality.md`.
 - **Human gate:** no
-- **Status:** in progress
+- **Status:** done
 - **Agent/session:** T-570 session, 2026-11-19
 - **Roadmap row:** N209
 
@@ -23,11 +23,11 @@ Non-goals: live model calls (scripted judges only), changes to the aggregation r
 
 ## Acceptance criteria
 
-- [ ] A table maps each clause of the bar and each fault class to the test or fixture that proves it, with "pass" as measured by the suite.
-- [ ] Every gap has a new test, written before any fix.
-- [ ] A failing proof is reported to the coordinator with the failing test and the smallest fix as a proposal, red-teamed, before any shared source changes.
-- [ ] The new tests are merged.
-- [ ] The Handoff lists any fault class the tests could not reach, and why.
+- [x] A table maps each clause of the bar and each fault class to the test or fixture that proves it, with "pass" as measured by the suite.
+- [x] Every gap has a new test, written before any fix.
+- [x] A failing proof is reported to the coordinator with the failing test and the smallest fix as a proposal, red-teamed, before any shared source changes.
+- [x] The new tests are merged.
+- [x] The Handoff lists any fault class the tests could not reach, and why.
 
 ## Evidence
 
@@ -39,12 +39,12 @@ Status words: **pass** (the suite shows it passing), **defect** (the suite recor
 | --- | --- | --- | --- |
 | No re-roll by a verdict | Panel selection takes no verdict; anyone recomputes the panel from the seed | `packages/judgment/src/panel.test.ts` ("anyone can recompute the panel", "the seed decides"); `panel.ts` takes no verdict | pass |
 | No re-roll by a fault | A fault seats no other judge; a retry repeats the same request; a second pass calls no judge | `apps/adjudicator/src/judge-faults.test.ts` ("a judge fault never re-rolls the commit-reveal panel", one case per fault class); `packages/judgment/src/faults.test.ts` ("only the seated judges are called") | pass |
-| No re-roll after a later failure | A failed submission, publication or restart signs the kept result without calling the judges | `apps/adjudicator/src/service.test.ts` ("never re-rolls: a failed submission", "never re-roll after a post-panel failure", "a restart after the panel returned") | pass |
+| No re-roll after a later failure | A failed submission, publication, restart or record build signs the kept result without calling the judges | `apps/adjudicator/src/service.test.ts` ("never re-rolls: a failed submission", "never re-roll after a post-panel failure", "a restart after the panel returned"); `judge-faults.test.ts` ("a record that cannot be built never runs the panel again", 4 cases: two refused passes, a record that never builds and ends in the default refund, a restart, a tampered delivery or seed) | pass; the record-build case after the service fix (PR 729) |
 | No one-family accept | An accept needs passes from two families | `packages/judgment/src/aggregate.test.ts` ("unanimous pass, one family", "3 pass but only one pass family"); `faults.test.ts` (the other family passing) | pass |
 | No one-family reject | After a fault, no reject rests on one family: valid verdicts from two families (rule 1), and fails from two families (rule 2) | `faults.test.ts` (the other family failing, under `agg-4`; "a deal bound to agg-3 keeps the rule it bound"); `aggregate.test.ts` (the `agg-4` rows and the pinned digests); `judge-faults.test.ts` ("through the adjudicator, agg-4 signs no one-family reject") | pass under `agg-4` (ADR-0043); `agg-3` keeps the one-family reject for the deals bound to it until they settle |
 | No re-roll on a malformed answer | No provider output and no delivered text aborts the panel or the record: a malformed answer is an error for its seat; a lone UTF-16 surrogate anywhere in the draft becomes U+FFFD, so the record always hashes | `faults.test.ts` ("no seat's output aborts the panel", 13 cases); `judge-faults.test.ts` ("a malformed answer never re-runs the panel", 8 cases) | pass, after the fix in `packages/judgment/src/pipeline.ts` (red team H1; the lone-surrogate paths from the review and red team of PR 722) |
 | No judge call before a refusal | Every seat's prompt is built before any judge is called | `faults.test.ts` ("a seat whose criteria order is refused stops the turn before any judge is called") | pass, after the same fix |
-| No one-family decision on the live demo | A retry is answered by the same kind of judge as the first call | none in this PR: `apps/demo-cloud/src/judges.ts` is outside T-570's paths | **defect** (red team H2, testnet only): a live judge's retry past the daily live budget is answered by the scripted judge; proposed as its own task |
+| No one-family decision on the live demo | A retry is answered by the same kind of judge as the first call | none here: `apps/demo-cloud/src/judges.ts` is outside T-570's paths | **defect** (red team H2, testnet only): a live judge's retry past the daily live budget is answered by the scripted judge; handed to T-574 by the coordinator |
 | A faulty seat is no vote | `passCount`, `failCount` and `validCount` leave faulty seats out | `faults.test.ts` (every case); `judge-faults.test.ts` (the late answer) | pass |
 | SimChain refuses the bond drain (flagged) | A flagged appeal whose judges fault signs reject; the default is refused; the appeal bond pays nothing | `judge-faults.test.ts` ("a judge fault at the appeal does not drain the appeal bond", 16 cases, and a control that shows the drain path pays when the appeal signs nothing); fixtures `attack.injection-splits-appeal-to-default`, `attack.injection-steers-appeal-supermajority`, `attack.injection-steers-appeal-two-families`, `attack.injection-filter-abstain-appeal-default`, `attack.forced-stride-appeal-default` | pass |
 | SimChain bond drain (unflagged) | An unflagged appeal that cannot decide signs nothing, and the default pays the seller compensation from the appeal bond | `judge-faults.test.ts` ("known gap (D27g)", 6 cases; and 2 cases where a filter abstention closes the path); fixture `neutrality.appeal-adjudicator-offline-after-escalation` | known gap: backlog row D27g in `docs/decisions-today.md` |
@@ -75,7 +75,7 @@ Each class was applied to every seat of one family.
 
 ## Handoff
 
-In progress. Merged: PR 719 (the proofs). Open in order: PR 722 (no seat's output aborts the panel), the service PR that keeps the panel's result before the record is built (branch `t-570-keep-draft`), and the `agg-4` PR (branch `t-570-agg-4`, ADR-0043, D87).
+Done with this PR's merge. Merged: PR 719 (the proofs), PR 722 (no seat's output aborts the panel), PR 729 (the service keeps the panel's result before the record is built) and PR 730 (aggregation `agg-4` as a kept version, ADR-0043, D87). The red teams' and the research pass's reports are scratch files on the maintainer's machine, `reports/scratch/t570-*.md`, not committed; the tables above carry their measured findings.
 
 ### The two deploys for `agg-4`, the coordinator's, each on Rafa's word
 

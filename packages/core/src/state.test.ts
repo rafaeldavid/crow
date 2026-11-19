@@ -1,10 +1,10 @@
 import { readFileSync } from 'node:fs';
-import { keccak256, type Hex } from 'viem';
+import { keccak256, stringToBytes, type Hex } from 'viem';
 import fc from 'fast-check';
 import { describe, expect, it } from 'vitest';
 import { DRAND_QUICKNET, DRAND_QUICKNET_CHAIN_HASH, roundAfter } from './beacon.js';
 import { rulebookHash } from './canonical.js';
-import { commitmentId, deliveryHash, termsOf } from './eip712.js';
+import { commitmentId, deliveryHash, holdbackDomain, messageDigest, termsOf } from './eip712.js';
 import type { TokenAmount } from './money/index.js';
 import { parseAppeal, parseClub, parseCommitment, parseDelivery, parseMessage } from './parse.js';
 import { PROBLEM_TYPES, type ProblemType } from './problem.js';
@@ -1287,6 +1287,45 @@ describe('phase_one profile', () => {
     const s = phaseOne([...toDeliveredP1, ev.decide('primary', 'escalate', escalatedAt), ev.decide('appeal', 'accept', escalationDecideBy.replace('10:06', '10:02'))]);
     expect(s.kind).toBe('Released');
     if (s.kind === 'Released') expect(s.via.kind).toBe('escalation');
+  });
+
+  // T-574: one rule for "no appeal ground". The phase-one rules contract refuses a decision whose appealGroundHash is not
+  // keccak256("") at every role (HoldbackRules), and the message encodes an absent ground as "". So core refuses a
+  // ground exactly when the contract would, and a decision with "" lands as the one without the field does.
+  describe('no appeal ground, as the rules contract reads it (T-574)', () => {
+    const EMPTY = keccak256(stringToBytes(''));
+    const contractRefuses = (g: string | undefined) => keccak256(stringToBytes(g ?? '')) !== EMPTY;
+    const grounds = fc.oneof(fc.constant(undefined), fc.constant(''), fc.constantFrom('wrong-outcome', 'missing-or-wrong-key', 'policy-or-panel-violation', 'mislabeled-model'), fc.string({ minLength: 1 }));
+    const ground = (g: string | undefined): Partial<Decision> => (g === undefined ? {} : { appealGround: g as NonNullable<Decision['appealGround']> });
+    const turns: Array<[string, () => EscrowState, (g: string | undefined) => EscrowEvent]> = [
+      ['the primary', () => phaseOne(toDeliveredP1), (g) => ev.decide('primary', 'reject', T.decide, ground(g))],
+      ['the fallback', () => phaseOne([...toDeliveredP1, ev.at('trigger_fallback', T.judgeBy)]), (g) => ev.decide('fallback', 'reject', T.fallbackDecide, ground(g))],
+      ['the appeal adjudicator on an escalation', () => phaseOne([...toDeliveredP1, ev.decide('primary', 'escalate', escalatedAt)]), (g) => ev.decide('appeal', 'accept', escalationDecideBy.replace('10:06', '10:02'), ground(g))],
+    ];
+    for (const [who, from, decide] of turns) {
+      it(`${who}: a ground is refused exactly when the contract refuses it, and "" lands as no ground does`, () => {
+        const s = from();
+        const bare = step(s, fill(s, decide(undefined)), 'phase_one');
+        if (!bare.ok) throw new Error(bare.error.detail);
+        for (const g of [undefined, '', 'wrong-outcome']) expect(step(s, fill(s, decide(g)), 'phase_one').ok, String(g)).toBe(!contractRefuses(g));
+        fc.assert(
+          fc.property(grounds, (g) => {
+            const r = step(s, fill(s, decide(g)), 'phase_one');
+            expect(r.ok).toBe(!contractRefuses(g));
+            if (r.ok) expect(r.value.kind).toBe(bare.value.kind);
+            else expect(r.error.type).toBe('invalid_terms');
+          }),
+        );
+      });
+    }
+
+    it('a decision with "" and the same decision without the field are one signed message', () => {
+      const without = { ...decision('primary', 'accept') };
+      delete without.appealGround;
+      const domain = holdbackDomain(31337, outsider);
+      expect(messageDigest(domain, { ...without, appealGround: '' as NonNullable<Decision['appealGround']> })).toBe(messageDigest(domain, without));
+      expect(messageDigest(domain, { ...without, appealGround: 'wrong-outcome' })).not.toBe(messageDigest(domain, without));
+    });
   });
 });
 

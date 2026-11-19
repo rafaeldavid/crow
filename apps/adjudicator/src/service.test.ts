@@ -26,7 +26,7 @@ import { demoCsv, DOMAIN, fakeRelays, makeCommitment, party, TestSettlement, tus
 import { drandQuicknet } from './drand.js';
 import { defaultPolicy, policyHashOf } from './policy.js';
 import { panelSeed, simRoundAt, type RandomnessSource } from './randomness.js';
-import { Adjudicator, DEFAULT_APPEAL_LIMITS, recordHashOf, type AdjudicatorConfig, type JudgedStore, type KeptJudgment } from './service.js';
+import { Adjudicator, DEFAULT_APPEAL_LIMITS, recordHashOf, type AdjudicatorConfig, type JudgedStore, type KeptDraft, type KeptJudgment } from './service.js';
 
 const entry = (id: string, family: string, provider: 'anthropic' | 'openai-compatible') => ({ id, provider, family, model: `${id}-20260601`, status: 'active' as const });
 const REGISTRY: RegistryDoc = {
@@ -850,7 +850,7 @@ describe('never re-roll after a post-panel failure (review item 1)', () => {
 describe('a judged result survives a restart (A-4)', () => {
   /** A store as a Durable Object keeps it: values are copied in and out. */
   const memory = (fail: { put?: number; get?: number } = {}) => {
-    const rows = new Map<string, KeptJudgment>();
+    const rows = new Map<string, KeptJudgment | KeptDraft>();
     const store: JudgedStore = {
       get: async (k) => {
         if (fail.get && fail.get-- > 0) throw new Error('store down');
@@ -880,7 +880,7 @@ describe('a judged result survives a restart (A-4)', () => {
     expect(s.state(id).kind).toBe('Released');
     expect(again.calls).toHaveLength(0);
     const [d] = s.decisions(id) as [Decision];
-    expect(d.judgmentRecordHash).toBe([...kept.rows.values()][0]!.record.recordHash);
+    expect(d.judgmentRecordHash).toBe(([...kept.rows.values()][0] as KeptJudgment).record.recordHash);
     expect(s.records.size).toBe(1);
     // The kept row holds the record and the outcome, never a key.
     expect(Object.keys([...kept.rows.values()][0]!).sort()).toEqual(['outcome', 'published', 'record']);
