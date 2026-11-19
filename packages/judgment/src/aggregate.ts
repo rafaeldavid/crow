@@ -210,7 +210,7 @@ export function aggregate(input: AggregateInput): Aggregate {
   // T-570 (red team M1): after a fault, the votes that carry a reject come from two families, as the passes behind an
   // accept always must. A seat faulted when it returned no valid verdict (a timeout, an error, a filter abstention or a
   // schema-valid abstain). With every seat answering, the rule is agg-3's: two fails from one family still outvote one
-  // pass from another, which is the existing design.
+  // pass from another, which is the existing design. Rule 1 above already escalates a one-family panel.
   const faulted = n < input.verdicts.length;
   const failFamilies = new Set(fail.map((v) => v.family)).size;
   const rejectShare = meets(fail.length, thresholds.rejectSupermajority, n) && fail.length > pass.length;

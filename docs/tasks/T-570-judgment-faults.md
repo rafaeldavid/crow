@@ -3,7 +3,7 @@
 - **Lane:** judgment
 - **Phase:** 2
 - **Depends on:** none
-- **Paths this task may touch:** `packages/judgment/src/*.test.ts`, `apps/adjudicator/src/*.test.ts` (new files only), `fixtures/scenarios/`, `docs/tasks/T-570-judgment-faults.md`. Source in `packages/judgment` and `apps/adjudicator` only with the coordinator's word (T-549 edits `apps/adjudicator` and `packages/settlement`).
+- **Paths this task may touch:** `packages/judgment/src/*.test.ts`, `apps/adjudicator/src/*.test.ts` (new files only), `fixtures/scenarios/`, `docs/tasks/T-570-judgment-faults.md`. With the coordinator's word of 2026-11-19, for the defects the proofs found: `packages/judgment/src/pipeline.ts` and `checks/index.ts` (PR 722); `apps/adjudicator/src/service.ts` (PR 729); for `agg-4` (PR 730), `packages/judgment/src/aggregate.ts`, `kept.ts` and `kept/agg-3.ts`, the `agg-4` entry in `apps/adjudicator/src/kept-policies.json` (agreed with T-549's lane), `fixtures/replay/kept-policies.json`, `packages/testkit/src/runner.test.ts`, `site/setup.mjs` (rebuilt), ADR-0043, D87 in `docs/decisions-today.md`, and the matching lines of `docs/judgment-and-defenses.md` and `docs/neutrality.md`.
 - **Human gate:** no
 - **Status:** in progress
 - **Agent/session:** T-570 session, 2026-11-19

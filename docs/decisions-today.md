@@ -1662,7 +1662,7 @@ The build is not started; it opens as its own task on Rafa's word.
 
 - **Rule 1.** When the valid verdicts come from fewer than two families, the case escalates, at every role.
 - **Rule 2.** When any seat returned no valid verdict, a reject also needs fail verdicts from two families, as an accept always needs passes from two.
-- **What does not change.** No decision where every seat answered: two fails from one family still outvote one pass from another, the existing design. No flagged case. At the shipped appeal panels, rule 1 changes no pattern and rule 2 changes 4 of 3,125 (measured).
+- **What does not change.** No decision where every seat answered, on any panel of two or more families (the only panels the schemas allow): two fails from one family still outvote one pass from another, the existing design. No flagged case. At the shipped appeal panels, rule 1 changes no pattern and rule 2 changes 4 of 3,125 (measured).
 - **Version.** The rules are aggregation `agg-4`. `agg-3` stays frozen for the deals bound to it (ADR-0036). `agg-4` merges as a kept version, bound to no new deal. The default moves in a second deploy, on Rafa's word.
 
 **Dropped the same day:** counting every seated seat in both supermajorities (the coordinator's first answer to the red team's M1). At the shipped appeal it turned 40 rejects and 36 accepts of 3,125 patterns into no decision, and 36 of those rejects had fails from two families (measured, research pass). Rule 2 closes the case the red team raised with 4.

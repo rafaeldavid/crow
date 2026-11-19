@@ -15,7 +15,7 @@ Labels: **measured** (run on branch `t-570-agg-4`, or in the scratch tests of th
 
 1. **No one-family decision.** When the valid verdicts come from fewer than two families, the case escalates. This holds at every role.
 2. **After a fault, a reject needs fails from two families,** as an accept always needs passes from two. A seat faulted when it returned no valid verdict.
-3. **Neither rule changes a decision where every seat returned a valid verdict.** Two fails from one family still outvote one pass from another family. That asymmetry is the existing design, and `agg-4` does not change it.
+3. **Neither rule changes a decision where every seat returned a valid verdict,** on any panel of two or more families, the only panels the schemas allow. Two fails from one family still outvote one pass from another family. That asymmetry is the existing design, and `agg-4` does not change it.
 4. **A new version.** The rules ship as `agg-4`. `agg-3` stays frozen for the deals bound to it (ADR-0036). `agg-4` merges as a kept version, bound to no new deal; the default moves in a second deploy, on Rafa's word.
 
 ## Context
@@ -64,7 +64,7 @@ Over every pattern of five outcomes per seat (pass, fail, schema-valid abstain, 
 | Appeal, 5 seats from 3 families (2, 2, 1), minimum 4 valid, at 2/3 | 3,125 | none |
 | Appeal, 5 seats from 2 families (3, 2), minimum 4 valid, at 2/3 | 3,125 | 4 rejects become escalations |
 
-No decision changes where every seat returned a valid verdict, and no flagged case changes [measured]. `aggregate.test.ts` pins each kept version to two digests: one on the existing corpus, and one on a corpus of unflagged panels with faults, where the two versions differ. Removing rule 2 changes the second digest, so the pin covers it [measured].
+No decision changes where every seat returned a valid verdict on a panel of two or more families, and no flagged case changes [measured]. On such panels rule 1 changes no decision that rule 2 does not also change; it adds its own reason text, and it states the principle for every role. Rule 1 alone changes a decision only on a one-family panel, which `terms.ts` accepts with `minFamilies` 1 but the schemas refuse: there an all-answered reject becomes an escalation (2 of 3,000 corpus samples, review of PR 730) [measured]. `aggregate.test.ts` pins these counts ("ADR-0043 section 3"). `aggregate.test.ts` pins each kept version to two digests: one on the existing corpus, and one on a corpus of unflagged panels with faults, where the two versions differ. Removing rule 2 changes the second digest, so the pin covers it [measured].
 
 ### 4. Where the rules do not reach
 

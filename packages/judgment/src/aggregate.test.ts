@@ -190,7 +190,7 @@ describe('aggregate: the decision table is pinned to AGGREGATION_VERSION', () =>
   const PINNED: Readonly<Record<string, string>> = {
     // Re-pinned for D27b/c before agg-3 reached main (no policy outside this repository bound the earlier table).
     'agg-3': '4cbc921977c5e5ad282d4eb1b66f197222b5fd6a04b25d3de17b913db6e50f25',
-    // T-570: agg-3 plus the two-family rule for every decision.
+    // T-570, ADR-0043: agg-3 plus two rules for judge faults (valid verdicts from two families; after a fault, fails from two).
     'agg-4': 'ce2941a18e78b435a7c7b5011562b7e79f098db8ea6925a5702c878846b7de52',
   };
   // Built inside each test: the arbitraries are declared further down this file.
@@ -214,24 +214,7 @@ describe('aggregate: the decision table is pinned to AGGREGATION_VERSION', () =>
     'agg-3': '54149ef79b20c9a607bcad0f694be045ae556effc4ab0d10915e8f1f7e488b21',
     'agg-4': '164860c833455d206e1cf3910fc5e6a5467105e77d026d36b8990a844a028e6d',
   };
-  const panelCorpus = () =>
-    fc.sample(
-      fc.record({
-        verdicts: fc.array(fc.record({ family: fc.constantFrom('claude', 'gpt', 'gemini'), kind: fc.constantFrom('pass', 'fail', 'abstain', 'invalid') }), { minLength: 3, maxLength: 7 }),
-        minValid: fc.integer({ min: 1, max: 4 }),
-        accept: arbFraction,
-        reject: arbFraction,
-        appeal: fc.constantFrom(undefined, 'escalated' as const, 'party' as const),
-      }),
-      { seed: 5701, numRuns: 3000 },
-    ).map((a): AggregateInput => ({
-      checks: [ok('cols')],
-      rubric: { ...RUBRIC, passThreshold: 0 },
-      screenFlagged: false,
-      ...(a.appeal ? { appeal: a.appeal } : {}),
-      verdicts: a.verdicts.map((x) => (x.kind === 'invalid' ? invalid(x.family) : v(x.family, x.kind as JudgeVerdict['overall']))),
-      thresholds: { minValid: a.minValid, acceptSupermajority: a.accept, rejectSupermajority: a.reject },
-    }));
+  const panelCorpus = unflaggedPanelCorpus;
   const panelDigestOf = (impl: { aggregate: typeof aggregate }) => createHash('sha256').update(panelCorpus().map((i) => impl.aggregate(i).decision).join(',')).digest('hex');
   it.each([...KEPT.aggregations.keys()])('kept %s keeps its pinned digest on unflagged panels with faults', (version) => {
     const digest = panelDigestOf(KEPT.aggregations.get(version)!);
@@ -391,11 +374,83 @@ describe('aggregate: properties', () => {
       expect(aggregate(i).decision).toBe(oracle(i));
     }), { seed: 6, numRuns: 2000 });
   });
+
+  // T-570: the corpus above seldom reaches the panel's own rules, so the oracle also runs over unflagged panels with faults.
+  it('agrees with the oracle on every unflagged panel with faults in the pinned corpus', () => {
+    for (const i of unflaggedPanelCorpus()) expect(aggregate(i).decision).toBe(oracle(i));
+  });
 });
 
 describe('aggregate: the tie guard is defense in depth', () => {
   it('a 2-2 split escalates even under a non-majority fraction (which the pipeline refuses)', () => {
     const half = { minValid: 2, acceptSupermajority: frac(1, 2), rejectSupermajority: frac(1, 2) };
     expect(decide({ thresholds: half, verdicts: [v('a', 'pass'), v('b', 'pass'), v('c', 'fail'), v('d', 'fail')] })).toBe('escalate');
+  });
+});
+
+/** Unflagged panels of 3 to 7 seats with faults and abstentions, at the primary and both appeals (T-570). */
+function unflaggedPanelCorpus(): AggregateInput[] {
+  return fc
+    .sample(
+      fc.record({
+        verdicts: fc.array(fc.record({ family: fc.constantFrom('claude', 'gpt', 'gemini'), kind: fc.constantFrom('pass', 'fail', 'abstain', 'invalid') }), { minLength: 3, maxLength: 7 }),
+        minValid: fc.integer({ min: 1, max: 4 }),
+        accept: arbFraction,
+        reject: arbFraction,
+        appeal: fc.constantFrom(undefined, 'escalated' as const, 'party' as const),
+      }),
+      { seed: 5701, numRuns: 3000 },
+    )
+    .map((a): AggregateInput => ({
+      checks: [ok('cols')],
+      rubric: { ...RUBRIC, passThreshold: 0 },
+      screenFlagged: false,
+      ...(a.appeal ? { appeal: a.appeal } : {}),
+      verdicts: a.verdicts.map((x) => (x.kind === 'invalid' ? invalid(x.family) : v(x.family, x.kind as JudgeVerdict['overall']))),
+      thresholds: { minValid: a.minValid, acceptSupermajority: a.accept, rejectSupermajority: a.reject },
+    }));
+}
+
+// ADR-0043 section 3: what agg-4 changes against agg-3, over every pattern of five outcomes per seat (pass, fail,
+// schema-valid abstain, timeout, filter abstention) on the shipped panels. Pinned so the ADR's counts stay reproducible.
+describe('aggregate: ADR-0043 section 3, the patterns agg-4 changes', () => {
+  const OUT = ['pass', 'fail', 'abstain', 'timeout', 'filter'] as const;
+  const changes = (families: string[], minValid: number, appeal?: 'escalated' | 'party') => {
+    const agg3 = KEPT.aggregations.get('agg-3')!;
+    const thresholds = { minValid, acceptSupermajority: frac(2, 3), rejectSupermajority: frac(2, 3) };
+    const out: Record<string, number> = {};
+    let allAnswered = 0;
+    for (let k = 0; k < OUT.length ** families.length; k++) {
+      const outs = families.map((_, j) => OUT[Math.floor(k / OUT.length ** j) % OUT.length]!);
+      const filtered = outs.filter((o) => o === 'filter').length;
+      const i: AggregateInput = {
+        checks: [ok('cols')],
+        rubric: { ...RUBRIC, passThreshold: 0 },
+        screenFlagged: false,
+        ...(appeal ? { appeal } : {}),
+        appealFamilies: 2,
+        filterAbstentions: filtered,
+        verdicts: outs.map((o, j) => (o === 'timeout' || o === 'filter' ? invalid(families[j]!) : v(families[j]!, o, o === 'pass' ? [4, 4, 4] : [0, 0, 0]))),
+        thresholds,
+        escalate: Array.from({ length: filtered }, () => 'judge output rejected by a filter (schema)'),
+      };
+      const a = agg3.aggregate(i).decision;
+      const b = aggregate(i).decision;
+      if (a !== b) {
+        out[`${a}->${b}`] = (out[`${a}->${b}`] ?? 0) + 1;
+        if (outs.every((o) => o === 'pass' || o === 'fail')) allAnswered++;
+      }
+    }
+    return { ...out, allAnswered };
+  };
+  it.each([
+    ['primary, claude, claude, gpt', ['claude', 'claude', 'gpt'], 2, undefined, { 'reject->escalate': 2, allAnswered: 0 }],
+    ['primary, three families', ['claude', 'gpt', 'qwen'], 2, undefined, { allAnswered: 0 }],
+    ['escalated appeal, families 2, 2, 1', ['claude', 'claude', 'gpt', 'gpt', 'qwen'], 4, 'escalated', { allAnswered: 0 }],
+    ['party appeal, families 2, 2, 1', ['claude', 'claude', 'gpt', 'gpt', 'qwen'], 4, 'party', { allAnswered: 0 }],
+    ['escalated appeal, families 3, 2', ['claude', 'claude', 'claude', 'deepseek', 'deepseek'], 4, 'escalated', { 'reject->escalate': 4, allAnswered: 0 }],
+    ['party appeal, families 3, 2', ['claude', 'claude', 'claude', 'deepseek', 'deepseek'], 4, 'party', { 'reject->escalate': 4, allAnswered: 0 }],
+  ] as const)('%s', (_name, families, minValid, appeal, expected) => {
+    expect(changes([...families], minValid, appeal)).toEqual(expected);
   });
 });
