@@ -515,7 +515,7 @@ const FEATURES = [
   ['Made for Machines', 'One API. Every response reports its token cost, so agents can budget.', 'code'],
   ['High Speed, Low Cost', 'Settles when checks pass. No invoices, no marketplace cut.', 'bolt'],
   ['Frontier AI Verification', 'Have AI review the work before payment, when you need it.', 'check'],
-  ['Your Existing Rails', 'Fund by card or through your current payment\u00a0provider.', 'card', 'soon'],
+  ['Spend Controls', 'You load your agent\u2019s budget by card or bank. It can\u2019t spend past\u00a0it.', 'card', 'soon'],
   ['Private Delivery', 'The seller encrypts the work. Only the buyer and the reviewer can open it.', 'eye'],
 ];
 /** The headline's three lines, shown in turn (Rafa, 2026-11-12). */
