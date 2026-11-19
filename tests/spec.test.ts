@@ -10,7 +10,7 @@ let exampleResults: ReturnType<typeof validateExamplesFresh> | undefined;
 const loadSpec = () => (spec ??= loadSpecFresh());
 const validateExamples = () => (exampleResults ??= validateExamplesFresh(loadSpec()));
 
-const V = 'https://holdback.dev/schemas/v0.11';
+const V = 'https://holdback.dev/schemas/v0.12';
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
 const example = (name: string): any => structuredClone(loadSpec().examples.find((e: { name: string }) => e.name === name).data);
 
@@ -75,14 +75,73 @@ describe('spec/', () => {
   // ADR-0023 and ADR-0024: v0.7 and v0.8 were additive and kept the signed encoding at 0.6. ADR-0029: v0.9 changes
   // EarlyAccept and Decision, so the EIP-712 domain version and commitment.schemaVersion move to 0.7. ADR-0030: v0.10
   // adds AdjudicatorRegistration, a new type, and keeps both at 0.7. ADR-0033: v0.11 adds the buyer's payment address
-  // and the seller's payout address to the terms, so both move to 0.8.
-  it('moves every schema $id to v0.11 and the commitment schemaVersion to 0.8', () => {
+  // and the seller's payout address to the terms, so both move to 0.8. ADR-0040 and ADR-0041: v0.12 widens the parties'
+  // signatures and changes no signed struct, so both stay at 0.8.
+  it('moves every schema $id to v0.12 and keeps the commitment schemaVersion at 0.8', () => {
     const { schemas, ajv } = loadSpec();
-    for (const id of schemas.values()) expect(id).toMatch(/\/schemas\/v0\.11\//);
+    for (const id of schemas.values()) expect(id).toMatch(/\/schemas\/v0\.12\//);
     const validate = ajv.getSchema(`${V}/commitment.schema.json`);
     const c = example('commitment');
     expect(c.schemaVersion).toBe('0.8');
     c.schemaVersion = '0.7';
+    expect(validate(c)).toBe(false);
+  });
+
+  // ADR-0040 §5 and ADR-0041 (D82, D84): a buyer's and a seller's signatures are PartySignature, any non-empty bytes, so a
+  // contract signer's ERC-1271 signature travels; every other signer keeps the 65-byte Signature.
+  const sig = (bytes: number) => `0x${'ab'.repeat(bytes)}`;
+  const agree = () => ({ type: 'Agree', commitmentId: `0x${'11'.repeat(32)}`, buyer: `0x${'22'.repeat(20)}`, nonce: `0x${'33'.repeat(32)}`, expiresAt: '2026-11-20T00:00:00Z', signature: sig(65) });
+  const offer = () => ({ type: 'Offer', commitmentId: `0x${'11'.repeat(32)}`, seller: `0x${'44'.repeat(20)}`, nonce: `0x${'33'.repeat(32)}`, expiresAt: '2026-11-20T00:00:00Z', signature: sig(65) });
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  type Site = [label: string, schema: string, make: () => any, path: string[]];
+  const partySites: Site[] = [
+    ['the seller on the terms', 'commitment', () => example('commitment'), ['signatures', 'seller']],
+    ['the buyer on the terms', 'commitment', () => example('commitment'), ['signatures', 'buyer']],
+    ['the seller on a delivery', 'delivery', () => example('delivery'), ['signature']],
+    ['an Offer', 'messages', offer, ['signature']],
+    ['an Agree', 'messages', agree, ['signature']],
+    ['an EarlyAccept', 'messages', () => example('messages.early-accept'), ['signature']],
+    ['a Dispute', 'messages', () => example('messages.dispute'), ['signature']],
+    ['the buyer on a MutualSettlement', 'messages', () => example('messages.mutual-settlement'), ['buyerSignature']],
+    ['the buyer on a Publish', 'messages', () => example('messages.publish'), ['buyerSignature']],
+    ['the seller on a MutualSettlement', 'messages', () => example('messages.mutual-settlement'), ['sellerSignature']],
+    ['the seller on a Publish', 'messages', () => example('messages.publish'), ['sellerSignature']],
+    ['an appeal', 'appeal', () => example('appeal'), ['signature']],
+  ];
+  const keySites: Site[] = [
+    ['a Decision', 'messages', () => example('messages.decision'), ['signature']],
+    ['an AdjudicatorAcceptance', 'messages', () => example('messages.acceptance'), ['signature']],
+    ['the ERC-3009 funding authorization', 'messages', () => example('messages.funding'), ['signature']],
+    ['the operator fee transfer', 'messages', () => example('messages.transfer'), ['signature']],
+    ['a ReadToken', 'messages', () => example('messages.read-token'), ['signature']],
+    ['a Delegation', 'messages', () => example('messages.delegation'), ['signature']],
+  ];
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  const withSig = (make: () => any, path: string[], value: string) => {
+    const doc = make();
+    let at = doc;
+    for (const k of path.slice(0, -1)) at = at[k];
+    at[path[path.length - 1]!] = value;
+    return doc;
+  };
+
+  it.each(partySites)('takes a contract signature of any length from %s, and refuses one that is empty or malformed', (_, schema, make, path) => {
+    const validate = loadSpec().ajv.getSchema(`${V}/${schema}.schema.json`)!;
+    for (const ok of [sig(65), sig(1), sig(64), sig(66), sig(1000)]) expect(validate(withSig(make, path, ok))).toBe(true);
+    for (const bad of ['0x', '0xabc', `0x${'AB'.repeat(65)}`, 'ab'.repeat(65), `0x${'zz'.repeat(65)}`]) expect(validate(withSig(make, path, bad))).toBe(false);
+  });
+
+  it.each(keySites)('keeps exactly 65 bytes for %s', (_, schema, make, path) => {
+    const validate = loadSpec().ajv.getSchema(`${V}/${schema}.schema.json`)!;
+    expect(validate(withSig(make, path, sig(65)))).toBe(true);
+    for (const bad of [sig(64), sig(66), sig(1000), '0x']) expect(validate(withSig(make, path, bad))).toBe(false);
+  });
+
+  it("keeps the adjudicator's acceptance inside the terms at 65 bytes", () => {
+    const validate = loadSpec().ajv.getSchema(`${V}/commitment.schema.json`)!;
+    const c = example('commitment');
+    expect(c.adjudicatorAcceptance).toBeDefined();
+    c.adjudicatorAcceptance.signature = sig(66);
     expect(validate(c)).toBe(false);
   });
 

@@ -1,6 +1,6 @@
 {
   "$schema": "https://json-schema.org/draft/2020-12/schema",
-  "$id": "https://holdback.dev/schemas/v0.11/delivery.schema.json",
+  "$id": "https://holdback.dev/schemas/v0.12/delivery.schema.json",
   "title": "Delivery (encrypted work + escrowed key)",
   "type": "object",
   "required": [
@@ -69,13 +69,14 @@
       "items": {
         "$ref": "common.schema.json#/$defs/EncryptedKey"
       },
-      "description": "The content key encrypted to the primary, fallback and appeal adjudicators, and to the buyer for early acceptance (ADR-0012, ADR-0016)"
+      "description": "The content key encrypted to the primary, fallback and appeal adjudicators (required), and optionally to the buyer for early acceptance (ADR-0012, ADR-0016). A delivery without the buyer's envelope, such as a standing delivery, cannot be accepted early or settled with releaseKey; the buyer's key then comes with an adjudicator's accept (since v0.12, ADR-0040 §2)"
     },
     "submittedAt": {
       "$ref": "common.schema.json#/$defs/Timestamp"
     },
     "signature": {
-      "$ref": "common.schema.json#/$defs/Signature"
+      "$ref": "common.schema.json#/$defs/PartySignature",
+      "description": "The seller's signature over the delivery: a key's 65-byte signature, or a contract seller's ERC-1271 signature (since v0.12, ADR-0040 §5)"
     }
   }
 }

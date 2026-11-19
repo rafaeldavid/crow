@@ -1,6 +1,6 @@
 {
   "$schema": "https://json-schema.org/draft/2020-12/schema",
-  "$id": "https://holdback.dev/schemas/v0.11/messages.schema.json",
+  "$id": "https://holdback.dev/schemas/v0.12/messages.schema.json",
   "title": "Signed protocol messages (EIP-712)",
   "description": "Every state-changing message other than Delivery and Appeal. Each carries its EIP-712 domain implicitly: name Holdback, version 0.8, chainId, verifyingContract (ADR-0016, ADR-0029, ADR-0033).",
   "oneOf": [
@@ -86,7 +86,7 @@
           "$ref": "common.schema.json#/$defs/Timestamp"
         },
         "signature": {
-          "$ref": "common.schema.json#/$defs/Signature"
+          "$ref": "common.schema.json#/$defs/PartySignature"
         }
       }
     },
@@ -119,7 +119,7 @@
           "$ref": "common.schema.json#/$defs/Timestamp"
         },
         "signature": {
-          "$ref": "common.schema.json#/$defs/Signature"
+          "$ref": "common.schema.json#/$defs/PartySignature"
         }
       }
     },
@@ -341,7 +341,7 @@
           "$ref": "common.schema.json#/$defs/Timestamp"
         },
         "signature": {
-          "$ref": "common.schema.json#/$defs/Signature"
+          "$ref": "common.schema.json#/$defs/PartySignature"
         }
       }
     },
@@ -709,7 +709,7 @@
           "$ref": "common.schema.json#/$defs/Timestamp"
         },
         "signature": {
-          "$ref": "common.schema.json#/$defs/Signature"
+          "$ref": "common.schema.json#/$defs/PartySignature"
         },
         "encryptedKeys": {
           "type": "array",
@@ -769,10 +769,10 @@
           "$ref": "common.schema.json#/$defs/Timestamp"
         },
         "buyerSignature": {
-          "$ref": "common.schema.json#/$defs/Signature"
+          "$ref": "common.schema.json#/$defs/PartySignature"
         },
         "sellerSignature": {
-          "$ref": "common.schema.json#/$defs/Signature"
+          "$ref": "common.schema.json#/$defs/PartySignature"
         }
       },
       "if": {
@@ -828,10 +828,10 @@
           "$ref": "common.schema.json#/$defs/Timestamp"
         },
         "buyerSignature": {
-          "$ref": "common.schema.json#/$defs/Signature"
+          "$ref": "common.schema.json#/$defs/PartySignature"
         },
         "sellerSignature": {
-          "$ref": "common.schema.json#/$defs/Signature"
+          "$ref": "common.schema.json#/$defs/PartySignature"
         }
       }
     },

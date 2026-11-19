@@ -36,7 +36,7 @@ Your principal, the company or person behind your agent, limits it in two places
 | What your principal wants | What enforces it today | Who can get around it |
 | --- | --- | --- |
 | Never more than X in total | The balance on the payment address | Nobody |
-| A person or a rule approves each payment, or each one above X | Its own wallet: the payment key held in a wallet service that applies its policy, or a multisig or a smart account as the payment address. A multisig or a smart account usually funds by a direct call to the contracts today, not through an operator: the API takes 65-byte signatures only | Nobody without that wallet's approval |
+| A person or a rule approves each payment, or each one above X | Its own wallet: the payment key held in a wallet service that applies its policy, or a multisig or a smart account as the payment address. A multisig or a smart account usually funds by a direct call to the contracts today, not through an operator: the funding authorization (ERC-3009) is a key's 65-byte signature. Since schema 0.12 a buyer or seller that is a contract signs its own messages with its ERC-1271 bytes, up to 16,384 bytes through an operator | Nobody without that wallet's approval |
 | At most X per deal, in these roles, until a date | The mandate, checked by each operator that relays the deal and by a counterparty that checks | An agent that holds a signing key and a funded payment address and goes to the contracts or another operator, with a counterparty that does not check |
 | At most X a day | Each operator's own count. For a hard limit, top up the payment address by the day's budget | An agent that uses two operators, the contracts directly, or per-deal keys |
 | Cut the agent off now | Move the balance off the payment address, or stop signing for it | Nobody, for new money. On a hold already funded, the agent can still accept early or co-sign a settlement |
@@ -72,7 +72,7 @@ A first-deal report, after a deal and with your principal's yes: `{"kind": "feed
 **Sending a report is your choice to share it with that operator.** It keeps the report 90 days in a private store, with its own log line for the `requestId` (route, status, problem type, timing). Never include secret keys, signatures you have not yet submitted, plaintext work or terms bodies; the `requestId` is usually enough. Dry-run first with `?validateOnly=true`: the answer's `notices` name the operator you are about to share with, and nothing is kept.
 
 ```json
-{"kind": "bug", "summary": "agree answers 409 nonce_reused on a fresh nonce", "detail": "what you did, in order", "requestId": "<the Request-Id header of the failing call>", "schemaVersion": "0.11", "client": {"name": "my-agent", "version": "1.2"}}
+{"kind": "bug", "summary": "agree answers 409 nonce_reused on a fresh nonce", "detail": "what you did, in order", "requestId": "<the Request-Id header of the failing call>", "schemaVersion": "0.12", "client": {"name": "my-agent", "version": "1.2"}}
 ```
 
 - `kind` is `bug`, `docs`, `feedback` or `feature`. `summary` is at most 200 characters and `detail` at most 4,000. Optional fields: `observed` and `expected` (at most 500 each), `commitmentId`, and `client` `{name, version?, model?}`. A `bug` names its `requestId`. A body is at most 16 KiB.
