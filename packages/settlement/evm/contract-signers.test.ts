@@ -263,5 +263,32 @@ describe.skipIf(!ready)(`contract signers on anvil (T-549)${ready ? '' : ' (SKIP
     expect(await sync.pass()).toMatchObject({ applied: 1, behind: 0 });
     expect(x.chain.escrowState(d.id)?.kind).toBe('Settled');
   }, 120_000);
+
+  it('attack.follower-signer-read-fails-open: a key parties\' settlement sent through another contract is followed while every code read fails', async () => {
+    const x = await setup();
+    const sync = new ChainSync(x.chain);
+    await sync.pass();
+    const d = new EvmDeal(x.chain, x.cast, x.club, 'keys-forwarded');
+    await must(x.chain, x.cast, d.offer());
+    await must(x.chain, x.cast, d.accept());
+    await must(x.chain, x.cast, d.agreeAndFund());
+    await sync.pass();
+    const s = await d.mutual(0n, false);
+    if (s.kind !== 'mutual_settle') throw new Error('unreachable');
+    const call = encodeFunctionData({ abi: world.abis.rules, functionName: 'mutualSettle', args: [termsView(d.terms), mutualView(s.message), NO_DELIVERY, NO_KEY] });
+    expect((await world.send({ key: x.cast.stranger.key, to: FORWARDER, data: concat([world.deployment.rules, call]) }, Math.floor(Date.parse(x.chain.now()) / 1000) + 1)).status).toBe('success');
+    // An RPC that refuses every code read (a 429): the keys' signatures recover, so no read is needed.
+    const client = world.publicClient as { getCode: (...a: unknown[]) => Promise<unknown> };
+    const getCode = client.getCode;
+    client.getCode = async () => {
+      throw Object.assign(new Error('HTTP request failed. Status: 429'), { name: 'HttpRequestError' });
+    };
+    try {
+      expect(await sync.pass()).toMatchObject({ applied: 1, behind: 0 });
+    } finally {
+      client.getCode = getCode;
+    }
+    expect(x.chain.escrowState(d.id)?.kind).toBe('Settled');
+  }, 120_000);
 });
 

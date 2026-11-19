@@ -9,7 +9,9 @@ import { encodeFunctionData, parseAbi, type Address, type Hex, type PublicClient
 
 const ERC1271 = parseAbi(['function isValidSignature(bytes32 hash, bytes signature) view returns (bytes4)']);
 const YES_WORD = `${ERC1271_MAGIC}${'0'.repeat(56)}`;
-const EXECUTION = /execution reverted|revert|out of gas|outofgas|invalid opcode|invalidfejump|stack (under|over)flow/i;
+// A halt inside the EVM: geth's and anvil's (revm) names for a revert, out of gas, a bad opcode or jump, the stack, the
+// call depth and the return data (T-549 red team, L1).
+const EXECUTION = /execution reverted|revert|out of gas|outofgas|invalid opcode|invalidfeopcode|opcodenotfound|invalid ?jump|stack ?(under|over)flow|max call depth|calltoodeep|return ?data out of bounds|outofoffset|EVM error/i;
 
 /** True when the error says the call itself failed inside the EVM (a revert, out of gas), not that the request failed. */
 export function executionFailed(e: unknown): boolean {

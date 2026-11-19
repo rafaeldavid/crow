@@ -45,7 +45,7 @@ import {
 } from '@holdback/core';
 import { commitmentIdOf, operationOf, previewSubmission, submissionKeys, submissionsOf, type Operation } from '@holdback/sdk';
 import type { PolicyContext, RelayPolicy } from './policy.js';
-import type { DryRunSubmission, Settlement, SubmitResult } from '@holdback/settlement';
+import { MAX_PARTY_SIGNATURE_BYTES, type DryRunSubmission, type Settlement, type SubmitResult } from '@holdback/settlement';
 import { privateKeyToAccount } from 'viem/accounts';
 import type { Sha256, Signature, Timestamp, TokenAmount } from '@holdback/core';
 import { CryptoError, sha256 } from '@holdback/core/crypto';
@@ -1102,7 +1102,9 @@ export class Operator {
       if (p.commitmentId !== sealed.id) fail('invalid_terms', 'the Publish names another commitment');
       if (LEVEL_RANK[p.level] < LEVEL_RANK[level]) fail('invalid_state', `the level is already ${level}; a Publish only raises it`);
       if (!(Date.parse(this.settlementNow()) < Date.parse(p.expiresAt))) fail('deadline_passed', `the Publish expired at ${p.expiresAt}`);
-      // ADR-0040 §5, D84: either party may be a contract; the settlement layer's contract-signer rule reads it.
+      // ADR-0040 §5, D84: either party may be a contract; the settlement layer's contract-signer rule reads it, within
+      // the relay limit on a party's signature (T-549 red team, L3).
+      for (const sig of [p.buyerSignature, p.sellerSignature]) if ((sig.length - 2) / 2 > MAX_PARTY_SIGNATURE_BYTES) fail('payload_too_large', `a Publish signature is ${Math.ceil((sig.length - 2) / 2)} bytes; this operator relays a party's signature of at most ${MAX_PARTY_SIGNATURE_BYTES} bytes`);
       if (!(await verifyCoSigned(this.domain, p, sealed.buyer, sealed.seller, this.o.settlement.signerCheck?.()))) fail('invalid_signature', 'the Publish is not signed by both the buyer and the seller of these terms');
       level = p.level;
     }
