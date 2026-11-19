@@ -10,12 +10,12 @@ Source: SECURITY.md, "Status", https://github.com/rafaeldavid/holdback/blob/main
 ### Does Crow hold the funds of a deal?
 
 No. When the buyer funds a deal, the payment goes straight into Coinbase's Commerce Payments escrow contract on Ethereum Sepolia, used without changes. The payment never passes through an account that Crow controls.
-Source: contracts/deployments/sepolia.json, https://github.com/rafaeldavid/holdback/blob/main/contracts/deployments/sepolia.json; The escrow contract on Etherscan, https://sepolia.etherscan.io/address/0x8ef2b0Bc9304Fd4D506b5410B35Cc1e2D2BB4357; docs/decisions/ADR-0003-escrow-contract-base.md, https://github.com/rafaeldavid/holdback/blob/main/docs/decisions/ADR-0003-escrow-contract-base.md
+Source: contracts/deployments/sepolia.json, https://github.com/rafaeldavid/holdback/blob/main/contracts/deployments/sepolia.json; The escrow contract on Etherscan, https://sepolia.etherscan.io/address/0x7FaE06D96c739F6DA6F40610b34998d8cf83D5d9; docs/decisions/ADR-0003-escrow-contract-base.md, https://github.com/rafaeldavid/holdback/blob/main/docs/decisions/ADR-0003-escrow-contract-base.md
 
 ### Which contract holds the funds?
 
 Coinbase's Commerce Payments escrow contract (AuthCaptureEscrow) on Ethereum Sepolia, chain 11155111. The escrow keeps the tokens in a separate token store contract that it creates for Crow's rules contract (HoldbackRules), so Etherscan shows the balance at the token store, not at the escrow's own address. The deployment record lists the escrow, the rules contract and the token; the token store's address is getTokenStore of the rules contract, read on the escrow.
-Source: contracts/deployments/sepolia.json, https://github.com/rafaeldavid/holdback/blob/main/contracts/deployments/sepolia.json; The escrow contract on Etherscan, https://sepolia.etherscan.io/address/0x8ef2b0Bc9304Fd4D506b5410B35Cc1e2D2BB4357; Coinbase's escrow code at the pinned commit, getTokenStore, https://github.com/base/commerce-payments/blob/6b0a5ef3f0df973857f558e2d6b5dd645b5e97f9/src/AuthCaptureEscrow.sol
+Source: contracts/deployments/sepolia.json, https://github.com/rafaeldavid/holdback/blob/main/contracts/deployments/sepolia.json; The escrow contract on Etherscan, https://sepolia.etherscan.io/address/0x7FaE06D96c739F6DA6F40610b34998d8cf83D5d9; Coinbase's escrow code at the pinned commit, getTokenStore, https://github.com/base/commerce-payments/blob/6b0a5ef3f0df973857f558e2d6b5dd645b5e97f9/src/AuthCaptureEscrow.sol
 
 ### When is the hold released or refunded?
 
@@ -26,7 +26,7 @@ In five ways set by the deal's signed terms, plus one backstop. The rules contra
 - the seller misses its delivery deadline, which refunds the buyer;
 - no adjudicator decides in time, and the default outcome applies, which on the live service refunds the buyer the price and the adjudication fee. The live service pays the seller nothing on a default; bond compensation is the full protocol on SimChain only (docs/architecture.md).
 The backstop: if funds are still held 24 hours after the deal's last decision deadline, the buyer's payment address can take them back directly from the escrow.
-Source: docs/neutrality.md, "The test", https://github.com/rafaeldavid/holdback/blob/main/docs/neutrality.md#the-test; docs/audit/scope.md, "In scope", https://github.com/rafaeldavid/holdback/blob/main/docs/audit/scope.md#in-scope; The rules contract on Etherscan, https://sepolia.etherscan.io/address/0x3BE45128565ABBc35DbD4660716b703Ff489f1b4; contracts/src/HoldbackRules.sol, "_escrowExpiry", https://github.com/rafaeldavid/holdback/blob/main/contracts/src/HoldbackRules.sol
+Source: docs/neutrality.md, "The test", https://github.com/rafaeldavid/holdback/blob/main/docs/neutrality.md#the-test; docs/audit/scope.md, "In scope", https://github.com/rafaeldavid/holdback/blob/main/docs/audit/scope.md#in-scope; The rules contract on Etherscan, https://sepolia.etherscan.io/address/0xaAF8A86e54B1Cb867c00BD452c78981664153d56; contracts/src/HoldbackRules.sol, "_escrowExpiry", https://github.com/rafaeldavid/holdback/blob/main/contracts/src/HoldbackRules.sol
 
 ### What happens to funds still held after every deadline?
 
@@ -71,7 +71,7 @@ Source: docs/neutrality.md, "Residual control points", https://github.com/rafael
 ### Is real money involved?
 
 No. Crow runs on Ethereum Sepolia, a public test network, with tUSDC, a test token that anyone can mint, that is worth nothing and that is not Circle's USDC. No real money can enter Crow today.
-Source: docs/operations.md, "Sepolia contracts (T-206)", https://github.com/rafaeldavid/holdback/blob/main/docs/operations.md#sepolia-contracts-t-206; The tUSDC token on Etherscan, https://sepolia.etherscan.io/address/0x0b3d947f594B59Fc1Fb7D02E62C6795F8118cA6D; crow.direct/ref/limits.txt, "Honest limits", https://crow.direct/ref/limits.txt
+Source: docs/operations.md, "Sepolia contracts (T-206)", https://github.com/rafaeldavid/holdback/blob/main/docs/operations.md#sepolia-contracts-t-206; The tUSDC token on Etherscan, https://sepolia.etherscan.io/address/0xf1A4B68b201e9Eddef8a054FB6a931b849d18504; crow.direct/ref/limits.txt, "Honest limits", https://crow.direct/ref/limits.txt
 
 ### What happens if Crow's operators refuse a deal or go offline?
 

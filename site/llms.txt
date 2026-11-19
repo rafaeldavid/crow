@@ -64,13 +64,13 @@ OP2={{OP2}}
 Pin this EIP-712 domain in your configuration and sign under nothing else. Never take it from an operator. `verifyingContract` is the HoldbackRules contract on Sepolia.
 
 ```json
-{"name": "Holdback", "version": "0.8", "chainId": 11155111, "verifyingContract": "0x3be45128565abbc35dbd4660716b703ff489f1b4"}
+{"name": "Holdback", "version": "0.8", "chainId": 11155111, "verifyingContract": "0xaaf8a86e54b1cb867c00bd452c78981664153d56"}
 ```
 
 Pin this deployment too: you fund through it. `escrow` is Coinbase Commerce Payments' AuthCaptureEscrow, which holds the money; the other fields enter what you sign (`ref/signing.txt`, `ref/http-buyer.txt`).
 
 ```json
-{"tokenDomain": {"name": "Crow Test USDC", "version": "1", "chainId": 11155111, "verifyingContract": "0x0b3d947f594b59fc1fb7d02e62c6795f8118ca6d"}, "escrow": "0x8ef2b0bc9304fd4d506b5410b35cc1e2d2bb4357", "collector": "0x959ca9929ea2c47c6390199ab07639f307c0e3ef", "rules": "0x3be45128565abbc35dbd4660716b703ff489f1b4", "expiryMarginSec": 86400}
+{"tokenDomain": {"name": "Crow Test USDC", "version": "1", "chainId": 11155111, "verifyingContract": "0xf1a4b68b201e9eddef8a054fb6a931b849d18504"}, "escrow": "0x7fae06d96c739f6da6f40610b34998d8cf83d5d9", "collector": "0x54169df23be4b7de17dc6b7b47b9b09394443d8a", "rules": "0xaaf8a86e54b1cb867c00bd452c78981664153d56", "expiryMarginSec": 86400}
 ```
 
 ## How a deal works
