@@ -63,7 +63,7 @@ export function validatorsSource(): string {
     ...[...imports].sort().map(([name]) => `const ${name} = { default: ${name}_module.default ?? ${name}_module };`),
     '',
     '/** A schema validator: true when `data` is valid; otherwise false, with the first error in `errors`. */',
-    'export type SchemaValidator = ((data: unknown) => boolean) & { errors?: { instancePath: string; message?: string }[] | null };',
+    'export type SchemaValidator = ((data: unknown) => boolean) & { errors?: { instancePath: string; schemaPath?: string; message?: string }[] | null };',
     '',
     '/** One validator per schema file, keyed by its name. `formats` supplies `uri` (a function) and `date-time` (an object with `validate`). */',
     'export function schemaValidators(formats: Record<string, unknown>): Record<string, SchemaValidator> {',
@@ -72,5 +72,19 @@ export function validatorsSource(): string {
     'return exports;',
     '}',
     '',
+    '/** Each message type in messages.schema.json: the fields it requires and the fields it allows, to explain a refusal by the type it names (T-574). */',
+    'export const messageFields: Record<string, { required: readonly string[]; allowed: readonly string[] }> = {',
+    ...messageFieldLines(schemas),
+    '};',
+    '',
   ].join('\n');
+}
+
+/** One line per message type: its required and allowed top-level fields, from the oneOf branch whose `type` it names. */
+function messageFieldLines(schemas: { name: string; schema: { $id: string } }[]): string[] {
+  type Def = { required?: string[]; properties?: Record<string, { const?: unknown }> };
+  const messages = schemas.find((s) => s.name === 'messages')!.schema as unknown as { $defs: Record<string, Def> };
+  return Object.entries(messages.$defs)
+    .filter(([name, def]) => def.properties?.['type']?.const === name)
+    .map(([name, def]) => `${JSON.stringify(name)}: ${JSON.stringify({ required: def.required ?? [], allowed: Object.keys(def.properties ?? {}) })},`);
 }

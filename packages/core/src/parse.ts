@@ -9,7 +9,8 @@ import { DRAND_QUICKNET_CHAIN_HASH } from './beacon.js';
 import { tokenAmount } from './money/index.js';
 import { problem, type Problem } from './problem.js';
 import { err, ok, type Result } from './result.js';
-import { plainValidators, signedValidators } from './validators.js';
+import { messageFields } from './validators.generated.js';
+import { plainValidators, signedValidators, type SchemaValidator } from './validators.js';
 import type {
   AdjudicatorRegistration,
   AgentRegistration,
@@ -73,6 +74,32 @@ function walk(value: unknown, signed: boolean, path = ''): string | undefined {
 }
 
 type Parser<T> = (json: unknown) => Result<T, Problem>;
+type SchemaError = NonNullable<SchemaValidator['errors']>[number];
+
+const errorText = (e: SchemaError | undefined) => (e ? `${e.instancePath || '/'} ${e.message ?? 'is invalid'}` : 'is invalid');
+
+/**
+ * T-574: why a message was refused, told by the oneOf branch its `type` names. The schema's first error is the first
+ * branch's, so a Decision without its beacon signature was told it lacked a seller, the Offer's field. Every branch checks
+ * its required and allowed fields first and its `type` constant next, so once the message has the named type's fields,
+ * every other branch stopped at one of those three and the first error beyond them is the named branch's. Only the
+ * message changes: the message is refused either way.
+ */
+function messageError(value: unknown, errors: readonly SchemaError[]): string | undefined {
+  if (value === null || typeof value !== 'object' || Array.isArray(value)) return undefined;
+  const type = (value as { type?: unknown }).type;
+  if (typeof type !== 'string') return undefined;
+  if (!Object.hasOwn(messageFields, type)) return '/type is not a message type';
+  const fields = messageFields[type]!;
+  const missing = fields.required.find((k) => !Object.hasOwn(value, k));
+  if (missing !== undefined) return `/ must have required property '${missing}'`;
+  if (Object.keys(value).some((k) => !fields.allowed.includes(k))) return '/ must NOT have additional properties';
+  const otherBranch = (e: SchemaError) =>
+    (e.instancePath === '' && (e.schemaPath === '#/required' || e.schemaPath === '#/additionalProperties' || e.schemaPath === '#/oneOf')) ||
+    (e.instancePath === '/type' && e.schemaPath === '#/properties/type/const');
+  const own = errors.find((e) => !otherBranch(e));
+  return own ? errorText(own) : undefined;
+}
 
 function parserFor<T>(name: string, signed: boolean, extra?: (value: T) => string | undefined): Parser<T> {
   const validators = signed ? signedValidators : plainValidators;
@@ -87,8 +114,9 @@ function parserFor<T>(name: string, signed: boolean, extra?: (value: T) => strin
       return err(problem('invalid_terms', `${name}: not JSON data`));
     }
     if (!validate(copy)) {
-      const e = validate.errors?.[0];
-      return err(problem('invalid_terms', `${name}: ${e ? `${e.instancePath || '/'} ${e.message ?? 'is invalid'}` : 'is invalid'}`));
+      const errors = validate.errors ?? [];
+      const why = (name === 'messages' ? messageError(copy, errors) : undefined) ?? errorText(errors[0]);
+      return err(problem('invalid_terms', `${name}: ${why}`));
     }
     const refusal = walk(copy, signed) ?? extra?.(copy as T);
     return refusal === undefined ? ok(copy as T) : err(problem('invalid_terms', `${name}: ${refusal}`));

@@ -9,7 +9,7 @@ const runtime_equal = { default: runtime_equal_module.default ?? runtime_equal_m
 const runtime_ucs2length = { default: runtime_ucs2length_module.default ?? runtime_ucs2length_module };
 
 /** A schema validator: true when `data` is valid; otherwise false, with the first error in `errors`. */
-export type SchemaValidator = ((data: unknown) => boolean) & { errors?: { instancePath: string; message?: string }[] | null };
+export type SchemaValidator = ((data: unknown) => boolean) & { errors?: { instancePath: string; schemaPath?: string; message?: string }[] | null };
 
 /** One validator per schema file, keyed by its name. `formats` supplies `uri` (a function) and `date-time` (an object with `validate`). */
 export function schemaValidators(formats: Record<string, unknown>): Record<string, SchemaValidator> {
@@ -29564,3 +29564,24 @@ validate148.evaluated = {"props":true,"dynamicProps":false,"dynamicItems":false}
 
 return exports;
 }
+
+/** Each message type in messages.schema.json: the fields it requires and the fields it allows, to explain a refusal by the type it names (T-574). */
+export const messageFields: Record<string, { required: readonly string[]; allowed: readonly string[] }> = {
+"Offer": {"required":["type","commitmentId","seller","nonce","expiresAt","signature"],"allowed":["type","commitmentId","seller","nonce","expiresAt","signature"]},
+"Agree": {"required":["type","commitmentId","buyer","nonce","expiresAt","signature"],"allowed":["type","commitmentId","buyer","nonce","expiresAt","signature"]},
+"AdjudicatorAcceptance": {"required":["type","commitmentId","adjudicator","seedCommitment","policyHash","registryHash","fee","bondReserved","nonce","expiresAt","signature"],"allowed":["type","commitmentId","adjudicator","seedCommitment","policyHash","registryHash","fee","bondReserved","nonce","expiresAt","signature"]},
+"FundingAuthorization": {"required":["type","scheme","commitmentId","from","value","token","validAfter","validBefore","nonce","expiresAt","signature"],"allowed":["type","scheme","commitmentId","from","value","token","validAfter","validBefore","nonce","expiresAt","signature"]},
+"TransferAuthorization": {"required":["type","scheme","purpose","commitmentId","from","to","value","token","validAfter","validBefore","nonce","expiresAt","signature"],"allowed":["type","scheme","purpose","commitmentId","from","to","value","token","validAfter","validBefore","nonce","expiresAt","signature"]},
+"EarlyAccept": {"required":["type","commitmentId","buyer","attempt","deliveryHash","nonce","expiresAt","signature"],"allowed":["type","commitmentId","buyer","attempt","deliveryHash","nonce","expiresAt","signature"]},
+"Decision": {"required":["type","commitmentId","attempt","deliveryHash","adjudicator","role","outcome","seed","policyHash","registryHash","judgmentRecordHash","nonce","expiresAt","signature"],"allowed":["type","commitmentId","attempt","deliveryHash","adjudicator","role","outcome","seed","policyHash","registryHash","judgmentRecordHash","keyForBuyer","appealGround","nonce","expiresAt","signature","beacon","encryptedKeys"]},
+"AgentRevocation": {"required":["type","agent","principal","nonce","expiresAt","signature"],"allowed":["type","agent","principal","nonce","expiresAt","signature"]},
+"MemberAdmission": {"required":["type","clubId","member","operator","validUntil","nonce","expiresAt","signature"],"allowed":["type","clubId","member","operator","validUntil","nonce","expiresAt","signature"]},
+"MemberRevocation": {"required":["type","clubId","member","operator","nonce","expiresAt","signature"],"allowed":["type","clubId","member","operator","nonce","expiresAt","signature"]},
+"Dispute": {"required":["type","commitmentId","buyer","attempt","grounds","bond","fee","encryptedKeys","nonce","expiresAt","signature"],"allowed":["type","commitmentId","buyer","attempt","grounds","bond","fee","nonce","expiresAt","signature","encryptedKeys"]},
+"MutualSettlement": {"required":["type","commitmentId","deliveryHash","payouts","releaseKey","nonce","expiresAt","buyerSignature","sellerSignature"],"allowed":["type","commitmentId","deliveryHash","payouts","releaseKey","nonce","expiresAt","buyerSignature","sellerSignature"]},
+"Publish": {"required":["type","commitmentId","level","nonce","expiresAt","buyerSignature","sellerSignature"],"allowed":["type","commitmentId","level","nonce","expiresAt","buyerSignature","sellerSignature"]},
+"ReadToken": {"required":["type","viewer","commitmentId","nonce","expiresAt","signature"],"allowed":["type","viewer","commitmentId","audience","nonce","expiresAt","signature"]},
+"Delegation": {"required":["type","principal","agent","dealKey","dealEncryptionKey","clubId","scope","nonce","expiresAt","signature"],"allowed":["type","principal","agent","dealKey","dealEncryptionKey","clubId","scope","nonce","expiresAt","signature"]},
+"KeyRegistration": {"required":["type","adjudicator","encryptionPublicKey","keyId","nonce","expiresAt","signature"],"allowed":["type","adjudicator","encryptionPublicKey","keyId","nonce","expiresAt","signature"]},
+"AdjudicatorRegistration": {"required":["type","adjudicator","encryptionPublicKey","keyId","policyHash","registryHash","fee","poolTermsHash","bodyHash","issuedAt","nonce","expiresAt","signature"],"allowed":["type","adjudicator","encryptionPublicKey","keyId","policyHash","registryHash","fee","poolTermsHash","bodyHash","issuedAt","nonce","expiresAt","signature"]},
+};
