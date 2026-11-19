@@ -95,11 +95,11 @@ describe('selection by the bound policy (ADR-0036 section 6)', () => {
     expect(implementationsFor(swapped).ok).toBe(false);
   });
 
-  it('keeps screen-0 and screen-1, one template pair and agg-3', () => {
+  it('keeps screen-0 and screen-1, one template pair, agg-3 and agg-4', () => {
     expect(keptLabels(KEPT)).toEqual({
       screens: ['screen-0', 'screen-1'],
       templatePairs: [{ promptTemplateHash: NEWEST_VERSIONS.promptTemplateHash, appealPromptTemplateHash: NEWEST_VERSIONS.appealPromptTemplateHash }],
-      aggregations: ['agg-3'],
+      aggregations: ['agg-3', 'agg-4'],
     });
   });
 

@@ -92,6 +92,8 @@ interface WorldOptions {
   judgedStore?: JudgedStore;
   /** The terms' acceptance, when a case needs other checks than the example's. */
   acceptance?: Commitment['acceptance'];
+  /** The aggregation every adjudicator's policy names (default: the build's default, kept-policies.json). */
+  aggregationVersion?: string;
 }
 
 async function world(o: WorldOptions = {}) {
@@ -138,7 +140,7 @@ async function world(o: WorldOptions = {}) {
       signingKey: actor.key,
       encryptionSecretKey: enc.secretKey,
       seedSecret: keccak256(actor.key),
-      policy: defaultPolicy(`${actor.name}/p1`),
+      policy: defaultPolicy(`${actor.name}/p1`, o.aggregationVersion ? { aggregationVersion: o.aggregationVersion } : {}),
       registry,
       registryUri: 'file:///config/judges.yaml',
       fee: { min: tusd('25000000') },
@@ -468,6 +470,23 @@ describe('T-570: on SimChain a judge fault at the appeal does not drain the appe
     expect((await w.chain.trigger(w.id, 'default')).ok).toBe(false);
     expect(await balanceOf(w, w.cast.seller.address)).toBe(sellerBefore);
     expect(poolTotal(w, w.cast.appeal.address)).toBe(poolBefore);
+  });
+});
+
+describe('T-570: through the adjudicator, agg-4 signs no one-family reject (ADR-0043)', () => {
+  // Every judge of the primary panel's one-seat family times out, and the two seats of the other family fail.
+  it.each([
+    ['agg-3', 'reject'],
+    ['agg-4', 'escalate'],
+  ] as const)('a deal bound to %s: the primary signs %s', async (aggregationVersion, outcome) => {
+    const w = await delivered(DEMO_CSV, { aggregationVersion });
+    const seats = primaryPanel(w);
+    // The seed seats two families, one of them twice: the one-seat family goes down.
+    expect([...new Set(seats.map(familyOf))].map((f) => seats.filter((s) => familyOf(s) === f).length).sort()).toEqual([1, 2]);
+    const minority = [...new Set(seats.map(familyOf))].find((f) => seats.filter((s) => familyOf(s) === f).length === 1)!;
+    w.judges.script = { ...Object.fromEntries(REGISTRY.judges.map((j) => [j.id, 'fail' as const])), ...downFamily(minority, 'timeout') };
+    expect((await w.primary.adj.runOnce()).decided).toEqual([{ commitmentId: w.id, role: 'primary', outcome }]);
+    expect([...w.records.values()][0]!.panel.members.filter((m) => m.status === 'ok').map((m) => m.family)).toEqual(seats.filter((s) => familyOf(s) !== minority).map(familyOf));
   });
 });
 

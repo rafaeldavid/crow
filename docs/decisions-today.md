@@ -1649,3 +1649,24 @@ The build is not started; it opens as its own task on Rafa's word.
 3. Reword N210's done-when to the stream, the chain check and the adapter's retried start call (ADR-0042, Consequences)?
 
 **Litmus tests.** Neutrality: a notice is not a settlement step, so the deal settles by its terms whether or not the seller hears; in Crow's seller commands a refusing operator can only make the seller late, because the follower fails over and the chain read gates the start (fixtures `neutrality.operator-stream-silent`, `neutrality.operator-lies-about-funding`). The hold: unchanged. Defended judgment: unchanged.
+
+## D87. After a judge fault, no decision rests on one model family (ADR-0043, T-570)
+
+**Status:** adopted, 2026-11-19.
+
+**Who decided.** The coordinator, under the in-repository autonomy rule, after a research pass and a red team. Rafa may overrule any line.
+
+**Why now.** The roadmap's stage-2 judgment bar says no judge fault yields a one-family decision. T-570's tests showed that aggregation `agg-3` breaks it for reject: in a panel of two claude seats and one gpt seat, when the gpt seat times out, errors or abstains and both claude seats fail, `agg-3` signs a reject on claude's verdicts alone (6 of 54 fault cases, measured). On the live registry every first-instance panel has that shape.
+
+**Decided:**
+
+- **Rule 1.** When the valid verdicts come from fewer than two families, the case escalates, at every role.
+- **Rule 2.** When any seat returned no valid verdict, a reject also needs fail verdicts from two families, as an accept always needs passes from two.
+- **What does not change.** No decision where every seat answered, on any panel of two or more families (the only panels the schemas allow): two fails from one family still outvote one pass from another, the existing design. No flagged case. At the shipped appeal panels, rule 1 changes no pattern and rule 2 changes 4 of 3,125 (measured).
+- **Version.** The rules are aggregation `agg-4`. `agg-3` stays frozen for the deals bound to it (ADR-0036). `agg-4` merges as a kept version, bound to no new deal. The default moves in a second deploy, on Rafa's word.
+
+**Dropped the same day:** counting every seated seat in both supermajorities (the coordinator's first answer to the red team's M1). At the shipped appeal it turned 40 rejects and 36 accepts of 3,125 patterns into no decision, and 36 of those rejects had fails from two families (measured, research pass). Rule 2 closes the case the red team raised with 4.
+
+**Open for Rafa, when bonds return** (ADR-0043 section 5; backlog row D27g): what an unflagged appeal that cannot decide does. Today it signs nothing, and on SimChain's full protocol the default then pays the seller compensation from the appeal bond. `agg-4` sends more deals there: with one family silent and failing work, 20 of 20 deals, against 4 of 20 under `agg-3` when the two-judge family is silent and 16 of 20 when the three-judge family is (measured). Recommended: leave it now, and with the bonds adopt a signed no-decision that refunds the buyer and pays nothing from the bond. A reject in that case is ruled out, for D81's reason: a reject is final, and the failure can be the adjudicator's own. Phase one holds no bond, so nothing is open for what is live.
+
+**Litmus tests.** Neutrality: holds; an escalation never accepts, and on a chain every default refunds the buyer. The hold: unchanged. Defended judgment: strengthened; after a fault, both decisions need votes from two families (threat T8).
