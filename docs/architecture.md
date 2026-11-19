@@ -14,6 +14,110 @@ How Crow's system is built on `main`, after the phase-one cutover of 2026-11-13.
 
 The settlement profile is a parameter of core's state machine (`SettlementProfile` in `packages/core/src/state.ts`), so one implementation serves both protocols.
 
+## The build in brief
+
+Crow is escrow between AI agents. A buyer agent and a seller agent agree terms, the buyer's payment is held on chain, the seller delivers, an adjudicator the two named checks the work against the terms, and the hold is released to the seller or refunded to the buyer. Each part is built from an existing standard wherever one fits, so an outside agent, wallet or auditor meets formats it already knows:
+
+- **The contracts** (`contracts/src/`) are the rules contract `HoldbackRules` and the beacon verifier `DrandQuicknetBeacon`. `HoldbackRules` operates Coinbase's Commerce Payments escrow instead of holding money in its own code. It has no owner, no pause and no upgrade path.
+- **The operators** (`apps/operator/`, run on Cloudflare by `apps/demo-cloud/`) serve one REST API, check and relay the parties' signed messages, pay the gas and serve receipts. Two operators run; either one is enough, and any party can skip both and send its signed messages straight to the contract.
+- **The adjudicators** (`apps/adjudicator/`, `packages/judgment/`) run declarative checks first, then, if the terms carry a rubric, a panel of pinned models from two families. They sign the decision, and the contract settles on it.
+- **The agents' side** (`examples/`, and the pinned `buy.mjs` and `try.mjs` on the site) signs, encrypts and verifies on the agent's own machine. Agents start from `https://crow.direct/llms.txt`; no SDK is needed.
+- **The checks behind it:** unit and property tests, scenario fixtures run against SimChain and a local chain (differential testing), Foundry tests of the contracts, a TLA+ model of the state machine (`formal/`), red-team fixtures, and outside reviews of the contracts (`docs/audit/`).
+
+## Standards the build uses
+
+Each row names the standard, what Crow uses it for and where to read the code. A row says "partial" where Crow takes part of a standard, and why.
+
+### Signing and identity
+
+| Standard | What Crow uses it for | Where |
+| --- | --- | --- |
+| **EIP-712** typed structured data | Every state-changing message an agent sends (terms, agreement, delivery, decision, settlement, mandate) is EIP-712 typed data under the domain `Holdback`. Wallets show the fields before signing, and the contract checks the same digest | `packages/core/src/eip712.ts`; `contracts/src/HoldbackTypes.sol` |
+| **EIP-155** chain IDs | The chain ID is part of the signing domain, so a signature made for Sepolia does not verify on another chain | the EIP-712 domain; `contracts/deployments/sepolia.json` |
+| **EIP-55** checksummed addresses | A mixed-case address must carry a valid checksum; a wrong one is refused as a typo before money moves | `packages/core/src/parse.ts`; `examples/verify.ts` |
+| **ERC-1271** contract signatures | A party can be a smart account or multisig. The contract checks its signature through Solady's `SignatureCheckerLib`. Its answer can change after signing; known issue OS-2 records the bound | `contracts/src/HoldbackRules.sol` (`_requireSigned`); `docs/audit/known-issues.md` |
+| **EIP-7702** delegated code | An externally owned account with delegated code signs like any key; the same changed-answer bound applies | ADR-0031; `docs/audit/threat-model.md` TA-7 |
+| **ERC-6492** signatures of undeployed accounts | A counterfactual smart account can sign before it exists; funding runs its prepare call through the canonical **Multicall3** | ADR-0033; `apps/operator/src/prepare.ts` |
+| **ERC-7739** (partial: recommended, not required) | A contract wallet that signs for Crow should bind its own address in what it accepts, as ERC-7739 does (known issue OS-3) | ADR-0031; `docs/audit/known-issues.md` |
+
+### Money and settlement
+
+| Standard | What Crow uses it for | Where |
+| --- | --- | --- |
+| **ERC-20** tokens | Each deployment settles one ERC-20 token fixed at deploy time: native USDC planned for mainnet, the open-mint tUSDC on Sepolia | `contracts/deployments/sepolia.json`; ADR-0034 |
+| **ERC-3009** `receiveWithAuthorization` | Funding is one signature by the buyer's payment address: gasless for the agent, relayable by anyone, and safe against a front-run because only the payee may use it. It is the only funding path in phase one | ADR-0031 §3; `HoldbackRules.agreeAndFund` |
+| **Commerce Payments Protocol** (`AuthCaptureEscrow`, `ERC3009PaymentCollector`, v1.1.0) | The escrow that holds the money is Coinbase's contract, reused unchanged. `HoldbackRules` is its operator: authorize at funding, capture on a release, void or reclaim on a refund. Its expiry is the backstop that returns a hold if every other path fails | ADR-0003; `contracts/src/HoldbackRules.sol` |
+| **ERC-8183** agentic commerce jobs (partial: draft) | The contract's `Job*`, `PaymentReleased` and `Refunded` events take ERC-8183's draft names, and the job ID is the commitment ID, so an indexer built for the draft can read Crow's deals | `contracts/src/IHoldbackRules.sol` |
+| **x402** (partial: same primitive, no integration yet) | x402's EVM exact scheme also pays with ERC-3009, so the funding step is the same primitive; interoperation is planned with an A2A extension | ADR-0017 |
+
+### Randomness for the panel
+
+| Standard | What Crow uses it for | Where |
+| --- | --- | --- |
+| **drand quicknet** (League of Entropy), BLS signatures on **BLS12-381** | The fallback and appeal panels take their seed from a public beacon round that no party picks. The contract verifies the round's BLS signature on chain | `contracts/src/DrandQuicknetBeacon.sol`; ADR-0032 |
+| **EIP-2537** BLS12-381 precompiles | The on-chain verification uses the chain's precompiles; a mainnet gate checks they are present and priced as assumed | `DrandQuicknetBeacon.sol`; ADR-0034 |
+| **RFC 9380** hashing to elliptic curves | The round number is hashed to G1 as RFC 9380 and drand specify, on chain and in the adjudicator alike | `DrandQuicknetBeacon.sol`; `apps/adjudicator/src/drand.ts` |
+| Commit-reveal | The primary's own seed is committed when it accepts the case and revealed in its decision, so it cannot choose the seed after seeing the delivery | this page, "Panel randomness"; ADR-0018 |
+
+### Data, hashing and time
+
+| Standard | What Crow uses it for | Where |
+| --- | --- | --- |
+| **RFC 8785** JSON Canonicalization Scheme | One byte form of a JSON value, so two parties hash the same record to the same value: event hashes, judgment records, policies | `packages/core/src/canonical.ts`; `apps/adjudicator/src/service.ts` |
+| **Keccak-256** and **SHA-256** | Keccak-256 for anything the chain or EIP-712 reads (the event log's hash chain, record hashes); SHA-256 for delivered files and ciphertexts, written `sha256:<hex>` | this page, "Events, receipts, audit"; `docs/api.md` |
+| **JSON Schema 2020-12** | `spec/schemas/` is the API contract. Ajv validates every example in strict mode, and core's validators are generated from the schemas | `spec/schemas/`; `packages/core/src/validators-codegen.ts`; `pnpm validate:spec` |
+| **RFC 3339** timestamps | Every time in the API is an RFC 3339 instant in UTC. The last representable instant bounds every deadline | `packages/core/src/parse.ts`; this page, "Timing rules" |
+| Integer money (house rule, from payments practice) | Amounts are decimal strings in token base units, and rates are basis points; no float appears in a hashed body | ADR-0022 |
+
+### Encryption of the work
+
+| Standard | What Crow uses it for | Where |
+| --- | --- | --- |
+| **NaCl `crypto_box`** (X25519, XSalsa20, Poly1305) | The seller encrypts the delivery once, and wraps its key in one envelope per adjudicator and one for the buyer, each from a fresh ephemeral key pair. The operators store only ciphertext; the buyer's key leaves only with the payment or a settlement both signed | `apps/operator/src/envelope-spec.ts`; ADR-0012; ADR-0020 |
+
+### The HTTP API
+
+| Standard | What Crow uses it for | Where |
+| --- | --- | --- |
+| **OpenAPI 3.1** | The operator API is described in one OpenAPI document, served by each node | `spec/openapi.json`; `apps/operator/src/openapi/` |
+| **RFC 9457** problem details | Every refusal is `application/problem+json` with a stable `type` an agent can act on, and a `detail` that says what to change | `apps/operator/src/problems.ts`; `docs/api.md`, Errors |
+| **`Idempotency-Key` header** (IETF HTTP API working group draft) | Every mutating call takes a key. The same key and body replays the stored answer; the same key with a different body is a 409 | `docs/api.md`; the hard rule in `CLAUDE.md` |
+| **RFC 8615** well-known URIs | Each operator serves its discovery document at `/.well-known/holdback.json`: the signing domain, the receipt signer, the token and the limits | `docs/api.md`, Discovery |
+| **W3C Trace Context** (`traceparent`) | A request's `traceparent` is read for correlation and is never kept in telemetry | `apps/operator/src/server.ts`; `apps/demo-cloud/src/world.ts` |
+
+### Agents finding and using Crow
+
+| Standard | What Crow uses it for | Where |
+| --- | --- | --- |
+| **llms.txt** | The front door for agents: one plain-text page with the commands and the role pages (`buy.txt`, the seller's guide, `ref/`), written for an agent's tokens | `site/llms.txt`; ADR-0017 |
+| Pinned downloads by hash | Each tool an agent downloads (`buy.mjs`, `try.mjs`, `preflight.mjs`) is checked against a published SHA-256 before it runs | `site/`; the guides' install steps |
+| **A2A** agent cards (partial: own card, A2A planned) | A seller's page carries a machine-readable `crow-agent` card with its quote and defaults addresses; an A2A extension is planned | `apps/hosted-sellers/src/worker.ts`; ADR-0017 |
+
+### Judgment input safety
+
+| Standard | What Crow uses it for | Where |
+| --- | --- | --- |
+| **Unicode NFKC** normalization and the Unicode format characters (bidi controls, tag characters, variation selectors) | The screen and the `hidden_characters_max` check count text that a reader cannot see or that changes under normalization, the usual carriers of a prompt injection | `packages/judgment/src/checks/index.ts`; `packages/judgment/src/kept/` |
+| Pinned model IDs, two model families | Judges are dated model versions from the registry, never `latest`, from at least two families, so one family's shared error or drift cannot decide alone | `config/judges-live.yaml`; ADR-0006 |
+| Structured judge output | A judge's answer must match `spec/schemas/judge-verdict.schema.json`, or the judge abstains | `judge-verdict.schema.json`; `docs/judgment-and-defenses.md` |
+
+### Web security and disclosure
+
+| Standard | What Crow uses it for | Where |
+| --- | --- | --- |
+| **HSTS**, `X-Content-Type-Options`, `X-Frame-Options`, referrer and permissions policies, **Content Security Policy** on pages | One function sets the security headers on every answer of each public Worker; plain HTTP is redirected, never served | `apps/demo-cloud/src/headers.ts`; `apps/site/headers.js`; `docs/operations.md`, Security headers |
+| **RFC 9116** `security.txt` | The security contact is at `https://crow.direct/.well-known/security.txt` | `SECURITY.md` |
+
+### How the build is verified
+
+| Practice | What Crow uses it for | Where |
+| --- | --- | --- |
+| **TLA+** model checking | The state machine's safety properties (conservation, settle-once) and liveness (every funded deal reaches a final state) are checked on a model | `formal/`; ADR-0009 |
+| **Foundry** tests, including fuzzing and differential tests against earlier builds | The contracts' unit, attack and differential tests | `contracts/test/`; `(cd contracts && forge test)` |
+| Differential testing across settlement layers | Each scenario fixture runs on SimChain and on a local chain, and the two must agree | `packages/testkit/src/runner.ts`; `pnpm snap` |
+| Secret scanning (**gitleaks**), code scanning (**CodeQL**), dependency alerts | Every pull request runs gitleaks and CodeQL; the default branch gets dependency alerts | `.github/workflows/` |
+| Outside review | The phase-one contracts were scanned, and their fixes reviewed, by an outside security firm; the known issues an auditor reads are listed in one page | `docs/audit/known-issues.md` |
+
 ## Shape of the system
 
 ```mermaid
