@@ -5,7 +5,7 @@
 - **Depends on:** none. It follows the private design study T-532 (roadmap row N196), where Rafa chose the direction on 2026-11-18.
 - **Paths this task may touch:** `docs/decisions/ADR-0040-standing-offers.md` (new), `docs/research/2026-11-18-standing-offers.md` and its folder (new), `docs/research/README.md` (one row), `docs/decisions-today.md` (D82), this file, and the build's task files T-548 to T-552 (new). Scratch only under `reports/scratch/t-544/`.
 - **Human gate:** yes: D82's two open points are Rafa's. The record changes no code.
-- **Status:** done (PR 675; the decision waits on Rafa, D82)
+- **Status:** done (PR 675; Rafa answered D82's two points on 2026-11-19)
 - **Agent/session:** the T-544 session (`standing-offers-adr`, started by `local_f8b8041f`), 2026-11-18, branch `t-544-standing-offers`.
 - **Roadmap row:** N196
 - **Change kind:** 10, research and decisions.
@@ -66,5 +66,5 @@ Rafa wants a seller to publish one offer that any buyer can take, without a prog
 
 ## Handoff
 
-- **Resume:** after Rafa answers D82's two open points, record his answers in D82, then open T-548.
+- **Resume:** Rafa answered D82's two open points on 2026-11-19 and D82 records his words. T-548 opens on his word to start the build.
 - **For the coordinator:** roadmap row N196, the daily log and the waiting items are yours to update.
