@@ -212,7 +212,7 @@ async function delivered(csv: string, o: WorldOptions = {}) {
 
 type World = Awaited<ReturnType<typeof world>>;
 const balanceOf = async (w: World, a: Address) => BigInt((await w.chain.balances([a]))[a]!.amount);
-const bondOf = (w: World, a: Address) => {
+const poolTotal = (w: World, a: Address) => {
   const p = w.chain.pool(a);
   return p.junior + p.senior;
 };
@@ -298,13 +298,13 @@ describe('T-570: on SimChain a judge fault at the appeal does not drain the appe
   it('control: an appeal adjudicator that signs nothing lets the default outcome pay the seller from its bond', async () => {
     const w = await escalatedFlagged();
     const sellerBefore = await balanceOf(w, w.cast.seller.address);
-    const bondBefore = bondOf(w, w.cast.appeal.address);
+    const bondBefore = poolTotal(w, w.cast.appeal.address);
     w.chain.advance(301);
     must(await w.chain.trigger(w.id, 'default'));
     must(await w.chain.trigger(w.id, 'apply_default'));
     const paid = (await balanceOf(w, w.cast.seller.address)) - sellerBefore;
     expect(paid).toBeGreaterThan(0n);
-    expect(bondBefore - bondOf(w, w.cast.appeal.address)).toBe(paid);
+    expect(bondBefore - poolTotal(w, w.cast.appeal.address)).toBe(paid);
   });
 
   // Each fault class takes down one family, in turn, so every family and every class is covered.
@@ -314,7 +314,7 @@ describe('T-570: on SimChain a judge fault at the appeal does not drain the appe
     const w = await escalatedFlagged();
     const sellerBefore = await balanceOf(w, w.cast.seller.address);
     const buyerBefore = await balanceOf(w, w.cast.buyer.address);
-    const bondBefore = bondOf(w, w.cast.appeal.address);
+    const bondBefore = poolTotal(w, w.cast.appeal.address);
     w.judges.script = downFamily(family, fault);
     expect((await w.appeal.adj.runOnce()).decided).toEqual([{ commitmentId: w.id, role: 'appeal', outcome: 'reject' }]);
     expect(w.chain.escrowState(w.id)?.kind).toBe('Refunded');
@@ -323,7 +323,7 @@ describe('T-570: on SimChain a judge fault at the appeal does not drain the appe
     expect((await w.chain.trigger(w.id, 'apply_default')).ok).toBe(false);
     expect(await balanceOf(w, w.cast.seller.address)).toBe(sellerBefore);
     expect((await balanceOf(w, w.cast.buyer.address)) - buyerBefore).toBe(BigInt(w.terms.price.amount));
-    expect(bondOf(w, w.cast.appeal.address)).toBe(bondBefore);
+    expect(poolTotal(w, w.cast.appeal.address)).toBe(bondBefore);
     expect(w.chain.pool(w.cast.appeal.address as Address).reserved).toBe(0n);
   });
 
@@ -338,7 +338,7 @@ describe('T-570: on SimChain a judge fault at the appeal does not drain the appe
     w.chain.advance(5);
     w.judges.script = { ...downFamily('gpt', fault), ...downFamily('qwen', fault) };
     const sellerBefore = await balanceOf(w, w.cast.seller.address);
-    const bondBefore = bondOf(w, w.cast.appeal.address);
+    const bondBefore = poolTotal(w, w.cast.appeal.address);
     const r = await w.appeal.adj.runOnce();
     expect(r.decided).toEqual([]);
     expect(w.chain.escrowState(w.id)?.kind).toBe('Escalated');
@@ -348,6 +348,6 @@ describe('T-570: on SimChain a judge fault at the appeal does not drain the appe
     const paid = (await balanceOf(w, w.cast.seller.address)) - sellerBefore;
     // simClub's rulebook: sellerCompensationRateBps 1000, so 10% of the 2,000 tUSD price.
     expect(paid).toBe(200_000_000n);
-    expect(bondBefore - bondOf(w, w.cast.appeal.address)).toBe(paid);
+    expect(bondBefore - poolTotal(w, w.cast.appeal.address)).toBe(paid);
   });
 });
