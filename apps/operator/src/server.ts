@@ -66,6 +66,14 @@ export { statusOf } from './problems.js';
 export const API_VERSION = 'v1';
 export const SCHEMA_VERSION = '0.12';
 const MAX_BODY_BYTES = 1_048_576;
+/**
+ * T-574: how far past a route's limit the JSON body reader reads on, so a body a little over the limit is refused with
+ * its 413 and the connection stays usable (T-559). A body past that is cut off: it costs at most the route's limit plus
+ * this to refuse, where before it cost the ciphertext ceiling (10 MiB) on every route.
+ */
+export const BODY_READ_ON_BYTES = 1_048_576;
+/** The most the JSON body reader reads for a route whose limit is `limit`: the limit plus BODY_READ_ON_BYTES, at most the ciphertext ceiling. */
+export const bodyCeiling = (limit: number): number => Math.min(MAX_CIPHERTEXT_BYTES, limit + BODY_READ_ON_BYTES);
 const DEFAULT_LIMIT = 50;
 const MAX_LIMIT = 200;
 const SSE_POLL_MS = 50;
@@ -656,12 +664,13 @@ export class Operator {
     let size = 0;
     // Past the limit the loop reads on, keeps nothing and refuses at the end of the body, as a ciphertext upload does
     // (T-547): leaving the loop early destroys the request's socket, which reset the client's upload or its next request
-    // on that connection (T-559, measured on every JSON route). It reads on only up to the protocol's ciphertext ceiling,
-    // the most this node reads for any request, so a larger body is cut off there and costs at most that much to refuse.
+    // on that connection (T-559, measured on every JSON route). It reads on only up to the route's ceiling (bodyCeiling),
+    // so a larger body is cut off there and costs at most that much to refuse (T-574).
     const tooLarge = () => fail('payload_too_large', `request bodies are limited to ${limit} bytes here`, { maxBytes: limit });
+    const ceiling = bodyCeiling(limit);
     for await (const chunk of ctx.req as AsyncIterable<Buffer>) {
       size += chunk.length;
-      if (size > MAX_CIPHERTEXT_BYTES) tooLarge();
+      if (size > ceiling) tooLarge();
       if (size <= limit) chunks.push(chunk);
     }
     if (size > limit) tooLarge();
