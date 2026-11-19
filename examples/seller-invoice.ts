@@ -109,7 +109,8 @@ async function termsChecked(r: J, id: string): Promise<Pin> {
   const answered: J[] = (Array.isArray(r.operators) ? r.operators : []).filter((o: J) => o?.answered);
   const domains = new Set(answered.map((o) => jcs({ ...o.domain, verifyingContract: lc(o.domain?.verifyingContract) })));
   const pin = domains.size === 1 ? knownPins().find((p) => jcs({ ...p.domain, verifyingContract: lc(p.domain.verifyingContract) }) === [...domains][0]) : undefined;
-  if (!pin) return refuse(`check "domain is pinned" failed here: the operators in the record serve ${domains.size === 1 ? 'an EIP-712 domain that examples/verify.ts does not pin' : `${domains.size} different domains`}`);
+  // The rules contract the document prints is this domain's, which equals the record's own: it is never a constant.
+  if (!pin) return refuse(`check "domain is pinned" failed here: the operators in the record serve ${domains.size === 1 ? `an EIP-712 domain that examples/verify.ts does not pin (rules contract ${plain(String(answered[0]?.domain?.verifyingContract)).slice(0, 42)}). For a deal on an earlier deployment, set HOLDBACK_DEPLOYMENT to that deployment's file from contracts/deployments/` : `${domains.size} different domains`}`);
   const signer = lc(await recoverTypedDataAddress({ ...typedOf('CommitmentTerms', t, pin.domain), signature: r.terms?.signatures?.seller?.signature }).catch(() => ''));
   if (signer !== lc(t.seller)) refuse(`check "seller's terms signature" failed here: the signature recovers to ${signer || 'nothing'}, not the seller ${lc(t.seller)}`);
   return pin;

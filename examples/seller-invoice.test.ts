@@ -153,6 +153,8 @@ describe("seller-invoice: the seller's invoice and credit note from a deal recor
       fiat: null,
     });
     expect(BigInt(d.totals.net.base) + BigInt(d.totals.tax.base)).toBe(BigInt(PRICE));
+    // The rules contract is the one the record's operators served, never a constant.
+    expect(d.deal.network.rulesContract).toBe(records.released.operators[0].domain.verifyingContract.toLowerCase());
     expect(d.notice).toMatch(/gives no tax or legal advice/);
     expect(d.notice).not.toMatch(/complies|compliant/i);
     const page = f.html('INV-2026-0001');
@@ -234,6 +236,7 @@ describe("seller-invoice: the seller's invoice and credit note from a deal recor
       ['a deal not final', (r) => (r.outcome.finalAt = null), /not final yet/],
       ['a split that does not add up', (r) => (r.outcome.escrowState = 'Settled'), /check "postings conserve the hold" is missing|settlement pays out/],
       ['another file', (r) => (r.record = 'holdback-evidence/1'), /not a deal record/],
+      ['another deployment', (r) => r.operators.forEach((o: J) => (o.domain.verifyingContract = '0x3be45128565abbc35dbd4660716b703ff489f1b4')), /does not pin \(rules contract 0x3be45128565abbc35dbd4660716b703ff489f1b4\)\. For a deal on an earlier deployment, set HOLDBACK_DEPLOYMENT/],
     ];
     for (const [what, change, why] of cases) {
       const r = clone(records.released);
