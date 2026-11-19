@@ -32,13 +32,19 @@ export function validatorsSource(): string {
   // own line, so a schema change shows as a readable diff. The generated code reads its formats from the name
   // `formats`, the parameter of the function it is wrapped in, so one copy of the code serves both sets.
   // ajv and ajv-formats are CommonJS; under NodeNext their default export arrives as `.default`.
-  const ajv = new Ajv2020.default({ strict: true, allErrors: false, validateSchema: false, code: { optimize: false, source: true, lines: true, formats: Ajv2020._`formats` } });
+  const ajv = new Ajv2020.default({ strict: true, allErrors: false, validateSchema: false, inlineRefs: false, code: { optimize: false, source: true, lines: true, formats: Ajv2020._`formats` } });
   ajv.addKeyword({ keyword: UNTRUSTED_KEYWORD, schemaType: 'boolean' });
   // The only formats the schemas use (strict mode refuses any other). ajv-formats' definitions fix the shape the
   // code calls: `uri` a function, `date-time` an object with `validate`. validators.ts passes the same shapes.
   addFormats.default(ajv, ['uri', 'date-time']);
   for (const { schema } of schemas) ajv.addSchema(schema);
-  const code = standalone.default(ajv, Object.fromEntries(schemas.map(({ name, schema }) => [name, schema.$id])));
+  // T-574: one validator per message type as well (`messages#Decision`), so a refused message is explained by the type
+  // it names: the oneOf's own first error comes from whichever branch failed first. Refs are not inlined, so each type's
+  // validator is the function the oneOf already calls: about 17 KB more code, not a second copy of every type (about
+  // 200 KB, measured).
+  const messages = schemas.find((x) => x.name === 'messages')!.schema as unknown as { $id: string; $defs: Record<string, { properties?: { type?: { const?: string } } }> };
+  const types = Object.entries(messages.$defs).filter(([d, x]) => x.properties?.type?.const === d).map(([d]) => [`messages#${d}`, `${messages.$id}#/$defs/${d}`]);
+  const code = standalone.default(ajv, Object.fromEntries([...schemas.map(({ name, schema }) => [name, schema.$id]), ...types]));
 
   // Standalone code is CommonJS: `exports.<name> = validateN;`, and `require("…").default` for Ajv's runtime
   // helpers. The exports become the wrapper's return value, and each helper an import. The helpers are CommonJS
@@ -63,28 +69,15 @@ export function validatorsSource(): string {
     ...[...imports].sort().map(([name]) => `const ${name} = { default: ${name}_module.default ?? ${name}_module };`),
     '',
     '/** A schema validator: true when `data` is valid; otherwise false, with the first error in `errors`. */',
-    'export type SchemaValidator = ((data: unknown) => boolean) & { errors?: { instancePath: string; schemaPath?: string; message?: string }[] | null };',
+    'export type SchemaValidator = ((data: unknown) => boolean) & { errors?: { instancePath: string; message?: string }[] | null };',
     '',
-    '/** One validator per schema file, keyed by its name. `formats` supplies `uri` (a function) and `date-time` (an object with `validate`). */',
+    '/** One validator per schema file, keyed by its name, and one per message type, keyed `messages#<type>`. `formats` supplies `uri` (a function) and `date-time` (an object with `validate`). */',
     'export function schemaValidators(formats: Record<string, unknown>): Record<string, SchemaValidator> {',
     'const exports = {};',
     body,
     'return exports;',
     '}',
     '',
-    '/** Each message type in messages.schema.json: the fields it requires and the fields it allows, to explain a refusal by the type it names (T-574). */',
-    'export const messageFields: Record<string, { required: readonly string[]; allowed: readonly string[] }> = {',
-    ...messageFieldLines(schemas),
-    '};',
     '',
   ].join('\n');
-}
-
-/** One line per message type: its required and allowed top-level fields, from the oneOf branch whose `type` it names. */
-function messageFieldLines(schemas: { name: string; schema: { $id: string } }[]): string[] {
-  type Def = { required?: string[]; properties?: Record<string, { const?: unknown }> };
-  const messages = schemas.find((s) => s.name === 'messages')!.schema as unknown as { $defs: Record<string, Def> };
-  return Object.entries(messages.$defs)
-    .filter(([name, def]) => def.properties?.['type']?.const === name)
-    .map(([name, def]) => `${JSON.stringify(name)}: ${JSON.stringify({ required: def.required ?? [], allowed: Object.keys(def.properties ?? {}) })},`);
 }

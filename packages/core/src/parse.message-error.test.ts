@@ -5,7 +5,7 @@ import { readdirSync, readFileSync } from 'node:fs';
 import { sha256 } from 'viem';
 import { describe, expect, it } from 'vitest';
 import { parseMessage } from './parse.js';
-import { messageFields } from './validators.generated.js';
+import { signedValidators } from './validators.js';
 
 const dir = new URL('../../../spec/examples/', import.meta.url);
 const examples = readdirSync(dir)
@@ -18,6 +18,11 @@ const detail = (m: unknown) => {
   return r.ok ? '' : r.error.detail;
 };
 const signature = `0x${'ab'.repeat(48)}` as const;
+/** The fields a message type requires, from its own schema branch. */
+const required = (type: string): string[] => {
+  const schema = JSON.parse(readFileSync(new URL('../../../spec/schemas/messages.schema.json', import.meta.url), 'utf8')) as { $defs: Record<string, { required?: string[] }> };
+  return schema.$defs[type]?.required ?? [];
+};
 /** A copy of `m` without the field `k`. */
 const without = (m: Record<string, unknown>, k: string) => Object.fromEntries(Object.entries(m).filter(([f]) => f !== k));
 const fallback = (beacon: Record<string, unknown>) => ({ ...decision, role: 'fallback', beacon });
@@ -40,8 +45,8 @@ describe('a refused message is told why by its own type (T-574)', () => {
   it('every example message, without each field its type requires, is refused and told that field', () => {
     for (const [file, m] of examples) {
       const type = m['type'] as string;
-      expect(Object.hasOwn(messageFields, type), file).toBe(true);
-      for (const field of messageFields[type]!.required.filter((f) => f !== 'type')) {
+      expect(Object.hasOwn(signedValidators, `messages#${type}`), file).toBe(true);
+      for (const field of required(type).filter((f) => f !== 'type')) {
         expect(detail(without(m, field)), `${file} without ${field}`).toBe(`messages: / must have required property '${field}'`);
       }
     }
@@ -49,6 +54,17 @@ describe('a refused message is told why by its own type (T-574)', () => {
 
   it('every example message with a field its type does not allow is refused and told so', () => {
     for (const [file, m] of examples) expect(detail({ ...m, extra: 1 }), file).toBe('messages: / must NOT have additional properties');
+  });
+
+  // The review of T-574 (Medium): Ajv checks a branch's allOf and if before its required fields, so a Dispute was told
+  // about a Decision's rule (`/ must NOT be valid`). The named type's own validator gives the field that is wrong.
+  it('every example message with one field of the wrong kind is told that field', () => {
+    for (const [file, m] of examples) {
+      for (const field of Object.keys(m).filter((f) => f !== 'type')) {
+        const wrong = typeof m[field] === 'number' ? 'x' : 12345;
+        expect(detail({ ...m, [field]: wrong }), `${file} with ${field} ${String(wrong)}`).toMatch(new RegExp(`^messages: /${field}(/| )`));
+      }
+    }
   });
 
   it('every example message still parses', () => {

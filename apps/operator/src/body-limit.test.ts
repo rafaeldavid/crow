@@ -25,6 +25,7 @@ interface Answer {
   body: Record<string, unknown>;
   reused: boolean;
   port: number | undefined;
+  connection?: string | undefined;
 }
 
 /** One request on the given agent; resolves with the answer, rejects with the socket's error (a reset). */
@@ -33,7 +34,7 @@ function send(agent: Agent, method: string, path: string, body?: Buffer): Promis
     const req = request({ host: url.hostname, port: url.port, method, path, agent, headers: { 'content-type': 'application/json', 'idempotency-key': `k-${path}-${body?.length ?? 0}` } }, (res) => {
       const chunks: Buffer[] = [];
       res.on('data', (c: Buffer) => chunks.push(c));
-      res.on('end', () => resolve({ status: res.statusCode ?? 0, body: JSON.parse(Buffer.concat(chunks).toString('utf8') || '{}') as Record<string, unknown>, reused: req.reusedSocket, port: req.socket?.localPort }));
+      res.on('end', () => resolve({ status: res.statusCode ?? 0, body: JSON.parse(Buffer.concat(chunks).toString('utf8') || '{}') as Record<string, unknown>, reused: req.reusedSocket, port: req.socket?.localPort, connection: res.headers.connection }));
       res.on('error', reject);
     });
     req.on('error', reject);
@@ -65,6 +66,17 @@ describe('an oversized JSON body (T-559)', () => {
       } finally {
         agent.destroy();
       }
+    });
+  }
+
+  // T-574 review (Medium): past the route's ceiling the reader stops, so the upload is reset rather than answered, as
+  // past 10 MiB before. The trade: a refusal costs at most the ceiling to read. On a new connection, so the reset reaches
+  // no other request.
+  for (const route of ROUTES) {
+    it(`refuses ${route.name} past its ceiling with a reset or a 413, never an answer`, async () => {
+      const over = bodyCeiling(route.limit) + 1024 * 1024;
+      const refused = await send(false as unknown as Agent, 'POST', route.path, jsonOf(over)).then((a) => a.status, (e: NodeJS.ErrnoException) => e.code ?? 'error');
+      expect([413, 'ECONNRESET', 'EPIPE'], `${route.path} ${over}: ${String(refused)}`).toContain(refused);
     });
   }
 

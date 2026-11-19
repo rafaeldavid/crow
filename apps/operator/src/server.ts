@@ -67,9 +67,10 @@ export const API_VERSION = 'v1';
 export const SCHEMA_VERSION = '0.12';
 const MAX_BODY_BYTES = 1_048_576;
 /**
- * T-574: how far past a route's limit the JSON body reader reads on, so a body a little over the limit is refused with
- * its 413 and the connection stays usable (T-559). A body past that is cut off: it costs at most the route's limit plus
- * this to refuse, where before it cost the ciphertext ceiling (10 MiB) on every route.
+ * T-574: how far past a route's limit the JSON body reader reads on, so a body up to 1 MiB over the limit is refused
+ * with its 413 and the connection stays usable (T-559). A body past that is cut off and its connection reset, as one
+ * past 10 MiB was before: a refusal costs at most the route's limit plus this to read, where before it cost 10 MiB on
+ * every route. The operators' Worker refuses a body by its declared length before it gets here.
  */
 export const BODY_READ_ON_BYTES = 1_048_576;
 /** The most the JSON body reader reads for a route whose limit is `limit`: the limit plus BODY_READ_ON_BYTES, at most the ciphertext ceiling. */
@@ -670,6 +671,8 @@ export class Operator {
     const ceiling = bodyCeiling(limit);
     for await (const chunk of ctx.req as AsyncIterable<Buffer>) {
       size += chunk.length;
+      // Past the ceiling the reader stops, which resets the connection, as past 10 MiB before T-574: a client that sends
+      // that much learns of the refusal as a reset, and its next request opens a new connection (T-574 review).
       if (size > ceiling) tooLarge();
       if (size <= limit) chunks.push(chunk);
     }
