@@ -3,7 +3,8 @@
 import { problem, type Problem, type ProblemType } from '@holdback/core';
 import { decodeErrorResult, parseAbi, type Abi, type Hex } from 'viem';
 
-const BY_NAME: Record<string, ProblemType> = {
+/** Each contract error by name, as the problem type SimChain returns for the same refusal. errors.test.ts checks every beacon error has one. */
+export const BY_NAME: Readonly<Record<string, ProblemType>> = {
   // HoldbackRules
   WrongStage: 'invalid_state',
   TooEarly: 'invalid_state', // core: a timeout before its deadline is invalid_state

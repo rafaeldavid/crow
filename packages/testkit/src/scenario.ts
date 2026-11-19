@@ -18,7 +18,9 @@ export type StepBody =
   | { kind: 'agree_and_fund'; by: 'buyer'; via: Via; signer?: string }
   // buyerEnvelope 'wrong_key': the seller seals the buyer's envelope to a key the buyer does not hold, naming the
   // right recipient (sim batch 1, F2). Settlement cannot tell; only the buyer's open fails.
-  | { kind: 'deliver'; by: 'seller'; via: Via; file: string; signer?: string; stubBytes?: true; attempt?: number; buyerEnvelope?: 'wrong_key' }
+  // buyerEnvelope 'none' (ADR-0040 §2, T-550): a standing delivery, with envelopes for the three adjudicators only. With
+  // by: buyer, the buyer posts the delivery the seller signed at setup; only a standing delivery may be posted so.
+  | { kind: 'deliver'; by: 'seller' | 'buyer'; via: Via; file: string; signer?: string; stubBytes?: true; attempt?: number; buyerEnvelope?: 'wrong_key' | 'none' }
   | { kind: 'advance_clock'; seconds: number }
   | { kind: 'judge'; adjudicator: string }
   | { kind: 'settle'; trigger: 'anyone' | 'buyer' | 'seller'; via: Via }
@@ -233,15 +235,16 @@ function parseStepBody(kind: string, body: unknown, path: string, operators: rea
       const file = str(o.file, `${p}.file`);
       if (file.startsWith('/') || file.split('/').includes('..')) fail(`${p}.file`, 'must be a path relative to fixtures/ without ".."');
       if (o.stub_bytes !== undefined && o.stub_bytes !== true) fail(`${p}.stub_bytes`, 'must be true when present');
+      if (o.by === 'buyer' && o.buyer_envelope !== 'none') fail(`${p}.by`, 'the buyer posts only a standing delivery the seller signed at setup: set buyer_envelope: none');
       return {
         kind,
-        by: literal(o.by, `${p}.by`, ['seller'] as const),
+        by: literal(o.by, `${p}.by`, ['seller', 'buyer'] as const),
         via: via(o),
         file,
         ...signer(o),
         ...(o.stub_bytes === true ? { stubBytes: true as const } : {}),
         ...(o.attempt !== undefined ? { attempt: positiveInt(o.attempt, `${p}.attempt`) } : {}),
-        ...(o.buyer_envelope !== undefined ? { buyerEnvelope: literal(o.buyer_envelope, `${p}.buyer_envelope`, ['wrong_key'] as const) } : {}),
+        ...(o.buyer_envelope !== undefined ? { buyerEnvelope: literal(o.buyer_envelope, `${p}.buyer_envelope`, ['wrong_key', 'none'] as const) } : {}),
       };
     }
     case 'early_accept': {

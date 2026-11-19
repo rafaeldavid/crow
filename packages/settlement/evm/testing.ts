@@ -268,7 +268,7 @@ export class EvmDeal {
       nonce: this.nonce(),
       expiresAt: plusSeconds(this.chain.now(), 86400),
       ...(round !== undefined ? { beacon: { source: 'sim' as const, round, value: value! } } : {}),
-      ...(over.appealGround ? { appealGround: over.appealGround } : {}),
+      ...(over.appealGround !== undefined ? { appealGround: over.appealGround } : {}),
       ...(outcome === 'accept' ? { keyForBuyer: { scheme: 'x25519-xsalsa20poly1305' as const, ciphertext: this.envelope(this.terms.buyer).ciphertext } } : {}),
       ...(outcome === 'escalate' ? { encryptedKeys: [this.envelope(this.terms.adjudication.appealAdjudicator)] } : {}),
     } as UnsignedMessage);

@@ -720,10 +720,13 @@ async function delivery(ctx: PrepareContext, input: Record<string, unknown>): Pr
   if (typeof input['plaintextSha256'] !== 'string') bad('plaintextSha256 ("sha256:<hex>" of the plaintext) is required', 'plaintextSha256');
   const keys = input['encryptedKeys'];
   if (!Array.isArray(keys)) bad('encryptedKeys is one envelope per recipient (GET /v1/commitments/{id}/recipients)', 'encryptedKeys');
-  const need = [c.adjudication.adjudicator, c.adjudication.fallbackAdjudicator, c.adjudication.appealAdjudicator, c.buyer].map(lc);
+  // ADR-0040 §2: the three adjudicators' envelopes are required; the buyer's may be left out (a standing delivery), and
+  // then the buyer's key comes only with an adjudicator's accept, as core says.
+  const need = [c.adjudication.adjudicator, c.adjudication.fallbackAdjudicator, c.adjudication.appealAdjudicator].map(lc);
   const have = (keys as EncryptedKey[]).map((k) => lc(String(k?.recipient)));
   const missing = need.filter((a) => !have.includes(a));
   if (missing.length) bad(`encryptedKeys has no envelope for ${missing.join(', ')}; seal the content key to every recipient GET /v1/commitments/${c.id}/recipients lists`, 'encryptedKeys');
+  const forBuyer = have.includes(lc(c.buyer));
   const givenAt = timestamp(input['submittedAt'], 'submittedAt');
   const submittedAt = givenAt ?? ctx.now();
   const body = {
@@ -744,10 +747,14 @@ async function delivery(ctx: PrepareContext, input: Record<string, unknown>): Pr
     check: [
       `you are the seller ${c.seller}`,
       `ciphertext ${body.ciphertext.sha256} (${body.ciphertext.bytes} bytes) at ${body.ciphertext.uri}; plaintext ${body.plaintextSha256}: the hashes you computed`,
-      `envelopes for ${need.join(', ')}: the buyer's sealed to buyerEncryptionPublicKey ${c.buyerEncryptionPublicKey} from the terms you signed, not a key from this operator`,
+      forBuyer
+        ? `envelopes for ${[...need, lc(c.buyer)].join(', ')}: the buyer's sealed to buyerEncryptionPublicKey ${c.buyerEncryptionPublicKey} from the terms you signed, not a key from this operator`
+        : `envelopes for the three adjudicators ${need.join(', ')} and none for the buyer ${c.buyer} (a standing delivery, ADR-0040 §2): the buyer gets its key only with an adjudicator's accept, which wraps it to buyerEncryptionPublicKey ${c.buyerEncryptionPublicKey}; the settlement layer refuses an early accept and a settlement that releases the key`,
       "each adjudicator's envelope sealed to the encryption key in its registration as a source you trust gives it (a second operator, or the adjudicator itself), not only this operator's /recipients",
     ],
     defaults: givenAt ? {} : { submittedAt },
+    // T-550 red team, Low 2: a per-buyer delivery that leaves the buyer out by mistake is now taken, so say so.
+    ...(forBuyer ? {} : { notices: [`Buyer envelope: none for ${c.buyer}. If you meant a delivery for this buyer only, seal the content key to buyerEncryptionPublicKey too; without it the buyer cannot accept early and gets its key only with an adjudicator's accept`] }),
   };
 }
 
@@ -771,6 +778,7 @@ async function earlyAccept(ctx: PrepareContext, input: Record<string, unknown>):
       `deliveryHash ${posted.deliveryHash} is the hash of the delivery you opened, computed yourself from the seller-signed delivery (EIP-712 struct hash without its signature); the settlement layer refuses an accept for any other delivery`,
       'open your envelope first: get the signed delivery from the seller, check it is the one the settlement layer holds (its deliveryHash in delivery.submitted, as at least two operators serve it), open your envelope with your own key, decrypt the ciphertext and check the plaintext hash; the envelope the seller supplied is what an early accept releases, and nothing else checks it',
       'no appeal follows an early accept (D32): if your envelope does not open, do not accept early; an adjudicator\'s decision re-seals the key to your terms key',
+      "if the delivery holds no envelope for you (a standing delivery, ADR-0040 §2), the settlement layer refuses an early accept: wait for the adjudicator's accept, which carries your key",
     ],
     defaults: givenExpiry ? {} : { expiresAt },
   };
@@ -895,6 +903,7 @@ async function settlement(ctx: PrepareContext, input: Record<string, unknown>): 
       `payouts: ${payouts.map((p) => `${amountText(p.amount)} to ${p.to}${payeeLabel(c, p.to)}`).join('; ')} (they must sum to the price ${amountText(c.price)})`,
       `the fee ${amountText(c.adjudication.fee)} returns to the buyer's payment address ${c.buyerPaymentAddress}`,
       releaseKey ? 'the buyer receives the content key' : 'the content key is not released',
+      ...(posted && releaseKey ? ["the key released is the buyer's envelope in the posted delivery: if it holds none (a standing delivery, ADR-0040 §2), the settlement layer refuses releaseKey true, so set it false"] : []),
       'both parties sign the identical typed data; either may submit once both signatures are in',
       ...(late
         ? [

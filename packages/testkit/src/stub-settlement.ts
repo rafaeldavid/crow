@@ -592,8 +592,10 @@ export class StubSettlement {
     const { parties } = this.scenario;
     switch (s.kind) {
       case 'offer':
-      case 'deliver':
         return { actor: parties.seller, via: s.via };
+      case 'deliver':
+        // ADR-0040 §2: the buyer may post the standing delivery the seller signed at setup.
+        return { actor: s.by === 'buyer' ? parties.buyer : parties.seller, via: s.via };
       case 'agree_and_fund':
       case 'reclaim':
       case 'verify_key_release':
@@ -654,7 +656,7 @@ export class StubSettlement {
       case 'agree_and_fund':
         return this.agreeAndFund(parties.buyer, s.via);
       case 'deliver':
-        return this.deliver(parties.seller, s.via, s.file, s.stubBytes === true, s.attempt ?? 1, s.buyerEnvelope === 'wrong_key');
+        return this.deliver(parties.seller, s.via, s.file, s.stubBytes === true, s.attempt ?? 1, s.buyerEnvelope, s.by === 'buyer' ? parties.buyer : undefined);
       case 'early_accept':
         return this.earlyAccept(parties.buyer, s.via, s.opened);
       case 'appeal':
@@ -869,19 +871,25 @@ export class StubSettlement {
     this.balanceRows.push({ after: 'fund', balances: await this.snapshotBalances() });
   }
 
-  private async deliver(seller: string, via: string, file: string, stubBytes: boolean, attempt: number, buyerWrongKey = false): Promise<void> {
-    const c = this.needCommitment(seller, 'deliver', via);
+  /**
+   * `poster`: who posts the delivery when it is not the seller. A standing delivery (ADR-0040 §2) is signed by the seller
+   * at setup and posted by anyone; the stub signs it here with the seller's key, which an offline seller still held then.
+   */
+  private async deliver(seller: string, via: string, file: string, stubBytes: boolean, attempt: number, buyerEnvelope?: 'wrong_key' | 'none', poster?: string): Promise<void> {
+    const by = poster ?? seller;
+    const c = this.needCommitment(by, 'deliver', via);
     if (!c) return;
-    const built = await this.signedDelivery(seller, c, file, stubBytes, attempt, buyerWrongKey);
-    const call = `deliver (attempt ${attempt})${buyerWrongKey ? ", buyer's envelope sealed to another key" : ''}`;
-    if (!(await this.submit(seller, call, via, { kind: 'deliver', delivery: built.message }))) return;
+    const built = await this.signedDelivery(seller, c, file, stubBytes, attempt, buyerEnvelope);
+    const what = buyerEnvelope === 'wrong_key' ? ", buyer's envelope sealed to another key" : buyerEnvelope === 'none' ? ', standing: no envelope for the buyer' : '';
+    const call = `deliver (attempt ${attempt})${what}${poster ? ', signed by the seller at setup' : ''}`;
+    if (!(await this.submit(by, call, via, { kind: 'deliver', delivery: built.message }))) return;
     this.delivery = built;
     this.receipt(via, 'deliver');
-    this.row(seller, call, via, 'ok');
+    this.row(by, call, via, 'ok');
   }
 
   /** A seller-signed delivery of a fixture file, built and signed but not submitted. */
-  private async signedDelivery(seller: string, c: { terms: CommitmentTerms; id: Hex32 }, file: string, stubBytes: boolean, attempt: number, buyerWrongKey = false) {
+  private async signedDelivery(seller: string, c: { terms: CommitmentTerms; id: Hex32 }, file: string, stubBytes: boolean, attempt: number, buyerEnvelope?: 'wrong_key' | 'none') {
     const path = join(this.root, 'fixtures', file);
     const present = existsSync(path);
     if (!present && !stubBytes) {
@@ -896,7 +904,9 @@ export class StubSettlement {
     const plaintextSha256 = sha256(plaintext);
     const contentKey = canonicalKeccak({ contentKey: plaintextSha256, commitmentId: c.id });
     const { adjudication } = c.terms;
-    const recipients = [adjudication.adjudicator, adjudication.fallbackAdjudicator, adjudication.appealAdjudicator, c.terms.buyer];
+    const buyerWrongKey = buyerEnvelope === 'wrong_key';
+    // A standing delivery leaves the buyer out: its key comes only with an adjudicator's accept (ADR-0040 §2).
+    const recipients = [adjudication.adjudicator, adjudication.fallbackAdjudicator, adjudication.appealAdjudicator, ...(buyerEnvelope === 'none' ? [] : [c.terms.buyer])];
     const body: Omit<Delivery, 'signature'> = {
       commitmentId: c.id,
       attempt,

@@ -1441,7 +1441,15 @@ describe.skipIf(!ready)(`ChainSync on anvil standing in for Sepolia${ready ? '' 
     const start = await head();
     const hasty = new LiveChain({ deployment, rpcUrls: [anvil.rpcUrl], relayerKey: HASTY_RELAYER, pollMs: 10, receiptTimeoutMs: 1 });
     const b = await EvmSettlement.restore(hasty, genesis, saved, wall);
-    await expect(b.submit(await d.agreeAndFund({ operatorFee: { to: cast.operator.address, value: 4_710_000n } }), { via: 'op-1' })).rejects.toThrow(/not mined within/);
+    // No block until the hasty relay has given up (T-559): with interval mining on, a loaded machine could poll for the
+    // receipt only after the next one-second block, find it mined, and resolve instead of missing it.
+    const funding = await d.agreeAndFund({ operatorFee: { to: cast.operator.address, value: 4_710_000n } });
+    await anvil.rpc('evm_setIntervalMining', [0]);
+    try {
+      await expect(b.submit(funding, { via: 'op-1' })).rejects.toThrow(/not mined within/);
+    } finally {
+      await anvil.rpc('evm_setIntervalMining', [1]);
+    }
     const c = await EvmSettlement.restore(chain, genesis, saved, wall);
     const sync = new ChainSync(c, start);
     let applied = 0;

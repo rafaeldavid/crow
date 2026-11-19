@@ -108,6 +108,9 @@ steps:
     const s = parseScenario(minimal('steps:\n  - deliver: { by: seller, file: data/x.csv, buyer_envelope: wrong_key }\n'), 't');
     expect(s.steps[0]).toEqual({ kind: 'deliver', by: 'seller', via: 'direct', file: 'data/x.csv', buyerEnvelope: 'wrong_key' });
     expect(() => parseScenario(minimal('steps:\n  - deliver: { by: seller, file: data/x.csv, buyer_envelope: missing }\n'), 't')).toThrow(/buyer_envelope/);
+    // T-550: a standing delivery has no buyer envelope, and only it may be posted by the buyer.
+    expect(parseScenario(minimal('steps:\n  - deliver: { by: buyer, file: data/x.csv, buyer_envelope: none }\n'), 't').steps[0]).toEqual({ kind: 'deliver', by: 'buyer', via: 'direct', file: 'data/x.csv', buyerEnvelope: 'none' });
+    expect(() => parseScenario(minimal('steps:\n  - deliver: { by: buyer, file: data/x.csv }\n'), 't')).toThrow(/buyer posts only a standing delivery/);
   });
 
   it('reserves ledger account names and checks faucet accounts', () => {

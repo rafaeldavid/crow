@@ -654,11 +654,17 @@ export class Operator {
   private async body(ctx: Ctx, limit = MAX_BODY_BYTES): Promise<unknown> {
     const chunks: Buffer[] = [];
     let size = 0;
+    // Past the limit the loop reads on, keeps nothing and refuses at the end of the body, as a ciphertext upload does
+    // (T-547): leaving the loop early destroys the request's socket, which reset the client's upload or its next request
+    // on that connection (T-559, measured on every JSON route). It reads on only up to the protocol's ciphertext ceiling,
+    // the most this node reads for any request, so a larger body is cut off there and costs at most that much to refuse.
+    const tooLarge = () => fail('payload_too_large', `request bodies are limited to ${limit} bytes here`, { maxBytes: limit });
     for await (const chunk of ctx.req as AsyncIterable<Buffer>) {
       size += chunk.length;
-      if (size > limit) fail('payload_too_large', `request bodies are limited to ${limit} bytes here`, { maxBytes: limit });
-      chunks.push(chunk);
+      if (size > MAX_CIPHERTEXT_BYTES) tooLarge();
+      if (size <= limit) chunks.push(chunk);
     }
+    if (size > limit) tooLarge();
     const text = Buffer.concat(chunks).toString('utf8');
     if (text.trim() === '') return {};
     try {
