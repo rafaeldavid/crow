@@ -1096,7 +1096,8 @@ export class Operator {
       if (p.commitmentId !== sealed.id) fail('invalid_terms', 'the Publish names another commitment');
       if (LEVEL_RANK[p.level] < LEVEL_RANK[level]) fail('invalid_state', `the level is already ${level}; a Publish only raises it`);
       if (!(Date.parse(this.settlementNow()) < Date.parse(p.expiresAt))) fail('deadline_passed', `the Publish expired at ${p.expiresAt}`);
-      if (!(await verifyCoSigned(this.domain, p, sealed.buyer, sealed.seller))) fail('invalid_signature', 'the Publish is not signed by both the buyer and the seller of these terms');
+      // ADR-0040 §5, D84: either party may be a contract; the settlement layer's contract-signer rule reads it.
+      if (!(await verifyCoSigned(this.domain, p, sealed.buyer, sealed.seller, this.o.settlement.signerCheck?.()))) fail('invalid_signature', 'the Publish is not signed by both the buyer and the seller of these terms');
       level = p.level;
     }
     if (body.keys.recordKeys?.length) fail('invalid_terms', 'recordKeys are reserved: sealed judgment records arrive in a later slice of T-207');

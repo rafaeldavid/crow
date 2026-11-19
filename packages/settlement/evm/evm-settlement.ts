@@ -74,6 +74,7 @@ import {
   type RandomnessSource,
   type Scope,
   type SettlementEvent,
+  type SignerCheck,
   type SettlementEventType,
   type SignableMessage,
   type Timestamp,
@@ -107,6 +108,7 @@ import {
 } from './encode.js';
 import { missingBlock, problemFromRevert, revertData, revertName } from './errors.js';
 import { assertSafeChain } from './guard.js';
+import { chainSignerCheck } from './signer-reads.js';
 import { commitmentTxs, embeddedCalls, feeLegs, idsOf, rulesCalls, type ChainTx, type RulesCall } from './sync.js';
 import type { EvmWorld } from './world.js';
 
@@ -889,8 +891,18 @@ export class EvmSettlement implements Settlement {
     return this.books.get(id) ?? refuse('not_found', `no commitment ${id}`);
   }
 
-  private async check(m: SignableMessage, signer: Address, what: string): Promise<void> {
-    if (!(await verifyMessage(this.domain, m, signer))) refuse('invalid_signature', `${what} signature does not recover to ${signer}`);
+  /** `party`: the contract-signer rule, for a message the buyer or the seller signs (ADR-0040 §5, D84); absent, ECDSA. */
+  private async check(m: SignableMessage, signer: Address, what: string, party?: SignerCheck): Promise<void> {
+    if (!(await verifyMessage(this.domain, m, signer, party))) refuse('invalid_signature', `${what} signature does not recover to ${signer}`);
+  }
+
+  /**
+   * The contract-signer rule over this chain (ADR-0040 §5, D84), for a buyer's or a seller's signature: ECDSA for an
+   * address with no code, ERC-1271 by eth_call for one with code. At `block` for a step read from a mined transaction,
+   * since a contract's answer can change after it; otherwise the latest block, at the scenario's second on anvil.
+   */
+  signerCheck(block?: bigint): SignerCheck {
+    return chainSignerCheck(this.world.publicClient, block !== undefined ? { blockNumber: block } : this.wall ? {} : { time: secs(this.now()) });
   }
 
   private stepped(state: EscrowState, e: EscrowEvent): EscrowState {
@@ -934,7 +946,7 @@ export class EvmSettlement implements Settlement {
       case 'offer': {
         const c = s.commitment;
         const t = termsOf(c);
-        if (!(await verifyTerms(this.domain, t, c.signatures.seller, t.seller))) refuse('invalid_signature', 'the seller did not sign these terms');
+        if (!(await verifyTerms(this.domain, t, c.signatures.seller, t.seller, this.signerCheck()))) refuse('invalid_signature', 'the seller did not sign these terms');
         if (this.books.has(c.id)) refuse('invalid_state', `commitment ${c.id} was already offered`);
         // ADR-0031 §2 (SC-1): a deployment serves one token, and agreeAndFund refuses terms in any other. Refused here,
         // before the club's and the mandates' checks and before the buyer and the adjudicator sign terms the contract
@@ -990,7 +1002,7 @@ export class EvmSettlement implements Settlement {
         return m.commitmentId;
       }
       case 'agree':
-        await this.check(s.message, s.message.buyer, 'Agree');
+        await this.check(s.message, s.message.buyer, 'Agree', this.signerCheck());
         return this.agree(s.message, via, dryRun).id;
       case 'fund':
         // On EVM the signature is the ERC-3009 one (ADR-0025); the token checks it inside agreeAndFund.
@@ -1003,7 +1015,7 @@ export class EvmSettlement implements Settlement {
         // T-218: this same signed funding already funded the deal, sent without the fee leg (a copy of the bundle's fund
         // leg, ADR-0028 §11). The fee leg can still go alone until fundBy.
         if (this.fundedBy(id, s.funding.signature)) return this.feeAlone(id, s, options, dryRun);
-        await this.check(s.agree, s.agree.buyer, 'Agree');
+        await this.check(s.agree, s.agree.buyer, 'Agree', this.signerCheck());
         const { announce, undo } = this.agree(s.agree, via, dryRun, true);
         if (dryRun) return id;
         try {
@@ -1059,7 +1071,7 @@ export class EvmSettlement implements Settlement {
         const m = s.message;
         const book = this.bookOf(m.commitmentId);
         const t = book.state.terms;
-        if (!(await verifyMutualSettlement(this.domain, m, t.buyer, t.seller))) refuse('invalid_signature', 'the settlement is not signed by both the buyer and the seller');
+        if (!(await verifyMutualSettlement(this.domain, m, t.buyer, t.seller, this.signerCheck()))) refuse('invalid_signature', 'the settlement is not signed by both the buyer and the seller');
         // SC-5b (T-357): in Held the settlement carries the unposted delivery it names, as the contract's `dv` and key
         // proof; core checks it first, as the contract does (:380-381). The contract stores no delivery for it.
         const late = book.state.kind === 'Held' && m.releaseKey ? s.delivery : undefined;
@@ -1093,7 +1105,7 @@ export class EvmSettlement implements Settlement {
     const following = book.state.kind === 'Held' && !book.behind;
     // A repost of a copy whose relay the contract already refused: read the chain once more, and relay nothing (red team round 2).
     if (following && book.posted?.asked && this.sameCopy(book.posted, want)) {
-      await this.check({ ...d, type: 'Delivery' }, book.state.terms.seller, 'Delivery');
+      await this.check({ ...d, type: 'Delivery' }, book.state.terms.seller, 'Delivery', this.signerCheck());
       if (dryRun) return id;
       const kept = options.note ? this.keepPosted(id, book, options.note, false) : 'kept';
       await this.catchUp(id, d).catch(() => undefined);
@@ -1139,7 +1151,7 @@ export class EvmSettlement implements Settlement {
       }
       // Only a copy the seller signed may stand in for the delivery the chain holds (red team: a forged copy joined here
       // when the hash reads trailed).
-      const signed = !dryRun && book.state.kind === 'Held' && (await verifyMessage(this.domain, { ...d, type: 'Delivery' }, book.state.terms.seller));
+      const signed = !dryRun && book.state.kind === 'Held' && (await verifyMessage(this.domain, { ...d, type: 'Delivery' }, book.state.terms.seller, this.signerCheck()));
       // A deal that moved some other way (a reclaim), or a hash read that failed: follow it, then refuse.
       if (e.revert === 'WrongStage' && !dryRun && book.state.kind === 'Held') {
         await this.catchUp(id, signed ? d : undefined);
@@ -1213,7 +1225,7 @@ export class EvmSettlement implements Settlement {
     if (book.state.kind !== 'Held') return problem('invalid_state', `a carried delivery needs a held commitment; it is ${book.state.kind}`);
     // The decision or early accept that carries it would revert InvalidMessage; core names this refusal.
     if (d.attempt !== 1) return problem('submission_limit_reached', `attempt ${d.attempt} exceeds maxSubmissions ${book.state.terms.timing.maxSubmissions}`);
-    if (!(await verifyMessage(this.domain, { ...d, type: 'Delivery' }, book.state.terms.seller))) return problem('invalid_signature', 'the delivery is not signed by the seller');
+    if (!(await verifyMessage(this.domain, { ...d, type: 'Delivery' }, book.state.terms.seller, this.signerCheck()))) return problem('invalid_signature', 'the delivery is not signed by the seller');
     book.carried = d;
     this.dirty.add(d.commitmentId);
     return null;
@@ -1997,14 +2009,14 @@ export class EvmSettlement implements Settlement {
       if ('wait' in r) {
         // A call that carries a delivery this node never held waits for it, but only once the logs and (for a call read
         // out of another contract) its signature say it ran: a planted call must not cancel the join (red-team round 3).
-        if (this.waitUnconfirmed(c, logs, book.state.terms) || (!readable && !(await this.waitSigned(id, book, c)))) continue;
+        if (this.waitUnconfirmed(c, logs, book.state.terms) || (!readable && !(await this.waitSigned(id, book, c, BigInt(tx.block))))) continue;
         waits.push(r.wait);
       }
       else if ('fail' in r) why = r.fail;
       else {
         const off = this.unconfirmed(r, logs, book.state.terms);
         if (off) why = `transaction ${tx.hash}'s logs do not show the ${r.fn} this node read from its calldata: ${off}.`;
-        else if (!readable && !(await r.signed())) why = `the ${r.fn} written in transaction ${tx.hash}'s calldata does not carry valid signatures this node can check (contract signers, ERC-1271, are not read).`;
+        else if (!readable && !(await r.signed())) why = `the ${r.fn} written in transaction ${tx.hash}'s calldata does not carry valid signatures: the parties' were read by their keys or, for a contract, its ERC-1271 answer at that block.`;
         else accepted.push(r);
       }
     }
@@ -2042,7 +2054,7 @@ export class EvmSettlement implements Settlement {
   }
 
   /** Whether a waiting call's own signed message verifies (the delivery it carries is checked when posted). */
-  private async waitSigned(id: Hex32, book: Book, c: RulesCall): Promise<boolean> {
+  private async waitSigned(id: Hex32, book: Book, c: RulesCall, block: bigint): Promise<boolean> {
     const v = c.args[1] as Record<string, unknown>;
     if (c.fn === 'decide') {
       const m = this.decisionFrom(id, book, v);
@@ -2051,7 +2063,7 @@ export class EvmSettlement implements Settlement {
     if (c.fn === 'earlyAccept') {
       const buyer = book.state.terms.buyer;
       const m: EarlyAccept = { type: 'EarlyAccept', commitmentId: id, buyer, attempt: Number(v['attempt']), deliveryHash: v['deliveryHash'] as Hex32, nonce: v['nonce'] as Hex32, expiresAt: chainTime(v['expiresAt']), signature: v['signature'] as Hex };
-      return verifyMessage(this.domain, m, buyer);
+      return verifyMessage(this.domain, m, buyer, this.signerCheck(block));
     }
     if (c.fn === 'mutualSettle') {
       const { buyer, seller } = book.state.terms;
@@ -2066,7 +2078,7 @@ export class EvmSettlement implements Settlement {
         buyerSignature: v['buyerSignature'] as Hex,
         sellerSignature: v['sellerSignature'] as Hex,
       };
-      return verifyMutualSettlement(this.domain, m, buyer, seller);
+      return verifyMutualSettlement(this.domain, m, buyer, seller, this.signerCheck(block));
     }
     return false;
   }
@@ -2271,7 +2283,7 @@ export class EvmSettlement implements Settlement {
             this.spent.set(day, (this.spent.get(day) ?? 0n) + BigInt(terms.price.amount));
           }
         };
-        const signed = async () => (await verifyMessage(this.domain, acceptance, a.adjudicator)) && (await verifyMessage(this.domain, agree, terms.buyer));
+        const signed = async () => (await verifyMessage(this.domain, acceptance, a.adjudicator)) && (await verifyMessage(this.domain, agree, terms.buyer, this.signerCheck(BigInt(tx.block))));
         // ADR-0033 §4: the funding's actor is the payment address, whichever route sent it.
         return { fn: call.fn, steps, actor: relayed ? funding.from : terms.buyerPaymentAddress, ctx: { mined }, signed };
       }
@@ -2301,7 +2313,7 @@ export class EvmSettlement implements Settlement {
             ? sub.message
             : { type: 'EarlyAccept', commitmentId: id, buyer: terms.buyer, attempt: Number(v['attempt']), deliveryHash: hex(v['deliveryHash']), nonce: hex(v['nonce']), expiresAt: ts(v['expiresAt']), signature: v['signature'] as Hex };
         const steps = (at: Timestamp): EscrowEvent[] => [...(carry ? [{ type: 'deliver' as const, at, delivery: carry }] : []), { type: 'early_accept', at, message: m }];
-        return { fn: call.fn, steps, actor: m.buyer, ctx: carry ? { delivery: carry } : {}, signed: () => verifyMessage(this.domain, m, terms.buyer) };
+        return { fn: call.fn, steps, actor: m.buyer, ctx: carry ? { delivery: carry } : {}, signed: () => verifyMessage(this.domain, m, terms.buyer, this.signerCheck(BigInt(tx.block))) };
       }
       case 'mutualSettle': {
         const v = args[1]!;
@@ -2327,7 +2339,7 @@ export class EvmSettlement implements Settlement {
           if (!late) return { wait: `a settlement in transaction ${tx.hash} released the key of delivery ${m.deliveryHash}, which was never posted and did not pass through this node, so this node holds no copy of it.` };
         }
         const carriedBy = late;
-        return { fn: call.fn, steps: (at) => [{ type: 'mutual_settle', at, message: m, rule: { allowed: true, payoutsTo: 'parties' }, ...(carriedBy ? { delivery: carriedBy } : {}) }], actor: 'anyone', ctx: {}, signed: () => verifyMutualSettlement(this.domain, m, terms.buyer, terms.seller), settlement: m };
+        return { fn: call.fn, steps: (at) => [{ type: 'mutual_settle', at, message: m, rule: { allowed: true, payoutsTo: 'parties' }, ...(carriedBy ? { delivery: carriedBy } : {}) }], actor: 'anyone', ctx: {}, signed: () => verifyMutualSettlement(this.domain, m, terms.buyer, terms.seller, this.signerCheck(BigInt(tx.block))), settlement: m };
       }
       case 'reclaim':
         return { fn: call.fn, steps: (at) => [{ type: 'reclaim', at }], actor: 'anyone', ctx: {}, signed: yes };
@@ -2434,7 +2446,7 @@ export class EvmSettlement implements Settlement {
    */
   private async joinLanded(book: Book, d: Delivery, landed: { hash: Hex32; block: bigint }, options: Relay, dryRun: boolean): Promise<'joined' | Kept> {
     const id = d.commitmentId;
-    await this.check({ ...d, type: 'Delivery' }, book.state.terms.seller, 'Delivery');
+    await this.check({ ...d, type: 'Delivery' }, book.state.terms.seller, 'Delivery', this.signerCheck());
     const want = deliveryHash(d);
     if (lc(landed.hash) !== lc(want)) refuse('invalid_state', `the delivery that landed on chain for this deal is ${landed.hash}, not this one (${want})`);
     if (dryRun) return 'joined';
@@ -2530,7 +2542,7 @@ export class EvmSettlement implements Settlement {
     if (!d || book.state.kind !== 'Held' || book.behind) return;
     const landed = await this.landedDelivery(id, mined.blockNumber, true);
     if (landed.kind === 'landed' ? lc(landed.hash) !== lc(deliveryHash(d)) : mined.timestamp >= secs(book.state.terms.timing.deliverBy)) return;
-    if (!(await verifyMessage(this.domain, { ...d, type: 'Delivery' }, book.state.terms.seller))) return;
+    if (!(await verifyMessage(this.domain, { ...d, type: 'Delivery' }, book.state.terms.seller, this.signerCheck(mined.blockNumber)))) return;
     this.keepPosted(id, book, note, landed.kind === 'landed');
     if (book.posted && this.sameCopy(book.posted, deliveryHash(d))) book.posted.asked = true;
   }
@@ -2544,7 +2556,7 @@ export class EvmSettlement implements Settlement {
     const id = d.commitmentId;
     const behind = book.behind!;
     const waiting = behind.waiting!;
-    await this.check({ ...d, type: 'Delivery' }, book.state.terms.seller, 'Delivery');
+    await this.check({ ...d, type: 'Delivery' }, book.state.terms.seller, 'Delivery', this.signerCheck());
     const landed = this.decode(waiting[0]!.logs.filter((l) => l.topics[1] === id && lc(l.address) === lc(this.world.deployment.rules)) as unknown as Log[]).find((l) => l.eventName === 'JobSubmitted')?.args['deliverable'];
     // A settlement in Held that released a key (SC-5b, T-357) lands no delivery: its rebuild checks the copy against the
     // signed deliveryHash instead, and waits again for another copy when it does not match.

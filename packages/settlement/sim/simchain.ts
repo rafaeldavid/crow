@@ -18,6 +18,8 @@ import {
   deliveryHash,
   holdbackDomain,
   MAINNET_CHAIN_IDS,
+  contractSignerRule,
+  recoversFrom,
   mulBps,
   offer,
   postedDeliveryHash,
@@ -46,6 +48,7 @@ import {
   type SettlementEventType,
   type SettlementProfile,
   type SignableMessage,
+  type SignerCheck,
   type Timestamp,
   type TokenAmount,
 } from '@holdback/core';
@@ -79,9 +82,27 @@ export interface Genesis {
    * worlds partners rehearse on, so a local rehearsal refuses what the chain refuses. On `phase_one` no bond is reserved.
    */
   profile?: SettlementProfile;
+  /**
+   * Contract accounts (ADR-0040 §5, D84): addresses that answer ERC-1271 as a contract would, so SimChain applies the
+   * contract-signer rule a chain applies to a buyer or a seller. SimChain runs no EVM, so each names what its code does.
+   */
+  contracts?: SimContract[];
+}
+
+/**
+ * A contract account on SimChain. `wallet`: answers yes to its owner key's 64- or 65-byte signature over the digest,
+ * as the test wallet SwitchWallet answers in its honest mode (contracts/test/crosscheck/ContractSigners.sol).
+ */
+export interface SimContract {
+  address: Address;
+  kind: 'wallet';
+  owner: Address;
 }
 
 export const DEFAULT_EXPIRY_MARGIN_SEC = 86_400;
+
+/** What `code` reads at a SimChain contract account: a marker, since SimChain runs no code. */
+const SIM_CODE = '0xfe';
 
 /** CPP's authorizationExpiry for a commitment: fallbackBy + appealDecideSec + margin (ADR-0003 "As built"). */
 export function authorizationExpiry(terms: AnyCommitmentTerms, marginSec: number = DEFAULT_EXPIRY_MARGIN_SEC): Timestamp {
@@ -252,6 +273,7 @@ export class SimChain implements Settlement {
   private readonly idempotency = new Map<string, { body: Hex32; result: Extract<SubmitResult, { ok: true }> }>();
   private readonly entries: JournalEntry[] = [];
   private readonly mandates = new Map<string, Mandate>();
+  private readonly contracts = new Map<string, SimContract>();
   private readonly ready: Promise<Problem | null>;
   private queue: Promise<unknown> = Promise.resolve();
   private clockMs: number;
@@ -269,7 +291,22 @@ export class SimChain implements Settlement {
       this.mint(account.senior(a), BigInt(b.senior));
     }
     for (const m of genesis.mandates) this.mandates.set(`${lc(m.agent)}|${m.clubId}`, m);
+    for (const c of genesis.contracts ?? []) this.contracts.set(lc(c.address), c);
     this.ready = this.verifyGenesis();
+  }
+
+  /**
+   * The contract-signer rule over SimChain's contract accounts (ADR-0040 §5, D84): an address in `genesis.contracts`
+   * answers as its kind says; any other address has no code, so a 64- or 65-byte signature is recovered as today.
+   */
+  signerCheck(): SignerCheck {
+    return contractSignerRule({
+      code: async (a) => (this.contracts.has(lc(a)) ? SIM_CODE : '0x'),
+      isValidSignature: async (a, digest, signature) => {
+        const c = this.contracts.get(lc(a));
+        return c?.kind === 'wallet' ? recoversFrom(digest, signature, c.owner) : false;
+      },
+    });
   }
 
   private async verifyGenesis(): Promise<Problem | null> {
@@ -506,45 +543,48 @@ export class SimChain implements Settlement {
     if (s.kind === 'trigger') return 'none';
     const unsignedParty = dryRun && PARTY_KINDS.has(s.kind) && this.missingSignature(s);
     if (unsignedParty) return 'skipped';
-    const check = async (m: SignableMessage, signer: Address, what: string) => {
-      if (!(await verifyMessage(this.domain, m, signer))) refuse('invalid_signature', `${what} signature does not recover to ${signer}`);
+    // A buyer's or a seller's signature takes the contract-signer rule (ADR-0040 §5, D84); an adjudicator's, a principal's
+    // and an ERC-3009 authorization stay ECDSA.
+    const party = this.signerCheck();
+    const check = async (m: SignableMessage, signer: Address, what: string, byParty = false) => {
+      if (!(await verifyMessage(this.domain, m, signer, byParty ? party : undefined))) refuse('invalid_signature', `${what} signature does not recover to ${signer}`);
     };
     const terms = (id: Hex32) => this.w.recs.get(id)?.state.terms ?? refuse('not_found', `no commitment ${id}`);
     switch (s.kind) {
       case 'offer': {
         const t = termsOf(s.commitment);
-        if (!(await verifyTerms(this.domain, t, s.commitment.signatures.seller, t.seller))) refuse('invalid_signature', 'the seller did not sign these terms');
+        if (!(await verifyTerms(this.domain, t, s.commitment.signatures.seller, t.seller, party))) refuse('invalid_signature', 'the seller did not sign these terms');
         break;
       }
       case 'adjudicator_accept':
         await check(s.message, s.message.adjudicator, 'AdjudicatorAcceptance');
         break;
       case 'agree':
-        await check(s.message, s.message.buyer, 'Agree');
+        await check(s.message, s.message.buyer, 'Agree', true);
         break;
       case 'fund':
         await check(s.message, s.message.from, 'FundingAuthorization');
         break;
       case 'agree_and_fund':
-        await check(s.agree, s.agree.buyer, 'Agree');
+        await check(s.agree, s.agree.buyer, 'Agree', true);
         await check(s.funding, s.funding.from, 'FundingAuthorization');
         if (s.operatorFee) await check(s.operatorFee, s.operatorFee.from, 'TransferAuthorization');
         break;
       case 'deliver':
-        await check({ ...s.delivery, type: 'Delivery' }, terms(s.delivery.commitmentId).seller, 'Delivery');
+        await check({ ...s.delivery, type: 'Delivery' }, terms(s.delivery.commitmentId).seller, 'Delivery', true);
         break;
       case 'early_accept':
-        await check(s.message, s.message.buyer, 'EarlyAccept');
+        await check(s.message, s.message.buyer, 'EarlyAccept', true);
         break;
       case 'decide':
         await check(s.message, s.message.adjudicator, 'Decision');
         break;
       case 'appeal':
-        await check({ ...s.appeal, type: 'Appeal' }, s.appeal.appellantAddress, 'Appeal');
+        await check({ ...s.appeal, type: 'Appeal' }, s.appeal.appellantAddress, 'Appeal', true);
         break;
       case 'mutual_settle': {
         const t = terms(s.message.commitmentId);
-        if (!(await verifyMutualSettlement(this.domain, s.message, t.buyer, t.seller))) refuse('invalid_signature', 'the settlement is not signed by both the buyer and the seller');
+        if (!(await verifyMutualSettlement(this.domain, s.message, t.buyer, t.seller, party))) refuse('invalid_signature', 'the settlement is not signed by both the buyer and the seller');
         break;
       }
     }
