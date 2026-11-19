@@ -90,10 +90,12 @@ Steps 0 to 6, then 8, then 7, then 11.1, 9, 10 and the rest of 11. The site depl
 7. **The deployer has test ETH.** Reusing the live record's deployer (`jq -r .deployer $W/contracts/deployments/sepolia.json`) or a new throwaway key is Rafa's call. Size the budget from the live deployment's own creations, then the gas price:
 
    ```sh
-   for tx in $(jq -r '.contracts[].tx, .token.tx' $W/contracts/deployments/sepolia.json); do cast receipt $tx gasUsed --rpc-url $R; done
+   for tx in $(jq -r '.contracts[].tx, .token.tx' $W/contracts/deployments/sepolia.json); do cast receipt $tx gasUsed --rpc-url $D; done
    cast gas-price --rpc-url $R
    cast balance <deployer address> --ether --rpc-url $R
    ```
+
+   The receipts come from `D`: on 2026-11-19 the public node answered `null` for each of the first deployment's five creations, six days old, and `cast receipt` waited on it without end; Tenderly's gateway returned all five [measured].
 
    Keep at least twice the sum at today's gas price, with room for the price to move: a stopped run is rerun whole, because the script does not resume (its header says so). A fix that grows the contracts costs more.
 8. **The relayer's funding lane has test ETH:** `cast balance $(curl -s https://api.crow.direct/.well-known/holdback.json | jq -r .demo.relayer.fundingLane) --ether --rpc-url $R`. The new world keeps the relayer key and its lanes. Do not run `apps/demo-cloud/scripts/relayer.mjs` or `apps/test-agents/scripts/seed.mjs`: both secrets stay as they are.
