@@ -4,7 +4,7 @@
 // calls go through an injected provider; a request carries the model ID, the two prompt strings and
 // fixed sampling parameters, and nothing else (no tools, no secrets, no URLs to fetch).
 import type { Hex32, MimeType, PanelMember, Problem, Result } from '@holdback/core';
-import { canonicalJson, canonicalKeccak, err, ok, problem } from '@holdback/core';
+import { canonicalKeccak, err, ok, problem } from '@holdback/core';
 import { preDecision, type Aggregate, type PanelVerdict, type PreDecision } from './aggregate.js';
 import { runChecks, type CheckOutcome } from './checks/index.js';
 import type { Intaken } from './intake.js';
@@ -147,6 +147,22 @@ function saneResponse(res: unknown): JudgeResponse {
   return { kind: 'error', transport: false, detail: 'the answer carried no text string' };
 }
 
+const LONE_SURROGATE = /\p{Cs}/gu;
+
+/**
+ * The draft with every lone UTF-16 surrogate replaced by U+FFFD. The signed record's hash is RFC 8785 canonical JSON,
+ * which refuses a lone surrogate, and text from the seller (a delivered CSV header or JSON key that a check copies
+ * into its detail and cuts) or from a judge (an escape, or redacted evidence cut at 300 units) can carry one. Left in,
+ * it made the record hash throw on every pass, so the adjudicator called the panel again or never signed (T-570,
+ * review and red team of PR 722). A string that hashed before is unchanged, so no kept version's result moves.
+ */
+function wellFormed<T>(value: T): T {
+  if (typeof value === 'string') return value.replace(LONE_SURROGATE, '\uFFFD') as T;
+  if (Array.isArray(value)) return value.map((v) => wellFormed(v)) as T;
+  if (value !== null && typeof value === 'object') return Object.fromEntries(Object.entries(value).map(([k, v]) => [wellFormed(k), wellFormed(v)])) as T;
+  return value;
+}
+
 async function call(provider: JudgeProvider, req: JudgeRequest): Promise<JudgeResponse> {
   const once = async (): Promise<JudgeResponse> => {
     try {
@@ -234,7 +250,7 @@ export async function runPipeline(input: PipelineInput): Promise<Result<Judgment
 
   if (next !== 'panel') {
     const agg = aggregation.aggregate({ checks: deterministic, inconclusive, rubric: acceptance.rubric, screenFlagged: baseScreen.flagged, verdicts: [], thresholds });
-    return ok({ ...base, screen: baseScreen, panel: { ran: false, members: [] }, aggregate: agg });
+    return ok(wellFormed({ ...base, screen: baseScreen, panel: { ran: false, members: [] }, aggregate: agg }));
   }
 
   const rubricHash = canonicalKeccak(acceptance.rubric);
@@ -297,14 +313,6 @@ export async function runPipeline(input: PipelineInput): Promise<Result<Judgment
       if (parsed.status === 'abstain') {
         return { member: { ...member, status: 'abstain' }, verdict: none, canaryEcho: parsed.reason === 'canary_echo', filtered: parsed.reason, strided: p.sampling === 'stride' };
       }
-      // The verdict goes into the signed record, whose hash is RFC 8785 canonical JSON. A verdict canonical JSON cannot
-      // represent (a lone UTF-16 surrogate, from the judge or from cutting redacted evidence) is an error for that seat;
-      // left in, it made the record hash throw and the adjudicator call the panel again (T-570 review of PR 722).
-      try {
-        canonicalJson(parsed.verdict);
-      } catch {
-        return seatError;
-      }
       const status = parsed.verdict.overall === 'abstain' ? 'abstain' : 'ok';
       return { member: { ...member, status, verdict: parsed.verdict }, verdict: { family, verdict: parsed.verdict }, canaryEcho: false, strided: p.sampling === 'stride' };
     }),
@@ -327,5 +335,5 @@ export async function runPipeline(input: PipelineInput): Promise<Result<Judgment
     thresholds,
     escalate,
   });
-  return ok({ ...base, screen: finalScreen, panel: { ran: true, members: rs.map((r) => r.member) }, aggregate: agg });
+  return ok(wellFormed({ ...base, screen: finalScreen, panel: { ran: true, members: rs.map((r) => r.member) }, aggregate: agg }));
 }

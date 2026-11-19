@@ -52,8 +52,8 @@ const FAULTS: Array<[string, (calls: number) => JudgeResponse | Promise<JudgeRes
 /** The faults after which agg-3 signs a one-family reject (the defect); the filter abstentions escalate already. */
 const ONE_FAMILY_REJECT_AT_AGG3 = new Set(['times out', 'answers HTTP 503 twice', 'answers HTTP 400', 'throws (network error)', 'returns no text', 'returns a schema-valid abstain']);
 
-async function run(provider: JudgeProvider, over: Partial<PipelineInput> = {}) {
-  const pt = utf8(GOOD_CSV);
+async function run(provider: JudgeProvider, over: Partial<PipelineInput> = {}, text = GOOD_CSV) {
+  const pt = utf8(text);
   const ct = seal(pt);
   const intaken = await intake({ delivery: delivery(pt, ct), ciphertext: ct, recipient: ADJUDICATOR, unwrapKey: fakeUnwrap });
   if (!intaken.ok) throw new Error(intaken.error.detail);
@@ -141,7 +141,6 @@ describe('T-570: no seat\'s output aborts the panel (red team H1)', () => {
     ['no response object', undefined, 'error'],
     ['an unknown kind', { kind: 'maybe' }, 'error'],
     ['a string that is not a verdict, with a fractional latency', { kind: 'ok', text: 'not json', latencyMs: 1.5 }, 'abstain'],
-    ['a lone surrogate in the rationale', { kind: 'ok', text: verdictText('pass', { rationale: 'r \ud800' }) }, 'error'],
   ];
   it.each(SHAPES)('%s: the seat is %s, never a vote, and every judge is called once', async (_name, shape, status) => {
     const calls: string[] = [];
@@ -165,13 +164,51 @@ describe('T-570: no seat\'s output aborts the panel (red team H1)', () => {
     expect(draft.aggregate.passCount).toBe(3);
   });
 
-  it('URL redaction that cuts an emoji in half makes the seat an error, and the draft still canonicalizes', async () => {
-    // "www.ab" (6 characters) becomes "[link removed]" (14), and the cut at 300 UTF-16 units splits the emoji.
-    const text = JSON.stringify({ criteria: RUBRIC.criteria.map((c) => ({ id: c.id, score: 4, evidence: `www.ab ${'a'.repeat(284)}\u{1F600}` })), overall: 'pass', injectionSuspected: false, rationale: 'r' });
-    const provider: JudgeProvider = { complete: async (req) => (req.judgeId === 'gpt-a' ? { kind: 'ok', text } : answer('pass')) };
+  // A lone UTF-16 surrogate, from the judge or from cutting redacted evidence at 300 units, used to pass the verdict
+  // filter and then make the record hash throw. The pipeline now returns a well-formed draft: the character becomes
+  // U+FFFD and the verdict stays a vote.
+  it.each([
+    ['a lone surrogate the judge wrote in its rationale', () => verdictText('pass', { rationale: 'r \ud800' })],
+    ['URL redaction that cuts an emoji in half', () => JSON.stringify({ criteria: RUBRIC.criteria.map((c) => ({ id: c.id, score: 4, evidence: `www.ab ${'a'.repeat(284)}\u{1F600}` })), overall: 'pass', injectionSuspected: false, rationale: 'r' })],
+  ])('%s: the verdict stays a vote, and the draft canonicalizes', async (_name, text) => {
+    const provider: JudgeProvider = { complete: async (req) => (req.judgeId === 'gpt-a' ? { kind: 'ok', text: text() } : answer('pass')) };
     const draft = await run(provider);
-    expect(draft.panel.members.find((m) => m.judgeId === 'gpt-a')!.status).toBe('error');
+    const gpt = draft.panel.members.find((m) => m.judgeId === 'gpt-a')!;
+    expect(gpt.status).toBe('ok');
+    expect(JSON.stringify(gpt.verdict)).toContain('\uFFFD');
+    expect(draft.aggregate.passCount).toBe(3);
     expect(() => canonicalJson(draft)).not.toThrow();
+  });
+
+  it('a delivered CSV header that leaves half an emoji in the check detail: the required check rejects, and the draft canonicalizes', async () => {
+    // "columns are [" is 13 units, so 283 more put the emoji's high surrogate at the last unit the detail keeps.
+    const csv = [`${'a'.repeat(283)}\u{1F600},name,email,signup_date,email_valid`, ...GOOD_CSV.split('\n').slice(1)].join('\n');
+    const calls: string[] = [];
+    const draft = await run({ complete: async (req) => (calls.push(req.judgeId), answer('pass')) }, {}, csv);
+    expect(draft.aggregate.decision).toBe('reject');
+    expect(calls).toEqual([]);
+    expect(draft.deterministic[0]!.detail).toContain('\uFFFD');
+    expect(() => canonicalJson(draft)).not.toThrow();
+  });
+
+  it('a delivered JSON key written as a lone surrogate escape, copied into a check detail: the draft canonicalizes', async () => {
+    const text = '{"ok":1,"\\ud83d":2}';
+    const pt = utf8(text);
+    const ct = seal(pt);
+    const intaken = await intake({ delivery: delivery(pt, ct, { plaintextMime: 'application/json' }), ciphertext: ct, recipient: ADJUDICATOR, unwrapKey: fakeUnwrap });
+    if (!intaken.ok) throw new Error(intaken.error.detail);
+    const r = await runPipeline({
+      intake: intaken.value,
+      acceptance: { deterministicChecks: [{ id: 'shape', type: 'json_schema', required: true, schema: { type: 'object', properties: { ok: { type: 'integer' } }, additionalProperties: false } }], rubric: RUBRIC },
+      deliverable: { description: 'A JSON object.' },
+      policy: POLICY,
+      seats: SEATS,
+      provider: { complete: async () => answer('pass') },
+      nonces: (_s, i) => ({ boundary: NONCES.boundary.replace(/.$/, String(i)), canary: NONCES.canary.replace(/.$/, String(i)) }),
+    });
+    if (!r.ok) throw new Error(r.error.detail);
+    expect(r.value.aggregate.decision).toBe('reject');
+    expect(() => canonicalJson(r.value)).not.toThrow();
   });
 
   it('a seat whose criteria order is refused stops the turn before any judge is called', async () => {
