@@ -5,7 +5,7 @@
 - **Depends on:** T-563, the cutover to the fixed phase-one contracts; T-559, the operators' early refusals
 - **Paths this task may touch:** `apps/adjudicator/src/hung-read.test.ts`, `apps/adjudicator/src/drand-fork.test.ts`, `apps/demo-cloud/src/limits.attack.test.ts`, `apps/demo-cloud/src/worker.ts` and its test, `apps/operator/src/server.ts` (the JSON body reader) and `apps/operator/src/body-limit.test.ts`, `packages/core/src/parse.ts`, `packages/core/src/state.ts`, `packages/core/src/validators-codegen.ts` and the generated `validators.generated.ts`, new tests in `packages/core/src/`, `packages/settlement/evm/evm-settlement.ts` (the decide case only) and `packages/settlement/evm/appeal-ground.test.ts`, `tools/duet/replay.ts` and `tools/duet/duet.test.ts`; for item 6, `apps/demo-cloud/src/judges.ts`, `apps/demo-cloud/src/world.ts` (the adjudicators' construction and pass) and their tests; this file
 - **Human gate:** no for the merges. The operator deploy that carries items 2, 5 and 6 is Rafa's; the coordinator arranges it.
-- **Status:** in progress
+- **Status:** review
 - **Agent/session:** the T-574 session, started by the coordinator on 2026-11-19 ("Start all seven")
 - **Roadmap row:** N211
 
@@ -22,12 +22,12 @@ Non-goals: no schema rule changes (item 3 changes only the error text), no chang
 
 ## Acceptance criteria
 
-- [ ] Each of the six items is fixed or dropped with its reason (Evidence).
-- [ ] Each fix has a test that fails before it and passes after it.
-- [ ] The three tests of item 1 assert at least what they asserted before, and none reads the wall clock for a bound.
-- [ ] Item 2(b): a property test shows the core rule refuses an appeal ground exactly when the rules contract would.
-- [ ] Each pull request has a reviewer subagent's report, and every finding of Medium or above is fixed with a test.
-- [ ] The coordinator knows which items need an operator deploy and which a site deploy.
+- [x] Each of the six items is fixed or dropped with its reason (Evidence).
+- [x] Each fix has a test that fails before it and passes after it.
+- [x] The three tests of item 1 assert at least what they asserted before, and none reads the wall clock for a bound.
+- [x] Item 2(b): a property test shows the core rule refuses an appeal ground exactly when the rules contract would.
+- [x] Each pull request has a reviewer subagent's report, and every finding of Medium or above is fixed with a test.
+- [x] The coordinator knows which items need an operator deploy and which a site deploy.
 
 ## Evidence
 
@@ -86,4 +86,18 @@ The driver gives the pass real turns of the event loop while no timer is due, an
 
 ## Handoff
 
-Filled in at the end.
+**Done.** All six items are fixed; none was dropped. Pull requests: 721 (item 1, merged as `9b732e63`), 727 (item 4, merged as `8065d37b`), 728 (item 6, merged as `cf60e083`), and 726 (items 2, 3 and 5). Each had a reviewer subagent; items 2(b) and 6 also had a red-teamer. Every Medium was fixed, with a test where a test can show it.
+
+**Deploys.** An operator deploy carries items 2, 3, 5 and 6: the body ceiling, the appeal-ground rule in the relay, the parser's error text, the security.txt redirect and the judge panel. It is Rafa's; the coordinator arranges it. No site deploy is needed: item 4 reaches the demo page at the next `duet publish` and site deploy. Item 1 is tests only.
+
+**Found, not fixed (for the triage file):**
+- `attack.t422-known-key-cpu` in `apps/demo-cloud/src/limits.attack.test.ts` still bounds by the wall clock (`heavy < fresh * 2`), the same failure kind as item 1 (review of PR 721).
+- `apps/demo-cloud/src/live-fork.test.ts` still forks at the RPC's head; the pinned block of item 1(c) would help it too.
+- `packages/settlement/evm/deploy-script.test.ts`, "the rehearsal command runs the whole routine twice on a local chain with no hand edit", failed once at 124.5 s in a full run of PR 726's packages under load, well inside its 900 s timeout, and passed alone in 155.7 s [measured]. An intermittent failure: to root-cause, not rerun.
+- The API's schema refuses `appealGround: ""`, a form of a message the contract accepts; the same signature is valid without the field. A change needs an ADR (red team of 2(b), Low).
+- A full-profile appeal decision's ground is never checked against the party's appeal; harmless while nothing reads it (red team of 2(b), Info).
+- The site's security.txt names only `https://crow.direct/.well-known/security.txt` as Canonical, so a strict checker may flag the API hostnames' redirect; `site/trust.mjs` could list them (review of PR 726, Info).
+- The ciphertext route still reads on to 10 MiB past a node's 1 MiB limit, T-547's choice; item 2(a) covered the JSON routes only.
+- Item 6, red team, Medium: past the day's live budget a seller can steer a rubric deal into a scripted panel that accepts, and its members still name the live models. It predates T-574 and `docs/operations.md` documents it. The coordinator has put it to Rafa, recommending that the scripted stand-in abstain in a live world.
+- Item 6, Info: the pass-level live check in `world.ts` sizes by the adjudicator's role in the world, not the task's (conservative); the live-call count is written only at the end of a pass.
+- The reviewers suggest a second review by another model family for item 6 and for items 2(b) and 3. `docs/team.md` makes that Rafa's call.
