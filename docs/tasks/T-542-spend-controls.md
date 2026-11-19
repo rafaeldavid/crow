@@ -5,7 +5,7 @@
 - **Change kind:** 1, copy and agent docs
 - **Paths this task may touch:** `site/build.mjs` (the value props), `site/vignettes.mjs` (one comment), `site/index.html` (built), `site/buy.txt`, `site/ref/limits.txt`; the direction's lines in `docs/decisions-today.md` (D83), `docs/architecture.md`, `docs/neutrality.md` and `docs/what-a-deal-can-do.md`; the deploy record in `docs/operations.md`; this file
 - **Human gate:** no (the site deploy after the merge is Rafa's word)
-- **Status:** review
+- **Status:** done (pull request 681, merged 2026-11-19 as `8f34c6e5`; site deployed 06:21 UTC)
 - **Agent/session:** `money-path`, Opus 5.5
 
 ## Intent

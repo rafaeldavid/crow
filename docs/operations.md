@@ -307,6 +307,14 @@ The maintainers keep the notes on agent sessions and permission prompts privatel
 
 Each entry records one deploy as it ran: the date and time in UTC, the commit, each Worker's new version and its rollback target, and what was measured after it. The deploy scripts print the entry's first line (`pnpm demo-cloud:deploy`, `pnpm site:deploy`, `node apps/test-agents/scripts/deploy.mjs`). The values are true for their date: for what runs now, read "What is live" above and each node's discovery.
 
+### Spend Controls on the home page (site deployed 2026-11-19, 06:21 UTC)
+
+Rafa's word was "Merge and deploy". Pull request 681 (T-542) merged at 06:21 UTC once every check had passed. The session ran the script from a clean worktree of `main` at that merge, after `pnpm install --frozen-lockfile` and `pnpm build`.
+
+**Site deploy 2026-11-19 06:21 UTC, commit `8f34c6e` on a detached HEAD: pass.** crow-site `ed7a837e-21b0-440f-bdb5-1d0896b3c207` (rollback target `59feed8a-d0a0-4cb1-ad09-2f1040954681`).
+
+The live site served the built `llms.txt` and the pinned `try.mjs` 0 s after the upload [measured by the script]. The live home page shows "Spend Controls · soon" in place of "Your Existing Rails". The live `ref/limits.txt`, `buy.txt` and `reference.txt` each had the SHA-256 of the built file [measured 06:21 UTC]. The site now carries T-542: the value prop, and the limits reference's section "Spend controls: what to tell your principal".
+
 ### The test agents, the site and both operators at one commit (deployed 2026-11-19, 05:24 to 05:31 UTC)
 
 Rafa's word for these was "Yes, after it merges", to "Run the deploy round once the template change has merged?"; pull request 673 (T-543) merged at 05:23 UTC. The coordinator ran each script from a clean worktree of `main` at that merge, after `pnpm install --frozen-lockfile` and `pnpm build`, one after the other. Before the operators' deploy, the two hosted sellers, the test seller and the test buyer each read `operational` with `open: 0` [measured 05:25 UTC], and no judging code had changed since the operators' last build.
