@@ -269,6 +269,33 @@ describe('T-570: a judge fault never re-rolls the commit-reveal panel', () => {
   });
 });
 
+describe('T-570: a malformed answer never re-runs the panel (red team H1)', () => {
+  // Before the fix, an ok answer whose text was not a string made runPipeline throw; the service kept no record and
+  // called the whole panel again on its next pass. Now the seat is an error, the panel decides once, and a second pass
+  // calls no judge.
+  const SHAPES: Array<[string, unknown]> = [
+    ['text null', { kind: 'ok', text: null }],
+    ['text an array', { kind: 'ok', text: [{ type: 'text', text: 'x' }] }],
+    ['text a number', { kind: 'ok', text: 7 }],
+    ['text an object', { kind: 'ok', text: { overall: 'pass' } }],
+    ['no response object', undefined],
+  ];
+  it.each(SHAPES)('%s from every judge of one family: each seated judge is called once across two passes, and the seat is an error', async (_name, shape) => {
+    const w = await delivered(DEMO_CSV);
+    const seats = primaryPanel(w);
+    const family = familyOf(seats[0]!);
+    w.judges.script = Object.fromEntries(REGISTRY.judges.filter((j) => j.family === family).map((j) => [j.id, () => shape as JudgeResponse]));
+    const first = await w.primary.adj.runOnce();
+    expect(first.refused).toEqual([]);
+    expect(first.decided).toHaveLength(1);
+    w.judges.script = {};
+    expect((await w.primary.adj.runOnce()).decided).toEqual([]);
+    expect(w.calls.map((c) => c.judgeId).sort()).toEqual([...seats].sort());
+    const [record] = [...w.records.values()];
+    for (const m of record!.panel.members) expect(m.status).toBe(familyOf(m.judgeId) === family ? 'error' : 'ok');
+  });
+});
+
 describe('T-570: a judge that answers after the timeout is no vote', () => {
   it('the late seats stay timeouts in the signed record, and the late answers change nothing once they arrive', async () => {
     // Every seat of every family but claude answers 200 ms after a 20 ms judge timeout.

@@ -11,6 +11,7 @@
 import { describe, expect, it } from 'vitest';
 import { ADJUDICATOR, delivery, fakeUnwrap, GOOD_CSV, NONCES, POLICY, RUBRIC, seal, utf8 } from './_helpers.js';
 import { intake } from './intake.js';
+import { KEPT, NEWEST_VERSIONS, type KeptTable } from './kept.js';
 import { runPipeline, type JudgeProvider, type JudgeRequest, type JudgeResponse, type PanelSeat, type PipelineInput } from './pipeline.js';
 import type { JudgmentAcceptance } from './terms.js';
 
@@ -125,12 +126,39 @@ describe('T-570: a fault in one whole family never yields a one-family decision'
   }
 });
 
-describe('T-570: an answer whose text is not a string (red team H1)', () => {
-  // Known defect: an OpenAI-compatible host can answer content null, an array or a number, which live.ts passes on as
-  // an ok answer. parseVerdict then throws and runPipeline rejects, so the adjudicator records nothing and calls the
-  // whole panel again on its next pass. The fix in T-570's second PR turns the seat into an error, no vote.
-  it.each([['null', null], ['an array', [{ type: 'text', text: 'x' }]], ['a number', 7]] as const)('text %s: runPipeline throws today', async (_name, text) => {
-    const provider: JudgeProvider = { complete: async (req) => (req.judgeId === 'gpt-a' ? ({ kind: 'ok', text } as unknown as JudgeResponse) : answer('pass')) };
-    await expect(run(provider)).rejects.toThrow();
+describe('T-570: no seat\'s output aborts the panel (red team H1)', () => {
+  // An OpenAI-compatible host can answer content null, an array or a number, which live.ts passes on as an ok answer.
+  // Before this fix parseVerdict threw, runPipeline rejected, and the adjudicator called the whole panel again on its
+  // next pass. Each malformed shape is now an error for that seat: no vote, and the panel still returns.
+  const SHAPES: Array<[string, unknown]> = [
+    ['text null', { kind: 'ok', text: null }],
+    ['text an array', { kind: 'ok', text: [{ type: 'text', text: 'x' }] }],
+    ['text a number', { kind: 'ok', text: 7 }],
+    ['text an object', { kind: 'ok', text: { overall: 'pass' } }],
+    ['no response object', undefined],
+    ['an unknown kind', { kind: 'maybe' }],
+    ['a latency that is not whole milliseconds', { kind: 'ok', text: 'not json', latencyMs: 1.5 }],
+  ];
+  it.each(SHAPES)('%s: the seat is an error or a filter abstention, never a vote, and every judge is called once', async (_name, shape) => {
+    const calls: string[] = [];
+    const provider: JudgeProvider = { complete: async (req) => (calls.push(req.judgeId), req.judgeId === 'gpt-a' ? (shape as JudgeResponse) : answer('pass')) };
+    const draft = await run(provider);
+    const gpt = draft.panel.members.find((m) => m.judgeId === 'gpt-a')!;
+    expect(gpt.status === 'error' || gpt.status === 'abstain').toBe(true);
+    expect(gpt.verdict).toBeUndefined();
+    expect(draft.aggregate.passCount).toBe(2);
+    expect(draft.aggregate.decision).toBe('escalate');
+    expect(calls.sort()).toEqual(['claude-a', 'claude-b', 'gpt-a']);
+    if (gpt.status === 'ok') expect.unreachable();
+    expect(gpt.latencyMs === undefined || Number.isSafeInteger(gpt.latencyMs)).toBe(true);
+  });
+
+  it('a verdict filter that throws on one seat makes that seat an error, and the panel still returns', async () => {
+    const agg = KEPT.aggregations.get(NEWEST_VERSIONS.aggregationVersion)!;
+    const kept: KeptTable = { ...KEPT, aggregations: new Map([[NEWEST_VERSIONS.aggregationVersion, { ...agg, parseVerdict: (raw, o) => (raw.includes('THROW') ? (() => { throw new RangeError('boom'); })() : agg.parseVerdict(raw, o)) }]]) };
+    const provider: JudgeProvider = { complete: async (req) => (req.judgeId === 'gpt-a' ? { kind: 'ok', text: 'THROW' } : answer('fail')) };
+    const draft = await run(provider, { kept });
+    expect(draft.panel.members.find((m) => m.judgeId === 'gpt-a')!.status).toBe('error');
+    expect(draft.aggregate.validCount).toBe(2);
   });
 });

@@ -129,10 +129,28 @@ function resolveSeats(seats: readonly PanelSeat[], policy: PipelinePolicy, regis
   return ok(families);
 }
 
+/**
+ * What the pipeline takes from a provider's response: a known kind, text that is a string, and a latency in whole
+ * milliseconds. Anything else is an error for that seat, so no provider output can abort the panel (T-570, red team
+ * H1: an OpenAI-compatible host's `content: null` once made parseVerdict throw, and the adjudicator called the whole
+ * panel again on its next pass).
+ */
+function saneResponse(res: unknown): JudgeResponse {
+  if (typeof res !== 'object' || res === null) return { kind: 'error', transport: false, detail: 'the provider returned no response object' };
+  const r = res as Record<string, unknown>;
+  if (r['kind'] === 'timeout') return { kind: 'timeout' };
+  if (r['kind'] === 'error') return { kind: 'error', transport: r['transport'] === true, detail: typeof r['detail'] === 'string' ? r['detail'].slice(0, 200) : 'provider error' };
+  if (r['kind'] === 'ok' && typeof r['text'] === 'string') {
+    const ms = r['latencyMs'];
+    return typeof ms === 'number' && Number.isSafeInteger(ms) && ms >= 0 ? { kind: 'ok', text: r['text'], latencyMs: ms } : { kind: 'ok', text: r['text'] };
+  }
+  return { kind: 'error', transport: false, detail: 'the answer carried no text string' };
+}
+
 async function call(provider: JudgeProvider, req: JudgeRequest): Promise<JudgeResponse> {
   const once = async (): Promise<JudgeResponse> => {
     try {
-      return await provider.complete(req);
+      return saneResponse(await provider.complete(req));
     } catch {
       return { kind: 'error', transport: true, detail: 'provider threw' };
     }
@@ -264,7 +282,13 @@ export async function runPipeline(input: PipelineInput): Promise<Result<Judgment
       const none = { family, verdict: null };
       if (res.kind !== 'ok') return { member: { ...member, status: res.kind }, verdict: none, canaryEcho: false, strided: p.sampling === 'stride' };
       if (res.latencyMs !== undefined) member.latencyMs = res.latencyMs;
-      const parsed = aggregation.parseVerdict(res.text, { criterionIds: rubricIds, canary: p.canary, rationaleMaxChars: policy.rationaleMaxChars });
+      let parsed: ReturnType<AggregationImpl['parseVerdict']>;
+      try {
+        parsed = aggregation.parseVerdict(res.text, { criterionIds: rubricIds, canary: p.canary, rationaleMaxChars: policy.rationaleMaxChars });
+      } catch {
+        // A verdict filter that throws on one seat's output makes that seat an error, never the whole panel's failure.
+        return { member: { ...member, status: 'error' }, verdict: none, canaryEcho: false, strided: p.sampling === 'stride' };
+      }
       if (parsed.status === 'abstain') {
         return { member: { ...member, status: 'abstain' }, verdict: none, canaryEcho: parsed.reason === 'canary_echo', filtered: parsed.reason, strided: p.sampling === 'stride' };
       }
