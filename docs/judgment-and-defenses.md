@@ -65,7 +65,8 @@ A flag on a deal with a rubric escalates the case, and a flagged case needs a un
 | Minimum distinct model families | 2 | 3 where available, else 2 |
 | Minimum valid (non-abstain) verdicts | 2 | 4 |
 | Accept supermajority (`acceptSupermajority`, a fraction) | ≥ 2/3 pass, with pass verdicts from ≥ 2 families | ≥ 4/5, with passes from ≥ 2 families |
-| Reject supermajority (`rejectSupermajority`, a fraction) | ≥ 2/3 fail | ≥ 4/5 fail |
+| Reject supermajority (`rejectSupermajority`, a fraction) | ≥ 2/3 fail; from `agg-4`, when any seat gave no valid verdict, with fail verdicts from ≥ 2 families | ≥ 4/5 fail; the same family rule from `agg-4` |
+| Families behind any decision (`agg-4`) | valid verdicts from ≥ 2 families, else escalate | same |
 | Flagged (screen, `injectionSuspected`, filter abstention, sampled read) | escalate | after an escalation: accept only if every seat passes validly on the whole file from the family minimum with no injection suspected, otherwise reject (D27a, D27b). On a party appeal (SimChain only): escalate, so the first decision stands (D27c, D28) |
 | Otherwise | escalate | after an escalation, the default outcome applies, a refund on a chain; on SimChain only, after a party appeal the first decision stands and the appealing party's bond is returned |
 | Judge timeout | 60 s, then abstain | 90 s |
@@ -102,15 +103,19 @@ if screen.flagged or any verdict.injectionSuspected   -> ESCALATE at the primary
                                                          else REJECT
 valid = verdicts where overall != "abstain"
 if len(valid) < policy.minValid                       -> ESCALATE
+if valid verdicts come from fewer than 2 families      -> ESCALATE   (agg-4)
 score = weighted mean of criterion scores across valid verdicts, in integer hundredths (0–400), sealed checks capped at rulebook weight
 passFamilies = distinct families among valid verdicts with overall == "pass"
 if pass * accept.den >= accept.num * len(valid) and pass > fail
    and len(passFamilies) >= 2 and score >= rubric.passThreshold -> ACCEPT
-if fail * reject.den >= reject.num * len(valid) and fail > pass -> REJECT
+if fail * reject.den >= reject.num * len(valid) and fail > pass
+   and (every seat gave a valid verdict or fails come from >= 2 families)   (agg-4) -> REJECT
 otherwise                                             -> ESCALATE   (ties escalate)
 ```
 
-**The appeal decides a flagged case** (ADR-0021 amendment, D25, review finding L3-1). There is no instance after the appeal, and an escalation there means no decision. On SimChain under the full protocol the default outcome would then pay an injecting seller from the appeal adjudicator's bond; on a chain it refunds the buyer, and the rule still gives every escalated case a decision. At the appeal after an escalation, a seller-controllable condition never escalates: a screen flag, a judge's injection suspicion, a filter abstention, or a sampled read the seller can force with one overlong record. The case is accepted only by a unanimous valid panel over the whole file, from all available families, in which no judge suspects injection; otherwise it is rejected (D27a, D27b). The red team showed that a steered supermajority, a split panel and a forced sample each paid the injector. On a party appeal against a first decision (SimChain only), these conditions escalate and the first decision stands, so judge noise cannot overturn an honest accept (D27c; D28: after an accept the appealing buyer carries the burden). The flag stays in the signed record. Aggregation version `agg-3`, pinned to a digest of the decision table in `aggregate.test.ts`.
+**The appeal decides a flagged case** (ADR-0021 amendment, D25, review finding L3-1). There is no instance after the appeal, and an escalation there means no decision. On SimChain under the full protocol the default outcome would then pay an injecting seller from the appeal adjudicator's bond; on a chain it refunds the buyer, and the rule still gives every escalated case a decision. At the appeal after an escalation, a seller-controllable condition never escalates: a screen flag, a judge's injection suspicion, a filter abstention, or a sampled read the seller can force with one overlong record. The case is accepted only by a unanimous valid panel over the whole file, from all available families, in which no judge suspects injection; otherwise it is rejected (D27a, D27b). The red team showed that a steered supermajority, a split panel and a forced sample each paid the injector. On a party appeal against a first decision (SimChain only), these conditions escalate and the first decision stands, so judge noise cannot overturn an honest accept (D27c; D28: after an accept the appealing buyer carries the burden). The flag stays in the signed record.
+
+**No decision rests on one model family after a judge fault** (ADR-0043; T-570). A seat faults when it returns no valid verdict: a timeout, an HTTP error, a filter abstention or a schema-valid abstain. When the valid verdicts come from one family, the case escalates. After a fault, a reject needs fail verdicts from two families, as an accept always needs passes from two. Neither rule changes a decision where every seat returned a valid verdict: two fails from one family still outvote one pass from another, as before. This is aggregation version `agg-4`. The build carries it beside `agg-3`, and deals bind `agg-3` until the default moves in a second deploy. `aggregate.test.ts` pins each kept version to digests of its decision table.
 
 Thresholds are exact fractions compared by cross-multiplication, never by division or floats (ADR-0022). A policy must satisfy `2 × numerator > denominator`, so accept and reject can never both hold. The record carries `passCount`, `failCount` and `validCount`, not shares.
 
@@ -128,7 +133,7 @@ Unit-test this function exhaustively with table-driven cases.
 | T6 | Retry until pass | The seller resubmits variants until one passes | `maxSubmissions` (1 in Phase 1; resubmission returns with `settle_after_window`) with a fee per attempt; panel seed fixed per (commitment, attempt); no re-roll | `error.submission-limit` |
 | T7 | Model drift | A provider upgrade flips outcomes (Kleros: Opus 4.7 → 4.8 changed 11 of 99) | Pinned model IDs in every verdict; registry promotion only after calibration regression; versions disclosed in receipts | `error.unpinned-model-refused`, calibration regression |
 | T20 | Policy swap after agreement | The adjudicator changes its prompt template or aggregation rule after both parties sign | `policyHash` bound in the commitment; each verdict's template hash checked against it; a mismatch invalidates the decision | `error.policy-hash-mismatch` |
-| T8 | Correlated error | Most adjudicators run the same models | Family diversity; cross-family agreement required for accept; pairwise agreement monitored; alert when one family diverges | Calibration report |
+| T8 | Correlated error | Most adjudicators run the same models | Family diversity; cross-family agreement required for accept; from `agg-4`, valid verdicts from two families for any decision, so a fault in one family cannot leave the other to decide alone (ADR-0043); pairwise agreement monitored; alert when one family diverges | Calibration report; `packages/judgment/src/faults.test.ts`, `apps/adjudicator/src/judge-faults.test.ts` |
 | T9 | Bad-faith buyer rejection | The buyer sees the work and rejects to keep it | Two-sided hold: the buyer never sees plaintext before acceptance. The buyer cannot block judgment | `happy-path` + `neutrality.buyer-silent` |
 | T10 | Seller non-delivery | — | Anyone can reclaim after deliverBy | `reclaim-no-delivery` |
 | T11 | Double spend, races | Parallel fund calls | Idempotency keys; serializable state transitions; settled-once guard | `error.concurrent-overdraft`, property tests |

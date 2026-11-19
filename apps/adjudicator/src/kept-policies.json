@@ -56,6 +56,11 @@
       "version": "agg-3",
       "status": "kept",
       "since": "released before T-377"
+    },
+    {
+      "version": "agg-4",
+      "status": "kept",
+      "since": "T-570, 2026-11-19: carried beside agg-3; the default moves in a second deploy"
     }
   ],
   "registries": [

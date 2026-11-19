@@ -4,6 +4,7 @@ import fc from 'fast-check';
 import { describe, expect, it } from 'vitest';
 import { criterion, RUBRIC } from './_helpers.js';
 import { AGGREGATION_VERSION, aggregate, preDecision, SCREEN_FLAGGED_REASON, signedOutcome, type AggregateInput, type PanelVerdict } from './aggregate.js';
+import { KEPT } from './kept.js';
 import type { CheckOutcome } from './checks/index.js';
 import type { Fraction, JudgmentRubric } from './terms.js';
 
@@ -88,6 +89,16 @@ describe('aggregate: table', () => {
     ['2 of 3 fail', { verdicts: [v('claude', 'fail', [0, 0, 0]), v('gpt', 'fail', [0, 0, 0]), v('gemini', 'pass')] }, 'reject'],
     ['2 of 3 fail from one family still rejects', { verdicts: [v('claude', 'fail', [0, 0, 0]), v('claude', 'fail', [0, 0, 0]), v('gpt', 'pass')] }, 'reject'],
     ['fail with high scores still rejects', { verdicts: [v('claude', 'fail'), v('gpt', 'fail'), v('gemini', 'fail')] }, 'reject'],
+    // agg-4 (T-570): no decision on valid verdicts from one family, whatever removed the other family's seats.
+    ['2 fail from one family, the other family timed out', { verdicts: [v('claude', 'fail', [0, 0, 0]), v('claude', 'fail', [0, 0, 0]), invalid('gpt')] }, 'escalate'],
+    ['2 fail from one family, the other family abstains', { verdicts: [v('claude', 'fail', [0, 0, 0]), v('claude', 'fail', [0, 0, 0]), v('gpt', 'abstain')] }, 'escalate'],
+    ['appeal 4/5: 4 fail from one family, the others timed out', { thresholds: APPEAL, verdicts: [v('a', 'fail'), v('a', 'fail'), v('a', 'fail'), v('a', 'fail'), invalid('b')] }, 'escalate'],
+    ['2 fail from two families, one seat timed out, still rejects', { verdicts: [v('claude', 'fail', [0, 0, 0]), v('gpt', 'fail', [0, 0, 0]), invalid('gemini')] }, 'reject'],
+    // agg-4 (T-570, red team M1): after a fault, a reject needs fails from two families.
+    ['5 seats: 3 claude fail, 1 gpt pass, 1 gpt timed out escalates (the fails come from one family)', { thresholds: { ...T, minValid: 4 }, verdicts: [v('claude', 'fail', [0, 0, 0]), v('claude', 'fail', [0, 0, 0]), v('claude', 'fail', [0, 0, 0]), v('gpt', 'pass'), invalid('gpt')] }, 'escalate'],
+    ['5 seats: 1 claude pass, 2 claude fail, 1 gpt fail, 1 gpt timed out still rejects (fails from two families)', { thresholds: { ...T, minValid: 4 }, verdicts: [v('claude', 'pass'), v('claude', 'fail', [0, 0, 0]), v('claude', 'fail', [0, 0, 0]), v('gpt', 'fail', [0, 0, 0]), invalid('gpt')] }, 'reject'],
+    ['5 seats: 3 pass from two families, 1 fail, 1 timed out accepts (passes from two families; the existing design)', { thresholds: { ...T, minValid: 4 }, verdicts: [v('claude', 'pass'), v('gpt', 'pass'), v('gpt', 'pass'), v('qwen', 'fail', [0, 0, 0]), invalid('qwen')] }, 'accept'],
+    ['3 seats, every seat answers: 2 claude fail, 1 gpt pass still rejects (the existing design)', { verdicts: [v('claude', 'fail', [0, 0, 0]), v('claude', 'fail', [0, 0, 0]), v('gpt', 'pass')] }, 'reject'],
     // Line 11: otherwise escalate; ties never decide.
     ['1 pass, 1 fail, 1 abstain', { verdicts: [v('claude', 'pass'), v('gpt', 'fail', [0, 0, 0]), v('gemini', 'abstain')] }, 'escalate'],
     ['2-2 tie escalates', { verdicts: [v('a', 'pass'), v('b', 'pass'), v('c', 'fail'), v('d', 'fail')] }, 'escalate'],
@@ -179,16 +190,60 @@ describe('aggregate: the decision table is pinned to AGGREGATION_VERSION', () =>
   const PINNED: Readonly<Record<string, string>> = {
     // Re-pinned for D27b/c before agg-3 reached main (no policy outside this repository bound the earlier table).
     'agg-3': '4cbc921977c5e5ad282d4eb1b66f197222b5fd6a04b25d3de17b913db6e50f25',
+    // T-570: agg-3 plus the two-family rule for every decision.
+    'agg-4': 'ce2941a18e78b435a7c7b5011562b7e79f098db8ea6925a5702c878846b7de52',
+  };
+  // Built inside each test: the arbitraries are declared further down this file.
+  const corpus = () => fc.sample(arbInputPublic, { seed: 2718, numRuns: 3000 }).map(buildPublic);
+  /** Each decision, then what each role signs for it (signedOutcome is part of the rule a policy binds). */
+  const digestOf = (impl: { aggregate: typeof aggregate; signedOutcome: typeof signedOutcome }) => {
+    const row = (i: AggregateInput) => {
+      const d = impl.aggregate(i).decision;
+      return [d, impl.signedOutcome(d, { appeal: false }), impl.signedOutcome(d, { appeal: true }), impl.signedOutcome(d, { appeal: true, firstOutcome: 'accept' }), impl.signedOutcome(d, { appeal: true, firstOutcome: 'reject' })].join(':');
+    };
+    return createHash('sha256').update(corpus().map(row).join(',')).digest('hex');
   };
   it('the digest of decisions and signed outcomes on a seeded corpus matches the pinned digest for this version', () => {
-    const corpus = fc.sample(arbInputPublic, { seed: 2718, numRuns: 3000 }).map(buildPublic);
-    // Each decision, then what each role signs for it (signedOutcome is part of the rule a policy binds).
-    const row = (i: AggregateInput) => {
-      const d = aggregate(i).decision;
-      return [d, signedOutcome(d, { appeal: false }), signedOutcome(d, { appeal: true }), signedOutcome(d, { appeal: true, firstOutcome: 'accept' }), signedOutcome(d, { appeal: true, firstOutcome: 'reject' })].join(':');
-    };
-    const digest = createHash('sha256').update(corpus.map(row).join(',')).digest('hex');
+    const digest = digestOf({ aggregate, signedOutcome });
     expect(PINNED[AGGREGATION_VERSION], `aggregate semantics changed: bump AGGREGATION_VERSION and pin ${digest} under it`).toBe(digest);
+  });
+  // T-570: the corpus above rarely reaches the panel's own rules (most samples carry a flag, an injection suspicion or a
+  // filter abstention). This one does: unflagged panels of 3 to 7 seats with faults and abstentions, at the primary,
+  // the party appeal and the escalated appeal. Each kept version pins its digest here too.
+  const PANEL_PINNED: Readonly<Record<string, string>> = {
+    'agg-3': '54149ef79b20c9a607bcad0f694be045ae556effc4ab0d10915e8f1f7e488b21',
+    'agg-4': '164860c833455d206e1cf3910fc5e6a5467105e77d026d36b8990a844a028e6d',
+  };
+  const panelCorpus = () =>
+    fc.sample(
+      fc.record({
+        verdicts: fc.array(fc.record({ family: fc.constantFrom('claude', 'gpt', 'gemini'), kind: fc.constantFrom('pass', 'fail', 'abstain', 'invalid') }), { minLength: 3, maxLength: 7 }),
+        minValid: fc.integer({ min: 1, max: 4 }),
+        accept: arbFraction,
+        reject: arbFraction,
+        appeal: fc.constantFrom(undefined, 'escalated' as const, 'party' as const),
+      }),
+      { seed: 5701, numRuns: 3000 },
+    ).map((a): AggregateInput => ({
+      checks: [ok('cols')],
+      rubric: { ...RUBRIC, passThreshold: 0 },
+      screenFlagged: false,
+      ...(a.appeal ? { appeal: a.appeal } : {}),
+      verdicts: a.verdicts.map((x) => (x.kind === 'invalid' ? invalid(x.family) : v(x.family, x.kind as JudgeVerdict['overall']))),
+      thresholds: { minValid: a.minValid, acceptSupermajority: a.accept, rejectSupermajority: a.reject },
+    }));
+  const panelDigestOf = (impl: { aggregate: typeof aggregate }) => createHash('sha256').update(panelCorpus().map((i) => impl.aggregate(i).decision).join(',')).digest('hex');
+  it.each([...KEPT.aggregations.keys()])('kept %s keeps its pinned digest on unflagged panels with faults', (version) => {
+    const digest = panelDigestOf(KEPT.aggregations.get(version)!);
+    expect(PANEL_PINNED[version], `pin ${digest} for ${version}`).toBe(digest);
+  });
+  it('agg-3 and agg-4 decide differently on that corpus, so the digest pins the new rules', () => {
+    expect(PANEL_PINNED['agg-3']).not.toBe(PANEL_PINNED['agg-4']);
+  });
+  // ADR-0036: every kept version keeps its pinned digest, so a version bound by open deals never changes under its label.
+  it.each([...KEPT.aggregations.keys()])('kept %s keeps its pinned digest', (version) => {
+    expect(PINNED[version]).toBeDefined();
+    expect(digestOf(KEPT.aggregations.get(version)!)).toBe(PINNED[version]);
   });
 });
 
@@ -274,10 +329,14 @@ function oracle(i: AggregateInput): 'accept' | 'reject' | 'escalate' {
   if (i.screenFlagged || injection) return 'escalate';
   if (i.escalate?.length) return 'escalate';
   if (valid.length < i.thresholds.minValid || valid.length === 0) return 'escalate';
+  // agg-4 (T-570): an accept or a reject needs valid verdicts from at least two families.
+  if (new Set(valid.map((x) => x.family)).size < 2) return 'escalate';
   const a = i.thresholds.acceptSupermajority;
   const r = i.thresholds.rejectSupermajority;
   if (pass * a.denominator >= a.numerator * n && pass > fail && fams >= 2 && scoreOk) return 'accept';
-  if (fail * r.denominator >= r.numerator * n && fail > pass) return 'reject';
+  // agg-4 (T-570): after a fault, a reject needs fails from two families.
+  const failFams = new Set(valid.filter((x) => x.verdict!.overall === 'fail').map((x) => x.family)).size;
+  if (fail * r.denominator >= r.numerator * n && fail > pass && (n === i.verdicts.length || failFams >= 2)) return 'reject';
   return 'escalate';
 }
 

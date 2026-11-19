@@ -18,6 +18,12 @@ function sandbox(): string {
   for (const dir of ['clubs', 'terms', 'data']) cpSync(join(repo, 'fixtures', dir), join(root, 'fixtures', dir), { recursive: true });
   mkdirSync(join(root, 'config'));
   cpSync(join(repo, 'config/judges.yaml'), join(root, 'config/judges.yaml'));
+  // The build's default versions (ADR-0036): without this file the runner takes the newest code's versions, which
+  // differ from the default while a new version ships carried first and default second (T-570, agg-4).
+  mkdirSync(join(root, 'apps/adjudicator/src'), { recursive: true });
+  cpSync(join(repo, 'apps/adjudicator/src/kept-policies.json'), join(root, 'apps/adjudicator/src/kept-policies.json'));
+  // The registries that file keeps, which the runner loads beside the default one.
+  cpSync(join(repo, 'config/judges-live.yaml'), join(root, 'config/judges-live.yaml'));
   return root;
 }
 
