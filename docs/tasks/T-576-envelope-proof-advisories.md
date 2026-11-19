@@ -45,7 +45,7 @@ The paths below come from `cargo tree -i <crate>`, run in each lockfile's folder
 | RUSTSEC-2024-0388, unmaintained | `derivative` 2.2.0 | host, guest | none | No fixed version | Compile-time only: a proc-macro, from `ark-crypto-primitives` 0.5.0 |
 | RUSTSEC-2024-0436, unmaintained | `paste` 1.0.15 | host, guest | none | No fixed version | Compile-time only: a proc-macro, from `ark-ff` 0.5.0 |
 
-**Why not a bigger upgrade:** newer parents exist (`rzup` 0.6.0, `ark-relations` 0.6.0, `risc0-zkvm` up to 5.0.0-rc.1, from `cargo search`, measured). Moving to them is a major `risc0-zkvm` upgrade. That changes the guest's image ID, which a buyer pins (README, "Pin the image ID"), and needs a new proof, the last of which took 2,813 s. Rafa stopped the prototype on 2026-11-19, so this task keeps the build as it is. No lockfile changed, so there is no `cargo check` to show.
+**No released upgrade fixes them (measured, crates.io index, 2026-11-19, from the review).** There is no `risc0-zkvm` 4.x. In 5.0.0-rc.1, `rzup` 0.6 still requires `rsa ^0.9`, and `risc0-groth16` still requires `ark-groth16 ^0.5`, which brings `tracing-subscriber` 0.2 back. The fix needs `rzup` on `rsa` 0.10 and `risc0-groth16` on `ark-groth16` 0.6, neither released. Any upgrade would also change the guest's image ID, which a buyer pins (README, "Pin the image ID"), and need a new proof, the last of which took 2,813 s. No lockfile changed, so there is no `cargo check` to show.
 
 ### Changes
 
@@ -59,5 +59,6 @@ The paths below come from `cargo tree -i <crate>`, run in each lockfile's folder
 ## Handoff
 
 - **For Rafa, the missing trigger.** One line in `.github/workflows/dependency-scan.yml`, under `on.pull_request.paths`, after `- '**/package.json'`: `      - '**/Cargo.lock'`. With it, a PR that adds or changes a Rust lockfile runs the scan, as T-541's did not. A `.github/` change, so it waits for his word.
-- **On 2027-01-18** the scan fails again on any PR that triggers it. If the prototype is still stopped then, delete `tools/envelope-proof` or renew the entries with a fresh reason. If it restarts, the upgrade to `risc0-zkvm` 4 or later is the fix for the `rsa` and `tracing-subscriber` findings.
+- **On 2027-01-18** the scan fails again on any PR that triggers it. If the prototype is still stopped then, delete `tools/envelope-proof` or renew the entries with a fresh reason. If it restarts, check first whether a released `rzup` takes `rsa` 0.10 and a released `risc0-groth16` takes `ark-groth16` 0.6; neither did on 2026-11-19.
+- **For Rafa, the workflow's comment.** The header of `.github/workflows/dependency-scan.yml` says an ignore goes in the root `osv-scanner.toml`. Since the scanner reads only the config beside each lockfile, that is incomplete. It should say: put the ignore in an `osv-scanner.toml` beside the lockfile it concerns. By the same rule the root file does not cover `tools/one-click/package-lock.json` (inferred). A `.github/` change, so it goes with the trigger line.
 - `osv-scanner` is not installed on the Mac, so the scan's result on this PR is the test.

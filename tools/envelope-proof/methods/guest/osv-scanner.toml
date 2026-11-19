@@ -7,7 +7,7 @@
 [[IgnoredVulns]]
 id = "RUSTSEC-2025-0055"
 ignoreUntil = 2027-01-18
-reason = "2026-11-19: tracing-subscriber 0.2.25, log poisoning with ANSI escapes; fixed in 0.3.20. Cannot move: ark-relations 0.5.1 requires ^0.2, through ark-groth16 0.5.0 and risc0-groth16 3.0.6 to risc0-zkvm 3.1.0. Not reachable (inferred): the guest runs inside the zkVM, writes no terminal log, and does no Groth16 wrapping."
+reason = "2026-11-19: tracing-subscriber 0.2.25, log poisoning with ANSI escapes; fixed in 0.3.20. Cannot move: ark-relations 0.5.1 requires ^0.2, through ark-groth16 0.5.0 and risc0-groth16 3.0.6 to risc0-zkvm 3.1.0. Not reachable (inferred): ark-relations uses it only in r1cs/trace.rs (ConstraintLayer), under an installed tracing subscriber; the guest runs inside the zkVM, installs none and writes no terminal log."
 
 [[IgnoredVulns]]
 id = "GHSA-xwfj-jgwm-7wp5"
