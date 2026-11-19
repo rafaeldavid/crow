@@ -129,10 +129,44 @@ function resolveSeats(seats: readonly PanelSeat[], policy: PipelinePolicy, regis
   return ok(families);
 }
 
+/**
+ * What the pipeline takes from a provider's response: a known kind, text that is a string, and a latency in whole
+ * milliseconds. Anything else is an error for that seat, so no provider output can abort the panel (T-570, red team
+ * H1: an OpenAI-compatible host's `content: null` once made parseVerdict throw, and the adjudicator called the whole
+ * panel again on its next pass).
+ */
+function saneResponse(res: unknown): JudgeResponse {
+  if (typeof res !== 'object' || res === null) return { kind: 'error', transport: false, detail: 'the provider returned no response object' };
+  const r = res as Record<string, unknown>;
+  if (r['kind'] === 'timeout') return { kind: 'timeout' };
+  if (r['kind'] === 'error') return { kind: 'error', transport: r['transport'] === true, detail: typeof r['detail'] === 'string' ? r['detail'].slice(0, 200) : 'provider error' };
+  if (r['kind'] === 'ok' && typeof r['text'] === 'string') {
+    const ms = r['latencyMs'];
+    return typeof ms === 'number' && Number.isSafeInteger(ms) && ms >= 0 ? { kind: 'ok', text: r['text'], latencyMs: ms } : { kind: 'ok', text: r['text'] };
+  }
+  return { kind: 'error', transport: false, detail: 'the answer carried no text string' };
+}
+
+const LONE_SURROGATE = /\p{Cs}/gu;
+
+/**
+ * The draft with every lone UTF-16 surrogate replaced by U+FFFD. The signed record's hash is RFC 8785 canonical JSON,
+ * which refuses a lone surrogate, and text from the seller (a delivered CSV header or JSON key that a check copies
+ * into its detail and cuts) or from a judge (an escape, or redacted evidence cut at 300 units) can carry one. Left in,
+ * it made the record hash throw on every pass, so the adjudicator called the panel again or never signed (T-570,
+ * review and red team of PR 722). A string that hashed before is unchanged, so no kept version's result moves.
+ */
+function wellFormed<T>(value: T): T {
+  if (typeof value === 'string') return value.replace(LONE_SURROGATE, '\uFFFD') as T;
+  if (Array.isArray(value)) return value.map((v) => wellFormed(v)) as T;
+  if (value !== null && typeof value === 'object') return Object.fromEntries(Object.entries(value).map(([k, v]) => [wellFormed(k), wellFormed(v)])) as T;
+  return value;
+}
+
 async function call(provider: JudgeProvider, req: JudgeRequest): Promise<JudgeResponse> {
   const once = async (): Promise<JudgeResponse> => {
     try {
-      return await provider.complete(req);
+      return saneResponse(await provider.complete(req));
     } catch {
       return { kind: 'error', transport: true, detail: 'provider threw' };
     }
@@ -216,7 +250,7 @@ export async function runPipeline(input: PipelineInput): Promise<Result<Judgment
 
   if (next !== 'panel') {
     const agg = aggregation.aggregate({ checks: deterministic, inconclusive, rubric: acceptance.rubric, screenFlagged: baseScreen.flagged, verdicts: [], thresholds });
-    return ok({ ...base, screen: baseScreen, panel: { ran: false, members: [] }, aggregate: agg });
+    return ok(wellFormed({ ...base, screen: baseScreen, panel: { ran: false, members: [] }, aggregate: agg }));
   }
 
   const rubricHash = canonicalKeccak(acceptance.rubric);
@@ -224,24 +258,28 @@ export async function runPipeline(input: PipelineInput): Promise<Result<Judgment
   const sameIds = (cs: readonly JudgmentCriterion[]) => cs.length === rubricIds.length && cs.every((c) => rubricIds.includes(c.id)) && new Set(cs.map((c) => c.id)).size === cs.length;
 
   type SeatResult = { member: PanelMember; verdict: PanelVerdict; canaryEcho: boolean; filtered?: string; strided: boolean };
-  const results = await Promise.all(
-    seats.map(async (seat, i): Promise<SeatResult | string> => {
-      const family = families[i]!;
-      const criteria = input.criteriaFor?.(seat, i) ?? acceptance.rubric.criteria;
-      if (!sameIds(criteria)) return `criteria for ${seat.judgeId} are not a permutation of the rubric`;
-      const prompt = buildPrompt({
-        spec: { description: input.deliverable.description },
-        criteria,
-        data: input.intake.data,
-        nonces: input.nonces(seat, i),
-        ...(input.template ? { template: input.template } : {}),
-        templates,
-        stride: screener.stride,
-        ...(input.maxDataChars !== undefined ? { maxDataChars: input.maxDataChars } : {}),
-        ...(input.sampleSeed ? { sample: { seed: input.sampleSeed(seat, i), mime: input.intake.mime } } : {}),
-      });
-      if (!prompt.ok) return `prompt for ${seat.judgeId}: ${prompt.error}`;
-      const p = prompt.value;
+  // Every seat's prompt is built before any judge is called, so a refusal (a bad criteria order, a prompt that cannot
+  // be built) never follows a judge call, and a retry of the turn never calls the same judges again for nothing.
+  const prompts: Array<{ seat: PanelSeat; family: string; p: Exclude<ReturnType<typeof buildPrompt>, { ok: false }>['value'] }> = [];
+  for (const [i, seat] of seats.entries()) {
+    const criteria = input.criteriaFor?.(seat, i) ?? acceptance.rubric.criteria;
+    if (!sameIds(criteria)) return err(problem('invalid_terms', `criteria for ${seat.judgeId} are not a permutation of the rubric`));
+    const prompt = buildPrompt({
+      spec: { description: input.deliverable.description },
+      criteria,
+      data: input.intake.data,
+      nonces: input.nonces(seat, i),
+      ...(input.template ? { template: input.template } : {}),
+      templates,
+      stride: screener.stride,
+      ...(input.maxDataChars !== undefined ? { maxDataChars: input.maxDataChars } : {}),
+      ...(input.sampleSeed ? { sample: { seed: input.sampleSeed(seat, i), mime: input.intake.mime } } : {}),
+    });
+    if (!prompt.ok) return err(problem('invalid_terms', `prompt for ${seat.judgeId}: ${prompt.error}`));
+    prompts.push({ seat, family: families[i]!, p: prompt.value });
+  }
+  const rs: SeatResult[] = await Promise.all(
+    prompts.map(async ({ seat, family, p }): Promise<SeatResult> => {
       const member: PanelMember = {
         judgeId: seat.judgeId,
         provider: seat.provider,
@@ -262,9 +300,16 @@ export async function runPipeline(input: PipelineInput): Promise<Result<Judgment
         maxOutputTokens: input.maxOutputTokens ?? 2048,
       });
       const none = { family, verdict: null };
+      const seatError = { member: { ...member, status: 'error' as const }, verdict: none, canaryEcho: false, strided: p.sampling === 'stride' };
       if (res.kind !== 'ok') return { member: { ...member, status: res.kind }, verdict: none, canaryEcho: false, strided: p.sampling === 'stride' };
       if (res.latencyMs !== undefined) member.latencyMs = res.latencyMs;
-      const parsed = aggregation.parseVerdict(res.text, { criterionIds: rubricIds, canary: p.canary, rationaleMaxChars: policy.rationaleMaxChars });
+      let parsed: ReturnType<AggregationImpl['parseVerdict']>;
+      try {
+        parsed = aggregation.parseVerdict(res.text, { criterionIds: rubricIds, canary: p.canary, rationaleMaxChars: policy.rationaleMaxChars });
+      } catch {
+        // A verdict filter that throws on one seat's output makes that seat an error, never the whole panel's failure.
+        return seatError;
+      }
       if (parsed.status === 'abstain') {
         return { member: { ...member, status: 'abstain' }, verdict: none, canaryEcho: parsed.reason === 'canary_echo', filtered: parsed.reason, strided: p.sampling === 'stride' };
       }
@@ -272,9 +317,6 @@ export async function runPipeline(input: PipelineInput): Promise<Result<Judgment
       return { member: { ...member, status, verdict: parsed.verdict }, verdict: { family, verdict: parsed.verdict }, canaryEcho: false, strided: p.sampling === 'stride' };
     }),
   );
-  const refused = results.find((r): r is string => typeof r === 'string');
-  if (refused) return err(problem('invalid_terms', refused));
-  const rs = results as SeatResult[];
 
   const canarySignals = rs.filter((r) => r.canaryEcho).map((r) => ({ kind: 'canary_echo' as const, detail: `judge ${r.member.judgeId} echoed its canary` }));
   const finalScreen: ScreenResult = { flagged: baseScreen.flagged || canarySignals.length > 0, signals: [...baseScreen.signals, ...canarySignals] };
@@ -293,5 +335,5 @@ export async function runPipeline(input: PipelineInput): Promise<Result<Judgment
     thresholds,
     escalate,
   });
-  return ok({ ...base, screen: finalScreen, panel: { ran: true, members: rs.map((r) => r.member) }, aggregate: agg });
+  return ok(wellFormed({ ...base, screen: finalScreen, panel: { ran: true, members: rs.map((r) => r.member) }, aggregate: agg }));
 }
