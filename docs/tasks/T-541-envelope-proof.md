@@ -4,7 +4,7 @@
 - **Phase:** 2, settlement on EVM (stable EVM operations, D53)
 - **Kind:** 10 (research), with a prototype in `tools/` that no tool calls; local checks: the prototype's own build and runs; review by one reviewer agent
 - **Depends on:** T-535 (case study 3, the waiver run as ADR-0039 describes it)
-- **Paths this task may touch:** `tools/envelope-proof/` (new), this file
+- **Paths this task may touch:** `tools/envelope-proof/` (new), this file, and one entry in `.gitleaksignore` (a false positive on the guest lockfile, allowed by Rafa on 2026-11-19)
 - **Human gate:** no (no deploy; Rafa approved installing Rust and RISC Zero's toolchain on the Mac on 2026-11-18)
 - **Status:** done with the merge of pull request 669 on 2026-11-18, after CI passed and the review's findings were fixed (PASS on the re-review); the prototype stays optional and not integrated
 - **Agent/session:** the T-534 session, 2026-11-18, branch `t-541-envelope-proof`
@@ -33,7 +33,7 @@ Non-goals:
 - [x] A real proof (not dev mode) on a case-study report, verified, with its time, cycle count and receipt size measured.
 - [x] Two tampered inputs (a wrong key in the envelope, a wrong secret) for which no proof exists.
 - [x] A README with what it proves, what it does not, and what to harden before any use.
-- [x] Not called by any Crow tool, and no change outside `tools/envelope-proof/` and this file.
+- [x] Not called by any Crow tool, and no change outside `tools/envelope-proof/`, this file and the one `.gitleaksignore` entry.
 
 ## Evidence
 
