@@ -26,23 +26,30 @@ export function executionFailed(e: unknown): boolean {
 }
 
 /**
- * Where a check reads: a block (a mined transaction's, for a step read from the chain), or `call` for each eth_call
- * (anvil's scenario clock, whose pending block carries the scenario's second). Neither: the latest block.
+ * Where a check reads: a block (a mined transaction's, for a step read from the chain; or, as a function, the node's
+ * newest, so a read after this node's own write sees it, T-232), or `call` for each eth_call (anvil's scenario clock,
+ * whose pending block carries the scenario's second).
  */
 export interface ReadAt {
-  blockNumber?: bigint;
+  blockNumber?: bigint | (() => Promise<bigint>);
   call?: (tx: { to: Address; data: Hex }) => Promise<Hex>;
 }
 
 /** The rule over `client` at `at`. */
 export function chainSignerCheck(client: PublicClient, at: ReadAt = {}): SignerCheck {
-  const block = at.blockNumber !== undefined ? { blockNumber: at.blockNumber } : {};
+  // One block for both reads of a check, asked once.
+  let pinned: Promise<{ blockNumber?: bigint }> | undefined;
+  const block = () => (pinned ??= typeof at.blockNumber === 'function' ? at.blockNumber().then((blockNumber) => ({ blockNumber })) : Promise.resolve(at.blockNumber !== undefined ? { blockNumber: at.blockNumber } : {}));
   return contractSignerRule({
-    code: async (address) => (await client.getCode({ address, ...block })) ?? '0x',
+    code: async (address) => (await client.getCode({ address, ...(await block()) })) ?? '0x',
     isValidSignature: async (address, digest, signature, code?: Hex) => {
       const data = encodeFunctionData({ abi: ERC1271, functionName: 'isValidSignature', args: [digest, signature] });
       try {
-        const answer = at.call && !code ? await at.call({ to: address, data }) : (await client.call({ to: address, data, ...block, ...(code ? { stateOverride: [{ address, code }] } : {}) })).data;
+        const answer =
+          at.call && !code
+            ? await at.call({ to: address, data })
+            : // Anvil's scenario clock passes `call`; a live chain passes its newest block; a block-less check reads the latest (a test's stub chain).
+              (await client.call({ to: address, data, ...(await block()), ...(code ? { stateOverride: [{ address, code }] } : {}) })).data; // eslint-disable-line no-restricted-syntax -- the block comes from block() above: the transaction's own, or the node's newest (T-232)
         return (answer ?? '0x').slice(0, 66).toLowerCase() === YES_WORD;
       } catch (e) {
         if (executionFailed(e)) return false;

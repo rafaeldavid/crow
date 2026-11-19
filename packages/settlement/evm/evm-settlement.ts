@@ -906,7 +906,8 @@ export class EvmSettlement implements Settlement {
    */
   signerCheck(block?: bigint): SignerCheck {
     const at = this.world.callAt && !this.wall ? (tx: { to: Address; data: Hex }) => this.world.callAt!(tx, secs(this.now())) : undefined;
-    return chainSignerCheck(this.world.publicClient, block !== undefined ? { blockNumber: block } : at ? { call: at } : {});
+    const newest = this.world.newest ? () => this.world.newest!('now') : undefined;
+    return chainSignerCheck(this.world.publicClient, block !== undefined ? { blockNumber: block } : at ? { call: at } : newest ? { blockNumber: newest } : {});
   }
 
   private stepped(state: EscrowState, e: EscrowEvent): EscrowState {
@@ -1050,8 +1051,12 @@ export class EvmSettlement implements Settlement {
         // The buyer's signature is read before any simulation (T-549 red team): a refusal names it, and a body the
         // contract would refuse never reaches the RPC.
         if (!dryRun) await this.check(m, book.state.terms.buyer, 'EarlyAccept', this.signerCheck());
-        const proof = keyProof(d, book.state.terms.buyer) ?? NO_KEY;
         const mirror = (at: Timestamp): EscrowEvent[] => [...(carry ? [{ type: 'deliver' as const, at, delivery: carry }] : []), { type: 'early_accept', at, message: m }];
+        const found = keyProof(d, book.state.terms.buyer);
+        // T-550's hand-over: a delivery with no envelope for the buyer (a standing delivery) cannot be accepted early.
+        // Core says why before any simulation, so the agent reads that reason, not the contract's bare BadKeyProof.
+        if (!found) mirror(this.now()).reduce((st, e) => this.stepped(st, e), book.state);
+        const proof = found ?? NO_KEY;
         await this.call(m.commitmentId, 'earlyAccept', [termsView(book.state.terms), earlyAcceptView(m), deliveryView(d), d.signature, proof], mirror, options, dryRun, m.buyer, carry ? { delivery: carry } : {});
         return m.commitmentId;
       }
@@ -1096,6 +1101,8 @@ export class EvmSettlement implements Settlement {
         const other = m.payouts.find((p) => lc(p.to) !== lc(t.buyerPaymentAddress) && lc(p.to) !== lc(t.sellerPayoutAddress));
         if (other) refuse('invalid_terms', `payout recipient ${other.to} is neither the buyer's payment address nor the seller's payout address: the phase-one contracts pay a mutual settlement to those two only (ADR-0031 §4, ADR-0033)`);
         const settle = (at: Timestamp): EscrowEvent[] => [{ type: 'mutual_settle', at, message: m, rule: { allowed: true, payoutsTo: 'parties' }, ...(late ? { delivery: late } : {}) }];
+        // T-550's hand-over: a settlement that releases a key no envelope carries; core names the reason first.
+        if (m.releaseKey && d && !keyProof(d, t.buyer)) settle(this.now()).reduce((st, e) => this.stepped(st, e), book.state);
         await this.call(m.commitmentId, 'mutualSettle', [termsView(t), mutualView(m), m.releaseKey && d ? deliveryView(d) : NO_DELIVERY, proof], settle, options, dryRun, 'anyone');
         return m.commitmentId;
       }
