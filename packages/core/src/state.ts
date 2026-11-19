@@ -359,14 +359,29 @@ function deliver(s: Extract<EscrowState, { kind: 'Held' }>, e: Extract<EscrowEve
   if (d.commitmentId !== s.id) return fail('invalid_terms', 'delivery is for another commitment');
   if (!before(e.at, terms.timing.deliverBy)) return fail('deadline_passed', `deliverBy passed at ${terms.timing.deliverBy}`);
   if (d.attempt !== 1) return fail('submission_limit_reached', `attempt ${d.attempt} exceeds maxSubmissions ${terms.timing.maxSubmissions}`);
-  // Every adjudicator who may have to judge must be able to read the work (ADR-0012, ADR-0016), and the
-  // buyer's key must be there for early acceptance, which releases it with the payment (architecture.md
-  // Two-sided hold, step 5). Checking at delivery means early acceptance can never strand the buyer.
+  // Every adjudicator who may have to judge must be able to read the work (ADR-0012, ADR-0016). The buyer's envelope
+  // may be left out (ADR-0040 §2): a standing delivery serves every take of one template, and only a holder of the
+  // content key can seal to each buyer. Without it the buyer's key comes only with an adjudicator's accept, which
+  // wraps the content key to the terms' encryption key, and core refuses an early accept and a settlement that
+  // releases the key (`withBuyerEnvelope`), as the contract does (HoldbackRules :344, :380-381).
   const { adjudicator, fallbackAdjudicator, appealAdjudicator } = terms.adjudication;
-  for (const recipient of [adjudicator, fallbackAdjudicator, appealAdjudicator, terms.buyer]) {
+  for (const recipient of [adjudicator, fallbackAdjudicator, appealAdjudicator]) {
     if (!d.encryptedKeys.some((k) => sameAddress(k.recipient, recipient))) return fail('invalid_terms', `no content key for ${recipient}`);
   }
   return ok({ ...s, kind: 'Delivered', delivery: d });
+}
+
+/** True when the delivery holds an envelope for the buyer; a standing delivery (ADR-0040 §2) may hold none. */
+export const holdsBuyerEnvelope = (d: Pick<Delivery, 'encryptedKeys'>, buyer: string): boolean => d.encryptedKeys.some((k) => sameAddress(k.recipient, buyer));
+
+/**
+ * ADR-0040 §2: a path that releases the buyer's key from the delivery itself (an early accept, a settlement with
+ * releaseKey) needs the buyer's envelope in it; the contract's key proof reverts BadKeyProof without one (:344,
+ * :381). Refused here, with the reason, before anything is relayed.
+ */
+function withBuyerEnvelope(d: Delivery, buyer: string, path: string): R<true> {
+  if (holdsBuyerEnvelope(d, buyer)) return ok(true);
+  return fail('invalid_terms', `the delivery has no envelope for the buyer ${buyer}, so ${path} has no key to release; the buyer's key comes only with an adjudicator's accept (a standing delivery, ADR-0040 §2)`);
 }
 
 // A timestamp in whole unix seconds, never below 0: the beacon arithmetic's input.
@@ -619,7 +634,7 @@ function lateDelivery(s: Extract<Settleable, { kind: 'Held' }>, m: MutualSettlem
   // Hex compared in any letter case: the contract hashes the id as bytes32 (:380).
   if (d.commitmentId.toLowerCase() !== s.id.toLowerCase()) return fail('invalid_terms', 'the carried delivery is for another commitment');
   if (deliveryHash(d) !== m.deliveryHash) return fail('invalid_terms', `the carried delivery does not hash to the signed deliveryHash ${m.deliveryHash}; it hashes to ${deliveryHash(d)}`);
-  if (!d.encryptedKeys.some((k) => sameAddress(k.recipient, s.terms.buyer))) return fail('invalid_terms', 'the carried delivery has no envelope for the buyer, so there is no key to release');
+  if (!holdsBuyerEnvelope(d, s.terms.buyer)) return fail('invalid_terms', 'the carried delivery has no envelope for the buyer, so there is no key to release');
   return ok(true);
 }
 
@@ -641,6 +656,9 @@ function mutualSettle(s: Settleable, e: Extract<EscrowEvent, { type: 'mutual_set
     if (!late.ok) return late;
   } else if (m.deliveryHash !== deliveryHash(s.delivery)) {
     return fail('invalid_terms', 'deliveryHash does not name the current delivery');
+  } else if (m.releaseKey) {
+    const keyed = withBuyerEnvelope(s.delivery, s.terms.buyer, 'a settlement that releases the key');
+    if (!keyed.ok) return keyed;
   }
   // D23: rulebook allows it, payouts in the price token sum to the price, recipients as payoutsTo allows.
   const why = mutualSettlementProblem(m, s.terms, e.rule);
@@ -701,6 +719,8 @@ export function step(s: EscrowState, e: EscrowEvent, profile: SettlementProfile 
         if (!named.ok) return named;
         const live = messageLive(m, e.at);
         if (!live.ok) return live;
+        const keyed = withBuyerEnvelope(s.delivery, s.terms.buyer, 'an early accept');
+        if (!keyed.ok) return keyed;
         return ok({ kind: 'Released', id: s.id, terms: s.terms, beaconSource: s.beaconSource, settledAt: e.at, via: { kind: 'early_accept', earlyAccept: m } });
       }
       if (e.type === 'trigger_fallback') {

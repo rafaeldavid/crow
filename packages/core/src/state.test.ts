@@ -8,7 +8,7 @@ import { commitmentId, deliveryHash, termsOf } from './eip712.js';
 import type { TokenAmount } from './money/index.js';
 import { parseAppeal, parseClub, parseCommitment, parseDelivery, parseMessage } from './parse.js';
 import { PROBLEM_TYPES, type ProblemType } from './problem.js';
-import { APPEAL_WINDOW_PROBLEM, HOLD_TOO_LARGE_PROBLEM, MAX_HOLD, beaconRoundFor, offer, panelSeed, postedDeliveryHash, step, type EscrowEvent, type EscrowState, type OfferInput } from './state.js';
+import { APPEAL_WINDOW_PROBLEM, HOLD_TOO_LARGE_PROBLEM, MAX_HOLD, beaconRoundFor, holdsBuyerEnvelope, offer, panelSeed, postedDeliveryHash, step, type EscrowEvent, type EscrowState, type OfferInput } from './state.js';
 import type { AdjudicatorAcceptance, Agree, Appeal, Commitment, CommitmentTerms, Decision, Delivery, EarlyAccept, FundingAuthorization, MutualSettlement, Rulebook, Scope } from './types.js';
 
 function load(file: string): unknown {
@@ -578,7 +578,9 @@ const illegal: Illegal[] = [
   ['a zero appeal bond', toReleased, ev.fileAppeal(T.appealFiled, { bond: tusd('0') }), 'insufficient_funds'],
   ['an appeal bond below the rulebook rate', toReleased, ev.fileAppeal(T.appealFiled, { bond: tusd('99999999') }), 'insufficient_funds'],
   ['an appeal fee below the rulebook fee', toReleased, ev.fileAppeal(T.appealFiled, {}, { feePaid: tusd('24999999') }), 'insufficient_funds'],
-  ['a delivery without a key for the buyer', toHeld, ev.deliver(T.deliver, { encryptedKeys: delivery().encryptedKeys.filter((k) => k.recipient !== buyer) }), 'invalid_terms'],
+  ['a delivery without a key for the primary', toHeld, ev.deliver(T.deliver, { encryptedKeys: delivery().encryptedKeys.filter((k) => k.recipient !== primary) }), 'invalid_terms'],
+  ['a delivery without a key for the fallback', toHeld, ev.deliver(T.deliver, { encryptedKeys: delivery().encryptedKeys.filter((k) => k.recipient !== fallback) }), 'invalid_terms'],
+  ['a delivery without a key for the appeal adjudicator', toHeld, ev.deliver(T.deliver, { encryptedKeys: delivery().encryptedKeys.filter((k) => k.recipient !== appealAdj) }), 'invalid_terms'],
   // second sweep: money-comparison error branches and the fundBy guard
   ['funding at fundBy with a message valid beyond it', toAgreed, ev.fund(T.fundBy, { message: { expiresAt: far, validBefore: far } }), 'deadline_passed'],
   ['the primary signing as fallback before judgeBy', toDelivered, ev.decide('fallback', 'accept', T.decide, { adjudicator: primary }), 'not_your_turn'],
@@ -997,6 +999,71 @@ describe('late-work settlement in Held (SC-5b)', () => {
   it('a reclaim that lands first ends the deal: the late settlement is refused (settle once)', () => {
     const r = step(run([...toHeld, ev.at('reclaim', T.deliverBy)]), carried(late, { deliveryHash: LATE_DH, releaseKey: true }, lateDelivery));
     expect(r.ok ? `ok: ${r.value.kind}` : r.error.type).toBe('invalid_state');
+  });
+});
+
+// T-550, ADR-0040 §2: a standing delivery serves every take of one template, so it holds envelopes for the three
+// adjudicators and none for the deal's own buyer. Core takes it; the buyer's key then comes only with an adjudicator's
+// accept, and core refuses, with the reason, every path that would release the key from the delivery itself, as the
+// contract does (HoldbackRules :344 and :380-381, BadKeyProof).
+describe('a standing delivery without the buyer envelope (ADR-0040 §2)', () => {
+  const standing = delivery({ encryptedKeys: delivery().encryptedKeys.filter((k) => k.recipient !== buyer) });
+  const SDH = deliveryHash(standing);
+  const toStanding = [...toHeld, ev.deliver(T.deliver, { encryptedKeys: standing.encryptedKeys })];
+  const noKey = /no envelope for the buyer .* comes only with an adjudicator's accept/;
+
+  it('is taken in Held and holds the three adjudicators envelopes only', () => {
+    const s = run(toStanding);
+    expect(s.kind).toBe('Delivered');
+    expect(s.kind === 'Delivered' && s.delivery.encryptedKeys.map((k) => k.recipient)).toEqual([primary, fallback, appealAdj]);
+    expect(holdsBuyerEnvelope(standing, buyer)).toBe(false);
+    expect(holdsBuyerEnvelope(delivery(), buyer.toLowerCase())).toBe(true);
+  });
+
+  it.each<[string, EscrowEvent[], EscrowEvent, string]>([
+    ["the primary's accept: the decision carries the buyer's key", toStanding, ev.decide('primary', 'accept', T.decide, { deliveryHash: SDH }), 'Released'],
+    ["the primary's reject", toStanding, ev.decide('primary', 'reject', T.decide, { deliveryHash: SDH }), 'Refunded'],
+    ["the fallback's accept after judgeBy", [...toStanding, ev.at('trigger_fallback', T.judgeBy)], ev.decide('fallback', 'accept', T.fallbackDecide, { deliveryHash: SDH }), 'Released'],
+    ['an escalation', toStanding, ev.decide('primary', 'escalate', T.decide, { deliveryHash: SDH }), 'Escalated'],
+    ['a settlement that keeps the key', toStanding, ev.mutual(T.decide, { deliveryHash: SDH, releaseKey: false }), 'Settled'],
+  ])('settles as today: %s', (_name, path, event, to) => {
+    const r = stepF(run(path), event);
+    if (!r.ok) throw new Error(`${r.error.type}: ${r.error.detail}`);
+    expect(r.value.kind).toBe(to);
+  });
+
+  it.each<[string, EscrowEvent[], EscrowEvent]>([
+    ['an early accept (BadKeyProof, :344)', toStanding, ev.earlyAccept(T.decide, buyer, { deliveryHash: SDH })],
+    ['a settlement that releases the key in Delivered (BadKeyProof, :381)', toStanding, ev.mutual(T.decide, { deliveryHash: SDH, releaseKey: true })],
+    ['the same during fallback judging', [...toStanding, ev.at('trigger_fallback', T.judgeBy)], ev.mutual(T.fallbackDecide, { deliveryHash: SDH, releaseKey: true })],
+    ['the same while escalated', [...toStanding, ev.decide('primary', 'escalate', T.decide, { deliveryHash: SDH })], ev.mutual(T.fallbackDecide, { deliveryHash: SDH, releaseKey: true })],
+  ])('refuses %s, with the reason, and changes nothing', (_name, path, event) => {
+    const before = run(path);
+    const r = stepF(before, event);
+    expect(r.ok ? `ok: ${r.value.kind}` : r.error.type).toBe('invalid_terms');
+    if (!r.ok) expect(r.error.detail).toMatch(noKey);
+    expect(run(path)).toEqual(before);
+  });
+
+  it('a refused early accept leaves the deal to the adjudicator: the primary still accepts it', () => {
+    const s = run(toStanding);
+    expect(stepF(s, ev.earlyAccept(T.decide, buyer, { deliveryHash: SDH })).ok).toBe(false);
+    expect(stepF(s, ev.decide('primary', 'accept', T.decide, { deliveryHash: SDH }))).toMatchObject({ ok: true, value: { kind: 'Released' } });
+  });
+
+  it('checks the envelope after the checks it shares with the contract: a wrong signer is still invalid_signature', () => {
+    const r = stepF(run(toStanding), ev.earlyAccept(T.decide, seller, { deliveryHash: SDH }));
+    expect(r.ok ? 'ok' : r.error.type).toBe('invalid_signature');
+  });
+
+  it('a delivery with the buyer envelope keeps every path, the early accept included', () => {
+    expect(stepF(run(toDelivered), ev.earlyAccept())).toMatchObject({ ok: true, value: { kind: 'Released' } });
+    expect(stepF(run(toDelivered), ev.mutual(T.decide, { deliveryHash: DH, releaseKey: true }))).toMatchObject({ ok: true, value: { kind: 'Settled', keyReleased: true } });
+  });
+
+  it('on the phase-one profile too, which every chain steps', () => {
+    const r = step(run(toStanding), ev.earlyAccept(T.decide, buyer, { deliveryHash: SDH }), 'phase_one');
+    expect(r.ok ? 'ok' : r.error.detail).toMatch(noKey);
   });
 });
 
