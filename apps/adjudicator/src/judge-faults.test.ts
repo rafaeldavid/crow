@@ -16,7 +16,7 @@ import { describe, expect, it, vi } from 'vitest';
 import { demoCsv } from './_sim.js';
 import { defaultPolicy, policyHashOf } from './policy.js';
 import { withTimeout } from './providers/timeout.js';
-import { Adjudicator } from './service.js';
+import { Adjudicator, type JudgedStore, type KeptDraft, type KeptJudgment } from './service.js';
 import { SettlementAdapter } from './simchain-adapter.js';
 
 const DOMAIN = holdbackDomain(SIM_CHAIN_ID);
@@ -88,6 +88,8 @@ interface WorldOptions {
   delays?: Record<string, number>;
   /** Wraps the judges in the adjudicator's own judge timeout (providers/timeout.ts). */
   timeoutMs?: number;
+  /** Gives every adjudicator this store of judged results (A-4), which outlives a restart. */
+  judgedStore?: JudgedStore;
 }
 
 async function world(o: WorldOptions = {}) {
@@ -142,6 +144,7 @@ async function world(o: WorldOptions = {}) {
       provider,
       settlement,
       trustedAdjudicators: [cast.primary.address, cast.fallback.address, cast.appeal.address],
+      ...(o.judgedStore ? { judgedStore: o.judgedStore } : {}),
     });
     registrations.set(adj.address, { ...adj.registration(), pool: {} as never, poolTermsHash: `0x${'00'.repeat(32)}`, status: 'active' });
     return { adj, enc };
@@ -180,7 +183,9 @@ async function world(o: WorldOptions = {}) {
     createdAt: now,
   };
   const id = commitmentId(terms);
-  return { cast, chain, blobs, records, calls, late, judges, primary, fallback, appeal, buyerEnc, terms, id };
+  /** A new process for the primary: a fresh service with the same keys, config and store. */
+  const restartPrimary = () => bench(cast.primary, 11);
+  return { cast, chain, blobs, records, calls, late, judges, primary, fallback, appeal, buyerEnc, terms, id, restartPrimary };
 }
 
 /** Offer, the primary's acceptance, agreement and funding, and the sealed delivery of `csv`. */
@@ -402,7 +407,7 @@ describe('T-570: a record that cannot be built never runs the panel again', () =
       for (let pass = 0; pass < 2; pass++) {
         const r = await w.primary.adj.runOnce();
         expect(r.decided).toEqual([]);
-        expect(r.refused.map((x) => x.problem.detail).join(' ')).toMatch(/the judgment record could not be built .* no judge is called again/);
+        expect(r.refused.map((x) => x.problem.detail).join(' ')).toMatch(/could not build the judgment record .* calls no judge again/);
       }
     } finally {
       recordHash.fails = false;
@@ -435,5 +440,47 @@ describe('T-570: a record that cannot be built never runs the panel again', () =
     must(await w.chain.trigger(w.id, 'apply_default'));
     expect(w.chain.escrowState(w.id)).toMatchObject({ kind: 'Refunded', via: { kind: 'default_outcome', from: 'FallbackJudging' } });
     expect((await balanceOf(w, w.cast.buyer.address)) - buyerBefore).toBe(BigInt(w.terms.price.amount) + BigInt(w.terms.adjudication.fee.amount));
+  });
+
+  const memoryStore = () => {
+    const rows = new Map<string, KeptJudgment | KeptDraft>();
+    const store: JudgedStore = { get: async (k) => structuredClone(rows.get(k)), put: async (k, v) => void rows.set(k, structuredClone(v)) };
+    return { rows, store };
+  };
+
+  it('after a restart, the new process builds the record from the stored panel result and calls no judge', async () => {
+    const kept = memoryStore();
+    const w = await delivered(DEMO_CSV, { judgedStore: kept.store });
+    const seats = primaryPanel(w);
+    recordHash.fails = true;
+    try {
+      expect((await w.primary.adj.runOnce()).decided).toEqual([]);
+    } finally {
+      recordHash.fails = false;
+    }
+    expect([...kept.rows.entries()].filter(([k, v]) => k.endsWith('|draft') && 'kind' in v && v.kind === 'draft')).toHaveLength(1);
+    const restarted = w.restartPrimary();
+    expect((await restarted.adj.runOnce()).decided).toEqual([{ commitmentId: w.id, role: 'primary', outcome: 'accept' }]);
+    expect(w.calls).toHaveLength(seats.length);
+  });
+
+  it('a held panel result is never used for another delivery or another seed: the turn is refused, and no judge is called', async () => {
+    const kept = memoryStore();
+    const w = await delivered(DEMO_CSV, { judgedStore: kept.store });
+    recordHash.fails = true;
+    try {
+      expect((await w.primary.adj.runOnce()).decided).toEqual([]);
+    } finally {
+      recordHash.fails = false;
+    }
+    const [key, held] = [...kept.rows.entries()].find(([k]) => k.endsWith('|draft'))! as [string, KeptDraft];
+    const calls = w.calls.length;
+    for (const tampered of [{ ...held, deliveryHash: `0x${'ab'.repeat(32)}` }, { ...held, seed: `0x${'cd'.repeat(32)}` }] as KeptDraft[]) {
+      kept.rows.set(key, tampered);
+      const r = await w.restartPrimary().adj.runOnce();
+      expect(r.decided).toEqual([]);
+      expect(r.refused.map((x) => x.problem.type ?? x.problem.detail).join(' ')).toMatch(/invalid_state|never judges an attempt twice/);
+    }
+    expect(w.calls).toHaveLength(calls);
   });
 });
