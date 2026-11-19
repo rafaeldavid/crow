@@ -1,6 +1,6 @@
 {
   "about": "Three live test deals on Sepolia, one per ending, shown under the demo's player (T-427; since T-500 one security-review deal of the kind Crow's first pilot runs, in review.ts). Run with tools/duet/review-deals.ts: a seller Crow ran for the page, with a fresh key, sold the demo review to Crow's test buyer. Taken from each deal's public record on the live API: offeredAt and endedAt are the record's commitment.offered and settlement event times; tx is the settlement event's transaction. A refresh is a change of this file and one publish.",
-  "date": "2026-11-17",
+  "date": "2026-11-19",
   "record": "https://api.crow.direct/v1/commitments/",
   "explorer": "https://sepolia.etherscan.io/tx/",
   "endings": [
@@ -11,10 +11,10 @@
       "measure": "from the seller's offer to the payment",
       "amount": { "base": "40000000", "label": "paid to the seller" },
       "how": "The report passed all five checks, so the checks alone decided and no AI judge was needed. The buyer paid 41 test dollars in all: the price and the reviewer's fee of 1 test dollar.",
-      "commitment": "0x341562ccb28591a4df09a0cfbabfeffec1fff011631585e0a020a177ec192e9b",
-      "offeredAt": "2026-11-17T08:44:19Z",
-      "endedAt": "2026-11-17T08:45:00Z",
-      "tx": "0xe47168fad7058cb2b164c7bceb297510cb3e2582a4ded02c6ffc88946194ae96"
+      "commitment": "0xa96f9a021aa384cfb50abcd6259b34c628bed5af510bc06d7451682b335771c3",
+      "offeredAt": "2026-11-19T19:12:51Z",
+      "endedAt": "2026-11-19T19:13:48Z",
+      "tx": "0x67d192518a1f11a09aa2916544d7390a64087eea24e7b3d415c93b455c0b16e6"
     },
     {
       "key": "fails",
@@ -23,10 +23,10 @@
       "measure": "from the seller's offer to the refund",
       "amount": { "base": "40000000", "label": "back to the buyer" },
       "how": "The same terms as the deal that passed. This report left out the proof of concept for its first Critical finding, so the proof check failed; the other four passed. The reviewer kept its fee of 1 test dollar.",
-      "commitment": "0x9908966eb7e10983d56fd593ac9798fe81a7011a5d3f13ef972fe1f6c0c44272",
-      "offeredAt": "2026-11-17T08:47:33Z",
-      "endedAt": "2026-11-17T08:48:24Z",
-      "tx": "0x652d1c6a24cc0d2d28f00d922511fdac37776d87d12c8925459508c2a0565b52"
+      "commitment": "0xa2c7f93bfbe8d8d2e0aa3d2cbea3817f91311162b4903446f82eb194d1efebb2",
+      "offeredAt": "2026-11-19T19:12:51Z",
+      "endedAt": "2026-11-19T19:13:36Z",
+      "tx": "0x0db8d656778abcd87b14eb08250ee8ded9a358304e8cc4a9c6d88b3f6f2fa5cb"
     },
     {
       "key": "silent",
@@ -34,12 +34,12 @@
       "rule": "Nothing arrived by the deadline, so the whole payment went back to the buyer, without the buyer asking.",
       "measure": "from the seller's offer to the refund",
       "amount": { "base": "41000000", "label": "back to the buyer: the price and the reviewer's fee" },
-      "how": "The seller took the deal and never delivered. The terms gave it 5 minutes from the offer; the payment went back 22 seconds after that deadline.",
-      "commitment": "0x8aedfce0e882d3ac4040820f9b36526abee14c8ef8c47578372202b8648022e6",
-      "offeredAt": "2026-11-17T08:49:39Z",
-      "deliverBy": "2026-11-17T08:54:38Z",
-      "endedAt": "2026-11-17T08:55:00Z",
-      "tx": "0x97ffd900b895164943a612efbce6227b9182369ae140323d4b888933e8a458ae"
+      "how": "The seller took the deal and never delivered. The terms gave it 5 minutes from the offer; the payment went back 21 seconds after that deadline.",
+      "commitment": "0x12fcf1b092354d8a28a6313fe3fbf283babcb635c694874547494cb1b7211686",
+      "offeredAt": "2026-11-19T19:12:51Z",
+      "deliverBy": "2026-11-19T19:17:51Z",
+      "endedAt": "2026-11-19T19:18:12Z",
+      "tx": "0x6ea95d6ad27ae6d45ca5ee3784a26788bac8d3019cea202f4aefb17ec88a398a"
     }
   ]
 }
