@@ -64,6 +64,14 @@ const RELAYER = '0x59c6995e998f97a5a0044966f0945389dc9e86dae88c7a8412f4603b6b786
 const EXAMPLE = JSON.parse(readFileSync(`${root}spec/examples/commitment.example.json`, 'utf8')) as Commitment;
 const CSV = readFileSync(`${root}fixtures/data/dataset-cleaning/customers.clean.csv`, 'utf8');
 const sleep = (ms: number) => new Promise((r) => setTimeout(r, ms));
+/** How far behind the fork RPC's head the fork starts (about 96 s of Sepolia blocks): every backend behind a public RPC has that block and its state. */
+const FORK_BEHIND = 8n;
+/** One JSON-RPC call; throws on an error answer. */
+async function rpcCall(url: string, method: string, params: unknown[]): Promise<unknown> {
+  const r = (await (await fetch(url, { method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify({ jsonrpc: '2.0', id: 1, method, params }) })).json()) as { result?: unknown; error?: { message?: string } };
+  if (r.error || r.result === undefined) throw new Error(`${method} at the fork RPC: ${r.error?.message ?? 'no result'}`);
+  return r.result;
+}
 /** Keys from public labels; they guard no value. */
 const actor = (name: string) => {
   const key = keccak256(stringToBytes(`holdback/t-217-fork/${name}`));
@@ -119,9 +127,14 @@ describe.skipIf(!forkReady)(`drand quicknet decisions on a Sepolia fork (T-217)$
         s.close(() => resolve(p));
       });
     });
+    // T-574: the fork starts FORK_BEHIND blocks behind the RPC's head. At the head itself a load-balanced public RPC
+    // answered "block not found" for 1 of 6 forks (the backend asked had not seen it yet), and anvil exited; 8 blocks
+    // back, 10 of 10 forks started (measured 2026-11-19 against a public Sepolia node).
+    const head = (await rpcCall(forkRpc!, 'eth_blockNumber', [])) as string;
+    const pinned = BigInt(head) - FORK_BEHIND;
     // Prague, as Sepolia runs: the drand verifier needs EIP-2537's BLS precompiles.
-    anvil = spawn('anvil', ['--fork-url', forkRpc!, '--hardfork', 'prague', '--host', '127.0.0.1', '--port', String(port), '--block-time', '1', '--silent'], { stdio: ['ignore', 'ignore', 'pipe'] });
-    // A load-balanced public RPC can answer "block not found" for its own head, and anvil then exits: say so.
+    anvil = spawn('anvil', ['--fork-url', forkRpc!, '--fork-block-number', String(pinned), '--hardfork', 'prague', '--host', '127.0.0.1', '--port', String(port), '--block-time', '1', '--silent'], { stdio: ['ignore', 'ignore', 'pipe'] });
+    // Say why if anvil exits anyway.
     let anvilError = '';
     anvil.stderr?.on('data', (d) => (anvilError += String(d)));
     rpc = `http://127.0.0.1:${port}`;
@@ -130,6 +143,9 @@ describe.skipIf(!forkReady)(`drand quicknet decisions on a Sepolia fork (T-217)$
     let up = false;
     for (let i = 0; i < 400 && !up; i++) up = !!(await call('eth_chainId', []).catch(() => ({ result: undefined }))).result || (await sleep(200), false);
     if (!up) throw new Error(`anvil did not fork ${forkRpc} within 80 s${anvilError ? `: ${anvilError.trim().slice(-300)}` : ''}`);
+    // The fork's clock starts at the pinned block's time, about FORK_BEHIND times 12 s behind; the deals here are timed
+    // by the wall clock and the drand rounds by real time, so the fork's clock is set to now.
+    await call('anvil_setTime', [Math.floor(Date.now() / 1000)]);
     forkBlock = BigInt((await call('eth_blockNumber', [])).result as string);
     await call('anvil_setBalance', [privateKeyToAccount(RELAYER).address, '0x8ac7230489e80000']);
     shim = await estimateShim(rpc);
