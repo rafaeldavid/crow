@@ -197,7 +197,7 @@ export async function dealOf(r: J): Promise<Deal> {
     token: { id: (/^0x/i.test(String(t.price.token)) ? lc(t.price.token) : plain(String(t.price.token))).slice(0, 64), symbol: known ? pin.token.symbol : null, decimals: known ? pin.token.decimals : null },
     funding: txOf(['hold.funded']),
     // A decision's transaction carries the release or the refund, and the record lists it under its first step.
-    settlement: txOf([step]) ?? txOf(['judgment.decided', 'appeal.decided', 'escalation.decided']),
+    settlement: txOf([step]) ?? txOf(['judgment.decided']),
     operators: (Array.isArray(r.operators) ? r.operators : []).filter((o: J) => o?.answered).map((o: J) => plain(String(o.api)).slice(0, 120)),
     party: r.party === 'buyer' ? 'buyer' : 'seller',
   };

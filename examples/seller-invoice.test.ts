@@ -262,7 +262,7 @@ describe("seller-invoice: the seller's invoice and credit note from a deal recor
       ['an outcome that its row contradicts', (r) => (r.outcome.escrowState = 'Settled'), /does not agree with itself: its outcome says Settled and its row says Released/],
       ['settlement times that differ', (r) => (r.row.settledAt = '2026-01-01T00:00:00Z'), /does not agree with itself: its settlement times do not agree/],
       ['another file', (r) => (r.record = 'holdback-evidence/1'), /not a deal record/],
-      ['another deployment', (r) => r.operators.forEach((o: J) => (o.domain.verifyingContract = '0x3be45128565abbc35dbd4660716b703ff489f1b4')), /does not pin \(rules contract 0x3be45128565abbc35dbd4660716b703ff489f1b4\)\. For a deal on an earlier deployment, set HOLDBACK_DEPLOYMENT/],
+      ['another deployment', (r) => r.operators.forEach((o: J) => (o.domain.verifyingContract = '0x000000000000000000000000000000000000c0de')), /does not pin \(rules contract 0x000000000000000000000000000000000000c0de\)\. For a deal on an earlier deployment, set HOLDBACK_DEPLOYMENT/],
     ];
     for (const [what, change, why] of cases) {
       const r = clone(records.released);
