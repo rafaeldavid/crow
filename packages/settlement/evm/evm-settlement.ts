@@ -44,6 +44,7 @@ import {
   deliveryHash,
   holdbackDomain,
   offer,
+  phaseOneDecisionProblem,
   postedDeliveryHash,
   problem,
   step,
@@ -1045,6 +1046,9 @@ export class EvmSettlement implements Settlement {
         // Core checks the ground after the turn, so a ground sent out of turn reads invalid_terms here, not_your_turn on
         // SimChain; both refuse it and send nothing.
         if (m.role !== 'appeal' && (m.appealGround ?? '') !== '') refuse('invalid_terms', APPEAL_GROUND_APPEAL_ONLY);
+        // T-540: the rules contract refuses these fields with a bare InvalidMessage; say why before anything is sent.
+        const why = phaseOneDecisionProblem(m, book.state.kind === 'Escalated');
+        if (why) refuse('invalid_terms', why);
         const carry = this.carrying(book);
         // An outside scan's finding (G1): a call that carries the delivery re-checks the seller inside it, so the seller
         // can make it revert after its calldata has published the primary's seed, then deliver again knowing the seed.

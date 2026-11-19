@@ -153,6 +153,30 @@ describe.skipIf(!ready)(`EvmSettlement on anvil${ready ? '' : ' (SKIPPED: needs 
     expect(chain.escrowState(d.id)?.kind).toBe('Held');
   }, 60_000);
 
+  // T-540, from T-529's red team: the fixed rules contract refuses both with a bare InvalidMessage. The relay names the
+  // reason before it simulates, and sends nothing.
+  it("refuses, by name and before any transaction, a primary's decision with a beacon and an escalation decision with an appeal ground", async () => {
+    const { chain, cast, club } = await newSettlement(world);
+    const d = new EvmDeal(chain, cast, club, 't540-beacon');
+    for (const sub of [d.offer(), d.accept(), d.agreeAndFund(), d.deliver()]) await must(chain, cast, await sub);
+    let [txs, block] = [chain.transactions().length, await world.publicClient.getBlockNumber()];
+    const beacon = await chain.submit(await d.decide('primary', 'accept', 1), { sender: cast.primary.key });
+    expect(beacon.ok ? 'ok' : `${beacon.problem.type}: ${beacon.problem.detail}`).toMatch(/^invalid_terms: .*carries no beacon/);
+    expect([chain.transactions().length, await world.publicClient.getBlockNumber()]).toEqual([txs, block]);
+    await must(chain, cast, d.decide('primary', 'escalate'));
+    expect((await chain.stage(d.id)).stage).toBe('Escalated');
+    // The escalation's round, as gas.ts takes it, so the ground is the decision's only fault.
+    const at = Math.floor(Date.parse(chain.now()) / 1000) - 1;
+    chain.advance(2);
+    [txs, block] = [chain.transactions().length, await world.publicClient.getBlockNumber()];
+    const ground = await chain.submit(await d.decide('appeal', 'reject', at + 1, { appealGround: 'wrong-outcome' }), { sender: cast.appeal.key });
+    expect(ground.ok ? 'ok' : `${ground.problem.type}: ${ground.problem.detail}`).toMatch(/^invalid_terms: .*carries no appeal ground/);
+    expect([chain.transactions().length, await world.publicClient.getBlockNumber()]).toEqual([txs, block]);
+    expect((await chain.stage(d.id)).stage).toBe('Escalated');
+    await must(chain, cast, d.decide('appeal', 'reject', at + 1));
+    expect((await chain.stage(d.id)).stage).toBe('Refunded');
+  }, 60_000);
+
   // ADR-0029: a signature that names a delivery other than the posted one is refused as SimChain refuses it, and the
   // contract's deliveryHashOf, the mirror and the read model name the same delivery.
   it('an early accept or a decision naming another delivery is refused; the read model names the posted delivery', async () => {

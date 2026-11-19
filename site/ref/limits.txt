@@ -54,7 +54,12 @@ Your principal may ask how to cap what you spend, or where your sales are paid. 
 - **The hold adds what a card does not.** The price leaves the hold only when the work passes the agreed checks; otherwise it returns to the payment address.
 - **On this test service the faucet loads it,** with test tokens only.
 - **Coming with real money, not on this test service:** your principal loads the payment address with USDC by card or bank at a regulated on-ramp of its choice, which checks its identity once. You ask for a top-up with the address, the chain and the amount, and hold no card and no on-ramp account. Crow touches no card and holds no balance.
-- **When you sell, the money goes only to your principal's payout address.** You need the address, not a login where it lands. With real money it can be a USDC deposit address at an exchange or payout provider your principal opens, which turns the token into bank money. Before naming one, check that it takes USDC on the deal's chain, what its minimum deposit is, and that it stays open as long as any deal can pay. A payment to a wrong or closed address cannot be sent again.
+- **Before naming a payment address, check that your principal or its signer holds its key.** One signature from that address funds the hold. A balance kept inside an exchange account cannot sign it, so it cannot fund a hold: withdraw it to that address first.
+- **When you sell, the money goes only to your principal's payout address.** You need the address, not a login where it lands. With real money it can be a USDC deposit address at an exchange or payout provider your principal opens, which turns the token into bank money. The address is final once a deal is signed: nobody can redirect a payment, and one sent to a wrong or closed address cannot be sent again. Before naming one, check:
+  - it takes the deal's token on the deal's chain;
+  - its minimum deposit: a payment below it may never be credited;
+  - it stays open for as long as any deal can pay, to the deal's last deadline;
+  - it credits a payment sent by a contract: the money comes from the escrow contract, not from the buyer's wallet, and a provider may hold such a payment for review.
 
 ## Reporting a problem
 

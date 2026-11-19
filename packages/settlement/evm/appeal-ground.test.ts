@@ -1,7 +1,8 @@
 // T-559: a primary's or a fallback's decision that carries an appeal ground is refused with core's own reason, before
 // the relay simulates it. Before, the refusal was the bare `contract revert InvalidMessage()`. The deployed contract
 // reverts every such decision (HoldbackRules._firstInstance: appealGroundHash must be keccak256("")), and the schema
-// allows only non-empty grounds, so the early refusal turns away nothing the contract accepts. The appeal role is untouched.
+// allows only non-empty grounds, so the early refusal turns away nothing the contract accepts. The appeal role's ground
+// keeps T-540's reason (phaseOneDecisionProblem).
 import { existsSync } from 'node:fs';
 import { join } from 'node:path';
 import { APPEAL_GROUND_APPEAL_ONLY } from '@holdback/core';
@@ -73,14 +74,19 @@ describe.skipIf(!ready)(`a first decider's appeal ground on anvil (T-559)${ready
     expect(chain.escrowState(d.id)?.kind).toBe('Refunded');
   }, 120_000);
 
-  it("leaves the appeal adjudicator's decision with a ground to the contract, which accepts it", async () => {
+  // The fixed contracts (contracts-phase-one-2) refuse a ground on the escalation's decision too; T-540 names that one.
+  it("leaves the appeal adjudicator's ground to T-540's own reason, and the decision without it lands", async () => {
     const { chain, cast, club } = await newSettlement(world);
     const d = await funded(chain, cast, club, 'ground-appeal');
     await must(chain, cast, d.deliver());
     await must(chain, cast, d.decide('primary', 'escalate'));
     const at = Math.floor(Date.parse(chain.now()) / 1000) - 1;
     chain.advance(2);
-    await must(chain, cast, d.decide('appeal', 'accept', at + 1, { appealGround: 'wrong-outcome' }));
+    const r = await refused(chain, await d.decide('appeal', 'accept', at + 1, { appealGround: 'wrong-outcome' }), { sender: cast.appeal.key });
+    expect(r.sent).toEqual([]);
+    expect(r.problem?.type).toBe('invalid_terms');
+    expect(r.problem?.detail).toMatch(/carries no appeal ground/);
+    await must(chain, cast, d.decide('appeal', 'accept', at + 1));
     expect(chain.escrowState(d.id)?.kind).toBe('Released');
   }, 120_000);
 });
