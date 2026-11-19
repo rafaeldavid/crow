@@ -4,7 +4,7 @@
 - **Phase:** 2
 - **Kind:** a scenario fixture with its snapshot, and 2 (docs and records) for the neutrality rows; one red-team read of the fixture and the rows
 - **Depends on:** none
-- **Paths this task may touch:** `fixtures/scenarios/neutrality.onramp-*`, `docs/neutrality.md`, this file. Never `contracts/`, `spec/schemas/`, `.github/`, `packages/`, `CLAUDE.md`, `AGENTS.md` or `.claude/`.
+- **Paths this task may touch:** `fixtures/scenarios/neutrality.onramp-*`, `docs/neutrality.md`, one line in `tests/cut-feature-alignment.known.json` (the fixture's `expire` step is the cut feature SC-6, as in `neutrality.adjudicator-never-accepts`), this file. Never `contracts/`, `spec/schemas/`, `.github/`, `packages/`, `CLAUDE.md`, `AGENTS.md` or `.claude/`.
 - **Human gate:** no
 - **Status:** in review
 - **Agent/session:** the T-558 session, started by the coordinator on 2026-11-19
@@ -47,6 +47,7 @@ All on 2026-11-19, in the T-558 worktree from `origin/main` `d9da8a00`.
 - **Measured:** `pnpm build` (`tsc -b`, the typecheck) exits 0.
 - **Measured:** `pnpm snap`: 49 passed, 0 failed, the new fixture included.
 - **Measured:** `pnpm vitest run tests/design-map.test.ts packages/testkit`: 15 files, 193 tests passed, 1 skipped; this covers the standing-doc rule on `docs/neutrality.md`.
+- **Measured:** after the review fixes, CI's static doc tests (`tests/cut-feature-alignment.test.ts`, `design-map`, `id-check`, `decisions-status`, `site-guides`): 5 files, 270 tests passed.
 - **Measured:** `node scripts/id-check.mjs` with this PR's title, branch and `Closes T-558`: pass.
 - **Measured, the snapshot (read before committing):** step 3 agree is ok and the deal is Agreed; step 3 fund is refused with `insufficient_funds` ("balance 1000000000 is below 2050000000"); at 30:04 (sim) anyone expires the deal through op-2 and it is Expired. The balances table has one row, the faucet: atlas-wallet 1,000 tUSD, escrow 0 tUSD, and nothing moves. Replay of 4 SimChain submissions matches; every applicable invariant holds.
 - **Measured, the gap:** a scratch fixture (deleted, never committed) ran `agree_and_fund` twice on an underfunded address. The second run re-signs Agree, and settlement refuses it with `invalid_state` ("agree is not allowed in Agreed"), so no step funds an agreed deal after a refused funding.
@@ -59,6 +60,27 @@ All on 2026-11-19, in the T-558 worktree from `origin/main` `d9da8a00`.
 - **The payment address holds 1,000 tUSD, not 0.** A partly filled address shows that a refused funding holds none of it: the 1,000 tUSD is still there after the expiry.
 - **No off-ramp fixture.** An off-ramp acts on no step of a deal, so no scenario can take it offline; settlement has finished before it is involved. The row says so and points to `two-addresses-released`, and residual 15 states the risk.
 
+## Review
+
+One red-team read (the `red-teamer` subagent), 2026-11-19. It found one blocking issue and five that don't block:
+- **B1, High, fixed:** `tests/cut-feature-alignment.test.ts` failed: the fixture's `expire` step is the cut feature SC-6, and the file was not on the known list. Added the one line, as for `neutrality.adjudicator-never-accepts`.
+- **N1, fixed:** naming another payment address takes a new deal the seller offers, because the address is in the terms the seller signs.
+- **N2, fixed:** the wait differs by backend. SimChain takes funding until `fundBy`; on a chain the contract refuses funding from `offerExpiresAt`, which comes earlier, and the operators record the expiry.
+- **N3, fixed:** the fixture could pass for the wrong reason (a refused agree past the deadline also ends Expired). `expect.problem` now pins `insufficient_funds` at step 3.
+- **N4, no change:** the snapshot's outage line says "atlas-buyer timed out", the runner's generic text for a permissionless timeout.
+- **N5, fixed:** gap 1 now reads "no step that tops up an address from outside the protocol", and this Handoff is filled.
+
 ## Handoff
 
-What is done, what is not, how to resume, and the open questions that remain.
+**Done.** `neutrality.onramp-offline-before-funding` passes on SimChain. `docs/neutrality.md` has an on-ramp row and an off-ramp row and residual 15.
+
+**Not done: `neutrality.onramp-refuses`.** Today's scenario language cannot write it (measured with a scratch fixture; the red team reached the same result). Three things are missing:
+1. A step that tops up an address from outside the protocol during a run. The faucet sets balances at genesis only.
+2. A step that funds an agreed deal after a refused funding. `agree_and_fund` re-signs Agree, which settlement refuses with `invalid_state`.
+3. A way for `fails:` to name an actor that is not a party, an adjudicator or an operator, such as an on-ramp. It would also need a way to record that actor's failure.
+
+Before writing that fixture, check one more thing: a top-up that arrives between `offerExpiresAt` and `fundBy` funds on SimChain but not on a chain, so the fixture should top up before `offerExpiresAt`.
+
+**Not measured:** the `--settlement local` run on anvil. The contract build had not finished on a loaded machine when the PR merged, and CI runs SimChain only. Inferred to pass: the contract refuses a short funding with `insufficient_funds` (`error.concurrent-overdraft`), and the adapter records the expiry of an agreed, unfunded deal.
+
+**For the coordinator:** `docs/plan.md`'s scenario index needs a row for `neutrality.onramp-offline-before-funding` (exists), and `neutrality.onramp-refuses` stays planned for the reasons above.

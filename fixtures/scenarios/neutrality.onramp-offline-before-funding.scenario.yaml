@@ -29,6 +29,7 @@ steps:
   - advance_clock:      { seconds: 1800 }              # past fundBy (createdAt + 1,800 s)
   - expire:             { via: op-2 }
 expect:
+  problem: { step: 3, type: insufficient_funds }   # the refusal is the short address, not a deadline
   terminal: Expired
   balances:
     atlas-buyer: "0"
