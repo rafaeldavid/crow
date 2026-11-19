@@ -36,10 +36,16 @@ export interface SignerReads {
   plannedCode?(address: Address, signature: Hex): Promise<Hex | undefined>;
 }
 
-/** ECDSA by `signer` over `digest`, 64 or 65 bytes, as SignatureCheckerLib reads a signer without code. Never throws. */
+/**
+ * ECDSA by `signer` over `digest`, 64 or 65 bytes, as SignatureCheckerLib reads a signer without code: a 65-byte one only
+ * with v of 27 or 28, since the ecrecover precompile takes no other (T-549 red team: a copy with v of 0 or 1 recovers in
+ * viem, and booking it would front-run the seller's own offer). Never throws.
+ */
 export async function recoversFrom(digest: Hex32, signature: Hex, signer: Address): Promise<boolean> {
   try {
     const n = size(signature);
+    const v = n === 65 ? parseInt(signature.slice(130, 132), 16) : 27;
+    if (v !== 27 && v !== 28) return false;
     const full = n === 64 ? serializeSignature(compactSignatureToSignature(parseCompactSignature(signature))) : n === 65 ? signature : null;
     if (full === null) return false;
     return isAddressEqual(await recoverAddress({ hash: digest, signature: full }), signer);

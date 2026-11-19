@@ -71,6 +71,16 @@ describe('the contract-signer rule (signer.ts)', () => {
     expect(none.asked).toEqual([]);
   });
 
+  it('attack.offer-v-flip-front-run: refuses a copy of a key\'s signature with v of 0 or 1, which the contract never takes', async () => {
+    const sig = await signer.sign({ hash: digest });
+    const v = parseInt(sig.slice(130), 16);
+    expect([27, 28]).toContain(v);
+    const flipped = `${sig.slice(0, 130)}${(v - 27).toString(16).padStart(2, '0')}` as Hex;
+    expect(await recoversFrom(digest, sig, signer.address)).toBe(true);
+    expect(await recoversFrom(digest, flipped, signer.address)).toBe(false);
+    expect(await contractSignerRule(reads({}, true).reads)(digest, flipped, signer.address)).toBe(false);
+  });
+
   it('refuses a malformed signature before any read, and a 65-byte one that does not recover', async () => {
     const throwing: SignerReads = {
       code: async () => {

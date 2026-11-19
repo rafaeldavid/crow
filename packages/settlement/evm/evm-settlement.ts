@@ -86,7 +86,7 @@ import { decodeEventLog, decodeFunctionData, encodeFunctionData, encodePacked, g
 import { privateKeyToAccount } from 'viem/accounts';
 import type { Genesis } from '../sim/simchain.js';
 import type { DryRunSubmission, Settlement, Submission, SubmitOptions, SubmitResult, TimeoutKind } from '../src/interface.js';
-import { Refusal, refuse, toJson } from '../src/util.js';
+import { oversizedPartySignature, Refusal, refuse, toJson } from '../src/util.js';
 import { RelayRefused, type EvmChain, type LaneRow, type Mined, type RelayNote } from './chain.js';
 import {
   acceptanceView,
@@ -808,6 +808,8 @@ export class EvmSettlement implements Settlement {
   }
 
   private async process(s: Submission, options: EvmSubmitOptions, dryRun: boolean): Promise<EvmSubmitResult> {
+    const long = oversizedPartySignature(s as unknown as { kind: string } & Record<string, unknown>);
+    if (long) return { ok: false, problem: problem('payload_too_large', long) };
     const key = dryRun ? undefined : options.idempotencyKey;
     const body = canonicalKeccak(toJson(s));
     const lane = submissionCommitmentId(s) as Hex32;
@@ -902,7 +904,8 @@ export class EvmSettlement implements Settlement {
    * since a contract's answer can change after it; otherwise the latest block, at the scenario's second on anvil.
    */
   signerCheck(block?: bigint): SignerCheck {
-    return chainSignerCheck(this.world.publicClient, block !== undefined ? { blockNumber: block } : this.wall ? {} : { time: secs(this.now()) });
+    const at = this.world.callAt && !this.wall ? (tx: { to: Address; data: Hex }) => this.world.callAt!(tx, secs(this.now())) : undefined;
+    return chainSignerCheck(this.world.publicClient, block !== undefined ? { blockNumber: block } : at ? { call: at } : {});
   }
 
   private stepped(state: EscrowState, e: EscrowEvent): EscrowState {
@@ -1043,6 +1046,9 @@ export class EvmSettlement implements Settlement {
         const book = this.bookOf(m.commitmentId);
         const carry = this.carrying(book);
         const d = carry ?? book.delivery ?? refuse('invalid_state', 'no delivery was relayed through this adapter; the early accept carries it on chain');
+        // The buyer's signature is read before any simulation (T-549 red team): a refusal names it, and a body the
+        // contract would refuse never reaches the RPC.
+        if (!dryRun) await this.check(m, book.state.terms.buyer, 'EarlyAccept', this.signerCheck());
         const proof = keyProof(d, book.state.terms.buyer) ?? NO_KEY;
         const mirror = (at: Timestamp): EscrowEvent[] => [...(carry ? [{ type: 'deliver' as const, at, delivery: carry }] : []), { type: 'early_accept', at, message: m }];
         await this.call(m.commitmentId, 'earlyAccept', [termsView(book.state.terms), earlyAcceptView(m), deliveryView(d), d.signature, proof], mirror, options, dryRun, m.buyer, carry ? { delivery: carry } : {});
@@ -1122,6 +1128,8 @@ export class EvmSettlement implements Settlement {
         tried = r;
       }
     }
+    // The seller's signature is read before any simulation (T-549 red team), as for every other party step.
+    if (!dryRun) await this.check({ ...d, type: 'Delivery' }, book.state.terms.seller, 'Delivery', this.signerCheck());
     try {
       await this.call(id, 'deliver', [termsView(book.state.terms), deliveryView(d), d.signature], (at) => [{ type: 'deliver', at, delivery: d }], options, dryRun, book.state.terms.seller, { delivery: d });
       return id;

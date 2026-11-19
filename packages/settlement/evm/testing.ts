@@ -124,6 +124,8 @@ export class EvmDeal {
     fee = 50_000_000n,
     /** ADR-0033: the buyer's payment address (an actor, since it signs the funding) and the seller's payout address. */
     private readonly money?: { payment: TestActor; payout: Address },
+    /** Fields that replace the built terms before the ID is taken: a contract as buyer or seller (T-549), a take's nonce. */
+    over: Partial<CommitmentTerms> = {},
   ) {
     const now = chain.now();
     const amt = (v: bigint) => ({ token: chain.token, amount: v.toString() }) as TokenAmount;
@@ -154,6 +156,7 @@ export class EvmDeal {
       buyerEncryptionPublicKey: b64url(keccak256(stringToBytes(`buyer-key/${tag}`))),
       nonce: keccak256(stringToBytes(`terms/${tag}/${now}`)),
       createdAt: now,
+      ...over,
     } as CommitmentTerms;
     this.id = commitmentId(this.terms);
     this.seed = keccak256(stringToBytes(`seed/${this.id}`));
@@ -178,7 +181,7 @@ export class EvmDeal {
   }
 
   async agreeAndFund(o: { operatorFee?: { to: Address; value: bigint }; fundingSigner?: TestActor } = {}): Promise<Submission> {
-    const agree = await this.sign(this.cast.buyer, { type: 'Agree', commitmentId: this.id, buyer: this.cast.buyer.address, nonce: this.nonce(), expiresAt: this.terms.timing.offerExpiresAt } as const);
+    const agree = await this.sign(this.cast.buyer, { type: 'Agree', commitmentId: this.id, buyer: this.terms.buyer, nonce: this.nonce(), expiresAt: this.terms.timing.offerExpiresAt } as const);
     const f = await this.chain.fundingAuthorization(this.terms);
     const funding = {
       type: 'FundingAuthorization' as const,
@@ -246,7 +249,7 @@ export class EvmDeal {
   }
 
   async earlyAccept(over: { deliveryHash?: Hex32 } = {}): Promise<Submission> {
-    return { kind: 'early_accept', message: await this.sign(this.cast.buyer, { type: 'EarlyAccept', commitmentId: this.id, buyer: this.cast.buyer.address, attempt: 1, deliveryHash: this.named(over.deliveryHash), nonce: this.nonce(), expiresAt: plusSeconds(this.chain.now(), 86400) } as const) };
+    return { kind: 'early_accept', message: await this.sign(this.cast.buyer, { type: 'EarlyAccept', commitmentId: this.id, buyer: this.terms.buyer, attempt: 1, deliveryHash: this.named(over.deliveryHash), nonce: this.nonce(), expiresAt: plusSeconds(this.chain.now(), 86400) } as const) };
   }
 
   async decide(role: 'primary' | 'fallback' | 'appeal', outcome: Decision['outcome'], round?: number, over: { deliveryHash?: Hex32; appealGround?: Decision['appealGround'] } = {}): Promise<Submission> {

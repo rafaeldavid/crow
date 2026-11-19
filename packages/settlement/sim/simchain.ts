@@ -54,7 +54,7 @@ import {
 } from '@holdback/core';
 import { encodePacked, keccak256 } from 'viem';
 import type { DryRunSubmission, Settlement, Submission, SubmitOptions, SubmitResult, TimeoutKind } from '../src/interface.js';
-import { Refusal, refuse, toJson } from '../src/util.js';
+import { oversizedPartySignature, Refusal, refuse, toJson } from '../src/util.js';
 
 export interface Genesis {
   start: Timestamp;
@@ -494,6 +494,8 @@ export class SimChain implements Settlement {
   }
 
   private async process(submission: Submission, options: SubmitOptions, dryRun: boolean): Promise<SubmitResult> {
+    const long = oversizedPartySignature(submission as unknown as { kind: string } & Record<string, unknown>);
+    if (long) return { ok: false, problem: problem('payload_too_large', long) };
     const genesisProblem = await this.ready;
     if (genesisProblem) return { ok: false, problem: genesisProblem };
     const key = dryRun ? undefined : options.idempotencyKey;

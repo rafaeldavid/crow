@@ -17,7 +17,7 @@ Every step has the same shape. `POST /v1/prepare/<kind>` with plain inputs retur
 }
 ```
 
-For each `sign` entry whose `signer` is you: sign, write the signature (`0x`, 65 bytes as hex) into `submit.body` at `slot` (a dotted path, such as `fund.signature`), and POST the body to `submit.path` with an `Idempotency-Key`. `defaults` lists only what the operator filled in because you left it out ("Encodings", times); the answer may also carry `notices`.
+For each `sign` entry whose `signer` is you: sign, write the signature (`0x`, 65 bytes as hex; a buyer or seller that is a contract writes the bytes its ERC-1271 `isValidSignature` accepts) into `submit.body` at `slot` (a dotted path, such as `fund.signature`), and POST the body to `submit.path` with an `Idempotency-Key`. `defaults` lists only what the operator filled in because you left it out ("Encodings", times); the answer may also carry `notices`.
 
 **Verify before you sign.** A prepare answer is a proposal: the operator chose both its typed data and its digest, so never check one against the other. Rebuild the message from your own intent and compare:
 

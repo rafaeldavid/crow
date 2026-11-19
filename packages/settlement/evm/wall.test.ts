@@ -21,6 +21,8 @@ class HeldChain implements EvmChain {
   readonly abis = LIVE_ABIS;
   readonly deployment = { token: address('a'), escrow: address('e'), erc3009Collector: address('c'), multicall: address('f'), rules: address('b'), beacon: address('8'), fromBlock: 0n };
   readonly publicClient = {
+    // No party is a contract here: the contract-signer rule recovers every signature by its key (T-549).
+    getCode: async () => undefined,
     readContract: async ({ functionName }: { functionName: string }) => {
       if (functionName === 'DOMAIN_SEPARATOR') return `0x${'11'.repeat(32)}`;
       if (functionName === 'balanceOf') return PLENTY;
