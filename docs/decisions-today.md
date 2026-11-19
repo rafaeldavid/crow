@@ -1559,3 +1559,28 @@ Today a seller with its own API reads 13 files of 98,462 bytes and runs 22 comma
 2. **The seller's check of each buyer.** A template signs for buyers the seller never sees. His words: "Yes, waive it", to "Standing offers: waive the seller's own check of each buyer and keep the operators' check?". A standing offer waives the seller's own check of each buyer's mandate, and the operators' check before they relay remains (D32). The rule on signed messages in `CLAUDE.md` gains one sentence saying so; that file changes on his word, and the sentence waits for it.
 
 **Litmus tests.** Neutrality: an operator that refuses is bypassed through another operator, a missing deployment is made by the seller or the first buyer, and an offline seller's fixed file is delivered by anyone. The hold: the rules contract is unchanged, and each take is one ID funded once. Defended judgment: checks and panel unchanged, each take judged on its own seed, and no buyer-filled scope.
+
+## D83. Card and bank money goes through regulated third parties, and an agent spends from a budget its owner loads, under hard spend controls (T-542)
+
+**Status:** decided, 2026-11-19.
+
+**Why now.** Once money is real, a buyer or a seller with no crypto has no path in or out. The private research on it is crow-private `strategy/2026-11-18-card-and-bank-money.md`. Agent owners also want hard limits on what their agents spend. Products that sell to them call it spend controls: Stripe Issuing, Link, Ramp, Brex and Privacy.com among them [documented, the desk pass in `docs/tasks/T-542-spend-controls.md`].
+
+**Decided by Rafa:**
+- **2026-11-18, card and bank steps.** Regulated third parties carry every card and bank step. Crow holds no balance and runs no checkout. His words: "Yes, we should assume this is the case and begin sourcing the right solution for it".
+- **2026-11-19, hard controls.** Spend controls become hard controls in a contract that Crow deploys for a buyer or a seller, paying the gas, for a nominal fee. His words: "look at Link, Stripe, Ramp, etc. spend control frameworks in detailed research and then transfer that into smart-contract deployments with gas we cover, for a nominal fee etc. So it's hard controls."
+- **2026-11-19, the home page.** The value prop "Your Existing Rails" becomes "Spend Controls", marked soon: "Cap each purchase and each day, how many at once, and who your agent pays." (PR 681).
+
+**What it means:**
+- **The owner loads, the agent spends.** The agent's payment address is its budget, like a prepaid card. The owner loads it, and the agent spends only what it holds. With real money the owner loads it by card or bank at a regulated on-ramp of its choice, which sends USDC to that address.
+- **No on-ramp is named in public pages** until an adviser has answered whether naming one is a crypto financial promotion in the United Kingdom. That is the research's decision 1, still open.
+- **A seller is paid at an address its owner sets,** such as a deposit address at the owner's own exchange or payout account. The selling agent holds no login there.
+- **v01's controls.** For a buyer: the most per deal and per day, how many deals are open at once, the approved sellers with their payout addresses, and a stop. For a seller: the payout address, sales per day and at once, and a stop. `examples/signer.ts` enforces the same rules off chain today, but only while the signer's machine stays out of the agent's reach (`site/ref/limits.txt`).
+- **Crow pays the gas and holds no key.** The contract is the owner's own, and Crow gets no control over it or the funds, as D82 says of the seller contract.
+
+**Litmus tests.** Neutrality: an on-ramp acts before the hold and an off-ramp after the deal ends, so neither can stop a valid deal. The spend-controls contract has no Crow key. The hold: unchanged; card and bank rails stay funding and payout adapters. Defended judgment: unchanged.
+
+**Open.**
+- The contract's design, its fee and who may deploy it. The spend-controls session (`local_223ae056`) writes the ADR, and it gets its own decision entry.
+- The research's five decisions (crow-private, part 7.2). One of them is whether to leave the funding service of ADR-0026 part 3 unbuilt.
+- Real money stays forbidden (hard rule 1).

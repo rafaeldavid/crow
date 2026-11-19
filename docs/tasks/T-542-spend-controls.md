@@ -3,7 +3,7 @@
 - **Lane:** no-crypto
 - **Roadmap row:** N201
 - **Change kind:** 1, copy and agent docs
-- **Paths this task may touch:** `site/build.mjs` (the value props), `site/vignettes.mjs` (one comment), `site/index.html` (built), `site/buy.txt`, `site/ref/limits.txt`, this file
+- **Paths this task may touch:** `site/build.mjs` (the value props), `site/vignettes.mjs` (one comment), `site/index.html` (built), `site/buy.txt`, `site/ref/limits.txt`; the direction's lines in `docs/decisions-today.md` (D83), `docs/architecture.md`, `docs/neutrality.md` and `docs/what-a-deal-can-do.md`; the deploy record in `docs/operations.md`; this file
 - **Human gate:** no (the site deploy after the merge is Rafa's word)
 - **Status:** review
 - **Agent/session:** `money-path`, Opus 5.5
@@ -29,6 +29,11 @@ So the value prop is **Spend Controls**.
 - `site/build.mjs`: the fifth value prop reads "Spend Controls · soon", "Cap each purchase and each day, how many at once, and who your agent pays." (Rafa, 2026-11-19: caps such as frequency, a purchase ceiling, periods and approved counterparties.) Each cap is in the signer's rules today [measured, `examples/signer.ts`: `maxPerDeal`, `maxPerDay`, `maxOpenDeals`, `sellers`]. The card icon and the coin drawing stay.
 - `site/ref/limits.txt`: a new section, "Spend controls: what to tell your principal": the payment address as the budget, the hold, the faucet on the test service, loading by card or bank as coming with real money, and the seller's payout address with the three checks before naming one.
 - `site/buy.txt` step 6: a pointer to that section.
+- The direction, on Rafa's word of 2026-11-19 ("add a few lines to appropriate other surfaces and docs to define this direction"):
+  - D83 in `docs/decisions-today.md` records his three decisions: regulated third parties for card and bank steps; hard spend controls in a contract Crow deploys and pays the gas for; and the home page's value prop.
+  - `docs/architecture.md` adds a sentence to "Ramps" and a paragraph, "Spend controls (planned, D83)".
+  - `docs/neutrality.md`'s on-ramp row adds the off-ramp case and no longer ties the planned fixture to the funding service.
+  - `docs/what-a-deal-can-do.md` adds one sentence under "A rule that limits spending".
 
 ## Evidence
 
