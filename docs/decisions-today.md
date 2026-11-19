@@ -1605,7 +1605,9 @@ The build is not started; it opens as its own task on Rafa's word.
 - **Approved merchants stay hard through the escrow,** because a hold pays out only to the terms' payout address or back to the payment address (`contracts/src/HoldbackRules.sol:400`) [measured].
 - **The mandate stays as ADR-0038 made it;** both apply and the tighter one wins.
 
-**Open, for Rafa:** the operators relaying a budget's funding; reading a contract buyer and its longer signature, for stepping in on funded deals; Crow-paid creation on request; the owner's guide in a current page; the fee, with none recommended now. The protocol's base, name and design go in its own record.
+**Decided by Rafa, 2026-11-19, to "Should a vault that buys (a contract as the buyer) go into the same schema change as standing offers?": "Yes, same change".** Schema v0.12, the standing-offer version (D82, ADR-0040), carries a contract buyer's longer signature beside the seller's: one version bump, not two. The operators and the reference adjudicator read a contract buyer in the same build (T-549), and admit it by the rules a key buyer gets today. Nothing is built yet.
+
+**Open, for Rafa:** the operators relaying a budget's funding; a stop that reaches a contract buyer's funded deals; Crow-paid creation on request; the owner's guide in a current page; the fee, with none recommended now. The protocol's base, name and design go in its own record.
 
 **Litmus tests.** Neutrality: no owner, controller, module or factory of the protocol can stop a funded deal or move a hold; on a fork of Sepolia the owner emptied its budget after a funding and the deal still ended Released [measured by the design research]. The hold: unchanged. Defended judgment: unchanged.
 
