@@ -9,7 +9,7 @@ import { DRAND_QUICKNET_CHAIN_HASH } from './beacon.js';
 import { tokenAmount } from './money/index.js';
 import { problem, type Problem } from './problem.js';
 import { err, ok, type Result } from './result.js';
-import { plainValidators, signedValidators } from './validators.js';
+import { plainValidators, signedValidators, type SchemaValidator } from './validators.js';
 import type {
   AdjudicatorRegistration,
   AgentRegistration,
@@ -73,6 +73,24 @@ function walk(value: unknown, signed: boolean, path = ''): string | undefined {
 }
 
 type Parser<T> = (json: unknown) => Result<T, Problem>;
+type SchemaError = NonNullable<SchemaValidator['errors']>[number];
+
+const errorText = (e: SchemaError | undefined) => (e ? `${e.instancePath || '/'} ${e.message ?? 'is invalid'}` : 'is invalid');
+
+/**
+ * T-574: why a message was refused, told by the message type it names. The messages schema is a oneOf, and its first
+ * error came from whichever branch failed first, so a Decision without its beacon signature was told it lacked a seller.
+ * The validator of the named type alone gives that type's own first error. Only the text changes: the message was
+ * already refused by the whole schema.
+ */
+function messageError(validators: Record<string, SchemaValidator>, value: unknown): string | undefined {
+  if (value === null || typeof value !== 'object' || Array.isArray(value)) return undefined;
+  const type = (value as { type?: unknown }).type;
+  if (typeof type !== 'string') return undefined;
+  const own = Object.hasOwn(validators, `messages#${type}`) ? validators[`messages#${type}`] : undefined;
+  if (!own) return '/type is not a message type';
+  return own(value) ? undefined : errorText(own.errors?.[0]);
+}
 
 function parserFor<T>(name: string, signed: boolean, extra?: (value: T) => string | undefined): Parser<T> {
   const validators = signed ? signedValidators : plainValidators;
@@ -87,8 +105,9 @@ function parserFor<T>(name: string, signed: boolean, extra?: (value: T) => strin
       return err(problem('invalid_terms', `${name}: not JSON data`));
     }
     if (!validate(copy)) {
-      const e = validate.errors?.[0];
-      return err(problem('invalid_terms', `${name}: ${e ? `${e.instancePath || '/'} ${e.message ?? 'is invalid'}` : 'is invalid'}`));
+      const errors = validate.errors ?? [];
+      const why = (name === 'messages' ? messageError(validators, copy) : undefined) ?? errorText(errors[0]);
+      return err(problem('invalid_terms', `${name}: ${why}`));
     }
     const refusal = walk(copy, signed) ?? extra?.(copy as T);
     return refusal === undefined ? ok(copy as T) : err(problem('invalid_terms', `${name}: ${refusal}`));

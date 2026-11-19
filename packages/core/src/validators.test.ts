@@ -1,22 +1,23 @@
 // T-233: the parsers run validators compiled ahead of time (validators.generated.ts) instead of compiling
 // spec/schemas with Ajv when core is imported. These tests pin that the swap changed nothing. The checked-in module
 // is what the schemas generate today. On every spec example, and on many mutations of each, the precompiled
-// validators give the same result and the same errors as the runtime compile parse.ts used before, kept here as
-// the oracle, for the signed and the plain set.
+// validators give the same result and the same errors as a runtime compile with the build's options, kept here as
+// the oracle, for the signed and the plain set. T-574 compiles refs as functions; the inlined compile, the build's
+// before T-574, must give the same answers and the same first errors.
 import { readdirSync, readFileSync } from 'node:fs';
 import Ajv2020 from 'ajv/dist/2020.js';
 import addFormats from 'ajv-formats';
 import { describe, expect, it } from 'vitest';
 import { UNTRUSTED } from './parse.js';
-import { schemaFiles, UNTRUSTED_KEYWORD, validatorsSource } from './validators-codegen.js';
+import { messageTypes, schemaFiles, UNTRUSTED_KEYWORD, validatorsSource } from './validators-codegen.js';
 import { plainValidators, signedTimestamp, signedValidators, type SchemaValidator } from './validators.js';
 
 const GENERATED = new URL('./validators.generated.ts', import.meta.url);
 const EXAMPLES = new URL('../../../spec/examples/', import.meta.url);
 
-/** parse.ts's compile before T-233, unchanged: the behaviour the generated validators must keep. */
-function runtimeCompile(signed: boolean): Map<string, SchemaValidator> {
-  const ajv = new Ajv2020.default({ strict: true, allErrors: false, validateSchema: false, code: { optimize: false } });
+/** Ajv at run time with the build's options; `inlineRefs` true is Ajv's default, which the build used before T-574. */
+function runtimeCompile(signed: boolean, inlineRefs = false): Map<string, SchemaValidator> {
+  const ajv = new Ajv2020.default({ strict: true, allErrors: false, validateSchema: false, inlineRefs, code: { optimize: false } });
   ajv.addKeyword({ keyword: UNTRUSTED, schemaType: 'boolean' });
   if (signed) {
     addFormats.default(ajv, ['uri']);
@@ -61,6 +62,16 @@ function cases(): { schema: string; label: string; value: unknown }[] {
     out.push({ schema, label: file, value: example });
     for (const value of [null, 'x', 1, [], {}]) out.push({ schema, label: `${file} as ${JSON.stringify(value)}`, value });
     for (const path of paths(example)) for (const swap of SWAPS) out.push({ schema, label: `${file} /${path.join('/')} = ${swap === DELETE ? '(removed)' : JSON.stringify(swap)}`, value: swapped(example, path, swap) });
+    // T-574: an extra field on every object, for additionalProperties and unevaluatedProperties through a $ref.
+    for (const path of [[], ...paths(example)] as Path[]) {
+      const copy = structuredClone(example) as Record<string | number, unknown>;
+      let at: unknown = copy;
+      for (const k of path) at = (at as Record<string | number, unknown>)[k];
+      if (at !== null && typeof at === 'object' && !Array.isArray(at)) {
+        (at as Record<string, unknown>)['zzExtra'] = 1;
+        out.push({ schema, label: `${file} /${path.join('/')} + zzExtra`, value: copy });
+      }
+    }
   }
   return out;
 }
@@ -79,8 +90,18 @@ describe('validators.generated.ts', () => {
     const names = schemaFiles()
       .map((s) => s.name)
       .sort();
-    expect(Object.keys(signedValidators).sort()).toEqual(names);
-    expect(Object.keys(plainValidators).sort()).toEqual(names);
+    // T-574: and one per message type, keyed messages#<type>, for the parser's error text.
+    const files = (set: Record<string, unknown>) => Object.keys(set).filter((k) => !k.startsWith('messages#')).sort();
+    expect(files(signedValidators)).toEqual(names);
+    expect(files(plainValidators)).toEqual(names);
+    // Every branch of the oneOf, by the type it names, and every example message's type.
+    const types = messageTypes(schemaFiles()).map((t) => `messages#${t.type}`).sort();
+    expect(types.length).toBeGreaterThan(10);
+    expect(Object.keys(signedValidators).filter((k) => k.startsWith('messages#')).sort()).toEqual(types);
+    for (const file of readdirSync(EXAMPLES).filter((f) => f.startsWith('messages.') && f.endsWith('.example.json'))) {
+      const { type } = JSON.parse(readFileSync(new URL(file, EXAMPLES), 'utf8')) as { type: string };
+      expect(types, file).toContain(`messages#${type}`);
+    }
   });
 });
 
@@ -89,6 +110,8 @@ describe('the precompiled validators', () => {
   for (const [set, precompiled, signed] of [['signed', signedValidators, true], ['plain', plainValidators, false]] as const) {
     it(`match the runtime compile on every example and mutation (${set} set)`, () => {
       const oracle = runtimeCompile(signed);
+      // T-574 compiles refs as functions instead of inlining them: the same answers as the inlined compile.
+      const inlined = runtimeCompile(signed, true);
       const mismatches: string[] = [];
       let refused = 0;
       for (const c of all) {
@@ -99,6 +122,9 @@ describe('the precompiled validators', () => {
         const a = JSON.stringify({ ok, errors: want.errors });
         const b = JSON.stringify({ ok: got(c.value), errors: got.errors });
         if (a !== b) mismatches.push(`${c.label}: runtime ${a}, precompiled ${b}`);
+        const old = inlined.get(c.schema)!;
+        const first = (v: SchemaValidator) => JSON.stringify(v.errors?.[0] ? [v.errors[0].instancePath, v.errors[0].message] : null);
+        if (old(c.value) !== ok || first(old) !== first(want)) mismatches.push(`${c.label}: the inlined compile answers ${first(old)}, this one ${first(want)}`);
       }
       expect(mismatches.slice(0, 5)).toEqual([]);
       // The mutations reach the refusals, not only the happy path.
