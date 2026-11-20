@@ -358,15 +358,15 @@ async function rubricDeal(urls: string[], diff: string): Promise<{ id: string; s
   return { id: offer.id, state, buyer };
 }
 
-/** A rubric offer between two fresh agents, offered and not yet accepted. */
-async function rubricOffer(urls: string[]) {
+/** A rubric offer between two fresh agents, offered and not yet accepted; `checksOnly`: the same deal with no rubric. */
+async function rubricOffer(urls: string[], { checksOnly = false } = {}) {
   const index = ((await (await fetch(`${urls[0]}/`)).json()) as J).demo;
   const buyer = freshAgent(urls);
   const seller = freshAgent(urls);
   for (const a of [buyer, seller]) await a.call('POST', '/v1/faucet', { address: a.address });
   const [primary, fallback, appeal] = index.adjudicators.map((a: J) => a.address);
   const offer = await seller.offer({
-    template: 'default',
+    template: checksOnly ? 'checks-only' : 'default',
     clubId: index.clubId,
     seller: seller.address,
     buyer: { address: buyer.address, encryptionPublicKey: buyer.encryptionPublicKey },
@@ -374,13 +374,13 @@ async function rubricOffer(urls: string[]) {
     price: { token: 'tUSD', amount: '30000000' },
     deliverable: { kind: 'other', description: 'Unified diff fixing the off-by-one in page()', format: 'text/plain' },
     checks: [{ id: 'hidden', type: 'hidden_characters_max', required: true, max: { tag: 0, bidi: 0, total: 0 } }],
-    rubric: {
+    ...(checksOnly ? {} : { rubric: {
       passThreshold: 300,
       criteria: [
         { id: 'fixes', description: 'The diff makes page() return exactly `size` items per full page.', weight: 70, anchors: { '0': 'Does not fix it', '2': 'Partly', '4': 'Fixes it' } },
         { id: 'minimal', description: 'No unrelated changes.', weight: 30, anchors: { '0': 'Rewrites everything', '2': 'Some noise', '4': 'Minimal' } },
       ],
-    },
+    } }),
     timing: { judgeWithinSec: 2, fallbackWithinSec: 2, appealWindowSec: 0, appealDecideSec: 2 },
   });
   return { offer, buyer, seller };
@@ -727,7 +727,8 @@ describe('live judges (T-028), with a stand-in for the models', () => {
     expect(((await (await fetch(`${urls[0]}/`)).json()) as J).demo.judges.judgedDeals).toEqual({ accepting: true, resumesAt: null });
     await rubricDeal(urls, DIFF);
     const index = ((await (await fetch(`${urls[0]}/`)).json()) as J).demo;
-    const next = new Date(Date.UTC(new Date().getUTCFullYear(), new Date().getUTCMonth(), new Date().getUTCDate() + 1)).toISOString();
+    // The next UTC midnight after the world's own day, not the test's clock.
+    const next = new Date(Date.parse(`${index.judges.day}T00:00:00Z`) + 86_400_000).toISOString();
     expect(index.judges.judgedDeals).toEqual({ accepting: false, resumesAt: next });
     const { offer, seller } = await rubricOffer(urls);
     let state: J;
@@ -741,15 +742,18 @@ describe('live judges (T-028), with a stand-in for the models', () => {
     expect(said).toContain(`retry after ${next}`);
     // The same reason before anyone signs: the offer's own notices at prepare.
     expect(offer.state.notices.join(' ')).toMatch(/judge_budget_spent/);
+    // A checks-only offer whose checks are all required is accepted.
     const d = await discovery(urls);
     const checksOnly = await post(`${urls[0]}/v1/prepare/offer`, offerRequest(d, freshAgent(urls), freshAgent(urls)));
     expect(((await checksOnly.json()) as J).notices.join(' ')).not.toMatch(/judge_budget_spent/);
+    const plain = await rubricOffer(urls, { checksOnly: true });
+    expect((await plain.buyer.waitFor(plain.offer.id, ['AcceptedByAdjudicator'], 10_000)).escrowState).toBe('AcceptedByAdjudicator');
   }, 90_000);
 
   // T-574: a judged deal accepted while the budget held, judged after it ran out, never gets a scripted verdict. Its
-  // panel abstains, so the terms' path for an undecided panel applies: the primary escalates, the appeal adjudicator's
-  // panel abstains too, and the deal ends in the default outcome. No panel is re-rolled.
-  it('a judged deal in flight when the budget runs out: its panels abstain, it escalates, and it ends in the default outcome', async () => {
+  // panel abstains, so the terms' path for an undecided panel applies: the primary escalates, the appeal adjudicator
+  // does not convene a panel it cannot run live (red team M1), and the deal ends in the default outcome. No re-roll.
+  it('a judged deal in flight when the budget runs out: its panel abstains, it escalates, and it ends in the default outcome', async () => {
     const { calls, provider } = standIn();
     const { urls } = await serve({ judgeProvider: provider, liveCallsPerDay: 6 });
     const a = await rubricOffer(urls);
@@ -760,7 +764,7 @@ describe('live judges (T-028), with a stand-in for the models', () => {
     expect((await a.buyer.waitFor(a.offer.id, ['Released', 'Refunded'])).escrowState).toBe('Released');
     expect(calls).toHaveLength(3);
     await b.seller.deliver(b.offer.terms, new TextEncoder().encode(DIFF));
-    // The primary's abstaining panel escalates; the appeal adjudicator's panel abstains too and signs nothing.
+    // The primary's abstaining panel escalates; the appeal adjudicator convenes no panel and signs nothing.
     const escalated = await b.buyer.waitFor(b.offer.id, ['Escalated', 'Released', 'Refunded'], 40_000);
     expect(escalated.escrowState).toBe('Escalated');
     // Past the escalation's window the default outcome applies. On SimChain a party sends it; on Sepolia the operators do.

@@ -100,6 +100,8 @@ export interface TestAdjudicatorOptions {
   acceptSealedUnread?: boolean;
   /** The host's own reason to decline a new deal as primary (AdjudicatorConfig.offerGate, T-574). */
   offerGate?: AdjudicatorConfig['offerGate'];
+  /** The host's own reason not to convene a panel for a turn (AdjudicatorConfig.judgeGate, T-574). */
+  judgeGate?: AdjudicatorConfig['judgeGate'];
   /**
    * The fallback and appeal adjudicators it accepts offers with (AdjudicatorConfig.trustedAdjudicators). A world's
    * adjudicators trust each other; unset, it trusts only itself and declines every offer naming another.
@@ -163,6 +165,7 @@ export function testAdjudicator(o: TestAdjudicatorOptions): TestAdjudicator {
     settlement,
     ...(o.acceptSealedUnread ? { acceptSealedUnread: true } : {}),
     ...(o.offerGate ? { offerGate: o.offerGate } : {}),
+    ...(o.judgeGate ? { judgeGate: o.judgeGate } : {}),
     ...(o.trustedAdjudicators ? { trustedAdjudicators: o.trustedAdjudicators } : {}),
     ...(o.judgedStore ? { judgedStore: o.judgedStore } : {}),
   });

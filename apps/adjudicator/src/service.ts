@@ -133,6 +133,11 @@ export interface AdjudicatorConfig {
    */
   offerGate?: (c: DecisionTask['commitment']) => Promise<Problem | null>;
   /**
+   * T-574: the host's own reason not to convene a panel of `size` seats for this turn, asked just before the panel runs
+   * and only when no judged result is kept. Refused, the turn is retried on each pass with no record. Unset, or null: run.
+   */
+  judgeGate?: (task: DecisionTask, size: number) => Promise<Problem | null>;
+  /**
    * The fallback and appeal adjudicators this service accepts an offer with (T-212). Since an overturn pays the price
    * from the first decider's bond (I-8), one actor as buyer, seller and appeal adjudicator could name this service as
    * primary, take its honest accept, file a zero-bond appeal and overturn it through its own appeal adjudicator. So an
@@ -1056,6 +1061,13 @@ export class Adjudicator {
         return err(problem('adjudicator_unavailable', `reference files unavailable from this adjudicator's store: ${describeUnavailable(loaded.unavailable)}${late ? ` (it did not answer within ${late.ms} ms)` : ''}; not judged, retrying (no record)`));
       }
       const references = loaded.references;
+      // T-574: the host may refuse to convene this panel (the public demo, at an appeal after an escalation, once its
+      // live budget is spent). Asked only when no judged draft is held, so it never discards a verdict: refused, the
+      // turn is retried on each pass with no record, and its deadline's path applies if it never runs.
+      if (!held.value) {
+        const gated = await this.#cfg.judgeGate?.(task, size);
+        if (gated) return err(gated);
+      }
       const run = held.value ? ok(held.value.draft) : await runPipeline({
         intake: intaken.value,
         acceptance: commitment.acceptance,

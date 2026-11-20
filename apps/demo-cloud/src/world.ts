@@ -169,21 +169,42 @@ const ADJUDICATORS: ReadonlyArray<{ role: AdjudicatorRole; label: string; name: 
   { role: 'appeal', label: 'demo-adjudicator-c', name: 'Demo Adjudicator C' },
 ];
 /**
- * T-574 (Rafa, 2026-11-20: "Decline new judged deals until following day, until we have sufficient Crow usage, then
- * revisit"): in a live world, why Crow's primary declines a new deal that needs a judge panel, or null. A deal needs one
- * when its rubric has criteria; a checks-only deal never does. It declines while today's budget cannot hold a whole live
- * panel of the bound policy's size, retries included; a sealed offer's rubric is unread, so it counts as needing one.
- * The reason starts with the token `judge_budget_spent:` and names the ISO time to retry after.
+ * T-574: whether a deal's terms can convene a judge panel. A rubric with criteria always does. A deal with no rubric does
+ * when one of its checks is optional: the checks accept alone only when every check passes (preDecision), so a failed
+ * optional check sends the deal to the panel (red team L1). Terms it cannot read (sealed) count as needing one.
  */
-export function judgedDealGate(panel: Pick<PanelConfig, 'live' | 'canRunLive' | 'resumesAt' | 'budget' | 'registry'>, c: { acceptance?: { rubric?: { criteria?: readonly unknown[] } } }, panelSize: number | undefined): Promise<Problem | null> {
-  return (async () => {
-    if (!panel.live) return null;
-    const criteria = c.acceptance?.rubric?.criteria;
-    if (criteria && criteria.length === 0) return null;
-    // A policy it cannot read sizes the panel at the most seats the registry has.
-    if (await panel.canRunLive(panelSize ?? panel.registry.active.length)) return null;
-    return problem('adjudicator_unavailable', `judge_budget_spent: this demo's live judge budget for today (${panel.budget.perDay} calls, UTC day) cannot hold another panel, so Crow's adjudicators accept no new deal that needs one; retry after ${panel.resumesAt()}, or offer checks-only terms, which are accepted now`);
-  })();
+export function needsPanel(c: { acceptance?: { rubric?: { criteria?: readonly unknown[] }; deterministicChecks?: readonly { required?: boolean }[] } }): boolean {
+  const a = c.acceptance;
+  if (!a?.rubric?.criteria) return true;
+  return a.rubric.criteria.length > 0 || (a.deterministicChecks ?? []).some((k) => k.required === false);
+}
+
+/**
+ * T-574 (Rafa, 2026-11-20: "Decline new judged deals until following day, until we have sufficient Crow usage, then
+ * revisit"): in a live world, why Crow's primary declines a new deal that can convene a judge panel, or null. It declines
+ * while today's budget, less `reserved` (what the funded judged deals still waiting for a Crow panel may need), cannot
+ * hold a whole live panel of the bound policy's size with its retries (twice its seats). The reason starts with the token
+ * `judge_budget_spent:`; it names the next UTC midnight to retry after, unless the daily budget can never hold a panel.
+ */
+export async function judgedDealGate(panel: Pick<PanelConfig, 'live' | 'resumesAt' | 'budget' | 'registry'>, c: Parameters<typeof needsPanel>[0], panelSize: number | undefined, reserved = 0): Promise<Problem | null> {
+  if (!panel.live || !needsPanel(c)) return null;
+  // A policy it cannot read sizes the panel at the most seats the registry has.
+  const need = 2 * (panelSize ?? panel.registry.active.length);
+  const offer = 'offer checks-only terms whose checks are all required, which are accepted now';
+  if (panel.budget.perDay < need) return problem('adjudicator_unavailable', `judge_budget_spent: this demo's live judge budget (${panel.budget.perDay} calls a day) cannot hold a panel of ${need / 2} seats on any day, so Crow's adjudicators accept no deal that can need one; ${offer}`);
+  if ((await panel.budget.remaining()) - reserved >= need) return null;
+  return problem('adjudicator_unavailable', `judge_budget_spent: this demo's live judge budget for today (${panel.budget.perDay} calls, UTC day) cannot hold another panel beside the judged deals already funded, so Crow's adjudicators accept no new deal that can need one; retry after ${panel.resumesAt()}, or ${offer}`);
+}
+
+/**
+ * T-574: in a live world, why an appeal adjudicator of this demo does not convene its panel for an escalation or an
+ * appeal, or null. An all-abstaining appeal panel would still sign a decision on a flagged delivery (D27a/b: reject unless
+ * unanimous) with no model run (red team M1), so past the budget the panel is not convened at all: nothing is decided,
+ * the turn is tried again on each pass, and if no panel can run by the deadline the default outcome applies.
+ */
+export async function appealPanelGate(panel: Pick<PanelConfig, 'live' | 'canRunLive'>, task: { role: string; commitment: Parameters<typeof needsPanel>[0] }, size: number): Promise<Problem | null> {
+  if (!panel.live || task.role !== 'appeal' || !needsPanel(task.commitment) || (await panel.canRunLive(size))) return null;
+  return problem('adjudicator_unavailable', `judge_budget_spent: this demo's live judge budget for today cannot hold this appeal panel of ${size} seats, so it is not convened and nothing is decided; the turn is tried again on each pass until its deadline, and if no panel runs by then the default outcome applies`);
 }
 
 const nameOf = (a: { name: string }, live: boolean) => `${a.name} (test; real checks, ${live ? 'live panel within a daily budget' : 'scripted panel'})`;
@@ -232,7 +253,7 @@ const TIMEOUTS_PER_DAY = 200;
 const OFFER_EXPIRIES_PER_DAY = 50;
 const SCRIPTED_PANEL = 'scripted judge panel: no model runs in this demo, every panel verdict is a fake judge marked "[fake judge, no model ran]"; use template checks-only for real acceptance';
 const livePanel = (perDay: number) =>
-  `live judge panel: pinned models from two families (Anthropic, DeepSeek; config/judges-live.yaml), at most ${perDay} live judge calls a day across this demo; past that, Crow's adjudicators decline new rubric deals until the next UTC day (demo.judges.judgedDeals), and a rubric deal already open has its panel abstain, so it escalates and ends in the default outcome`;
+  `live judge panel: pinned models from two families (Anthropic, DeepSeek; config/judges-live.yaml), at most ${perDay} live judge calls a day across this demo; past that, Crow's adjudicators decline new deals that can need a panel until the next UTC day (demo.judges.judgedDeals), and one already open escalates and, unless a panel can run before its deadline, ends in the default outcome`;
 const SEALED =
   'These demo adjudicators decline private and judgment offers: they cannot open sealed terms yet (T-207), so the offer would stay unaccepted and expire, and nobody could fund it. Offer at disclosure public on this demo; the work itself is encrypted either way.';
 
@@ -842,6 +863,8 @@ export class PublicWorld {
     const operatorFee = operatorFeeFromEnv(o.env, lc(key('demo-operator-fees').address) as Address, token, gasQuote);
     const feedback = feedbackFrom(o, (id) => telemetry.lookup(id));
     const adjudicators = {} as Record<AdjudicatorRole, TestAdjudicator>;
+    // T-574: what funded judged deals may still need of today's live budget; bound to the world once it exists.
+    let reservedJudgeCalls: () => number = () => 0;
     const declined = new Map<Hex32, string>();
     const turnsDeclined = new Map<Hex32, DeclinedTurn>();
     const waiting = new Map<Hex32, WaitingTurn>();
@@ -885,7 +908,11 @@ export class PublicWorld {
                 tokensToday: { input: today.inputTokens, output: today.outputTokens, byModel: today.byModel ?? {} },
                 day: today.day,
                 // T-574: whether Crow's primary accepts a new rubric deal now, and if not, from when (the next UTC day).
-                judgedDeals: (await panel.canRunLive(adjudicators.primary.registration().policy.panelSize)) ? { accepting: true, resumesAt: null } : { accepting: false, resumesAt: panel.resumesAt() },
+                judgedDeals: await (async () => {
+                  const size = adjudicators.primary.registration().policy.panelSize;
+                  if (!(await judgedDealGate(panel, { acceptance: { rubric: { criteria: [{}] } } }, size, reservedJudgeCalls()))) return { accepting: true, resumesAt: null };
+                  return { accepting: false, resumesAt: panel.budget.perDay < 2 * size ? null : panel.resumesAt() };
+                })(),
               }
             : { missing: panel.missing }),
         },
@@ -993,7 +1020,9 @@ export class PublicWorld {
       const adj = testAdjudicator({
         name: nameOf(a, panel.live),
         // T-574: past the day's live budget, decline a new deal that needs a panel, until the next UTC day.
-        offerGate: async (c) => judgedDealGate(panel, c, (await registrations.policy(c.adjudication.policyHash))?.panelSize),
+        offerGate: async (c) => judgedDealGate(panel, c, (await registrations.policy(c.adjudication.policyHash))?.panelSize, reservedJudgeCalls()),
+        // T-574: past the budget, an appeal panel is not convened, so it signs nothing (red team M1).
+        judgeGate: async (task, size) => appealPanelGate(panel, task, size),
         registry: panel.registry,
         registryUri: panel.registryUri,
         keptRegistries: panel.kept,
@@ -1035,7 +1064,7 @@ export class PublicWorld {
         },
       });
       await registerOwn(registrations, domain, a.keys.privateKey, { ...adj.registration(), pool: { terms: { ...POOL_TERMS } }, poolTermsHash: canonicalKeccak(POOL_TERMS), status: 'active' }, { label: a.label, start: meta.start, now: wholeSecond(now()) });
-      // T-574: each decision task runs at most one panel, so each runs live or scripted as a whole, retries included. Its
+      // T-574: each decision task runs at most one panel, so each runs live or abstaining as a whole, retries included. Its
       // size is the policy the deal bound, which may be another adjudicator's (T-574 red team L3).
       const decide = adj.service.decideTask.bind(adj.service);
       adj.service.decideTask = async (task) => {
@@ -1048,6 +1077,7 @@ export class PublicWorld {
     if (registrations.policiesKept() > 0) telemetry.rows('ph', registrations.policiesKept());
     const keys = [principal, key('demo-club-operator'), ...adjKeys.map((a) => a.keys), key('demo-operator-1'), key('demo-operator-2')];
     const world = new PublicWorld(o, telemetry, secret, chain, keys, operators, adjudicators, panel, declined, turnsDeclined, waiting, journalLength, publicUrls, live);
+    reservedJudgeCalls = () => world.reservedJudgeCalls();
     world.caps = new DailyCaps(storage, now, secret, capLimits);
     world.deployedAt = deployedAt;
     // A wake, from a plain read too, makes the world active only when its adjudicators have a step to take or a chain
@@ -1273,6 +1303,27 @@ export class PublicWorld {
   }
 
   /** One adjudicator pass (the Durable Object alarm): accept or decline offers, trigger fallbacks, decide; on a chain, then send due timeouts. */
+  /**
+   * T-574: the live judge calls the funded judged deals still waiting for one of this world's panels may need, twice each
+   * panel's seats: a deal Held or Delivered with its primary, FallbackJudging with its fallback, Escalated with its appeal
+   * adjudicator. Counted only from funding, since an unfunded offer costs nothing to make; the per-client daily cap on
+   * funded deals bounds what one client can hold back. The gate on new judged deals subtracts it.
+   */
+  reservedJudgeCalls(): number {
+    const ours = (role: AdjudicatorRole, address: string) => lc(this.adjudicators[role].address) === lc(address);
+    const policy = (role: AdjudicatorRole) => this.adjudicators[role].registration().policy;
+    let n = 0;
+    for (const id of this.commitments) {
+      const s = this.chain.escrowState(id);
+      if (!s || !needsPanel(s.terms as Parameters<typeof needsPanel>[0])) continue;
+      const { adjudicator, fallbackAdjudicator, appealAdjudicator } = s.terms.adjudication;
+      if ((s.kind === 'Held' || s.kind === 'Delivered') && ours('primary', adjudicator)) n += 2 * policy('primary').panelSize;
+      else if (s.kind === 'FallbackJudging' && ours('fallback', fallbackAdjudicator)) n += 2 * policy('fallback').panelSize;
+      else if (s.kind === 'Escalated' && ours('appeal', appealAdjudicator)) n += 2 * policy('appeal').appealPanelSize;
+    }
+    return n;
+  }
+
   async work(): Promise<void> {
     // A broken world takes no new work: the stored write failure, before an adjudicator acts or a transaction goes out.
     if (this.failed) await this.persisting;
@@ -1728,7 +1779,7 @@ export function notesFor(
       : `Operator fee: these nodes charge an operator fee of ${fee.bps} bp of the price, at least ${amount(fee.min)}${fee.max === null ? '' : `, at most ${amount(fee.max)}`}, rounded up, paid by the buyer to ${fee.to} with the funded agreement: POST /v1/prepare/agree-and-fund returns a third signature (slot operatorFee.signature). It is a separate transfer, never part of the hold, and not refunded. A funded agree without it gets 402 payment_required; reads, prepare, the faucet, deliveries and direct submission to the settlement layer are free (ADR-0023).${gasText}${gas ? ' Submitting directly to the contract, you pay your own gas and no fee to these nodes.' : ''}`
     : undefined;
   const judges = panel?.live
-    ? `Adjudicators: three test adjudicators run by this demo, listed by role under demo.adjudicators in this discovery document. Deterministic checks are real. Rubric deals get a live judge panel: pinned models from two families, Anthropic and DeepSeek (${panel.registry.active.map((e) => e.model).join(', ')}; registry config/judges-live.yaml, not calibrated). At most ${panel.budget.perDay} live judge calls a day across this demo (UTC; demo.judges shows today's count). Past that, Crow's adjudicators decline new rubric deals until the next UTC day (demo.judges.judgedDeals.resumesAt), and a rubric deal already open has its panel abstain: it escalates and ends in the default outcome, never on a scripted verdict. DeepSeek's model names are provider aliases that can change underneath.`
+    ? `Adjudicators: three test adjudicators run by this demo, listed by role under demo.adjudicators in this discovery document. Deterministic checks are real. Rubric deals get a live judge panel: pinned models from two families, Anthropic and DeepSeek (${panel.registry.active.map((e) => e.model).join(', ')}; registry config/judges-live.yaml, not calibrated). At most ${panel.budget.perDay} live judge calls a day across this demo (UTC; demo.judges shows today's count). Past that, Crow's adjudicators decline new deals that can need a panel (a rubric, or an optional check) until the next UTC day (demo.judges.judgedDeals.resumesAt), and one already open escalates and, unless a panel can run before its deadline, ends in the default outcome, never on a scripted verdict. DeepSeek's model names are provider aliases that can change underneath.`
     : 'Adjudicators: three test adjudicators run by this demo, listed by role under demo.adjudicators in this discovery document. Deterministic checks are real. Judge panels are scripted fake judges (no model runs; verdicts start "[fake judge, no model ran]"), so use template "checks-only" for real acceptance.';
   const settlement = chain
     ? [

@@ -2,11 +2,12 @@
 // set as Worker secrets, within a daily cap on live judge calls; scripted fake judges otherwise, marked as such. The cap
 // is the spending limit for the public faucet. Past it, on Rafa's decision of 2026-11-20 ("Decline new judged deals
 // until following day, until we have sufficient Crow usage, then revisit"; T-574): Crow's primary declines a new deal
-// that needs a panel until the next UTC day (`canRunLive`, `resumesAt`), and a panel of a deal already in flight
-// abstains (`ABSTAIN_DETAIL`), so the terms' path for an undecided panel applies. A live world never gives a scripted
-// verdict. To revisit once Crow has sufficient usage.
+// that can need a panel until the next UTC day (world.ts, `judgedDealGate`). A first-instance panel of a deal already in
+// flight abstains (`ABSTAIN_DETAIL`), so it escalates; an appeal panel past the budget is not convened (world.ts,
+// `appealPanelGate`), so the default outcome applies unless a panel can run before the deadline. A live world never gives
+// a scripted verdict. To revisit once Crow has sufficient usage.
 //
-// T-574: a panel is live or scripted as a whole, chosen once when it starts (`PanelConfig.panel`). Before, each call
+// T-574: a panel is live or abstaining as a whole, chosen once when it starts (`PanelConfig.panel`). Before, each call
 // chose, so a live seat's retry after an HTTP 503 could go to the scripted judge once the budget ran out, and that
 // scripted pass counted as the second model family (T-570's red team, H2).
 import { liveJudges, liveRegistry, LIVE_REGISTRY_URI, markedFake, markerFake, missingLiveEnv, placeholderRegistry, type JudgeUsage, type KeptRegistry, type TestAdjudicatorOptions } from '@holdback/adjudicator';
