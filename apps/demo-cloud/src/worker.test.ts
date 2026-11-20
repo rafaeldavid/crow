@@ -7,7 +7,9 @@ import { generatePrivateKey } from 'viem/accounts';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { Agent } from '../../../examples/agent.ts';
 import { MemoryStorage } from './storage.js';
-import worker, { SECURITY_TXT_URL, World, type Env } from './worker.js';
+import { SECURITY_TXT_URL } from './headers.js';
+import * as entry from './worker.js';
+import worker, { World, type Env } from './worker.js';
 
 type J = any; // eslint-disable-line @typescript-eslint/no-explicit-any
 
@@ -304,5 +306,23 @@ describe('security.txt on the API hostnames (T-574)', () => {
     for (const r of [new Request('https://api.crow.direct/.well-known/security.txt', { method: 'POST', body: '{}' }), new Request('https://api.crow.direct/.well-known/security.txt.bak'), new Request('https://api.crow.direct/well-known/security.txt')]) {
       expect((await worker.fetch(r, untouched)).status, `${r.method} ${r.url}`).toBe(500);
     }
+  });
+});
+
+// T-574: PR 726 exported SECURITY_TXT_URL from this entry module, and the Workers runtime refused to start it under
+// wrangler dev ("Incorrect type for map entry 'SECURITY_TXT_URL': the provided value is not of type 'function or
+// ExportedHandler'"). The entry may export only its default handler and the Durable Object classes the configs bind.
+describe('the Worker entry module (T-574)', () => {
+  it('exports only the default handler and the Durable Object classes its wrangler configs name', () => {
+    const classes = new Set<string>();
+    for (const file of ['wrangler.op1.jsonc', 'wrangler.op2.jsonc']) {
+      const text = readFileSync(new URL(`../${file}`, import.meta.url), 'utf8');
+      for (const m of text.matchAll(/"class_name":\s*"([A-Za-z_$][\w$]*)"/g)) classes.add(m[1]!);
+    }
+    expect([...classes]).toEqual(['World']);
+    const named = Object.keys(entry).filter((k) => k !== 'default').sort();
+    expect(named).toEqual([...classes].sort());
+    for (const k of named) expect(typeof (entry as Record<string, unknown>)[k], k).toBe('function');
+    expect(typeof (entry.default as { fetch?: unknown }).fetch).toBe('function');
   });
 });
