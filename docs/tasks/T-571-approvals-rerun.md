@@ -5,7 +5,7 @@
 - **Depends on:** T-412 (the 2026-11-14 benchmark and its definition of an approval), T-391 (the duet harness), T-560 (the duet's `installed` option)
 - **Paths this task may touch:** `tools/duet/approvals.ts`, `tools/duet/approvals.test.ts`, one row of `tools/duet/README.md`, this file; in the private repository, `case-studies/approvals-2026-11-19/`.
 - **Human gate:** yes for the live runs only. They spend Rafa's model keys, so Rafa starts them from a terminal tab, after his go on the spend.
-- **Status:** in progress
+- **Status:** done (runner in PR 717, merged as `eedb3f20`; live runs 2026-11-20)
 - **Agent/session:** a side session of the coordinator, 2026-11-19, branch `t-571-approvals-rerun`
 - **Roadmap row:** T-252 (and N38's "approvals per deal")
 - **Change kind:** 4 (tool code with its tests): the duet tests, the folder's typecheck, eslint; one `reviewer` pass
@@ -29,8 +29,8 @@ On 2026-11-14 an approval was each point where a person in the agent's seat had 
 - [x] The seller's sell command takes the seller's own `--work` and `--terms` files only; a test shows `--sample`, `--buyer`, `--outcome` and a file outside the folder refused.
 - [x] The approvals, tokens, cost, seconds and both operators' final states come from the record; a test checks the count and the states.
 - [x] Scripted runs of both directions reach Released on Sepolia against the live operators.
-- [ ] The pilot (one run per model, budget USD 2) and the batch (four runs, budget USD 8), on Rafa's go.
-- [ ] The results in the private repository, `case-studies/approvals-2026-11-19/`, with `results.json`.
+- [x] The pilot (one run per model, budget USD 2) and the batch (four runs, budget USD 8), on Rafa's go.
+- [x] The results in the private repository, `case-studies/approvals-2026-11-19/`, with `results.json`.
 - [x] One `reviewer` pass, its findings fixed.
 
 ## Evidence
@@ -46,6 +46,8 @@ On 2026-11-14 an approval was each point where a person in the agent's seat had 
   - Low: calls the loop never ran are not counted; policy approvals are split into granted and refused; a budget stop reads "stopped by the budget"; the judges' key variables are on the secret list too.
   - After the fixes [measured]: 13 tests passed; the folder's `tsc` and eslint print nothing; the scripted seller on Sepolia again ended Released on both operators (61 s, 3 approvals).
 
+- **The live runs** [measured, 2026-11-20 06:45 to 07:01 UTC, operators on build `c20ba520` before and after]: six completed deals, all Released on both operators, USD 1.47 at list prices (pilot USD 0.77 of USD 2, batch USD 0.81 of USD 8). Batch approvals: Claude buyer 6, DeepSeek buyer 9, Claude seller 16, DeepSeek seller 18, median 9 (nearest rank); the two seller pilots 13 and 22. The first Claude pilot never started: the API refused a key not scoped to a workspace, and nothing was billed. The buyers read no guide (the harness's tool list describes the buying command), so their numbers measure the harness. The full write-up, the ranked causes and the records are in the private repository, `case-studies/approvals-2026-11-19/`.
+
 ## Handoff
 
-The live runs are Rafa's (the private repository, `case-studies/approvals-2026-11-19/README.md`, "How to run").
+Done. The follow-ups are the ranked causes in the private repository's write-up: first, one example `--terms` file in `ref/intake.txt` and on the front door's sell line, which every seller lacked.
