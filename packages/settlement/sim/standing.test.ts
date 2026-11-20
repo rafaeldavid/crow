@@ -3,7 +3,7 @@
 // standingApproval, the rule of HoldbackStandingSeller.isValidSignature. Named tests for ADR-0040 §9's scenario rows:
 // attack.take-changes-a-fixed-field, attack.take-replayed, attack.take-backdated; and the template's ends (revoked,
 // retired, expired), and its standing delivery to a take.
-import { commitmentId, encodeSimStandingSignature, STANDING_DELIVERY, TAKE, takeTerms, templateDigest, templateFrom, templateHash, type Address, type Commitment, type CommitmentTerms, type Delivery, type Hex32, type StandingOffer, type TakeFill, type Timestamp } from '@holdback/core';
+import { commitmentId, encodeSimStandingSignature, SIMCHAIN_VERIFYING_CONTRACT, STANDING_DELIVERY, TAKE, takeTerms, templateDigest, templateFrom, templateHash, type Address, type Commitment, type CommitmentTerms, type Delivery, type Hex32, type StandingOffer, type TakeFill, type Timestamp } from '@holdback/core';
 import { keccak256, stringToBytes, type Hex } from 'viem';
 import { privateKeyToAccount } from 'viem/accounts';
 import { describe, expect, it } from 'vitest';
@@ -24,7 +24,7 @@ async function world(o: { revoked?: (th: Hex32) => boolean; retired?: boolean; t
   const draftChain = new SimChain(genesis);
   const draft = new Deal(draftChain, cast, { club, tag: 'template' });
   // It pays the seller's own key address: a template that pays the contract is refused (ADR-0040 §1).
-  const made = templateFrom({ ...draft.terms, sellerPayoutAddress: base.seller.address }, { rules: '0x0000000000000000000000000000000000000000', expiresAt: plus(START, 7 * 86_400), offerId: 'sim-standing' });
+  const made = templateFrom({ ...draft.terms, sellerPayoutAddress: base.seller.address }, { rules: SIMCHAIN_VERIFYING_CONTRACT, expiresAt: plus(START, 7 * 86_400), offerId: 'sim-standing' });
   const template = o.template ? o.template(made) : made;
   const th = templateHash(template);
   const seller: SimContract = { address: SELLER, kind: 'standing_seller', key: base.seller.address, ...(o.revoked?.(th) ? { revoked: [th] } : {}), ...(o.retired ? { retired: true } : {}) };
@@ -107,6 +107,27 @@ describe('takes of a standing offer on SimChain (T-549)', () => {
     // Backdated by less than the offer window, it is offered and the seller keeps deliverBy minus that window.
     const recent = w.take('backdated-recent', plus(w.chain.now(), -60));
     await w.ok(recent.offer());
+  });
+
+  it('attack.take-under-another-deployment: a template naming another rules deployment approves no take here', async () => {
+    const w = await world({ template: (o) => ({ ...o, rules: '0x00000000000000000000000000000000000000a1' }) });
+    const r = await w.submit(w.take('elsewhere').offer());
+    expect(r.ok ? 'ok' : r.problem.type).toBe('invalid_signature');
+  });
+
+  it('attack.funded-take-flood: a seller of per-buyer work declines every funded take, and each ends in its buyer\'s refund', async () => {
+    const w = await world();
+    const takes = ['flood-a', 'flood-b', 'flood-c'].map((s) => w.take(s));
+    const before = BigInt((await w.chain.balances([w.cast.buyer.address]))[w.cast.buyer.address]!.amount);
+    for (const t of takes) {
+      await w.ok(t.offer());
+      await w.ok(t.deal.accept());
+      await w.ok(t.deal.agreeAndFund());
+    }
+    // The seller delivers nothing: past deliverBy anyone reclaims each hold, price and fee.
+    w.chain.advanceTo(plus(takes[2]!.terms.timing.deliverBy, 1));
+    for (const t of takes) expect((await w.ok(t.deal.trigger('reclaim'))).state.escrowState).toBe('Refunded');
+    expect(BigInt((await w.chain.balances([w.cast.buyer.address]))[w.cast.buyer.address]!.amount)).toBe(before);
   });
 
   it('a take dated ahead of the chain is refused', async () => {

@@ -3,7 +3,7 @@
 // to that buyer, so no flood of takes spends the seller's write budget, and no take names a victim buyer; a take that
 // is not public is refused; and a take one operator refuses goes through another.
 import { encryptionKeyPairFromSecretKey } from '@holdback/core/crypto';
-import { commitmentId, encodeSimStandingSignature, sealTerms, holdbackDomain, signTerms, TAKE, takeTerms, templateDigest, templateFrom, type Address, type Commitment, type CommitmentTerms, type StandingOffer, type TakeFill, type Timestamp } from '@holdback/core';
+import { commitmentId, encodeSimStandingSignature, sealTerms, SIMCHAIN_VERIFYING_CONTRACT, holdbackDomain, signTerms, TAKE, takeTerms, templateDigest, templateFrom, type Address, type Commitment, type CommitmentTerms, type StandingOffer, type TakeFill, type Timestamp } from '@holdback/core';
 import { Deal, SIM_CHAIN_ID, SimChain, simActor, simCast, simClub, simGenesis, type Cast, type SimActor } from '@holdback/settlement/sim';
 import { keccak256, stringToBytes } from "viem";
 import { privateKeyToAccount } from 'viem/accounts';
@@ -27,7 +27,7 @@ async function world() {
   const genesis = await simGenesis({ cast, club, start: START, balances: { buyer: 10_000_000_000n }, bonds: { primary: BOND, fallback: BOND, appeal: BOND } });
   const chain = new SimChain({ ...genesis, contracts: [{ address: SELLER, kind: 'standing_seller', key: base.seller.address }] });
   const draft = new Deal(chain, cast, { club, tag: 'template' });
-  const template: StandingOffer = templateFrom({ ...draft.terms, sellerPayoutAddress: base.seller.address }, { rules: '0x0000000000000000000000000000000000000000', expiresAt: plus(START, 86_400), offerId: 'takes' });
+  const template: StandingOffer = templateFrom({ ...draft.terms, sellerPayoutAddress: base.seller.address }, { rules: SIMCHAIN_VERIFYING_CONTRACT, expiresAt: plus(START, 86_400), offerId: 'takes' });
   const keySignature = await privateKeyToAccount(base.seller.key).sign({ hash: templateDigest(template, SELLER, SIM_CHAIN_ID) });
   /** A take by `buyer`, signed by it (or by `signer`) over the terms, as the buyer posts it. */
   const take = async (buyer: SimActor, seed: string, o: { signer?: SimActor; over?: Partial<CommitmentTerms>; unsigned?: boolean } = {}): Promise<Commitment> => {
@@ -91,6 +91,25 @@ describe("an operator's rules for a take of a standing offer (T-549)", () => {
     // The victim's own budget is whole: five takes of its own go through.
     for (let i = 0; i < 5; i++) {
       const r = await w.post(op, await w.take(victim, `victim-own-${i}`));
+      expect(r.status, JSON.stringify(r.body)).toBeLessThan(300);
+    }
+  });
+
+  it('attack.take-flood-names-the-seller-as-buyer: a take whose buyer is the seller contract is never charged to the seller', async () => {
+    const w = await world();
+    // A budget of 3 writes per window, for the client and for each signer.
+    const op = await w.operator('op-1', { rateLimit: { writes: 3, reads: 1000, windowMs: 3_600_000 } });
+    // The seller contract approves any take of its template, so its "signature" as buyer is the take blob itself.
+    const self = async (seed: string) => {
+      const t = await w.take({ ...simActor('unused'), address: SELLER }, seed, { unsigned: true });
+      return { ...t, signatures: { ...t.signatures, buyer: t.signatures.seller } };
+    };
+    for (const seed of ['self-1', 'self-2']) expect((await w.post(op, await self(seed))).status).toBeLessThan(300);
+    // Charged to the seller, two self-takes would leave it one write; it makes two offers of its own.
+    for (const tag of ['seller-own-a', 'seller-own-b']) {
+      const own = await new Deal(w.chain, { ...w.cast, seller: { ...w.base.seller, address: SELLER } }, { club: w.club, tag, over: { sellerPayoutAddress: w.base.seller.address } }).offer();
+      if (own.kind !== 'offer') throw new Error('unreachable');
+      const r = await w.post(op, own.commitment);
       expect(r.status, JSON.stringify(r.body)).toBeLessThan(300);
     }
   });

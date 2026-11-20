@@ -280,4 +280,21 @@ describe.skipIf(!ready)(`contract signers on anvil (T-549)${ready ? '' : ' (SKIP
     expect((await x.chain.stage(t.deal.id)).stage).toBe('Released');
     expect(await x.chain.tokenBalance(c.seller.address)).toBe(BigInt(t.deal.terms.price.amount));
   }, 120_000);
+  it('the differential check holds for a template with dispute offsets: the contract counts disputeBy from the take, and the windows pass through', async () => {
+    const x = await setup();
+    const draft = new EvmDeal(x.chain, x.cast, x.club, 'take-dispute', undefined, undefined, undefined, { seller: SELLER_CONTRACT, sellerPayoutAddress: x.cast.seller.address });
+    const at = Date.parse(draft.terms.createdAt);
+    const iso = (ms: number) => new Date(ms).toISOString().replace('.000Z', 'Z') as Timestamp;
+    const timing = { ...draft.terms.timing, disputeBy: iso(at + 5_400_000), disputeJudgeSec: 600, disputeFallbackSec: 900 };
+    const template = templateFrom({ ...draft.terms, timing }, { rules: world.deployment.rules, expiresAt: iso(at + 86_400_000), offerId: 'offer/take-dispute' });
+    expect(template.terms.timing).toMatchObject({ disputeBy: 5_400, disputeJudgeSec: 600, disputeFallbackSec: 900 });
+    for (const later of [0, 3_600]) {
+      const fill: TakeFill = { buyer: draft.terms.buyer, buyerPaymentAddress: draft.terms.buyerPaymentAddress, buyerEncryptionPublicKey: draft.terms.buyerEncryptionPublicKey, nonceSeed: keccak256(stringToBytes(`seed/dispute/${later}`)), createdAt: iso(at + later * 1000) };
+      const terms = takeTerms(template, fill, SELLER_CONTRACT);
+      expect(terms.timing.disputeBy).toBe(iso(at + later * 1000 + 5_400_000));
+      const read = <T>(functionName: string, args: unknown[]) => world.publicClient.readContract({ address: SELLER_CONTRACT, abi: x.sellerAbi, functionName, args }) as Promise<T>;
+      expect(await read<Hex32>('templateHash', [standingOfferView(template)])).toBe(templateHash(template));
+      expect(await read<Hex32>('commitmentId', [await read('termsOf', [standingOfferView(template), fillView(fill)])])).toBe(commitmentId(terms));
+    }
+  }, 120_000);
 });

@@ -539,7 +539,8 @@ export class Adjudicator {
     // ADR-0040 §6 (T-549): an accept wraps the content key to the buyer's encryption key, so a key that does not decode
     // could never carry it. Checked at acceptance, before any work is done for the deal, since anyone can compose a take.
     try {
-      decodePublicKey(c.buyerEncryptionPublicKey);
+      // wrapKey also refuses a low-order point, which decodes (red team of PR 736, L2).
+      wrapKey(ContentKey.fromBytes(new Uint8Array(32).fill(1)), decodePublicKey(c.buyerEncryptionPublicKey));
     } catch {
       return problem('invalid_terms', `the buyer's encryption key in the terms does not decode as an X25519 public key, so an accept could never carry the buyer's key; ${this.#cfg.name} declines the offer (attack.take-with-bad-buyer-key)`);
     }

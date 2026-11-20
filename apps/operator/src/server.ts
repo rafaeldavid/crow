@@ -25,6 +25,7 @@ import {
   trimTrailingSlashes,
   verifyCoSigned,
   verifyTerms,
+  isTakeSignature,
   type AcceptanceSpec,
   type Address,
   type AnyCommitment,
@@ -383,14 +384,17 @@ export function isTake(c: { signatures?: { seller?: string } }): boolean {
   const sig = c.signatures?.seller;
   if (typeof sig !== 'string') return false;
   const bytes = (sig.length - 2) / 2;
-  return bytes !== 64 && bytes !== 65;
+  // A key's signature is never a take; a long one is when it decodes as one (a multisig's is not, red team of PR 736).
+  return bytes !== 64 && bytes !== 65 && isTakeSignature(sig as `0x${string}`);
 }
 
 /** The address whose write budget an operation spends, when it names one. A take spends its buyer's, never the seller's (ADR-0040 §9). */
 function signerOf(op: Operation): string | undefined {
   switch (op.kind) {
     case 'offer':
-      return isTake(op.commitment) ? op.commitment.buyer : op.commitment.seller;
+      // A take that names its seller as buyer stays on the caller's own budget (review of PR 736, finding 1).
+      if (isTake(op.commitment)) return lc(op.commitment.buyer) === lc(op.commitment.seller) ? undefined : op.commitment.buyer;
+      return op.commitment.seller;
     case 'hold':
       return op.agree.buyer;
     case 'acceptance':
@@ -762,7 +766,7 @@ export class Operator {
       const otherToken = tokenRefusal(this.o.token, op.commitment, op.kind === 'hold' ? 'commitment.' : '');
       if (otherToken) fail(otherToken.type, otherToken.detail, { field: otherToken.field! });
     }
-    if (!dryRun && (op.kind === 'offer' || op.kind === 'hold') && isTake(op.commitment)) await this.takeRule(op.commitment, op.kind === 'offer');
+    if ((op.kind === 'offer' || op.kind === 'hold') && isTake(op.commitment)) await this.takeRule(op.commitment, op.kind === 'offer', dryRun);
     const signer = signerOf(op);
     const signerBucket = signer ? `w:${lc(signer)}` : undefined;
     if (signerBucket) this.admit(signerBucket, budget);
@@ -796,11 +800,14 @@ export class Operator {
    *   budget (`attack.take-flood-spends-seller-budget`, `attack.take-flood-names-a-victim-buyer`). A hold carries the
    *   buyer's Agree, which the settlement layer checks.
    */
-  private async takeRule(c: AnyCommitment, offer: boolean): Promise<void> {
+  private async takeRule(c: AnyCommitment, offer: boolean, dryRun: boolean): Promise<void> {
     if (c.disclosure.level !== 'public') fail('invalid_terms', `a take of a standing offer is a public deal (ADR-0040 §7); this one's disclosure is ${c.disclosure.level}`, { field: 'disclosure.level' });
     if (!offer) return;
     const by = c.signatures?.buyer;
-    if (!by) fail('invalid_terms', "a take of a standing offer is posted by its buyer: sign the terms as the buyer and send the signature as signatures.buyer, so this node charges the write to you, not to the seller", { field: 'signatures.buyer' });
+    // A dry run may leave its signatures out (prepare's slots); one it sends is checked.
+    if (!by && dryRun) return;
+    if (!by) return fail('invalid_terms', "a take of a standing offer is posted by its buyer: sign the terms as the buyer and send the signature as signatures.buyer, so this node charges the write to you, not to the seller", { field: 'signatures.buyer' });
+    if ((by.length - 2) / 2 > MAX_PARTY_SIGNATURE_BYTES) fail('payload_too_large', `signatures.buyer is ${Math.ceil((by.length - 2) / 2)} bytes; this operator relays a party's signature of at most ${MAX_PARTY_SIGNATURE_BYTES} bytes`, { field: 'signatures.buyer' });
     if (!(await verifyTerms(this.domain, c, by as `0x${string}`, c.buyer, this.o.settlement.signerCheck?.()))) fail('invalid_signature', "signatures.buyer is not the buyer's signature over these terms", { field: 'signatures.buyer' });
   }
 

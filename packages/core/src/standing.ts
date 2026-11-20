@@ -8,8 +8,9 @@
 // - the same decision for SimChain, which runs no EVM: its blob is the template in JSON, decided by these functions.
 // The types and the pins are those of packages/core/src/eip712.vectors.test.ts and StandingOfferVectors.t.sol; the
 // differential test on anvil pins takeTerms to the contract's termsOf. The pinned bundles never import this module.
-import { concat, decodeAbiParameters, encodeAbiParameters, fromHex, getAddress, hashStruct, hashTypedData, keccak256, recoverAddress, stringToBytes, toHex, type Hex, type TypedData } from 'viem';
+import { concat, decodeAbiParameters, encodeAbiParameters, fromHex, getAddress, hashStruct, hashTypedData, keccak256, stringToBytes, toHex, type Hex, type TypedData } from 'viem';
 import { bodyHashes, commitmentId, eip712Types, messageDigest, termsDigest, typedDataOf, typedTermsOf, type HoldbackDomain } from './eip712.js';
+import { recoversFrom } from './signer.js';
 import { toTimestamp } from './timing.js';
 import type { UnsignedMessage } from './eip712.js';
 import type { Address, CommitmentTerms, Delivery, EncryptedKey, Hex32, Timestamp } from './types.js';
@@ -46,8 +47,11 @@ export interface TakeFill {
   createdAt: Timestamp;
 }
 
-/** The terms a template fixes: every field of the terms but the seller (the contract), the take's fields, the nonce and the disclosure (public). */
-export type TemplateTerms = Omit<CommitmentTerms, 'seller' | 'buyer' | 'buyerPaymentAddress' | 'buyerEncryptionPublicKey' | 'nonce' | 'createdAt' | 'disclosure' | 'timing'> & { timing: TimingOffsets };
+/**
+ * The terms a template fixes: every field of the terms but the seller (the contract), the take's fields, the nonce, the
+ * disclosure (public) and the settlement, which the contract fixes as guaranteed_on_decision in the price token.
+ */
+export type TemplateTerms = Omit<CommitmentTerms, 'seller' | 'buyer' | 'buyerPaymentAddress' | 'buyerEncryptionPublicKey' | 'nonce' | 'createdAt' | 'disclosure' | 'timing' | 'settlement'> & { timing: TimingOffsets };
 
 /** One delivery for every take: a fixed file's (ADR-0040 §2). `encryptedKeys` holds the three adjudicators' envelopes. */
 export type StandingDeliveryBody = Pick<Delivery, 'ciphertext' | 'plaintextSha256' | 'plaintextMime' | 'encryptedKeys' | 'submittedAt'>;
@@ -66,7 +70,13 @@ export interface StandingOffer {
 
 type Encoded = Record<string, unknown>;
 const str = (s: string): Hex32 => keccak256(stringToBytes(s));
-const secs = (t: Timestamp): bigint => BigInt(Math.floor(Date.parse(t) / 1000));
+const secs = (t: Timestamp): bigint => {
+  const ms = Date.parse(t);
+  if (!Number.isFinite(ms) || ms % 1000 !== 0) throw new RangeError(`${t} is not a whole second`);
+  return BigInt(ms / 1000);
+};
+/** The settlement the seller contract builds into every take (HoldbackTypes: GUARANTEED_HASH and the one token). */
+const settlementOf = (o: TemplateTerms): CommitmentTerms['settlement'] => ({ mode: 'guaranteed_on_decision', token: o.price.token });
 const after = (createdAt: Timestamp, offset: number): Timestamp => toTimestamp(Date.parse(createdAt) + offset * 1000);
 const ZERO_ADDRESS: Address = '0x0000000000000000000000000000000000000000';
 const ZERO32: Hex32 = '0x0000000000000000000000000000000000000000000000000000000000000000';
@@ -107,8 +117,6 @@ export const standingTypes = () => ({
     { name: 'remedy', type: 'Remedy' },
     { name: 'delivery', type: 'StandingDelivery[]' },
   ],
-  Revoke: [{ name: 'templateHash', type: 'bytes32' }],
-  Retire: [],
 }) as const satisfies TypedData;
 
 /**
@@ -119,6 +127,7 @@ function atEpoch(o: StandingOffer): CommitmentTerms {
   const t = o.terms.timing;
   return {
     ...o.terms,
+    settlement: settlementOf(o.terms),
     seller: ZERO_ADDRESS,
     buyer: ZERO_ADDRESS,
     buyerPaymentAddress: ZERO_ADDRESS,
@@ -185,7 +194,11 @@ export const takeNonce = (th: Hex32, seed: Hex32): Hex32 => keccak256(encodeAbiP
  */
 export function templateFrom(t: CommitmentTerms, o: { rules: Address; expiresAt: Timestamp; offerId: string; delivery?: StandingDeliveryBody }): StandingOffer {
   const at = Date.parse(t.createdAt);
-  const off = (ts: Timestamp): number => (Date.parse(ts) - at) / 1000;
+  const off = (ts: Timestamp): number => {
+    const s = (Date.parse(ts) - at) / 1000;
+    if (!Number.isInteger(s) || s < 0) throw new RangeError(`a template counts its dates in whole seconds after createdAt; ${ts} is ${s} s after ${t.createdAt}`);
+    return s;
+  };
   const timing = t.timing;
   return {
     rules: o.rules,
@@ -200,7 +213,6 @@ export function templateFrom(t: CommitmentTerms, o: { rules: Address; expiresAt:
       acceptance: t.acceptance,
       price: t.price,
       adjudication: t.adjudication,
-      settlement: t.settlement,
       remedy: t.remedy,
       timing: {
         offerExpiresAt: off(timing.offerExpiresAt),
@@ -226,6 +238,7 @@ export function takeTerms(o: StandingOffer, fill: TakeFill, sellerContract: Addr
   const at = fill.createdAt;
   return {
     ...o.terms,
+    settlement: settlementOf(o.terms),
     seller: sellerContract,
     buyer: fill.buyer,
     buyerPaymentAddress: fill.buyerPaymentAddress,
@@ -387,10 +400,20 @@ export function encodeStandingSignature(kind: typeof TAKE | typeof STANDING_DELI
   return encodeAbiParameters([{ type: 'uint8' }, STANDING_OFFER_ABI, { type: 'bytes' }, FILL_ABI], [kind, standingOfferView(o), keySignature, fillView(fill)] as never);
 }
 
-/** The kind, ABI template, key signature and fill of a chain blob; throws on a blob the contract would fail to decode. */
-export function decodeStandingSignature(blob: Hex): { kind: number; offer: ReturnType<typeof standingOfferView>; keySignature: Hex; fill: ReturnType<typeof fillView> } {
-  const [kind, offer, keySignature, fill] = decodeAbiParameters([{ type: 'uint8' }, STANDING_OFFER_ABI, { type: 'bytes' }, FILL_ABI], blob) as unknown as [number, ReturnType<typeof standingOfferView>, Hex, ReturnType<typeof fillView>];
-  return { kind, offer, keySignature, fill };
+/**
+ * Whether a signature is a take of a standing offer: a chain blob of kind TAKE that decodes as the seller contract
+ * decodes it, or SimChain's JSON blob of kind TAKE. A contract signer's other long signatures (a multisig's, a passkey
+ * wallet's) are not (red team of PR 736, M2). Never throws.
+ */
+export function isTakeSignature(signature: Hex): boolean {
+  const sim = decodeSim(signature);
+  if (sim) return sim.kind === TAKE;
+  try {
+    const [kind] = decodeAbiParameters([{ type: 'uint8' }, STANDING_OFFER_ABI, { type: 'bytes' }, FILL_ABI], signature);
+    return Number(kind) === TAKE;
+  } catch {
+    return false;
+  }
 }
 
 // SimChain's standing seller: the same decision over a JSON blob, since SimChain has no EVM to decode the ABI one.
@@ -438,8 +461,10 @@ export async function standingApproval(seller: StandingSellerState, domain: Hold
       if (!(Date.parse(now) < Date.parse(offer.expiresAt)) || Date.parse(fill.createdAt) > Date.parse(now)) return false;
     }
     if (getAddress(offer.terms.sellerPayoutAddress) === getAddress(seller.address)) return false;
-    const signer = await recoverAddress({ hash: templateDigest(offer, seller.address, chainId), signature: b.keySignature });
-    if (getAddress(signer) !== getAddress(seller.key)) return false;
+    // The template's own deployment: the contract signs the take's digest under `offer.rules`' domain (red team H-1 of T-548).
+    if (getAddress(offer.rules) !== getAddress(domain.verifyingContract)) return false;
+    // The key's signature as the contract reads it (Solady ECDSA: 64 or 65 bytes, v 27 or 28).
+    if (!(await recoversFrom(templateDigest(offer, seller.address, chainId), b.keySignature, seller.key))) return false;
     const terms = takeTerms(offer, fill, seller.address);
     if (b.kind === TAKE) return digest.toLowerCase() === termsDigest(domain, terms).toLowerCase();
     const id = commitmentId(terms);
