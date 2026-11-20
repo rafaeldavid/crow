@@ -307,6 +307,18 @@ The maintainers keep the notes on agent sessions and permission prompts privatel
 
 Each entry records one deploy as it ran: the date and time in UTC, the commit, each Worker's new version and its rollback target, and what was measured after it. The deploy scripts print the entry's first line (`pnpm demo-cloud:deploy`, `pnpm site:deploy`, `node apps/test-agents/scripts/deploy.mjs`). The values are true for their date: for what runs now, read "What is live" above and each node's discovery.
 
+### Standing-offer takes and the owner's vault guide (deployed 2026-11-20, 08:52 to 08:58 UTC)
+
+Rafa's word: "Can you finish any hanging deploys?" The round puts live the operators' take rules for a standing offer (T-549, pull request 736) and, on the site, the owner's guide to a spend-controls vault at `vault.txt` with its two pointers in `ref/limits.txt` (T-554, pull request 738). The demo script (720) and the deploy record (737) change no deployed code. It ran from a clean worktree at `6bf21cdc` after `main`'s own checks passed there (15 passed, 2 skipped; a Dependabot update run for `tools/envelope-proof` failed, which is not a check of the code), after `pnpm demo-cloud:e2e` passed in 8 s, with `wrangler tail` on both operators beside it [measured].
+
+**Deploy 2026-11-20 08:52 UTC, commit `6bf21cd` on a detached HEAD: pass.** holdback-op1 `ed5c8b4c-3fcf-46c5-b84d-b5c566b25db8` (rollback target `4087b4a7-8d75-4dd2-b219-0e77048be02f`), holdback-op2 `20979440-d207-49a0-b1f9-4719ebfeac71` (rollback target `204f24bb-c8b4-4e04-a2f6-39eab9905d1d`). Smoke deal `0x3d117156c3c4a3a7a100b35e1237f0311926342d40455c417833b5a3ce81e6ee` Released in 72 s, against commit `6bf21cd` (both nodes' discovery named it 255 s after /v1/status answered).
+
+**Site deploy 2026-11-20 08:58 UTC, commit `6bf21cd` on a detached HEAD: pass.** crow-site `18dccf5f-ac36-48f7-b0af-bcec0d986eaa` (rollback target `440d6785-fec5-4d37-aa10-a798ab1ac347`).
+
+Afterwards [measured at about 09:02 UTC]: both nodes' discovery named `6bf21cdc` with schema `0.12`; `vault.txt` answered 200 (5,970 bytes) and `ref/limits.txt` names it twice; the five pinned bundles match their SHA-256 in `llms.txt`; the tails saw 185 events and no exception.
+
+**Not deployed in this round:** the test agents and the two hosted sellers (no change to their code since their last deploy); `agg-4` as the default aggregation, which Rafa delayed to next week ("Delay the stricter rule on judge panels, we can revisit next week"); Crest's vault-as-buyer build, tabled by Rafa until next week.
+
 ### Schema v0.12 and the changes merged overnight (deployed 2026-11-20, 07:28 to 07:35 UTC)
 
 Rafa's word: "Yes, deploy". The round puts live schema v0.12 with a contract buyer and seller (pull requests 713 and 715), the pipeline fixes (722), the service keeping the panel's result (729), the demo judges live or scripted as a whole (728), three small operator fixes (726: a read ceiling before a 413, one rule for "no appeal ground", `security.txt` on the API hostnames), agg-4 as a kept version that is not the default (730), the clearer schema error (732) and, on the site, the telemetry section (718) and the new `setup.mjs` with the deliver command (714, re-pinned once with 732).
