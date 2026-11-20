@@ -9,7 +9,7 @@
   - This file.
   - It changes nothing in `examples/seller-adapter-core.ts`, `examples/seller-adapter-api.ts` or `examples/seller-adapter.ts`, nothing under `packages/`, `apps/`, `spec/schemas/` or `contracts/`, no existing test, and no generated bundle but `site/setup.mjs`.
 - **Human gate:** yes, for the site deploy that publishes the new pinned `setup.mjs` and `setup.txt`. The merge is not gated.
-- **Status:** review
+- **Status:** done (merged in pull request 714 as `fb176072`, 2026-11-19; the site deploy of the new `setup.mjs` is batched by the coordinator)
 - **Agent/session:** a session started by the `journeys` session on 2026-11-19 (item 4 of its list of what is missing)
 - **Roadmap row:** N196
 
