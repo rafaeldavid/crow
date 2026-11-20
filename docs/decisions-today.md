@@ -1631,11 +1631,13 @@ The build is not started; it opens as its own task on Rafa's word.
 
 ## D86. A seller hears of a funded hold on the event stream it opens (ADR-0042, T-573)
 
-**Status:** needs Rafa, 2026-11-19.
+**Status:** decided, 2026-11-20.
+
+**Decided by Rafa, 2026-11-20:** "How does a seller learn that the buyer's money is held? Use the event feed and the chain read". ADR-0042 is accepted as proposed. The answers to the questions below: (1) yes, the event stream and the chain read are the funded notice, and the planned `POST /v1/webhooks` is withdrawn; (2) the chain read is the proof, with no operator signature on each notice; (3) the coordinator rewords row N210's done-when. The seller's HTTP reference page (`site/ref/http-seller.txt`) says where a seller learns its deal is funded. The build plan's pull requests follow as their own tasks.
 
 **Why now.** Stage 2 of the roadmap asks for a signed, retried, idempotent "funded" push to the seller's system with no polling (row N210). Today every seller-side component polls: the hosted seller adapter every 5 s, `setup.mjs deliver` (PR 714) from a cron entry every 5 minutes. `POST /v1/webhooks` has been planned since ADR-0017 and answers 501.
 
-**Proposed** (ADR-0042; a Fable max-effort research pass on 2026-11-19):
+**The record** (ADR-0042; a Fable max-effort research pass on 2026-11-19):
 - **The push is `GET /v1/events`, the stream the seller opens at any operator.** Both live operators already serve every `hold.funded` on it, with the funding transaction's hash and block [measured]. A follower in the seller's own commands holds it, wakes on `hold.funded`, and moves to the next operator on an error or after 60 s of silence.
 - **The notice only wakes the seller; the chain decides.** Before work starts, Crow's seller commands read the deal's stage from the rules contract at the finality the seller chose (`latest`, `safe` or `finalized`). That read replaces today's rule that every operator must agree, so one silent operator no longer stops a start.
 - **The call into the seller's own system is the adapter's start.** When the seller's start mapping names its idempotency header, the start is keyed on the commitment ID and sent again after a failure; without one it goes at most once, by design [measured, `examples/seller-adapter-core.ts:1535-1538`, `examples/seller-adapter-api.ts:485-486`].
@@ -1643,7 +1645,7 @@ The build is not started; it opens as its own task on Rafa's word.
 - **The planned webhook route is withdrawn.** A webhook would make every operator store a link from a seller's key to its URL (against D35), call out to addresses strangers chose, and still leave the seller to check the chain and cover a refusing operator.
 - **Build after Rafa's answer:** the follower and the finality check, the stream's repairs, then the guides; about 310,000 tokens [guessed].
 
-**Questions for Rafa:**
+**Questions put to Rafa, answered above:**
 1. Accept the stream, with the seller's chain check, as the funded push, and withdraw the planned `POST /v1/webhooks`?
 2. Is the chain check enough for "signed", or should each `hold.funded` on the stream also carry the operator's signed receipt?
 3. Reword N210's done-when to the stream, the chain check and the adapter's retried start call (ADR-0042, Consequences)?

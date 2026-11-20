@@ -5,7 +5,7 @@
 - **Depends on:** none. Touches the same ground as T-549 (schema v0.12 and the operators, open) and PR 714 (`setup.mjs deliver`, open); this task changes neither.
 - **Paths this task may touch:** `docs/decisions/ADR-0042-funded-notice.md` (new), `docs/decisions-today.md` (one entry), this file.
 - **Human gate:** no for the record. Rafa answers the decision before anything is built.
-- **Status:** review
+- **Status:** done
 - **Agent/session:** the T-573 session, 2026-11-19, branch `t-573-funded-push`, started by the coordinator session.
 - **Roadmap row:** N210
 - **Change kind:** 10, research and decisions.
@@ -55,4 +55,6 @@ Non-goals: no code, no schema change, no change to the site or the adapter.
 
 ## Handoff
 
-Done: the record. Not done: anything built. Resume: when Rafa answers D86, start PR 2 of ADR-0042's build plan (the follower and the chain read, after PR 714 merges); PR 3 can run beside it once PR 715 merges. Open questions: the three in D86.
+Done. Rafa decided D86 on 2026-11-20 ("Use the event feed and the chain read"): ADR-0042 is accepted, D86 is decided, ADR-0017 carries a note that the webhook route is withdrawn, and `site/ref/http-seller.txt` says where a seller learns its deal is funded. The record merged in PR 723; the acceptance in the pull request that closes this task.
+
+Not done, for new tasks: ADR-0042's build plan, PRs 2 to 4 (the follower and the chain read in `examples/` after PR 714; the stream's three repairs after PR 715; the other guides). The coordinator rewords row N210 and reserves those tasks. A site deploy that serves the new paragraph waits for Rafa. No open questions.

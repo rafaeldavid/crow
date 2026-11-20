@@ -1,12 +1,12 @@
 # ADR-0042: A seller hears of a funded hold on the event stream it opens
 
-- **Status:** Proposed, 2026-11-19. D86 in `docs/decisions-today.md` waits for Rafa. Nothing is built until he answers.
+- **Status:** Accepted, 2026-11-20 (D86). Rafa decided it on 2026-11-20: "How does a seller learn that the buyer's money is held? Use the event feed and the chain read". No webhook and no operator signature on each notice. Proposed on 2026-11-19.
 - **Date:** 2026-11-19
 - **Raised by:** T-573, roadmap row N210. Stage 2 of the roadmap asks that "the seller's system gets a signed, retried, idempotent "funded" push (webhook or event stream) with no polling".
 - **Research:** a research pass by a Fable max-effort agent on 2026-11-19, given `CLAUDE.md`, the documents below and the inventory in Context, not a conclusion. Its findings are folded into this record; the sources it read are named where they are used.
 - **Builds on:** ADR-0001 (neutrality), ADR-0005 (access by API, the escape hatch), ADR-0017 (the agent-ready API, which planned webhooks), ADR-0037 (the hosted seller adapter), D35 (rails, not a record-keeper).
-- **Amends:** ADR-0017, if accepted: its planned `POST /v1/webhooks` is withdrawn (section "Decision", point 5).
-- **Changes now:** no code, no schema, no route. This record, D86 and the task file.
+- **Amends:** ADR-0017: its planned `POST /v1/webhooks` is withdrawn (section "Decision", point 5).
+- **Changes at acceptance:** no code, no schema, no route. This record, D86, the task file, a note in ADR-0017, and one paragraph in `site/ref/http-seller.txt`, "Hear that the money is held". The build plan's pull requests follow as their own tasks.
 
 Labels: **measured** (read at the cited line at `origin/main` `46b590c6`, or run as cited on 2026-11-19 between 21:40 and 22:10 UTC), **documented** (a doc or published standard states it), **inferred**, **guessed**.
 
