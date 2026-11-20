@@ -57,6 +57,8 @@ Seconds are wall time on this machine for each beat, from opening its round to i
 
 Accepted so far: 2 of 2 (measured). The table closes at 5.
 
+**Builds (measured, discovery's `demo.build`):** runs 1 and 2 ran on operators at `c20ba52`, deployed 2026-11-19 21:13 UTC on both. Runs 3 to 5 wait for the deploy round of 2026-11-20 (main `254830bf`), so they measure the build a demo will use; each row names its build. The chain scheduled for 00:02 UTC never fired: the Mac slept, and no run started (measured, no run 3 log).
+
 **The deals and their panels (measured):**
 - Run 1, release `0xa66055182b03d8be6318547f225a75b869fb4283f6386618b9c2425391f0a016`. The primary's panel: deepseek-flash@2026-11-01 pass, claude-opus-5-5@2026-09-21 pass, deepseek-v4-pro@2026-11-01 pass. Decision accept.
 - Run 1, reject `0x45df3064aee1882889664559a48deef697daa8aa1204d0279253da7a646de45e`. The `rows` check failed; decision reject; no panel ran.
