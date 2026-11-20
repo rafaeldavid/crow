@@ -12,6 +12,13 @@
 // as any other unknown route (measured 2026-11-14, docs/tasks/T-451-security-headers.md). Cache-Control is untouched.
 // Bodies, statuses and every other header pass through as the World wrote them.
 
+/**
+ * Where the site serves security.txt (apps/site/worker.js, written by site/build.mjs); worker.ts redirects the API
+ * hostnames' security.txt there (T-574). Kept here, not in worker.ts: the Workers runtime refuses an entry module whose
+ * named exports are not handlers or Durable Object classes.
+ */
+export const SECURITY_TXT_URL = 'https://crow.direct/.well-known/security.txt';
+
 export const API_HEADERS: Readonly<Record<string, string>> = Object.freeze({
   'strict-transport-security': 'max-age=31536000; includeSubDomains',
   'x-content-type-options': 'nosniff',
