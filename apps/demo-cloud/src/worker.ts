@@ -17,7 +17,7 @@ import { PublicWorld, type LiveSettlement, type Via } from './world.js';
 import { KvFeedbackStore, type KvNamespace } from './feedback-store.js';
 import { admitted, clientKey, emptySegment, flooded, oversized } from './limits.js';
 import type { WorldStorage } from './storage.js';
-import { secured } from './headers.js';
+import { SECURITY_TXT_URL, secured } from './headers.js';
 
 // The few Workers runtime types used here, declared locally so the package needs no Workers type package.
 interface DurableObjectStorage extends WorldStorage {
@@ -237,8 +237,6 @@ export class World {
   }
 }
 
-/** Where the site serves security.txt (apps/site/worker.js, written by site/build.mjs). */
-export const SECURITY_TXT_URL = 'https://crow.direct/.well-known/security.txt';
 const SECURITY_TXT_PATH = '/.well-known/security.txt';
 
 export default {
