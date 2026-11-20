@@ -1008,6 +1008,13 @@ export class PublicWorld {
         },
       });
       await registerOwn(registrations, domain, a.keys.privateKey, { ...adj.registration(), pool: { terms: { ...POOL_TERMS } }, poolTermsHash: canonicalKeccak(POOL_TERMS), status: 'active' }, { label: a.label, start: meta.start, now: wholeSecond(now()) });
+      // T-574: each decision task runs at most one panel, so each runs live or scripted as a whole, retries included. Its
+      // size is the policy the deal bound, which may be another adjudicator's (T-574 red team L3).
+      const decide = adj.service.decideTask.bind(adj.service);
+      adj.service.decideTask = async (task) => {
+        const policy = (await registrations.policy(task.commitment.adjudication.policyHash)) ?? adj.registration().policy;
+        return panel.panel(task.role === 'appeal' ? policy.appealPanelSize : policy.panelSize, () => decide(task));
+      };
       adjudicators[a.role] = adj;
     }
     telemetry.rows('ar', registrations.count());
@@ -1271,8 +1278,8 @@ export class PublicWorld {
     const { panel } = this;
     for (const [role, a] of Object.entries(this.adjudicators) as [AdjudicatorRole, TestAdjudicator][]) {
       try {
-        // Live only when today's budget still holds a whole panel of this adjudicator's size, so a panel is
-        // live or scripted as a whole (a pass deciding several cases can still cross the line).
+        // Live only when today's budget still holds a whole panel of this adjudicator's size; each panel in the pass
+        // then chooses again as it starts (T-574), so a pass deciding several cases cannot mix one.
         if (panel.live) {
           const policy = a.registration().policy;
           panel.allowLive = (await panel.budget.remaining()) >= (role === 'appeal' ? policy.appealPanelSize : policy.panelSize);

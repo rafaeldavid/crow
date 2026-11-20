@@ -13,9 +13,11 @@
 //   if a judge's output was rejected by a filter, or the judges saw a sample  -> ESCALATE
 //   valid = verdicts where overall != "abstain"
 //   if len(valid) < policy.minValid or len(valid) == 0    -> ESCALATE
+//   if valid verdicts come from fewer than 2 families      -> ESCALATE (agg-4, T-570: no one-family decision)
 //   accept if pass x den >= num x valid and pass > fail and >= 2 pass families
 //             and sum(w*s) x 100 >= passThreshold x sum(w) x valid
 //   reject if fail x den >= num x valid and fail > pass
+//             and, when any seat gave no valid verdict, fails from >= 2 families   (agg-4, T-570)
 //   otherwise                                             -> ESCALATE
 //
 // All arithmetic is on integers (D18): thresholds are fractions compared by cross-multiplication,
@@ -24,11 +26,16 @@ import type { JudgeVerdict } from '@holdback/core';
 import type { CheckOutcome } from './checks/index.js';
 import type { Fraction, JudgmentRubric } from './terms.js';
 
-// agg-3: the flagged-appeal rule (L3-1, D27a). The policy hash binds this string; aggregate.test.ts pins a
-// digest of the decision table to it, so a change of semantics without a new version fails the tests.
-export const AGGREGATION_VERSION = 'agg-3';
+// agg-4: agg-3 (the flagged-appeal rule, L3-1, D27a) plus two rules for judge faults and abstentions (T-570, ADR-0043):
+// when they leave valid verdicts from one family only, the case escalates instead of being decided on them; and after
+// a fault, a reject needs fail verdicts from two families, as an accept always needs passes from two. agg-3 is kept, frozen, in kept/agg-3.ts for the deals bound to it (ADR-0036). The policy hash binds this
+// string; aggregate.test.ts pins a digest of the decision table to it, so a change of semantics without a new
+// version fails the tests.
+export const AGGREGATION_VERSION = 'agg-4';
 /** Cross-family agreement required for accept (threat T8). Fixed by the rule, not by policy. */
 export const MIN_PASS_FAMILIES = 2;
+/** Families the valid verdicts behind any accept or reject must come from (T-570). Fixed by the rule, not by policy. */
+export const MIN_DECISION_FAMILIES = 2;
 export const SCREEN_FLAGGED_REASON = 'screen flagged; see screen.signals';
 
 export interface PanelVerdict {
@@ -189,14 +196,33 @@ export function aggregate(input: AggregateInput): Aggregate {
   if (n < thresholds.minValid || n === 0) {
     return { decision: 'escalate', ...stats, reasons: [`${n} valid verdicts; the policy needs ${Math.max(1, thresholds.minValid)}`] };
   }
+  // T-570: a judge fault or an abstention can leave every valid verdict in one family. Neither an accept nor a reject
+  // rests on one family's verdicts (threat T8, the third litmus test), so the case escalates.
+  const validFamilies = new Set(valid.map((v) => v.family)).size;
+  if (validFamilies < MIN_DECISION_FAMILIES) {
+    return { decision: 'escalate', ...stats, reasons: [`${n} valid verdicts from ${validFamilies} model family; a decision needs verdicts from ${MIN_DECISION_FAMILIES}`] };
+  }
 
   const acceptShare = meets(pass.length, thresholds.acceptSupermajority, n) && pass.length > fail.length;
   if (acceptShare && passFamilies.length >= MIN_PASS_FAMILIES && scoreOk) {
     return { decision: 'accept', ...stats, reasons: [cap(`${pass.length} of ${n} valid verdicts pass, from ${passFamilies.length} families, score at or above ${rubric.passThreshold / 100}`)] };
   }
-  if (meets(fail.length, thresholds.rejectSupermajority, n) && fail.length > pass.length) {
+  // T-570 (red team M1): after a fault, the votes that carry a reject come from two families, as the passes behind an
+  // accept always must. A seat faulted when it returned no valid verdict (a timeout, an error, a filter abstention or a
+  // schema-valid abstain). With every seat answering, the rule is agg-3's: two fails from one family still outvote one
+  // pass from another, which is the existing design. Rule 1 above already escalates a one-family panel.
+  const faulted = n < input.verdicts.length;
+  const failFamilies = new Set(fail.map((v) => v.family)).size;
+  const rejectShare = meets(fail.length, thresholds.rejectSupermajority, n) && fail.length > pass.length;
+  if (rejectShare && (!faulted || failFamilies >= MIN_DECISION_FAMILIES)) {
     return { decision: 'reject', ...stats, reasons: [cap(`${fail.length} of ${n} valid verdicts fail`)] };
   }
-  const why = !acceptShare ? 'no supermajority' : passFamilies.length < MIN_PASS_FAMILIES ? `pass verdicts from ${passFamilies.length} family` : 'score below the pass threshold';
+  const why = rejectShare
+    ? `after a fault, fail verdicts from ${failFamilies} family`
+    : !acceptShare
+      ? 'no supermajority'
+      : passFamilies.length < MIN_PASS_FAMILIES
+        ? `pass verdicts from ${passFamilies.length} family`
+        : 'score below the pass threshold';
   return { decision: 'escalate', ...stats, reasons: [cap(`${pass.length} pass, ${fail.length} fail of ${n} valid: ${why}`)] };
 }

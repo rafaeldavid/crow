@@ -12,6 +12,7 @@
 import type { AdjudicatorPolicy, Hex32 } from '@holdback/core';
 import { err, ok, type Result } from '@holdback/core';
 import { aggregate, AGGREGATION_VERSION, preDecision, signedOutcome } from './aggregate.js';
+import * as agg3 from './kept/agg-3.js';
 import * as screen0 from './kept/screen-0.js';
 import { strideSample0 } from './kept/stride-0.js';
 import { strideSample1, TEMPLATE_PAIR, type StrideSampler, type TemplatePair } from './prompt.js';
@@ -53,7 +54,8 @@ export interface PolicyImpl {
 
 const SCREEN_1: ScreenImpl = { screen, screenTerms, stride: strideSample1 };
 const SCREEN_0: ScreenImpl = { screen: screen0.screen, screenTerms: screen0.screenTerms, stride: strideSample0 };
-const AGG_3: AggregationImpl = { parseVerdict, preDecision, aggregate, signedOutcome };
+const AGG_3: AggregationImpl = { parseVerdict, preDecision: agg3.preDecision, aggregate: agg3.aggregate, signedOutcome: agg3.signedOutcome };
+const AGG_4: AggregationImpl = { parseVerdict, preDecision, aggregate, signedOutcome };
 
 export const KEPT: KeptTable = {
   screens: new Map([
@@ -61,7 +63,10 @@ export const KEPT: KeptTable = {
     [SCREEN_VERSION, SCREEN_1],
   ]),
   templatePairs: [TEMPLATE_PAIR],
-  aggregations: new Map([[AGGREGATION_VERSION, AGG_3]]),
+  aggregations: new Map([
+    [agg3.AGGREGATION_VERSION, AGG_3],
+    [AGGREGATION_VERSION, AGG_4],
+  ]),
 };
 
 /** The newest version of each: what a new build offers as its default unless its kept-policies file says otherwise. */

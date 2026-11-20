@@ -7,6 +7,8 @@ import { generatePrivateKey } from 'viem/accounts';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { Agent } from '../../../examples/agent.ts';
 import { MemoryStorage } from './storage.js';
+import { SECURITY_TXT_URL } from './headers.js';
+import * as entry from './worker.js';
 import worker, { World, type Env } from './worker.js';
 
 type J = any; // eslint-disable-line @typescript-eslint/no-explicit-any
@@ -281,5 +283,46 @@ describe('the SETTLEMENT variable (T-313)', () => {
     const r = await object.fetch(new Request('http://127.0.0.1:8787/v1/status', { headers: { 'x-holdback-settlement': 'sim' } }));
     expect(r.status).toBe(200);
     expect(reads).toBeGreaterThan(0);
+  });
+});
+
+// T-574: SECURITY.md names the API hostnames in scope, and both answered 404 at /.well-known/security.txt. The Worker now
+// redirects there to the site's file, before any world is opened, so the site's build keeps the one Expires date.
+describe('security.txt on the API hostnames (T-574)', () => {
+  const untouched: Env = { WORLD: { idFromName: () => { throw new Error('no world for security.txt'); }, get: () => { throw new Error('no world for security.txt'); } }, NODE_INDEX: '0' };
+
+  it('a GET or a HEAD is redirected to the site\'s security.txt, with no world opened and no settlement needed', async () => {
+    for (const host of ['api.crow.direct', 'api2.crow.direct']) {
+      for (const method of ['GET', 'HEAD']) {
+        const r = await worker.fetch(new Request(`https://${host}/.well-known/security.txt`, { method }), untouched);
+        expect([r.status, r.headers.get('location')], `${method} ${host}`).toEqual([301, SECURITY_TXT_URL]);
+      }
+    }
+  });
+
+  it('names the file SECURITY.md points to, and redirects nothing else', async () => {
+    expect(readFileSync(new URL('../../../SECURITY.md', import.meta.url), 'utf8')).toContain(SECURITY_TXT_URL);
+    // A POST there, or another well-known path, goes on as before: here, to the missing-settlement refusal.
+    for (const r of [new Request('https://api.crow.direct/.well-known/security.txt', { method: 'POST', body: '{}' }), new Request('https://api.crow.direct/.well-known/security.txt.bak'), new Request('https://api.crow.direct/well-known/security.txt')]) {
+      expect((await worker.fetch(r, untouched)).status, `${r.method} ${r.url}`).toBe(500);
+    }
+  });
+});
+
+// T-574: PR 726 exported SECURITY_TXT_URL from this entry module, and the Workers runtime refused to start it under
+// wrangler dev ("Incorrect type for map entry 'SECURITY_TXT_URL': the provided value is not of type 'function or
+// ExportedHandler'"). The entry may export only its default handler and the Durable Object classes the configs bind.
+describe('the Worker entry module (T-574)', () => {
+  it('exports only the default handler and the Durable Object classes its wrangler configs name', () => {
+    const classes = new Set<string>();
+    for (const file of ['wrangler.op1.jsonc', 'wrangler.op2.jsonc']) {
+      const text = readFileSync(new URL(`../${file}`, import.meta.url), 'utf8');
+      for (const m of text.matchAll(/"class_name":\s*"([A-Za-z_$][\w$]*)"/g)) classes.add(m[1]!);
+    }
+    expect([...classes]).toEqual(['World']);
+    const named = Object.keys(entry).filter((k) => k !== 'default').sort();
+    expect(named).toEqual([...classes].sort());
+    for (const k of named) expect(typeof (entry as Record<string, unknown>)[k], k).toBe('function');
+    expect(typeof (entry.default as { fetch?: unknown }).fetch).toBe('function');
   });
 });
