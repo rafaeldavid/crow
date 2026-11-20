@@ -12,7 +12,7 @@ import { privateKeyToAccount } from 'viem/accounts';
 import { defaultPolicy, type KeptPolicies } from './policy.js';
 import type { RandomnessSource } from './randomness.js';
 import { loadRegistryFile } from './registry-file.js';
-import { Adjudicator, type JudgedStore, type KeptRegistry, type RunReport } from './service.js';
+import { Adjudicator, type AdjudicatorConfig, type JudgedStore, type KeptRegistry, type RunReport } from './service.js';
 import { SettlementAdapter, type ContentStore, type SettlementReads } from './simchain-adapter.js';
 
 export const FAKE_JUDGE_MARK = '[fake judge, no model ran]';
@@ -98,6 +98,10 @@ export interface TestAdjudicatorOptions {
   provider?: JudgeProvider;
   /** Accept sealed offers without reading them (AdjudicatorConfig.acceptSealedUnread). Default false: decline. */
   acceptSealedUnread?: boolean;
+  /** The host's own reason to decline a new deal as primary (AdjudicatorConfig.offerGate, T-574). */
+  offerGate?: AdjudicatorConfig['offerGate'];
+  /** The host's own reason not to convene a panel for a turn (AdjudicatorConfig.judgeGate, T-574). */
+  judgeGate?: AdjudicatorConfig['judgeGate'];
   /**
    * The fallback and appeal adjudicators it accepts offers with (AdjudicatorConfig.trustedAdjudicators). A world's
    * adjudicators trust each other; unset, it trusts only itself and declines every offer naming another.
@@ -160,6 +164,8 @@ export function testAdjudicator(o: TestAdjudicatorOptions): TestAdjudicator {
     provider: o.provider ?? markedFake(markerFake(o.judges ?? {})),
     settlement,
     ...(o.acceptSealedUnread ? { acceptSealedUnread: true } : {}),
+    ...(o.offerGate ? { offerGate: o.offerGate } : {}),
+    ...(o.judgeGate ? { judgeGate: o.judgeGate } : {}),
     ...(o.trustedAdjudicators ? { trustedAdjudicators: o.trustedAdjudicators } : {}),
     ...(o.judgedStore ? { judgedStore: o.judgedStore } : {}),
   });

@@ -1,9 +1,13 @@
 // The public demo's judge panel: live pinned models from two families when the three model variables are
-// set as Worker secrets, within a daily cap on live judge calls; scripted fake judges otherwise. The cap is the
-// spending limit for the public faucet: past it, panels are scripted for the rest of the UTC day, and their
-// verdicts carry the fake-judge mark, so a record never passes scripted output for a model's.
+// set as Worker secrets, within a daily cap on live judge calls; scripted fake judges otherwise, marked as such. The cap
+// is the spending limit for the public faucet. Past it, on Rafa's decision of 2026-11-20 ("Decline new judged deals
+// until following day, until we have sufficient Crow usage, then revisit"; T-574): Crow's primary declines a new deal
+// that can need a panel until the next UTC day (world.ts, `judgedDealGate`). A first-instance panel of a deal already in
+// flight abstains (`ABSTAIN_DETAIL`), so it escalates; an appeal panel past the budget is not convened (world.ts,
+// `appealPanelGate`), so the default outcome applies unless a panel can run before the deadline. A live world never gives
+// a scripted verdict. To revisit once Crow has sufficient usage.
 //
-// T-574: a panel is live or scripted as a whole, chosen once when it starts (`PanelConfig.panel`). Before, each call
+// T-574: a panel is live or abstaining as a whole, chosen once when it starts (`PanelConfig.panel`). Before, each call
 // chose, so a live seat's retry after an HTTP 503 could go to the scripted judge once the budget ran out, and that
 // scripted pass counted as the second model family (T-570's red team, H2).
 import { liveJudges, liveRegistry, LIVE_REGISTRY_URI, markedFake, markerFake, missingLiveEnv, placeholderRegistry, type JudgeUsage, type KeptRegistry, type TestAdjudicatorOptions } from '@holdback/adjudicator';
@@ -11,6 +15,15 @@ import type { WorldStorage } from './storage.js';
 
 export type JudgeProvider = NonNullable<TestAdjudicatorOptions['provider']>;
 type Registry = NonNullable<TestAdjudicatorOptions['registry']>;
+
+/** What each seat of a panel that cannot run live answers in a live world: no model ran, so the seat abstains (T-574). */
+export const ABSTAIN_DETAIL = "today's live judge budget is spent: no model ran, so this seat abstains";
+
+/** The next UTC midnight after `ms`, as an ISO timestamp: when the day's live judge budget resets. */
+export const nextUtcDay = (ms: number): string => {
+  const d = new Date(ms);
+  return new Date(Date.UTC(d.getUTCFullYear(), d.getUTCMonth(), d.getUTCDate() + 1)).toISOString();
+};
 
 /** Live judge calls a day across the whole demo, unless LIVE_JUDGE_CALLS_PER_DAY says otherwise. */
 export const DEFAULT_LIVE_CALLS_PER_DAY = 30;
@@ -123,19 +136,26 @@ export interface PanelConfig {
   kept: KeptRegistry[];
   /** The live-judging variables that are missing, by name (empty when live). */
   missing: string[];
-  /** What every adjudicator calls: the live models inside a panel chosen live, the scripted judges otherwise. */
+  /**
+   * What every adjudicator calls. A live world: the live models inside a panel chosen live, and otherwise an abstention
+   * (ABSTAIN_DETAIL), never a scripted verdict (T-574). A world without the live keys: the scripted judges.
+   */
   provider: JudgeProvider;
   budget: JudgeBudget;
   /** Set before each adjudicator pass: no panel in the pass is live unless it is set. */
   allowLive: boolean;
   /**
-   * Runs one panel (one decision task) live or scripted as a whole (T-574): live when `allowLive` is set and today's
+   * Runs one panel (one decision task) live or abstaining as a whole (T-574): live when `allowLive` is set and today's
    * budget still holds `2 * size` calls, chosen once before any call. Each seat calls once and retries at most once
    * after a transport error (packages/judgment, pipeline.ts), so a live panel never passes the day's cap. Every call inside it, a retry included, goes the same
-   * way, and a live call is counted. A call outside any panel is scripted. Panels run one at a time: a panel asked for
+   * way, and a live call is counted. A call outside any panel abstains. Panels run one at a time: a panel asked for
    * while another is open waits for it (T-574 red team L1), so no panel's end can change another's choice.
    */
   panel<T>(size: number, run: () => Promise<T>): Promise<T>;
+  /** T-574: whether today's budget still holds a whole live panel of `size` seats, retries included (`2 * size` calls). */
+  canRunLive(size: number): Promise<boolean>;
+  /** T-574: when the day's budget resets, the next UTC midnight. */
+  resumesAt(): string;
 }
 
 export interface PanelOptions {
@@ -155,10 +175,12 @@ export function panelConfig(o: PanelOptions): PanelConfig {
   const scripted = markedFake(markerFake());
   const live = o.judgeProvider ? { ok: true as const, value: o.judgeProvider } : liveJudges(o.env, { onUsage: (u) => budget.usage(u) });
   if (!live.ok) {
-    return { live: false, registry: placeholderRegistry(), registryUri: PLACEHOLDER_REGISTRY_URI, kept: [], missing: missingLiveEnv(o.env), provider: scripted, budget, allowLive: false, panel: (_size, run) => run() };
+    return { live: false, registry: placeholderRegistry(), registryUri: PLACEHOLDER_REGISTRY_URI, kept: [], missing: missingLiveEnv(o.env), provider: scripted, budget, allowLive: false, panel: (_size, run) => run(), canRunLive: async () => true, resumesAt: () => nextUtcDay(o.now()) };
   }
+  const abstain: JudgeProvider = { complete: async () => ({ kind: 'error', transport: false, detail: ABSTAIN_DETAIL }) };
+  const canRunLive = async (size: number) => (await budget.remaining()) >= 2 * size;
   /** The open panel's choice: undefined outside a panel. */
-  let mode: 'live' | 'scripted' | undefined;
+  let mode: 'live' | 'abstain' | undefined;
   /** The end of the last panel asked for: the next one starts after it. */
   let queue: Promise<unknown> = Promise.resolve();
   const cfg: PanelConfig = {
@@ -171,14 +193,14 @@ export function panelConfig(o: PanelOptions): PanelConfig {
     allowLive: false,
     provider: {
       complete: async (r) => {
-        if (mode !== 'live') return scripted.complete(r);
+        if (mode !== 'live') return abstain.complete(r);
         await budget.charge();
         return live.value.complete(r);
       },
     },
     panel: (size, run) => {
       const turn = queue.then(async () => {
-        mode = cfg.allowLive && (await budget.remaining()) >= 2 * size ? 'live' : 'scripted';
+        mode = cfg.allowLive && (await canRunLive(size)) ? 'live' : 'abstain';
         try {
           return await run();
         } finally {
@@ -188,6 +210,8 @@ export function panelConfig(o: PanelOptions): PanelConfig {
       queue = turn.catch(() => undefined);
       return turn;
     },
+    canRunLive,
+    resumesAt: () => nextUtcDay(o.now()),
   };
   return cfg;
 }

@@ -127,6 +127,17 @@ export interface AdjudicatorConfig {
    */
   acceptSealedUnread?: boolean;
   /**
+   * T-574: the host's own reason to decline a new deal as primary, asked after the service's own checks at acceptance
+   * and in `declines` (so an operator says it before anyone signs). The public demo declines a deal that needs a judge
+   * panel once its daily live-judge budget is spent. Unset, or null: no reason of the host's.
+   */
+  offerGate?: (c: DecisionTask['commitment']) => Promise<Problem | null>;
+  /**
+   * T-574: the host's own reason not to convene a panel of `size` seats for this turn, asked just before the panel runs
+   * and only when no judged result is kept. Refused, the turn is retried on each pass with no record. Unset, or null: run.
+   */
+  judgeGate?: (task: DecisionTask, size: number) => Promise<Problem | null>;
+  /**
    * The fallback and appeal adjudicators this service accepts an offer with (T-212). Since an overturn pays the price
    * from the first decider's bond (I-8), one actor as buyer, seller and appeal adjudicator could name this service as
    * primary, take its honest accept, file a zero-bond appeal and overturn it through its own appeal adjudicator. So an
@@ -508,7 +519,7 @@ export class Adjudicator {
   async #accept(c: DecisionTask['commitment']): Promise<Result<AdjudicatorAcceptance, Problem>> {
     const { adjudication } = c;
     if (adjudication.adjudicator.toLowerCase() !== this.address) return err(problem('not_your_turn', 'not the primary adjudicator'));
-    const declined = this.#offerProblem(c) ?? (await this.#referenceProblem(c));
+    const declined = this.#offerProblem(c) ?? (await this.#referenceProblem(c)) ?? (await this.#cfg.offerGate?.(c)) ?? null;
     if (declined) return err(declined);
     const unsigned: Omit<AdjudicatorAcceptance, 'signature'> = {
       type: 'AdjudicatorAcceptance',
@@ -570,7 +581,7 @@ export class Adjudicator {
    * (T-221 review). The fallback's cover and the appeal's timing are still checked at the turn. null: it would take it.
    */
   async declines(c: DecisionTask['commitment'], role: DecisionTask['role']): Promise<Problem | null> {
-    if (role === 'primary') return this.#offerProblem(c) ?? (await this.#referenceProblem(c));
+    if (role === 'primary') return this.#offerProblem(c) ?? (await this.#referenceProblem(c)) ?? (await this.#cfg.offerGate?.(c)) ?? null;
     const consented = c.adjudication.adjudicator.toLowerCase() === this.address;
     return this.#termsMismatch(c) ?? (await this.#turnProblem(c, role, { consented, cover: false, ahead: true })) ?? (await this.#runnable(c, role));
   }
@@ -1050,6 +1061,13 @@ export class Adjudicator {
         return err(problem('adjudicator_unavailable', `reference files unavailable from this adjudicator's store: ${describeUnavailable(loaded.unavailable)}${late ? ` (it did not answer within ${late.ms} ms)` : ''}; not judged, retrying (no record)`));
       }
       const references = loaded.references;
+      // T-574: the host may refuse to convene this panel (the public demo, at an appeal after an escalation, once its
+      // live budget is spent). Asked only when no judged draft is held, so it never discards a verdict: refused, the
+      // turn is retried on each pass with no record, and its deadline's path applies if it never runs.
+      if (!held.value) {
+        const gated = await this.#cfg.judgeGate?.(task, size);
+        if (gated) return err(gated);
+      }
       const run = held.value ? ok(held.value.draft) : await runPipeline({
         intake: intaken.value,
         acceptance: commitment.acceptance,

@@ -350,13 +350,23 @@ const offerRequest = (d: J, seller: Agent, buyer: Agent, extra: J = {}) => {
 
 /** The code-fix job from tools/sim/catalogue.json: a rubric deal a judge panel decides. */
 async function rubricDeal(urls: string[], diff: string): Promise<{ id: string; state: J; buyer: Agent }> {
+  const { offer, buyer, seller } = await rubricOffer(urls);
+  await buyer.waitFor(offer.id, ['AcceptedByAdjudicator']);
+  await buyer.agreeAndFund(offer.terms, 40_000_000n);
+  await seller.deliver(offer.terms, new TextEncoder().encode(diff));
+  const state = await buyer.waitFor(offer.id, ['Released', 'Refunded']);
+  return { id: offer.id, state, buyer };
+}
+
+/** A rubric offer between two fresh agents, offered and not yet accepted; `checksOnly`: the same deal with no rubric. */
+async function rubricOffer(urls: string[], { checksOnly = false } = {}) {
   const index = ((await (await fetch(`${urls[0]}/`)).json()) as J).demo;
   const buyer = freshAgent(urls);
   const seller = freshAgent(urls);
   for (const a of [buyer, seller]) await a.call('POST', '/v1/faucet', { address: a.address });
   const [primary, fallback, appeal] = index.adjudicators.map((a: J) => a.address);
   const offer = await seller.offer({
-    template: 'default',
+    template: checksOnly ? 'checks-only' : 'default',
     clubId: index.clubId,
     seller: seller.address,
     buyer: { address: buyer.address, encryptionPublicKey: buyer.encryptionPublicKey },
@@ -364,20 +374,16 @@ async function rubricDeal(urls: string[], diff: string): Promise<{ id: string; s
     price: { token: 'tUSD', amount: '30000000' },
     deliverable: { kind: 'other', description: 'Unified diff fixing the off-by-one in page()', format: 'text/plain' },
     checks: [{ id: 'hidden', type: 'hidden_characters_max', required: true, max: { tag: 0, bidi: 0, total: 0 } }],
-    rubric: {
+    ...(checksOnly ? {} : { rubric: {
       passThreshold: 300,
       criteria: [
         { id: 'fixes', description: 'The diff makes page() return exactly `size` items per full page.', weight: 70, anchors: { '0': 'Does not fix it', '2': 'Partly', '4': 'Fixes it' } },
         { id: 'minimal', description: 'No unrelated changes.', weight: 30, anchors: { '0': 'Rewrites everything', '2': 'Some noise', '4': 'Minimal' } },
       ],
-    },
+    } }),
     timing: { judgeWithinSec: 2, fallbackWithinSec: 2, appealWindowSec: 0, appealDecideSec: 2 },
   });
-  await buyer.waitFor(offer.id, ['AcceptedByAdjudicator']);
-  await buyer.agreeAndFund(offer.terms, 40_000_000n);
-  await seller.deliver(offer.terms, new TextEncoder().encode(diff));
-  const state = await buyer.waitFor(offer.id, ['Released', 'Refunded']);
-  return { id: offer.id, state, buyer };
+  return { offer, buyer, seller };
 }
 
 const DIFF = '--- a/page.js\n+++ b/page.js\n@@ -1 +1 @@\n-function page(items, n, size) { return items.slice(n * size, n * size + size - 1); }\n+function page(items, n, size) { return items.slice(n * size, n * size + size); }\n';
@@ -666,7 +672,7 @@ describe('live judges (T-028), with a stand-in for the models', () => {
     expect(r.notices).toEqual([...DEFAULTED, expect.stringMatching(/live judge panel/)]);
   });
 
-  it('judges a rubric deal live within the daily budget, then falls back to marked scripted judges', async () => {
+  it('judges a rubric deal live within the daily budget, then accepts no new rubric deal', async () => {
     const { calls, provider } = standIn();
     const { urls } = await serve({ judgeProvider: provider, liveCallsPerDay: 6 });
     const first = await rubricDeal(urls, DIFF);
@@ -680,18 +686,14 @@ describe('live judges (T-028), with a stand-in for the models', () => {
     }
     expect(((await (await fetch(`${urls[0]}/`)).json()) as J).demo.judges.liveCallsToday).toBe(3);
 
-    // Three calls left today: fewer than the 6 a panel of 3 may need with its retries, so the next panel is scripted and
-    // its record says so.
-    const second = await rubricDeal(urls, DIFF);
-    expect(second.state.escrowState).toBe('Released');
-    expect(calls).toHaveLength(3);
-    const scripted = (await second.buyer.call('GET', `/v1/commitments/${second.id}/judgment`)) as J;
-    for (const m of scripted.panel.members) expect(m.verdict.rationale).toMatch(/^\[fake judge, no model ran\]/);
+    // Three calls left today: fewer than the 6 a panel of 3 may need with its retries. Since T-574 a new rubric deal is
+    // declined until the next UTC day, never judged by scripted judges (the tests below).
+    expect(((await (await fetch(`${urls[0]}/`)).json()) as J).demo.judges.judgedDeals.accepting).toBe(false);
   }, 90_000);
 
   // T-574, from T-570's red team (H2): each call chose live or scripted, so a live seat's retry after an HTTP 503 went to
   // the scripted judge once the day's budget ran out, and that scripted pass counted as the second model family.
-  it('chooses live or scripted once per panel: a retry after a 503 stays live and is counted, and the next panel is scripted', async () => {
+  it('chooses live once per panel: a retry after a 503 stays live and is counted', async () => {
     const inner = markerFake();
     const calls: string[] = [];
     let refused = false;
@@ -714,12 +716,73 @@ describe('live judges (T-028), with a stand-in for the models', () => {
     expect([record.panel.members.length, marked(record)]).toEqual([3, 0]);
     expect(calls).toHaveLength(4);
     expect(((await (await fetch(`${urls[0]}/`)).json()) as J).demo.judges.liveCallsToday).toBe(4);
-    // Two calls left: the next panel is scripted as a whole, and every member says so.
-    const second = await rubricDeal(urls, DIFF);
-    const scripted = (await second.buyer.call('GET', `/v1/commitments/${second.id}/judgment`)) as J;
-    expect(marked(scripted)).toBe(scripted.panel.members.length);
-    expect(calls).toHaveLength(4);
   }, 90_000);
+
+  // T-574, Rafa's decision of 2026-11-20: "Decline new judged deals until following day, until we have sufficient Crow
+  // usage, then revisit." Once the day's live budget cannot hold a whole panel, Crow's primary declines a new deal that
+  // needs one, says until when, and still takes a checks-only deal.
+  it('past the budget, declines a new rubric offer until the next UTC day and says so; a checks-only offer is still accepted', async () => {
+    const { provider } = standIn();
+    const { urls } = await serve({ judgeProvider: provider, liveCallsPerDay: 6 });
+    expect(((await (await fetch(`${urls[0]}/`)).json()) as J).demo.judges.judgedDeals).toEqual({ accepting: true, resumesAt: null });
+    await rubricDeal(urls, DIFF);
+    const index = ((await (await fetch(`${urls[0]}/`)).json()) as J).demo;
+    // The next UTC midnight after the world's own day, not the test's clock.
+    const next = new Date(Date.parse(`${index.judges.day}T00:00:00Z`) + 86_400_000).toISOString();
+    expect(index.judges.judgedDeals).toEqual({ accepting: false, resumesAt: next });
+    const { offer, seller } = await rubricOffer(urls);
+    let state: J;
+    for (const end = Date.now() + 10_000; Date.now() < end; await new Promise((r) => setTimeout(r, 100))) {
+      state = await seller.call('GET', `/v1/commitments/${offer.id}`);
+      if (state.notices?.some((n: string) => /declined this offer/.test(n))) break;
+    }
+    expect(state!.escrowState).toBe('Offered');
+    const said = state!.notices.join(' ');
+    expect(said).toMatch(/declined this offer: judge_budget_spent:/);
+    expect(said).toContain(`retry after ${next}`);
+    // The same reason before anyone signs: the offer's own notices at prepare.
+    expect(offer.state.notices.join(' ')).toMatch(/judge_budget_spent/);
+    // A checks-only offer whose checks are all required is accepted.
+    const d = await discovery(urls);
+    const checksOnly = await post(`${urls[0]}/v1/prepare/offer`, offerRequest(d, freshAgent(urls), freshAgent(urls)));
+    expect(((await checksOnly.json()) as J).notices.join(' ')).not.toMatch(/judge_budget_spent/);
+    const plain = await rubricOffer(urls, { checksOnly: true });
+    expect((await plain.buyer.waitFor(plain.offer.id, ['AcceptedByAdjudicator'], 10_000)).escrowState).toBe('AcceptedByAdjudicator');
+  }, 90_000);
+
+  // T-574: a judged deal accepted while the budget held, judged after it ran out, never gets a scripted verdict. Its
+  // panel abstains, so the terms' path for an undecided panel applies: the primary escalates, the appeal adjudicator
+  // does not convene a panel it cannot run live (red team M1), and the deal ends in the default outcome. No re-roll.
+  it('a judged deal in flight when the budget runs out: its panel abstains, it escalates, and it ends in the default outcome', async () => {
+    const { calls, provider } = standIn();
+    const { urls } = await serve({ judgeProvider: provider, liveCallsPerDay: 6 });
+    const a = await rubricOffer(urls);
+    const b = await rubricOffer(urls);
+    for (const x of [a, b]) await x.buyer.waitFor(x.offer.id, ['AcceptedByAdjudicator']);
+    for (const x of [a, b]) await x.buyer.agreeAndFund(x.offer.terms, 40_000_000n);
+    await a.seller.deliver(a.offer.terms, new TextEncoder().encode(DIFF));
+    expect((await a.buyer.waitFor(a.offer.id, ['Released', 'Refunded'])).escrowState).toBe('Released');
+    expect(calls).toHaveLength(3);
+    await b.seller.deliver(b.offer.terms, new TextEncoder().encode(DIFF));
+    // The primary's abstaining panel escalates; the appeal adjudicator convenes no panel and signs nothing.
+    const escalated = await b.buyer.waitFor(b.offer.id, ['Escalated', 'Released', 'Refunded'], 40_000);
+    expect(escalated.escrowState).toBe('Escalated');
+    // Past the escalation's window the default outcome applies. On SimChain a party sends it; on Sepolia the operators do.
+    const due = Date.parse(escalated.deadlines['appealDecideBy']!);
+    await new Promise((r) => setTimeout(r, Math.max(0, due - Date.now()) + 1_500));
+    // Still Escalated: the appeal adjudicator decided nothing on an abstaining panel.
+    expect(((await b.buyer.call('GET', `/v1/commitments/${b.offer.id}`)) as J).escrowState).toBe('Escalated');
+    await b.buyer.call('POST', `/v1/commitments/${b.offer.id}/triggers/default`, {});
+    const end = await b.buyer.waitFor(b.offer.id, ['Defaulted', 'Refunded', 'Released'], 20_000);
+    expect(['Defaulted', 'Refunded']).toContain(end.escrowState);
+    expect(calls).toHaveLength(3);
+    const record = (await b.buyer.call('GET', `/v1/commitments/${b.offer.id}/judgment`)) as J;
+    expect(record.aggregate.decision).toBe('escalate');
+    for (const m of record.panel.members) {
+      expect(m.status).toBe('error');
+      expect(JSON.stringify(m)).not.toMatch(/fake judge/);
+    }
+  }, 120_000);
 
   it('keeps the count across a rebuild from storage', async () => {
     const storage = new MemoryStorage();
