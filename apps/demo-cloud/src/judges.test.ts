@@ -1,4 +1,4 @@
-// T-574, from T-570's red team (H2): the demo's panel is live or scripted as a whole, chosen once as it starts. Before,
+// T-574, from T-570's red team (H2): the demo's panel is live or abstaining as a whole, chosen once as it starts. Before,
 // each call chose, so a panel could mix live and scripted judges: a live seat's retry after the budget ran out, or a
 // second panel in the same pass that started with budget for one seat. A scripted pass then counted as a model family.
 import { FAKE_JUDGE_MARK } from '@holdback/adjudicator';
@@ -21,10 +21,10 @@ function world(perDay: number) {
     judgeProvider: { complete: async (r) => (live.push(r.judgeId), { kind: 'ok', text: verdict }) },
   });
   cfg.allowLive = true;
-  /** How each answer was made: live (the stand-in's text) or scripted (the fake-judge mark). */
+  /** How each answer was made: live (the stand-in's text), scripted (the fake-judge mark), or `error` (an abstaining seat: since T-574 a live world never scripts). */
   const how = async (r: Request) => {
     const a = await cfg.provider.complete(r);
-    return a.kind === 'ok' && a.text.includes(FAKE_JUDGE_MARK) ? 'scripted' : a.kind === 'ok' && a.text === verdict ? 'live' : a.kind;
+    return a.kind === 'ok' && a.text.includes(FAKE_JUDGE_MARK) ? 'error' : a.kind === 'ok' && a.text === verdict ? 'live' : a.kind;
   };
   return { cfg, live, how };
 }
@@ -38,30 +38,30 @@ describe('the demo panel chooses live or scripted once (T-574)', () => {
     expect((await cfg.budget.used()).calls).toBe(4);
     // 2 calls left, fewer than the 6 a panel of 3 may need with its retries.
     const second = await cfg.panel(3, () => Promise.all(seats.map((s) => how(request(s)))));
-    expect(second).toEqual(['scripted', 'scripted', 'scripted']);
+    expect(second).toEqual(['error', 'error', 'error']);
     expect(live).toHaveLength(4);
   });
 
-  it('a second panel in the same pass, with budget for fewer seats than it has, is scripted as a whole', async () => {
+  it('a second panel in the same pass, with budget for fewer seats than it has, abstains as a whole', async () => {
     const { cfg, live, how } = world(8);
     expect(await cfg.panel(3, () => Promise.all(seats.map((s) => how(request(s)))))).toEqual(['live', 'live', 'live']);
     // Five calls left, fewer than the 6 a panel of 3 may need with its retries: scripted as a whole, so it can never
     // start live and finish scripted.
-    expect(await cfg.panel(3, () => Promise.all(seats.map((s) => how(request(s)))))).toEqual(['scripted', 'scripted', 'scripted']);
+    expect(await cfg.panel(3, () => Promise.all(seats.map((s) => how(request(s)))))).toEqual(['error', 'error', 'error']);
     expect([live.length, await cfg.budget.remaining()]).toEqual([3, 5]);
   });
 
-  it('a call outside any panel, or in a pass not allowed live, is scripted and costs nothing', async () => {
+  it('a call outside any panel, or in a pass not allowed live, abstains and costs nothing', async () => {
     const { cfg, live, how } = world(30);
-    expect(await how(request('claude-a'))).toBe('scripted');
+    expect(await how(request('claude-a'))).toBe('error');
     cfg.allowLive = false;
-    expect(await cfg.panel(3, () => how(request('claude-a')))).toBe('scripted');
+    expect(await cfg.panel(3, () => how(request('claude-a')))).toBe('error');
     expect([live.length, (await cfg.budget.used()).calls]).toEqual([0, 0]);
   });
 
   it('the choice ends with the panel, also when the panel throws', async () => {
     const { cfg, how } = world(30);
     await expect(cfg.panel(3, async () => { throw new Error('a store read failed'); })).rejects.toThrow('a store read failed');
-    expect(await how(request('claude-a'))).toBe('scripted');
+    expect(await how(request('claude-a'))).toBe('error');
   });
 });

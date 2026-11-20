@@ -27,7 +27,7 @@ describe('red team: the demo panel choice (T-574)', () => {
     cfg.allowLive = true;
     const how = async (r: Request) => {
       const a = await cfg.provider.complete(r);
-      return a.kind === 'ok' && a.text.includes(FAKE_JUDGE_MARK) ? 'scripted' : 'live';
+      return a.kind === 'ok' && a.text.includes(FAKE_JUDGE_MARK) ? 'scripted' : a.kind === 'ok' ? 'live' : a.kind;
     };
     let release!: () => void;
     const gate = new Promise<void>((r) => (release = r));

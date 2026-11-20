@@ -127,6 +127,12 @@ export interface AdjudicatorConfig {
    */
   acceptSealedUnread?: boolean;
   /**
+   * T-574: the host's own reason to decline a new deal as primary, asked after the service's own checks at acceptance
+   * and in `declines` (so an operator says it before anyone signs). The public demo declines a deal that needs a judge
+   * panel once its daily live-judge budget is spent. Unset, or null: no reason of the host's.
+   */
+  offerGate?: (c: DecisionTask['commitment']) => Promise<Problem | null>;
+  /**
    * The fallback and appeal adjudicators this service accepts an offer with (T-212). Since an overturn pays the price
    * from the first decider's bond (I-8), one actor as buyer, seller and appeal adjudicator could name this service as
    * primary, take its honest accept, file a zero-bond appeal and overturn it through its own appeal adjudicator. So an
@@ -508,7 +514,7 @@ export class Adjudicator {
   async #accept(c: DecisionTask['commitment']): Promise<Result<AdjudicatorAcceptance, Problem>> {
     const { adjudication } = c;
     if (adjudication.adjudicator.toLowerCase() !== this.address) return err(problem('not_your_turn', 'not the primary adjudicator'));
-    const declined = this.#offerProblem(c) ?? (await this.#referenceProblem(c));
+    const declined = this.#offerProblem(c) ?? (await this.#referenceProblem(c)) ?? (await this.#cfg.offerGate?.(c)) ?? null;
     if (declined) return err(declined);
     const unsigned: Omit<AdjudicatorAcceptance, 'signature'> = {
       type: 'AdjudicatorAcceptance',
@@ -570,7 +576,7 @@ export class Adjudicator {
    * (T-221 review). The fallback's cover and the appeal's timing are still checked at the turn. null: it would take it.
    */
   async declines(c: DecisionTask['commitment'], role: DecisionTask['role']): Promise<Problem | null> {
-    if (role === 'primary') return this.#offerProblem(c) ?? (await this.#referenceProblem(c));
+    if (role === 'primary') return this.#offerProblem(c) ?? (await this.#referenceProblem(c)) ?? (await this.#cfg.offerGate?.(c)) ?? null;
     const consented = c.adjudication.adjudicator.toLowerCase() === this.address;
     return this.#termsMismatch(c) ?? (await this.#turnProblem(c, role, { consented, cover: false, ahead: true })) ?? (await this.#runnable(c, role));
   }
