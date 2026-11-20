@@ -18,6 +18,7 @@
     "snap": "tsc -b packages/testkit && node packages/testkit/dist/cli.js",
     "load": "tsc -b packages/settlement && node packages/settlement/dist/sim/load.js",
     "demo": "tsc -b apps/demo && node apps/demo/dist/bin.js",
+    "demo:sepolia": "node examples/demo-sepolia.ts",
     "sim": "tsc -b apps/operator && node apps/operator/dist/sim-bin.js",
     "example": "tsc -b examples && node examples/run.ts",
     "audit-deal": "tsc -b examples && node examples/audit-deal.ts",
