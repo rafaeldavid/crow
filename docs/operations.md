@@ -307,6 +307,28 @@ The maintainers keep the notes on agent sessions and permission prompts privatel
 
 Each entry records one deploy as it ran: the date and time in UTC, the commit, each Worker's new version and its rollback target, and what was measured after it. The deploy scripts print the entry's first line (`pnpm demo-cloud:deploy`, `pnpm site:deploy`, `node apps/test-agents/scripts/deploy.mjs`). The values are true for their date: for what runs now, read "What is live" above and each node's discovery.
 
+### Schema v0.12 and the changes merged overnight (deployed 2026-11-20, 07:28 to 07:35 UTC)
+
+Rafa's word: "Yes, deploy". The round puts live schema v0.12 with a contract buyer and seller (pull requests 713 and 715), the pipeline fixes (722), the service keeping the panel's result (729), the demo judges live or scripted as a whole (728), three small operator fixes (726: a read ceiling before a 413, one rule for "no appeal ground", `security.txt` on the API hostnames), agg-4 as a kept version that is not the default (730), the clearer schema error (732) and, on the site, the telemetry section (718) and the new `setup.mjs` with the deliver command (714, re-pinned once with 732).
+
+**The first attempt failed and rolled back on its own.** It ran from a clean worktree at `b136a02c`, whose parent's own checks on `main` had passed.
+
+**Deploy 2026-11-20 06:33 UTC, commit `b136a02` on a detached HEAD: FAIL, the smoke deal did not end Released within 180 s.** holdback-op1 `679d084a-e906-4a8f-b35a-ff49ddb595e8` (rollback target `dae6100a-a9a5-40d9-83be-0fa5089fc60b`, rolled back), holdback-op2 `c7fa57ae-e16a-4b26-8a7f-7a021773c5fe` (rollback target `761b9dbb-a2ac-4176-aedf-bf5ba3b96306`, rolled back).
+
+The smoke deal stalled after the faucet's mint, which landed on chain at 06:35:12 UTC [reported by the diagnosis agent]. One cause was found and reproduced: pull request 726 had exported `SECURITY_TXT_URL` from the Worker's entry module, and workerd refuses a named export that is not a handler or a class, so `pnpm demo-cloud:e2e` failed in 4 s on `main` [measured by T-574's session]. Production accepted the upload, so whether that export alone stalled the live smoke deal is not known; the operators' Workers logs for those minutes were not readable with the session token (403 on the telemetry query) [measured]. The fix, pull request 734 (T-574, merged as `db8be818`), moves the constant to `headers.ts` and adds a test that fails when the entry exports anything but its default handler and the Durable Object classes its wrangler configs name. CI does not run `pnpm demo-cloud:e2e`; the coordinator ran it in the deploy worktree before the retry: it passed in 28 s [measured].
+
+**The retry, from a clean worktree at `db8be818`, after `main`'s own checks passed there (every check passed or skipped), with `wrangler tail` on both operators beside it.**
+
+**Deploy 2026-11-20 07:28 UTC, commit `db8be81` on a detached HEAD: pass.** holdback-op1 `4087b4a7-8d75-4dd2-b219-0e77048be02f` (rollback target `dae6100a-a9a5-40d9-83be-0fa5089fc60b`), holdback-op2 `204f24bb-c8b4-4e04-a2f6-39eab9905d1d` (rollback target `761b9dbb-a2ac-4176-aedf-bf5ba3b96306`). Smoke deal `0x252292f16db1a99775ef717b128fdce05ef666ba53093cbd83a6361c2d90120f` Released in 49 s, against commit `db8be81` (both nodes' discovery named it 282 s after /v1/status answered).
+
+**Test seller deploy 2026-11-20 07:34 UTC, commit `db8be81`: pass.** crow-test-agents `b78888a8-029f-4808-82d1-b3a6aa847cf8` (rollback target `80b7d270-6218-40e2-bcee-175952947768`).
+
+**Site deploy 2026-11-20 07:35 UTC, commit `db8be81` on a detached HEAD: pass.** crow-site `440d6785-fec5-4d37-aa10-a798ab1ac347` (rollback target `0b288408-7a56-47f9-95fd-40cff9f81dd4`).
+
+Afterwards [measured at about 07:37 UTC]: both nodes' discovery named `db8be818` with schema `0.12`; `/.well-known/security.txt` on both API hostnames answered 301 to `https://crow.direct/.well-known/security.txt`, which serves the contact; a 1.2 MB POST to `/v1/feedback` answered 413 on both; `try.mjs`, `try-sell.mjs`, `try-judged.mjs`, `try-reclaim.mjs` and `preflight.mjs` match their SHA-256 in `llms.txt`, and `setup.mjs` matches the hash `setup.txt` lists (`19234ae2…`). The tails saw 282 events and no exception; 2 events on holdback-op1 ended `canceled`. A judged deal's panel labelled live was not checked in this round; the demo script's runs check it.
+
+**Not deployed in this round:** the two hosted sellers (no change since the cutover touches `apps/hosted-sellers` or the seller adapter), and agg-4 as the default aggregation, which is a second deploy on Rafa's word.
+
 ### The day's merged changes after the contract cutover (deployed 2026-11-19, 20:50 to 21:13 UTC)
 
 Rafa's words for these were "Yes, go ahead and deploy when ready" and "Remember you need to redeploy everything once this round of updates is complete". The coordinator ran each script from a clean worktree of `main`, after `pnpm install --frozen-lockfile` and `pnpm build`, in two rounds. Each round ran at a commit whose own checks on `main` had all passed [measured].
