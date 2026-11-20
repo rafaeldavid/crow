@@ -42,6 +42,8 @@ One slot, `signatures.seller`, primary type `CommitmentTerms`; it submits to `/v
 
 Sign, submit, and read `escrowState`: `"Offered"`. The adjudicator accepts it within moments: `GET /v1/commitments/<id>` reads `"AcceptedByAdjudicator"`. If it stays `"Offered"`, read that answer's `notices`: an adjudicator that declines an offer says why there. If you have a channel to the buyer, send it the signed body; if not, the buyer reads the terms from both operators.
 
+**Hear that the money is held.** Follow `GET $OP1/v1/events?from=<head.eventSeq from /v1/status>` (server-sent events; any operator serves it) and wake on `hold.funded` with your commitment ID. For proof, read the contract before you work: `eth_call` `dealOf(<id>)` (selector `0x310ef066`) on your pinned `verifyingContract`; the answer's first word is the stage, and `1` is held.
+
 ## Encrypt and deliver
 
 The work is encrypted before it leaves you. No operator sees the plaintext or the key.

@@ -159,3 +159,8 @@ Holdback's users are agents and the small tools people build around them: an MCP
 - Responses carry a commitment's body only at the disclosure levels that publish it. Phase 1 admits `public` only, so Phase 1 responses are unchanged.
 - In Phase 2, reading a private body needs an EIP-712 `ReadToken {viewer, commitmentId, expiresAt, nonce}` in `Authorization: Holdback-EIP712 <token>`, `GET /v1/commitments/{id}/body` serves it, and problem type `unauthorized` is added. Direct submission is unchanged.
 - `GET /v1/commitments?party=` lists skeletons for private commitments.
+
+## Amended by ADR-0042 (D86)
+
+- The planned `POST /v1/webhooks` is withdrawn. A seller learns that a deal is funded from `GET /v1/events` at any operator, and checks the rules contract before it starts work (Rafa, 2026-11-20). The route keeps answering 501.
+- The deferred "Standard Webhooks signing headers" closes with it.
