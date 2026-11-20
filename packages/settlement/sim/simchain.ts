@@ -20,6 +20,7 @@ import {
   MAINNET_CHAIN_IDS,
   contractSignerRule,
   recoversFrom,
+  standingApproval,
   mulBps,
   offer,
   postedDeliveryHash,
@@ -90,14 +91,14 @@ export interface Genesis {
 }
 
 /**
- * A contract account on SimChain. `wallet`: answers yes to its owner key's 64- or 65-byte signature over the digest,
- * as the test wallet SwitchWallet answers in its honest mode (contracts/test/crosscheck/ContractSigners.sol).
+ * A contract account on SimChain.
+ * - `wallet`: answers yes to its owner key's 64- or 65-byte signature over the digest, as the test wallet SwitchWallet
+ *   answers in its honest mode (contracts/test/crosscheck/ContractSigners.sol).
+ * - `standing_seller`: a standing seller's contract (ADR-0040 §1): its key's own 64- or 65-byte signatures, and a take or
+ *   a standing delivery of a template the key signed, decided by core's standingApproval. SimChain runs no EVM, so its
+ *   blob is the template in JSON (core's encodeSimStandingSignature), and the digest is SimChain's own domain's.
  */
-export interface SimContract {
-  address: Address;
-  kind: 'wallet';
-  owner: Address;
-}
+export type SimContract = { address: Address; kind: 'wallet'; owner: Address } | { address: Address; kind: 'standing_seller'; key: Address; revoked?: Hex32[]; retired?: boolean };
 
 export const DEFAULT_EXPIRY_MARGIN_SEC = 86_400;
 
@@ -304,7 +305,13 @@ export class SimChain implements Settlement {
       code: async (a) => (this.contracts.has(lc(a)) ? SIM_CODE : '0x'),
       isValidSignature: async (a, digest, signature) => {
         const c = this.contracts.get(lc(a));
-        return c?.kind === 'wallet' ? recoversFrom(digest, signature, c.owner) : false;
+        if (c?.kind === 'wallet') return recoversFrom(digest, signature, c.owner);
+        if (c?.kind === 'standing_seller') {
+          const n = (signature.length - 2) / 2;
+          if (n === 64 || n === 65) return recoversFrom(digest, signature, c.key);
+          return standingApproval(c, this.domain, this.genesis.chainId, this.now(), digest, signature);
+        }
+        return false;
       },
     });
   }

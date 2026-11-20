@@ -24,6 +24,7 @@ import {
   signMessage,
   trimTrailingSlashes,
   verifyCoSigned,
+  verifyTerms,
   type AcceptanceSpec,
   type Address,
   type AnyCommitment,
@@ -374,11 +375,22 @@ function wholeSeconds<T>(v: T): T {
   return v;
 }
 
-/** The address whose write budget an operation spends, when it names one. */
+/**
+ * A take of a standing offer (ADR-0040 §1): an offer whose seller signature is not a key's 64 or 65 bytes, so a contract
+ * approved it for whoever filled it. The seller never saw this buyer, so the buyer posts it (T-549).
+ */
+export function isTake(c: { signatures?: { seller?: string } }): boolean {
+  const sig = c.signatures?.seller;
+  if (typeof sig !== 'string') return false;
+  const bytes = (sig.length - 2) / 2;
+  return bytes !== 64 && bytes !== 65;
+}
+
+/** The address whose write budget an operation spends, when it names one. A take spends its buyer's, never the seller's (ADR-0040 §9). */
 function signerOf(op: Operation): string | undefined {
   switch (op.kind) {
     case 'offer':
-      return op.commitment.seller;
+      return isTake(op.commitment) ? op.commitment.buyer : op.commitment.seller;
     case 'hold':
       return op.agree.buyer;
     case 'acceptance':
@@ -750,6 +762,7 @@ export class Operator {
       const otherToken = tokenRefusal(this.o.token, op.commitment, op.kind === 'hold' ? 'commitment.' : '');
       if (otherToken) fail(otherToken.type, otherToken.detail, { field: otherToken.field! });
     }
+    if (!dryRun && (op.kind === 'offer' || op.kind === 'hold') && isTake(op.commitment)) await this.takeRule(op.commitment, op.kind === 'offer');
     const signer = signerOf(op);
     const signerBucket = signer ? `w:${lc(signer)}` : undefined;
     if (signerBucket) this.admit(signerBucket, budget);
@@ -773,6 +786,22 @@ export class Operator {
       if (r.status < 300 && signerBucket) this.transfer(client, signerBucket);
       return r;
     });
+  }
+
+  /**
+   * A take's two rules (ADR-0040 §7, §9; T-549), before any budget is spent or anything is relayed:
+   * - a take is a public deal: the seller contract fixes `public`, and this node refuses any other level;
+   * - a take posted as an offer carries the buyer's own signature over its terms (`signatures.buyer`), checked by the
+   *   settlement layer's contract-signer rule, so the write is charged to that buyer and nobody spends another address's
+   *   budget (`attack.take-flood-spends-seller-budget`, `attack.take-flood-names-a-victim-buyer`). A hold carries the
+   *   buyer's Agree, which the settlement layer checks.
+   */
+  private async takeRule(c: AnyCommitment, offer: boolean): Promise<void> {
+    if (c.disclosure.level !== 'public') fail('invalid_terms', `a take of a standing offer is a public deal (ADR-0040 §7); this one's disclosure is ${c.disclosure.level}`, { field: 'disclosure.level' });
+    if (!offer) return;
+    const by = c.signatures?.buyer;
+    if (!by) fail('invalid_terms', "a take of a standing offer is posted by its buyer: sign the terms as the buyer and send the signature as signatures.buyer, so this node charges the write to you, not to the seller", { field: 'signatures.buyer' });
+    if (!(await verifyTerms(this.domain, c, by as `0x${string}`, c.buyer, this.o.settlement.signerCheck?.()))) fail('invalid_signature', "signatures.buyer is not the buyer's signature over these terms", { field: 'signatures.buyer' });
   }
 
   /**

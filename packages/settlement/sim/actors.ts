@@ -138,6 +138,8 @@ export interface DealOptions {
   club: Club;
   /** Distinguishes several deals between the same parties. */
   tag?: string;
+  /** Fields that replace the built terms before the ID is taken: a take's (T-549). */
+  over?: Partial<CommitmentTerms>;
 }
 
 /** An operator fee for Deal.agreeAndFund (ADR-0023). */
@@ -205,6 +207,7 @@ export class Deal {
       buyerEncryptionPublicKey: b64url(keccak256(stringToBytes(`buyer-key/${tag}`))),
       nonce: keccak256(stringToBytes(`terms/${tag}/${now}`)),
       createdAt: now,
+      ...options.over,
     };
     this.id = commitmentId(this.terms);
     this.seed = keccak256(stringToBytes(`seed/${this.id}`));
