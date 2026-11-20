@@ -536,6 +536,14 @@ export class Adjudicator {
     if (isSealed(c) && !this.#cfg.acceptSealedUnread) {
       return problem('adjudicator_unavailable', `${this.#cfg.name} cannot open sealed terms yet (ADR-0024, T-207): it declines private and judgment offers rather than accept a deal it could not judge; offer at disclosure public`);
     }
+    // ADR-0040 §6 (T-549): an accept wraps the content key to the buyer's encryption key, so a key that does not decode
+    // could never carry it. Checked at acceptance, before any work is done for the deal, since anyone can compose a take.
+    try {
+      // wrapKey also refuses a low-order point, which decodes (red team of PR 736, L2).
+      wrapKey(ContentKey.fromBytes(new Uint8Array(32).fill(1)), decodePublicKey(c.buyerEncryptionPublicKey));
+    } catch {
+      return problem('invalid_terms', `the buyer's encryption key in the terms does not decode as an X25519 public key, so an accept could never carry the buyer's key; ${this.#cfg.name} declines the offer (attack.take-with-bad-buyer-key)`);
+    }
     // T-212: an untrusted appeal adjudicator could overturn this service's honest decision and take the price from its
     // bond; an untrusted fallback is declined on the same footing.
     for (const [role, who] of [['fallback', adjudication.fallbackAdjudicator], ['appeal', adjudication.appealAdjudicator]] as const) {

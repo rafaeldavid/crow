@@ -16,6 +16,7 @@ import {
   typedTermsOf,
   type UnsignedMessage,
 } from './eip712.js';
+import * as standing from './standing.js';
 import { panelSeed } from './state.js';
 import type { Address, CommitmentTerms, Delivery, Hex32 } from './types.js';
 
@@ -201,4 +202,35 @@ describe('standing offer vectors (StandingOfferVectors.t.sol)', () => {
   it.each(Object.keys(standingPins))('core computes the pinned %s', (name) => {
     expect(standingValues[name]).toBe(standingPins[name]);
   });
+});
+
+// T-549: core's own standing-offer functions (standing.ts) give the same pins from the template in JSON.
+describe('standing.ts gives the standing offer vectors from the template in JSON (T-549)', () => {
+  const template: standing.StandingOffer = standing.templateFrom(terms, {
+    rules: VERIFYING,
+    expiresAt: new Date(1_795_000_000_000).toISOString().replace('.000Z', 'Z'),
+    offerId: 'standing-offer-vectors',
+    delivery: { ciphertext: delivery.ciphertext, plaintextSha256: delivery.plaintextSha256, plaintextMime: delivery.plaintextMime, encryptedKeys: delivery.encryptedKeys, submittedAt: delivery.submittedAt },
+  });
+  const { buyer, buyerPaymentAddress, buyerEncryptionPublicKey, createdAt } = terms;
+  const fillOf: standing.TakeFill = { buyer, buyerPaymentAddress, buyerEncryptionPublicKey, nonceSeed: fill('44'), createdAt };
+  const th = standing.templateHash(template);
+  const take = standing.takeTerms(template, fillOf, SELLER_CONTRACT);
+  const ownValues: Record<string, Hex32> = {
+    templateHash: th,
+    templateDigest: standing.templateDigest(template, SELLER_CONTRACT, 31337),
+    takeNonce: standing.takeNonce(th, fill('44')),
+    takeCommitmentId: commitmentId(take),
+    takeTermsDigest: termsDigest(domain, take),
+    takeDeliveryHash: deliveryHash({ ...standing.standingDeliveryFor(template, commitmentId(take))!, signature: '0x' }),
+  };
+  it.each(Object.keys(standingPins).filter((k) => k in ownValues))('core computes the pinned %s from the JSON template', (name) => {
+    expect(ownValues[name]).toBe(standingPins[name]);
+  });
+  it('builds the same terms as the vectors: the example with the seller contract, the derived nonce and public disclosure', () => {
+    expect(take).toEqual(takeTerms_expected());
+  });
+  function takeTerms_expected(): CommitmentTerms {
+    return { ...terms, seller: SELLER_CONTRACT, nonce: standing.takeNonce(th, fill('44')), disclosure: { level: 'public' } };
+  }
 });

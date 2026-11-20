@@ -6,8 +6,8 @@
 // `anvil` on PATH and `forge build` output in contracts/out; skipped without.
 import { existsSync } from 'node:fs';
 import { join } from 'node:path';
-import { commitmentId, holdbackDomain, signMessage, type Club, type CommitmentTerms, type Hex32, type Mandate, type TokenAmount, type UnsignedMessage } from '@holdback/core';
-import { concat, encodeAbiParameters, encodeFunctionData, getContractAddress, keccak256, stringToBytes, type Abi, type AbiParameter, type Hex } from 'viem';
+import { commitmentId, encodeStandingSignature, fillView, STANDING_DELIVERY, standingDeliveryFor, type StandingDeliveryBody, holdbackDomain, signMessage, standingOfferView, TAKE, takeTerms, templateDigest, templateFrom, templateHash, type Club, type StandingOffer, type TakeFill, type Timestamp, type CommitmentTerms, type Hex32, type Mandate, type TokenAmount, type UnsignedMessage } from '@holdback/core';
+import { concat, encodeFunctionData, getContractAddress, keccak256, stringToBytes, type Abi, type Hex } from 'viem';
 import { privateKeyToAccount } from 'viem/accounts';
 import { foundry } from 'viem/chains';
 import { afterAll, beforeAll, describe, expect, it } from 'vitest';
@@ -96,52 +96,19 @@ describe.skipIf(!ready)(`contract signers on anvil (T-549)${ready ? '' : ' (SKIP
    * A take of a template the seller's key signed for the seller contract (ADR-0040 §1): the template is the deal's terms
    * without the take's five fields, with the dates as offsets from createdAt; the nonce is derived from the template.
    */
-  async function take(x: Setup, tag: string): Promise<{ deal: EvmDeal; blob: Hex; terms: CommitmentTerms }> {
+  async function take(x: Setup, tag: string, withDelivery?: StandingDeliveryBody): Promise<{ deal: EvmDeal; blob: Hex; terms: CommitmentTerms; template: StandingOffer; fill: TakeFill; keySignature: Hex }> {
     const draft = new EvmDeal(x.chain, x.cast, x.club, tag, undefined, undefined, undefined, { seller: SELLER_CONTRACT, sellerPayoutAddress: x.cast.seller.address });
-    const v = termsView(draft.terms);
-    const at = v.createdAt;
-    const timing = { ...v.timing, offerExpiresAt: v.timing.offerExpiresAt - at, fundBy: v.timing.fundBy - at, deliverBy: v.timing.deliverBy - at, judgeBy: v.timing.judgeBy - at, fallbackBy: v.timing.fallbackBy - at };
-    const offer = {
-      rules: world.deployment.rules,
-      expiresAt: at + 86_400n,
-      offerIdHash: keccak256(stringToBytes(`offer/${tag}`)),
-      schemaVersionHash: v.schemaVersionHash,
-      clubIdHash: v.clubIdHash,
-      rulebookHash: v.rulebookHash,
-      sellerPayoutAddress: v.sellerPayoutAddress,
-      deliverableHash: v.deliverableHash,
-      acceptanceHash: v.acceptanceHash,
-      token: v.token,
-      price: v.price,
-      adjudicator: v.adjudicator,
-      fallbackAdjudicator: v.fallbackAdjudicator,
-      appealAdjudicator: v.appealAdjudicator,
-      policyIdHash: v.policyIdHash,
-      fee: v.fee,
-      registryHash: v.registryHash,
-      policyHash: v.policyHash,
-      timing,
-      remedyHash: v.remedyHash,
-      delivery: [],
-    };
-    const seed = keccak256(stringToBytes(`seed/${tag}`));
-    const fill = { buyer: v.buyer, buyerPaymentAddress: v.buyerPaymentAddress, buyerKeyHash: v.buyerKeyHash, nonceSeed: seed, createdAt: at };
+    const template = templateFrom(draft.terms, { rules: world.deployment.rules, expiresAt: new Date(Date.parse(draft.terms.createdAt) + 86_400_000).toISOString().replace('.000Z', 'Z') as Timestamp, offerId: `offer/${tag}`, ...(withDelivery ? { delivery: withDelivery } : {}) });
+    const fill: TakeFill = { buyer: draft.terms.buyer, buyerPaymentAddress: draft.terms.buyerPaymentAddress, buyerEncryptionPublicKey: draft.terms.buyerEncryptionPublicKey, nonceSeed: keccak256(stringToBytes(`seed/${tag}`)), createdAt: draft.terms.createdAt };
+    const terms = takeTerms(template, fill, SELLER_CONTRACT);
+    const deal = new EvmDeal(x.chain, x.cast, x.club, tag, undefined, undefined, undefined, { seller: SELLER_CONTRACT, sellerPayoutAddress: x.cast.seller.address, nonce: terms.nonce });
+    expect(deal.terms).toEqual(terms);
+    // The differential check of ADR-0040 §5: the contract's template hash and its own terms for the take equal core's.
     const read = <T>(functionName: string, args: unknown[]) => world.publicClient.readContract({ address: SELLER_CONTRACT, abi: x.sellerAbi, functionName, args }) as Promise<T>;
-    const th = await read<Hex32>('templateHash', [offer]);
-    const nonce = keccak256(encodeAbiParameters([{ type: 'bytes32' }, { type: 'bytes32' }], [th, seed]));
-    const deal = new EvmDeal(x.chain, x.cast, x.club, tag, undefined, undefined, undefined, { seller: SELLER_CONTRACT, sellerPayoutAddress: x.cast.seller.address, nonce });
-    // The contract's own terms for the take hash to the ID core computes (the differential check of ADR-0040 §5).
-    expect(await read<Hex32>('commitmentId', [await read('termsOf', [offer, fill])])).toBe(deal.id);
-    const domainSeparator = keccak256(
-      encodeAbiParameters(
-        [{ type: 'bytes32' }, { type: 'bytes32' }, { type: 'bytes32' }, { type: 'uint256' }, { type: 'address' }],
-        [keccak256(stringToBytes('EIP712Domain(string name,string version,uint256 chainId,address verifyingContract)')), keccak256(stringToBytes('HoldbackStandingSeller')), keccak256(stringToBytes('1')), BigInt(world.chainId), SELLER_CONTRACT],
-      ),
-    );
-    const keySignature = await privateKeyToAccount(x.cast.seller.key).sign({ hash: keccak256(concat(['0x1901', domainSeparator, th])) });
-    const fn = (name: string) => (x.sellerAbi as Array<{ type: string; name?: string; inputs?: AbiParameter[] }>).find((f) => f.type === 'function' && f.name === name)!.inputs!;
-    const blob = encodeAbiParameters([{ type: 'uint8' }, fn('templateHash')[0]!, { type: 'bytes' }, fn('termsOf')[1]!], [1, offer, keySignature, fill]);
-    return { deal, blob, terms: deal.terms };
+    expect(await read<Hex32>('templateHash', [standingOfferView(template)])).toBe(templateHash(template));
+    expect(await read<Hex32>('commitmentId', [await read('termsOf', [standingOfferView(template), fillView(fill)])])).toBe(commitmentId(terms));
+    const keySignature = await privateKeyToAccount(x.cast.seller.key).sign({ hash: templateDigest(template, SELLER_CONTRACT, world.chainId) });
+    return { deal, blob: encodeStandingSignature(TAKE, template, keySignature, fill), terms, template, fill, keySignature };
   }
 
   const takeOffer = (t: { deal: EvmDeal; blob: Hex; terms: CommitmentTerms }, over: Partial<CommitmentTerms> = {}): Submission => {
@@ -290,5 +257,44 @@ describe.skipIf(!ready)(`contract signers on anvil (T-549)${ready ? '' : ' (SKIP
     }
     expect(x.chain.escrowState(d.id)?.kind).toBe('Settled');
   }, 120_000);
+  it("neutrality.standing-delivery-carried-by-decision: a take's standing delivery, approved by the template alone, rides on the primary's accept and settles", async () => {
+    const x = await setup();
+    const c = x.cast;
+    const file: StandingDeliveryBody = {
+      ciphertext: { uri: 'sim://blobs/standing-file', sha256: `sha256:${'c'.repeat(64)}`, bytes: 100, cipher: 'aes-256-gcm' },
+      plaintextSha256: `sha256:${'d'.repeat(64)}`,
+      plaintextMime: 'text/csv',
+      encryptedKeys: [c.primary.address, c.fallback.address, c.appeal.address].map((recipient) => ({ recipient, scheme: 'x25519-xsalsa20poly1305' as const, ciphertext: 'ZW52ZWxvcGU' })),
+      submittedAt: '2026-01-01T00:00:00Z',
+    };
+    const t = await take(x, 'take-standing-file', file);
+    await must(x.chain, c, takeOffer(t));
+    await must(x.chain, c, t.deal.accept());
+    await must(x.chain, c, t.deal.agreeAndFund());
+    // Nobody holds the seller's key here: the standing delivery's signature is the template's (kind STANDING_DELIVERY).
+    const d = { ...standingDeliveryFor(t.template, t.deal.id)!, signature: encodeStandingSignature(STANDING_DELIVERY, t.template, t.keySignature, t.fill) };
+    expect(await x.chain.carryDelivery(d)).toBeNull();
+    t.deal.delivery = d;
+    x.chain.advance(1);
+    await must(x.chain, c, t.deal.decide('primary', 'accept'));
+    expect((await x.chain.stage(t.deal.id)).stage).toBe('Released');
+    expect(await x.chain.tokenBalance(c.seller.address)).toBe(BigInt(t.deal.terms.price.amount));
+  }, 120_000);
+  it('the differential check holds for a template with dispute offsets: the contract counts disputeBy from the take, and the windows pass through', async () => {
+    const x = await setup();
+    const draft = new EvmDeal(x.chain, x.cast, x.club, 'take-dispute', undefined, undefined, undefined, { seller: SELLER_CONTRACT, sellerPayoutAddress: x.cast.seller.address });
+    const at = Date.parse(draft.terms.createdAt);
+    const iso = (ms: number) => new Date(ms).toISOString().replace('.000Z', 'Z') as Timestamp;
+    const timing = { ...draft.terms.timing, disputeBy: iso(at + 5_400_000), disputeJudgeSec: 600, disputeFallbackSec: 900 };
+    const template = templateFrom({ ...draft.terms, timing }, { rules: world.deployment.rules, expiresAt: iso(at + 86_400_000), offerId: 'offer/take-dispute' });
+    expect(template.terms.timing).toMatchObject({ disputeBy: 5_400, disputeJudgeSec: 600, disputeFallbackSec: 900 });
+    for (const later of [0, 3_600]) {
+      const fill: TakeFill = { buyer: draft.terms.buyer, buyerPaymentAddress: draft.terms.buyerPaymentAddress, buyerEncryptionPublicKey: draft.terms.buyerEncryptionPublicKey, nonceSeed: keccak256(stringToBytes(`seed/dispute/${later}`)), createdAt: iso(at + later * 1000) };
+      const terms = takeTerms(template, fill, SELLER_CONTRACT);
+      expect(terms.timing.disputeBy).toBe(iso(at + later * 1000 + 5_400_000));
+      const read = <T>(functionName: string, args: unknown[]) => world.publicClient.readContract({ address: SELLER_CONTRACT, abi: x.sellerAbi, functionName, args }) as Promise<T>;
+      expect(await read<Hex32>('templateHash', [standingOfferView(template)])).toBe(templateHash(template));
+      expect(await read<Hex32>('commitmentId', [await read('termsOf', [standingOfferView(template), fillView(fill)])])).toBe(commitmentId(terms));
+    }
+  }, 120_000);
 });
-

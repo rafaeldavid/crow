@@ -10,6 +10,7 @@ export * from './private.js';
 export * from './problem.js';
 export * from './result.js';
 export * from './signer.js';
+export * from './standing.js';
 export * from './state.js';
 export * from './timing.js';
 export * from './trim.js';

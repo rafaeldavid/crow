@@ -249,6 +249,22 @@ describe('the adjudicator service on the real SimChain (T-006)', () => {
     expect(chain.escrowState(id)?.kind).toBe('Released');
   });
 
+  it('attack.take-with-bad-buyer-key: the primary declines an offer whose buyer encryption key does not decode, before any work', async () => {
+    const w = await world();
+    const { cast, chain } = w;
+    // Not a key at all, and a low-order point that decodes but no key can be wrapped to (32 zero bytes).
+    for (const [i, key] of ['bm90LWEta2V5', 'AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA'].entries()) {
+      const bad = { ...w.terms, buyerEncryptionPublicKey: key, nonce: keccak256(stringToBytes(`bad-buyer-key-${i}`)) };
+      const badId = commitmentId(bad);
+      must(await chain.submit({ kind: 'offer', commitment: { ...bad, id: badId, signatures: { seller: await signTerms(cast.seller.key, DOMAIN, bad) } } }));
+      const r = await w.primary.adj.runOnce();
+      expect(r.accepted).not.toContain(badId);
+      expect(r.declined.find((d) => d.commitmentId === badId)?.reason).toMatch(/buyer's encryption key .* does not decode/);
+      expect(chain.escrowState(badId)?.kind).toBe('Offered');
+    }
+    expect(w.calls).toHaveLength(0);
+  });
+
   it('a silent primary: the fallback triggers the takeover at judgeBy, opens only its released key, seeds from the beacon and settles', async () => {
     const w = await delivered();
     const { chain, cast, terms, id } = w;
