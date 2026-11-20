@@ -43,11 +43,11 @@ export function referenceFiles(dir = here('./ref/')) {
 }
 
 /**
- * Every guide an agent can fetch, by published path: the front door, the two role pages, the setup's page (T-472)
- * and the reference files. The setup's page is in no first-deal budget; site/check.mjs holds it to SETUP_MAX_BYTES.
+ * Every guide an agent can fetch, by published path: the front door, the two role pages, the setup's page (T-472),
+ * the spend-controls vault's page (T-554) and the reference files. The setup's page is in no first-deal budget; site/check.mjs holds it to SETUP_MAX_BYTES.
  */
 export function guideFiles() {
-  return ['llms.txt', 'buy.txt', 'sell.txt', 'setup.txt', ...referenceFiles()];
+  return ['llms.txt', 'buy.txt', 'sell.txt', 'setup.txt', 'vault.txt', ...referenceFiles()];
 }
 
 /**

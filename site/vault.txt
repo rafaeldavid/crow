@@ -1,0 +1,37 @@
+# A spend-controls vault for your agent
+
+%% T-554: the owner's guide to the spend-controls vault, at vault.txt on Rafa's word (2026-11-20). The protocol stays unnamed on the site while its name is undecided; the one link carries the name only in its URL (Rafa's choice, 2026-11-20). Addresses come from the linked record, never typed here.
+One page for an AI assistant whose principal, the person or company it acts for, said: "Read https://crow.direct/vault.txt and set up a budget I control for my agent." Show your principal each transaction before you send it, unless it approved them in advance.
+
+A contract your principal owns can be an agent's payment address. It holds the money and pays a hold only within the limits your principal set for the agent's key, checked in the same transaction that funds the hold. The agent's key holds no money and cannot change its own limits. It is on Sepolia, test tokens only, and not audited. Its source, the addresses (`deployments/11155111.json`), the deployed commit (`deployments/README.md`; `main` may be newer), the buyer's command (`client/vault-buy.ts`) and the agent's page (`client/docs/pay-through-a-vault.txt`) are at https://github.com/rafaeldavid/crest.
+
+- **A grant** is one agent key's limits:
+  - `perSpend`: the most one hold may be;
+  - `perPeriod`: the most per `period` seconds; 86400 is a UTC day;
+  - `lifetime`: the most in total;
+  - `maxOpen`: deals open at once;
+  - `period`: the length of the window `perPeriod` counts, in seconds;
+  - `expiresAt`: no payment from then on, in unix seconds; 0 means never;
+  - `mayDelegate`: whether the key may give sub-keys narrower grants;
+  - `list`: the contract that says whom it may pay. 0 means anyone, still bounded by every grant above.
+
+  The largest value of a type means no limit. A hold is the price plus the adjudication fee, so `perSpend` must cover both. Amounts are base units: tUSDC has 6 decimals.
+- **A listed seller** is its payout address together with the deal's three adjudicators, as one entry. It holds through the escrow, which pays a hold only to the terms' payout address or back to the vault.
+- **Set it up** with your principal's key, which needs a little Sepolia ETH for gas. Sign with its wallet, for example `cast send --account <keystore name>`; never put a private key on a command line.
+  - From the record: `FACTORY` is `factory`, `MODULE` is `holdbackModule`, `LIST` is `allowList`, `RULES` is `rules`.
+  - From your principal: `PRINCIPAL`, its address; `AGENT`, the agent's key address; `PER_DEAL`, `PER_DAY`, `TOTAL` and `AMOUNT` in base units; `OPEN`, the deals open at once. From the seller's offer: `PAYOUT` (`sellerPayoutAddress`) and `ADJUDICATOR`, `FALLBACK` and `APPEAL` (`adjudication.adjudicator`, `fallbackAdjudicator`, `appealAdjudicator`).
+  - `SALT` and `GRANT_SALT` are any 32 bytes you pick, for example `$(cast keccak "my-agent-vault")`. The same salt gives the same vault address. They are not the record's `salt`, which is the deploy's.
+  - Steps 2 to 6 are transactions; `0x` is an empty note.
+  1. `TOKEN=$(cast call $RULES "TOKEN()(address)")`.
+  2. `cast send $FACTORY "create(address,address,bytes32)" $PRINCIPAL $TOKEN $SALT`. Then `VAULT=$(cast call $FACTORY "addressOf(address,address,bytes32)(address)" $PRINCIPAL $TOKEN $SALT)`.
+  3. `cast send $VAULT "setModule(address,address,bytes)" $MODULE $(cast call $MODULE "payee()(address)") 0x`.
+  4. `cast send $VAULT "grant(uint256,address,(uint128,uint128,uint128,uint32,uint32,uint40,bool,address),bytes32,bytes)" 1 $AGENT "($PER_DEAL,$PER_DAY,$TOTAL,$OPEN,86400,0,false,$LIST)" $GRANT_SALT 0x`. Grant 1 is the root, your principal's. Then `GRANT=$(cast keccak $(cast abi-encode "f(uint256,address,bytes32)" 1 $AGENT $GRANT_SALT))`.
+  5. Approve a seller from its offer's terms: `cast send $LIST "set(address,uint256,bytes32,bool,bytes)" $VAULT $GRANT $(cast call $MODULE "counterpartyOf(address,address,address,address)(bytes32)" $PAYOUT $ADJUDICATOR $FALLBACK $APPEAL) true 0x`. The list is `allowList`.
+  6. Fund it: `cast send $TOKEN "mint(address,uint256)" $VAULT $AMOUNT`, since tUSDC is open-mint on this test service, or `"transfer(address,uint256)"` from a wallet that holds tUSDC.
+- **Check it before a purchase.** `cast call $VAULT "getGrant(uint256)((uint256,address,bool,bool,(uint128,uint128,uint128,uint32,uint32,uint40,bool,address),uint128,uint128,uint40,uint32))" $GRANT` reads, in order, the parent, the key, paused, closed, the limits, this period's spend, the total spent, the period's end and the deals open. `cast call $VAULT "checkPath(uint256,uint256,bytes32)" $GRANT $HOLD $COUNTERPARTY` returns nothing when the state, the expiry, the per-deal limit and the lists allow that hold; otherwise it reverts with the refusing limit. The period, total and open counts are checked when the hold is funded.
+- **Stop or take back.**
+  - Pause: `"setPaused(uint256,bool,bytes)" $GRANT true 0x`. Close for good: `"close(uint256,bytes)" $GRANT 0x`. Either stops every payment from that key and every key below it, from the block it lands in.
+  - Take back: `"withdraw(address,uint256,bytes)" $TO $AMOUNT 0x`. Pause first: a withdrawal of a balance read earlier reverts if a payment lands before it, and moves nothing.
+  - A hold already funded is not the vault's: it settles by the deal's terms. Set the period and total limits to what your principal accepts losing if the agent's key were misused before a stop.
+- **Hand the agent** the vault's address and the module's. The agent keeps its own key file, and a helper key with Sepolia ETH pays the gas of each funding; `client/vault-buy.ts`'s header names each setting. The agent buys with `client/vault-buy.ts`. The deal names the agent's key as the buyer and the vault as the payment address. The funding is the payment module's `agreeAndFund`, sent by any key that pays the gas; the operators follow it. A refusal names the limit, the grant and the numbers, and nothing moves.
+- **Known limit of this version.** While the agent's key is the deal's buyer, it can still accept early a funded hold whose seller has signed a delivery, even after a stop. A version where the vault itself is the buyer, so your principal can sign in the agent's place, is built and not yet deployed.
