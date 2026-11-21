@@ -752,6 +752,9 @@ if (existsSync(here('../reports/site-out/llms.txt'))) {
   expect(existsSync(outFile('sitemap.xml')), 'the publish build wrote no sitemap.xml');
   expect(existsSync(outFile('robots.txt')) && read('../reports/site-out/robots.txt').includes(`Sitemap: ${site}sitemap.xml`), 'robots.txt does not name the sitemap');
   if (existsSync(outFile('sitemap.xml'))) {
+    // Every guide an agent can fetch is in the sitemap, the one-file reference included.
+    const sitemapText = read('../reports/site-out/sitemap.xml');
+    for (const g of [...guideFiles(), 'reference.txt']) expect(sitemapText.includes(`<loc>${site}${g}</loc>`), `the sitemap leaves out the guide ${g}`);
     const locs = [...read('../reports/site-out/sitemap.xml').matchAll(/<loc>([^<]+)<\/loc>/g)].map((m) => m[1].replaceAll('&amp;', '&'));
     expect(locs.length > 0, 'the sitemap lists no page');
     for (const loc of locs) {
@@ -759,6 +762,7 @@ if (existsSync(here('../reports/site-out/llms.txt'))) {
       const p = loc.slice(site.length);
       const served = [p, `${p}index.html`, `${p}.html`].some((c) => c !== '' && !c.endsWith('/') && existsSync(outFile(c)));
       expect(served, `sitemap: ${loc} names no file the build wrote`);
+      expect(!p.endsWith('.html'), `sitemap: ${loc} names a .html address, which the site redirects; list the address it serves`);
     }
   }
 }

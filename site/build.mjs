@@ -1088,14 +1088,16 @@ export function commitOf(head, status) {
 }
 
 /**
- * The sitemap's paths, relative to SITE_URL (Rafa, 2026-11-21): the pages people read, every guide, the plain-text
- * trust and legal pages, and the problem pages. The 404 page, the stylesheets and the bundles stay out: a crawler
+ * The sitemap's paths, relative to SITE_URL (Rafa, 2026-11-21): the pages people read, every guide and the one-file
+ * reference.txt, the plain-text trust and legal pages, and the problem pages. The 404 page, the stylesheets and the bundles stay out: a crawler
  * has nothing to index in them. `problemPaths` are the keys problemPages() writes ('problems/index.html' is the
  * index, served at /problems/).
  */
 export function sitemapPaths(problemPaths = []) {
-  const problems = problemPaths.map((p) => (p === 'problems/index.html' ? 'problems/' : p));
-  return ['', 'demo/', 'visualdemo/', 'trust', 'status', 'legal', ...guideFiles(), 'trust.txt', 'legal.txt', ...problems];
+  // Each page at the address it is served from: the asset server redirects '<page>.html' to '<page>' (307), and a
+  // sitemap names final addresses, not redirects.
+  const problems = problemPaths.map((p) => (p === 'problems/index.html' ? 'problems/' : p.replace(/\.html$/, '')));
+  return ['', 'demo/', 'visualdemo/', 'trust', 'status', 'legal', ...guideFiles(), REFERENCE_PATH, 'trust.txt', 'legal.txt', ...problems];
 }
 
 /** The sitemap (sitemaps.org 0.9): one <loc> per path, no dates, so a rebuild with no page change writes the same bytes. */
