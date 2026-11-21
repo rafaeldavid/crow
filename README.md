@@ -4,7 +4,7 @@ Crow is escrow and verification for deals between AI agents. The website writes 
 
 Agents can already pay each other, but they cannot safely commit money against work from an agent at another firm. With Crow, the buyer's money sits in escrow while the seller delivers its work encrypted. Declarative checks (rules written as data, with no code to run) run first, then a panel of AI models. Together they decide whether the work meets the agreed terms. The panel uses pinned models (exact model versions) from at least two model families. If the work passes, the settlement layer releases the payment and the work's decryption key together. If not, it refunds the buyer.
 
-By design, no single party can stop a valid deal from settling on its terms or move held funds outside them. That includes Crow's own operators and maintainers. The public demo settles on contracts on Ethereum Sepolia, an Ethereum public test network. Since 2026-11-13 it runs the phase-one contracts: no party appeals, no bonds, and one token per deployment, so the first decision by the primary or the fallback adjudicator is final (ADR-0031). Models from two families reviewed the phase-one contracts before they were frozen; no one has audited Crow's contracts yet. The frozen code carries the tag `contracts-phase-one-1`, and `docs/audit/` is the audit's starting point. Anyone with Sepolia ETH, the network's test currency, can call them directly, past every operator. Some properties are not in place yet; for one, both operator nodes run as one process (see Status).
+By design, no single party can stop a valid deal from settling on its terms or move held funds outside them. That includes Crow's own operators and maintainers. The public demo settles on contracts on Ethereum Sepolia, an Ethereum public test network. It runs the phase-one contracts: no party appeals, no bonds, and one token per deployment, so the first decision by the primary or the fallback adjudicator is final (ADR-0031). Since 2026-11-19 it runs their fixed version, tagged `contracts-phase-one-2`, which answers an outside scan's findings. Models from two families reviewed the phase-one contracts; no one has audited Crow's contracts yet, and `docs/audit/` is the audit's starting point. Anyone with Sepolia ETH, the network's test currency, can call them directly, past every operator. Some properties are not in place yet; for one, both operator nodes run as one process (see Status).
 
 ## Try it
 
@@ -15,6 +15,46 @@ By design, no single party can stop a valid deal from settling on its terms or m
 What is private today: the delivered work, which is encrypted before it leaves the seller and opened only by the adjudicators and, once it has paid, the buyer. What is public in this phase: the addresses, amounts, deadlines and adjudicators a deal names, on Sepolia, to anyone who reads the chain. Private terms come in a later phase.
 
 The public demo uses tUSDC, a test token on Sepolia that anyone can mint (open-mint). tUSDC is worth nothing and is not Circle's USDC. No real money can enter.
+
+## The repositories
+
+| Repository | What it holds |
+| --- | --- |
+| [rafaeldavid/crow](https://github.com/rafaeldavid/crow) (this one) | The protocol and the reference service: the contracts, the operator nodes, the adjudicator, the judgment pipeline, the API contract, the site and its agent guide, and the decisions behind them. Development happens here. |
+| [rafaeldavid/crow-agent-vault](https://github.com/rafaeldavid/crow-agent-vault) | Crow Vault: spend controls for agents, enforced on chain. A principal's vault holds the money and gives each agent limits it cannot exceed. Its first module pays a hold in this repository's contracts, unchanged. |
+| [rafaeldavid/holdback-eng-review](https://github.com/rafaeldavid/holdback-eng-review) | A read-only copy of the phase-one settlement contracts at their fixed version, with tests, audit pages and decision records, for outside engineering review. |
+| A private operations repository | Company, partner and operations material: the roadmap, the daily build log, research, costs and brand work. It is not public; [docs/private-materials.md](docs/private-materials.md) lists what it holds and how to ask for access. |
+
+## The product modules
+
+Crow is a small set of parts that share one deal. An agent sees one REST API; each part underneath does one job and can be used on its own. The protocol is free to use: Crow takes no fee on a deal.
+
+**Live on the test network**
+
+| Module | What it does | Where it lives |
+| --- | --- | --- |
+| **Crow Hold** (settlement) | Holds the buyer's money until the terms say where it goes. No admin keys; every hold expires; nothing can be paid twice; agents can always submit straight to the chain. | `contracts/`, `packages/settlement/` |
+| **Crow Envelope** (private delivery) | Delivers work that only the buyer and the deal's adjudicators can open. It is encrypted before it leaves the seller, and operators carry hashes and amounts, never the content. | `packages/core/` (envelope encryption) |
+| **Crow Judge** (adjudication) | Checks the work against the agreed terms, and only those. Declarative checks run first, then a panel of pinned models from at least two families, behind a screen for injected instructions. The parties name the primary, fallback and appeal adjudicators. | `apps/adjudicator/`, `packages/judgment/` |
+| **Crow Vault** (agent controls) | Gives an agent a budget its principal sets and the agent cannot exceed: limits per deal, per day and in total, and approved sellers only, checked in the same transaction that funds the hold. | [crow-agent-vault](https://github.com/rafaeldavid/crow-agent-vault) |
+| **Crow Gateway** (made for machines) | The site, the guides and the REST API an agent reads, measured in tokens. Two operator nodes serve the same API, and the one-command tools are pinned by their SHA-256 fingerprint. | `apps/operator/`, `apps/demo-cloud/`, `site/` |
+| **Crow Offer** (the seller kit) | Turns an existing API into a seller any agent can buy from: standing offers on posted terms (ADR-0040), an adapter that maps the seller's quote and result, and deal templates. | `examples/`, `apps/hosted-sellers/` |
+| **Crow Traces** (records and events) | Records every step of a deal so it can be checked later. Each message is signed by the party that sent it, operators return receipts, the contracts emit every move of the money, and an event feed (`GET /v1/events`) follows it live. Each party chooses what it discloses, and to whom. | `apps/operator/`, `contracts/` |
+
+**In development**
+
+| Module | What it is for | State |
+| --- | --- | --- |
+| **Crow Bond** (backed decisions) | Adjudicators put capital behind their decisions, and anyone can post or back a bond and earn for the risk. Appeals are paid from the bond. | On SimChain only, as the full protocol's reference (ADR-0007, ADR-0014); not in phase one's contracts |
+| **Crow Blindsight** (end-to-end privacy) | Zero-knowledge proofs, so a deal can settle without showing its contents: the work passed its checks, without revealing the work, the parties or the price. | Planned; no code yet |
+
+## Where we are looking for the first offer
+
+Three directions are being explored. None is chosen yet. Each lists the evidence that would make it Crow's first offer.
+
+- **Structured agent services.** Work a buyer commissions again and again, where the checks for a good delivery can be written down before the job starts. The buyer would pay to spend less time reviewing deliveries and reconciling invoices.
+- **Data.** Recurring collection the buyer commissions, where freshness, provenance, coverage or rights can be checked on delivery. This means newly commissioned datasets, or deliveries buyers find hard to accept today, not catalogue data bought outright.
+- **Robotics.** A lab or a commercial operator with a budget, telemetry it can share, and a recurring job that integrates quickly. The first sale can be a delivery of telemetry or evidence of the work done.
 
 ## Run it locally
 
@@ -84,10 +124,10 @@ Every change must pass three litmus tests (`CLAUDE.md`):
 
 ## Status
 
-As of 2026-11-17:
+As of 2026-11-21:
 
-- **Live: the phase-one contracts on Sepolia,** since the cutover of 2026-11-13 ([`docs/operations.md`](docs/operations.md) has the dated record). The contracts drop what is not in phase one (party appeals, bonds, Permit2 funding, other tokens and payouts to third addresses) and add the buyer's payment address and the seller's payout address (ADR-0031, ADR-0032 and ADR-0033). The two operator nodes, the test seller and buyer, and the site all run on them. Addresses, the deployed commit and the margins are fields of [`contracts/deployments/sepolia.json`](contracts/deployments/sepolia.json); the live schema version and EIP-712 domain are in each node's `/v1/status`.
-- **Frozen for an audit:** the tag `contracts-phase-one-1`, whose `contracts/src` equals the record's `commit`. [`docs/audit/scope.md`](docs/audit/scope.md) is the audit's starting point. The version with the audit's fixes will be `contracts-phase-one-2`.
+- **Live: the phase-one contracts on Sepolia,** first deployed in the cutover of 2026-11-13 and replaced by their fixed version on 2026-11-19 ([`docs/operations.md`](docs/operations.md) has the dated record). The contracts drop what is not in phase one (party appeals, bonds, Permit2 funding, other tokens and payouts to third addresses) and add the buyer's payment address and the seller's payout address (ADR-0031, ADR-0032 and ADR-0033). The two operator nodes, the test seller and buyer, and the site all run on them. Addresses, the deployed commit and the margins are fields of [`contracts/deployments/sepolia.json`](contracts/deployments/sepolia.json); the live schema version and EIP-712 domain are in each node's `/v1/status`.
+- **Tagged for an audit:** `contracts-phase-one-1`, the version first deployed, and `contracts-phase-one-2`, the fixed version deployed since 2026-11-19, whose `contracts/src` equals the record's `commit`. [`docs/audit/scope.md`](docs/audit/scope.md) is the audit's starting point.
 - **Done: Phase 1** (2026-11-01): the walking skeleton on SimChain, the narrated demo and the HTTP API on two operator nodes. **Met: Phase 2's exit criteria** (D54): settlement on EVM (the Ethereum virtual machine), with the public demo on Sepolia. `docs/plan.md` lists each phase's tasks and records each criterion.
 - **Running: the first pilot.** Its cases were rehearsed on the new deployment, and its first real deal on Sepolia was funded on 2026-11-17, through a hosted seller (`docs/operations.md`, What is live). **Next:** the pilot's deals to Released, then an external audit.
 - **Blocked until an audit:** Ethereum mainnet, the target chain (D4, the chain decision).
