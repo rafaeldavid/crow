@@ -194,6 +194,8 @@ export function checkInvariants(v: LedgerView): Invariant[] {
 const DAY = 86_400;
 /** The Via column for an outside actor's act (T-558): no operator relays it and settlement never sees it. */
 const OUTSIDE = 'outside';
+/** The Call column for a top-up, whether it arrives or its source refuses or is offline. */
+const topUpCall = (to: string) => `top up ${to} (outside the protocol)`;
 const MAX_SCOPE = tusd('1000000000000000');
 
 const plus = (ts: Timestamp, seconds: number): Timestamp => new Date(Date.parse(ts) + seconds * 1000).toISOString();
@@ -634,7 +636,7 @@ export class StubSettlement {
   private blocked(s: Step): boolean {
     const party = this.actingParty(s);
     if (!party) return false;
-    const call = s.kind === 'judge' ? 'decide' : s.kind;
+    const call = s.kind === 'judge' ? 'decide' : s.kind === 'top_up' ? topUpCall(s.to) : s.kind;
     if (this.offline.has(party.actor)) {
       this.outages.push({ step: this.stepNo, actor: party.actor, kind: 'offline' });
       this.row(party.actor, call, party.via, 'offline (no call)');
@@ -671,7 +673,15 @@ export class StubSettlement {
         return this.agreeAndFund(parties.buyer, s.via);
       case 'fund': {
         const c = this.needCommitment(parties.buyer, 'fund', s.via);
-        return c ? this.fund(parties.buyer, s.via, c) : undefined;
+        if (!c) return;
+        // The backends differ here (T-558 note N2): SimChain takes funding until fundBy, the contract refuses it from
+        // offerExpiresAt with deadline_passed. A fixture that funds in that gap would pass on one and not the other.
+        if (Date.parse(this.ctx.clock.now()) >= Date.parse(c.terms.timing.offerExpiresAt)) {
+          throw new ScenarioError(
+            `steps[${this.stepNo}].fund: the sim time ${this.ctx.clock.now()} is at or past offerExpiresAt ${c.terms.timing.offerExpiresAt}; SimChain takes funding until fundBy ${c.terms.timing.fundBy}, but the contract refuses it from offerExpiresAt with deadline_passed, so fund before offerExpiresAt`,
+          );
+        }
+        return this.fund(parties.buyer, s.via, c);
       }
       case 'refuses':
         this.refusingOutside.add(s.actor);
@@ -922,7 +932,7 @@ export class StubSettlement {
       sim.faucet(address, amount);
     }
     this.faucetTotal += amount;
-    this.row(from, `top up ${to} (outside the protocol)`, OUTSIDE, 'ok');
+    this.row(from, topUpCall(to), OUTSIDE, 'ok');
     this.balanceRows.push({ after: 'top-up', balances: await this.snapshotBalances() });
   }
 

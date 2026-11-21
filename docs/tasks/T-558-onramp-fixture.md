@@ -4,7 +4,7 @@
 - **Phase:** 2
 - **Kind:** a scenario fixture with its snapshot, and 2 (docs and records) for the neutrality rows; one red-team read of the fixture and the rows
 - **Depends on:** none
-- **Paths this task may touch:** `fixtures/scenarios/neutrality.onramp-*`, and since 2026-11-21 (the coordinator's brief for the second fixture) the scenario runner and parser in `packages/testkit/src/` and the step list in `fixtures/README.md`, `docs/neutrality.md`, one line in `tests/cut-feature-alignment.known.json` (the fixture's `expire` step is the cut feature SC-6, as in `neutrality.adjudicator-never-accepts`), this file. Never `contracts/`, `spec/schemas/`, `.github/`, `packages/`, `CLAUDE.md`, `AGENTS.md` or `.claude/`.
+- **Paths this task may touch:** `fixtures/scenarios/neutrality.onramp-*`, and since 2026-11-21 (the coordinator's brief for the second fixture) the scenario runner and parser in `packages/testkit/src/` and the step list in `fixtures/README.md`, `docs/neutrality.md`, one line in `tests/cut-feature-alignment.known.json` (the fixture's `expire` step is the cut feature SC-6, as in `neutrality.adjudicator-never-accepts`), this file. Never `contracts/`, `spec/schemas/`, `.github/`, other `packages/`, `CLAUDE.md`, `AGENTS.md` or `.claude/`.
 - **Human gate:** no
 - **Status:** done (PR 700 merged the first fixture on 2026-11-19; this PR adds `neutrality.onramp-refuses`)
 - **Agent/session:** the T-558 session, started by the coordinator on 2026-11-19
@@ -62,6 +62,13 @@ All on 2026-11-19, in the T-558 worktree from `origin/main` `d9da8a00`.
 - **Measured, the snapshot (read before committing):** step 3 agree is ok and the deal is Agreed; step 3 fund is refused with `insufficient_funds` ("balance 1000000000 is below 1550000000"); step 5 card-onramp's top-up is "refused (no call)" and Outages lists "Step 5: card-onramp refused to act"; step 6 bank-onramp tops up atlas-wallet at 00:06 (sim), well before `offerExpiresAt` (900 s), and the balances row reads 2,050 tUSD; step 7 fund through op-2 is ok and the deal is Held, with no second Agree; Bench A accepts on checks only and the deal is Released. Final balances: atlas-wallet 500 tUSD, tidewater-seller 1,500 tUSD, bench-a 25,050 tUSD, escrow 0. Replay of 6 SimChain journal entries matches; every invariant holds, conservation included.
 - **Measured:** `pnpm snap --settlement local neutrality.onramp-refuses neutrality.onramp-offline-before-funding` on anvil (chain ID 31337): 2 passed, 0 failed; both transcripts are identical to SimChain's. `onramp-refuses` sends 3 adapter transactions for 504,097 gas; the top-up's mint is a setup-style transaction outside the adapter and is not counted.
 
+**After the PR 753 review, 2026-11-21,** on the branch at `8987838f` (origin/main merged in):
+
+- **Measured:** the new tests failed before their fixes: the parser tests for the reserved name `outside` and for a `top_up` to a seller or payout address, the runner test for a `fund` past `offerExpiresAt`, and the row label of a refused or offline top-up (5 failed, 16 passed in the filtered run). After the fixes, `vitest run packages/testkit`: 14 files, 175 tests passed.
+- **Measured:** `pnpm typecheck` and `pnpm lint` exit 0; `pnpm snap`: 52 passed, 0 failed. The snapshot diff is one line: step 5 now reads "top up atlas-wallet (outside the protocol)" instead of "top_up".
+- **Measured:** `pnpm snap --settlement local` for both on-ramp fixtures: 2 passed, both transcripts identical to SimChain's.
+- **Measured, the stricter local rule tried and reverted:** with `--settlement local` failing any fixture whose transcript differs from SimChain, a full local run gave 43 passed, 2 failed, 7 excluded. `neutrality.store-drops-standing-ciphertext` and `neutrality.store-withholds-delivery` each differ by 9 lines: on SimChain `trigger_default` leaves the deal Defaulted and the default outcome then refunds it; on the contract the same call ends Refunded.
+
 ## Decisions
 
 - **One fixture, not the planned one.** The planned `neutrality.onramp-refuses` cannot be written today (Handoff). The fixture that can, `neutrality.onramp-offline-before-funding`, is the second case the brief allowed: the on-ramp goes offline after the buyer agrees and before it funds.
@@ -73,6 +80,10 @@ All on 2026-11-19, in the T-558 worktree from `origin/main` `d9da8a00`.
 - **No settlement or schema change was needed.** SimChain already had a journaled test faucet, and the anvil test token already mints to anyone. `refuses` is new rather than reusing `offline` because the fixture's on-ramp refuses rather than disappears, and the snapshot says which.
 - **The top-up comes before `offerExpiresAt`,** per the 2026-11-19 Handoff, so the fixture runs the same on SimChain and the contract.
 - **A second operator funds.** Step 7 goes through op-2, so the fixture also shows that funding after a refusal needs no particular operator.
+
+- **Review M1, `fund` past `offerExpiresAt`:** the runner refuses a `fund` step at or past `offerExpiresAt` with a ScenarioError that names the gap: SimChain takes funding until `fundBy`, the contract refuses it from `offerExpiresAt` with `deadline_passed`. The check is on the `fund` step only; `agree_and_fund`'s funding follows an Agree that is itself refused from `offerExpiresAt`.
+- **Review M1, local runs and transcript differences: not changed.** Failing `--settlement local` on any transcript difference is one condition in `runner.ts`, but it fails 2 fixtures outside this task (Evidence), so it needs a decision on those first (Handoff).
+- **Review L2 to L5:** `outside` is a reserved name; `top_up` fills only the buyer's paying address (`buyer_payment`, or the buyer); a refused or offline top-up's row names its target as a top-up that arrives does; the Paths line says "other `packages/`".
 
 ## Review
 
@@ -96,5 +107,7 @@ One red-team read (the `red-teamer` subagent), 2026-11-19. It found one blocking
 Before writing that fixture, check one more thing: a top-up that arrives between `offerExpiresAt` and `fundBy` funds on SimChain but not on a chain, so the fixture should top up before `offerExpiresAt`.
 
 **On the contract:** the fixture passes `--settlement local` with the same transcript as SimChain (Evidence). CI runs SimChain only.
+
+**For the coordinator, after the review:** making `snap --settlement local` fail on a transcript difference from SimChain is a small change in `runner.ts` (fail when `diffLines(sim, local)` is not empty), but today it fails `neutrality.store-drops-standing-ciphertext` and `neutrality.store-withholds-delivery`: SimChain passes through Defaulted on `trigger_default` and the contract goes straight to Refunded. That needs its own task: a known-differences list with reasons, as `LOCAL_EXCLUSIONS` has, or aligning the two backends.
 
 **For the coordinator:** `docs/plan.md`'s scenario index needs rows for `neutrality.onramp-offline-before-funding` and `neutrality.onramp-refuses`, both existing. No red-team read was run on the 2026-11-21 steps; they are test tooling, but a reviewer should check that `top_up` cannot make a fixture pass for the wrong reason (it only adds money, and the fixture pins the one refusal at step 3). CI runs SimChain only.

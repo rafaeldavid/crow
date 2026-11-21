@@ -356,6 +356,10 @@ ${steps}`;
       expect(r.snapshot).toMatch(/\| 5 \| atlas-buyer \| fund \| op-1 \| ok \| Held \|/);
       expect(r.snapshot).not.toMatch(/\| 5 \| atlas-buyer \| agree \|/);
       // On a deal not yet agreed, fund is refused by settlement: it never signs Agree for the buyer.
+      // From offerExpiresAt the contract refuses funding (deadline_passed) while SimChain takes it until fundBy, so the
+      // runner refuses a fund step there rather than let the backends differ (review M1, the task's note N2).
+      const late = await fixture(root, 'error.ramp-fund-late', `${ramp('error.ramp-fund-late', '  - agree_and_fund: { by: buyer, via: op-1 }\n  - top_up: { from: ramp-b, to: atlas-wallet, amount: "1050000000" }\n  - advance_clock: { seconds: 900 }\n  - fund: { by: buyer, via: op-1 }\n')}expect: { problem: { step: 3, type: insufficient_funds } }\n`);
+      expect(late.out[0]).toMatch(/fail {2}error\.ramp-fund-late: ScenarioError: steps\[6\]\.fund: .*offerExpiresAt.*SimChain.*fundBy.*contract.*deadline_passed/);
       const early = await fixture(root, 'error.ramp-fund-early', `${ramp('error.ramp-fund-early', '  - fund: { by: buyer, via: op-1 }\n')}expect: { problem: { step: 3, type: invalid_state } }\n`);
       expect(early.out[0]).toBe('pass  error.ramp-fund-early (snapshot updated)');
     });
@@ -374,8 +378,9 @@ ${steps}`;
       ].join('\n');
       const r = await fixture(root, name, `${ramp(name, steps)}expect: { terminal: Expired, balances: { atlas-wallet: "1000000000" } }\n`);
       expect(r.out[0]).toBe(`pass  ${name} (snapshot updated)`);
-      expect(r.snapshot).toMatch(/\| ramp-a \| top_up \| outside \| refused \(no call\) \|/);
-      expect(r.snapshot).toMatch(/\| ramp-b \| top_up \| outside \| offline \(no call\) \|/);
+      // The same label a top-up that arrives writes, naming the target (review L4).
+      expect(r.snapshot).toMatch(/\| ramp-a \| top up atlas-wallet \(outside the protocol\) \| outside \| refused \(no call\) \|/);
+      expect(r.snapshot).toMatch(/\| ramp-b \| top up atlas-wallet \(outside the protocol\) \| outside \| offline \(no call\) \|/);
       expect(r.snapshot).toMatch(/Step 4: ramp-a refused to act/);
       expect(r.snapshot).toMatch(/Step 6: ramp-b is offline/);
       // fails: names the outside actor; the evaluation needs a step that shows it failing.

@@ -28,7 +28,7 @@ T-558. Atlas pays from its own payment address, atlas-wallet, which holds $1,000
 | 00:02.000 | 3 | atlas-buyer | agree | op-1 | ok | Agreed |
 | 00:03.000 | 3 | atlas-buyer | fund | op-1 | insufficient_funds | Agreed |
 | 00:04.000 | 4 | card-onramp | starts refusing | outside | ok | Agreed |
-| 00:05.000 | 5 | card-onramp | top_up | outside | refused (no call) | Agreed |
+| 00:05.000 | 5 | card-onramp | top up atlas-wallet (outside the protocol) | outside | refused (no call) | Agreed |
 | 00:06.000 | 6 | bank-onramp | top up atlas-wallet (outside the protocol) | outside | ok | Agreed |
 | 00:07.000 | 7 | atlas-buyer | fund | op-2 | ok | Held |
 | 00:08.000 | 8 | tidewater-seller | deliver (attempt 1) | op-1 | ok | Delivered |

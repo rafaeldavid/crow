@@ -116,7 +116,8 @@ const isObj = (v: unknown): v is Obj => typeof v === 'object' && v !== null && !
 const NAME = /^[a-z0-9][a-z0-9._-]*$|^_[a-z0-9._-]+$/;
 const DECIMAL = /^(0|[1-9][0-9]{0,77})$/;
 /** Ledger and routing names the runner uses itself; no actor may take them. */
-export const RESERVED_NAMES: readonly string[] = ['escrow', 'appeal-hold', 'anyone', 'direct', 'faucet'];
+/** `outside` is the Via the runner writes for an outside actor's act (T-558). */
+export const RESERVED_NAMES: readonly string[] = ['escrow', 'appeal-hold', 'anyone', 'direct', 'faucet', 'outside'];
 
 function fail(path: string, message: string): never {
   throw new ScenarioError(`${path}: ${message}`);
@@ -196,10 +197,11 @@ const UNSUPPORTED: Record<string, string> = {
 /** Steps that do not act on a commitment, so `commitment:` makes no sense on them. */
 const NO_COMMITMENT = ['advance_clock', 'offline', 'operator_refuses', 'restart_adjudicators', 'refuses', 'top_up'];
 
-/** What a step may name besides the scenario's actors: its outside actors, and the party addresses a top-up may fill. */
+/** What a step may name besides the scenario's actors: its outside actors, and the one address a top-up may fill. */
 interface Names {
   outside: readonly string[];
-  partyAddresses: readonly string[];
+  /** The buyer's paying address: `buyer_payment`, or the buyer when it is not set. */
+  payer: string;
 }
 
 function parseStep(raw: unknown, path: string, operators: readonly string[], actors: readonly string[], names: Names): Step {
@@ -340,7 +342,8 @@ function parseStepBody(kind: string, body: unknown, path: string, operators: rea
       const from = name(o.from, `${p}.from`);
       if (!names.outside.includes(from)) fail(`${p}.from`, `"${from}" is not an outside actor of this scenario (outside: [${names.outside.join(', ')}])`);
       const to = name(o.to, `${p}.to`);
-      if (!names.partyAddresses.includes(to)) fail(`${p}.to`, `"${to}" is not a party address of this scenario (${names.partyAddresses.join(', ')})`);
+      // Only the buyer's paying address, until a fixture needs another.
+      if (to !== names.payer) fail(`${p}.to`, `"${to}" is not the buyer's paying address (${names.payer}); a top-up fills only that address`);
       const amount = money(o.amount, `${p}.amount`);
       if (BigInt(amount) === 0n) fail(`${p}.amount`, 'must be above 0');
       return { kind, from, to, amount };
@@ -433,7 +436,7 @@ export function parseScenario(source: string, fileName: string): Scenario {
   const outside = top.outside === undefined ? [] : Array.isArray(top.outside) ? top.outside.map((o, i) => name(o, `outside[${i}]`)) : fail('outside', 'must be a list');
   for (const a of outside) if (RESERVED_NAMES.includes(a)) fail('outside', `"${a}" is reserved for the runner (${RESERVED_NAMES.join(', ')})`);
   if (new Set([...actors, ...outside]).size !== actors.length + outside.length) fail('outside', 'outside actors must have names distinct from each other and from every party, adjudicator and operator');
-  const names: Names = { outside, partyAddresses: [parties.buyer, parties.seller, ...money] };
+  const names: Names = { outside, payer: parties.buyerPayment ?? parties.buyer };
 
   const faucet = top.faucet === undefined ? {} : moneyMap(top.faucet, 'faucet');
   for (const who of Object.keys(faucet)) if (!actors.includes(who)) fail(`faucet.${who}`, 'not a party, adjudicator or operator of this scenario');

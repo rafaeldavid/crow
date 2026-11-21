@@ -114,6 +114,10 @@ steps:
     expect(() => parseScenario(minimal('outside: [b]\nsteps: []\n'), 't')).toThrow(/distinct/);
     expect(() => parseScenario(minimal('outside: [faucet]\nsteps: []\n'), 't')).toThrow(/reserved/);
     expect(() => parseScenario(minimal('outside: ramp-a\nsteps: []\n'), 't')).toThrow(/list/);
+    // `outside` is the Via the runner writes for an outside actor's act, so no actor may take the name (review L2).
+    expect(() => parseScenario(minimal('operators: [outside]\nsteps: []\n'), 't')).toThrow(/reserved/);
+    expect(() => parseScenario(minimal('steps: []\n').replace('seller: s', 'seller: outside'), 't')).toThrow(/reserved/);
+    expect(() => parseScenario(minimal('outside: [outside]\nsteps: []\n'), 't')).toThrow(/reserved/);
   });
 
   it('top_up: an outside actor adds money to a party address during the run (T-558)', () => {
@@ -121,7 +125,13 @@ steps:
     expect(s.steps[0]).toEqual({ kind: 'top_up', from: 'ramp-b', to: 'b', amount: '1050000000' });
     // From an outside actor only, to a party's address only (an adjudicator's faucet money is its bond).
     expect(() => parseScenario(minimal('steps:\n  - top_up: { from: p, to: b, amount: "1" }\n'), 't')).toThrow(/not an outside actor/);
-    expect(() => parseScenario(minimal('outside: [r]\nsteps:\n  - top_up: { from: r, to: p, amount: "1" }\n'), 't')).toThrow(/party address/);
+    // Only the buyer's paying address, until a fixture needs more (review L3).
+    expect(() => parseScenario(minimal('outside: [r]\nsteps:\n  - top_up: { from: r, to: p, amount: "1" }\n'), 't')).toThrow(/paying address/);
+    expect(() => parseScenario(minimal('outside: [r]\nsteps:\n  - top_up: { from: r, to: s, amount: "1" }\n'), 't')).toThrow(/paying address/);
+    const split = (to: string) => minimal(`outside: [r]\nsteps:\n  - top_up: { from: r, to: ${to}, amount: "1" }\n`).replace('seller: s', 'seller: s, buyer_payment: w, seller_payout: sp');
+    expect(parseScenario(split('w'), 't').steps[0]).toEqual({ kind: 'top_up', from: 'r', to: 'w', amount: '1' });
+    expect(() => parseScenario(split('b'), 't')).toThrow(/paying address/);
+    expect(() => parseScenario(split('sp'), 't')).toThrow(/paying address/);
     expect(() => parseScenario(minimal('outside: [r]\nsteps:\n  - top_up: { from: r, to: b, amount: 1 }\n'), 't')).toThrow(/decimal string/);
     expect(() => parseScenario(minimal('outside: [r]\nsteps:\n  - top_up: { from: r, to: b, amount: "0" }\n'), 't')).toThrow(/above 0/);
     expect(() => parseScenario(minimal('outside: [r]\nsteps:\n  - top_up: { from: r, to: b, amount: "1", commitment: 2 }\n'), 't')).toThrow(/does not act on a commitment/);
