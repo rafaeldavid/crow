@@ -97,10 +97,10 @@ The list is none of the five: no step waits for it or reads it.
 The SHA-256 in the command stops a file that differs from the one this page names: a changed file at the host, a stale copy, a swap on the way. It does not protect against whoever controls crow.direct, because the hash and the file come from that one origin, and this file runs beside a key that lasts. For a second origin, compare with the copy on the repository's `main` branch. The two match when the site and that branch are at one version. An answer that starts `e3b0c442` is the hash of nothing: the file was not found.
 
 ```sh
-curl -fsSL https://raw.githubusercontent.com/rafaeldavid/holdback/main/site/setup.mjs | shasum -a 256
+curl -fsSL https://raw.githubusercontent.com/rafaeldavid/crow/main/site/setup.mjs | shasum -a 256
 ```
 
-Its sources are `examples/setup.ts` and the files beside it in https://github.com/rafaeldavid/holdback.
+Its sources are `examples/setup.ts` and the files beside it in https://github.com/rafaeldavid/crow.
 
 ## Not in this version
 

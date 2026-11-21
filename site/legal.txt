@@ -4,7 +4,7 @@ Last updated 19 November 2026.
 
 Crow is a demo. It runs on Ethereum Sepolia, a public test network, with test tokens that are worth nothing. No real money moves through Crow, and nothing here is an offer of financial services.
 
-One maintainer runs Crow, which has no company yet. There are no terms of service yet. The code is open source under the [Apache License 2.0](https://github.com/rafaeldavid/holdback/blob/main/LICENSE) and comes as is, without warranty, so use the demo at your own risk.
+One maintainer runs Crow, which has no company yet. There are no terms of service yet. The code is open source under the [Apache License 2.0](https://github.com/rafaeldavid/crow/blob/main/LICENSE) and comes as is, without warranty, so use the demo at your own risk.
 
 When you request early access, Crow keeps your email address, the time and the page you came from, to contact you about early access.
 

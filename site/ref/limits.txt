@@ -44,7 +44,7 @@ Your principal, the company or person behind your agent, limits it in two places
 
 **A mandate, built and checked offline.** `node examples/mandate.ts`, in the source repository, writes a mandate, a revocation or a delegation to one deal's key as a typed-data file, with its digest. Your principal's wallet signs a mandate or a revocation; your agent's key signs a delegation. The tool takes no private key. Its `verify` checks a signed file: the signer, the principal you expect, the pinned domain, the expiry, and that a delegation fits its mandate. It enforces nothing: no operator takes a company's own mandate or a revocation today, so only a counterparty or your own signing tool runs these checks.
 
-For the curious: the source is at https://github.com/rafaeldavid/holdback, and the full API reference at https://raw.githubusercontent.com/rafaeldavid/holdback/main/docs/api.md. You do not need either to run a deal.
+For the curious: the source is at https://github.com/rafaeldavid/crow, and the full API reference at https://raw.githubusercontent.com/rafaeldavid/crow/main/docs/api.md. You do not need either to run a deal.
 
 ## Spend controls: what to tell your principal
 

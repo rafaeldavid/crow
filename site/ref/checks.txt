@@ -4,7 +4,7 @@ How to write the deterministic checks a buyer binds, for a CSV and for a JSON re
 
 ## Writing checks that protect a buyer
 
-On a checks-only deal the checks are the whole contract. Write each as if the seller will deliver the least that passes. The checks and the judges read the delivered file only: a file the delivery only links to is not fetched or checked, so put what you need in the delivery. A CSV once passed every check its buyer wrote with emails like `a@a`, one date repeated, and an instruction string as a customer ID. These checks would have refused it:
+On a checks-only deal the checks are the whole deal. Write each as if the seller will deliver the least that passes. The checks and the judges read the delivered file only: a file the delivery only links to is not fetched or checked, so put what you need in the delivery. A CSV once passed every check its buyer wrote with emails like `a@a`, one date repeated, and an instruction string as a customer ID. These checks would have refused it:
 
 ```json
 [
@@ -30,7 +30,7 @@ The check types: `csv_columns_exact` (`columns`), `row_count_range` (`min`, `max
 
 - **`unique_key` with several columns** treats them together as one key: `"columns": ["t_ms", "joint"]` fails only when a row repeats the same pair, so `t_ms` may repeat across joints. For columns that must each be unique, write one `unique_key` per column.
 - **`hidden_characters_max`** counts these code points in the delivered text, before any normalization, and fails when a class's count is over its `max`; name at least one class, and `total` bounds their sum. `tag`: U+E0000 to U+E007F. `bidi`: U+061C, U+200E, U+200F, U+202A to U+202E, U+2066 to U+2069. `variationSelector`: U+FE00 to U+FE0F, U+E0100 to U+E01EF, U+180B to U+180D, U+180F. `otherIgnorable` (zero-width and other invisible characters): U+00AD, U+034F, U+115F, U+1160, U+17B4, U+17B5, U+180E, U+200B to U+200D, U+2060 to U+2064, U+206A to U+206F, U+3164, U+FEFF, U+FFA0, U+1D173 to U+1D17A. `"max": {"total": 0}` fails on any of them.
-- **`reference_row_match_min`** compares the delivery with a file you hold, in the delivery's format: it passes when at least `minBps` of the reference file's rows appear in the delivery, matched on `keyColumn`, with the same value in every column the reference has. Upload the file before the offer with `POST /v1/ciphertext` (`ref/http-seller.txt`, "Encrypt and deliver", shows the call) and put the answer's `uri` and `id` in `"reference": {"uri": "<uri>", "sha256": "<id>"}`. The operator stores the file in the clear, and anyone with its hash can read it, so put nothing in it you would not publish. Upload it to the store the terms' adjudicators read, as for a delivery: each declines the offer when its store cannot return the file. It is at most `limits.maxCiphertextBytes` in discovery (1,048,576 bytes on these nodes), and a reference with Unicode tag characters fails the check. A pass shows the rows are present, not that the seller produced them. The rest: https://github.com/rafaeldavid/holdback/blob/main/docs/api.md, "Reference files".
+- **`reference_row_match_min`** compares the delivery with a file you hold, in the delivery's format: it passes when at least `minBps` of the reference file's rows appear in the delivery, matched on `keyColumn`, with the same value in every column the reference has. Upload the file before the offer with `POST /v1/ciphertext` (`ref/http-seller.txt`, "Encrypt and deliver", shows the call) and put the answer's `uri` and `id` in `"reference": {"uri": "<uri>", "sha256": "<id>"}`. The operator stores the file in the clear, and anyone with its hash can read it, so put nothing in it you would not publish. Upload it to the store the terms' adjudicators read, as for a delivery: each declines the offer when its store cannot return the file. It is at most `limits.maxCiphertextBytes` in discovery (1,048,576 bytes on these nodes), and a reference with Unicode tag characters fails the check. A pass shows the rows are present, not that the seller produced them. The rest: https://github.com/rafaeldavid/crow/blob/main/docs/api.md, "Reference files".
 
 For a report delivered as one JSON document, "Writing checks for a report" below lists the `json_schema` subset and four recipes.
 
@@ -95,7 +95,7 @@ Four recipes for an audit report with a `commit`, a `filesReviewed` list and a `
 - The subset cannot compare two fields (a line range that ends before it starts), cannot require one property to be unique across a list (two findings with the same id), and cannot say that a finding is true.
 - For what the checks cannot say, add a rubric. Judges read a report of up to 100,000 characters whole. They read a longer report as a sample of its lines, and a sampled read escalates the deal to the appeal adjudicator. The checks always run on the whole report.
 
-A complete commitment with these checks, the full report schema and an optional five-criterion rubric is `spec/examples/commitment.audit-report.example.json` in [the repository](https://github.com/rafaeldavid/holdback/blob/main/spec/examples/commitment.audit-report.example.json).
+A complete commitment with these checks, the full report schema and an optional five-criterion rubric is `spec/examples/commitment.audit-report.example.json` in [the repository](https://github.com/rafaeldavid/crow/blob/main/spec/examples/commitment.audit-report.example.json).
 
 ## Writing checks for a robot episode
 
@@ -115,7 +115,7 @@ A robot run sold as one JSON document is checked with `json_schema` too. The sel
 
 ## Writing checks for a telemetry run
 
-A robot run's readings sold as one CSV file, one row per sample, take the column checks. The template is `fixtures/terms/telemetry-run.yaml` in [the repository](https://github.com/rafaeldavid/holdback/blob/main/fixtures/terms/telemetry-run.yaml): a run ID on every row, a timestamp in ms, and integer readings in fixed units, each held to its range by a pattern.
+A robot run's readings sold as one CSV file, one row per sample, take the column checks. The template is `fixtures/terms/telemetry-run.yaml` in [the repository](https://github.com/rafaeldavid/crow/blob/main/fixtures/terms/telemetry-run.yaml): a run ID on every row, a timestamp in ms, and integer readings in fixed units, each held to its range by a pattern.
 
 - **Duration, rate and gaps by counting.** A `regex_match_rate_min` check on the timestamp column with `minBps: 10000` allows only the grid's timestamps, written without leading zeros. `unique_key` forbids a repeat, and `row_count_range` with `min` and `max` both at the grid's size then makes each timestamp appear once: the whole run at the agreed rate, with no gap. With a `minBps` below 10000 the count proves nothing.
 - **No check compares the order of rows or the step between them,** or two columns.
