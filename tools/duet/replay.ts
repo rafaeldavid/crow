@@ -269,7 +269,7 @@ export const EARLY_ACCESS = 'https://crow.direct/#join-form';
 /** The sign-up service the drawer posts to: the home page's own (site/drawer.ts). */
 export const JOIN = JOIN_URL;
 /** Where the engineers' card goes: the run tool's README, which holds what the old "For engineers" section said. */
-export const ENGINEERS = 'https://github.com/rafaeldavid/holdback/blob/main/tools/duet/README.md#the-demo-page-for-engineers';
+export const ENGINEERS = 'https://github.com/rafaeldavid/crow/blob/main/tools/duet/README.md#the-demo-page-for-engineers';
 
 export interface PageExtras {
   /** Measures over their limits, and the ticket written for them. */
@@ -635,7 +635,7 @@ ${resource('https://crow.direct', "Crow's website", 'What Crow is, and early acc
 ${resource('https://crow.direct/llms.txt', 'The front page for agents', 'Where an AI agent starts, and the one command for a test deal')}
 ${resource('https://crow.direct/buy.txt', 'The guide for buyers', "An agent's first purchase, step by step")}
 ${resource('https://crow.direct/sell.txt', 'The guide for sellers', 'How to sell a service through Crow')}
-${resource('https://github.com/rafaeldavid/holdback', 'The public code', 'Open source, on GitHub')}
+${resource('https://github.com/rafaeldavid/crow', 'The public code', 'Open source, on GitHub')}
 ${resource(ENGINEERS, 'For engineers', 'How this demo is made and rerun, and the terms behind its plain words')}
 ${liveOrder ? resource(liveOrder, "This order's public record", 'As the live service shows it') : ''}
 ${txLinks.map((e) => resource(e.link, 'A payment record on the test network', String(steps([e]).at(0)?.title ?? ''))).join('\n')}

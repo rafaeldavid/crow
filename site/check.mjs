@@ -119,7 +119,7 @@ expect((md.match(/\{\{[^}]*\}\}/g) ?? []).every((p) => ['{{OP1}}', '{{OP2}}', '{
 // A link as build.mjs renders one (https, trailing punctuation left out), parsed, so a look-alike host or a longer
 // path does not count (CodeQL js/incomplete-url-substring-sanitization).
 const mdLinks = (md.match(/https:\/\/[^\s<)]+[^\s<).,;:]/g) ?? []).filter((u) => URL.canParse(u)).map((u) => new URL(u));
-expect(mdLinks.some((u) => u.host === 'github.com' && u.pathname === '/rafaeldavid/holdback'), 'llms.txt links the public repo (optional reading)');
+expect(mdLinks.some((u) => u.host === 'github.com' && u.pathname === '/rafaeldavid/crow'), 'llms.txt links the public repo (optional reading)');
 // The home page (the enterprise look, Rafa 2026-11-12, as on the demo page): a slim header with Crow's mark and the
 // links to the demo, the agent docs and early access; the hero (the tagline, the headline's three lines, the lede,
 // early access, the demo link); the six value props, each with an icon; then the footer and the agent docs link.
@@ -250,7 +250,7 @@ expect(!visible.includes('try.mjs.part') && !visible.includes(trySha256()), 'ind
 // `echo "<sha256>  try.mjs" | shasum -a 256 -c`, and shasum then refuses the line; pre-wrap keeps them.
 expect(/\.copied \{[^}]*white-space: pre-wrap;/.test(HOME_CSS), "the .copied fallback must use white-space: pre-wrap, or a hand copy breaks the command's hash check");
 expect(!/before you ask|fetch https:\/\/crow\.direct\/try\.mjs/.test(tryIt), '"Try it" asks the agent to fetch try.mjs before the command: each fetch is one more approval');
-expect(tryIt.includes('runs it only if its SHA-256 matches the one in the command') && tryIt.includes('`examples/try.ts`, `agent.ts` and `verify.ts` in https://github.com/rafaeldavid/holdback'), '"Try it" lost a trust anchor: the SHA-256 pin or the source on GitHub');
+expect(tryIt.includes('runs it only if its SHA-256 matches the one in the command') && tryIt.includes('`examples/try.ts`, `agent.ts` and `verify.ts` in https://github.com/rafaeldavid/crow'), '"Try it" lost a trust anchor: the SHA-256 pin or the source on GitHub');
 // The goal commands (T-469): each site/<name>.mjs is the current, self-contained bundle of its source (no import but
 // Node's own modules, so no install step), and "Try it" carries its one command, with the file's current sha256, in
 // its own sh block, after try.mjs's. try.mjs and buy.mjs stay pinned by their own hashes (groups 7 and 13).
@@ -342,7 +342,7 @@ for (const [file, src, title] of [['sell.txt', sell, '# Crow for sellers\n'], ['
   // A step runs from its numbered line to the next one, its indented code block included.
   const steps = sectionOf(src, 'First hour').split(/\n(?=\d+\. \*\*)/).slice(1);
   expect(steps.length >= 5 && steps.every((l, i) => l.startsWith(`${i + 1}. `) && l.includes('Worked')), `each "First hour" step in ${file} is numbered in order and says what you see when it Worked`);
-  expect(links(src).some((u) => u.href === `${SITE_URL}llms.txt`) && links(src).some((u) => u.host === 'github.com' && u.pathname === '/rafaeldavid/holdback'), `${file} links the front door and the public repo`);
+  expect(links(src).some((u) => u.href === `${SITE_URL}llms.txt`) && links(src).some((u) => u.host === 'github.com' && u.pathname === '/rafaeldavid/crow'), `${file} links the front door and the public repo`);
 }
 expect(!/127\.0\.0\.1|localhost/.test(sell.replace(firstHour, '')), 'sell.txt has a local address outside "First hour"');
 const roles = sectionOf(md, 'Read one page for your role');
@@ -522,7 +522,7 @@ if (existsSync(here('trust.html'))) {
   const t = read('trust.html');
   faq('trust.html', t);
   for (const w of ['Coming soon', 'outside audit', 'SOC 2', 'test network']) expect(shownText(t).includes(w), `site/trust.html no longer says "${w}": it states plainly what is not there yet`);
-  const repo = 'https://github.com/rafaeldavid/holdback/';
+  const repo = 'https://github.com/rafaeldavid/crow/';
   // A submodule counts when .gitmodules names it: a copy of the tracked files (tests/record-copies.test.ts) has no submodule folder.
   const submodules = [...read('../.gitmodules').matchAll(/^\s*path = (.+)$/gm)].map((m) => m[1].trim());
   for (const m of t.matchAll(/href="https:\/\/github\.com\/rafaeldavid\/holdback\/(blob|tree)\/main\/([^"#]+)/g)) expect(existsSync(here(`../${m[2]}`)) || submodules.includes(m[2]), `site/trust.html links ${repo}${m[1]}/main/${m[2]}, which is not in this checkout`);
@@ -680,7 +680,7 @@ const SETUP_SAYS = [
   ['that every deal on the live service is public', '**Every deal on the live service is public.**'],
   ['the ways the setup leans on Crow-run hosts', '## What leans on Crow-run hosts'],
   ['what the hash does not protect', 'It does not protect against whoever controls crow.direct'],
-  ["the optional command that compares the file with the repository's copy", 'curl -fsSL https://raw.githubusercontent.com/rafaeldavid/holdback/main/site/setup.mjs | shasum -a 256'],
+  ["the optional command that compares the file with the repository's copy", 'curl -fsSL https://raw.githubusercontent.com/rafaeldavid/crow/main/site/setup.mjs | shasum -a 256'],
   ['what an answer of the comparison means when the file was not found', 'An answer that starts `e3b0c442` is the hash of nothing'],
   ['the preview the person sees before the first deal', '`node ~/.crow/setup.mjs first-deal --preview`'],
   ['what this version sends before the marker', 'Before the marker, this version sends nothing to a Crow-run host'],

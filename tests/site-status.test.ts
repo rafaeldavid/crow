@@ -70,7 +70,7 @@ describe('the trust surfaces (site/trust.mjs)', () => {
     expect(fields.get('Expires')).toEqual(['2027-05-13T00:00:00.000Z']);
     expect(fields.get('Preferred-Languages')).toEqual(['en']);
     expect(fields.get('Canonical')).toEqual(['https://crow.direct/.well-known/security.txt']);
-    expect(fields.get('Policy')).toEqual(['https://github.com/rafaeldavid/holdback/blob/main/SECURITY.md']);
+    expect(fields.get('Policy')).toEqual(['https://github.com/rafaeldavid/crow/blob/main/SECURITY.md']);
     expect(() => parseSecurityTxt('Contact https://x\n')).toThrow(/not "Field: value"/);
   });
   it('makes the trust page an FAQ: every heading a question, every answer with a Source line of full links, the same questions in trust.txt', () => {

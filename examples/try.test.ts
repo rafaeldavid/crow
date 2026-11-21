@@ -244,7 +244,7 @@ describe('try.ts', () => {
     // Each fetch before the command is one more approval: "Try it" asks for none, and keeps the sha256 pin and the source.
     expect(tryIt).not.toMatch(/before you ask|fetch https:\/\/crow\.direct\/try\.mjs/);
     expect(tryIt).toContain('runs it only if its SHA-256 matches the one in the command');
-    expect(tryIt).toContain('`examples/try.ts`, `agent.ts` and `verify.ts` in https://github.com/rafaeldavid/holdback');
+    expect(tryIt).toContain('`examples/try.ts`, `agent.ts` and `verify.ts` in https://github.com/rafaeldavid/crow');
   });
 });
 

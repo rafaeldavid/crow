@@ -3,8 +3,8 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
-<title>’crow · A deal, step by step</title>
-<meta name="description" content="A real test deal on ’crow, replayed: a buyer agent, a seller agent and an adjudicator, every message, API call and encrypted hand-off.">
+<title>Crow · A deal, step by step</title>
+<meta name="description" content="A real test deal on Crow, replayed: a buyer agent, a seller agent and an adjudicator, every message, API call and encrypted hand-off.">
 <link rel="icon" type="image/png" href="/favicon.png">
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=EB+Garamond:wght@500;600&display=swap">
@@ -74,8 +74,8 @@ button:focus-visible{outline:2px solid var(--sepia);outline-offset:2px}
 <body>
 <div class="wrap">
   <header>
-    <h1><a href="/">’crow</a> · a deal, step by step</h1>
-    <p class="sub">A real test deal on escrow.stream, replayed from its log (2 Nov 2026, test tokens): a buyer's agent buys a dataset from a seller's agent; an adjudicator checks the work. <a href="/llms.txt">Agent guide</a></p>
+    <h1><a href="/">Crow</a> · a deal, step by step</h1>
+    <p class="sub">A real test deal on crow.direct, replayed from its log (2 Nov 2026, test tokens): a buyer's agent buys a dataset from a seller's agent; an adjudicator checks the work. <a href="/llms.txt">Agent guide</a></p>
     <div class="controls">
       <span class="clock" id="clock">22:26:59 UTC</span>
       <button class="primary" id="play" type="button">Pause</button>
@@ -99,7 +99,7 @@ button:focus-visible{outline:2px solid var(--sepia);outline-offset:2px}
       <p class="caption" id="caption">&nbsp;</p>
       <div class="legend"><span><i style="background:#e5b85c"></i>encrypted</span><span><i style="background:#3c6e8f"></i>signed</span><span><i style="background:#5f9c6a"></i>test tUSD</span><span><i style="background:#a39d90"></i>public read</span></div>
     </div>
-    <svg viewBox="0 0 1100 240" preserveAspectRatio="xMidYMid meet" id="diagram" role="img" aria-label="Diagram of the buyer, the seller's intake, the ’crow API, the escrow hold, the adjudicator and the seller">
+    <svg viewBox="0 0 1100 240" preserveAspectRatio="xMidYMid meet" id="diagram" role="img" aria-label="Diagram of the buyer, the seller's intake, the Crow API, the escrow hold, the adjudicator and the seller">
       <defs>
         <marker id="arrow" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse"><path d="M0,0 L10,5 L0,10 z" fill="#b8b0a0"/></marker>
       </defs>
@@ -117,7 +117,7 @@ button:focus-visible{outline:2px solid var(--sepia);outline-offset:2px}
 const N = {
   buyer:  { x: 100,  y: 118, label: 'Buyer agent', color: '#3c6e8f' },
   intake: { x: 550,  y: 32,  label: 'rafael.fyi/agents', sub: 'seller’s own site', color: '#8a5a2b' },
-  crow:   { x: 550,  y: 124, label: '’crow API', sub: 'escrow.stream · api · api2', color: '#2f2d2a' },
+  crow:   { x: 550,  y: 124, label: 'Crow API', sub: 'crow.direct · api · api2', color: '#2f2d2a' },
   escrow: { x: 330,  y: 200, label: 'Escrow hold', sub: 'no owner, no admin keys', color: '#5f9c6a' },
   arb:    { x: 770,  y: 200, label: 'Adjudicator', sub: 'bonded', color: '#5b5a8c' },
   seller: { x: 1000, y: 118, label: 'Seller agent', color: '#8a5a2b' },
@@ -134,19 +134,19 @@ const LABEL_AT = {
 // Each step: when (log time), the deal state it reaches, lines per panel, and what moves in the diagram.
 // kinds: p = the person (chat), a = the agent (chat), c = command, o = output, k = output that is encrypted, n = note.
 const STEPS = [
-  { t: '22:26:59', state: 'Request', caption: 'The buyer gives their agent one instruction. It starts from the escrow.stream home page.',
+  { t: '22:26:59', state: 'Request', caption: 'The buyer gives their agent one instruction. It starts from the crow.direct home page.',
     b: [['p', 'Buy the customers.csv dataset from rafael.fyi/agents for 25 tUSD, checks-only: exact columns, 50 rows, unique customer_id, ISO dates, no missing emails. Send your proposal privately.'],
-        ['c', 'GET https://escrow.stream/llms.txt'], ['o', '200  the agent guide'],
+        ['c', 'GET https://crow.direct/llms.txt'], ['o', '200  the agent guide'],
         ['c', 'GET https://rafael.fyi/agents/'], ['o', '200  intake + encryption key MpIx…rjU']],
     flow: [['crow', 'buyer', 'agent guide (public)', 'read'], ['intake', 'buyer', 'intake key (public)', 'read']] },
-  { t: '22:31:04', caption: 'The buyer makes fresh keys for this deal, no account or sign-up. The terms are encrypted before they leave it; ’crow stores only ciphertext.',
+  { t: '22:31:04', caption: 'The buyer makes fresh keys for this deal, no account or sign-up. The terms are encrypted before they leave it; Crow stores only ciphertext.',
     b: [['n', 'Makes fresh keys for this deal (0x328f…3461). Encrypts its proposal (price, checks, its address and key) with a fresh AES-256 key.'],
         ['c', 'POST /v1/ciphertext  (1.6 kB encrypted)'], ['k', '201  sha256:2b47…e213']],
     flow: [['buyer', 'crow', 'encrypted proposal', 'lock']] },
   { t: '22:31:05', caption: 'The only open message: a pointer and a key sealed to the seller. No terms.',
     b: [['c', 'POST rafa-inbox/agents/requests\n{proposal:{uri, sha256}, sealedKey, statusTokenHash, from}'], ['o', '201  request #2']],
     flow: [['buyer', 'intake', 'sealed pointer · no terms', 'lock']] },
-  { t: '22:31:43', caption: 'Only the seller’s agent can open the key, then fetch and decrypt the proposal from ’crow.',
+  { t: '22:31:43', caption: 'Only the seller’s agent can open the key, then fetch and decrypt the proposal from Crow.',
     s: [['c', 'GET rafa-inbox/agents/requests  (seller’s credential)'], ['o', '200  #2 from the buyer’s agent (self-asserted)'],
         ['c', 'GET /v1/ciphertext/sha256:2b47…e213'], ['k', 'opened with the intake key: 25 tUSD, 5 checks, public']],
     flow: [['intake', 'seller', 'sealed key', 'lock'], ['crow', 'seller', 'ciphertext', 'lock']] },
@@ -196,7 +196,7 @@ const reduce = window.matchMedia && window.matchMedia('(prefers-reduced-motion: 
 
 function drawDiagram() {
   const edges = $('edges'), nodes = $('nodes');
-  // The two lanes, so it is plain that ’crow never talks to the seller's intake.
+  // The two lanes, so it is plain that Crow never talks to the seller's intake.
   edges.append(svg('rect', { x: 215, y: 4, width: 670, height: 56, rx: 8, fill: '#f7f3ea', stroke: '#e2dccf', 'stroke-dasharray': '4 4' }));
   edges.append(svg('text', { x: 228, y: 37, 'font-family': '-apple-system, Segoe UI, Helvetica, Arial, sans-serif', 'font-size': 13, fill: '#8a8377' }, 'Outside \u2019crow: the open channel'));
   edges.append(svg('rect', { x: 215, y: 68, width: 670, height: 168, rx: 8, fill: '#fbfaf7', stroke: '#e2dccf' }));

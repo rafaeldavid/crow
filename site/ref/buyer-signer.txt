@@ -4,7 +4,7 @@ The buyer's tools in full: the library calls behind the commands in https://crow
 
 ## A seller's client can carry the buyer's side
 
-A seller can ship the buyer's side of a deal inside its own command-line client, so a buyer's agent pays with no code of its own. The file is `examples/buyer-signer.ts` in https://github.com/rafaeldavid/holdback; it runs the buyer steps of `ref/http-buyer.txt` with `agent.ts` and `verify.ts`. The buyer's agent approves the offer once, and the file does the rest on the buyer's machine:
+A seller can ship the buyer's side of a deal inside its own command-line client, so a buyer's agent pays with no code of its own. The file is `examples/buyer-signer.ts` in https://github.com/rafaeldavid/crow; it runs the buyer steps of `ref/http-buyer.txt` with `agent.ts` and `verify.ts`. The buyer's agent approves the offer once, and the file does the rest on the buyer's machine:
 
 1. **Keys.** `makeKeys(<directory>)` makes a fresh signing key and x25519 key for one deal and saves them in a directory on the buyer's machine, with file mode 0600. The keys stay on that machine: the file sends the seller only the buyer's address, its public encryption key and the scope of the work. The operator relays signed messages and never holds a key.
 2. **Quote.** `quote(<the seller's quote URL>, <scope>)` posts `{buyer, buyerEncryptionPublicKey, scope}` and reads `{commitmentId, price, fees, expiresAt}`. The answer is the seller's claim. When the seller requires a bearer credential, put it in an environment variable and name that variable in `makeKeys(<directory>, {quoteCredentialEnv: "<NAME>"})`: the signer sends it and never saves or prints it. On this test service `testFunds(<total>)` then takes the deal's total and a mandate from the faucet.
