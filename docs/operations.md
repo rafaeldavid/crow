@@ -307,6 +307,14 @@ The maintainers keep the notes on agent sessions and permission prompts privatel
 
 Each entry records one deploy as it ran: the date and time in UTC, the commit, each Worker's new version and its rollback target, and what was measured after it. The deploy scripts print the entry's first line (`pnpm demo-cloud:deploy`, `pnpm site:deploy`, `node apps/test-agents/scripts/deploy.mjs`). The values are true for their date: for what runs now, read "What is live" above and each node's discovery.
 
+### The sitemap and robots.txt (deployed 2026-11-21, 07:14 UTC)
+
+Rafa, 2026-11-21: crow.direct had no sitemap, and robots.txt carried only Cloudflare's managed comments; "build it as real thing". The site deploy carries pull requests 745 (the publish build writes `sitemap.xml` and `robots.txt`; site check 21) and 746 (the sitemap adds `reference.txt` and lists the problem pages at their served addresses). It ran from a clean worktree at `a6e3fd7d` after `main`'s own checks passed there [measured].
+
+**Site deploy 2026-11-21 07:14 UTC, commit `a6e3fd7` on a detached HEAD: pass.** crow-site `c6158ed6-27bd-444a-9a37-ca83c9d3d865` (rollback target `d277e49b-14f8-42bf-9ee1-f059b28fd81f`).
+
+Afterwards [measured at about 07:15 UTC]: `/sitemap.xml` answered 200 as `application/xml` with 57 entries, none ending in `.html`, and every entry answered 200; `/robots.txt` reads `User-agent: *`, `Allow: /` and `Sitemap: https://crow.direct/sitemap.xml` beneath Cloudflare's managed comments. The operators were not redeployed: nothing in these pull requests touches them.
+
 ### The home page's "Autonomous Adjudication" card and the judge cap (deployed 2026-11-21, 06:27 to 06:35 UTC)
 
 Rafa's words: "On https://crow.direct/, change Frontier AI Verification to \"Autonomous Adjudication\"…", then "Yes deploy the site". The site deploy carries pull request 743 (the card's new wording) and the site pages changed since the last site deploy: the seller's funding paragraph in `site/ref/http-seller.txt` (740) and the judge-cap lines in `site/ref/limits.txt` and `site/ref/intake.txt` (741). It ran from a clean worktree at `15a7881f` after `main`'s own checks passed there [measured].
