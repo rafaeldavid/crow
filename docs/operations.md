@@ -307,6 +307,14 @@ The maintainers keep the notes on agent sessions and permission prompts privatel
 
 Each entry records one deploy as it ran: the date and time in UTC, the commit, each Worker's new version and its rollback target, and what was measured after it. The deploy scripts print the entry's first line (`pnpm demo-cloud:deploy`, `pnpm site:deploy`, `node apps/test-agents/scripts/deploy.mjs`). The values are true for their date: for what runs now, read "What is live" above and each node's discovery.
 
+### The vocabulary fixes and the guide lines (deployed 2026-11-21, 12:11 UTC)
+
+Rafa, 2026-11-21: "Yes, deploy". The site deploy carries pull requests 748 (the public pages follow the agreed vocabulary and link the renamed repositories) and 749 (roadmap row N213: the guide lines the approvals runs lacked, a seller's own terms and deal record in `ref/intake.txt`, and which quote address takes a POST). No bundle changes. It ran from a clean worktree at `3d74a765` after `main`'s own checks passed there [measured].
+
+**Site deploy 2026-11-21 12:11 UTC, commit `3d74a76` on a detached HEAD: pass.** crow-site `8da33680-d256-4c03-b4c0-c5df51e4a784` (rollback target `c6158ed6-27bd-444a-9a37-ca83c9d3d865`).
+
+After the deploy, the live guides carry the new lines, link `rafaeldavid/crow` and no old repository address, `vault.txt` links `crow-agent-vault`, the visual demo names neither the logomark nor the old host, and all 57 sitemap addresses answer 200 [measured].
+
 ### The sitemap and robots.txt (deployed 2026-11-21, 07:14 UTC)
 
 Rafa, 2026-11-21: crow.direct had no sitemap, and robots.txt carried only Cloudflare's managed comments; "build it as real thing". The site deploy carries pull requests 745 (the publish build writes `sitemap.xml` and `robots.txt`; site check 21) and 746 (the sitemap adds `reference.txt` and lists the problem pages at their served addresses). It ran from a clean worktree at `a6e3fd7d` after `main`'s own checks passed there [measured].
