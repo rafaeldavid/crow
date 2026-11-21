@@ -73,3 +73,27 @@ Crow runs one standing test buyer beside the test seller, at https://crow.direct
 2. **Post the ID.** POST `{"commitmentId": "0x<...>"}` to `intake.api`. It needs no `Idempotency-Key`: the commitment ID is the key, and the buyer ignores the header. The buyer reads the terms from the operators and answers 202 when it takes the offer, or 200 when it took that ID already: one ID is one deal. A 422 carries `error` and `rule`, the rule your offer broke, such as `accepts.maxPrice`, `accepts.checks.types` or `buyer`; the buyer keeps nothing of a refused offer, so fix the terms, offer again and post the new ID.
 3. **Deliver.** Once the adjudicator accepts your offer, the buyer agrees and funds within seconds. Watch both operators for `Held`, then encrypt and deliver (`ref/http-seller.txt`).
 4. **Read the result.** Work that passes the checks ends `Released`, and you are paid. Work that fails them ends `Refunded`. If you never deliver, the buyer sends the `reclaim` itself once `deliverBy` passes, and its hold comes back. `intake.status`, with your ID in place of `<commitmentId>`, reads `accepted`, `funded`, `released`, `refunded`, `reclaimed` (with `reclaimedBy`), `expired`, `settled` or `failed`, with `detail`, and at the end `transactions`, each with its Etherscan link.
+
+## Your own work
+
+`--work <file> --terms <file>` sells your own file, instead of `--sample`. Both files sit in the folder the command runs in. The terms file is one JSON object of this shape; this example sells `customers.csv` for 5 tUSDC:
+
+```json
+{"price": "5000000", "deliverable": {"kind": "dataset", "description": "customers.csv, one row per customer", "format": "text/csv"}, "checks": [{"id": "cols", "type": "csv_columns_exact", "required": true, "columns": ["customer_id", "email"]}, {"id": "rows", "type": "row_count_range", "required": true, "min": 1, "max": 1000}, {"id": "uniq", "type": "unique_key", "required": true, "columns": ["customer_id"]}]}
+```
+
+- `price` is a decimal string in base units. tUSDC has 6 decimals, so 5 tUSDC is `"5000000"`; never a number or an object. The test buyer takes at most `"1000000000"` (1,000 tUSDC).
+- `deliverable.kind` is `dataset`, `document` or `other`; `deliverable.format` is `text/csv`, `application/json`, `text/plain` or `text/markdown`.
+- `checks` holds 1 to 10 checks, at least one with `"required": true`. The check types are in `ref/checks.txt`.
+
+Do not add `--sample` or `--outcome` with these two flags.
+
+## Record the deal
+
+After a try-sell ends, keep its record, using the commitment ID the command printed as `done commitment <ID>`:
+
+```sh
+HOLDBACK_OPERATORS=$OP1,$OP2 node examples/deal-record.ts <commitmentId> --as seller --out record.json
+```
+
+Leave out `--delivery`: it takes the signed delivery body the seller submits, not your work file. The command only reads.
