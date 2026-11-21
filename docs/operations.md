@@ -20,7 +20,7 @@ The standing runbook comes first and points to the source of each value: the dep
 
 All on Rafa's Cloudflare account (its ID is the 1Password item that `config/secrets/cloudflare.refs` names for `CLOUDFLARE_ACCOUNT_ID`). The domains `escrow.stream` and `crow.direct` (Rafa, 2026-11-10) were bought on Cloudflare; crow.direct is the canonical home since T-312's deploy, and Crow Control lives at control.crow.direct since 2026-11-11 (below).
 
-**Demo settings** (vars in `apps/demo-cloud/wrangler.op1.jsonc`): the minimum window (`MIN_WINDOW_SEC`) and the operator fee (`OPERATOR_FEE_BPS`, `OPERATOR_FEE_MIN`, `OPERATOR_FEE_GAS`, optional `OPERATOR_FEE_MAX`; D33, ADR-0023). For the first pilots all three are 0, and Crow's relayer pays the gas (T-389). Read the live values in discovery (`demo.minWindowSec`, `fees.operator`). Live judges: Anthropic and DeepSeek, pinned in `config/judges-live.yaml`, capped at 30 calls a day (`LIVE_JUDGE_CALLS_PER_DAY`); past the cap, or without keys, panels are scripted and every verdict says so.
+**Demo settings** (vars in `apps/demo-cloud/wrangler.op1.jsonc`): the minimum window (`MIN_WINDOW_SEC`) and the operator fee (`OPERATOR_FEE_BPS`, `OPERATOR_FEE_MIN`, `OPERATOR_FEE_GAS`, optional `OPERATOR_FEE_MAX`; D33, ADR-0023). For the first pilots all three are 0, and Crow's relayer pays the gas (T-389). Read the live values in discovery (`demo.minWindowSec`, `fees.operator`). Live judges: Anthropic and DeepSeek, pinned in `config/judges-live.yaml`, capped at 30 calls a day (`LIVE_JUDGE_CALLS_PER_DAY`); past the cap, Crow's adjudicators decline new judged deals until the next UTC day, and a deal already being judged gets no stand-in verdict (pull request 741; Rafa, 2026-11-20); without keys, panels are scripted and every verdict says so.
 
 **Schema and domain:** main and the live demo share one schema version and one EIP-712 domain, the domain of the contracts in `contracts/deployments/sepolia.json`. Read the live values in `/v1/status` (`schemaVersion`, `domain`); the build's are in `packages/core/src/eip712.ts` and `spec/schemas/`.
 
@@ -306,6 +306,20 @@ The maintainers keep the notes on agent sessions and permission prompts privatel
 ## Deploy record
 
 Each entry records one deploy as it ran: the date and time in UTC, the commit, each Worker's new version and its rollback target, and what was measured after it. The deploy scripts print the entry's first line (`pnpm demo-cloud:deploy`, `pnpm site:deploy`, `node apps/test-agents/scripts/deploy.mjs`). The values are true for their date: for what runs now, read "What is live" above and each node's discovery.
+
+### The home page's "Autonomous Adjudication" card and the judge cap (deployed 2026-11-21, 06:27 to 06:35 UTC)
+
+Rafa's words: "On https://crow.direct/, change Frontier AI Verification to \"Autonomous Adjudication\"…", then "Yes deploy the site". The site deploy carries pull request 743 (the card's new wording) and the site pages changed since the last site deploy: the seller's funding paragraph in `site/ref/http-seller.txt` (740) and the judge-cap lines in `site/ref/limits.txt` and `site/ref/intake.txt` (741). It ran from a clean worktree at `15a7881f` after `main`'s own checks passed there [measured].
+
+**Site deploy 2026-11-21 06:27 UTC, commit `15a7881` on a detached HEAD: pass.** crow-site `d277e49b-14f8-42bf-9ee1-f059b28fd81f` (rollback target `18dccf5f-ac36-48f7-b0af-bcec0d986eaa`).
+
+Afterwards [measured at about 06:28 UTC]: the home page reads "Autonomous Adjudication" and "Request an AI of your choice to review the work before payment."; the seller page names `hold.funded`; the five pinned bundles match their SHA-256 in `llms.txt`.
+
+**Then the operators, on Rafa's word ("go ahead and deploy", 2026-11-21),** so the guides and the live service match. They carry pull request 741: past the daily live-judge budget, Crow's adjudicators decline new judged deals until the next UTC day, a first-instance panel already under way abstains, and an appeal panel does not convene. `pnpm demo-cloud:e2e` passed in 8 s before the deploy, and `wrangler tail` ran on both operators beside it [measured].
+
+**Deploy 2026-11-21 06:29 UTC, commit `15a7881` on a detached HEAD: pass.** holdback-op1 `1f856e81-7f5a-428b-af22-6733a847a140` (rollback target `ed5c8b4c-3fcf-46c5-b84d-b5c566b25db8`), holdback-op2 `092d7ac7-a91c-47e4-9e70-681f25926749` (rollback target `20979440-d207-49a0-b1f9-4719ebfeac71`). Smoke deal `0x032cc811db0a02f1c5227e63a98b54be504cb3bfa664358e55ffa7e2a0cf4afa` Released in 49 s, against commit `15a7881` (both nodes' discovery named it 259 s after /v1/status answered).
+
+Afterwards [measured at about 06:35 UTC]: both nodes' discovery named `15a7881f` with schema `0.12`; the tails saw 187 events and no exception, and one event on holdback-op1 ended `canceled`.
 
 ### Standing-offer takes and the owner's vault guide (deployed 2026-11-20, 08:52 to 08:58 UTC)
 
