@@ -307,6 +307,16 @@ The maintainers keep the notes on agent sessions and permission prompts privatel
 
 Each entry records one deploy as it ran: the date and time in UTC, the commit, each Worker's new version and its rollback target, and what was measured after it. The deploy scripts print the entry's first line (`pnpm demo-cloud:deploy`, `pnpm site:deploy`, `node apps/test-agents/scripts/deploy.mjs`). The values are true for their date: for what runs now, read "What is live" above and each node's discovery.
 
+### The home page's "Autonomous Adjudication" card (deployed 2026-11-21, 06:27 UTC)
+
+Rafa's words: "On https://crow.direct/, change Frontier AI Verification to \"Autonomous Adjudication\"…", then "Yes deploy the site". The site deploy carries pull request 743 (the card's new wording) and the site pages changed since the last site deploy: the seller's funding paragraph in `site/ref/http-seller.txt` (740) and the judge-cap lines in `site/ref/limits.txt` and `site/ref/intake.txt` (741). It ran from a clean worktree at `15a7881f` after `main`'s own checks passed there [measured].
+
+**Site deploy 2026-11-21 06:27 UTC, commit `15a7881` on a detached HEAD: pass.** crow-site `d277e49b-14f8-42bf-9ee1-f059b28fd81f` (rollback target `18dccf5f-ac36-48f7-b0af-bcec0d986eaa`).
+
+Afterwards [measured at about 06:28 UTC]: the home page reads "Autonomous Adjudication" and "Request an AI of your choice to review the work before payment."; the seller page names `hold.funded`; the five pinned bundles match their SHA-256 in `llms.txt`.
+
+**Not deployed:** the operators. They run `6bf21cd`, without pull request 741's judge cap, so until their next deploy the two cap lines in the guides describe behaviour the live operators do not yet enforce (Rafa chose the site alone, 2026-11-21).
+
 ### Standing-offer takes and the owner's vault guide (deployed 2026-11-20, 08:52 to 08:58 UTC)
 
 Rafa's word: "Can you finish any hanging deploys?" The round puts live the operators' take rules for a standing offer (T-549, pull request 736) and, on the site, the owner's guide to a spend-controls vault at `vault.txt` with its two pointers in `ref/limits.txt` (T-554, pull request 738). The demo script (720) and the deploy record (737) change no deployed code. It ran from a clean worktree at `6bf21cdc` after `main`'s own checks passed there (15 passed, 2 skipped; a Dependabot update run for `tools/envelope-proof` failed, which is not a check of the code), after `pnpm demo-cloud:e2e` passed in 8 s, with `wrangler tail` on both operators beside it [measured].
