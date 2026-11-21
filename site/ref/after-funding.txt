@@ -20,7 +20,7 @@ Each is prepared, verified and submitted as `ref/signing.txt`, "Prepare, verify,
 
 ## A record anyone can check offline
 
-A public deal closed by an adjudicator's accept or reject leaves one file anyone can check with no network. In a clone of [the repository](https://github.com/rafaeldavid/holdback), after `pnpm install`:
+A public deal closed by an adjudicator's accept or reject leaves one file anyone can check with no network. In a clone of [the repository](https://github.com/rafaeldavid/crow), after `pnpm install`:
 
 - `node examples/evidence.ts fetch <commitment ID> --out deal.json` writes the evidence bundle: the operator's terms, events, receipts and judgment record, the encrypted work, and the raw signed transactions (the buyer's agreement, the seller's delivery and the adjudicator's decision are only in their calldata). Env: `HOLDBACK_OPERATOR`, `SEPOLIA_RPC_URL`.
 - `node examples/evidence.ts check deal.json` checks it offline: it runs the deal record's own checks over the file (the record of `buy.txt` step 11, which runs them live), then the signed messages inside each transaction, and the decision and the judgment record against the terms. It prints what that proves and the one chain read it cannot make, `eth_getTransactionReceipt` of the decide transaction, as a command; add `--receipt <answer file>` to check that answer too. Exit 0 passed, 1 a check failed (do not rely on the file), 2 could not run.

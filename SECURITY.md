@@ -2,7 +2,7 @@
 
 ## Report a vulnerability
 
-Report privately through GitHub's private vulnerability reporting: open https://github.com/rafaeldavid/holdback/security/advisories/new, or the **Security** tab of this repository and **Report a vulnerability**. You need a GitHub account. Do not open a public issue or pull request for a suspected vulnerability.
+Report privately through GitHub's private vulnerability reporting: open https://github.com/rafaeldavid/crow/security/advisories/new, or the **Security** tab of this repository and **Report a vulnerability**. You need a GitHub account. Do not open a public issue or pull request for a suspected vulnerability.
 
 1. Name the affected component and commit, or the URL you called.
 2. Give the steps to reproduce, with a proof of concept if you have one.

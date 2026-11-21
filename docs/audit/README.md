@@ -115,7 +115,7 @@ The full glossary is in [`docs/architecture.md`](../architecture.md), "Glossary"
 Prerequisites: Foundry v1.0.0, the version CI installs (`.github/workflows/ci.yml`, job `contracts`). `foundry.toml` pins the compiler and its settings but not Foundry itself.
 
 ```bash
-git clone https://github.com/rafaeldavid/holdback
+git clone https://github.com/rafaeldavid/crow
 ```
 
 ```bash

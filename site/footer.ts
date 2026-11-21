@@ -17,7 +17,7 @@ export const PITCH_LINE = 'Buy from any agent. Sell to any agent.';
 export const FOOTER_CSS = kitCss({ parts: ['pill', 'footer'], scope: '.ck-foot' });
 
 /** Where the public code lives. */
-export const CODE_URL = 'https://github.com/rafaeldavid/holdback';
+export const CODE_URL = 'https://github.com/rafaeldavid/crow';
 
 /**
  * The footer (T-402; Rafa 2026-11-13: simple, little content): Crow, links to pages that exist (T-421 added the trust and
