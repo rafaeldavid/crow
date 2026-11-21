@@ -118,7 +118,7 @@ describe('pnpm demo-cloud:deploy, before the build', () => {
     expect(r.stderr).toContain('FAIL: the build failed');
     expect(r.stdout).toMatch(new RegExp(`\\*\\*Deploy \\d{4}-\\d\\d-\\d\\d \\d\\d:\\d\\d UTC, commit \`${git(root, 'rev-parse', 'HEAD').slice(0, 7)}\` on branch \`t-999-deploy\`: FAIL, the build failed\\.\\*\\*`));
     // N166: the last step asks for a Crow Control build; the stand-in gh refuses, and the deploy says so and keeps its code
-    expect(r.stdout).toMatch(/^Crow Control: no build started \(gh exit 1\); the page shows this deploy at its next build, or run: gh workflow run control-hourly\.yml --repo rafaeldavid\/crow-private --ref main$/m);
+    expect(r.stdout).toMatch(/^Crow Control: no build started \(gh exit 1\); the page shows this deploy at its next build, or run: gh workflow run control-hourly\.yml --repo rafaeldavid\/crow-ops-private --ref main$/m);
     expect(r.status).toBe(1);
   });
 

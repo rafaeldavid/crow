@@ -15,10 +15,10 @@ This recipe runs `examples/seller-adapter.ts` in production on one Linux machine
 1. **Install.** Node 22 and pnpm 12 (through corepack), then the repository at a commit you have read:
 
    ```sh
-   git clone https://github.com/rafaeldavid/holdback /opt/holdback
-   git -C /opt/holdback checkout <commit>
-   pnpm -C /opt/holdback install --frozen-lockfile
-   pnpm -C /opt/holdback build
+   git clone https://github.com/rafaeldavid/crow /opt/crow
+   git -C /opt/crow checkout <commit>
+   pnpm -C /opt/crow install --frozen-lockfile
+   pnpm -C /opt/crow build
    useradd --system --no-create-home crow-seller
    ```
 

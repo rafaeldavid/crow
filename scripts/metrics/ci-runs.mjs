@@ -16,7 +16,7 @@ import { cli, envelope, gitCommit, isMain, iso, quantile, ROOT, writeJson } from
 
 const run = promisify(execFile);
 const DAY_MS = 86_400_000;
-export const REPO = 'rafaeldavid/holdback';
+export const REPO = 'rafaeldavid/crow';
 
 // The changes job's own patterns, copied from .github/workflows/ci.yml; the test fails when they drift apart.
 export const DOCS_ONLY = /^(docs\/.+|[^/]+\.md)$/;

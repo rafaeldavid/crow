@@ -150,7 +150,7 @@ export function recordLine({ title, startedAt, commit, branch, failure, workers,
 }
 
 /** The workflow that builds Crow Control, in the maintainers' private repository (crow-private `control/README.md`). */
-export const CONSOLE_BUILD = { repo: 'rafaeldavid/crow-private', workflow: 'control-hourly.yml', ref: 'main' };
+export const CONSOLE_BUILD = { repo: 'rafaeldavid/crow-ops-private', workflow: 'control-hourly.yml', ref: 'main' };
 
 /**
  * After a deploy, starts a Crow Control build, so its page shows what this deploy changed within minutes instead of
