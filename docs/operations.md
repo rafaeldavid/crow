@@ -85,7 +85,7 @@ curl -s https://crow.direct/agents/test-buyer/health
 node apps/test-agents/scripts/sell-to-test-buyer.mjs
 ```
 
-**Every deploy script ends by asking for a Crow Control build** (N166, `scripts/deploy-lib.mjs` `finishDeploy`): after a deploy that may have changed what runs, it starts the console's workflow by hand (`gh workflow run control-hourly.yml --repo rafaeldavid/crow-private --ref main`), which always builds. So the page shows the deploy within about 5 minutes, not after its two-hour wait between automatic builds. Without `gh` or access it says so in one line and the deploy's exit code stays the same. A refusal before upload, a dry run and a check-only run ask for none.
+**Every deploy script ends by asking for a Crow Control build** (N166, `scripts/deploy-lib.mjs` `finishDeploy`): after a deploy that may have changed what runs, it starts the console's workflow by hand (`gh workflow run control-hourly.yml --repo rafaeldavid/crow-ops-private --ref main`), which always builds. So the page shows the deploy within about 5 minutes, not after its two-hour wait between automatic builds. Without `gh` or access it says so in one line and the deploy's exit code stays the same. A refusal before upload, a dry run and a check-only run ask for none.
 
 **Every deploy script starts with a pre-flight** (T-313, `scripts/deploy-lib.mjs`). It refuses, with exit code 2 and before any build or upload, a checkout whose tracked files differ from its commit, and one that lacks origin/main's commits after a fresh fetch. So a deploy uploads the commit its record line names, and never an old wrangler file. Untracked files are fine.
 

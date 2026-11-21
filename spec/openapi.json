@@ -10357,91 +10357,91 @@
       "method": "POST",
       "path": "/v1/clubs",
       "note": "Clubs come from genesis in Phase 1.",
-      "source": "https://github.com/rafaeldavid/holdback/blob/main/docs/api.md#registry-and-test-funding"
+      "source": "https://github.com/rafaeldavid/crow/blob/main/docs/api.md#registry-and-test-funding"
     },
     {
       "method": "POST",
       "path": "/v1/clubs/{clubId}/members",
       "note": "MemberAdmission, signed by the club operator.",
-      "source": "https://github.com/rafaeldavid/holdback/blob/main/docs/api.md#registry-and-test-funding"
+      "source": "https://github.com/rafaeldavid/crow/blob/main/docs/api.md#registry-and-test-funding"
     },
     {
       "method": "POST",
       "path": "/v1/clubs/{clubId}/members/{principal}/revoke",
       "note": "MemberRevocation, signed by the club operator.",
-      "source": "https://github.com/rafaeldavid/holdback/blob/main/docs/api.md#registry-and-test-funding"
+      "source": "https://github.com/rafaeldavid/crow/blob/main/docs/api.md#registry-and-test-funding"
     },
     {
       "method": "POST",
       "path": "/v1/agents",
       "note": "Mandates come from genesis in Phase 1.",
-      "source": "https://github.com/rafaeldavid/holdback/blob/main/docs/api.md#registry-and-test-funding"
+      "source": "https://github.com/rafaeldavid/crow/blob/main/docs/api.md#registry-and-test-funding"
     },
     {
       "method": "POST",
       "path": "/v1/agents/{address}/revoke",
       "note": "Principal-signed revocation.",
-      "source": "https://github.com/rafaeldavid/holdback/blob/main/docs/api.md#registry-and-test-funding"
+      "source": "https://github.com/rafaeldavid/crow/blob/main/docs/api.md#registry-and-test-funding"
     },
     {
       "method": "POST",
       "path": "/v1/adjudicators/{address}/quote",
       "note": "Fee quote for draft terms.",
-      "source": "https://github.com/rafaeldavid/holdback/blob/main/docs/decisions/ADR-0014-incentives.md"
+      "source": "https://github.com/rafaeldavid/crow/blob/main/docs/decisions/ADR-0014-incentives.md"
     },
     {
       "method": "POST",
       "path": "/v1/commitments/{commitmentId}/publish",
       "note": "Publish (ADR-0020): raise the disclosure level.",
-      "source": "https://github.com/rafaeldavid/holdback/blob/main/docs/decisions/ADR-0020-privacy-model.md"
+      "source": "https://github.com/rafaeldavid/crow/blob/main/docs/decisions/ADR-0020-privacy-model.md"
     },
     {
       "method": "POST",
       "path": "/v1/commitments/{commitmentId}/disputes",
       "note": "Dispute, optimistic mode (Phase 4).",
-      "source": "https://github.com/rafaeldavid/holdback/blob/main/docs/decisions/ADR-0015-optimistic-release.md"
+      "source": "https://github.com/rafaeldavid/crow/blob/main/docs/decisions/ADR-0015-optimistic-release.md"
     },
     {
       "method": "GET",
       "path": "/v1/commitments/{commitmentId}/judgments",
       "note": "Every judgment record by adjudicator and attempt; /judgment stays the latest.",
-      "source": "https://github.com/rafaeldavid/holdback/blob/main/docs/reviews/2026-11-02-api-agent-review.md#62-stubs"
+      "source": "https://github.com/rafaeldavid/crow/blob/main/docs/reviews/2026-11-02-api-agent-review.md#62-stubs"
     },
     {
       "method": "GET",
       "path": "/v1/commitments/{commitmentId}/evidence",
       "note": "One commitment's signed terms, messages, receipts, judgment record and chain proof, verifiable offline (D26).",
-      "source": "https://github.com/rafaeldavid/holdback/blob/main/docs/decisions-today.md#d26-widen-collaboration-the-law-stays-the-backstop"
+      "source": "https://github.com/rafaeldavid/crow/blob/main/docs/decisions-today.md#d26-widen-collaboration-the-law-stays-the-backstop"
     },
     {
       "method": "POST",
       "path": "/v1/webhooks",
       "note": "Webhook registration with operator-signed payloads.",
-      "source": "https://github.com/rafaeldavid/holdback/blob/main/docs/decisions/ADR-0017-agent-ready-api.md"
+      "source": "https://github.com/rafaeldavid/crow/blob/main/docs/decisions/ADR-0017-agent-ready-api.md"
     },
     {
       "method": "GET",
       "path": "/v1/audit/verify",
       "note": "Hash-chain verification report.",
-      "source": "https://github.com/rafaeldavid/holdback/blob/main/docs/api.md#events-and-audit"
+      "source": "https://github.com/rafaeldavid/crow/blob/main/docs/api.md#events-and-audit"
     },
     {
       "method": "POST",
       "path": "/v1/funding/quote",
       "note": "Funding routes from a separate funding service: swap, ETH wrap, bridge or on-ramp (ADR-0026).",
-      "source": "https://github.com/rafaeldavid/holdback/blob/main/docs/decisions/ADR-0026-funding-paths.md"
+      "source": "https://github.com/rafaeldavid/crow/blob/main/docs/decisions/ADR-0026-funding-paths.md"
     },
     {
       "method": "POST",
       "path": "/v1/funding/sessions",
       "note": "Start a quoted funding route; the buyer signs or pays what it names (ADR-0026).",
-      "source": "https://github.com/rafaeldavid/holdback/blob/main/docs/decisions/ADR-0026-funding-paths.md"
+      "source": "https://github.com/rafaeldavid/crow/blob/main/docs/decisions/ADR-0026-funding-paths.md"
     },
     {
       "method": "GET",
       "path": "/v1/funding/sessions/{sessionId}",
       "note": "A funding session's state and next step (ADR-0026 §4).",
-      "source": "https://github.com/rafaeldavid/holdback/blob/main/docs/decisions/ADR-0026-funding-paths.md"
+      "source": "https://github.com/rafaeldavid/crow/blob/main/docs/decisions/ADR-0026-funding-paths.md"
     }
   ],
   "x-holdback-generated": "Generated by `pnpm openapi` from spec/schemas and spec/openapi/paths.json. Do not edit by hand."

@@ -61,7 +61,7 @@ export function routeOf(method: string, pathname: string): string {
 }
 
 export const AGENT_GUIDE = 'https://crow.direct/llms.txt';
-export const API_REFERENCE = 'https://raw.githubusercontent.com/rafaeldavid/holdback/main/docs/api.md';
+export const API_REFERENCE = 'https://raw.githubusercontent.com/rafaeldavid/crow/main/docs/api.md';
 
 /** llms.txt (llmstxt.org): what this node is, and links to the guide, the reference and its machine-readable API. */
 export function llmsTxt(baseUrl: string, notes: readonly string[] = []): string {

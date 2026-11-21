@@ -179,7 +179,7 @@ footer{margin-top:56px;padding-top:16px;border-top:1px solid var(--hair);font-si
 (function(){
   var M = window.MAP;
   if (!M) { document.querySelector('main').insertAdjacentHTML('afterbegin','<p>No data: build this page with pnpm map.</p>'); return; }
-  var REPO='https://github.com/rafaeldavid/holdback';
+  var REPO='https://github.com/rafaeldavid/crow';
   function $(id){return document.getElementById(id)}
   function esc(t){return String(t).replace(/[&<>"]/g,function(c){return {'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[c]})}
   function md(t){return esc(t).replace(/\*\*([^*]+)\*\*/g,'$1').replace(/`([^`]+)`/g,'<code>$1</code>')}
