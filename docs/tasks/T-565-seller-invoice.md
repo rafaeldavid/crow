@@ -5,7 +5,7 @@
 - **Depends on:** T-333 (the deal record), T-531 (the research, task 2 of its section 8), T-538 (the proof of purchase)
 - **Paths this task may touch:** `examples/seller-invoice.ts` and its test (new), `docs/research/2026-11-19-invoice-and-credit-note.md` (new), `site/ref/after-funding.txt` (one section), `site/sell.txt` (one pointer in step 10), this file.
 - **Human gate:** no. A site deploy that serves the new section is Rafa's.
-- **Status:** review
+- **Status:** done (merged in PR 701, 2026-11-19)
 - **Agent/session:** the T-565 session, 2026-11-19, branch `t-565-seller-invoice`.
 - **Roadmap row:** N198
 - **Change kind:** 4, example code a party runs with its tests; 1 for the research note and the reference section.

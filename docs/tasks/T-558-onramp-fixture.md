@@ -6,7 +6,7 @@
 - **Depends on:** none
 - **Paths this task may touch:** `fixtures/scenarios/neutrality.onramp-*`, `docs/neutrality.md`, one line in `tests/cut-feature-alignment.known.json` (the fixture's `expire` step is the cut feature SC-6, as in `neutrality.adjudicator-never-accepts`), this file. Never `contracts/`, `spec/schemas/`, `.github/`, `packages/`, `CLAUDE.md`, `AGENTS.md` or `.claude/`.
 - **Human gate:** no
-- **Status:** in review
+- **Status:** in progress: criterion 3 (the `neutrality.onramp-refuses` fixture) is left, and another agent is writing it; PR 700 merged the rest, 2026-11-19
 - **Agent/session:** the T-558 session, started by the coordinator on 2026-11-19
 - **Roadmap row:** N201
 

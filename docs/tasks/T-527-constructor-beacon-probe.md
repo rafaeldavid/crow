@@ -6,7 +6,7 @@
 - **Depends on:** T-525 (main in the lane), T-523's plan, group G2 with G6
 - **Paths this task may touch:** `contracts/src/HoldbackRules.sol`, `contracts/src/IHoldbackRules.sol`, `contracts/test/unit/BeaconProbe.t.sol`, `contracts/test/unit/Vectors.t.sol` (its placeholder beacon), `packages/settlement/evm/abis.json` (regenerated: the new error), this file
 - **Human gate:** answered: Rafa kept the beacon probe on 2026-11-18 (below)
-- **Status:** in review
+- **Status:** done (merged in PR 654, 2026-11-18)
 - **Agent/session:** the scan-fixes contract lane session (T-525)
 - **Roadmap row:** N190
 
@@ -22,7 +22,7 @@ An outside scan's findings in group G2 say the constructor checks its four addre
 
 - [x] A test fails on the lane's code before the fix and passes after it.
 - [x] `forge test` passes on the whole suite.
-- [ ] One review (kind 7).
+- [x] One review (kind 7).
 - [x] Rafa's answer on the probe: kept, for the beacon only (2026-11-18).
 
 ## Evidence
