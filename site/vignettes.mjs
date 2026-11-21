@@ -146,7 +146,7 @@ function feather() {
   );
 }
 
-// 4. Frontier AI Verification: a balance, level.
+// 4. Autonomous Adjudication: a balance, level.
 function balance() {
   const r = rng(41);
   const half = (y) => { const T = [[15, 0.6], [20, 0.75], [27, 0.95], [38, 1.75], [43, 1.9], [46.5, 1.05], [48, 1.35], [50, 2.5]]; for (let i = 1; i < T.length; i++) if (y <= T[i][0]) { const k = (y - T[i - 1][0]) / (T[i][0] - T[i - 1][0]); return T[i - 1][1] + (T[i][1] - T[i - 1][1]) * k; } return 2.5; };

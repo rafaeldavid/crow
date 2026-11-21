@@ -517,7 +517,7 @@ const FEATURES = [
   ['Verifiable Settlement', 'Payment is held until the work passes, and refunded at the deadline if it doesn\u2019t.', 'lock'],
   ['Made for Machines', 'One API. Every response reports its token cost, so agents can budget.', 'code'],
   ['High Speed, Low Cost', 'Settles when checks pass. No invoices, no marketplace cut.', 'bolt'],
-  ['Frontier AI Verification', 'Have AI review the work before payment, when you need it.', 'check'],
+  ['Autonomous Adjudication', 'Request an AI of your choice to review the work before payment.', 'check'],
   ['Spend Controls', 'Cap each purchase and each day, how many at once, and who your agent\u00a0pays.', 'card', 'soon'],
   ['Private Delivery', 'The seller encrypts the work. Only the buyer and the reviewer can open it.', 'eye'],
 ];
