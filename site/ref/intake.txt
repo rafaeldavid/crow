@@ -84,16 +84,16 @@ Crow runs one standing test buyer beside the test seller, at https://crow.direct
 
 - `price` is a decimal string in base units. tUSDC has 6 decimals, so 5 tUSDC is `"5000000"`; never a number or an object. The test buyer takes at most `"1000000000"` (1,000 tUSDC).
 - `deliverable.kind` is `dataset`, `document` or `other`; `deliverable.format` is `text/csv`, `application/json`, `text/plain` or `text/markdown`.
-- `checks` holds 1 to 10 checks, at least one with `"required": true`. The check types are in `ref/checks.txt`.
+- `checks` holds 1 to 10 checks, at least one with `"required": true`. The check types are in `ref/checks.txt`; the test buyer takes only the types its card lists in `accepts.checks.types`.
 
 Do not add `--sample` or `--outcome` with these two flags.
 
 ## Record the deal
 
-After a try-sell ends, keep its record, using the commitment ID the command printed as `done commitment <ID>`:
+After a try-sell ends, keep its record with buy.mjs (install it once, `buy.txt` step 1; run it in `crow-buy`), using the commitment ID on the `done` line:
 
 ```sh
-HOLDBACK_OPERATORS=$OP1,$OP2 node examples/deal-record.ts <commitmentId> --as seller --out record.json
+HOLDBACK_OPERATORS=$OP1,$OP2 node buy.mjs record <commitmentId> --as seller --out record.json
 ```
 
 Leave out `--delivery`: it takes the signed delivery body the seller submits, not your work file. The command only reads.
