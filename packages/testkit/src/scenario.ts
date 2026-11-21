@@ -16,6 +16,8 @@ export type StepBody =
   | { kind: 'offer'; by: 'seller'; via: Via; signer?: string }
   | { kind: 'adjudicator_accept'; via: Via }
   | { kind: 'agree_and_fund'; by: 'buyer'; via: Via; signer?: string }
+  // T-558: the buyer's payment address signs the funding of an agreed deal, with no Agree, after a refused funding.
+  | { kind: 'fund'; by: 'buyer'; via: Via; signer?: string }
   // buyerEnvelope 'wrong_key': the seller seals the buyer's envelope to a key the buyer does not hold, naming the
   // right recipient (sim batch 1, F2). Settlement cannot tell; only the buyer's open fails.
   // buyerEnvelope 'none' (ADR-0040 §2, T-550): a standing delivery, with envelopes for the three adjudicators only. With
@@ -40,6 +42,10 @@ export type StepBody =
   // Outages and permissionless timeouts (neutrality fixtures).
   | { kind: 'offline'; actor: string }
   | { kind: 'operator_refuses'; operator: string }
+  // T-558: actors outside the protocol (`outside:`, such as an on-ramp). An outside actor that refuses acts no more;
+  // a top-up mints `amount` to a party's address from outside the protocol, as an on-ramp filling it would.
+  | { kind: 'refuses'; actor: string }
+  | { kind: 'top_up'; from: string; to: string; amount: string }
   // ADR-0036: a deploy. The three adjudicators restart on a build whose default screen version or registry differs; the
   // build keeps every version and registry it carried, so a deal judges under what it bound.
   | { kind: 'restart_adjudicators'; screenVersion?: string; registry?: string }
@@ -89,8 +95,13 @@ export interface Scenario {
   terms?: string;
   /** ADR-0033: `buyerPayment` funds the hold and is refunded, `sellerPayout` is paid; each defaults to its party. */
   parties: { buyer: string; seller: string; buyerPayment?: string; sellerPayout?: string };
-  /** neutrality. fixtures: the actor that refuses or disappears. */
+  /** neutrality. fixtures: the actor that refuses or disappears; an outside actor may be named. */
   fails?: string;
+  /**
+   * T-558: actors outside the protocol, such as an on-ramp. They hold no key and no account, sign nothing, and
+   * settlement never sees them; a top_up step names one as its source.
+   */
+  outside: string[];
   adjudicators: { primary: string; fallback: string; appeal: string };
   operators: string[];
   /** Starting balances in base units (decimal strings). */
@@ -170,6 +181,9 @@ const STEP_KINDS = [
   'early_accept',
   'appeal',
   'mutual_settle',
+  'fund',
+  'refuses',
+  'top_up',
 ];
 
 /** Steps the scenario index names that need settlement support this build does not have. */
@@ -180,14 +194,20 @@ const UNSUPPORTED: Record<string, string> = {
 };
 
 /** Steps that do not act on a commitment, so `commitment:` makes no sense on them. */
-const NO_COMMITMENT = ['advance_clock', 'offline', 'operator_refuses', 'restart_adjudicators'];
+const NO_COMMITMENT = ['advance_clock', 'offline', 'operator_refuses', 'restart_adjudicators', 'refuses', 'top_up'];
 
-function parseStep(raw: unknown, path: string, operators: readonly string[], actors: readonly string[]): Step {
+/** What a step may name besides the scenario's actors: its outside actors, and the party addresses a top-up may fill. */
+interface Names {
+  outside: readonly string[];
+  partyAddresses: readonly string[];
+}
+
+function parseStep(raw: unknown, path: string, operators: readonly string[], actors: readonly string[], names: Names): Step {
   if (!isObj(raw) || Object.keys(raw).length !== 1) fail(path, 'each step is a mapping with exactly one key, e.g. "- offer: { by: seller }"');
   const [kind, rawBody] = Object.entries(raw)[0]!;
   const p = `${path}.${kind}`;
   if (kind in UNSUPPORTED) fail(path, `step "${kind}" is not supported: ${UNSUPPORTED[kind]}`);
-  if (!isObj(rawBody) || !('commitment' in rawBody || 'tamper' in rawBody)) return parseStepBody(kind, rawBody, path, operators, actors);
+  if (!isObj(rawBody) || !('commitment' in rawBody || 'tamper' in rawBody)) return parseStepBody(kind, rawBody, path, operators, actors, names);
   const extra: { commitment?: number; tamper?: Tamper[] } = {};
   if ('commitment' in rawBody) {
     if (NO_COMMITMENT.includes(kind)) fail(`${p}.commitment`, `${kind} does not act on a commitment`);
@@ -205,10 +225,10 @@ function parseStep(raw: unknown, path: string, operators: readonly string[], act
   const rest = { ...rawBody };
   delete rest.commitment;
   delete rest.tamper;
-  return { ...parseStepBody(kind, Object.keys(rest).length ? rest : undefined, path, operators, actors), ...extra };
+  return { ...parseStepBody(kind, Object.keys(rest).length ? rest : undefined, path, operators, actors, names), ...extra };
 }
 
-function parseStepBody(kind: string, body: unknown, path: string, operators: readonly string[], actors: readonly string[]): StepBody {
+function parseStepBody(kind: string, body: unknown, path: string, operators: readonly string[], actors: readonly string[], names: Names): StepBody {
   const p = `${path}.${kind}`;
   const via = (o: Obj): Via => {
     if (o.via === undefined || o.via === 'direct') return 'direct';
@@ -226,7 +246,8 @@ function parseStepBody(kind: string, body: unknown, path: string, operators: rea
       const o = object(body ?? {}, p, ['via']);
       return { kind, via: via(o) };
     }
-    case 'agree_and_fund': {
+    case 'agree_and_fund':
+    case 'fund': {
       const o = object(body, p, ['by', 'via', 'signer'], ['by']);
       return { kind, by: literal(o.by, `${p}.by`, ['buyer'] as const), via: via(o), ...signer(o) };
     }
@@ -305,8 +326,24 @@ function parseStepBody(kind: string, body: unknown, path: string, operators: rea
     case 'offline': {
       const o = object(body, p, ['actor'], ['actor']);
       const actor = name(o.actor, `${p}.actor`);
-      if (!actors.includes(actor)) fail(`${p}.actor`, `"${actor}" is not a party, adjudicator or operator of this scenario`);
+      if (!actors.includes(actor) && !names.outside.includes(actor)) fail(`${p}.actor`, `"${actor}" is not a party, adjudicator, operator or outside actor of this scenario`);
       return { kind, actor };
+    }
+    case 'refuses': {
+      const o = object(body, p, ['actor'], ['actor']);
+      const actor = name(o.actor, `${p}.actor`);
+      if (!names.outside.includes(actor)) fail(`${p}.actor`, `"${actor}" is not an outside actor of this scenario (outside: [${names.outside.join(', ')}]); a party or an adjudicator goes offline, an operator has operator_refuses`);
+      return { kind, actor };
+    }
+    case 'top_up': {
+      const o = object(body, p, ['from', 'to', 'amount'], ['from', 'to', 'amount']);
+      const from = name(o.from, `${p}.from`);
+      if (!names.outside.includes(from)) fail(`${p}.from`, `"${from}" is not an outside actor of this scenario (outside: [${names.outside.join(', ')}])`);
+      const to = name(o.to, `${p}.to`);
+      if (!names.partyAddresses.includes(to)) fail(`${p}.to`, `"${to}" is not a party address of this scenario (${names.partyAddresses.join(', ')})`);
+      const amount = money(o.amount, `${p}.amount`);
+      if (BigInt(amount) === 0n) fail(`${p}.amount`, 'must be above 0');
+      return { kind, from, to, amount };
     }
     case 'operator_refuses': {
       const o = object(body, p, ['operator'], ['operator']);
@@ -353,7 +390,7 @@ function parseExpect(raw: unknown, shorthand: unknown): ScenarioExpect {
   return out;
 }
 
-const TOP = ['name', 'description', 'club', 'terms', 'parties', 'fails', 'adjudicators', 'operators', 'faucet', 'steps', 'expect', 'expect_terminal'] as const;
+const TOP = ['name', 'description', 'club', 'terms', 'parties', 'fails', 'outside', 'adjudicators', 'operators', 'faucet', 'steps', 'expect', 'expect_terminal'] as const;
 
 /** Parses a scenario file. Throws ScenarioError with a path for anything it does not understand. */
 export function parseScenario(source: string, fileName: string): Scenario {
@@ -393,6 +430,10 @@ export function parseScenario(source: string, fileName: string): Scenario {
   const actors = [parties.buyer, parties.seller, ...money, ...Object.values(adjudicators), ...operators];
   for (const a of actors) if (RESERVED_NAMES.includes(a)) fail('parties', `"${a}" is reserved for the runner (${RESERVED_NAMES.join(', ')})`);
   if (new Set(actors).size !== actors.length) fail('parties', 'buyer, seller, adjudicators and operators must all have distinct names');
+  const outside = top.outside === undefined ? [] : Array.isArray(top.outside) ? top.outside.map((o, i) => name(o, `outside[${i}]`)) : fail('outside', 'must be a list');
+  for (const a of outside) if (RESERVED_NAMES.includes(a)) fail('outside', `"${a}" is reserved for the runner (${RESERVED_NAMES.join(', ')})`);
+  if (new Set([...actors, ...outside]).size !== actors.length + outside.length) fail('outside', 'outside actors must have names distinct from each other and from every party, adjudicator and operator');
+  const names: Names = { outside, partyAddresses: [parties.buyer, parties.seller, ...money] };
 
   const faucet = top.faucet === undefined ? {} : moneyMap(top.faucet, 'faucet');
   for (const who of Object.keys(faucet)) if (!actors.includes(who)) fail(`faucet.${who}`, 'not a party, adjudicator or operator of this scenario');
@@ -403,8 +444,9 @@ export function parseScenario(source: string, fileName: string): Scenario {
     parties,
     adjudicators,
     operators,
+    outside,
     faucet,
-    steps: top.steps.map((s, i) => parseStep(s, `steps[${i + 1}]`, operators, actors)),
+    steps: top.steps.map((s, i) => parseStep(s, `steps[${i + 1}]`, operators, actors, names)),
     expect: parseExpect(top.expect, top.expect_terminal),
   };
   if (top.description !== undefined) scenario.description = str(top.description, 'description');
@@ -415,7 +457,7 @@ export function parseScenario(source: string, fileName: string): Scenario {
   if (top.fails !== undefined) {
     if (prefix !== 'neutrality') fail('fails', 'only neutrality. fixtures name a failing actor');
     const failing = name(top.fails, 'fails');
-    if (!actors.includes(failing)) fail('fails', `"${failing}" is not a party, adjudicator or operator of this scenario`);
+    if (!actors.includes(failing) && !outside.includes(failing)) fail('fails', `"${failing}" is not a party, adjudicator, operator or outside actor of this scenario`);
     scenario.fails = failing;
   } else if (prefix === 'neutrality') {
     fail('fails', 'neutrality. fixtures must name the actor that refuses or disappears, e.g. "fails: bench-a"');

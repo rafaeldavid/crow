@@ -104,7 +104,7 @@ export function renderSnapshot(scenario: Scenario, prefix: Prefix, run: StubRun,
     );
   const refusals = run.rows.filter((r) => r.detail !== undefined);
   if (refusals.length) out.push('', 'Refusals:', '', ...refusals.map((r) => `- Step ${r.step} ${r.call}: ${r.result}: ${mdText(r.detail!)}`));
-  if (run.outages.length) out.push('', 'Outages:', '', ...run.outages.map((o) => `- Step ${o.step}: ${o.actor} ${o.kind === 'offline' ? 'is offline' : o.kind === 'operator_refused' ? 'refused to relay' : o.kind === 'restarted' ? 'restarted on a build with another default' : 'timed out; a permissionless timeout acted instead'}`));
+  if (run.outages.length) out.push('', 'Outages:', '', ...run.outages.map((o) => `- Step ${o.step}: ${o.actor} ${o.kind === 'offline' ? 'is offline' : o.kind === 'operator_refused' ? 'refused to relay' : o.kind === 'restarted' ? 'restarted on a build with another default' : o.kind === 'refused' ? 'refused to act' : 'timed out; a permissionless timeout acted instead'}`));
   out.push('');
 
   out.push(`## Balances (${TOKEN})`, '');
