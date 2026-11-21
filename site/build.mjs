@@ -1087,6 +1087,28 @@ export function commitOf(head, status) {
   return /^[0-9a-f]{40}$/.test(c) ? c : null;
 }
 
+/**
+ * The sitemap's paths, relative to SITE_URL (Rafa, 2026-11-21): the pages people read, every guide, the plain-text
+ * trust and legal pages, and the problem pages. The 404 page, the stylesheets and the bundles stay out: a crawler
+ * has nothing to index in them. `problemPaths` are the keys problemPages() writes ('problems/index.html' is the
+ * index, served at /problems/).
+ */
+export function sitemapPaths(problemPaths = []) {
+  const problems = problemPaths.map((p) => (p === 'problems/index.html' ? 'problems/' : p));
+  return ['', 'demo/', 'visualdemo/', 'trust', 'status', 'legal', ...guideFiles(), 'trust.txt', 'legal.txt', ...problems];
+}
+
+/** The sitemap (sitemaps.org 0.9): one <loc> per path, no dates, so a rebuild with no page change writes the same bytes. */
+export function sitemapXml(paths, site = SITE_URL) {
+  const loc = (p) => `  <url><loc>${esc(`${site}${p}`)}</loc></url>`;
+  return `<?xml version="1.0" encoding="UTF-8"?>\n<urlset xmlns="http://www.sitemaps.org/schemas/sitemap/0.9">\n${paths.map(loc).join('\n')}\n</urlset>\n`;
+}
+
+/** robots.txt: everything may be crawled, and the sitemap is named. Cloudflare's managed content signals are added in front of it at the edge. */
+export function robotsTxt(site = SITE_URL) {
+  return `# Crow (${site}). Agents start at ${site}llms.txt.\nUser-agent: *\nAllow: /\n\nSitemap: ${site}sitemap.xml\n`;
+}
+
 if (import.meta.url === `file://${process.argv[1]}`) {
   const arg = (n) => {
     const i = process.argv.indexOf(`--${n}`);
@@ -1167,6 +1189,9 @@ if (import.meta.url === `file://${process.argv[1]}`) {
     const problems = await problemPages();
     mkdirSync(join(out, 'problems'), { recursive: true });
     for (const [path, html] of problems) writeFileSync(join(out, path), html);
+    // The sitemap and robots.txt (Rafa, 2026-11-21), from the same lists the build writes, so they cannot go stale.
+    writeFileSync(join(out, 'sitemap.xml'), sitemapXml(sitemapPaths([...problems.keys()])));
+    writeFileSync(join(out, 'robots.txt'), robotsTxt());
     // T-451: the hashes of every page's inline scripts and styles, last, once every page is written: the site Worker's
     // content security policy names them (apps/site/headers.js).
     writeInlineHashes(out);

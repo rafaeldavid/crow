@@ -743,6 +743,26 @@ try {
 }
 for (const m of measured) expect(m.tokens <= FIRST_DEAL_BUDGET.tokens, `the ${m.role}'s first-deal path (${m.files.join(' + ')}) is ${m.tokens} tokens, over the budget of ${FIRST_DEAL_BUDGET.tokens} (${m.method})`);
 
+// 21. The sitemap (Rafa, 2026-11-21): after a publish build, reports/site-out holds sitemap.xml and robots.txt, robots.txt
+// names the sitemap, and every <loc> is a file the build wrote (a path, its index.html, or its .html), so the sitemap
+// cannot list a page the site does not serve.
+if (existsSync(here('../reports/site-out/llms.txt'))) {
+  const { SITE_URL: site } = await import('./build.mjs');
+  const outFile = (p) => here(`../reports/site-out/${p}`);
+  expect(existsSync(outFile('sitemap.xml')), 'the publish build wrote no sitemap.xml');
+  expect(existsSync(outFile('robots.txt')) && read('../reports/site-out/robots.txt').includes(`Sitemap: ${site}sitemap.xml`), 'robots.txt does not name the sitemap');
+  if (existsSync(outFile('sitemap.xml'))) {
+    const locs = [...read('../reports/site-out/sitemap.xml').matchAll(/<loc>([^<]+)<\/loc>/g)].map((m) => m[1].replaceAll('&amp;', '&'));
+    expect(locs.length > 0, 'the sitemap lists no page');
+    for (const loc of locs) {
+      expect(loc.startsWith(site), `sitemap: ${loc} is not under ${site}`);
+      const p = loc.slice(site.length);
+      const served = [p, `${p}index.html`, `${p}.html`].some((c) => c !== '' && !c.endsWith('/') && existsSync(outFile(c)));
+      expect(served, `sitemap: ${loc} names no file the build wrote`);
+    }
+  }
+}
+
 if (failures.length) {
   for (const f of failures) console.error(`FAIL ${f}`);
   process.exit(1);
