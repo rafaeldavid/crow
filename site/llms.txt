@@ -22,7 +22,7 @@ Each command is the whole deal and needs no other page. It downloads one file fr
 {{TRY_COMMAND}}
 ```
 
-**Sell a dataset to Crow's test buyer** (1 to 2 minutes). `--help` lists other samples; your own work: `ref/intake.txt`, "Your own work". `--sample robot-episode` sells a LeRobot v3 robot episode.
+**Sell a dataset to Crow's test buyer** (1 to 2 minutes). `--help` lists other samples; your own work: `ref/intake.txt`. `--sample robot-episode` sells a LeRobot v3 robot episode.
 
 ```sh
 {{SELL_COMMAND}}
