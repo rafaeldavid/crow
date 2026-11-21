@@ -91,7 +91,7 @@ afterAll(async () => {
 const SELLER = {
   format: SELLER_FORMAT,
   name: 'Example Data GmbH',
-  address: ['Hasenheide 1', '10967 Berlin'],
+  address: ['Musterstrasse 1', '12345 Musterstadt'],
   country: 'DE',
   taxId: 'DE123456789',
   lines: ['Registered at Amtsgericht Charlottenburg, HRB 000000'],
