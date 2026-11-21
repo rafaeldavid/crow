@@ -321,6 +321,70 @@ describe('pnpm snap', () => {
     expect(r.snapshot).toMatch(/\| anyone \| expire \| direct \| ok \| Expired \|/);
   });
 
+  describe('on-ramps outside the protocol (T-558)', () => {
+    /** Checks-only terms (no panel); 1,550 tUSD funds the hold. The wallet starts with 1,000 tUSD. */
+    const ramp = (name: string, steps: string, fails = 'ramp-a') => `# @settlement sim @judges fake @seed 558
+name: ${name}
+club: fixtures/clubs/data-services-v1.yaml
+terms: fixtures/terms/audit-report.yaml
+parties: { buyer: atlas-buyer, seller: tidewater-seller, buyer_payment: atlas-wallet }
+adjudicators: { primary: bench-a, fallback: bench-b, appeal: bench-c }
+operators: [op-1]
+outside: [ramp-a, ramp-b]
+${name.startsWith('neutrality.') ? `fails: ${fails}\n` : ''}faucet: { atlas-wallet: "1000000000", bench-a: "25000000000", bench-b: "25000000000", bench-c: "25000000000" }
+steps:
+  - offer: { by: seller, via: op-1 }
+  - adjudicator_accept: { via: op-1 }
+${steps}`;
+
+    it('top_up adds money to the payment address, and conservation counts it', async () => {
+      const root = sandbox();
+      const r = await fixture(root, 'ramp-top-up', ramp('ramp-top-up', '  - top_up: { from: ramp-b, to: atlas-wallet, amount: "1050000000" }\n  - agree_and_fund: { by: buyer, via: op-1 }\n'));
+      expect(r.out[0]).toMatch(/^fail {2}ramp-top-up: expected a terminal state, ended in Held/);
+      expect(r.snapshot).toMatch(/\| ramp-b \| top up atlas-wallet \(outside the protocol\) \| outside \| ok \| AcceptedByAdjudicator \|/);
+      expect(r.snapshot).toMatch(/\| top-up \| 2,050\.000000 \|/);
+      expect(r.snapshot).toMatch(/conservation ✓/);
+      expect(r.snapshot).toMatch(/replay matches the settlement state ✓/);
+    });
+
+    it('fund funds an agreed deal after a refused funding, without signing Agree again', async () => {
+      const root = sandbox();
+      const steps = '  - agree_and_fund: { by: buyer, via: op-1 }\n  - top_up: { from: ramp-b, to: atlas-wallet, amount: "1050000000" }\n  - fund: { by: buyer, via: op-1 }\n';
+      const r = await fixture(root, 'error.ramp-fund', `${ramp('error.ramp-fund', steps)}expect: { problem: { step: 3, type: insufficient_funds } }\n`);
+      expect(r.out[0]).toBe('pass  error.ramp-fund (snapshot updated)');
+      expect(r.snapshot).toMatch(/\| 3 \| atlas-buyer \| fund \| op-1 \| insufficient_funds \| Agreed \|/);
+      expect(r.snapshot).toMatch(/\| 5 \| atlas-buyer \| fund \| op-1 \| ok \| Held \|/);
+      expect(r.snapshot).not.toMatch(/\| 5 \| atlas-buyer \| agree \|/);
+      // On a deal not yet agreed, fund is refused by settlement: it never signs Agree for the buyer.
+      const early = await fixture(root, 'error.ramp-fund-early', `${ramp('error.ramp-fund-early', '  - fund: { by: buyer, via: op-1 }\n')}expect: { problem: { step: 3, type: invalid_state } }\n`);
+      expect(early.out[0]).toBe('pass  error.ramp-fund-early (snapshot updated)');
+    });
+
+    it('a refusing or offline outside actor tops up nothing, and the failure is recorded against it', async () => {
+      const root = sandbox();
+      const name = 'neutrality.ramp-refuses';
+      const steps = [
+        '  - refuses: { actor: ramp-a }',
+        '  - top_up: { from: ramp-a, to: atlas-wallet, amount: "1050000000" }',
+        '  - offline: { actor: ramp-b }',
+        '  - top_up: { from: ramp-b, to: atlas-wallet, amount: "1050000000" }',
+        '  - advance_clock: { seconds: 900 }',
+        '  - expire: {}',
+        '',
+      ].join('\n');
+      const r = await fixture(root, name, `${ramp(name, steps)}expect: { terminal: Expired, balances: { atlas-wallet: "1000000000" } }\n`);
+      expect(r.out[0]).toBe(`pass  ${name} (snapshot updated)`);
+      expect(r.snapshot).toMatch(/\| ramp-a \| top_up \| outside \| refused \(no call\) \|/);
+      expect(r.snapshot).toMatch(/\| ramp-b \| top_up \| outside \| offline \(no call\) \|/);
+      expect(r.snapshot).toMatch(/Step 4: ramp-a refused to act/);
+      expect(r.snapshot).toMatch(/Step 6: ramp-b is offline/);
+      // fails: names the outside actor; the evaluation needs a step that shows it failing.
+      const silent = 'neutrality.ramp-silent';
+      const s = await fixture(root, silent, `${ramp(silent, '  - advance_clock: { seconds: 900 }\n  - expire: {}\n')}expect: { terminal: Expired }\n`);
+      expect(s.out[0]).toMatch(/no step shows ramp-a offline, refusing/);
+    });
+  });
+
   it('attack: an empty attack fixture fails, as does one that stops at Held', async () => {
     const root = sandbox();
     const empty = deliverBeforeFund('attack.empty').replace(/steps:[\s\S]*$/, 'steps: []\n');
