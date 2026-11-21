@@ -39,7 +39,7 @@ import { sha256 } from '@holdback/core/crypto';
 import type { Submission, TimeoutKind } from '@holdback/settlement';
 import { EvmSettlement, rebindToken, type EvmWorld } from '@holdback/settlement/evm';
 import { account, b64url, SimChain, tusd, type Genesis } from '@holdback/settlement/sim';
-import { keccak256, stringToBytes, type Hex } from 'viem';
+import { encodeFunctionData, keccak256, stringToBytes, type Hex } from 'viem';
 import { privateKeyToAccount, sign as signDigest } from 'viem/accounts';
 import type { SimContext } from './context.js';
 import { loadClubFile, loadTermsFile, termsFromTemplate, type TermsTemplate } from './fixture-files.js';
@@ -192,6 +192,10 @@ export function checkInvariants(v: LedgerView): Invariant[] {
   ];
 }
 const DAY = 86_400;
+/** The Via column for an outside actor's act (T-558): no operator relays it and settlement never sees it. */
+const OUTSIDE = 'outside';
+/** The Call column for a top-up, whether it arrives or its source refuses or is offline. */
+const topUpCall = (to: string) => `top up ${to} (outside the protocol)`;
 const MAX_SCOPE = tusd('1000000000000000');
 
 const plus = (ts: Timestamp, seconds: number): Timestamp => new Date(Date.parse(ts) + seconds * 1000).toISOString();
@@ -223,7 +227,8 @@ export class StubSettlement {
   private readonly token: string;
   private readonly keys = new Map<string, Hex>();
   private readonly actors: Actor[] = [];
-  private readonly faucetTotal: bigint;
+  /** Money minted into the scenario: the faucet at genesis plus every top-up from outside the protocol (T-558). */
+  private faucetTotal: bigint;
   private readonly rows: TimelineRow[] = [];
   private readonly balanceRows: StubRun['balanceRows'] = [];
   private readonly judgments: JudgmentView[] = [];
@@ -234,6 +239,8 @@ export class StubSettlement {
   private readonly outages: Outage[] = [];
   private readonly offline = new Set<string>();
   private readonly refusingOperators = new Set<string>();
+  /** Outside actors (T-558) that refuse from now on. */
+  private readonly refusingOutside = new Set<string>();
   private readonly states: EscrowStateKind[] = [];
 
   private club: Club | null = null;
@@ -597,6 +604,7 @@ export class StubSettlement {
         // ADR-0040 §2: the buyer may post the standing delivery the seller signed at setup.
         return { actor: s.by === 'buyer' ? parties.buyer : parties.seller, via: s.via };
       case 'agree_and_fund':
+      case 'fund':
       case 'reclaim':
       case 'verify_key_release':
       case 'early_accept':
@@ -616,6 +624,9 @@ export class StubSettlement {
       case 'expire':
       case 'expire_appeal':
         return { actor: 'anyone', via: s.via };
+      case 'top_up':
+        // Outside the protocol: no operator relays it, and settlement never sees who sent the money.
+        return { actor: s.from, via: OUTSIDE };
       default:
         return null;
     }
@@ -625,7 +636,7 @@ export class StubSettlement {
   private blocked(s: Step): boolean {
     const party = this.actingParty(s);
     if (!party) return false;
-    const call = s.kind === 'judge' ? 'decide' : s.kind;
+    const call = s.kind === 'judge' ? 'decide' : s.kind === 'top_up' ? topUpCall(s.to) : s.kind;
     if (this.offline.has(party.actor)) {
       this.outages.push({ step: this.stepNo, actor: party.actor, kind: 'offline' });
       this.row(party.actor, call, party.via, 'offline (no call)');
@@ -635,6 +646,11 @@ export class StubSettlement {
     if (party.via !== 'direct' && this.offline.has(party.via)) {
       this.outages.push({ step: this.stepNo, actor: party.via, kind: 'offline' });
       this.row(party.actor, call, party.via, `${party.via} is offline (not relayed)`);
+      return true;
+    }
+    if (this.refusingOutside.has(party.actor)) {
+      this.outages.push({ step: this.stepNo, actor: party.actor, kind: 'refused' });
+      this.row(party.actor, call, party.via, 'refused (no call)');
       return true;
     }
     if (this.refusingOperators.has(party.via)) {
@@ -655,6 +671,23 @@ export class StubSettlement {
         return this.adjudicatorAccept(s.via, false);
       case 'agree_and_fund':
         return this.agreeAndFund(parties.buyer, s.via);
+      case 'fund': {
+        const c = this.needCommitment(parties.buyer, 'fund', s.via);
+        if (!c) return;
+        // The backends differ here (T-558 note N2): SimChain takes funding until fundBy, the contract refuses it from
+        // offerExpiresAt with deadline_passed. A fixture that funds in that gap would pass on one and not the other.
+        if (Date.parse(this.ctx.clock.now()) >= Date.parse(c.terms.timing.offerExpiresAt)) {
+          throw new ScenarioError(
+            `steps[${this.stepNo}].fund: the sim time ${this.ctx.clock.now()} is at or past offerExpiresAt ${c.terms.timing.offerExpiresAt}; SimChain takes funding until fundBy ${c.terms.timing.fundBy}, but the contract refuses it from offerExpiresAt with deadline_passed, so fund before offerExpiresAt`,
+          );
+        }
+        return this.fund(parties.buyer, s.via, c);
+      }
+      case 'refuses':
+        this.refusingOutside.add(s.actor);
+        return this.row(s.actor, 'starts refusing', OUTSIDE, 'ok');
+      case 'top_up':
+        return this.topUp(s.from, s.to, BigInt(s.amount));
       case 'deliver':
         return this.deliver(parties.seller, s.via, s.file, s.stubBytes === true, s.attempt ?? 1, s.buyerEnvelope, s.by === 'buyer' ? parties.buyer : undefined);
       case 'early_accept':
@@ -822,15 +855,22 @@ export class StubSettlement {
     const c = this.needCommitment(buyer, 'agree', via);
     if (!c) return;
     const buyerAddress = this.address(buyer);
-    // ADR-0033: the payment address signs the funding; the buyer's signing address signed the agreement.
-    const payer = this.payer();
-    const payerAddress = this.address(payer);
+    // ADR-0033: the payment address signs the funding (fund, below); the buyer's signing address signs the agreement.
 
     const agree = await this.sign(buyer, { type: 'Agree', commitmentId: c.id, buyer: buyerAddress, nonce: this.nonceFor(buyer, 'msg'), expiresAt: c.terms.timing.offerExpiresAt } as const);
     if (!(await this.submit(buyer, 'agree', via, { kind: 'agree', message: agree }))) return;
     this.receipt(via, 'agree');
     this.row(buyer, 'agree', via, 'ok');
+    await this.fund(buyer, via, c);
+  }
 
+  /**
+   * The payment address signs the funding of the agreed deal `c`. A `fund` step (T-558) calls it alone, so a buyer
+   * whose first funding was refused funds again without signing Agree, which settlement refuses in Agreed.
+   */
+  private async fund(buyer: string, via: string, c: { terms: CommitmentTerms; id: Hex32 }): Promise<void> {
+    const payer = this.payer();
+    const payerAddress = this.address(payer);
     const total = BigInt(c.terms.price.amount) + BigInt(c.terms.adjudication.fee.amount);
     const evm = this.evm;
     let funding;
@@ -869,6 +909,31 @@ export class StubSettlement {
     this.receipt(via, 'fund');
     this.row(buyer, 'fund', via, 'ok');
     this.balanceRows.push({ after: 'fund', balances: await this.snapshotBalances() });
+  }
+
+  /**
+   * T-558: money reaches a party's address from outside the protocol, as an on-ramp filling it would. SimChain mints
+   * it through its test faucet, which its journal replays; on anvil the test token mints it in a transaction no
+   * adapter sent. Settlement sees only the new balance, never `from`.
+   */
+  private async topUp(from: string, to: string, amount: bigint): Promise<void> {
+    const address = this.address(to);
+    const evm = this.evm;
+    if (evm && this.backend.kind === 'local') {
+      const { world } = this.backend;
+      evm.advanceTo(this.ctx.clock.now());
+      const data = encodeFunctionData({ abi: world.abis.token, functionName: 'mint', args: [address, amount] });
+      const mined = await world.send({ to: world.deployment.token, data }, Math.floor(Date.parse(evm.now()) / 1000));
+      if (mined.status !== 'success') throw new Error(`steps[${this.stepNo}].top_up: the test token's mint to ${to} reverted (${mined.hash})`);
+      evm.forgetBalances([address]);
+    } else {
+      const sim = this.sim as SimChain;
+      sim.advanceTo(this.ctx.clock.now());
+      sim.faucet(address, amount);
+    }
+    this.faucetTotal += amount;
+    this.row(from, topUpCall(to), OUTSIDE, 'ok');
+    this.balanceRows.push({ after: 'top-up', balances: await this.snapshotBalances() });
   }
 
   /**

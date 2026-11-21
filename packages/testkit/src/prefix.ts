@@ -20,7 +20,8 @@ export interface Outage {
   step: number;
   actor: string;
   /** restarted: a deploy restarted the adjudicators on a build with another default (ADR-0036). */
-  kind: 'offline' | 'operator_refused' | 'timeout' | 'restarted';
+  /** refused: an actor outside the protocol (T-558, such as an on-ramp) refused to act. */
+  kind: 'offline' | 'operator_refused' | 'timeout' | 'restarted' | 'refused';
   /**
    * The buyer reclaimed after deliverBy because the seller never delivered. A seller may simply not deliver;
    * the terms provide for it, so a normal (no-prefix) fixture may end this way.
