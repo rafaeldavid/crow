@@ -6,7 +6,7 @@
 - **Depends on:** T-525 (main in the lane), T-523's plan, group G3 (RR-1, R-9)
 - **Paths this task may touch:** `contracts/src/DrandQuicknetBeacon.sol`, `contracts/script/deploy-sepolia.sh` (the new argument only), `contracts/test/unit/BeaconPairingGas.t.sol`, the tests that deploy the beacon (the argument only), the two anvil tests that deploy it outside `contracts/` (the argument only), this file
 - **Human gate:** no; deploying a build with this beacon is Rafa's (`docs/redeploy-contracts.md`)
-- **Status:** in review
+- **Status:** done (merged in PR 657, 2026-11-18)
 - **Agent/session:** the scan-fixes contract lane session (T-525)
 - **Roadmap row:** N190
 
@@ -19,8 +19,8 @@ An outside scan's findings in group G3 repeat two known issues of the beacon. Th
 - [x] Tests fail on the lane's beacon before the change and pass after it.
 - [x] The drand vector suites pass with only the new argument added (`DrandAllRounds`, `DrandEncodings`, `DrandRedTeam`, `DrandVerifierReview`, `DrandSecondRead`).
 - [x] `forge test` passes on the whole suite.
-- [ ] One review (kind 7).
-- [ ] Merged into the lane after every check has passed.
+- [x] One review (kind 7).
+- [x] Merged into the lane after every check has passed.
 
 ## Evidence
 

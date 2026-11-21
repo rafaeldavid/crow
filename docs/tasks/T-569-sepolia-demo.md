@@ -1,7 +1,7 @@
 # T-569: one command plays the demo on Sepolia, and a measurement that it holds
 
 - **Roadmap row:** none
-- **Status:** review
+- **Status:** done (merged in PR 720, 2026-11-20)
 - **Kind:** 9, live tests on testnet (the command is example code in `examples/`; no operator, adjudicator, settlement or schema code changes)
 - **Started:** 2026-11-19, by the coordinator's list for the roadmap's demo stage (stage 2, "The initial demo, and design partners start")
 
