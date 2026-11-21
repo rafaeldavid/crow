@@ -6,7 +6,7 @@
 - **Depends on:** none
 - **Paths this task may touch:** `fixtures/scenarios/neutrality.onramp-*`, and since 2026-11-21 (the coordinator's brief for the second fixture) the scenario runner and parser in `packages/testkit/src/` and the step list in `fixtures/README.md`, `docs/neutrality.md`, one line in `tests/cut-feature-alignment.known.json` (the fixture's `expire` step is the cut feature SC-6, as in `neutrality.adjudicator-never-accepts`), this file. Never `contracts/`, `spec/schemas/`, `.github/`, `packages/`, `CLAUDE.md`, `AGENTS.md` or `.claude/`.
 - **Human gate:** no
-- **Status:** done
+- **Status:** done (PR 700 merged the first fixture on 2026-11-19; this PR adds `neutrality.onramp-refuses`)
 - **Agent/session:** the T-558 session, started by the coordinator on 2026-11-19
 - **Roadmap row:** N201
 

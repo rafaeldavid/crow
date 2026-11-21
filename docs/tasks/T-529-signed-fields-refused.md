@@ -6,7 +6,7 @@
 - **Depends on:** T-527 (merged into the lane), T-523's plan, group G4 (L-1, I-1, RR-5)
 - **Paths this task may touch:** `contracts/src/HoldbackRules.sol`, `contracts/src/IHoldbackRules.sol`, `contracts/src/HoldbackTypes.sol` (two NatSpec blocks, comments only), `contracts/scripts/mutants-lane.json` (the mutants of the changed lines), `contracts/test/unit/SignedFieldsRefused.t.sol`, `contracts/test/attack/CarriedDeliveryRevert.t.sol` (G1's documenting test), `contracts/test/attack/SignedFieldRefusalsAttack.t.sol` (the red team's tests), `contracts/test/unit/ZeroAddressOutcomes.t.sol` (RR-3's documenting tests), the two test files that pinned the old behaviour (`contracts/test/crosscheck/R11Review.t.sol`, `contracts/test/attack/PhaseOneRedTeam.t.sol`), this file
 - **Human gate:** no for the lane; every deploy of the next build is Rafa's (Handoff)
-- **Status:** in review
+- **Status:** done (merged in PR 659, 2026-11-18)
 - **Agent/session:** the scan-fixes contract lane session (T-525)
 - **Roadmap row:** N190
 
@@ -40,9 +40,9 @@ Each new refusal could stop live deals on the next deployment if a sender filled
 
 - [x] Each refusal has a test that fails on the lane's code before the change.
 - [x] The three tests that pinned the old behaviour are replaced, and say where their refusals are now tested.
-- [ ] `forge test` passes on the whole suite.
-- [ ] One review and the red team; blocking findings fixed.
-- [ ] Merged into the lane after every check has passed.
+- [x] `forge test` passes on the whole suite.
+- [x] One review and the red team; blocking findings fixed.
+- [x] Merged into the lane after every check has passed.
 
 ## Evidence
 

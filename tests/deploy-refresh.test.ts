@@ -16,8 +16,8 @@ describe('the Crow Control build after a deploy (N166)', () => {
   it('starts a manual build of the console workflow, which always builds', async () => {
     const f = fake(0);
     expect(await refreshConsole(f.run)).toBe('Crow Control: a build started; the page shows this deploy in about 5 minutes.');
-    expect(f.calls).toEqual([{ cmd: 'gh', args: ['workflow', 'run', 'control-hourly.yml', '--repo', 'rafaeldavid/crow-private', '--ref', 'main'] }]);
-    expect(CONSOLE_BUILD).toEqual({ repo: 'rafaeldavid/crow-private', workflow: 'control-hourly.yml', ref: 'main' });
+    expect(f.calls).toEqual([{ cmd: 'gh', args: ['workflow', 'run', 'control-hourly.yml', '--repo', 'rafaeldavid/crow-ops-private', '--ref', 'main'] }]);
+    expect(CONSOLE_BUILD).toEqual({ repo: 'rafaeldavid/crow-ops-private', workflow: 'control-hourly.yml', ref: 'main' });
   });
 
   it('says so in one line and names the command when gh cannot start it', async () => {

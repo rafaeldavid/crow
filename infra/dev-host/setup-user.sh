@@ -7,8 +7,8 @@
 #   bash setup-user.sh --agents-login <login> [options]
 #
 # Options:
-#   --public-repo <owner/name>     default rafaeldavid/holdback
-#   --private-repo <owner/name>    default rafaeldavid/crow-private
+#   --public-repo <owner/name>     default rafaeldavid/crow
+#   --private-repo <owner/name>    default rafaeldavid/crow-ops-private
 #   --project <path>               where the public repository goes (default: escrow in this user's home, so
 #                                  /Users/crow/escrow for the record's user crow). Each person's session user has its own.
 #
@@ -34,8 +34,8 @@ say() { printf '%s\n' "$*"; }
 die() { printf 'setup-user: %s\n' "$*" >&2; exit 1; }
 
 login=""
-public_repo=rafaeldavid/holdback
-private_repo=rafaeldavid/crow-private
+public_repo=rafaeldavid/crow
+private_repo=rafaeldavid/crow-ops-private
 mode=setup
 while [ $# -gt 0 ]; do
   case "$1" in

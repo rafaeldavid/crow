@@ -5,7 +5,7 @@
 - **Depends on:** T-423 (the limits page's guidance), T-542 (its spend-controls section)
 - **Paths this task may touch:** `site/buy.txt`, `site/sell.txt`, `site/ref/limits.txt`, `site/ref/buyer-signer.txt`, this file
 - **Human gate:** no (the site deploy that publishes it waits for Rafa)
-- **Status:** review
+- **Status:** done (merged in PR 698, 2026-11-19)
 - **Agent/session:** buyer-guide-lines (local_6b78eea6 started it), 2026-11-19
 - **Roadmap row:** N8, N202, N201
 

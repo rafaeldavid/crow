@@ -6,7 +6,7 @@
 - **Depends on:** T-523 (the triage and its plan), D77 (fixes land in the next build)
 - **Paths this task may touch:** the lane `contracts-audit-ready` only: `contracts/src/HoldbackRules.sol`, `contracts/src/IHoldbackRules.sol`, `contracts/src/DrandQuicknetBeacon.sol`, `contracts/src/IHoldbackBeacon.sol`, `contracts/script/deploy-sepolia.sh` (the beacon's one new argument), tests under `contracts/test/`, and the task files T-525, T-527, T-528 and T-529
 - **Human gate:** no for the lane's pull requests; every deploy of the next build is Rafa's
-- **Status:** in progress
+- **Status:** done (merged in PR 649, 2026-11-18)
 - **Agent/session:** the scan-fixes contract lane session (session A of T-523's plan), started 2026-11-18
 - **Roadmap row:** N190
 
@@ -18,11 +18,11 @@ The order: this pull request brings `main` into the lane (D77's first step); the
 
 ## Acceptance criteria
 
-- [ ] `origin/main` is merged into the lane, and `contracts/src/` is unchanged by the merge.
-- [ ] G2 with G6, G3 and G4 are merged into the lane, each with its failing test written first (T-527, T-528, T-529).
-- [ ] G4 has had its red team before it merges.
-- [ ] `forge test` passes on the lane's tip.
-- [ ] The last task's Handoff lists what a redeploy of the next build needs.
+- [x] `origin/main` is merged into the lane, and `contracts/src/` is unchanged by the merge.
+- [x] G2 with G6, G3 and G4 are merged into the lane, each with its failing test written first (T-527, T-528, T-529).
+- [x] G4 has had its red team before it merges.
+- [x] `forge test` passes on the lane's tip.
+- [x] The last task's Handoff lists what a redeploy of the next build needs.
 
 ## Evidence
 
