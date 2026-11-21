@@ -1,0 +1,48 @@
+# @settlement sim @judges recorded @mode guaranteed_on_decision @seed 558
+name: neutrality.onramp-refuses
+description: >-
+  T-558. Atlas pays from its own payment address, atlas-wallet, which holds $1,000; the deal needs $1,550. Atlas
+  agrees, and its funding is refused as insufficient. The card on-ramp it meant to top up from refuses, so
+  nothing arrives. Atlas buys the $1,050 it lacks through a bank on-ramp instead, before offerExpiresAt, and funds
+  the agreed deal without signing again. Settlement never sees either on-ramp: it sees one refused funding and one
+  that holds. The checks-only terms pass, Bench A accepts, and the price goes to Tidewater.
+fails: card-onramp
+club: fixtures/clubs/data-services-v1.yaml
+terms: fixtures/terms/audit-report.yaml
+parties:
+  buyer: atlas-buyer
+  seller: tidewater-seller
+  buyer_payment: atlas-wallet
+adjudicators:
+  primary: bench-a
+  fallback: bench-b
+  appeal: bench-c
+operators: [op-1, op-2]
+outside: [card-onramp, bank-onramp]                  # on-ramps: no key, no account, no step in the deal
+faucet:
+  atlas-wallet: "1000000000"
+  bench-a: "25000000000"
+  bench-b: "25000000000"
+  bench-c: "25000000000"
+steps:
+  - offer:              { by: seller, via: op-1 }
+  - adjudicator_accept: { via: op-1 }
+  - agree_and_fund:     { by: buyer, via: op-1 }       # agree ok; fund refused: 1,000 tUSD is below 1,550 tUSD
+  - refuses:            { actor: card-onramp }
+  - top_up:             { from: card-onramp, to: atlas-wallet, amount: "1050000000" }   # refused: nothing arrives
+  - top_up:             { from: bank-onramp, to: atlas-wallet, amount: "1050000000" }   # before offerExpiresAt (900 s)
+  - fund:               { by: buyer, via: op-2 }       # the agreed deal, funded; no second Agree
+  - deliver:            { by: seller, via: op-1, file: data/audit-report/report.json }
+  - advance_clock:      { seconds: 5 }
+  - judge:              { adjudicator: bench-a }
+  - settle:             { trigger: anyone }
+  - verify_key_release: { by: buyer }
+expect:
+  problem: { step: 3, type: insufficient_funds }   # the one refusal is the short address
+  terminal: Released
+  balances:
+    atlas-buyer: "0"
+    atlas-wallet: "500000000"
+    tidewater-seller: "1500000000"
+    bench-a: "25050000000"
+    escrow: "0"
