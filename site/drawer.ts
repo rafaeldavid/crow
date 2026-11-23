@@ -35,7 +35,7 @@ export const drawerScript = (): string => String.raw`(function () {
   var d = box.firstChild;
   document.body.appendChild(d);
   var form = d.querySelector('form'), email = d.querySelector('#drawer-email'), msg = d.querySelector('.ck-dialog-msg'), send = d.querySelector('.ck-btn'), opener = null;
-  var open = function (e) { e.preventDefault(); e.stopPropagation(); opener = this; msg.textContent = ''; d.showModal(); email.focus(); };
+  var open = function (e) { e.preventDefault(); e.stopPropagation(); opener = e.currentTarget; msg.textContent = ''; d.showModal(); email.focus(); };
   for (var i = 0; i < opens.length; i++) opens[i].addEventListener('click', open);
   d.querySelector('.ck-dialog-close').addEventListener('click', function () { d.close(); });
   d.addEventListener('click', function (e) { if (e.target === d) d.close(); }); // a click outside the sheet

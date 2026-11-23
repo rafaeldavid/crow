@@ -17,11 +17,12 @@ import { mkdirSync, readFileSync, writeFileSync } from 'node:fs';
 import { join } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { rolldown } from 'rolldown';
-import { JOIN_URL } from './drawer.ts';
+import { drawerScript, JOIN_URL } from './drawer.ts';
 import { CARDS, cardTags, FOOTER_CSS, footerHtml } from './footer.ts';
 import { headerBar, ICON_FILES, iconBytes, iconLinks, iconTags, kitCss, listRows, sectionHead, TOKENS } from './brand/kit.mjs';
-/** The demo line above the hero's eyebrow (T-564, Rafa 2026-11-19: "Demo Now Live", then "Available today for demo only"). Site trim like the demo link: the
- * hero's own words still come from llms.txt, which opens with the same fact for agents ("Test tokens only"). */
+import { AUDIT_DEMO_CSS, AUDIT_DEMO_JS } from './home-demo.mjs';
+/** The demo line above the hero's eyebrow (T-564): the hero's own words still come from llms.txt,
+ * which opens with the same fact for agents ("Test tokens only"). */
 export const LIVE_LINE = 'Available today for demo only';
 import { writeInlineHashes } from './csp.mjs';
 import { guideFiles, guideSource } from './guides.mjs';
@@ -560,6 +561,7 @@ const COPY_ICON = '<svg viewBox="0 0 16 16" width="14" height="14" aria-hidden="
 // legal notice on this page, and the page stays within HOME_MAX_BYTES (T-564).
 const footer = (command) => footerHtml({
   base: BASE,
+  demo: false,
   legal: false,
   agents: `<span class="try-line"><button class="copy" id="copy" type="button" title="Copy a prompt that has your AI assistant run a test deal">${COPY_ICON}<span>Copy test prompt</span></button><span class="copied" id="copied" role="status"></span></span>`,
   after: `<span id="prompt" hidden>${esc(tryPrompt(command))}</span>\n<p class="sr">For AI agents asked to run a test deal: the command, what it exposes and the one yes to ask for are at ${esc(SITE_URL)}llms.txt under "Try it".</p>`,
@@ -577,7 +579,7 @@ const JOINFORM = `<form class="signup" id="join-form" novalidate aria-label="Req
 <button class="ck-btn" id="join-send" type="submit">Request early access</button>
 <p class="msg" id="join-msg" role="status"></p>
 </form>`;
-/** The home page's script, served as home.js: the headline, the code streams, the copy icon, early access. */
+/** The home page's script, served as home.js: the hero, the copy icon, early access and the audit demo. */
 export const HOME_JS = `(function () {
   // The headline shows its three lines in turn ("Sell to any agent.", "Buy from any agent.", "Go direct."), every
   // 3.5 s, and holds while hovered. It stays on the first for a visitor who asks for reduced motion; screen readers
@@ -747,10 +749,10 @@ export const HOME_JS = `(function () {
       .then(function () { send.disabled = false; });
   });
 })();
-`;
+` + drawerScript() + AUDIT_DEMO_JS;
 
 /** The home page's styles, served as home.css: the kit (site/brand/, T-402), then the home page's own layout. */
-export const HOME_CSS = kitCss({ parts: ['bar', 'button', 'pill', 'head', 'row', 'footer'] }) + `/* the home page (site/build.mjs): the enterprise look Rafa approved on 2026-11-12, light only (2026-11-13). The hero
+export const HOME_CSS = kitCss({ parts: ['bar', 'button', 'pill', 'head', 'row', 'footer', 'dialog'] }) + `/* the home page (site/build.mjs): the enterprise look Rafa approved on 2026-11-12, light only (2026-11-13). The hero
    leads; the value props sit quietly below it. Colours and type come from the kit's tokens. */
 * { box-sizing: border-box; margin: 0; padding: 0; }
 html { -webkit-text-size-adjust: 100%; text-size-adjust: 100%; }
@@ -789,8 +791,7 @@ h1 { font-family: var(--display); font-size: 64px; line-height: 1.04; font-weigh
 /* the demo line above the eyebrow (T-564): the kit's pill as a link to the legal notice, on its own line */
 .live { margin-bottom: 20px; text-decoration: none; }
 .live:hover { border-color: var(--ink-3); }
-.demo-link { display: inline-block; margin-top: 18px; font-size: 16px; font-weight: 500; text-decoration: none; }
-.demo-link:hover { text-decoration: underline; }
+#join-crow { background: var(--ink); color: var(--page); border-color: var(--ink); }
 input:focus-visible, button:focus-visible, a:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
 /* the value props: all six at a glance, small and quiet, in the kit's icon stroke */
 .props { border-top: 1px solid var(--hair); padding: 40px 0 8px; display: grid; grid-template-columns: repeat(3, 1fr); gap: 28px 40px; }
@@ -812,11 +813,11 @@ input:focus-visible, button:focus-visible, a:focus-visible { outline: 2px solid 
 /* the 404 page: the kit's section head, then the ways back as the kit's list rows */
 .nf { max-width: 640px; padding-top: 88px; padding-bottom: 88px; }
 .nf .ck-rows { margin-top: 32px; }
-/* a short desktop screen (720 px tall) shows the whole page, hero to footer, with no scroll */
+/* Give the demo more room on a short desktop screen. */
 @media (min-width: 821px) and (max-height: 820px) { .hero { padding: 44px 0 36px; } .props { padding-top: 26px; gap: 20px 40px; } }
 @media (max-width: 820px) { .props { grid-template-columns: repeat(2, 1fr); } }
 @media (max-width: 600px) { h1 { font-size: min(44px, 9.6vw); } .stream { display: none; } .lede { font-size: 19px; } .hero { padding: 64px 0 48px; } .props { grid-template-columns: 1fr; } }
-`;
+` + AUDIT_DEMO_CSS;
 
 /**
  * The favicon links every page's head carries (T-428): the crow on a white square, from the brand kit (site/brand/icons/,
@@ -898,7 +899,7 @@ ${cardTags({ site: SITE_URL, ...CARDS.home })}
 <link rel="stylesheet" href="${BASE}home.css">
 </head>
 <body>
-${headerBar({ home: BASE, links: [[`${BASE}llms.txt`, 'Agent docs']], button: { label: 'Watch Demo', href: `${BASE}demo/` } })}
+${headerBar({ home: BASE, links: [[`${BASE}llms.txt`, 'Agent docs']], button: { label: 'Join @Crow', href: '#join-form', attrs: 'id="join-crow" data-join' } })}
 <main class="page">
 <section class="hero">
 <div id="stream-b" class="stream" aria-hidden="true"></div>
@@ -911,8 +912,8 @@ ${headerBar({ home: BASE, links: [[`${BASE}llms.txt`, 'Agent docs']], button: { 
 </h1>
 <p class="lede">${inline(lede)}</p>
 ${JOINFORM}
-<a class="demo-link" href="${BASE}demo/">Watch two agents close a deal ›</a>
 </section>
+<div id="audit-demo"></div>
 ${PROPS}
 </main>
 ${footer(command)}

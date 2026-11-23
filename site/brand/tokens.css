@@ -6,6 +6,24 @@
      page with a hint of warmth (Rafa chose it over the oat paper the same day) */
   --page: #fdfcf9; --band: #f6f3ec; --ink: #2a2a2c; --ink-2: #5d5d60; --ink-3: #85837e; --line: #d6d0c4; --hair: #e6e0d5;
   --paid: #1d6b45; --paid-wash: #e2eee4; --warn: #b0233c; --warn-wash: #f7e1e4;
+  /* The homepage audit demo conversation window. */
+  --slack-aubergine: #4a154b;
+  --slack-header: #f6f6f5;
+  --slack-chrome-line: #dededc;
+  --slack-white: #fff;
+  --slack-ink: #1d1c1d;
+  --slack-muted: #565456;
+  --slack-line: #e1dbe2;
+  --slack-soft: #f6f3f6;
+  --slack-blue: #1264a3;
+  --slack-blue-wash: #e7f4fb;
+  --slack-green: #00684b;
+  --slack-green-wash: #e5f4ec;
+  --slack-yellow-wash: #fdf2d9;
+  --slack-yellow-ink: #805c17;
+  --window-red: #ff5f57;
+  --window-yellow: #ffbd2e;
+  --window-green: #28c840;
   /* one seasonal accent at a time, by the date in Berlin (Mar 1, Jun 1, Sep 1, Dec 1); a small pill, a thin rule, a
      labelled chart series or the season's drawing; never body text, a large area or a state */
   --accent-spring: #6f7a14; --accent-summer: #8f6c14; --accent-autumn: #a55a17; --accent-winter: #24466e;
