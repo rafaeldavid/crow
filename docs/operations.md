@@ -307,6 +307,14 @@ The maintainers keep the notes on agent sessions and permission prompts privatel
 
 Each entry records one deploy as it ran: the date and time in UTC, the commit, each Worker's new version and its rollback target, and what was measured after it. The deploy scripts print the entry's first line (`pnpm demo-cloud:deploy`, `pnpm site:deploy`, `node apps/test-agents/scripts/deploy.mjs`). The values are true for their date: for what runs now, read "What is live" above and each node's discovery.
 
+### The demo's seller name on phones (deployed 2026-11-23, 17:07 UTC)
+
+Rafa, 2026-11-23: the name "Seller · Alpha Security" looked cramped on phones; "Yes, deploy". The site deploy carries pull request 757: on screens up to 600 px the demo's header row puts Buyer and Seller on one line and the example label below. It ran from a clean worktree at `d47ad1d` after `main`'s own checks passed there [measured].
+
+**Site deploy 2026-11-23 17:07 UTC, commit `d47ad1d` on a detached HEAD: pass.** crow-site `d3bcb19d-26f5-4cfb-bfcf-5abde5be3ac5` (rollback target `794bbf8b-fb38-4596-8078-76fda277eb89`).
+
+After the deploy, the live home.css carries the new phone layout and every sitemap address answers 200 [measured].
+
 ### The homepage audit demo (deployed 2026-11-23, 16:37 UTC)
 
 Rafa, 2026-11-23: "review with Sonnet then deploy". The site deploy carries pull request 755: the homepage shows an illustrative conversation in which a buyer's agent books a security audit and pays through a payment hold, replacing the links to the demo page on the homepage. A Sonnet review found a lint failure in the sign-up drawer script and three wording issues, fixed on the branch before the merge. It ran from a clean worktree at `4b8ac68` after `main`'s own checks passed there [measured].
