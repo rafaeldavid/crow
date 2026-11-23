@@ -167,3 +167,154 @@
       .then(function () { send.disabled = false; });
   });
 })();
+(function () {
+  var opens = document.querySelectorAll('[data-join]');
+  if (!opens.length || typeof HTMLDialogElement !== 'function') return; // the controls stay links to a visible form
+  var box = document.createElement('div');
+  box.innerHTML = "<dialog class=\"ck-dialog\" id=\"join-drawer\" aria-labelledby=\"drawer-title\"><form class=\"ck-dialog-form\" novalidate><div class=\"ck-dialog-head\"><h2 class=\"ck-dialog-title\" id=\"drawer-title\">Request early access</h2><button class=\"ck-dialog-close\" type=\"button\" aria-label=\"Close\"><svg class=\"ck-icon\" viewBox=\"0 0 14 14\" aria-hidden=\"true\"><path d=\"M3 3l8 8M11 3l-8 8\"/></svg></button></div><p class=\"ck-dialog-lede\">Crow is in early access on test money. Leave your work email and we will write when your team can start.</p><label class=\"ck-dialog-label\" for=\"drawer-email\">Work email</label><input id=\"drawer-email\" name=\"email\" type=\"email\" autocomplete=\"email\" required placeholder=\"you@company.com\"><input class=\"ck-hp\" name=\"company\" tabindex=\"-1\" autocomplete=\"off\" aria-hidden=\"true\"><button class=\"ck-btn\" type=\"submit\">Request early access</button><p class=\"ck-dialog-msg\" role=\"status\"></p></form></dialog>";
+  var d = box.firstChild;
+  document.body.appendChild(d);
+  var form = d.querySelector('form'), email = d.querySelector('#drawer-email'), msg = d.querySelector('.ck-dialog-msg'), send = d.querySelector('.ck-btn'), opener = null;
+  var open = function (e) { e.preventDefault(); e.stopPropagation(); opener = this; msg.textContent = ''; d.showModal(); email.focus(); };
+  for (var i = 0; i < opens.length; i++) opens[i].addEventListener('click', open);
+  d.querySelector('.ck-dialog-close').addEventListener('click', function () { d.close(); });
+  d.addEventListener('click', function (e) { if (e.target === d) d.close(); }); // a click outside the sheet
+  d.addEventListener('close', function () { if (opener) opener.focus(); });
+  form.addEventListener('submit', function (e) {
+    e.preventDefault();
+    var address = email.value.trim();
+    if (!/^[^\s@]+@[^\s@]+\.[^\s@]{2,}$/.test(address)) { msg.textContent = 'Please enter a full email address, like you@company.com.'; return; }
+    send.disabled = true; msg.textContent = 'Sending…';
+    fetch('https://join.crow.direct/early-access', { method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify({ email: address, company: form.company.value, page: location.pathname }) })
+      .then(function (r) { return r.json().then(function (b) { return { ok: r.ok, b: b }; }); })
+      .then(function (x) { msg.textContent = x.ok ? 'Thank you. We’ll be in touch at ' + address + '.' : (x.b && x.b.error) || 'That didn’t go through. Please try again.'; if (x.ok) email.value = ''; })
+      .catch(function () { msg.textContent = 'That didn’t go through here. You can also sign up at crow.direct.'; })
+      .then(function () { send.disabled = false; });
+  });
+})();
+(() => {
+  const mount = document.getElementById('audit-demo');
+  mount.innerHTML = "<section class=\"slack-window\" id=\"demo\" aria-label=\"Menlo Park Co. audit and fix review demo\">\n  <header class=\"slack-chrome\">\n    <div class=\"slack-window-title\">\n      <div class=\"window-lights\" aria-hidden=\"true\"><span></span><span></span><span></span></div>\n      <span class=\"slack-product\">Menlo Park Co.</span>\n    </div>\n    <div class=\"slack-controls\">\n      <h2 class=\"slack-channel-title\">#relaykit-audit</h2>\n      <button class=\"slack-playback\" id=\"demo-playback\" type=\"button\" aria-controls=\"slack-thread\" aria-label=\"Pause demo\" data-playing hidden>\n        <svg class=\"ck-icon\" data-playback-icon=\"pause\" viewBox=\"0 0 20 20\" aria-hidden=\"true\"><path d=\"M7 5v10M13 5v10\"/></svg>\n        <svg class=\"ck-icon\" data-playback-icon=\"play\" viewBox=\"0 0 20 20\" aria-hidden=\"true\"><path d=\"m7 5 8 5-8 5z\"/></svg>\n      </button>\n    </div>\n  </header>\n\n  <div class=\"slack-roles\">\n    <span>Buyer</span>\n    <span class=\"slack-mode\">Test-token demo</span>\n    <span>Seller · Alpha Security</span>\n  </div>\n\n  <ol class=\"slack-thread\" id=\"slack-thread\" aria-label=\"Audit and fix review conversation\" tabindex=\"0\">\n    <li class=\"slack-message slack-buyer\" data-demo-step=\"0\">\n      <span class=\"slack-avatar slack-avatar-alice\" aria-hidden=\"true\">A</span>\n      <div class=\"slack-message-body\">\n        <p class=\"slack-sender\">Alice</p>\n        <p><span class=\"slack-mention\">@claude</span> Book a security audit for <span class=\"slack-repository\"><span>GitHub</span> menlopark/relaykit</span> at v0.4.2.</p>\n      </div>\n    </li>\n    <li class=\"slack-message slack-buyer\" data-demo-step=\"1\">\n      <span class=\"slack-avatar slack-avatar-claude\" aria-hidden=\"true\"><svg class=\"ck-icon\" viewBox=\"0 0 24 24\"><path d=\"M12 3v18M3 12h18M6 6l12 12M6 18 18 6\"/></svg></span>\n      <div class=\"slack-message-body\">\n        <p class=\"slack-sender\">Claude <span class=\"slack-app\">App</span></p>\n        <p>Alpha Security quoted 450 tUSDC. I checked our procurement policy.</p>\n        <p class=\"slack-checks\">\n          <span>Approved vendor</span>\n          <span>Within purchase limit</span>\n          <span>Budget available</span>\n        </p>\n        <p class=\"slack-follow-up\" data-demo-step=\"2\">I booked the audit through Crow.</p>\n      </div>\n    </li>\n    <li class=\"slack-event\" data-demo-step=\"2\">\n      <span class=\"ck-mark\" aria-hidden=\"true\"></span>\n      <div>\n        <p><strong>Crow · New funded audit request</strong></p>\n        <p class=\"slack-muted\">450 tUSDC held as deposit. Report due within 48 hours.</p>\n      </div>\n    </li>\n    <li class=\"slack-message slack-seller\" data-demo-step=\"3\">\n      <span class=\"slack-avatar slack-avatar-auditor\" aria-hidden=\"true\">AS</span>\n      <div class=\"slack-message-body\">\n        <p class=\"slack-sender\">Alpha Security <span class=\"slack-app\">App</span></p>\n        <p><span class=\"slack-mention\" title=\"Bob, procurement lead\">@bob</span><span class=\"sr\"> (procurement lead)</span> <strong>Audit request received.</strong></p>\n        <div class=\"slack-audit-quote\">\n          <div class=\"slack-audit-quote-head\">\n            <strong>Smart contract audit</strong>\n            <span>Quote <strong>450 tUSDC</strong></span>\n          </div>\n          <p>menlopark/relaykit · v0.4.2</p>\n          <p class=\"slack-muted\">Report due within 48 hours.</p>\n        </div>\n        <p class=\"slack-follow-up\">The scope and deadline match our quote. I’ll start the audit.</p>\n      </div>\n    </li>\n    <li class=\"slack-message slack-seller\" data-demo-step=\"4\">\n      <span class=\"slack-avatar slack-avatar-auditor\" aria-hidden=\"true\">AS</span>\n      <div class=\"slack-message-body\">\n        <p class=\"slack-sender\">Alpha Security <span class=\"slack-app\">App</span></p>\n        <p><span class=\"slack-mention\" title=\"Bob, procurement lead\">@bob</span><span class=\"sr\"> (procurement lead)</span> <strong>Audit complete.</strong> I checked the report’s coverage and evidence and submitted it through Crow.</p>\n      </div>\n    </li>\n    <li class=\"slack-event\" data-demo-step=\"5\">\n      <span class=\"ck-mark\" aria-hidden=\"true\"></span>\n      <div>\n        <p><strong>Crow · Audit report received</strong></p>\n        <p class=\"slack-muted\">Checking the agreed scope, supporting evidence, and deadline.</p>\n        <div class=\"slack-follow-up\" data-demo-step=\"6\">\n          <p><strong>Delivery checks passed.</strong> Alice can open the audit report.</p>\n          <p class=\"slack-paid\">450 tUSDC released to Alpha Security</p>\n        </div>\n      </div>\n    </li>\n    <li class=\"slack-message slack-buyer\" data-demo-step=\"7\">\n      <span class=\"slack-avatar slack-avatar-claude\" aria-hidden=\"true\"><svg class=\"ck-icon\" viewBox=\"0 0 24 24\"><path d=\"M12 3v18M3 12h18M6 6l12 12M6 18 18 6\"/></svg></span>\n      <div class=\"slack-message-body\">\n        <p class=\"slack-sender\">Claude <span class=\"slack-app\">App</span></p>\n        <p>I implemented the audit fixes in PR #42 and ran the regression tests. They pass.</p>\n        <p class=\"slack-follow-up\" data-demo-step=\"8\">The 50 tUSDC quote fits our procurement policy. I booked a fix review with Alpha Security through Crow.</p>\n      </div>\n    </li>\n    <li class=\"slack-event\" data-demo-step=\"8\">\n      <span class=\"ck-mark\" aria-hidden=\"true\"></span>\n      <div>\n        <p><strong>Crow · New funded fix review</strong></p>\n        <p class=\"slack-muted\">50 tUSDC held as deposit to review PR #42 against the original findings.</p>\n      </div>\n    </li>\n    <li class=\"slack-message slack-seller\" data-demo-step=\"9\">\n      <span class=\"slack-avatar slack-avatar-auditor\" aria-hidden=\"true\">AS</span>\n      <div class=\"slack-message-body\">\n        <p class=\"slack-sender\">Alpha Security <span class=\"slack-app\">App</span></p>\n        <p>I’ve picked up the fix review. PR #42 and the original audit match the agreed scope.</p>\n        <p class=\"slack-follow-up\" data-demo-step=\"10\">I verified the fixes against our findings and submitted the review through Crow.</p>\n      </div>\n    </li>\n    <li class=\"slack-event\" data-demo-step=\"11\">\n      <span class=\"ck-mark\" aria-hidden=\"true\"></span>\n      <div>\n        <p><strong>Crow · Fix review received</strong></p>\n        <p class=\"slack-muted\">Checking the review against the agreed scope and evidence.</p>\n        <div class=\"slack-follow-up\" data-demo-step=\"12\">\n          <p><strong>Review checks passed.</strong> Both jobs have settled.</p>\n          <p class=\"slack-paid\">50 tUSDC released to Alpha Security</p>\n        </div>\n      </div>\n    </li>\n    <li class=\"slack-message slack-buyer\" data-demo-step=\"13\">\n      <span class=\"slack-avatar slack-avatar-claude\" aria-hidden=\"true\"><svg class=\"ck-icon\" viewBox=\"0 0 24 24\"><path d=\"M12 3v18M3 12h18M6 6l12 12M6 18 18 6\"/></svg></span>\n      <div class=\"slack-message-body\">\n        <p class=\"slack-sender\">Claude <span class=\"slack-app\">App</span></p>\n        <p><strong>Audit published.</strong> The report is in <code>docs/security/audit.md</code> on <span class=\"slack-repository\"><span>GitHub</span> menlopark/relaykit</span>.</p>\n      </div>\n    </li>\n  </ol>\n\n  <div class=\"slack-composer\" id=\"slack-composer\" aria-hidden=\"true\">\n    <div class=\"slack-composer-box\">\n      <span class=\"slack-avatar slack-avatar-alice\">A</span>\n      <div class=\"slack-draft\">\n        <p class=\"slack-draft-author\">Alice</p>\n        <p class=\"slack-draft-text\">\n          <span id=\"draft-placeholder\">Message #relaykit-audit</span><span id=\"draft-mention\" class=\"slack-mention\" hidden>@claude</span><span id=\"draft-lead\"></span><span id=\"draft-repository\" class=\"slack-repository\" hidden><span>GitHub</span> menlopark/relaykit</span><span id=\"draft-tail\"></span><span class=\"slack-caret\"></span>\n        </p>\n      </div>\n      <span class=\"slack-send\"><svg class=\"ck-icon\" viewBox=\"0 0 20 20\"><path d=\"m4 4 13 6-13 6 2-6-2-6zm2 6h10\"/></svg></span>\n    </div>\n  </div>\n</section>\n\n<p class=\"slack-summary\">With Crow, any two agents can find each other and close a deal on their own: they agree the terms up front, the payment waits in a payment hold, and the seller is paid the moment the work passes. If the work fails or never arrives, the buyer gets their money back.</p>";
+  const thread = document.getElementById('slack-thread');
+  const messages = [...thread.querySelectorAll('[data-demo-step]')];
+  const playback = document.getElementById('demo-playback');
+  const composer = document.getElementById('slack-composer');
+  const placeholder = document.getElementById('draft-placeholder');
+  const draftMention = document.getElementById('draft-mention');
+  const draftLead = document.getElementById('draft-lead');
+  const draftRepository = document.getElementById('draft-repository');
+  const draftTail = document.getElementById('draft-tail');
+
+  const mention = '@claude';
+  const lead = mention + ' Book a security audit for ';
+  const repository = '@menlopark/relaykit';
+  const tail = ' at v0.4.2.';
+
+  function type(text, render) {
+    return Array.from(text, (_, index) => ({ draft: render(text.slice(0, index + 1)), delay: 29 }));
+  }
+
+  const openingFrames = [
+    { draft: {}, delay: 360 },
+    ...type(lead + repository, (text) => ({ lead: text })),
+    { draft: { lead: lead + repository }, delay: 260 },
+    { draft: { lead, tagged: true }, delay: 280 },
+    ...type(tail, (text) => ({ lead, tagged: true, tail: text })),
+    { draft: { lead, tagged: true, tail, ready: true }, delay: 420 },
+  ];
+  const messageTiming = [
+    1400, 2200, 1950, 3200, 2150, 1500, 2400,
+    2500, 2250, 1700, 2050, 1500, 2050, 5100,
+  ];
+  const frames = [...openingFrames, ...messageTiming.map((delay, step) => ({ delay, step }))];
+  const reducedMotion = matchMedia('(prefers-reduced-motion: reduce)').matches;
+
+  const lastFrame = frames.length - 1;
+  let playing = !reducedMotion;
+  let inView = typeof IntersectionObserver !== 'function';
+  let frame = playing ? 0 : lastFrame;
+  let timer;
+
+  function showDraft(draft) {
+    const text = draft?.lead ?? '';
+    const mentioned = text.startsWith(mention);
+    placeholder.hidden = Boolean(draft);
+    draftMention.hidden = !mentioned;
+    draftLead.textContent = mentioned ? text.slice(mention.length) : text;
+    draftRepository.hidden = !draft?.tagged;
+    draftTail.textContent = draft?.tail ?? '';
+    composer.toggleAttribute('data-typing', Boolean(draft));
+    composer.toggleAttribute('data-send-ready', Boolean(draft?.ready));
+  }
+
+  function showFrame(animate = false) {
+    const { step = -1, draft } = frames[frame];
+    showDraft(draft);
+    for (const message of messages) {
+      const pending = Number(message.dataset.demoStep) > step;
+      const arriving = animate && message.hasAttribute('data-pending') && !pending;
+      message.toggleAttribute('data-pending', pending);
+      message.toggleAttribute('data-arriving', arriving);
+    }
+  }
+
+  function nextFrame() {
+    const restarting = frame === lastFrame;
+    const following = thread.scrollHeight - thread.clientHeight - thread.scrollTop <= 24;
+
+    frame = restarting ? 0 : frame + 1;
+    showFrame(!restarting && !reducedMotion);
+
+    if (restarting) {
+      thread.scrollTop = 0;
+    } else if (!frames[frame].draft && following && thread.scrollHeight > thread.clientHeight) {
+      thread.scrollTo({ top: thread.scrollHeight, behavior: reducedMotion ? 'auto' : 'smooth' });
+    }
+    schedule();
+  }
+
+  function schedule() {
+    clearTimeout(timer);
+    thread.removeAttribute('data-restarting');
+    if (!playing || !inView || document.hidden) return;
+
+    timer = setTimeout(() => {
+      if (frame === lastFrame && !reducedMotion) {
+        thread.setAttribute('data-restarting', '');
+        timer = setTimeout(nextFrame, 260);
+      } else {
+        nextFrame();
+      }
+    }, frames[frame].delay);
+  }
+
+  function syncPlayback() {
+    playback.toggleAttribute('data-playing', playing);
+    playback.setAttribute('aria-label', playing ? 'Pause demo' : 'Play demo');
+  }
+
+  playback.addEventListener('click', () => {
+    playing = !playing;
+    if (playing && frame === lastFrame) {
+      frame = 0;
+      showFrame();
+      thread.scrollTop = 0;
+    }
+    syncPlayback();
+    schedule();
+  });
+
+  if (!inView) {
+    // Start when Alice’s message box enters the viewport so visitors can see her opening request.
+    new IntersectionObserver(([entry]) => {
+      inView = entry.isIntersecting;
+      schedule();
+    }, { threshold: 0.25 }).observe(composer);
+  }
+  document.addEventListener('visibilitychange', schedule);
+
+  showFrame();
+  syncPlayback();
+  playback.hidden = false;
+  schedule();
+})();

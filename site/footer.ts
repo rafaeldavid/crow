@@ -22,15 +22,15 @@ export const CODE_URL = 'https://github.com/rafaeldavid/crow';
 /**
  * The footer (T-402; Rafa 2026-11-13: simple, little content): Crow, links to pages that exist (T-421 added the trust and
  * status pages, T-564 the legal notice) and, on the home page, the copy-the-prompt button; then the legal line and the tagline (Rafa dropped the pill, 2026-11-13). `current` marks
- * the page's own link; `legal: false` leaves out the Legal link where the page links the notice itself (the home page); `agents` follows the links; `after` follows the bar.
+ * the page's own link; the home page omits the Demo and Legal links. `agents` follows the links; `after` follows the bar.
  */
-export const footerHtml = (o: { base: string; current?: 'demo' | 'trust' | 'status' | 'legal'; legal?: boolean; agents?: string; after?: string }): string =>
+export const footerHtml = (o: { base: string; current?: 'demo' | 'trust' | 'status' | 'legal'; demo?: boolean; legal?: boolean; agents?: string; after?: string }): string =>
   footer({
     home: o.base,
     tagline: TAGLINE,
     legal: '© 2026 Crow',
     links: [
-      { href: `${o.base}demo/`, label: 'Demo', current: o.current === 'demo' },
+      ...(o.demo === false ? [] : [{ href: `${o.base}demo/`, label: 'Demo', current: o.current === 'demo' }]),
       { href: `${o.base}llms.txt`, label: 'Agent docs' },
       { href: `${o.base}trust`, label: 'Trust', current: o.current === 'trust' },
       { href: `${o.base}status`, label: 'Status', current: o.current === 'status' },
