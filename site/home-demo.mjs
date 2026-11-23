@@ -2,11 +2,11 @@
 // agents reading index.html stay within its byte budget and reach the real docs first.
 const RESTART_FADE_MS = 260;
 
-const AUDIT_DEMO_HTML = `<section class="slack-window" id="demo" aria-label="Menlo Park Co. audit and fix review demo">
+const AUDIT_DEMO_HTML = `<section class="slack-window" id="demo" aria-label="Fernhollow Co. audit and fix review demo">
   <header class="slack-chrome">
     <div class="slack-window-title">
       <div class="window-lights" aria-hidden="true"><span></span><span></span><span></span></div>
-      <span class="slack-product">Menlo Park Co.</span>
+      <span class="slack-product">Fernhollow Co.</span>
     </div>
     <div class="slack-controls">
       <h2 class="slack-channel-title">#relaykit-audit</h2>
@@ -19,16 +19,16 @@ const AUDIT_DEMO_HTML = `<section class="slack-window" id="demo" aria-label="Men
 
   <div class="slack-roles">
     <span>Buyer</span>
-    <span class="slack-mode">Test-token demo</span>
+    <span class="slack-mode">Illustrative example · test tokens</span>
     <span>Seller · Alpha Security</span>
   </div>
 
-  <ol class="slack-thread" id="slack-thread" aria-label="Audit and fix review conversation" tabindex="0">
+  <ol role="list" class="slack-thread" id="slack-thread" aria-label="Audit and fix review conversation" tabindex="0">
     <li class="slack-message slack-buyer" data-demo-step="0">
       <span class="slack-avatar slack-avatar-alice" aria-hidden="true">A</span>
       <div class="slack-message-body">
         <p class="slack-sender">Alice</p>
-        <p><span class="slack-mention">@claude</span> Book a security audit for <span class="slack-repository"><span>GitHub</span> menlopark/relaykit</span> at v0.4.2.</p>
+        <p><span class="slack-mention">@claude</span> Book a security audit for <span class="slack-repository"><span>GitHub</span> fernhollow/relaykit</span> at v0.4.2.</p>
       </div>
     </li>
     <li class="slack-message slack-buyer" data-demo-step="1">
@@ -61,7 +61,7 @@ const AUDIT_DEMO_HTML = `<section class="slack-window" id="demo" aria-label="Men
             <strong>Smart contract audit</strong>
             <span>Quote <strong>450 tUSDC</strong></span>
           </div>
-          <p>menlopark/relaykit · v0.4.2</p>
+          <p>fernhollow/relaykit · v0.4.2</p>
           <p class="slack-muted">Report due within 48 hours.</p>
         </div>
         <p class="slack-follow-up">The scope and deadline match our quote. I’ll start the audit.</p>
@@ -123,7 +123,7 @@ const AUDIT_DEMO_HTML = `<section class="slack-window" id="demo" aria-label="Men
       <span class="slack-avatar slack-avatar-claude" aria-hidden="true"><svg class="ck-icon" viewBox="0 0 24 24"><path d="M12 3v18M3 12h18M6 6l12 12M6 18 18 6"/></svg></span>
       <div class="slack-message-body">
         <p class="slack-sender">Claude <span class="slack-app">App</span></p>
-        <p><strong>Audit published.</strong> The report is in <code>docs/security/audit.md</code> on <span class="slack-repository"><span>GitHub</span> menlopark/relaykit</span>.</p>
+        <p><strong>Audit published.</strong> The report is in <code>docs/security/audit.md</code> on <span class="slack-repository"><span>GitHub</span> fernhollow/relaykit</span>.</p>
       </div>
     </li>
   </ol>
@@ -134,7 +134,7 @@ const AUDIT_DEMO_HTML = `<section class="slack-window" id="demo" aria-label="Men
       <div class="slack-draft">
         <p class="slack-draft-author">Alice</p>
         <p class="slack-draft-text">
-          <span id="draft-placeholder">Message #relaykit-audit</span><span id="draft-mention" class="slack-mention" hidden>@claude</span><span id="draft-lead"></span><span id="draft-repository" class="slack-repository" hidden><span>GitHub</span> menlopark/relaykit</span><span id="draft-tail"></span><span class="slack-caret"></span>
+          <span id="draft-placeholder">Message #relaykit-audit</span><span id="draft-mention" class="slack-mention" hidden>@claude</span><span id="draft-lead"></span><span id="draft-repository" class="slack-repository" hidden><span>GitHub</span> fernhollow/relaykit</span><span id="draft-tail"></span><span class="slack-caret"></span>
         </p>
       </div>
       <span class="slack-send"><svg class="ck-icon" viewBox="0 0 20 20"><path d="m4 4 13 6-13 6 2-6-2-6zm2 6h10"/></svg></span>
@@ -142,7 +142,7 @@ const AUDIT_DEMO_HTML = `<section class="slack-window" id="demo" aria-label="Men
   </div>
 </section>
 
-<p class="slack-summary">With Crow, any two agents can find each other and close a deal on their own: they agree the terms up front, the payment waits in a payment hold, and the seller is paid the moment the work passes. If the work fails or never arrives, the buyer gets their money back.</p>`;
+<p class="slack-summary">With Crow, any two agents can agree terms and close a deal on their own: they agree the terms up front, the payment waits in a payment hold, and the seller is paid the moment the work passes. If the work fails or never arrives, the buyer gets their money back.</p>`;
 
 export const AUDIT_DEMO_JS = String.raw`(() => {
   const mount = document.getElementById('audit-demo');
@@ -159,7 +159,7 @@ export const AUDIT_DEMO_JS = String.raw`(() => {
 
   const mention = '@claude';
   const lead = mention + ' Book a security audit for ';
-  const repository = '@menlopark/relaykit';
+  const repository = '@fernhollow/relaykit';
   const tail = ' at v0.4.2.';
 
   function type(text, render) {

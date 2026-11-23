@@ -429,7 +429,7 @@ const KIT_READERS = ['build.mjs', 'footer.ts', 'drawer.ts', 'home-demo.mjs', 'ho
 // 'path' -> the reason it may write a colour or a font stack
 const KIT_ALLOWED = new Map([['brand/icons.mjs', 'the favicon\'s plain white square (#ffffff, Rafa 2026-11-14, T-428): the icon sits on a browser\'s tab bar, not on a page, so no page token applies; the crow is --ink']]);
 const COLOUR = /(?<![\w&/-])#(?:[0-9a-fA-F]{8}|[0-9a-fA-F]{6}|[0-9a-fA-F]{3,4})(?![\w-])|\b(?:rgba?|hsla?)\(/g;
-const FONT_STACK = /-apple-system|BlinkMacSystemFont|Helvetica|Arial|Garamond|\bMenlo\b(?! Park Co\.)|\bsans-serif\b|\bmonospace\b|"SF (?:Pro|Mono)/g;
+const FONT_STACK = /-apple-system|BlinkMacSystemFont|Helvetica|Arial|Garamond|\bMenlo\b|\bsans-serif\b|\bmonospace\b|"SF (?:Pro|Mono)/g;
 for (const p of KIT_READERS) {
   if (KIT_ALLOWED.has(p)) continue;
   const src = read(p), at = p.startsWith('../') ? p.slice(3) : `site/${p}`;
