@@ -472,6 +472,10 @@ input:focus-visible, button:focus-visible, a:focus-visible { outline: 2px solid 
   .window-lights span { inline-size: 8px; block-size: 8px; }
   .slack-playback { inline-size: 30px; block-size: 32px; }
   .slack-channel-title, .slack-roles { font-size: 12px; }
+  .slack-roles { grid-template-columns: minmax(0, 1fr) auto; grid-template-areas: "buyer seller" "mode mode"; row-gap: 2px; }
+  .slack-roles span:first-child { grid-area: buyer; }
+  .slack-roles span:last-child { grid-area: seller; white-space: nowrap; }
+  .slack-roles .slack-mode { grid-area: mode; text-align: center; }
   .slack-thread { block-size: clamp(225px, 100svh - 302px, 396px); }
   .slack-composer { padding-inline: var(--space-3); block-size: 106px; }
   .slack-composer-box { padding-inline: var(--space-2); }
