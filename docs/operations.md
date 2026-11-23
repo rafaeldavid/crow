@@ -307,6 +307,14 @@ The maintainers keep the notes on agent sessions and permission prompts privatel
 
 Each entry records one deploy as it ran: the date and time in UTC, the commit, each Worker's new version and its rollback target, and what was measured after it. The deploy scripts print the entry's first line (`pnpm demo-cloud:deploy`, `pnpm site:deploy`, `node apps/test-agents/scripts/deploy.mjs`). The values are true for their date: for what runs now, read "What is live" above and each node's discovery.
 
+### The homepage audit demo (deployed 2026-11-23, 16:37 UTC)
+
+Rafa, 2026-11-23: "review with Sonnet then deploy". The site deploy carries pull request 755: the homepage shows an illustrative conversation in which a buyer's agent books a security audit and pays through a payment hold, replacing the links to the demo page on the homepage. A Sonnet review found a lint failure in the sign-up drawer script and three wording issues, fixed on the branch before the merge. It ran from a clean worktree at `4b8ac68` after `main`'s own checks passed there [measured].
+
+**Site deploy 2026-11-23 16:37 UTC, commit `4b8ac68` on a detached HEAD: pass.** crow-site `794bbf8b-fb38-4596-8078-76fda277eb89` (rollback target `8da33680-d256-4c03-b4c0-c5df51e4a784`).
+
+After the deploy, the live home.js carries the demo with its "Illustrative example" label, the homepage sends its content security policy, /demo/ still answers 200, and every sitemap address answers 200 [measured].
+
 ### The vocabulary fixes and the guide lines (deployed 2026-11-21, 12:11 UTC)
 
 Rafa, 2026-11-21: "Yes, deploy". The site deploy carries pull requests 748 (the public pages follow the agreed vocabulary and link the renamed repositories) and 749 (roadmap row N213: the guide lines the approvals runs lacked, a seller's own terms and deal record in `ref/intake.txt`, and which quote address takes a POST). No bundle changes. It ran from a clean worktree at `3d74a765` after `main`'s own checks passed there [measured].
