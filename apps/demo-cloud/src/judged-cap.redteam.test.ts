@@ -16,7 +16,7 @@ const running: Array<{ close(): Promise<void> }> = [];
 afterEach(async () => void (await Promise.all(running.splice(0).map((r) => r.close()))));
 
 async function serve(options: Partial<PublicWorldOptions>): Promise<string[]> {
-  const world = await PublicWorld.open({ storage: new MemoryStorage(), env: {}, minWindowSec: 2, judgedDealsPerClientPerDay: 100, ...options });
+  const world = await PublicWorld.open({ storage: new MemoryStorage(), env: {}, minWindowSec: 2, ...options });
   const { urls, close } = await serveTwoOrigins(world, { tickMs: 100, keepContentLength: true });
   running.push({ close });
   return urls;

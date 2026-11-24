@@ -317,7 +317,7 @@ describe('attack.t422: variants the caps hold against (expected to pass)', () =>
 
 describe('attack.t422: smaller faults', () => {
   it('attack.t422-ciphertext-recount: bytes the store already holds are counted again while under the cap', async () => {
-    const caps = new DailyCaps(new MemoryStorage(), () => Date.parse('2026-11-14T12:00:00Z'), 'secret', { fundedDeals: 1, ciphertextBytes: 200, judgedDeals: 1, fundedDealsAll: 100 });
+    const caps = new DailyCaps(new MemoryStorage(), () => Date.parse('2026-11-14T12:00:00Z'), 'secret', { fundedDeals: 1, ciphertextBytes: 200, fundedDealsAll: 100 });
     expect((await caps.takeBytes(0, 'c', 60, async () => false)).ok).toBe(true);
     const again = await caps.takeBytes(0, 'c', 60, async () => true); // the same 60 bytes, already stored
     const third = await caps.takeBytes(0, 'c', 90, async () => false); // 90 new bytes: 150 new in all, under the cap of 200

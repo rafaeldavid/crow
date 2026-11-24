@@ -1,6 +1,6 @@
 // T-581 (roadmap N222, security review 2026-11-21, section 5): the brakes on what a stranger can spend. Each test here is
-// also an attack that failed before the change: one client holding the day's judge budget with judged deals, many
-// clients draining the relayer, a restart resetting the faucet's per-client count.
+// also an attack that failed before the change: one buyer holding the day's judge budget with judged deals, by any
+// route to the settlement layer; many clients draining the relayer; a restart resetting the faucet's per-client count.
 import nacl from 'tweetnacl';
 import { generatePrivateKey } from 'viem/accounts';
 import { afterEach, describe, expect, it } from 'vitest';
@@ -8,7 +8,7 @@ import { Agent } from '../../../examples/agent.ts';
 import { serveTwoOrigins } from '../../../examples/two-origins.ts';
 import { markerFake } from '@holdback/adjudicator';
 import { MemoryStorage, PublicWorld, type PublicWorldOptions } from './index.js';
-import { DailyCaps } from './limits.js';
+import { BuyerJudgedDeals, DailyCaps } from './limits.js';
 
 type J = any; // eslint-disable-line @typescript-eslint/no-explicit-any
 
@@ -27,12 +27,21 @@ const freshAgent = (urls: string[]) => new Agent(urls, generatePrivateKey(), nac
 const TIMING = { judgeWithinSec: 2, fallbackWithinSec: 2, appealWindowSec: 0, appealDecideSec: 2 };
 const post = (url: string, body: unknown, key: string) => fetch(url, { method: 'POST', headers: { 'content-type': 'application/json', 'idempotency-key': key }, body: JSON.stringify(body) });
 
-/** An accepted offer, the buyer and seller each at `urls`. `judged` makes it a rubric deal; otherwise one required check. */
-async function offered(urls: string[], judged: boolean) {
+const granted = new Set<string>();
+/**
+ * An offer, the buyer and seller each at `urls`. `judged` makes it a rubric deal; otherwise one required check. `o.buyer`
+ * reuses a buyer; `o.direct` submits the signed offer straight to the settlement layer, past every operator; `o.accepted`
+ * false returns without waiting for Crow's acceptance.
+ */
+async function offered(urls: string[], judged: boolean, o: { buyer?: Agent; direct?: PublicWorld; accepted?: boolean } = {}) {
   const index = ((await (await fetch(`${urls[0]}/`)).json()) as J).demo;
-  const buyer = freshAgent(urls);
+  const buyer = o.buyer ?? freshAgent(urls);
   const seller = freshAgent(urls);
-  for (const a of [buyer, seller]) await a.call('POST', '/v1/faucet', { address: a.address });
+  for (const a of [buyer, seller]) {
+    if (granted.has(a.address)) continue;
+    await a.call('POST', '/v1/faucet', { address: a.address });
+    granted.add(a.address);
+  }
   const [primary, fallback, appeal] = index.adjudicators.map((x: J) => x.address);
   const common = {
     clubId: index.clubId,
@@ -42,57 +51,117 @@ async function offered(urls: string[], judged: boolean) {
     price: { token: 'tUSD', amount: '25000000' },
     timing: TIMING,
   };
-  const offer = judged
-    ? await seller.offer({
+  const given = judged
+    ? {
         ...common,
         template: 'default',
         deliverable: { kind: 'other', description: 'A diff', format: 'text/plain' },
         checks: [{ id: 'hidden', type: 'hidden_characters_max', required: true, max: { tag: 0, bidi: 0, total: 0 } }],
         rubric: { passThreshold: 300, criteria: [{ id: 'fixes', description: 'Fixes it.', weight: 100, anchors: { '0': 'No', '2': 'Partly', '4': 'Yes' } }] },
-      })
-    : await seller.offer({
+      }
+    : {
         ...common,
         template: 'checks-only',
         deliverable: { kind: 'dataset', description: 'customers.csv', format: 'text/csv' },
         checks: [{ id: 'cols', type: 'csv_columns_exact', required: true, columns: ['customer_id', 'email'] }],
-      });
-  await buyer.waitFor(offer.id, ['AcceptedByAdjudicator']);
+      };
+  let offer: { id: string; terms: J; state: J };
+  if (o.direct) {
+    // The seller's signed offer goes to the settlement layer itself: no operator sees it.
+    const world = o.direct;
+    const call = seller.call.bind(seller);
+    seller.call = (async (method: string, path: string, body?: J) => {
+      if (method !== 'POST' || path !== '/v1/commitments') return call(method, path, body);
+      const r = await world.chain.submit({ kind: 'offer', commitment: body });
+      if (!r.ok) throw new Error(`direct offer refused: ${JSON.stringify(r)}`);
+      return { notices: [] };
+    }) as typeof seller.call;
+    offer = await seller.offerDirect(given);
+  } else offer = await seller.offer(given);
+  if (o.accepted !== false) await buyer.waitFor(offer.id, ['AcceptedByAdjudicator']);
   return { buyer, seller, offer };
 }
 const fund = (d: Awaited<ReturnType<typeof offered>>) => d.buyer.agreeAndFund(d.offer.terms, 40_000_000n);
 const standIn = () => ({ judgeProvider: markerFake() as never });
 
-describe('judged deals per client per day (T-581 item 1)', () => {
-  // Attack: one address funds judged deal after judged deal. Each reserves 6 of the daily judge calls (30 when this was
-  // written, 100 by default since 2026-11-24), so a handful hold the day for everyone. Before the change every one of the five was relayed. The default is 3 (Rafa, 2026-11-24: the
-  // Sepolia demo plays three judged beats at once from one machine), so the fourth from one address is refused.
-  it('relays three judged deals per client a day by default, so one client reserves 18 judge calls at one node at most', async () => {
-    const { world, urls } = await serve({ ...standIn(), liveCallsPerDay: 30 });
-    const deals = [];
-    for (let i = 0; i < 4; i++) deals.push(await offered(urls, true));
-    const [second] = deals.slice(3);
-    for (const d of deals.slice(0, 3)) await fund(d);
-    await expect(fund(second!)).rejects.toThrow(/rate_limited.*judge panel/);
-    expect(world.reservedJudgeCalls()).toBe(18);
-    // A deal with required checks only costs no judge call: the same client still funds it.
-    await fund(await offered(urls, false));
-    // The refusal gave nothing away: the refused deal is still unfunded and a second client can fund it.
-    expect((await second!.buyer.call('GET', `/v1/commitments/${second!.offer.id}`)).escrowState).toBe('AcceptedByAdjudicator');
+/** Waits a few of the world's passes (100 ms apart), then reads the deal's state. */
+async function stateAfterPasses(d: Awaited<ReturnType<typeof offered>>): Promise<string> {
+  await new Promise((r) => setTimeout(r, 1500));
+  return (await d.buyer.call('GET', `/v1/commitments/${d.offer.id}`)).escrowState;
+}
+const relayerFunded = async (storage: MemoryStorage) => [...(await storage.list<{ funded: number }>({ prefix: 'lc:' })).entries()].filter(([k]) => k.endsWith(':all')).reduce((n, [, v]) => n + v.funded, 0);
+
+describe('judged deals per buyer per day, at Crow\'s acceptance (T-581 item 1; Rafa, 2026-11-24)', () => {
+  // Attack: one buyer address takes judged deal after judged deal. Each funded one reserves 6 of the daily judge calls,
+  // so a handful hold the day for everyone. Before the change Crow accepted every one. The default is 3, so the Sepolia
+  // demo plays its three judged beats from one buyer; the fourth is declined before anyone can fund it.
+  it('accepts three judged deals per buyer a day and declines the fourth, which costs the relayer nothing', async () => {
+    const { urls, storage } = await serve({ ...standIn(), liveCallsPerDay: 100 });
+    const buyer = freshAgent(urls);
+    for (let i = 0; i < 3; i++) await offered(urls, true, { buyer });
+    const fourth = await offered(urls, true, { buyer, accepted: false });
+    // The operators say so before relaying, from the adjudicator's own `declines`.
+    expect(fourth.offer.state.notices.join(' ')).toMatch(/judged_deals_per_buyer:/);
+    expect(await stateAfterPasses(fourth)).toBe('Offered');
+    const before = await relayerFunded(storage);
+    await expect(fund(fourth)).rejects.toThrow();
+    expect(await relayerFunded(storage)).toBe(before);
+    // A deal decided by required checks alone needs no judge call: the same buyer still gets it. Another buyer is apart.
+    await offered(urls, false, { buyer });
+    await offered(urls, true);
   }, 90_000);
 
-  it('is a configured value: 2 lets a second judged deal through, 0 refuses every judged deal', async () => {
-    const two = await serve({ ...standIn(), liveCallsPerDay: 30, judgedDealsPerClientPerDay: 2 });
-    await fund(await offered(two.urls, true));
-    await fund(await offered(two.urls, true));
-    expect(two.world.reservedJudgeCalls()).toBe(12);
-    const none = await serve({ ...standIn(), liveCallsPerDay: 30, env: { JUDGED_DEALS_PER_CLIENT_PER_DAY: '0' } });
-    await expect(fund(await offered(none.urls, true))).rejects.toThrow(/rate_limited/);
-    await fund(await offered(none.urls, false));
+  it('counts and declines an offer submitted straight to the settlement layer, past every operator', async () => {
+    const { world, urls } = await serve({ ...standIn(), liveCallsPerDay: 100 });
+    const buyer = freshAgent(urls);
+    await offered(urls, true, { buyer });
+    await offered(urls, true, { buyer, direct: world });
+    await offered(urls, true, { buyer, direct: world });
+    const fourth = await offered(urls, true, { buyer, direct: world, accepted: false });
+    expect(await stateAfterPasses(fourth)).toBe('Offered');
   }, 90_000);
 
-  it('refuses a malformed value at start, as the other limits do', async () => {
-    await expect(PublicWorld.open({ storage: new MemoryStorage(), env: { JUDGED_DEALS_PER_CLIENT_PER_DAY: '1.5' } })).rejects.toThrow(/JUDGED_DEALS_PER_CLIENT_PER_DAY/);
+  it('is a configured value: 0 declines every judged deal, a malformed value refuses to start, a scripted panel counts nothing', async () => {
+    const none = await serve({ ...standIn(), liveCallsPerDay: 100, env: { JUDGED_DEALS_PER_BUYER_PER_DAY: '0' } });
+    expect(await stateAfterPasses(await offered(none.urls, true, { accepted: false }))).toBe('Offered');
+    await offered(none.urls, false);
+    await expect(PublicWorld.open({ storage: new MemoryStorage(), env: { JUDGED_DEALS_PER_BUYER_PER_DAY: '1.5' } })).rejects.toThrow(/JUDGED_DEALS_PER_BUYER_PER_DAY/);
     await expect(PublicWorld.open({ storage: new MemoryStorage(), env: { FUNDED_DEALS_PER_DAY: 'many' } })).rejects.toThrow(/FUNDED_DEALS_PER_DAY/);
+    // Without live judges no budget is spent, so nothing is counted.
+    const scripted = await serve({ judgedDealsPerBuyerPerDay: 1 });
+    const buyer = freshAgent(scripted.urls);
+    await offered(scripted.urls, true, { buyer });
+    await offered(scripted.urls, true, { buyer });
+  }, 90_000);
+});
+
+describe('BuyerJudgedDeals, the count behind it (T-581)', () => {
+  const day = Date.parse('2026-11-24T12:00:00Z');
+  it('lets exactly the limit through from concurrent acceptances, and counts one deal once', async () => {
+    const j = new BuyerJudgedDeals(new MemoryStorage(), () => day, 's', 3);
+    const takes = await Promise.all(Array.from({ length: 20 }, (_, i) => j.take(i % 2 ? '0xAbC' : '0xabc', `d${i}`)));
+    expect(takes.filter(Boolean)).toHaveLength(3);
+    const k = new BuyerJudgedDeals(new MemoryStorage(), () => day, 's', 3);
+    expect((await Promise.all(Array.from({ length: 10 }, () => k.take('0xb', 'same')))).every(Boolean)).toBe(true);
+    expect(await Promise.all(['x', 'y', 'z'].map((d) => k.take('0xb', d)))).toEqual([true, true, false]);
+  });
+
+  it('checks without counting, gives a count back, and opens again at 00:00 UTC with the old rows deleted', async () => {
+    let now = day;
+    const storage = new MemoryStorage();
+    const j = new BuyerJudgedDeals(storage, () => now, 's', 1);
+    expect(await j.check('0xb', 'a')).toBe(true);
+    expect(await j.take('0xb', 'a')).toBe(true);
+    expect(await j.check('0xb', 'b')).toBe(false);
+    expect(await j.check('0xb', 'a')).toBe(true);
+    await j.giveBack('0xb', 'a');
+    expect(await j.take('0xb', 'b')).toBe(true);
+    expect(await j.take('0xb', 'c')).toBe(false);
+    now = Date.parse('2026-11-25T00:00:01Z');
+    expect(await j.take('0xb', 'c')).toBe(true);
+    const rows = [...(await storage.list({ prefix: 'ja:' })).keys()];
+    expect(rows.every((k) => k.startsWith('ja:2026-11-25:'))).toBe(true);
+    expect(rows.join()).not.toContain('0xb');
   });
 });
 
@@ -110,36 +179,36 @@ describe('funded deals per day across every client (T-581 item 2)', () => {
   }, 90_000);
 });
 
-describe('DailyCaps, the new counts (T-581)', () => {
-  const limits = { fundedDeals: 10, ciphertextBytes: 10, judgedDeals: 1, fundedDealsAll: 2 };
+describe('DailyCaps, the new count for every client (T-581)', () => {
+  const limits = { fundedDeals: 1, ciphertextBytes: 10, fundedDealsAll: 2 };
   const day = () => Date.parse('2026-11-24T12:00:00Z');
 
-  it('tells a refusal apart: the client, its judged cap, or every client together', async () => {
+  it('tells a refusal apart: the client, or every client together', async () => {
     const caps = new DailyCaps(new MemoryStorage(), day, 's', limits);
-    expect(await caps.takeFunding(0, 'a', 'f1', true)).toEqual({ ok: true, counted: true });
-    expect(await caps.takeFunding(0, 'a', 'f2', true)).toMatchObject({ ok: false, reason: 'judged' });
-    expect((await caps.takeFunding(0, 'a', 'f3', false)).ok).toBe(true);
-    expect(await caps.takeFunding(1, 'b', 'f4', false)).toMatchObject({ ok: false, reason: 'global' });
+    expect(await caps.takeFunding(0, 'a', 'f1')).toEqual({ ok: true, counted: true });
+    expect(await caps.takeFunding(0, 'a', 'f2')).toMatchObject({ ok: false, reason: 'client' });
+    expect((await caps.takeFunding(0, 'b', 'f3')).ok).toBe(true);
+    expect(await caps.takeFunding(1, 'c', 'f4')).toMatchObject({ ok: false, reason: 'global' });
   });
 
-  it('gives all three counts back when the relay refuses, and keeps the replay rule', async () => {
+  it('gives both counts back when the relay refuses, and keeps the replay rule', async () => {
     const caps = new DailyCaps(new MemoryStorage(), day, 's', limits);
-    await caps.takeFunding(0, 'a', 'f1', true);
-    expect(await caps.takeFunding(0, 'a', 'f1', true)).toEqual({ ok: true, counted: false });
-    await caps.settleFunding(0, 'a', 'f1', false, true);
-    expect(await caps.takeFunding(0, 'a', 'f2', true)).toEqual({ ok: true, counted: true });
-    expect(await caps.takeFunding(0, 'c', 'f3', false)).toEqual({ ok: true, counted: true });
-    expect(await caps.takeFunding(0, 'd', 'f4', false)).toMatchObject({ ok: false, reason: 'global' });
+    await caps.takeFunding(0, 'a', 'f1');
+    expect(await caps.takeFunding(0, 'a', 'f1')).toEqual({ ok: true, counted: false });
+    await caps.settleFunding(0, 'a', 'f1', false);
+    expect(await caps.takeFunding(0, 'a', 'f2')).toEqual({ ok: true, counted: true });
+    expect(await caps.takeFunding(0, 'c', 'f3')).toEqual({ ok: true, counted: true });
+    expect(await caps.takeFunding(0, 'd', 'f4')).toMatchObject({ ok: false, reason: 'global' });
   });
 
   it('opens again at 00:00 UTC', async () => {
     let now = day();
     const caps = new DailyCaps(new MemoryStorage(), () => now, 's', limits);
-    await caps.takeFunding(0, 'a', 'f1', false);
-    await caps.takeFunding(0, 'b', 'f2', false);
-    expect((await caps.takeFunding(0, 'c', 'f3', false)).ok).toBe(false);
+    await caps.takeFunding(0, 'a', 'f1');
+    await caps.takeFunding(0, 'b', 'f2');
+    expect((await caps.takeFunding(0, 'c', 'f3')).ok).toBe(false);
     now = Date.parse('2026-11-25T00:00:01Z');
-    expect((await caps.takeFunding(0, 'c', 'f3', false)).ok).toBe(true);
+    expect((await caps.takeFunding(0, 'c', 'f3')).ok).toBe(true);
   });
 });
 
@@ -179,20 +248,19 @@ describe('the red team and review of T-581', () => {
   // High (review item 1, red team item 1): takeFunding awaited the global row between the client's check and its count,
   // so concurrent takes from one client all passed. 20 at once must admit exactly the cap.
   it('admits exactly the cap from concurrent takes of one client', async () => {
-    const caps = new DailyCaps(new MemoryStorage(), () => Date.parse('2026-11-24T12:00:00Z'), 's', { fundedDeals: 3, ciphertextBytes: 10, judgedDeals: 1, fundedDealsAll: 100 });
-    const judged = await Promise.all(Array.from({ length: 20 }, (_, i) => caps.takeFunding(0, 'a', `j${i}`, true)));
-    expect(judged.filter((t) => t.ok)).toHaveLength(1);
-    const plain = await Promise.all(Array.from({ length: 20 }, (_, i) => caps.takeFunding(0, 'b', `p${i}`, false)));
+    const caps = new DailyCaps(new MemoryStorage(), () => Date.parse('2026-11-24T12:00:00Z'), 's', { fundedDeals: 3, ciphertextBytes: 10, fundedDealsAll: 100 });
+    const plain = await Promise.all(Array.from({ length: 20 }, (_, i) => caps.takeFunding(0, 'b', `p${i}`)));
     expect(plain.filter((t) => t.ok)).toHaveLength(3);
     // And concurrent give-backs leave the counts right: all three of b's back, so three more fit.
-    await Promise.all(['p0', 'p1', 'p2'].map((f) => caps.settleFunding(0, 'b', f, false)));
-    expect((await Promise.all(Array.from({ length: 5 }, (_, i) => caps.takeFunding(0, 'b', `q${i}`, false)))).filter((t) => t.ok)).toHaveLength(3);
+    const admitted = plain.flatMap((t, i) => (t.ok ? [`p${i}`] : []));
+    await Promise.all(admitted.map((f) => caps.settleFunding(0, 'b', f, false)));
+    expect((await Promise.all(Array.from({ length: 5 }, (_, i) => caps.takeFunding(0, 'b', `q${i}`)))).filter((t) => t.ok)).toHaveLength(3);
   });
 
   it('counts a take that straddles 00:00 UTC on one day only', async () => {
     let calls = 0;
     const times = [Date.parse('2026-11-24T23:59:59.999Z'), Date.parse('2026-11-25T00:00:00.001Z')];
-    const caps = new DailyCaps(new MemoryStorage(), () => times[Math.min(calls++, 1)]!, 's', { fundedDeals: 1, ciphertextBytes: 10, judgedDeals: 1, fundedDealsAll: 1 });
+    const caps = new DailyCaps(new MemoryStorage(), () => times[Math.min(calls++, 1)]!, 's', { fundedDeals: 1, ciphertextBytes: 10, fundedDealsAll: 1 });
     expect((await caps.takeFunding(0, 'a', 'f1')).ok).toBe(true);
     // Both rows were charged on 25 November: a second client on that day meets the global cap.
     expect(await caps.takeFunding(0, 'b', 'f2')).toMatchObject({ ok: false, reason: 'global' });

@@ -100,6 +100,8 @@ export interface TestAdjudicatorOptions {
   acceptSealedUnread?: boolean;
   /** The host's own reason to decline a new deal as primary (AdjudicatorConfig.offerGate, T-574). */
   offerGate?: AdjudicatorConfig['offerGate'];
+  /** The host's count of the deals it accepts (AdjudicatorConfig.acceptLimit, T-581). */
+  acceptLimit?: AdjudicatorConfig['acceptLimit'];
   /** The host's own reason not to convene a panel for a turn (AdjudicatorConfig.judgeGate, T-574). */
   judgeGate?: AdjudicatorConfig['judgeGate'];
   /**
@@ -165,6 +167,7 @@ export function testAdjudicator(o: TestAdjudicatorOptions): TestAdjudicator {
     settlement,
     ...(o.acceptSealedUnread ? { acceptSealedUnread: true } : {}),
     ...(o.offerGate ? { offerGate: o.offerGate } : {}),
+    ...(o.acceptLimit ? { acceptLimit: o.acceptLimit } : {}),
     ...(o.judgeGate ? { judgeGate: o.judgeGate } : {}),
     ...(o.trustedAdjudicators ? { trustedAdjudicators: o.trustedAdjudicators } : {}),
     ...(o.judgedStore ? { judgedStore: o.judgedStore } : {}),

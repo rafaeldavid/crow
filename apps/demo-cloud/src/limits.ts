@@ -20,7 +20,13 @@ import type { WorldStorage } from './storage.js';
 export const FLOOD_CEILING = { limit: 500, periodSec: 10 } as const;
 
 /** The daily caps' defaults: deals the relayer funds, and new ciphertext bytes stored, per client and operator a UTC day. */
-export const DEFAULT_DAILY_CAPS = { fundedDeals: 100, ciphertextBytes: 268_435_456, judgedDeals: 3, fundedDealsAll: 200 } as const;
+export const DEFAULT_DAILY_CAPS = { fundedDeals: 100, ciphertextBytes: 268_435_456, fundedDealsAll: 200 } as const;
+
+/**
+ * T-581: judged deals Crow's adjudicators accept per buyer address a UTC day, by default. 3, so `pnpm demo:sepolia` plays
+ * its three judged beats from one buyer (Rafa, 2026-11-24).
+ */
+export const DEFAULT_JUDGED_DEALS_PER_BUYER = 3;
 
 /** The operator's read and write throttle's defaults, per 60 s (ADR-0017 §3). */
 export const DEFAULT_RATE = { reads: 1200, writes: 120 } as const;
@@ -30,12 +36,6 @@ export interface DailyCapLimits {
   fundedDeals: number;
   /** New ciphertext bytes stored per client per UTC day, at each operator. */
   ciphertextBytes: number;
-  /**
-   * T-581: funded deals that can convene Crow's judge panel (they reserve live judge calls) per client per UTC day, at each
-   * operator. They count inside `fundedDeals` too. Default 3, so `pnpm demo:sepolia` plays its three judged beats from one machine (Rafa, 2026-11-24); one client
-   * then reserves up to 18 judge calls at each operator, of one daily budget for both (LIVE_JUDGE_CALLS_PER_DAY).
-   */
-  judgedDeals: number;
   /** T-581: deals the relayer funds per UTC day across every client and both operators, which share one relayer wallet. */
   fundedDealsAll: number;
 }
@@ -130,12 +130,10 @@ interface CapRow {
   seen: string[];
   /** New ciphertext bytes stored through this operator today, pending ones included. */
   bytes: number;
-  /** Of `funded`, the deals that can convene a judge panel (T-581). Absent in a row written before it: none. */
-  judged?: number;
 }
 
-/** What refused a take: the client's own funded-deal cap, its judged-deal cap, or the cap on every client together. */
-export type TakeRefusal = 'client' | 'judged' | 'global';
+/** What refused a take: the client's own funded-deal cap, or the cap on every client together. */
+export type TakeRefusal = 'client' | 'global';
 
 /** A take: refused with when to retry, or admitted, saying whether this request took a count (and so may give it back). */
 export type Take = { ok: true; counted: boolean } | { ok: false; retryAfterSec: number; reason?: TakeRefusal };
@@ -202,24 +200,22 @@ export class DailyCaps {
    * with `counted: true` may be given back: a copy of a counted funding that the relay refuses gives nothing back
    * (T-422 review and red team, F2).
    */
-  async takeFunding(node: number, client: string, fingerprint: string, judged = false): Promise<Take> {
+  async takeFunding(node: number, client: string, fingerprint: string): Promise<Take> {
     // Both rows first: from here to the counts, no await, so a concurrent take sees this one's count.
     const { key, row, all } = await this.pair(node, client);
     if (row.seen.includes(fingerprint)) return { ok: true, counted: false };
     if (row.funded >= this.limits.fundedDeals) return this.refused('client');
-    if (judged && (row.judged ?? 0) >= this.limits.judgedDeals) return this.refused('judged');
     // The count for every client together (T-581): the relayer's wallet is one, behind both operators.
     if (all.row.funded >= this.limits.fundedDealsAll) return this.refused('global');
     row.funded++;
     all.row.funded++;
-    if (judged) row.judged = (row.judged ?? 0) + 1;
     row.seen.push(fingerprint);
     await this.storage.put({ [key]: row, [all.key]: all.row });
     return { ok: true, counted: true };
   }
 
   /** After the relay: a refused funding this request counted gives its count back, so a corrected request can use it. */
-  async settleFunding(node: number, client: string, fingerprint: string, accepted: boolean, judged = false): Promise<void> {
+  async settleFunding(node: number, client: string, fingerprint: string, accepted: boolean): Promise<void> {
     if (accepted) return;
     const { key, row, all } = await this.pair(node, client);
     const i = row.seen.indexOf(fingerprint);
@@ -227,7 +223,6 @@ export class DailyCaps {
     row.seen.splice(i, 1);
     row.funded = Math.max(0, row.funded - 1);
     all.row.funded = Math.max(0, all.row.funded - 1);
-    if (judged) row.judged = Math.max(0, (row.judged ?? 0) - 1);
     await this.storage.put({ [key]: row, [all.key]: all.row });
   }
 
@@ -247,6 +242,73 @@ export class DailyCaps {
     const { key, row } = await this.row(node, client);
     row.bytes = Math.max(0, row.bytes - bytes);
     await this.storage.put({ [key]: row });
+  }
+}
+
+/**
+ * T-581: the judged deals Crow's adjudicators accept per buyer address and UTC day (Rafa, 2026-11-24: one limit, at
+ * acceptance, however the offer reached the settlement layer). One row per buyer and day, `ja:<YYYY-MM-DD>:<buyer hash>`,
+ * holding the commitment IDs counted, so a pass that accepts the same offer again counts it once. The buyer is hashed
+ * with the world's secret. Takes run one at a time, so concurrent acceptances cannot pass the limit together. The first
+ * take of a new day deletes the rows of the days before it. An adjudicator's own choice of deals (D29), not a protocol rule.
+ */
+export class BuyerJudgedDeals {
+  private queue: Promise<unknown> = Promise.resolve();
+  private day = '';
+
+  constructor(
+    private readonly storage: WorldStorage,
+    private readonly now: () => number,
+    private readonly secret: string,
+    readonly perDay: number,
+  ) {}
+
+  private keyOf(day: string, buyer: string): string {
+    return `ja:${day}:${canonicalKeccak({ judgedBuyer: buyer.toLowerCase(), secret: this.secret }).slice(2, 34)}`;
+  }
+
+  private serial<T>(f: () => Promise<T>): Promise<T> {
+    const step = this.queue.then(f);
+    this.queue = step.catch(() => undefined);
+    return step;
+  }
+
+  private async ids(buyer: string): Promise<{ key: string; ids: string[] }> {
+    const today = dayOf(this.now());
+    if (today !== this.day) {
+      this.day = today;
+      const old = [...(await this.storage.list({ prefix: 'ja:', end: `ja:${today}` })).keys()];
+      for (let i = 0; i < old.length; i += 128) await this.storage.delete(old.slice(i, i + 128));
+    }
+    const key = this.keyOf(today, buyer);
+    return { key, ids: (await this.storage.get<string[]>(key)) ?? [] };
+  }
+
+  /** Whether one more judged deal for `buyer` fits today, counting nothing: true when `id` is already counted. */
+  check(buyer: string, id: string): Promise<boolean> {
+    return this.serial(async () => {
+      const { ids } = await this.ids(buyer);
+      return ids.includes(id) || ids.length < this.perDay;
+    });
+  }
+
+  /** Counts `id` for `buyer` today, unless the day's limit is reached; an `id` already counted takes nothing more. */
+  take(buyer: string, id: string): Promise<boolean> {
+    return this.serial(async () => {
+      const { key, ids } = await this.ids(buyer);
+      if (ids.includes(id)) return true;
+      if (ids.length >= this.perDay) return false;
+      await this.storage.put({ [key]: [...ids, id] });
+      return true;
+    });
+  }
+
+  /** Returns the count of an acceptance that was not submitted. */
+  giveBack(buyer: string, id: string): Promise<void> {
+    return this.serial(async () => {
+      const { key, ids } = await this.ids(buyer);
+      if (ids.includes(id)) await this.storage.put({ [key]: ids.filter((x) => x !== id) });
+    });
   }
 }
 

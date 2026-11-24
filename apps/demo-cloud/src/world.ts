@@ -70,7 +70,7 @@ import type { TimeoutKind } from '@holdback/settlement';
 import { mandateFor, SIM_CHAIN_ID, SIM_RULEBOOK, simClub, SimChain, TOKEN, wideScope, type Genesis, type JournalEntry } from '@holdback/settlement/sim';
 import { panelConfig, type JudgeProvider, type PanelConfig } from './judges.js';
 import { StorageLanes } from './lanes.js';
-import { capOf, DailyCaps, MAX_BODY_BYTES, routedUrl, DEFAULT_DAILY_CAPS, DEFAULT_RATE, FLOOD_CEILING, problemResponse, wholeNumberVar } from './limits.js';
+import { BuyerJudgedDeals, capOf, DailyCaps, DEFAULT_JUDGED_DEALS_PER_BUYER, secondsToUtcMidnight, MAX_BODY_BYTES, routedUrl, DEFAULT_DAILY_CAPS, DEFAULT_RATE, FLOOD_CEILING, problemResponse, wholeNumberVar } from './limits.js';
 import type { WorldStorage } from './storage.js';
 import { dealFacts, Telemetry, type DayFacts, type TelemetryOptions } from './telemetry.js';
 
@@ -99,8 +99,8 @@ export interface PublicWorldOptions {
   fundedDealsPerClientPerDay?: number;
   /** T-422: new ciphertext bytes stored per client per UTC day, at each node. Default CIPHERTEXT_BYTES_PER_CLIENT_PER_DAY from `env`, else 256 MiB. */
   ciphertextBytesPerClientPerDay?: number;
-  /** T-581: funded deals that can convene a judge panel per client per UTC day, at each node. Default JUDGED_DEALS_PER_CLIENT_PER_DAY from `env`, else 3. */
-  judgedDealsPerClientPerDay?: number;
+  /** T-581: judged deals Crow's adjudicators accept per buyer address per UTC day, while live. Default JUDGED_DEALS_PER_BUYER_PER_DAY from `env`, else 3. */
+  judgedDealsPerBuyerPerDay?: number;
   /** T-581: deals the relayer funds per UTC day across all clients and both nodes. Default FUNDED_DEALS_PER_DAY from `env`, else 200. */
   fundedDealsPerDay?: number;
   /**
@@ -881,8 +881,21 @@ export class PublicWorld {
     const capLimits = {
       fundedDeals: o.fundedDealsPerClientPerDay ?? wholeNumberVar(o.env, 'FUNDED_DEALS_PER_CLIENT_PER_DAY', DEFAULT_DAILY_CAPS.fundedDeals),
       ciphertextBytes: o.ciphertextBytesPerClientPerDay ?? wholeNumberVar(o.env, 'CIPHERTEXT_BYTES_PER_CLIENT_PER_DAY', DEFAULT_DAILY_CAPS.ciphertextBytes),
-      judgedDeals: o.judgedDealsPerClientPerDay ?? wholeNumberVar(o.env, 'JUDGED_DEALS_PER_CLIENT_PER_DAY', DEFAULT_DAILY_CAPS.judgedDeals),
       fundedDealsAll: o.fundedDealsPerDay ?? wholeNumberVar(o.env, 'FUNDED_DEALS_PER_DAY', DEFAULT_DAILY_CAPS.fundedDealsAll),
+    };
+    // T-581 (Rafa, 2026-11-24): the judged deals Crow's adjudicators accept per buyer address a UTC day, counted at
+    // acceptance, so it holds however the offer reached the settlement layer; while live judges run, since only they
+    // spend the budget. One count for all three of Crow's adjudicators.
+    const judgedPerBuyer = new BuyerJudgedDeals(storage, now, secret, o.judgedDealsPerBuyerPerDay ?? wholeNumberVar(o.env, 'JUDGED_DEALS_PER_BUYER_PER_DAY', DEFAULT_JUDGED_DEALS_PER_BUYER));
+    const judgedCounts = (c: Parameters<typeof needsPanel>[0]) => panel.live && needsPanel(c);
+    const overJudged = () => {
+      const n = judgedPerBuyer.perDay;
+      return problem('adjudicator_unavailable', `judged_deals_per_buyer: Crow's adjudicators accept at most ${n} deal${n === 1 ? '' : 's'} a UTC day per buyer address that can need a judge panel (a rubric, or an optional check), and this buyer has reached it. Nothing is held: the offer stays unaccepted and expires by its terms. Retry after ${new Date(now() + secondsToUtcMidnight(now()) * 1000).toISOString()}, offer a deal decided by required checks alone, or name another adjudicator`);
+    };
+    const acceptLimit = {
+      check: async (c: { id: string; buyer: string } & Parameters<typeof needsPanel>[0]) => (judgedCounts(c) && !(await judgedPerBuyer.check(c.buyer, c.id)) ? overJudged() : null),
+      take: async (c: { id: string; buyer: string } & Parameters<typeof needsPanel>[0]) => (judgedCounts(c) && !(await judgedPerBuyer.take(c.buyer, c.id)) ? overJudged() : null),
+      giveBack: async (c: { id: string; buyer: string } & Parameters<typeof needsPanel>[0]) => (judgedCounts(c) ? judgedPerBuyer.giveBack(c.buyer, c.id) : undefined),
     };
     // Each node's deploy time, as the Worker in front last said (T-413); null until it does.
     const deployedAt: Array<string | null> = [null, null];
@@ -1027,6 +1040,8 @@ export class PublicWorld {
         name: nameOf(a, panel.live),
         // T-574: past the day's live budget, decline a new deal that needs a panel, until the next UTC day.
         offerGate: async (c) => judgedDealGate(panel, c, (await registrations.policy(c.adjudication.policyHash))?.panelSize, reservedJudgeCalls()),
+        // T-581: judged deals per buyer address a day, counted when the acceptance is signed.
+        acceptLimit,
         // T-574: past the budget, an appeal panel is not convened, so it signs nothing (red team M1).
         judgeGate: async (task, size) => appealPanelGate(panel, task, size),
         registry: panel.registry,
@@ -1493,12 +1508,7 @@ export class PublicWorld {
     const id = cap === 'funding' && url.pathname.endsWith('/holds') ? ((body as { commitment?: { id?: unknown } }).commitment?.id ?? null) : url.pathname.split('/').filter(Boolean)[2];
     const state = typeof id === 'string' && /^0x[0-9a-fA-F]{64}$/.test(id) ? await this.chain.state(id as Hex32).catch(() => null) : null;
     if (state && !PRE_FUNDING_STATES.has(state.escrowState)) return { request: forward };
-    const judged = this.judgedFunding(cap, url, body, id);
-    const t = await caps.takeFunding(n, via.client, fingerprint, judged);
-    if (!t.ok && t.reason === 'judged') {
-      const d = caps.limits.judgedDeals;
-      return problemResponse('rate_limited', `this operator relays at most ${d} funded deal${d === 1 ? '' : 's'} a day (UTC) per client (an IPv4 address or an IPv6 /64) that can need Crow's judge panel (a rubric, or an optional check), because each reserves live judge calls from a daily budget shared by everyone, and this client has reached it. Nothing about the deal changed: retry after 00:00 UTC, use a deal with required deterministic checks only, or name another adjudicator`, { retryAfterSec: t.retryAfterSec });
-    }
+    const t = await caps.takeFunding(n, via.client, fingerprint);
     if (!t.ok && t.reason === 'global') {
       const d = caps.limits.fundedDealsAll;
       return problemResponse('rate_limited', `the relayer funds at most ${d} deal${d === 1 ? '' : 's'} a day (UTC) across all clients, and today's are used. Nothing about the deal changed: retry after 00:00 UTC, or submit it to the settlement layer (on Sepolia, the rules contract) yourself and pay your own gas`, { retryAfterSec: t.retryAfterSec });
@@ -1507,23 +1517,7 @@ export class PublicWorld {
       const d = caps.limits.fundedDeals;
       return problemResponse('rate_limited', `this operator relays at most ${d} funded deal${d === 1 ? '' : 's'} a day (UTC) per client (an IPv4 address or an IPv6 /64), and this client has reached it. Nothing about the deal changed: retry after 00:00 UTC, send the same signed request to another operator, or submit it to the settlement layer (on Sepolia, the rules contract) yourself`, { retryAfterSec: t.retryAfterSec });
     }
-    return t.counted ? { request: forward, settle: (ok) => caps.settleFunding(n, via.client, fingerprint, ok, judged) } : { request: forward };
-  }
-
-  /**
-   * T-581: whether a funding can reserve live judge calls from Crow's own adjudicators: its terms can convene a panel
-   * (needsPanel) and name one of this world's adjudicators. The terms come from the settlement layer for a deal already
-   * offered, or from the body of a one-shot hold. Terms nobody can read here count as not judged: the relay refuses them.
-   */
-  private judgedFunding(cap: 'funding' | 'agree' | 'ciphertext', url: URL, body: unknown, id: unknown): boolean {
-    const fromBody = cap === 'funding' && url.pathname.endsWith('/holds') ? (body as { commitment?: unknown }).commitment : undefined;
-    const terms = fromBody ?? (typeof id === 'string' && /^0x[0-9a-fA-F]{64}$/.test(id) ? this.chain.escrowState(id as Hex32)?.terms : undefined);
-    if (typeof terms !== 'object' || terms === null) return false;
-    if (!needsPanel(terms as Parameters<typeof needsPanel>[0])) return false;
-    const a = (terms as { adjudication?: { adjudicator?: string; fallbackAdjudicator?: string; appealAdjudicator?: string } }).adjudication;
-    const named = [a?.adjudicator, a?.fallbackAdjudicator, a?.appealAdjudicator].filter((x): x is string => typeof x === 'string').map(lc);
-    if (named.length === 0) return true;
-    return (['primary', 'fallback', 'appeal'] as const).some((r) => named.includes(lc(this.adjudicators[r].address)));
+    return t.counted ? { request: forward, settle: (ok) => caps.settleFunding(n, via.client, fingerprint, ok) } : { request: forward };
   }
 
   async fetch(request: Request, via: Via): Promise<Response> {
