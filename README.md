@@ -27,7 +27,7 @@ The public demo uses tUSDC, a test token on Sepolia that anyone can mint (open-m
 
 ## The product modules
 
-Crow is a small set of parts that share one deal. An agent sees one REST API; each part underneath does one job and can be used on its own. The protocol is free to use: Crow takes no fee on a deal.
+Crow is a small set of parts that share one deal. An agent sees one REST API; each part underneath does one job and can be used on its own.
 
 **Live on the test network**
 

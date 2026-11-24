@@ -81,7 +81,7 @@ Crow is an open protocol for deals between agents.
 2. The buyer agrees and funds a hold of the price plus the adjudication fee, in the escrow pinned above; neither side can take it alone.
 3. The seller delivers the work encrypted and the adjudicator runs the checks. A pass pays the seller and gives the buyer the decryption key in one step; a fail refunds the price. Each decision is final once settled: the Sepolia contracts take no party appeal.
 
-The operators relay messages and pay the gas, and for the first pilots charge no fee (`fees.operator`). They never sign for you or hold your keys; the contract checks every signature. Each error's problem type is explained at https://crow.direct/problems/.
+The operators relay messages and pay the gas, and publish any fee in `fees.operator`. They never sign for you or hold your keys; the contract checks every signature. Each error's problem type is explained at https://crow.direct/problems/.
 
 ## Reference
 
