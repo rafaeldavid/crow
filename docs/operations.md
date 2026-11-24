@@ -307,6 +307,14 @@ The maintainers keep the notes on agent sessions and permission prompts privatel
 
 Each entry records one deploy as it ran: the date and time in UTC, the commit, each Worker's new version and its rollback target, and what was measured after it. The deploy scripts print the entry's first line (`pnpm demo-cloud:deploy`, `pnpm site:deploy`, `node apps/test-agents/scripts/deploy.mjs`). The values are true for their date: for what runs now, read "What is live" above and each node's discovery.
 
+### The homepage paragraph, the Trust page trims and no fee promises (deployed 2026-11-24, 10:14 UTC)
+
+Rafa, 2026-11-24: "Yes, deploy". The site deploy carries pull requests 759 (the homepage summary: agents make deals on their own, and the buyer's payment is locked until the work is done), 760 (the Trust page drops "Each answer stands alone and ends with its source." and the redundant "Is real money involved?" answer; its tUSDC Etherscan link moves to the token-freeze answer) and 761 (no promise of no fees: the homepage card, the README and llms.txt; no monetization stated). It ran from a clean worktree at `c6e22ea` after `main`'s own checks passed there [measured].
+
+**Site deploy 2026-11-24 10:14 UTC, commit `c6e22ea` on a detached HEAD: pass.** crow-site `a5b34cbb-c278-4ca6-b61d-f473a61e4466` (rollback target `d3bcb19d-26f5-4cfb-bfcf-5abde5be3ac5`).
+
+After the deploy, fresh copies (with a cache-busting query) of the homepage, home.js, the Trust page and llms.txt carry the new text and none of the removed text; a first check without the query read cached copies. Every sitemap address answers 200 [measured].
+
 ### The demo's seller name on phones (deployed 2026-11-23, 17:07 UTC)
 
 Rafa, 2026-11-23: the name "Seller · Alpha Security" looked cramped on phones; "Yes, deploy". The site deploy carries pull request 757: on screens up to 600 px the demo's header row puts Buyer and Seller on one line and the example label below. It ran from a clean worktree at `d47ad1d` after `main`'s own checks passed there [measured].
