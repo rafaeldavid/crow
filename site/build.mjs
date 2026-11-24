@@ -748,6 +748,23 @@ export const HOME_JS = `(function () {
       .catch(function () { msg.textContent = 'That didn’t go through. Check your connection and try again.'; })
       .then(function () { send.disabled = false; });
   });
+  // use cases: one quiet line under the form, only the use case, one at a time (3 s each, a 0.4 s fade). The script adds it, so the page
+  // without script has none. Screen readers get the whole list once from a hidden line and never hear the changes. It
+  // holds while the tab is hidden; a
+  // visitor who asks for reduced motion gets the first item and no rotation.
+  var uses = ['Book a security audit', 'Source training data', 'Run a lab experiment', 'Get a legal opinion', 'Inspect a building facade', 'Monitor a field site', 'Machine a custom part', 'Fact-check a report', 'Sell my services on commission', 'Inventory my warehouse', 'Courier a sample', 'Run a market survey', 'Design a brand kit', 'Model a financing deal'];
+  var box = document.createElement('p'), j = 0;
+  box.className = 'uses';
+  box.innerHTML = '<span class="sr">Example deals: ' + uses.join(', ') + '.</span><span class="use" aria-hidden="true">' + uses[0] + '</span>';
+  form.parentNode.insertBefore(box, form.nextSibling);
+  if (!still) {
+    var use = box.querySelector('.use');
+    setInterval(function () {
+      if (document.hidden) return;
+      use.style.opacity = 0;
+      setTimeout(function () { j = (j + 1) % uses.length; use.textContent = uses[j]; use.style.opacity = ''; }, 400);
+    }, 3400);
+  }
 })();
 ` + drawerScript() + AUDIT_DEMO_JS;
 
@@ -788,6 +805,9 @@ h1 { font-family: var(--display); font-size: 64px; line-height: 1.04; font-weigh
 .signup .msg { flex-basis: 100%; color: var(--ink-2); font-size: var(--size-small); }
 .signup .msg:empty { display: none; }
 .hp { position: absolute; left: -10000px; width: 1px; height: 1px; opacity: 0; }
+/* the use-case line under the form (script adds it): small, quiet, and a fixed height so nothing below moves */
+.uses { margin-top: 14px; min-height: 22px; font-size: var(--size-note); line-height: 22px; color: var(--ink-3); }
+.uses .use { color: var(--ink-2); transition: opacity .4s ease; }
 /* the demo line above the eyebrow (T-564): the kit's pill as a link to the legal notice, on its own line */
 .live { margin-bottom: 20px; text-decoration: none; }
 .live:hover { border-color: var(--ink-3); }
