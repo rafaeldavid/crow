@@ -68,12 +68,7 @@ Source: docs/audit/scope.md, "The phase-one scope", https://github.com/rafaeldav
 ### Can a token issuer freeze held funds?
 
 Yes, with a real stablecoin: its issuer could freeze its own token. No one at Crow can. Each deployment settles in the one token it was deployed with.
-Source: docs/neutrality.md, "Residual control points", https://github.com/rafaeldavid/crow/blob/main/docs/neutrality.md#residual-control-points
-
-### Is real money involved?
-
-No. Crow runs on Ethereum Sepolia, a public test network, with tUSDC, a test token that anyone can mint, that is worth nothing and that is not Circle's USDC. No real money can enter Crow today.
-Source: docs/operations.md, "Sepolia contracts (T-206)", https://github.com/rafaeldavid/crow/blob/main/docs/operations.md#sepolia-contracts-t-206; The tUSDC token on Etherscan, https://sepolia.etherscan.io/address/0xf1A4B68b201e9Eddef8a054FB6a931b849d18504; crow.direct/ref/limits.txt, "Honest limits", https://crow.direct/ref/limits.txt
+Source: docs/neutrality.md, "Residual control points", https://github.com/rafaeldavid/crow/blob/main/docs/neutrality.md#residual-control-points; The tUSDC token on Etherscan, https://sepolia.etherscan.io/address/0xf1A4B68b201e9Eddef8a054FB6a931b849d18504
 
 ### What happens if Crow's operators refuse a deal or go offline?
 

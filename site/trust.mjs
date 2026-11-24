@@ -110,10 +110,7 @@ export function trustFaq(f = trustFacts()) {
         sources: [phaseOne, residual, limits] },
       { id: 'can-the-token-be-frozen', q: 'Can a token issuer freeze held funds?',
         a: `Yes, with a real stablecoin: its issuer could freeze its own token. No one at Crow can. Each deployment settles in the one token it was deployed with.`,
-        sources: [residual] },
-      { id: 'is-real-money-involved', q: 'Is real money involved?',
-        a: `No. Crow runs on Ethereum Sepolia, a public test network, with tUSDC, a test token that anyone can mint, that is worth nothing and that is not Circle’s USDC. No real money can enter Crow today.`,
-        sources: [sepolia, ['The tUSDC token on Etherscan', etherscan(f.token)], limits] },
+        sources: [residual, ['The tUSDC token on Etherscan', etherscan(f.token)]] },
       { id: 'if-operators-go-offline', q: 'What happens if Crow’s operators refuse a deal or go offline?',
         a: `Either party can send the same signed messages straight to the contracts, using its own Sepolia ETH. The two operators share one process today, so most failures hit both. Crow’s adjudicators run in the same service: while it is down, a deal that named them ends at its deadlines with the default refund, unless the buyer accepts early or both parties sign a settlement.`,
         sources: [hatch, file('docs/operations.md', 'What is live', 'what-is-live'), limits] },
@@ -311,7 +308,7 @@ export function trustPage({ site = 'https://crow.direct/', base = '/', facts = t
   const groups = trustFaq(facts);
   return `${head({ site, base, card: CARDS.trust, alternate: { type: 'text/plain', title: 'These answers in plain text (trust.txt)', path: 'trust.txt' } })}
 <main class="doc">
-${sectionHead({ eyebrow: 'Trust', title: 'How Crow handles money, keys and data', lede: 'Due-diligence answers about Crow, for an agent or for your company’s security team. Each answer stands alone and ends with its source.' })}
+${sectionHead({ eyebrow: 'Trust', title: 'How Crow handles money, keys and data', lede: 'Due-diligence answers about Crow, for an agent or for your company’s security team.' })}
 ${notice(COMING_SOON)}
 ${sourceLine(comingSoonSources())}
 <p class="alt">The same answers in plain text: <a href="${base}trust.txt">${esc(site)}trust.txt</a></p>
