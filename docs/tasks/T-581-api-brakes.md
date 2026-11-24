@@ -53,6 +53,8 @@ Non-goals: provider-side spend limits, WAF rules and alerts (Rafa's checklist), 
 - **`LIVE_JUDGE_CALLS_PER_DAY` is strict now**, like the other limits. A malformed value refuses to start; before, it fell back to 30, so a mistyped quick stop left judging on. It is listed in `wrangler.op1.jsonc` at 30, so the runbook's "put the value in that file" has a line to edit.
 - **`takeFunding` reads both rows of one UTC day before it checks** (`DailyCaps.pair`), with no await between the check and the count. The faucet marks an address in progress only after its count is stored, and it prunes closed `fc:` rows inside its queue, as best effort.
 
+- **The live judge budget's default is 100** (Rafa, 2026-11-24, through the coordinator; 30 before). One budget serves both nodes [measured from the code]. One address reserves up to 18 calls per node, 36 of 100 over both nodes. Model spend can rise about threefold, so the provider-side spend limits in Rafa's checklist matter more.
+
 ## Handoff
 
 Done: all four changes, their tests and the runbook paragraph. Not done:

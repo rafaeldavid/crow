@@ -63,8 +63,8 @@ const fund = (d: Awaited<ReturnType<typeof offered>>) => d.buyer.agreeAndFund(d.
 const standIn = () => ({ judgeProvider: markerFake() as never });
 
 describe('judged deals per client per day (T-581 item 1)', () => {
-  // Attack: one address funds judged deal after judged deal. Each reserves 6 of the 30 daily judge calls, so five hold
-  // the day for everyone. Before the change every one of the five was relayed. The default is 3 (Rafa, 2026-11-24: the
+  // Attack: one address funds judged deal after judged deal. Each reserves 6 of the daily judge calls (30 when this was
+  // written, 100 by default since 2026-11-24), so a handful hold the day for everyone. Before the change every one of the five was relayed. The default is 3 (Rafa, 2026-11-24: the
   // Sepolia demo plays three judged beats at once from one machine), so the fourth from one address is refused.
   it('relays three judged deals per client a day by default, so one client reserves 18 judge calls at one node at most', async () => {
     const { world, urls } = await serve({ ...standIn(), liveCallsPerDay: 30 });

@@ -33,7 +33,7 @@ export interface DailyCapLimits {
   /**
    * T-581: funded deals that can convene Crow's judge panel (they reserve live judge calls) per client per UTC day, at each
    * operator. They count inside `fundedDeals` too. Default 3, so `pnpm demo:sepolia` plays its three judged beats from one machine (Rafa, 2026-11-24); one client
-   * then reserves up to 18 judge calls at each operator.
+   * then reserves up to 18 judge calls at each operator, of one daily budget for both (LIVE_JUDGE_CALLS_PER_DAY).
    */
   judgedDeals: number;
   /** T-581: deals the relayer funds per UTC day across every client and both operators, which share one relayer wallet. */

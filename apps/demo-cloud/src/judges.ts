@@ -26,8 +26,8 @@ export const nextUtcDay = (ms: number): string => {
   return new Date(Date.UTC(d.getUTCFullYear(), d.getUTCMonth(), d.getUTCDate() + 1)).toISOString();
 };
 
-/** Live judge calls a day across the whole demo, unless LIVE_JUDGE_CALLS_PER_DAY says otherwise. */
-export const DEFAULT_LIVE_CALLS_PER_DAY = 30;
+/** Live judge calls a day across the whole demo, both nodes together, unless LIVE_JUDGE_CALLS_PER_DAY says otherwise (100 since Rafa, 2026-11-24; 30 before). */
+export const DEFAULT_LIVE_CALLS_PER_DAY = 100;
 const PLACEHOLDER_REGISTRY_URI = 'file:///config/judges.yaml';
 
 /** One model's live calls and tokens for a day: counts only, never a prompt or a verdict (T-066). */

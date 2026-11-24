@@ -104,7 +104,7 @@ export interface PublicWorldOptions {
   /** T-581: deals the relayer funds per UTC day across all clients and both nodes. Default FUNDED_DEALS_PER_DAY from `env`, else 200. */
   fundedDealsPerDay?: number;
   /**
-   * Live judge calls a day across the demo. Default LIVE_JUDGE_CALLS_PER_DAY from `env`, else 30.
+   * Live judge calls a day across the demo. Default LIVE_JUDGE_CALLS_PER_DAY from `env`, else 100.
    * Live judging needs HOLDBACK_ANTHROPIC_API_KEY, HOLDBACK_OPENAI_COMPATIBLE_API_KEY and
    * HOLDBACK_OPENAI_COMPATIBLE_BASE_URL in `env` (Worker secrets); without them the panel is scripted.
    */
