@@ -1672,3 +1672,24 @@ The build is not started; it opens as its own task on Rafa's word.
 **Open for Rafa, when bonds return** (ADR-0043 section 5; backlog row D27g): what an unflagged appeal that cannot decide does. Today it signs nothing, and on SimChain's full protocol the default then pays the seller compensation from the appeal bond. `agg-4` sends more deals there: with one family silent and failing work, 20 of 20 deals, against 4 of 20 under `agg-3` when the two-judge family is silent and 16 of 20 when the three-judge family is (measured). Recommended: leave it now, and with the bonds adopt a signed no-decision that refunds the buyer and pays nothing from the bond. A reject in that case is ruled out, for D81's reason: a reject is final, and the failure can be the adjudicator's own. Phase one holds no bond, so nothing is open for what is live.
 
 **Litmus tests.** Neutrality: holds; an escalation never accepts, and on a chain every default refunds the buyer. The hold: unchanged. Defended judgment: strengthened; after a fault, both decisions need votes from two families (threat T8).
+
+## D88. A local run fails on any difference from SimChain that is not pinned, line by line, with a reason (T-583)
+
+**Status:** adopted, 2026-11-24.
+
+**Who decided.** The coordinator, under the in-repository autonomy rule, after a research pass. Rafa may overrule any line.
+
+**The finding (T-558, 2026-11-21).** `pnpm snap --settlement local` compared each fixture's transcript on the contract with its SimChain run and printed the count, but a difference did not fail the run. Two fixtures differed by 9 lines each and passed: `neutrality.store-withholds-delivery` and `neutrality.store-drops-standing-ciphertext`. CI compared nothing on the contract.
+
+**What differs (measured, 2026-11-24, 45 fixtures on the contract: 43 identical, 2 differ).** Both fixtures end in the default after the fallback. On SimChain, `trigger_default` leaves the deal Defaulted, and `apply_default_outcome` refunds the buyer and pays the seller compensation from the primary's and the fallback's bonds. On the phase-one contract, `triggerDefault` refunds the buyer in the same call and pays no compensation, because phase one has no bonds (ADR-0031, D57). Both are as designed. `formal/README.md` ("The two profiles", Default) states them.
+
+**Decided:**
+
+- **A difference fails.** A fixture passes a local run when its expectations hold on the contract and its transcript differs from SimChain's by exactly the lines pinned for it. No entry means no lines.
+- **Known differences are pinned.** `LOCAL_KNOWN_DIFFERENCES` in `packages/testkit/src/runner.ts` holds, per fixture, the reason and the exact differing lines. A changed line, an extra line, or an entry whose fixture no longer differs fails the run.
+- **CI checks it.** A test in `packages/testkit/src/runner.test.ts` runs every fixture on anvil in the existing anvil job. No workflow change.
+- **SimChain stays as it is.** It keeps the Defaulted state and the bond compensation as the full protocol's reference.
+
+**Dropped:** changing SimChain to refund in one step. It leaves the bond payout difference (4 of the 9 lines), and it removes a state from `spec/schemas/commitment-state.schema.json`, which takes an ADR and a version bump. Also dropped: a list of fixture names without lines, which would hide a new difference in a listed fixture; and a rule that ignores default payouts, which would hide a balance difference.
+
+**Litmus tests.** Neutrality: strengthened; a fixture that tells a different story on the contract now fails, and the two store fixtures keep running on the contract. The hold: unchanged. Defended judgment: unchanged.

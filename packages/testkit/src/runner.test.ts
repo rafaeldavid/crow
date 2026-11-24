@@ -1,11 +1,11 @@
-import { cpSync, existsSync, mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
+import { cpSync, existsSync, mkdirSync, mkdtempSync, readdirSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import { panelSeed, type Decision } from '@holdback/core';
 import { anvilAvailable } from '@holdback/settlement/evm';
 import { SimChain } from '@holdback/settlement/sim';
-import { diffLines, LOCAL_EXCLUSIONS, main, runScenario } from './runner.js';
+import { diffLines, LOCAL_EXCLUSIONS, LOCAL_KNOWN_DIFFERENCES, main, parityProblem, runScenario, type SnapIO } from './runner.js';
 
 const repo = new URL('../../../', import.meta.url).pathname;
 
@@ -259,6 +259,74 @@ describe('pnpm snap', () => {
     expect(text).toMatch(/excluded, not in phase one/);
     expect(text).toMatch(/gas \d/);
   }, 120_000);
+
+  it('pins every known difference with a reason and lines, for a fixture that runs on the contract (D88)', () => {
+    expect(Object.keys(LOCAL_KNOWN_DIFFERENCES).sort()).toEqual(['neutrality.store-drops-standing-ciphertext', 'neutrality.store-withholds-delivery']);
+    for (const [name, k] of Object.entries(LOCAL_KNOWN_DIFFERENCES)) {
+      expect(existsSync(join(repo, 'fixtures/scenarios', `${name}.scenario.yaml`))).toBe(true);
+      expect(LOCAL_EXCLUSIONS[name]).toBeUndefined();
+      expect(k.reason.length).toBeGreaterThan(0);
+      expect(k.diff.length).toBeGreaterThan(0);
+      for (const line of k.diff) expect(line).toMatch(/^[-+] /);
+    }
+  });
+
+  it('compares a fixture’s difference with its pinned lines exactly', () => {
+    expect(parityProblem([], undefined)).toBeNull();
+    expect(parityProblem(['- a', '+ b'], ['- a', '+ b'])).toBeNull();
+    expect(parityProblem(['- a'], undefined)).toMatch(/none are pinned[\s\S]*- a/);
+    expect(parityProblem(['- a', '+ b'], ['- a', '+ c'])).toMatch(/unexpected lines:\n\s+\+ b[\s\S]*did not occur:\n\s+\+ c/);
+    expect(parityProblem(['- a'], ['- a', '+ b'])).toMatch(/did not occur:\n\s+\+ b/);
+    expect(parityProblem(['- a', '+ b'], ['+ b', '- a'])).toMatch(/different order/);
+    expect(parityProblem([], ['- a'])).toMatch(/identical to SimChain's.*remove the entry/);
+  });
+
+  describe.skipIf(!anvil)('parity with SimChain on the contract (anvil)', () => {
+    const withholds = 'neutrality.store-withholds-delivery';
+    const real = LOCAL_KNOWN_DIFFERENCES[withholds]!;
+    const run = async (names: readonly string[], knownDifferences: SnapIO['knownDifferences']) => {
+      const out: string[] = [];
+      const code = await main(['--settlement=local', ...names], { root: repo, contractsRoot: repo, out: (l) => out.push(l), ...(knownDifferences ? { knownDifferences } : {}) });
+      return { code, text: out.join('\n') };
+    };
+
+    it('fails an unlisted difference and prints its lines', async () => {
+      const r = await run([withholds], {});
+      expect(r.code).toBe(1);
+      expect(r.text).toContain('- step 11: anyone | trigger_default | op-2 | ok | Defaulted');
+    }, 120_000);
+
+    it('fails when one pinned line is changed', async () => {
+      const diff = real.diff.map((l, i) => (i === 0 ? `${l} (changed)` : l));
+      const r = await run([withholds], { [withholds]: { reason: real.reason, diff } });
+      expect(r.code).toBe(1);
+      expect(r.text).toMatch(/fail {2}neutrality\.store-withholds-delivery on the contract/);
+    }, 120_000);
+
+    it('fails a stale entry for a fixture whose transcript is identical', async () => {
+      const r = await run(['_example'], { _example: { reason: 'invented', diff: ['- an invented line'] } });
+      expect(r.code).toBe(1);
+      expect(r.text).toMatch(/remove the entry/);
+    }, 120_000);
+
+    it('passes the real list, naming the known lines', async () => {
+      const r = await run([withholds], undefined);
+      expect(r.code).toBe(0);
+      expect(r.text).toMatch(/pass {2}neutrality\.store-withholds-delivery .*lines are known/);
+    }, 120_000);
+
+    it('passes every fixture with the real list', async () => {
+      const dir = join(repo, 'fixtures/scenarios');
+      const all = readdirSync(dir)
+        .filter((f) => f.endsWith('.scenario.yaml'))
+        .map((f) => f.slice(0, -'.scenario.yaml'.length))
+        .sort();
+      // A named run never rewrites the tracked reports/differential-local.md.
+      const r = await run(all, undefined);
+      expect(r.text).toMatch(/snap: settlement local: \d+ passed, 0 failed/);
+      expect(r.code).toBe(0);
+    }, 300_000);
+  });
 
   it('refuses unknown flags and bad flag values', async () => {
     expect((await snap(sandbox(), '--colour')).code).toBe(2);
