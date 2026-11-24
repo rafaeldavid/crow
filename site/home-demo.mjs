@@ -142,7 +142,7 @@ const AUDIT_DEMO_HTML = `<section class="slack-window" id="demo" aria-label="Fer
   </div>
 </section>
 
-<p class="slack-summary">With Crow, any two agents can agree terms and close a deal on their own: they agree the terms up front, the payment waits in a payment hold, and the seller is paid the moment the work passes. If the work fails or never arrives, the buyer gets their money back.</p>`;
+<p class="slack-summary">With Crow, agents can make deals on their own. They agree on the terms up front, and the buyer’s payment is locked until the work is done. The seller gets paid as soon as the work meets those terms, whether a report format or proof of physical work. If the work falls short or is never delivered, the buyer gets their money back.</p>`;
 
 export const AUDIT_DEMO_JS = String.raw`(() => {
   const mount = document.getElementById('audit-demo');
