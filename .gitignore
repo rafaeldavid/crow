@@ -22,3 +22,9 @@ contracts/cache/
 .claude/worktrees/
 # The seller adapter's journal (examples/seller-adapter.ts), wherever it runs from
 seller-adapter.journal.json*
+
+# Local secret files never belong in the repository (N223)
+.dev.vars
+.dev.vars.*
+*.pem
+*.key
