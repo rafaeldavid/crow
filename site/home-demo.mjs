@@ -2,7 +2,7 @@
 // agents reading index.html stay within its byte budget and reach the real docs first.
 const RESTART_FADE_MS = 260;
 
-const AUDIT_DEMO_HTML = `<section class="slack-window" id="demo" aria-label="Fernhollow Co. audit and fix review demo">
+const AUDIT_DEMO_HTML = `<section class="slack-window" id="demo" aria-label="Fernhollow Co. audit and fix review demo, an illustrative example with test tokens">
   <header class="slack-chrome">
     <div class="slack-window-title">
       <div class="window-lights" aria-hidden="true"><span></span><span></span><span></span></div>
@@ -17,25 +17,19 @@ const AUDIT_DEMO_HTML = `<section class="slack-window" id="demo" aria-label="Fer
     </div>
   </header>
 
-  <div class="slack-roles">
-    <span>Buyer</span>
-    <span class="slack-mode">Illustrative example · test tokens</span>
-    <span>Seller · Alpha Security</span>
-  </div>
-
   <ol role="list" class="slack-thread" id="slack-thread" aria-label="Audit and fix review conversation" tabindex="0">
     <li class="slack-message slack-buyer" data-earlier>
       <span class="slack-avatar slack-avatar-alice" aria-hidden="true">A</span>
       <div class="slack-message-body">
         <p class="slack-sender">Alice</p>
-        <p>Charlie, please finish the new relaykit feature set this sprint: bulk export and an audit log. It follows the recent synthesis of enterprise implementation feedback in <span class="slack-repository"><span>GitHub</span> docs/feedback/enterprise-synthesis.md</span>.</p>
+        <p>Charlie, please finish single sign-on and a new payment flow for enterprise customers this sprint, based on our synthesis of enterprise implementation feedback.</p>
       </div>
     </li>
     <li class="slack-message slack-buyer" data-earlier>
       <span class="slack-avatar slack-avatar-charlie" aria-hidden="true">C</span>
       <div class="slack-message-body">
         <p class="slack-sender">Charlie</p>
-        <p>Done. Bulk export and the audit log are merged and tagged v0.4.2.</p>
+        <p>Done. Single sign-on and the new payment flow are merged and tagged v0.4.2.</p>
       </div>
     </li>
     <li class="slack-message slack-buyer" data-earlier>
@@ -364,18 +358,6 @@ export const AUDIT_DEMO_CSS = `/* Animated hero text and changing demo messages 
 .slack-playback .ck-icon { width: 17px; height: 17px; }
 .slack-playback[data-playing] [data-playback-icon="play"],
 .slack-playback:not([data-playing]) [data-playback-icon="pause"] { display: none; }
-.slack-roles {
-  display: grid;
-  grid-template-columns: 1fr auto 1fr;
-  align-items: baseline;
-  gap: var(--space-2);
-  padding: var(--space-3) var(--space-5) 0;
-  color: var(--slack-muted);
-  font-size: var(--size-note);
-  font-weight: var(--weight-strong);
-}
-.slack-mode { font-size: 12px; font-weight: 400; }
-.slack-roles span:last-child { text-align: right; }
 .slack-thread {
   padding: var(--space-3) var(--space-5) var(--space-5);
   display: flex;
@@ -597,17 +579,13 @@ export const AUDIT_DEMO_CSS = `/* Animated hero text and changing demo messages 
 }
 @media (max-width: 600px) {
   .slack-summary { text-align: left; }
-  .slack-chrome, .slack-roles, .slack-thread { padding-inline: var(--space-3); }
+  .slack-chrome, .slack-thread { padding-inline: var(--space-3); }
   .slack-chrome, .slack-window-title, .slack-controls { gap: var(--space-2); }
   .slack-product { font-size: 13px; }
   .window-lights { gap: 5px; }
   .window-lights span { inline-size: 8px; block-size: 8px; }
   .slack-playback { inline-size: 30px; block-size: 32px; }
-  .slack-channel-title, .slack-roles { font-size: 12px; }
-  .slack-roles { grid-template-columns: minmax(0, 1fr) auto; grid-template-areas: "buyer seller" "mode mode"; row-gap: 2px; }
-  .slack-roles span:first-child { grid-area: buyer; }
-  .slack-roles span:last-child { grid-area: seller; white-space: nowrap; }
-  .slack-roles .slack-mode { grid-area: mode; text-align: center; }
+  .slack-channel-title { font-size: 12px; }
   .slack-thread { block-size: clamp(225px, 100svh - 302px, 396px); }
   .slack-composer { padding-inline: var(--space-3); block-size: 106px; }
   .slack-composer-box { padding-inline: var(--space-2); }
