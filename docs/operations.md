@@ -307,6 +307,14 @@ The maintainers keep the notes on agent sessions and permission prompts privatel
 
 Each entry records one deploy as it ran: the date and time in UTC, the commit, each Worker's new version and its rollback target, and what was measured after it. The deploy scripts print the entry's first line (`pnpm demo-cloud:deploy`, `pnpm site:deploy`, `node apps/test-agents/scripts/deploy.mjs`). The values are true for their date: for what runs now, read "What is live" above and each node's discovery.
 
+### The demo's opening conversation and the drifting use cases (deployed 2026-11-24, 11:27 UTC)
+
+Rafa, 2026-11-24: "Yes, deploy". The site deploy carries pull request 764: the homepage demo opens with an earlier conversation already in place (single sign-on and a new payment flow, tagged v0.4.2, then "let's get it audited"), the roles row under the window's title is removed, and the use-case line becomes one row of about three to four items drifting right to left with faded edges (a CSS animation; still under reduced motion). It ran from a clean worktree at `dc4fea4` after `main`'s own checks passed there [measured].
+
+**Site deploy 2026-11-24 11:27 UTC, commit `dc4fea4` on a detached HEAD: pass.** crow-site `a0145536-2799-4c9f-8549-9677d6539da5` (rollback target `61783442-d9c4-4212-b2c1-a402f44e171b`).
+
+After the deploy, version.json names `dc4fea4`, fresh copies of home.js and home.css carry the new conversation and the drift with no roles row, and every sitemap address answers 200 [measured].
+
 ### The use-case line under the early-access form (deployed 2026-11-24, 11:03 UTC)
 
 Rafa, 2026-11-24: "Yes, deploy". The site deploy carries pull request 763: one quiet line under the homepage's email form shows one of 14 example deals at a time (3 s each, a 0.4 s fade), with no lead-in and no pause control; it stops while the tab is hidden and does not rotate under reduced motion, and screen readers get the list once. It ran from a clean worktree at `034e70e` after `main`'s own checks passed there [measured].
