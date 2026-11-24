@@ -75,6 +75,68 @@ export const LOCAL_EXCLUSIONS: Readonly<Record<string, string>> = {
   'attack.adjudicator-self-dealing': 'not in phase one: the bond coverage refusal, and phase one has no bonds (SC-7, ADR-0031)',
 };
 
+const DEFAULT_DIFFERENCE_REASON =
+  'not in phase one: `triggerDefault` refunds in the same call, so no Defaulted state, and the default pays the seller nothing from the bonds; SimChain keeps both (SC-7, ADR-0031; formal/README.md, The two profiles, Default)';
+
+/**
+ * Fixtures that run on the contract and differ from their SimChain run by exactly these transcript lines (D88).
+ * `diff` holds the lines of `diffLines(simulated, contract)`: `-` is SimChain only, `+` is the contract only. A local
+ * run fails a fixture whose difference is not exactly its entry (no entry means no lines), and fails an entry whose
+ * fixture no longer differs. Distinct from LOCAL_EXCLUSIONS: these fixtures still run on the contract.
+ */
+export const LOCAL_KNOWN_DIFFERENCES: Readonly<Record<string, { reason: string; diff: readonly string[] }>> = {
+  'neutrality.store-withholds-delivery': {
+    reason: DEFAULT_DIFFERENCE_REASON,
+    diff: [
+      "- step 11: anyone | trigger_default | op-2 | ok | Defaulted",
+      "+ step 11: anyone | trigger_default | op-2 | ok | Refunded",
+      "- states: Offered > AcceptedByAdjudicator > Agreed > Held > Delivered > FallbackJudging > Defaulted > Refunded",
+      "+ states: Offered > AcceptedByAdjudicator > Agreed > Held > Delivered > FallbackJudging > Refunded",
+      "- balances after apply_default_outcome: atlas-buyer=10000000000 tidewater-seller=2000000000 bench-a=24000000000 bench-b=24000000000 bench-c=25000000000",
+      "+ balances after apply_default_outcome: atlas-buyer=10000000000 bench-a=25000000000 bench-b=25000000000 bench-c=25000000000",
+      "- events step 11: default.triggered",
+      // SimChain only, not in phase one: the bonds pay the seller on default.
+      "- events step 12: settlement.refunded, bond.slashed, bond.slashed",
+      "+ events step 11: default.triggered, settlement.refunded",
+    ],
+  },
+  'neutrality.store-drops-standing-ciphertext': {
+    reason: DEFAULT_DIFFERENCE_REASON,
+    diff: [
+      "- step 12: anyone | trigger_default | op-2 | ok | Defaulted",
+      "+ step 12: anyone | trigger_default | op-2 | ok | Refunded",
+      "- states: Offered > AcceptedByAdjudicator > Agreed > Held > Delivered > FallbackJudging > Defaulted > Refunded",
+      "+ states: Offered > AcceptedByAdjudicator > Agreed > Held > Delivered > FallbackJudging > Refunded",
+      "- balances after apply_default_outcome: atlas-buyer=10000000000 tidewater-seller=2000000000 bench-a=24000000000 bench-b=24000000000 bench-c=25000000000",
+      "+ balances after apply_default_outcome: atlas-buyer=10000000000 bench-a=25000000000 bench-b=25000000000 bench-c=25000000000",
+      "- events step 12: default.triggered",
+      // SimChain only, not in phase one: the bonds pay the seller on default.
+      "- events step 13: settlement.refunded, bond.slashed, bond.slashed",
+      "+ events step 12: default.triggered, settlement.refunded",
+    ],
+  },
+};
+
+/**
+ * Compares a fixture's actual difference from SimChain with its pinned lines, exactly and in order. Returns null
+ * when they are equal, else the problem to print.
+ */
+export function parityProblem(diff: readonly string[], known: readonly string[] | undefined): string | null {
+  const pinned = known ?? [];
+  if (diff.length === pinned.length && diff.every((l, i) => l === pinned[i])) return null;
+  if (diff.length === 0) return `the transcript is identical to SimChain's but LOCAL_KNOWN_DIFFERENCES pins ${pinned.length} lines for it; remove the entry`;
+  const missing = pinned.filter((l) => !diff.includes(l));
+  const extra = diff.filter((l) => !pinned.includes(l));
+  const parts: string[] = [];
+  if (!known) parts.push(`the transcript differs from SimChain's by ${diff.length} lines and none are pinned`);
+  else parts.push(`the transcript differs from SimChain's by ${diff.length} lines, not the ${pinned.length} pinned in LOCAL_KNOWN_DIFFERENCES`);
+  if (extra.length) parts.push(`unexpected lines:\n${extra.map((l) => `      ${l}`).join('\n')}`);
+  if (missing.length) parts.push(`pinned lines that did not occur:\n${missing.map((l) => `      ${l}`).join('\n')}`);
+  if (!extra.length && !missing.length) parts.push('the pinned lines are the same set in a different order');
+  parts.push('fix the backend that is wrong, or pin the lines in LOCAL_KNOWN_DIFFERENCES with a reason');
+  return parts.join('\n    ');
+}
+
 /**
  * One fixture run as comparable lines: the timeline (actor, call, via, result, state), state sequence, balances
  * after each step, event types per step, final state and invariants. No hashes, IDs or times, so SimChain and the
@@ -262,16 +324,22 @@ export interface SnapIO {
   out: (line: string) => void;
   /** Where contracts/out lives for --settlement local; defaults to root. */
   contractsRoot?: string;
+  /** The pinned differences for --settlement local; defaults to LOCAL_KNOWN_DIFFERENCES. Tests plant differences through it. */
+  knownDifferences?: Readonly<Record<string, { reason: string; diff: readonly string[] }>>;
 }
 
 /**
  * --settlement local: every fixture not on LOCAL_EXCLUSIONS runs against the contracts on anvil and, for the
- * differential, on SimChain. A fixture passes when its expectations hold on the contract; the .expect.md snapshot
- * is not compared, because commitment IDs, hashes and the token identifier differ by design (ADR-0025).
+ * differential, on SimChain. A fixture passes when its expectations hold on the contract and its transcript differs
+ * from SimChain's by exactly the lines pinned in LOCAL_KNOWN_DIFFERENCES (none when it has no entry; D88). The
+ * .expect.md snapshot is not compared, because commitment IDs, hashes and the token identifier differ by design
+ * (ADR-0025).
  */
 async function mainLocal(names: readonly string[], all: readonly string[], full: boolean, io: SnapIO, judges: JudgeSource | undefined): Promise<number> {
-  io.out('snap: settlement local (anvil, chain id 31337, 127.0.0.1). Each fixture is compared with its SimChain run, not with .expect.md.');
+  const knownDifferences = io.knownDifferences ?? LOCAL_KNOWN_DIFFERENCES;
+  io.out('snap: settlement local (anvil, chain id 31337, 127.0.0.1). Each fixture is compared with its SimChain run, not with .expect.md; any difference not pinned in LOCAL_KNOWN_DIFFERENCES fails.');
   for (const [name, reason] of Object.entries(LOCAL_EXCLUSIONS)) io.out(`excluded, not in phase one (SimChain only)  ${name}: ${reason}`);
+  for (const [name, k] of Object.entries(knownDifferences)) io.out(`known difference, ${k.diff.length} lines pinned  ${name}: ${k.reason}`);
   let world: EvmWorld;
   try {
     world = await EvmWorld.start(io.contractsRoot ?? io.root);
@@ -311,7 +379,9 @@ async function mainLocal(names: readonly string[], all: readonly string[], full:
       }
       const diff = diffLines(sim.transcript, local.transcript);
       const gas = local.transactions.reduce((a, t) => a + t.gasUsed, 0n);
-      const row: DifferentialRow = { name, pass: local.outcome.pass, reasons: local.outcome.reasons, diff, gas, txs: local.transactions, label: local.outcome.label };
+      const known = knownDifferences[name];
+      const problem = local.outcome.pass ? parityProblem(diff, known?.diff) : null;
+      const row: DifferentialRow = { name, pass: local.outcome.pass && !problem, reasons: problem ? [...local.outcome.reasons, problem] : local.outcome.reasons, diff, gas, txs: local.transactions, label: local.outcome.label, ...(known && !problem ? { known: known.reason } : {}) };
       report.push(row);
       const note = `gas ${gas.toLocaleString('en-US')} over ${local.transactions.length} tx; ${diff.length ? `${diff.length} transcript lines differ from SimChain` : 'transcript identical to SimChain'}`;
       if (!local.outcome.pass) {
@@ -319,8 +389,13 @@ async function mainLocal(names: readonly string[], all: readonly string[], full:
         io.out(`fail  ${name} on the contract: ${local.outcome.reasons.join('; ')} (${note})`);
         continue;
       }
+      if (problem) {
+        failed++;
+        io.out(`fail  ${name} on the contract: its expectations hold, but ${problem} (${note})`);
+        continue;
+      }
       passed++;
-      io.out(`pass  ${name} on the contract${local.outcome.label === 'todo' ? ' (todo)' : ''} (${note})`);
+      io.out(`pass  ${name} on the contract${local.outcome.label === 'todo' ? ' (todo)' : ''} (${note}${known ? `; the ${diff.length} lines are known: ${known.reason}` : ''})`);
     }
   } finally {
     await world.stop();
@@ -338,7 +413,7 @@ async function mainLocal(names: readonly string[], all: readonly string[], full:
 export type DifferentialRow =
   | { name: string; excluded: string }
   | { name: string; error: string }
-  | { name: string; pass: boolean; reasons: string[]; diff: string[]; gas: bigint; txs: ScenarioRun['transactions']; label: string };
+  | { name: string; pass: boolean; reasons: string[]; diff: string[]; gas: bigint; txs: ScenarioRun['transactions']; label: string; known?: string };
 
 /** reports/differential-local.md: per fixture, the result on the contract, gas, and the transcript lines that differ. */
 export function renderDifferential(rows: readonly DifferentialRow[]): string {
@@ -350,7 +425,8 @@ export function renderDifferential(rows: readonly DifferentialRow[]): string {
     'through `EvmSettlement` on anvil (chain id 31337). Lines are the normalised transcripts (`normalizedTranscript` in',
     '`packages/testkit/src/runner.ts`): timeline rows, states, balances, event types per step, final state and invariants.',
     '`-` is SimChain only, `+` is the contract only. Explanations and the decision on each difference: T-205 Decisions',
-    '(docs/tasks/T-205-evm-settlement.md). All values measured.',
+    '(docs/tasks/T-205-evm-settlement.md). A difference fails the run unless `LOCAL_KNOWN_DIFFERENCES` pins its exact lines (D88).',
+    'All values measured.',
     '',
     `Fixtures: ${rows.length}; run on the contract: ${ran.length}; passing on the contract: ${ran.filter((r) => r.pass).length}; identical transcripts: ${ran.filter((r) => r.diff.length === 0).length}; excluded, not in phase one: ${rows.filter((r) => 'excluded' in r).length}; errors: ${rows.filter((r) => 'error' in r).length}.`,
     '',
@@ -377,6 +453,7 @@ export function renderDifferential(rows: readonly DifferentialRow[]): string {
         out.push('');
       }
       out.push(...(r.diff.length ? ['```diff', ...r.diff, '```'] : ['Identical.']), '');
+      if (r.known) out.push(`Known difference, pinned in \`LOCAL_KNOWN_DIFFERENCES\`: ${r.known}`, '');
     }
   }
   return out.join('\n');
