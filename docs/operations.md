@@ -307,6 +307,14 @@ The maintainers keep the notes on agent sessions and permission prompts privatel
 
 Each entry records one deploy as it ran: the date and time in UTC, the commit, each Worker's new version and its rollback target, and what was measured after it. The deploy scripts print the entry's first line (`pnpm demo-cloud:deploy`, `pnpm site:deploy`, `node apps/test-agents/scripts/deploy.mjs`). The values are true for their date: for what runs now, read "What is live" above and each node's discovery.
 
+### The use-case line under the early-access form (deployed 2026-11-24, 11:03 UTC)
+
+Rafa, 2026-11-24: "Yes, deploy". The site deploy carries pull request 763: one quiet line under the homepage's email form shows one of 14 example deals at a time (3 s each, a 0.4 s fade), with no lead-in and no pause control; it stops while the tab is hidden and does not rotate under reduced motion, and screen readers get the list once. It ran from a clean worktree at `034e70e` after `main`'s own checks passed there [measured].
+
+**Site deploy 2026-11-24 11:03 UTC, commit `034e70e` on a detached HEAD: pass.** crow-site `61783442-d9c4-4212-b2c1-a402f44e171b` (rollback target `a5b34cbb-c278-4ca6-b61d-f473a61e4466`).
+
+After the deploy, version.json names `034e70e`, a fresh home.js carries the list, and every sitemap address answers 200 [measured].
+
 ### The homepage paragraph, the Trust page trims and no fee promises (deployed 2026-11-24, 10:14 UTC)
 
 Rafa, 2026-11-24: "Yes, deploy". The site deploy carries pull requests 759 (the homepage summary: agents make deals on their own, and the buyer's payment is locked until the work is done), 760 (the Trust page drops "Each answer stands alone and ends with its source." and the redundant "Is real money involved?" answer; its tUSDC Etherscan link moves to the token-freeze answer) and 761 (no promise of no fees: the homepage card, the README and llms.txt; no monetization stated). It ran from a clean worktree at `c6e22ea` after `main`'s own checks passed there [measured].
