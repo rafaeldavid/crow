@@ -156,6 +156,26 @@ export function buyerBriefDirect(s: Scenario, f: BriefFacts): string {
   ].join('\n\n');
 }
 
+/** The usage line of each buying command, as the buyer's brief gives it once: the order of the arguments, no more (N215). */
+export const BUYER_USAGE: Record<string, string> = {
+  'buy-with-signer': "<quote URL> <key store> <scope as JSON> <the most you pay> [<defaults URL>]; or approve <key store> <commitment ID> <the most you pay>; or resume <key store> [<commitment ID>]",
+  'check-delivery': '<terms.json> <file> [--json]',
+  'deal-record': '<commitment ID> --as buyer [--out <file>]',
+};
+
+/**
+ * The direct brief for the approvals runner's buyer (N215): the same intent, and the usage line of each command
+ * once. It names no guide: the agent finds the buyer's page from crow.direct, and must read it to learn the steps,
+ * the answers to expect and the errors, which the usage lines do not give.
+ */
+export function buyerBriefCold(s: Scenario, f: BriefFacts): string {
+  const lines = Object.entries(BUYER_USAGE).map(([c, u]) => `- ${c} ${u}`);
+  return [
+    buyerBriefDirect(s, f),
+    `Our company installed these commands for you and already set up their environment. Their arguments, once, and nothing more:\n${lines.join('\n')}`,
+  ].join('\n\n');
+}
+
 export function sellerBrief(s: Scenario, f: BriefFacts): string {
   return [
     'You work for our company. We run an API that writes security audit reports for smart contracts, and we want to sell its reports to other agents through Crow.',

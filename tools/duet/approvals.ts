@@ -8,7 +8,7 @@
 //   node tools/duet/approvals.ts run --runs claude:buy,deepseek:sell --budget-usd 2 [--out <dir>]
 //   node tools/duet/approvals.ts run --runs scripted:sell                       the seller's path with a script: no key, no model
 //
-// A run is <model>:<direction>. buy: the agent buys a security review from a seller that the duet's scripted seller
+// A run is <model>:<direction>. buy (N215): the agent starts from crow.direct with the usage line of each command once in its brief, never --help, so it must read buy.txt to know the steps; it buys a security review from a seller that the duet's scripted seller
 // plays on this machine against the live operators, so no run uses the test seller's rate-limited quote route. sell:
 // the agent sells its company's own data file to Crow's test buyer through the front door's sell command, run as
 // `node examples/try-sell.ts`, with --work and --terms only.
@@ -18,7 +18,7 @@
 // vendor's own tool prompt, every token at the dearest input price, plus the output cap. It sends no turn whose
 // reservation would pass the budget, settles the reservation to the turn's list-price cost when it is back, and keeps
 // the whole reservation when the turn fails. Not counted: a request the vendor billed and the client retried (the
-// providers retry on network errors, 429 and 5xx), guessed to be rare. Keys: HOLDBACK_AGENT_ANTHROPIC_API_KEY for claude; HOLDBACK_AGENT_OPENAI_COMPATIBLE_API_KEY
+// providers retry on network errors, 429 and 5xx), guessed to be rare. Keys: HOLDBACK_AGENT_ANTHROPIC_API_KEY for claude (and, for a key scoped to a workspace, HOLDBACK_AGENT_ANTHROPIC_WORKSPACE_ID: an ID, sent as `anthropic-workspace-id`); HOLDBACK_AGENT_OPENAI_COMPATIBLE_API_KEY
 // and HOLDBACK_AGENT_OPENAI_COMPATIBLE_BASE_URL (https) for deepseek. They are scrubbed from everything written.
 import { appendFileSync, mkdirSync, readFileSync, realpathSync, writeFileSync } from 'node:fs';
 import { join, resolve } from 'node:path';
@@ -198,6 +198,7 @@ async function chainAccount(rec: Recorder, ids: string[], buyer: string | null):
 export interface Result {
   model: string; vendor: string; direction: Direction; approvals: number; approvals_by_step: Array<{ turn: number; tool: string; what: string }>;
   policy_approvals: { granted: number; refused: number }; turns: number; tokens_in: number; tokens_out: number; cache_read: number; cost_usd: number; seconds: number | null;
+  help_probes: number; guide_reads: string[];
   final_state: string | null; final_state_op2: string | null; commitment_id: string | null; agent_end: string; refusals: number; failed_calls: number; date: string; run: string;
 }
 
@@ -230,6 +231,9 @@ export function measureRun(events: readonly Event[], role: 'buyer' | 'seller', d
     cache_read: turns.reduce((s, t) => s + Number(t['cacheRead'] ?? 0), 0),
     cost_usd: Math.round(cost) / 1_000_000,
     seconds: Number.isFinite(first) && finalEvent !== undefined ? Math.round((finalEvent - first) / 1000) : null,
+    // Calls that asked a command how to use it (no arguments, or --help or -h alone), and the Crow guide pages read.
+    help_probes: tools.filter((e) => e['name'] === 'run_command' && ((e['input'] as J)?.args?.length ?? 0) <= 1 && (((e['input'] as J)?.args ?? []).length === 0 || ['--help', '-h'].includes(String((e['input'] as J).args[0])))).length,
+    guide_reads: [...new Set(tools.filter((e) => e['name'] === 'fetch_url').map((e) => { try { const u = new URL(String((e['input'] as J)?.url)); return u.origin === CROW_SITE ? u.pathname : ''; } catch { return ''; } }).filter((p) => /\.txt$|^\/ref\//.test(p)))],
     final_state: stateAt(OPERATORS[0]!), final_state_op2: stateAt(OPERATORS[1]!), commitment_id: id,
     agent_end: String(end?.['outcome'] ?? '').includes(BUDGET_STOP) ? `stopped by the budget: ${String(end?.['outcome']).split(BUDGET_STOP)[1]!.trim().slice(0, 200)}` : `${String(end?.['status'] ?? 'none')}: ${String(end?.['outcome'] ?? '').slice(0, 200)}`,
     refusals: mine.filter((e) => e.kind === 'refused').length,
@@ -285,7 +289,7 @@ async function main(): Promise<void> {
       events = await sellRun(dir, p, secrets);
     } else {
       const buyer = r.model === 'scripted' ? 'scripted' as const : budget.guard(providers[r.model]!);
-      const done = await runDuet({ scenario: 'paid', buyer, seller: 'scripted', brief: 'direct', world: OPERATORS, out: dir, caps: CAPS, timeoutSec: 1800, secrets: modelSecrets, log: (l) => console.log(`  ${l}`) });
+      const done = await runDuet({ scenario: 'paid', buyer, seller: 'scripted', brief: 'direct', coldBuyer: true, world: OPERATORS, out: dir, caps: CAPS, timeoutSec: 1800, secrets: modelSecrets, log: (l) => console.log(`  ${l}`) });
       events = readFileSync(done.record, 'utf8').split('\n').filter(Boolean).map((l) => JSON.parse(l) as Event);
     }
     const m = measureRun(events, r.direction === 'buy' ? 'buyer' : 'seller', r.direction, dir);
