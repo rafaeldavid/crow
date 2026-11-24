@@ -11,6 +11,7 @@
 // chose, so a live seat's retry after an HTTP 503 could go to the scripted judge once the budget ran out, and that
 // scripted pass counted as the second model family (T-570's red team, H2).
 import { liveJudges, liveRegistry, LIVE_REGISTRY_URI, markedFake, markerFake, missingLiveEnv, placeholderRegistry, type JudgeUsage, type KeptRegistry, type TestAdjudicatorOptions } from '@holdback/adjudicator';
+import { wholeNumberVar } from './limits.js';
 import type { WorldStorage } from './storage.js';
 
 export type JudgeProvider = NonNullable<TestAdjudicatorOptions['provider']>;
@@ -169,8 +170,9 @@ export interface PanelOptions {
 
 /** Live when a stand-in is given or all three model variables are set; scripted otherwise. */
 export function panelConfig(o: PanelOptions): PanelConfig {
-  const fromEnv = Number(o.env['LIVE_JUDGE_CALLS_PER_DAY']);
-  const perDay = o.liveCallsPerDay ?? (Number.isSafeInteger(fromEnv) && fromEnv >= 0 && o.env['LIVE_JUDGE_CALLS_PER_DAY'] ? fromEnv : DEFAULT_LIVE_CALLS_PER_DAY);
+  // T-581: strict, like the other limits. A malformed value refuses to start, so a typo in this quick stop never leaves
+  // judging on at the default.
+  const perDay = o.liveCallsPerDay ?? wholeNumberVar(o.env, 'LIVE_JUDGE_CALLS_PER_DAY', DEFAULT_LIVE_CALLS_PER_DAY);
   const budget = new JudgeBudget(o.storage, perDay, o.now);
   const scripted = markedFake(markerFake());
   const live = o.judgeProvider ? { ok: true as const, value: o.judgeProvider } : liveJudges(o.env, { onUsage: (u) => budget.usage(u) });

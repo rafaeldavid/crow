@@ -26,7 +26,7 @@
 // The World object's limits run with this Worker's variables, for both nodes, each node counting apart:
 // RATE_READS_PER_MIN and RATE_WRITES_PER_MIN (requests per 60 s), FUNDED_DEALS_PER_CLIENT_PER_DAY (deals the relayer
 // funds, about 1.56 million gas each), CIPHERTEXT_BYTES_PER_CLIENT_PER_DAY (new bytes stored; 268435456 is 256 MiB).
-// T-581: JUDGED_DEALS_PER_CLIENT_PER_DAY (funded deals that can need Crow's judge panel; each reserves 6 of the 30 daily
+// T-581: LIVE_JUDGE_CALLS_PER_DAY (live judge calls a UTC day across the demo), JUDGED_DEALS_PER_CLIENT_PER_DAY (funded deals that can need Crow's judge panel; each reserves 6 of the 30 daily
 // live judge calls) and FUNDED_DEALS_PER_DAY (deals the relayer funds across every client and both nodes, which share one
 // relayer wallet). workers_dev is false: the nodes answer on their custom hostnames only.
 // The day is UTC. They protect this operator's service; none caps a value the parties negotiate (D31).
@@ -41,7 +41,7 @@
     { "pattern": "api.escrow.stream", "custom_domain": true }
   ],
   "preview_urls": false,
-  "vars": { "OPERATOR_URLS": "https://api.crow.direct,https://api2.crow.direct", "NODE_INDEX": "0", "SETTLEMENT": "sepolia", "MIN_WINDOW_SEC": "60", "OPERATOR_FEE_BPS": "0", "OPERATOR_FEE_MIN": "0", "OPERATOR_FEE_GAS": "0", "RATE_READS_PER_MIN": "1200", "RATE_WRITES_PER_MIN": "120", "FUNDED_DEALS_PER_CLIENT_PER_DAY": "100", "JUDGED_DEALS_PER_CLIENT_PER_DAY": "1", "FUNDED_DEALS_PER_DAY": "200", "CIPHERTEXT_BYTES_PER_CLIENT_PER_DAY": "268435456" },
+  "vars": { "OPERATOR_URLS": "https://api.crow.direct,https://api2.crow.direct", "NODE_INDEX": "0", "SETTLEMENT": "sepolia", "MIN_WINDOW_SEC": "60", "OPERATOR_FEE_BPS": "0", "OPERATOR_FEE_MIN": "0", "OPERATOR_FEE_GAS": "0", "RATE_READS_PER_MIN": "1200", "RATE_WRITES_PER_MIN": "120", "FUNDED_DEALS_PER_CLIENT_PER_DAY": "100", "LIVE_JUDGE_CALLS_PER_DAY": "30", "JUDGED_DEALS_PER_CLIENT_PER_DAY": "1", "FUNDED_DEALS_PER_DAY": "200", "CIPHERTEXT_BYTES_PER_CLIENT_PER_DAY": "268435456" },
   "ratelimits": [{ "name": "FLOOD", "namespace_id": "4221", "simple": { "limit": 500, "period": 10 } }],
   "version_metadata": { "binding": "CF_VERSION_METADATA" },
   "kv_namespaces": [{ "binding": "FEEDBACK", "id": "dc6ab7d9243c4d129c7e2ad908c02324" }],

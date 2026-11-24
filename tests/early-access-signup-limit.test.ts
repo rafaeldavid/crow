@@ -48,3 +48,14 @@ describe('the sign-up write limit (T-581 item 4)', () => {
     expect((await call(sign('e@example.com'), hung)).status).toBe(200);
   });
 });
+
+describe('the sign-up limit counts an IPv6 /64 as one client (T-581 red team, item 3)', () => {
+  it('refuses a host that rotates addresses inside its /64', async () => {
+    const e = env(2);
+    const ips = ['2001:db8:1:2::1', '2001:db8:1:2::2', '2001:db8:1:2:aaaa::3'];
+    const answers = [];
+    for (const [i, ip] of ips.entries()) answers.push((await call(sign(`v6-${i}@example.com`, ip), e)).status);
+    expect(answers).toEqual([200, 200, 429]);
+    expect((await call(sign('v6-other@example.com', '2001:db8:1:3::1'), e)).status).toBe(200);
+  });
+});

@@ -15,9 +15,10 @@
 // route here serves an entry, and no deal reads it.
 import { buildInfo, buildResponse, isBuildRead } from '../site/build-info.js';
 import { secured } from '../demo-cloud/src/headers.ts';
-import { LISTING_PATH, listing } from './listing.js';
+import { LISTING_PATH, clientKey, listing } from './listing.js';
 
-// T-581: the write limit. SIGNUP_LIMIT is a Cloudflare rate-limit binding (wrangler.jsonc, 5 writes per 60 s per client);
+// T-581: the write limit. SIGNUP_LIMIT is a Cloudflare rate-limit binding (wrangler.jsonc, 5 writes per 60 s per client, an
+// IPv4 address or an IPv6 /64);
 // a write over it gets 429 before anything is stored. It fails open after 100 ms or on an error, so a Cloudflare outage
 // never stops sign-ups. A caller that rotates addresses can still add rows: the limit slows a stranger, it does not
 // stop one, and the list is private and sends no email.
@@ -25,7 +26,8 @@ const LIMIT_TIMEOUT_MS = 100;
 const LIMIT_RETRY_SEC = 60;
 async function admitted(env, request) {
   if (!env.SIGNUP_LIMIT) return true;
-  const client = request.headers.get('cf-connecting-ip') ?? 'unknown';
+  // An IPv4 address, or an IPv6 address's /64, which one host usually holds whole (red team, item 3).
+  const client = clientKey(request.headers.get('cf-connecting-ip'));
   let timer;
   const open = new Promise((resolve) => (timer = setTimeout(() => resolve(true), LIMIT_TIMEOUT_MS)));
   try {

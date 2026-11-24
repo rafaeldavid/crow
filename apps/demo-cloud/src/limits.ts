@@ -178,6 +178,20 @@ export class DailyCaps {
     return { key, row: await row };
   }
 
+  /**
+   * The client's row and the row for every client, both of one UTC day (a request that straddles 00:00 reads both again).
+   * A caller checks and counts with no await after this returns, so concurrent requests see each other's counts (T-581
+   * review, item 1).
+   */
+  private async pair(node: number, client: string): Promise<{ key: string; row: CapRow; all: { key: string; row: CapRow } }> {
+    for (;;) {
+      const one = await this.row(node, client);
+      const all = await this.row('all', '');
+      const day = `lc:${this.day}:`;
+      if (one.key.startsWith(day) && all.key.startsWith(day)) return { ...one, all };
+    }
+  }
+
   private refused(reason?: TakeRefusal): Take {
     return { ok: false, retryAfterSec: secondsToUtcMidnight(this.now()), ...(reason ? { reason } : {}) };
   }
@@ -188,12 +202,12 @@ export class DailyCaps {
    * (T-422 review and red team, F2).
    */
   async takeFunding(node: number, client: string, fingerprint: string, judged = false): Promise<Take> {
-    const { key, row } = await this.row(node, client);
+    // Both rows first: from here to the counts, no await, so a concurrent take sees this one's count.
+    const { key, row, all } = await this.pair(node, client);
     if (row.seen.includes(fingerprint)) return { ok: true, counted: false };
     if (row.funded >= this.limits.fundedDeals) return this.refused('client');
     if (judged && (row.judged ?? 0) >= this.limits.judgedDeals) return this.refused('judged');
     // The count for every client together (T-581): the relayer's wallet is one, behind both operators.
-    const all = await this.row('all', '');
     if (all.row.funded >= this.limits.fundedDealsAll) return this.refused('global');
     row.funded++;
     all.row.funded++;
@@ -206,10 +220,9 @@ export class DailyCaps {
   /** After the relay: a refused funding this request counted gives its count back, so a corrected request can use it. */
   async settleFunding(node: number, client: string, fingerprint: string, accepted: boolean, judged = false): Promise<void> {
     if (accepted) return;
-    const { key, row } = await this.row(node, client);
+    const { key, row, all } = await this.pair(node, client);
     const i = row.seen.indexOf(fingerprint);
     if (i < 0) return;
-    const all = await this.row('all', '');
     row.seen.splice(i, 1);
     row.funded = Math.max(0, row.funded - 1);
     all.row.funded = Math.max(0, all.row.funded - 1);

@@ -1674,18 +1674,25 @@ function grantFrom(w: {
       if (c.count >= w.perClient) return { ok: false, problem: problem('rate_limited', 'too many faucet grants from this client; retry later'), retryAfterSec: retryAfterSec(c.start + windowMs) };
       if (granting.has(address)) return { ok: false, problem: problem('rate_limited', `a grant to ${address} is in progress; one grant per address per window`), retryAfterSec: retryAfterSec(now + 15_000) };
       c.count++;
-      granting.add(address);
       await w.storage.put({ [clientKey]: c });
+      // Marked in progress only once the count is stored, so a failed write leaves no address stuck (T-581 review, item 2).
+      granting.add(address);
+      // Rows of closed windows, pruned at most once a window, inside the queue so no count written meanwhile is deleted
+      // (item 3). Pruning is best effort: a failure leaves rows for the next pass and refuses nothing.
+      if (now - prunedAt >= windowMs) {
+        prunedAt = now;
+        try {
+          const closed = [...(await w.storage.list<{ start: number }>({ prefix: 'fc:' })).entries()].filter(([k, v]) => k !== clientKey && now - v.start >= windowMs).map(([k]) => k);
+          for (let i = 0; i < closed.length; i += 128) await w.storage.delete(closed.slice(i, i + 128));
+        } catch {
+          prunedAt = 0;
+        }
+      }
       return null;
     });
     counting = step.catch(() => undefined);
     const refused = await step;
     if (refused) return refused;
-    if (now - prunedAt >= windowMs) {
-      prunedAt = now;
-      const closed = [...(await w.storage.list<{ start: number }>({ prefix: 'fc:' })).entries()].filter(([k, v]) => k !== clientKey && now - v.start >= windowMs).map(([k]) => k);
-      for (let i = 0; i < closed.length; i += 128) await w.storage.delete(closed.slice(i, i + 128));
-    }
     try {
       return await grant(address, paymentAddress, amount, now, windowMs, retryAfterSec);
     } finally {

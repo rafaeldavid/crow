@@ -172,3 +172,50 @@ describe('faucet grants per client, kept in storage (T-581 item 3)', () => {
     expect((await post(`${urls[0]}/v1/faucet`, { address: freshAgent(urls).address }, 'w-4')).status).toBe(200);
   }, 60_000);
 });
+
+describe('the red team and review of T-581', () => {
+  // High (review item 1, red team item 1): takeFunding awaited the global row between the client's check and its count,
+  // so concurrent takes from one client all passed. 20 at once must admit exactly the cap.
+  it('admits exactly the cap from concurrent takes of one client', async () => {
+    const caps = new DailyCaps(new MemoryStorage(), () => Date.parse('2026-11-24T12:00:00Z'), 's', { fundedDeals: 3, ciphertextBytes: 10, judgedDeals: 1, fundedDealsAll: 100 });
+    const judged = await Promise.all(Array.from({ length: 20 }, (_, i) => caps.takeFunding(0, 'a', `j${i}`, true)));
+    expect(judged.filter((t) => t.ok)).toHaveLength(1);
+    const plain = await Promise.all(Array.from({ length: 20 }, (_, i) => caps.takeFunding(0, 'b', `p${i}`, false)));
+    expect(plain.filter((t) => t.ok)).toHaveLength(3);
+    // And concurrent give-backs leave the counts right: all three of b's back, so three more fit.
+    await Promise.all(['p0', 'p1', 'p2'].map((f) => caps.settleFunding(0, 'b', f, false)));
+    expect((await Promise.all(Array.from({ length: 5 }, (_, i) => caps.takeFunding(0, 'b', `q${i}`, false)))).filter((t) => t.ok)).toHaveLength(3);
+  });
+
+  it('counts a take that straddles 00:00 UTC on one day only', async () => {
+    let calls = 0;
+    const times = [Date.parse('2026-11-24T23:59:59.999Z'), Date.parse('2026-11-25T00:00:00.001Z')];
+    const caps = new DailyCaps(new MemoryStorage(), () => times[Math.min(calls++, 1)]!, 's', { fundedDeals: 1, ciphertextBytes: 10, judgedDeals: 1, fundedDealsAll: 1 });
+    expect((await caps.takeFunding(0, 'a', 'f1')).ok).toBe(true);
+    // Both rows were charged on 25 November: a second client on that day meets the global cap.
+    expect(await caps.takeFunding(0, 'b', 'f2')).toMatchObject({ ok: false, reason: 'global' });
+  });
+
+  // Review item 2: a failed write of the faucet's count left the address marked in progress until a restart.
+  it('leaves no address stuck when the faucet cannot store its count', async () => {
+    const storage = new MemoryStorage();
+    const { urls } = await serve({}, storage);
+    const address = freshAgent(urls).address;
+    const put = storage.put.bind(storage);
+    let fail = true;
+    storage.put = async (entries) => {
+      if (fail && Object.keys(entries).some((k) => k.startsWith('fc:'))) throw new Error('storage down');
+      return put(entries);
+    };
+    expect((await post(`${urls[0]}/v1/faucet`, { address }, 'f-1')).status).toBe(500);
+    fail = false;
+    expect((await post(`${urls[0]}/v1/faucet`, { address }, 'f-2')).status).toBe(200);
+  }, 60_000);
+
+  // Review item 4: LIVE_JUDGE_CALLS_PER_DAY fell back to 30 on a typo, so a mistyped quick stop left judging on.
+  it('refuses to start on a malformed LIVE_JUDGE_CALLS_PER_DAY', async () => {
+    await expect(PublicWorld.open({ storage: new MemoryStorage(), env: { LIVE_JUDGE_CALLS_PER_DAY: '0 ' } })).rejects.toThrow(/LIVE_JUDGE_CALLS_PER_DAY/);
+    const off = await PublicWorld.open({ storage: new MemoryStorage(), env: { LIVE_JUDGE_CALLS_PER_DAY: '0' }, ...standIn() });
+    expect(off).toBeDefined();
+  });
+});

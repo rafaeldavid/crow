@@ -3,7 +3,7 @@
 - **Lane:** api
 - **Phase:** 2
 - **Depends on:** T-422, T-574
-- **Paths this task may touch:** `apps/demo-cloud/src/` (limits.ts, world.ts, judges.ts and their tests), `apps/early-access/`, `apps/demo-cloud/wrangler.op1.jsonc`, `apps/demo-cloud/wrangler.op2.jsonc`, `apps/early-access/wrangler.jsonc`, `docs/operations.md`, this file; one new test file, `tests/early-access-signup-limit.test.ts` (see Handoff)
+- **Paths this task may touch:** `apps/demo-cloud/src/` (limits.ts, world.ts, judges.ts and their tests, and a new brakes.test.ts), `apps/early-access/`, `apps/demo-cloud/wrangler.op1.jsonc`, `apps/demo-cloud/wrangler.op2.jsonc`, `apps/early-access/wrangler.jsonc`, `docs/operations.md`, this file; one new test file, `tests/early-access-signup-limit.test.ts` (see Handoff)
 - **Human gate:** yes for the deploy only; the code is in-repo
 - **Status:** review
 - **Agent/session:** api-brakes (side session of the coordinator, 2026-11-24)
@@ -39,6 +39,8 @@ Non-goals: provider-side spend limits, WAF rules and alerts (Rafa's checklist), 
 
 - Commands run and results [measured]: `pnpm typecheck` passed. `pnpm exec vitest run apps/demo-cloud tests/early-access` gave 21 files passed and 5 skipped, 269 tests passed and 13 skipped. `pnpm lint` passed.
 - Attack tests against main [measured]: with main's `world.ts`, `limits.ts` and `worker.js` swapped in, 11 of the 12 new tests in `apps/demo-cloud/src/brakes.test.ts` and `tests/early-access-signup-limit.test.ts` failed. The 12th, the fail-open test, passed there, as it should.
+- Review and red team [measured]: one reviewer pass and one red-team pass, both on Sonnet 5.5, because Fable 5.2 and Opus 5.5 were out of quota until 03:00 Berlin on 2026-11-25. Both found the same High: `takeFunding` awaited the global row between the client's check and its count, so 20 concurrent takes from one client were all admitted (measured by both). The fixes and their tests are in the second commit. Of the 5 new tests in "the red team and review of T-581" and the sign-up /64 test, 4 fail at the first commit (24384bcf). The midnight test passes there too, so it guards against a regression and proves no bypass.
+- After the fixes [measured]: `pnpm typecheck` and `pnpm lint` passed. `pnpm exec vitest run apps/demo-cloud tests/early-access` gave 21 files passed and 5 skipped, 274 tests passed and 13 skipped.
 - Existing tests changed: three test servers that fund several judged deals from one client now set `judgedDealsPerClientPerDay: 100`. The DailyCaps unit tests pass the two new limits, and the telemetry test's list of storage prefixes gains `fc` (hashed, no address; the IP check there still covers it).
 
 ## Decisions
@@ -47,7 +49,9 @@ Non-goals: provider-side spend limits, WAF rules and alerts (Rafa's checklist), 
 - **Terms that cannot be read count as not judged.** The relay refuses a funding with unknown terms anyway. Terms that name no adjudicator count as judged.
 - **Default of 200 for the global cap** [guessed]. That is about 312 million gas a day at about 1.56 million gas a deal (T-389's measurement). Rafa should set it from the relayer's balance; the review suggests exactly that.
 - **No discovery fields for the new limits.** `demo.limits` is defined in `spec/openapi/`, which changes only through an ADR and a version bump. The refusals' `detail` text names each limit instead.
-- **The sign-up limit uses a Cloudflare rate-limit binding** and fails open, like the operators' flood ceiling. The binding's namespace ID is `5811`.
+- **The sign-up limit uses a Cloudflare rate-limit binding** and fails open, like the operators' flood ceiling. The binding's namespace ID is `5811`. It counts an IPv4 address or an IPv6 /64 (`clientKey` from listing.js), after the red team.
+- **`LIVE_JUDGE_CALLS_PER_DAY` is strict now**, like the other limits. A malformed value refuses to start; before, it fell back to 30, so a mistyped quick stop left judging on. It is listed in `wrangler.op1.jsonc` at 30, so the runbook's "put the value in that file" has a line to edit.
+- **`takeFunding` reads both rows of one UTC day before it checks** (`DailyCaps.pair`), with no await between the check and the count. The faucet marks an address in progress only after its count is stored, and it prunes closed `fc:` rows inside its queue, as best effort.
 
 ## Handoff
 
@@ -55,5 +59,6 @@ Done: all four changes, their tests and the runbook paragraph. Not done:
 
 - **Deploy waits for Rafa:** holdback-op1, holdback-op2 and crow-early-access. `workers_dev: false` removes the `*.workers.dev` hostnames. Nothing in the repo calls them except an old cutover note in `docs/operations.md` (Sepolia cutover step 2).
 - **A path outside the list:** the early-access tests live in `tests/` (vitest does not collect `apps/early-access/`), so the new test is `tests/early-access-signup-limit.test.ts`. It is a new file, and no other file there changed.
-- **Residual** [inferred]: a client is an address, so a stranger who rotates through 3 addresses per node can still reserve the 30 calls. The cap raises the cost from 1 address to several. Closing it fully needs identity or payment for judged deals, which is a product decision.
+- **Decision for Rafa: the default of 1 refuses part of `pnpm demo:sepolia`** [inferred from examples/demo-sepolia.ts: it plays the release, reject and escalate beats at once from one machine, three judged deals over two nodes]. Options: set `JUDGED_DEALS_PER_CLIENT_PER_DAY` to 3 on a demo day (an operator deploy), play one beat per node a day (`--beat`), or choose another default. A default of 3 per node would let one address reserve the whole budget again. The site's single judged try and Crow's test buyer, which takes checks-only deals (`apps/test-agents/src/buyer.ts:160`), are not affected.
+- **Residuals that need a product decision** [inferred, red team items 2 and 5]: (a) a client is an address, counted per node, so about 3 addresses (IPv4s or IPv6 /64s) can still reserve the 30 calls; (b) funding straight on the rules contract skips every operator cap, and `reservedJudgeCalls` counts that deal too, so offers plus direct funding can hold the budget at the cost of test gas. Both need identity or payment for judged deals, or a reservation counted at the adjudicator's acceptance with its own per-seller limit. Until then `LIVE_JUDGE_CALLS_PER_DAY=0` is the stop, and the runbook says so.
 - **Follow-up:** add `judgedDealsPerDay` and the global cap to discovery's `demo.limits` (a schema change with an ADR), and to the agent docs.
