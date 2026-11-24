@@ -155,8 +155,12 @@ h1 { font-family: var(--display); font-size: 64px; line-height: 1.04; font-weigh
 .signup .msg:empty { display: none; }
 .hp { position: absolute; left: -10000px; width: 1px; height: 1px; opacity: 0; }
 /* the use-case line under the form (script adds it): small, quiet, and a fixed height so nothing below moves */
-.uses { margin-top: 14px; min-height: 22px; font-size: var(--size-note); line-height: 22px; color: var(--ink-3); }
-.uses .use { color: var(--ink-2); transition: opacity .4s ease; }
+.uses { position: relative; margin: 14px auto 0; width: min(100%, 640px); height: 22px; overflow: hidden; font-size: var(--size-note); line-height: 22px; color: var(--ink-2);
+  -webkit-mask-image: linear-gradient(to right, transparent, black 15%, black 85%, transparent); mask-image: linear-gradient(to right, transparent, black 15%, black 85%, transparent); }
+.uses-track { position: absolute; left: 0; top: 0; display: flex; width: max-content; white-space: nowrap; animation: uses-drift 60s linear infinite; }
+.uses .use::after { content: "·"; margin: 0 18px; color: var(--ink-3); }
+@keyframes uses-drift { to { transform: translateX(-50%); } }
+@media (prefers-reduced-motion: reduce) { .uses-track { animation: none; } }
 /* the demo line above the eyebrow (T-564): the kit's pill as a link to the legal notice, on its own line */
 .live { margin-bottom: 20px; text-decoration: none; }
 .live:hover { border-color: var(--ink-3); }
@@ -250,18 +254,6 @@ input:focus-visible, button:focus-visible, a:focus-visible { outline: 2px solid 
 .slack-playback .ck-icon { width: 17px; height: 17px; }
 .slack-playback[data-playing] [data-playback-icon="play"],
 .slack-playback:not([data-playing]) [data-playback-icon="pause"] { display: none; }
-.slack-roles {
-  display: grid;
-  grid-template-columns: 1fr auto 1fr;
-  align-items: baseline;
-  gap: var(--space-2);
-  padding: var(--space-3) var(--space-5) 0;
-  color: var(--slack-muted);
-  font-size: var(--size-note);
-  font-weight: var(--weight-strong);
-}
-.slack-mode { font-size: 12px; font-weight: 400; }
-.slack-roles span:last-child { text-align: right; }
 .slack-thread {
   padding: var(--space-3) var(--space-5) var(--space-5);
   display: flex;
@@ -294,6 +286,20 @@ input:focus-visible, button:focus-visible, a:focus-visible { outline: 2px solid 
     to { opacity: 1; transform: translateY(0); }
   }
 }
+.slack-divider {
+  display: flex;
+  flex: none;
+  align-items: center;
+  gap: var(--space-3);
+  color: var(--slack-muted);
+  font-size: 12px;
+  font-weight: var(--weight-strong);
+}
+.slack-divider::before, .slack-divider::after {
+  content: "";
+  flex: 1;
+  border-top: 1px solid var(--slack-line);
+}
 .slack-message, .slack-event {
   display: grid;
   flex: none;
@@ -324,6 +330,7 @@ input:focus-visible, button:focus-visible, a:focus-visible { outline: 2px solid 
   font-weight: var(--weight-strong);
 }
 .slack-avatar-alice { background: var(--slack-blue-wash); color: var(--slack-blue); }
+.slack-avatar-charlie { background: var(--slack-soft); color: var(--slack-aubergine); }
 .slack-avatar-claude { background: var(--slack-yellow-wash); color: var(--slack-yellow-ink); }
 .slack-avatar-auditor { background: var(--slack-green-wash); color: var(--slack-green); }
 .slack-avatar .ck-icon { width: 22px; height: 22px; }
@@ -468,17 +475,13 @@ input:focus-visible, button:focus-visible, a:focus-visible { outline: 2px solid 
 }
 @media (max-width: 600px) {
   .slack-summary { text-align: left; }
-  .slack-chrome, .slack-roles, .slack-thread { padding-inline: var(--space-3); }
+  .slack-chrome, .slack-thread { padding-inline: var(--space-3); }
   .slack-chrome, .slack-window-title, .slack-controls { gap: var(--space-2); }
   .slack-product { font-size: 13px; }
   .window-lights { gap: 5px; }
   .window-lights span { inline-size: 8px; block-size: 8px; }
   .slack-playback { inline-size: 30px; block-size: 32px; }
-  .slack-channel-title, .slack-roles { font-size: 12px; }
-  .slack-roles { grid-template-columns: minmax(0, 1fr) auto; grid-template-areas: "buyer seller" "mode mode"; row-gap: 2px; }
-  .slack-roles span:first-child { grid-area: buyer; }
-  .slack-roles span:last-child { grid-area: seller; white-space: nowrap; }
-  .slack-roles .slack-mode { grid-area: mode; text-align: center; }
+  .slack-channel-title { font-size: 12px; }
   .slack-thread { block-size: clamp(225px, 100svh - 302px, 396px); }
   .slack-composer { padding-inline: var(--space-3); block-size: 106px; }
   .slack-composer-box { padding-inline: var(--space-2); }

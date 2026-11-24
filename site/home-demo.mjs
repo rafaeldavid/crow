@@ -2,7 +2,7 @@
 // agents reading index.html stay within its byte budget and reach the real docs first.
 const RESTART_FADE_MS = 260;
 
-const AUDIT_DEMO_HTML = `<section class="slack-window" id="demo" aria-label="Fernhollow Co. audit and fix review demo">
+const AUDIT_DEMO_HTML = `<section class="slack-window" id="demo" aria-label="Fernhollow Co. audit and fix review demo, an illustrative example with test tokens">
   <header class="slack-chrome">
     <div class="slack-window-title">
       <div class="window-lights" aria-hidden="true"><span></span><span></span><span></span></div>
@@ -17,13 +17,29 @@ const AUDIT_DEMO_HTML = `<section class="slack-window" id="demo" aria-label="Fer
     </div>
   </header>
 
-  <div class="slack-roles">
-    <span>Buyer</span>
-    <span class="slack-mode">Illustrative example · test tokens</span>
-    <span>Seller · Alpha Security</span>
-  </div>
-
   <ol role="list" class="slack-thread" id="slack-thread" aria-label="Audit and fix review conversation" tabindex="0">
+    <li class="slack-message slack-buyer" data-earlier>
+      <span class="slack-avatar slack-avatar-alice" aria-hidden="true">A</span>
+      <div class="slack-message-body">
+        <p class="slack-sender">Alice</p>
+        <p>Charlie, please finish single sign-on and a new payment flow for enterprise customers this sprint, based on our synthesis of enterprise implementation feedback.</p>
+      </div>
+    </li>
+    <li class="slack-message slack-buyer" data-earlier>
+      <span class="slack-avatar slack-avatar-charlie" aria-hidden="true">C</span>
+      <div class="slack-message-body">
+        <p class="slack-sender">Charlie</p>
+        <p>Done. Single sign-on and the new payment flow are merged and tagged v0.4.2.</p>
+      </div>
+    </li>
+    <li class="slack-message slack-buyer" data-earlier>
+      <span class="slack-avatar slack-avatar-alice" aria-hidden="true">A</span>
+      <div class="slack-message-body">
+        <p class="slack-sender">Alice</p>
+        <p>Thanks. Before we ship it to customers, let’s get it audited.</p>
+      </div>
+    </li>
+    <li class="slack-divider" role="separator" aria-label="Today"><span>Today</span></li>
     <li class="slack-message slack-buyer" data-demo-step="0">
       <span class="slack-avatar slack-avatar-alice" aria-hidden="true">A</span>
       <div class="slack-message-body">
@@ -187,6 +203,11 @@ export const AUDIT_DEMO_JS = String.raw`(() => {
   let frame = playing ? 0 : lastFrame;
   let timer;
 
+  function showEarlier() {
+    // Open at the end of the earlier conversation so the new messages arrive just below it.
+    thread.scrollTop = reducedMotion ? 0 : thread.scrollHeight;
+  }
+
   function showDraft(draft) {
     const text = draft?.lead ?? '';
     const mentioned = text.startsWith(mention);
@@ -218,7 +239,7 @@ export const AUDIT_DEMO_JS = String.raw`(() => {
     showFrame(!restarting && !reducedMotion);
 
     if (restarting) {
-      thread.scrollTop = 0;
+      showEarlier();
     } else if (!frames[frame].draft && following && thread.scrollHeight > thread.clientHeight) {
       thread.scrollTo({ top: thread.scrollHeight, behavior: reducedMotion ? 'auto' : 'smooth' });
     }
@@ -250,7 +271,7 @@ export const AUDIT_DEMO_JS = String.raw`(() => {
     if (playing && frame === lastFrame) {
       frame = 0;
       showFrame();
-      thread.scrollTop = 0;
+      showEarlier();
     }
     syncPlayback();
     schedule();
@@ -266,6 +287,7 @@ export const AUDIT_DEMO_JS = String.raw`(() => {
   document.addEventListener('visibilitychange', schedule);
 
   showFrame();
+  showEarlier();
   syncPlayback();
   playback.hidden = false;
   schedule();
@@ -336,18 +358,6 @@ export const AUDIT_DEMO_CSS = `/* Animated hero text and changing demo messages 
 .slack-playback .ck-icon { width: 17px; height: 17px; }
 .slack-playback[data-playing] [data-playback-icon="play"],
 .slack-playback:not([data-playing]) [data-playback-icon="pause"] { display: none; }
-.slack-roles {
-  display: grid;
-  grid-template-columns: 1fr auto 1fr;
-  align-items: baseline;
-  gap: var(--space-2);
-  padding: var(--space-3) var(--space-5) 0;
-  color: var(--slack-muted);
-  font-size: var(--size-note);
-  font-weight: var(--weight-strong);
-}
-.slack-mode { font-size: 12px; font-weight: 400; }
-.slack-roles span:last-child { text-align: right; }
 .slack-thread {
   padding: var(--space-3) var(--space-5) var(--space-5);
   display: flex;
@@ -380,6 +390,20 @@ export const AUDIT_DEMO_CSS = `/* Animated hero text and changing demo messages 
     to { opacity: 1; transform: translateY(0); }
   }
 }
+.slack-divider {
+  display: flex;
+  flex: none;
+  align-items: center;
+  gap: var(--space-3);
+  color: var(--slack-muted);
+  font-size: 12px;
+  font-weight: var(--weight-strong);
+}
+.slack-divider::before, .slack-divider::after {
+  content: "";
+  flex: 1;
+  border-top: 1px solid var(--slack-line);
+}
 .slack-message, .slack-event {
   display: grid;
   flex: none;
@@ -410,6 +434,7 @@ export const AUDIT_DEMO_CSS = `/* Animated hero text and changing demo messages 
   font-weight: var(--weight-strong);
 }
 .slack-avatar-alice { background: var(--slack-blue-wash); color: var(--slack-blue); }
+.slack-avatar-charlie { background: var(--slack-soft); color: var(--slack-aubergine); }
 .slack-avatar-claude { background: var(--slack-yellow-wash); color: var(--slack-yellow-ink); }
 .slack-avatar-auditor { background: var(--slack-green-wash); color: var(--slack-green); }
 .slack-avatar .ck-icon { width: 22px; height: 22px; }
@@ -554,17 +579,13 @@ export const AUDIT_DEMO_CSS = `/* Animated hero text and changing demo messages 
 }
 @media (max-width: 600px) {
   .slack-summary { text-align: left; }
-  .slack-chrome, .slack-roles, .slack-thread { padding-inline: var(--space-3); }
+  .slack-chrome, .slack-thread { padding-inline: var(--space-3); }
   .slack-chrome, .slack-window-title, .slack-controls { gap: var(--space-2); }
   .slack-product { font-size: 13px; }
   .window-lights { gap: 5px; }
   .window-lights span { inline-size: 8px; block-size: 8px; }
   .slack-playback { inline-size: 30px; block-size: 32px; }
-  .slack-channel-title, .slack-roles { font-size: 12px; }
-  .slack-roles { grid-template-columns: minmax(0, 1fr) auto; grid-template-areas: "buyer seller" "mode mode"; row-gap: 2px; }
-  .slack-roles span:first-child { grid-area: buyer; }
-  .slack-roles span:last-child { grid-area: seller; white-space: nowrap; }
-  .slack-roles .slack-mode { grid-area: mode; text-align: center; }
+  .slack-channel-title { font-size: 12px; }
   .slack-thread { block-size: clamp(225px, 100svh - 302px, 396px); }
   .slack-composer { padding-inline: var(--space-3); block-size: 106px; }
   .slack-composer-box { padding-inline: var(--space-2); }
