@@ -20,7 +20,7 @@ import type { WorldStorage } from './storage.js';
 export const FLOOD_CEILING = { limit: 500, periodSec: 10 } as const;
 
 /** The daily caps' defaults: deals the relayer funds, and new ciphertext bytes stored, per client and operator a UTC day. */
-export const DEFAULT_DAILY_CAPS = { fundedDeals: 100, ciphertextBytes: 268_435_456 } as const;
+export const DEFAULT_DAILY_CAPS = { fundedDeals: 100, ciphertextBytes: 268_435_456, judgedDeals: 1, fundedDealsAll: 200 } as const;
 
 /** The operator's read and write throttle's defaults, per 60 s (ADR-0017 §3). */
 export const DEFAULT_RATE = { reads: 1200, writes: 120 } as const;
@@ -30,6 +30,13 @@ export interface DailyCapLimits {
   fundedDeals: number;
   /** New ciphertext bytes stored per client per UTC day, at each operator. */
   ciphertextBytes: number;
+  /**
+   * T-581: funded deals that can convene Crow's judge panel (they reserve live judge calls) per client per UTC day, at each
+   * operator. They count inside `fundedDeals` too. Default 1, so no one client can reserve the day's judge budget.
+   */
+  judgedDeals: number;
+  /** T-581: deals the relayer funds per UTC day across every client and both operators, which share one relayer wallet. */
+  fundedDealsAll: number;
 }
 
 /** What a per-client limit counts: an IPv4 address, or an IPv6 address's /64, which one host usually holds whole. */
@@ -122,10 +129,15 @@ interface CapRow {
   seen: string[];
   /** New ciphertext bytes stored through this operator today, pending ones included. */
   bytes: number;
+  /** Of `funded`, the deals that can convene a judge panel (T-581). Absent in a row written before it: none. */
+  judged?: number;
 }
 
+/** What refused a take: the client's own funded-deal cap, its judged-deal cap, or the cap on every client together. */
+export type TakeRefusal = 'client' | 'judged' | 'global';
+
 /** A take: refused with when to retry, or admitted, saying whether this request took a count (and so may give it back). */
-export type Take = { ok: true; counted: boolean } | { ok: false; retryAfterSec: number };
+export type Take = { ok: true; counted: boolean } | { ok: false; retryAfterSec: number; reason?: TakeRefusal };
 
 /**
  * The daily caps, one storage row per client, operator and UTC day: `lc:<YYYY-MM-DD>:<node>:<client hash>`. The client
@@ -144,12 +156,12 @@ export class DailyCaps {
     readonly limits: DailyCapLimits,
   ) {}
 
-  private keyOf(node: number, client: string): string {
-    return `lc:${this.day}:${node}:${canonicalKeccak({ limitsClient: client, secret: this.secret }).slice(2, 34)}`;
+  private keyOf(node: number | 'all', client: string): string {
+    return node === 'all' ? `lc:${this.day}:all` : `lc:${this.day}:${node}:${canonicalKeccak({ limitsClient: client, secret: this.secret }).slice(2, 34)}`;
   }
 
   /** The row for today, read once and kept in memory; a new day drops yesterday's rows from memory and storage. */
-  private async row(node: number, client: string): Promise<{ key: string; row: CapRow }> {
+  private async row(node: number | 'all', client: string): Promise<{ key: string; row: CapRow }> {
     const today = dayOf(this.now());
     if (today !== this.day) {
       this.day = today;
@@ -166,8 +178,8 @@ export class DailyCaps {
     return { key, row: await row };
   }
 
-  private refused(): Take {
-    return { ok: false, retryAfterSec: secondsToUtcMidnight(this.now()) };
+  private refused(reason?: TakeRefusal): Take {
+    return { ok: false, retryAfterSec: secondsToUtcMidnight(this.now()), ...(reason ? { reason } : {}) };
   }
 
   /**
@@ -175,25 +187,34 @@ export class DailyCaps {
    * with `counted: true` may be given back: a copy of a counted funding that the relay refuses gives nothing back
    * (T-422 review and red team, F2).
    */
-  async takeFunding(node: number, client: string, fingerprint: string): Promise<Take> {
+  async takeFunding(node: number, client: string, fingerprint: string, judged = false): Promise<Take> {
     const { key, row } = await this.row(node, client);
     if (row.seen.includes(fingerprint)) return { ok: true, counted: false };
-    if (row.funded >= this.limits.fundedDeals) return this.refused();
+    if (row.funded >= this.limits.fundedDeals) return this.refused('client');
+    if (judged && (row.judged ?? 0) >= this.limits.judgedDeals) return this.refused('judged');
+    // The count for every client together (T-581): the relayer's wallet is one, behind both operators.
+    const all = await this.row('all', '');
+    if (all.row.funded >= this.limits.fundedDealsAll) return this.refused('global');
     row.funded++;
+    all.row.funded++;
+    if (judged) row.judged = (row.judged ?? 0) + 1;
     row.seen.push(fingerprint);
-    await this.storage.put({ [key]: row });
+    await this.storage.put({ [key]: row, [all.key]: all.row });
     return { ok: true, counted: true };
   }
 
   /** After the relay: a refused funding this request counted gives its count back, so a corrected request can use it. */
-  async settleFunding(node: number, client: string, fingerprint: string, accepted: boolean): Promise<void> {
+  async settleFunding(node: number, client: string, fingerprint: string, accepted: boolean, judged = false): Promise<void> {
     if (accepted) return;
     const { key, row } = await this.row(node, client);
     const i = row.seen.indexOf(fingerprint);
     if (i < 0) return;
+    const all = await this.row('all', '');
     row.seen.splice(i, 1);
     row.funded = Math.max(0, row.funded - 1);
-    await this.storage.put({ [key]: row });
+    all.row.funded = Math.max(0, all.row.funded - 1);
+    if (judged) row.judged = Math.max(0, (row.judged ?? 0) - 1);
+    await this.storage.put({ [key]: row, [all.key]: all.row });
   }
 
   /** Takes `bytes` of new ciphertext for this client at this operator; bytes the store already holds take nothing. */

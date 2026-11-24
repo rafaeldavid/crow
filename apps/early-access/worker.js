@@ -17,6 +17,24 @@ import { buildInfo, buildResponse, isBuildRead } from '../site/build-info.js';
 import { secured } from '../demo-cloud/src/headers.ts';
 import { LISTING_PATH, listing } from './listing.js';
 
+// T-581: the write limit. SIGNUP_LIMIT is a Cloudflare rate-limit binding (wrangler.jsonc, 5 writes per 60 s per client);
+// a write over it gets 429 before anything is stored. It fails open after 100 ms or on an error, so a Cloudflare outage
+// never stops sign-ups. A caller that rotates addresses can still add rows: the limit slows a stranger, it does not
+// stop one, and the list is private and sends no email.
+const LIMIT_TIMEOUT_MS = 100;
+const LIMIT_RETRY_SEC = 60;
+async function admitted(env, request) {
+  if (!env.SIGNUP_LIMIT) return true;
+  const client = request.headers.get('cf-connecting-ip') ?? 'unknown';
+  let timer;
+  const open = new Promise((resolve) => (timer = setTimeout(() => resolve(true), LIMIT_TIMEOUT_MS)));
+  try {
+    return await Promise.race([env.SIGNUP_LIMIT.limit({ key: client }).then((r) => r.success, () => true), open]);
+  } finally {
+    clearTimeout(timer);
+  }
+}
+
 const ALLOWED = ['https://crow.direct', 'https://www.crow.direct', 'https://escrow.stream', 'https://www.escrow.stream', 'https://npc.here.now', 'https://mighty-canvas-c3tc.here.now'];
 const CANONICAL = 'https://join.crow.direct';
 const FORWARDED = 'join.escrow.stream';
@@ -55,6 +73,12 @@ async function route(request, env) {
     return Response.redirect(`${CANONICAL}${url.pathname}${url.search}`, request.method === 'GET' || request.method === 'HEAD' ? 301 : 308);
   }
   if (isBuildRead(request, '/version.json')) return buildResponse(buildInfo({ worker: 'crow-early-access', commit: env.BUILD_COMMIT, metadata: env.CF_VERSION_METADATA }), request.method);
+  const write = request.method === 'POST' && (url.pathname === LISTING_PATH || url.pathname === '/early-access');
+  if (write && !(await admitted(env, request))) {
+    const refusal = json(429, { error: 'Too many sign-ups from this address. Please try again in a minute.' }, origin);
+    refusal.headers.set('retry-after', String(LIMIT_RETRY_SEC));
+    return refusal;
+  }
   if (url.pathname === LISTING_PATH) return listing(request, env);
   if (url.pathname !== '/early-access' || request.method !== 'POST') return json(404, { error: 'not found' }, origin);
   if (!ALLOWED.includes(origin)) return json(403, { error: 'sign up from the ’crow site' }, origin);

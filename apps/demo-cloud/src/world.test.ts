@@ -32,7 +32,7 @@ afterEach(async () => void (await Promise.all(running.splice(0).map((r) => r.clo
  * every 100 ms, or only when the test calls `world.work()` with `passes: false`.
  */
 async function serveWorld(options: Partial<PublicWorldOptions> = {}, storage = new MemoryStorage(), client?: string, { passes = true } = {}): Promise<Running> {
-  const world = await PublicWorld.open({ storage, env: {}, minWindowSec: 2, ...options });
+  const world = await PublicWorld.open({ storage, env: {}, minWindowSec: 2, judgedDealsPerClientPerDay: 100, ...options });
   const { urls, close } = await serveTwoOrigins(world, { tickMs: passes ? 100 : undefined, client, keepContentLength: true });
   const r: Running = { world, urls, close };
   running.push(r);
@@ -860,7 +860,7 @@ describe('a checks-only deal between two fresh agents, over HTTP', () => {
 describe('adjudicator passes (T-057)', () => {
   /** A new world over the same storage, as after an eviction, woken by a plain read. */
   const wake = async (storage: MemoryStorage, options: Partial<PublicWorldOptions> = {}) => {
-    const world = await PublicWorld.open({ storage, env: {}, minWindowSec: 2, ...options });
+    const world = await PublicWorld.open({ storage, env: {}, minWindowSec: 2, judgedDealsPerClientPerDay: 100, ...options });
     await world.fetch(new Request('http://127.0.0.1/v1/status'), { node: 0, origin: 'http://127.0.0.1', client: 'test' });
     return world;
   };
@@ -1066,7 +1066,7 @@ describe('telemetry (T-031)', () => {
     // `ar`: the demo adjudicators' own registrations (T-221), which hold no request data. `lc`: the daily caps (T-422),
     // keyed by the client hashed with the world's secret; the IP check below covers them. `jd`: each adjudicator's judged
     // result (A-4, T-530), the same record `jr` publishes, with its outcome and no key.
-    expect(new Set([...everything.keys()].map((k) => k.split(':')[0]))).toEqual(new Set(['meta', 'j', 'fa', 'ct', 'jr', 'jd', 'rl', 'tm', 'ar', 'lc']));
+    expect(new Set([...everything.keys()].map((k) => k.split(':')[0]))).toEqual(new Set(['meta', 'j', 'fa', 'ct', 'jr', 'jd', 'rl', 'tm', 'ar', 'lc', 'fc']));
     const stored = JSON.stringify([...everything.values()], (_k, v) => (v instanceof Uint8Array ? undefined : v)).toLowerCase();
     for (const secret of [...Object.values(canaries), 'c0ffeec0ffee', 'canary-query', 'canary-body', ip]) expect(stored).not.toContain(secret.toLowerCase());
   }, 60_000);

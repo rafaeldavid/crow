@@ -22,6 +22,19 @@ All on Rafa's Cloudflare account (its ID is the 1Password item that `config/secr
 
 **Demo settings** (vars in `apps/demo-cloud/wrangler.op1.jsonc`): the minimum window (`MIN_WINDOW_SEC`) and the operator fee (`OPERATOR_FEE_BPS`, `OPERATOR_FEE_MIN`, `OPERATOR_FEE_GAS`, optional `OPERATOR_FEE_MAX`; D33, ADR-0023). For the first pilots all three are 0, and Crow's relayer pays the gas (T-389). Read the live values in discovery (`demo.minWindowSec`, `fees.operator`). Live judges: Anthropic and DeepSeek, pinned in `config/judges-live.yaml`, capped at 30 calls a day (`LIVE_JUDGE_CALLS_PER_DAY`); past the cap, Crow's adjudicators decline new judged deals until the next UTC day, and a deal already being judged gets no stand-in verdict (pull request 741; Rafa, 2026-11-20); without keys, panels are scripted and every verdict says so.
 
+**Abuse limits and quick stops** (T-581, N222). The World object reads its limits from holdback-op1's variables, for both nodes; each is an operator's configuration with a default, never a protocol rule (D31). A refused request changes nothing about the deal: the caller can retry the next UTC day, use another operator, or submit to the rules contract itself.
+
+| Variable | Default | What it limits |
+| --- | --- | --- |
+| `LIVE_JUDGE_CALLS_PER_DAY` | 30 | Live judge calls a UTC day across the demo |
+| `JUDGED_DEALS_PER_CLIENT_PER_DAY` | 1 | Funded deals per client per node a day that can need Crow's panel; each reserves 6 judge calls |
+| `FUNDED_DEALS_PER_CLIENT_PER_DAY` | 100 | Deals the relayer funds per client per node a day |
+| `FUNDED_DEALS_PER_DAY` | 200 | Deals the relayer funds a day across every client and both nodes |
+
+A client is an IPv4 address or an IPv6 /64. The faucet's per-client count (50 grants an hour) is kept in the World's storage, so a restart no longer resets it. The sign-up Worker allows 5 writes per 60 s per client (binding `SIGNUP_LIMIT` in `apps/early-access/wrangler.jsonc`). The operators and the sign-up Worker answer on their custom hostnames only (`workers_dev: false`).
+
+To stop spending fast, set one of these to `0` on holdback-op1: `LIVE_JUDGE_CALLS_PER_DAY=0` stops live judging (Crow declines new judged deals), `FUNDED_DEALS_PER_DAY=0` stops every relayer-funded deal, and `JUDGED_DEALS_PER_CLIENT_PER_DAY=0` stops judged deals only. `FUNDED_DEALS_PER_CLIENT_PER_DAY=0` also stops relayer funding for every client. A value set in the Cloudflare dashboard takes effect at once but is lost at the next deploy, which writes the values in `apps/demo-cloud/wrangler.op1.jsonc`; put the value in that file too. A malformed value stops the World from starting.
+
 **Schema and domain:** main and the live demo share one schema version and one EIP-712 domain, the domain of the contracts in `contracts/deployments/sepolia.json`. Read the live values in `/v1/status` (`schemaVersion`, `domain`); the build's are in `packages/core/src/eip712.ts` and `spec/schemas/`.
 
 > **A build and the contracts it settles on must share one EIP-712 domain.** A contract change that moves the domain ships as a new deployment: deploy it, update `contracts/deployments/sepolia.json` (and its copy in `examples/deployments.ts`, and the pins in `site/llms.txt`), and only then deploy the Workers and the site. The Sepolia world refuses to start against a contract under another domain (`LiveChain.verify`, `domainMismatch`); the SimChain world and the site have no such check. ADR-0029 §8 has the steps. A new rules contract also means a new world (D49): the Sepolia world refuses to open against another rules address (`apps/demo-cloud/src/world.ts`).
