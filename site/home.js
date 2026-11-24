@@ -166,23 +166,16 @@
       .catch(function () { msg.textContent = 'That didn’t go through. Check your connection and try again.'; })
       .then(function () { send.disabled = false; });
   });
-  // use cases: one quiet line under the form, only the use case, one at a time (3 s each, a 0.4 s fade). The script adds it, so the page
-  // without script has none. Screen readers get the whole list once from a hidden line and never hear the changes. It
-  // holds while the tab is hidden; a
-  // visitor who asks for reduced motion gets the first item and no rotation.
+  // use cases: one quiet row under the form, only the use cases, drifting right to left behind a soft fade at both edges. The script
+  // adds it, so the page without script has none. Screen readers get the whole list once from a hidden line and never hear
+  // the moving row. The row is the list twice and a CSS animation moves it by half, so the loop has no seam. A visitor who
+  // asks for reduced motion gets the row still, starting at the first items.
   var uses = ['Book a security audit', 'Source training data', 'Run a lab experiment', 'Get a legal opinion', 'Inspect a building facade', 'Monitor a field site', 'Machine a custom part', 'Fact-check a report', 'Sell my services on commission', 'Inventory my warehouse', 'Courier a sample', 'Run a market survey', 'Design a brand kit', 'Model a financing deal'];
-  var box = document.createElement('p'), j = 0;
+  var box = document.createElement('p');
+  var items = uses.map(function (u) { return '<span class="use">' + u + '</span>'; }).join('');
   box.className = 'uses';
-  box.innerHTML = '<span class="sr">Example deals: ' + uses.join(', ') + '.</span><span class="use" aria-hidden="true">' + uses[0] + '</span>';
+  box.innerHTML = '<span class="sr">Example deals: ' + uses.join(', ') + '.</span><span class="uses-track" aria-hidden="true">' + items + items + '</span>';
   form.parentNode.insertBefore(box, form.nextSibling);
-  if (!still) {
-    var use = box.querySelector('.use');
-    setInterval(function () {
-      if (document.hidden) return;
-      use.style.opacity = 0;
-      setTimeout(function () { j = (j + 1) % uses.length; use.textContent = uses[j]; use.style.opacity = ''; }, 400);
-    }, 3400);
-  }
 })();
 (function () {
   var opens = document.querySelectorAll('[data-join]');
