@@ -64,18 +64,20 @@ const standIn = () => ({ judgeProvider: markerFake() as never });
 
 describe('judged deals per client per day (T-581 item 1)', () => {
   // Attack: one address funds judged deal after judged deal. Each reserves 6 of the 30 daily judge calls, so five hold
-  // the day for everyone. Before the change every one of the five was relayed.
-  it('relays one judged deal per client a day, so one client reserves 6 of the 30 judge calls at most', async () => {
+  // the day for everyone. Before the change every one of the five was relayed. The default is 3 (Rafa, 2026-11-24: the
+  // Sepolia demo plays three judged beats at once from one machine), so the fourth from one address is refused.
+  it('relays three judged deals per client a day by default, so one client reserves 18 judge calls at one node at most', async () => {
     const { world, urls } = await serve({ ...standIn(), liveCallsPerDay: 30 });
-    const first = await offered(urls, true);
-    const second = await offered(urls, true);
-    await fund(first);
-    await expect(fund(second)).rejects.toThrow(/rate_limited.*judge panel/);
-    expect(world.reservedJudgeCalls()).toBe(6);
+    const deals = [];
+    for (let i = 0; i < 4; i++) deals.push(await offered(urls, true));
+    const [second] = deals.slice(3);
+    for (const d of deals.slice(0, 3)) await fund(d);
+    await expect(fund(second!)).rejects.toThrow(/rate_limited.*judge panel/);
+    expect(world.reservedJudgeCalls()).toBe(18);
     // A deal with required checks only costs no judge call: the same client still funds it.
     await fund(await offered(urls, false));
     // The refusal gave nothing away: the refused deal is still unfunded and a second client can fund it.
-    expect((await second.buyer.call('GET', `/v1/commitments/${second.offer.id}`)).escrowState).toBe('AcceptedByAdjudicator');
+    expect((await second!.buyer.call('GET', `/v1/commitments/${second!.offer.id}`)).escrowState).toBe('AcceptedByAdjudicator');
   }, 90_000);
 
   it('is a configured value: 2 lets a second judged deal through, 0 refuses every judged deal', async () => {

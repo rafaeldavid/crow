@@ -99,7 +99,7 @@ export interface PublicWorldOptions {
   fundedDealsPerClientPerDay?: number;
   /** T-422: new ciphertext bytes stored per client per UTC day, at each node. Default CIPHERTEXT_BYTES_PER_CLIENT_PER_DAY from `env`, else 256 MiB. */
   ciphertextBytesPerClientPerDay?: number;
-  /** T-581: funded deals that can convene a judge panel per client per UTC day, at each node. Default JUDGED_DEALS_PER_CLIENT_PER_DAY from `env`, else 1. */
+  /** T-581: funded deals that can convene a judge panel per client per UTC day, at each node. Default JUDGED_DEALS_PER_CLIENT_PER_DAY from `env`, else 3. */
   judgedDealsPerClientPerDay?: number;
   /** T-581: deals the relayer funds per UTC day across all clients and both nodes. Default FUNDED_DEALS_PER_DAY from `env`, else 200. */
   fundedDealsPerDay?: number;

@@ -27,7 +27,7 @@ All on Rafa's Cloudflare account (its ID is the 1Password item that `config/secr
 | Variable | Default | What it limits |
 | --- | --- | --- |
 | `LIVE_JUDGE_CALLS_PER_DAY` | 30 | Live judge calls a UTC day across the demo |
-| `JUDGED_DEALS_PER_CLIENT_PER_DAY` | 1 | Funded deals per client per node a day that can need Crow's panel; each reserves 6 judge calls |
+| `JUDGED_DEALS_PER_CLIENT_PER_DAY` | 3 | Funded deals per client per node a day that can need Crow's panel; each reserves 6 judge calls |
 | `FUNDED_DEALS_PER_CLIENT_PER_DAY` | 100 | Deals the relayer funds per client per node a day |
 | `FUNDED_DEALS_PER_DAY` | 200 | Deals the relayer funds a day across every client and both nodes |
 
@@ -35,7 +35,7 @@ A client is an IPv4 address or an IPv6 /64. The faucet's per-client count (50 gr
 
 To stop spending fast, set one of these to `0` on holdback-op1: `LIVE_JUDGE_CALLS_PER_DAY=0` stops live judging (Crow declines new judged deals), `FUNDED_DEALS_PER_DAY=0` stops every relayer-funded deal, and `JUDGED_DEALS_PER_CLIENT_PER_DAY=0` stops judged deals only. `FUNDED_DEALS_PER_CLIENT_PER_DAY=0` also stops relayer funding for every client. Saving a variable in the Cloudflare dashboard makes a new version of the Worker; the World object reads its limits when it starts, so the value applies once the World restarts on that version [inferred]. The next deploy writes the values in `apps/demo-cloud/wrangler.op1.jsonc` and drops the dashboard's, so put the value in that file too. A malformed value of any of these variables stops the World from starting.
 
-What the limits do not stop [inferred]: a stranger with several addresses (IPv4 addresses or IPv6 /64s) gets 1 judged deal per address per node, so about 3 addresses can reserve the day's 30 judge calls. Funding straight on the rules contract skips the operators' caps, at the cost of the stranger's own test gas. Both need a decision on identity or payment for judged deals; until then `LIVE_JUDGE_CALLS_PER_DAY=0` is the stop.
+What the limits do not stop [inferred]: the judged-deal default is 3 so that `pnpm demo:sepolia` can play its three judged beats at once from one machine without a deploy (Rafa, 2026-11-24). The trade-off: one address can reserve up to 18 judge calls at each node, and the 30 calls a day are one budget for both nodes, so one address using both nodes can reserve all of it. The default stops one address from taking the budget through one node, nothing more. It is a configurable value: on a day with no demo, `JUDGED_DEALS_PER_CLIENT_PER_DAY=1` limits an address to 6 calls per node, so it takes about 3 addresses (IPv4 addresses or IPv6 /64s) to hold the budget. Funding straight on the rules contract skips the operators' caps, at the cost of the stranger's own test gas. Both need a decision on identity or payment for judged deals; until then `LIVE_JUDGE_CALLS_PER_DAY=0` is the stop.
 
 **Schema and domain:** main and the live demo share one schema version and one EIP-712 domain, the domain of the contracts in `contracts/deployments/sepolia.json`. Read the live values in `/v1/status` (`schemaVersion`, `domain`); the build's are in `packages/core/src/eip712.ts` and `spec/schemas/`.
 

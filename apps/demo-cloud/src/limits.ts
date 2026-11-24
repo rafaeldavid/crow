@@ -20,7 +20,7 @@ import type { WorldStorage } from './storage.js';
 export const FLOOD_CEILING = { limit: 500, periodSec: 10 } as const;
 
 /** The daily caps' defaults: deals the relayer funds, and new ciphertext bytes stored, per client and operator a UTC day. */
-export const DEFAULT_DAILY_CAPS = { fundedDeals: 100, ciphertextBytes: 268_435_456, judgedDeals: 1, fundedDealsAll: 200 } as const;
+export const DEFAULT_DAILY_CAPS = { fundedDeals: 100, ciphertextBytes: 268_435_456, judgedDeals: 3, fundedDealsAll: 200 } as const;
 
 /** The operator's read and write throttle's defaults, per 60 s (ADR-0017 §3). */
 export const DEFAULT_RATE = { reads: 1200, writes: 120 } as const;
@@ -32,7 +32,8 @@ export interface DailyCapLimits {
   ciphertextBytes: number;
   /**
    * T-581: funded deals that can convene Crow's judge panel (they reserve live judge calls) per client per UTC day, at each
-   * operator. They count inside `fundedDeals` too. Default 1, so no one client can reserve the day's judge budget.
+   * operator. They count inside `fundedDeals` too. Default 3, so `pnpm demo:sepolia` plays its three judged beats from one machine (Rafa, 2026-11-24); one client
+   * then reserves up to 18 judge calls at each operator.
    */
   judgedDeals: number;
   /** T-581: deals the relayer funds per UTC day across every client and both operators, which share one relayer wallet. */
