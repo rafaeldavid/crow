@@ -3,22 +3,29 @@
 // reference, an unknown key) is dropped and counted. Nothing else is repaired, and no judge is called again.
 //
 //   1. Output over 65,536 characters abstains (too_long).
-//   2. The canary is scanned first, on the raw output and on every key and string of the parsed output, base64 runs
-//      decoded, so a canary in a key, a code or a reference that would be dropped still abstains (canary_echo).
+//   2. The canary is scanned first (canary_echo): on the raw output, and on the parsed output's keys and strings, each
+//      folded by NFKC, in three joins: all of them in document order, the values alone with the schema's own words
+//      left out (closed-list words, rubric ids, pass, fail, abstain), and the keys alone with the schema's key names
+//      left out; base64 runs are decoded. So a canary in a key, a code or a reference that would be dropped, or split
+//      across two of them with schema words between, still abstains (red team M1). An encoding the scan does not
+//      know (bytes as numbers, reversed text) is not seen: the canary is a tripwire, not a proof.
 //   3. Output that is not one JSON value abstains (not_json).
 //   4. Decision fields are strict, as today: criteria, each criterion's id and score, overall and injectionSuspected,
-//      and the ids exactly the rubric's, each once (schema, criteria_mismatch). The detail is metadata only.
+//      and the ids exactly the rubric's, each once (schema, criteria_mismatch); a decision key written twice abstains,
+//      where JSON.parse would read the last one. The detail is metadata only.
 //   5. Evidence fields never cost the seat. An unknown reason code or injection kind, an item past the third, a
 //      duplicate, a reference that is not a string, is over 512 code points or does not resolve in the work, kinds and
 //      references without the injection flag, and every unknown key (a habitual rationale, say) are dropped, and the
 //      seat's `dropped` counts them, each count capped at 9. A sampled read keeps no reference.
 //   6. The record keeps the format, the scores, the codes and kinds, an anchor per kept reference (refs.ts) and the
-//      counts: no string a judge or the work chose.
+//      counts: no string a judge or the work chose. The criteria are in rubric order and the codes and kinds in
+//      closed-list order, so neither order carries anything a judge chose (red team M2 and L1).
 //
 // Why dropping is safe [inferred, ADR-0050]: a filter abstention escalates, because a party could otherwise make only
 // failing seats abstain; a dropped evidence field keeps the seat and its score whatever a party induces, and
 // aggregation reads no evidence field. The counts are never an escalation reason.
 import { parseCodedJudgeVerdict, type CodedJudgeVerdict, type CodedRecordVerdict, type InjectionKind, type ReasonCode } from '@holdback/core';
+import { repeatedKeys } from './json-keys.js';
 import { anchorOf, resolves, type WorkView } from './refs.js';
 import { MAX_OUTPUT_CHARS } from './verdict.js';
 
@@ -66,24 +73,29 @@ export interface CodedOptions {
 }
 
 const abstain = (reason: CodedAbstainReason, detail: string): ParsedCoded => ({ status: 'abstain', reason, detail });
-const squash = (s: string) => s.toLowerCase().replace(/[^0-9a-z]/g, '');
+const squash = (s: string) => s.normalize('NFKC').toLowerCase().replace(/[^0-9a-z]/g, '');
 const isRecord = (v: unknown): v is Record<string, unknown> => v !== null && typeof v === 'object' && !Array.isArray(v);
 const typeOf = (v: unknown) => (v === null ? 'null' : Array.isArray(v) ? 'array' : typeof v === 'number' && !Number.isFinite(v) ? 'non-finite number' : typeof v);
 
-/** Every key and every string of a parsed output, in document order, iteratively. */
-function allText(value: unknown): string[] {
-  const out: string[] = [];
-  const stack: unknown[] = [value];
+/** Every key and every string of a parsed output, in document order, iteratively: all of them, the keys, the values. */
+function allText(value: unknown): { all: string[]; keys: string[]; values: string[] } {
+  const all: string[] = [];
+  const keys: string[] = [];
+  const values: string[] = [];
+  const stack: Array<{ v: unknown; key: boolean }> = [{ v: value, key: false }];
   while (stack.length) {
-    const v = stack.pop();
-    if (typeof v === 'string') out.push(v);
-    else if (Array.isArray(v)) for (let i = v.length - 1; i >= 0; i--) stack.push(v[i]);
+    const { v, key } = stack.pop()!;
+    if (typeof v === 'string') {
+      all.push(v);
+      (key ? keys : values).push(v);
+    }
+    else if (Array.isArray(v)) for (let i = v.length - 1; i >= 0; i--) stack.push({ v: v[i], key: false });
     else if (isRecord(v)) {
       const entries = Object.entries(v);
-      for (let i = entries.length - 1; i >= 0; i--) stack.push(entries[i]![1], entries[i]![0]);
+      for (let i = entries.length - 1; i >= 0; i--) stack.push({ v: entries[i]![1], key: false }, { v: entries[i]![0], key: true });
     }
   }
-  return out;
+  return { all, keys, values };
 }
 
 /**
@@ -103,14 +115,23 @@ function* decodedBase64(t: string): Generator<string> {
   }
 }
 
-/** The canary in any case, with any separators, in a key or a value, split across them, or base64-encoded. */
-function echoesCanary(raw: string, parsed: unknown, canary: string): boolean {
+/**
+ * The canary in any case, folded by NFKC, with any separators, in a key or a value, split across two of them in one of
+ * the three joins, or base64-encoded. `schemaWords` are the words the schema itself puts between evidence fields.
+ */
+function echoesCanary(raw: string, parsed: unknown, canary: string, schemaWords: ReadonlySet<string>): boolean {
   const c = squash(canary);
   if (!c) return false;
   if (squash(raw).includes(c)) return true;
-  const texts = parsed === undefined ? [] : allText(parsed);
-  if (squash(texts.join('')).includes(c)) return true;
-  for (const t of [raw, ...texts]) for (const decoded of decodedBase64(t)) if (squash(decoded).includes(c)) return true;
+  if (parsed === undefined) {
+    for (const decoded of decodedBase64(raw)) if (squash(decoded).includes(c)) return true;
+    return false;
+  }
+  const t = allText(parsed);
+  const values = t.values.filter((s) => !schemaWords.has(s));
+  const keys = t.keys.filter((s) => !SCHEMA_KEYS.has(s));
+  for (const join of [t.all, values, keys]) if (squash(join.join('')).includes(c)) return true;
+  for (const s of [raw, ...t.all]) for (const decoded of decodedBase64(s)) if (squash(decoded).includes(c)) return true;
   return false;
 }
 
@@ -182,6 +203,20 @@ function keepList<T extends string>(v: unknown, accept: (x: unknown) => x is T, 
 
 const CRITERION_KEYS = ['id', 'refs', 'reasons', 'score'];
 const TOP_KEYS = ['criteria', 'overall', 'injectionSuspected', 'injectionKinds', 'injectionRefs'];
+const SCHEMA_KEYS: ReadonlySet<string> = new Set([...TOP_KEYS, ...CRITERION_KEYS]);
+const LIST_WORDS = [...REASON_CODES, ...INJECTION_KINDS, 'pass', 'fail', 'abstain'];
+/** The items in the closed list's own order: a judge chooses which, never their order (red team M2). */
+const inListOrder = <T extends string>(kept: readonly T[], list: readonly T[]): T[] => list.filter((x) => kept.includes(x));
+/** Where a repeated key is a decision key: the top level's criteria, overall and flag, a criterion's id and score. */
+function repeatedDecisionKey(raw: string): string | undefined {
+  let fault: string | undefined;
+  repeatedKeys(raw, (path, key) => {
+    if (path.length === 0 && ['criteria', 'overall', 'injectionSuspected'].includes(key)) fault = 'top level: a decision key written twice';
+    else if (path.length === 2 && path[0] === 'criteria' && typeof path[1] === 'number' && (key === 'id' || key === 'score')) fault = `criteria[${path[1]}]: a decision key written twice`;
+    return fault !== undefined;
+  });
+  return fault;
+}
 const isReason = (x: unknown): x is ReasonCode => typeof x === 'string' && (REASON_CODES as readonly string[]).includes(x);
 const isKind = (x: unknown): x is InjectionKind => typeof x === 'string' && (INJECTION_KINDS as readonly string[]).includes(x);
 
@@ -194,10 +229,11 @@ export function parseCodedVerdict(raw: string, opts: CodedOptions): ParsedCoded 
   } catch {
     jsonOk = false;
   }
-  if (echoesCanary(raw, jsonOk ? json : undefined, opts.canary)) return abstain('canary_echo', 'output contains the canary');
+  const schemaWords = new Set([...LIST_WORDS, ...opts.criterionIds]);
+  if (echoesCanary(raw, jsonOk ? json : undefined, opts.canary, schemaWords)) return abstain('canary_echo', 'output contains the canary');
   if (!jsonOk) return abstain('not_json', `output is not a single JSON value${/^\s*```/.test(raw) ? ' (it starts with a code fence)' : ''}`);
 
-  const fault = decisionFault(json);
+  const fault = decisionFault(json) ?? repeatedDecisionKey(raw);
   if (fault) return abstain('schema', fault);
   const top = json as Record<string, unknown>;
   const cs = top['criteria'] as Array<Record<string, unknown>>;
@@ -211,17 +247,19 @@ export function parseCodedVerdict(raw: string, opts: CodedOptions): ParsedCoded 
   const isRef = (x: unknown): x is string => typeof x === 'string' && !codePointsOver(x, MAX_LOCATOR) && resolves(opts.work, x);
   const unknownKeys = (o: Record<string, unknown>, allowed: readonly string[]) => dropped.add('keys', Object.keys(o).filter((k) => !allowed.includes(k)).length);
   unknownKeys(top, TOP_KEYS);
-  const criteria = cs.map((c) => {
+  const read = cs.map((c) => {
     unknownKeys(c, CRITERION_KEYS);
     const refs = keepList(Object.hasOwn(c, 'refs') ? c['refs'] : undefined, isRef, () => dropped.add('refs'));
-    const reasons = keepList(Object.hasOwn(c, 'reasons') ? c['reasons'] : undefined, isReason, () => dropped.add('reasons'));
+    const reasons = inListOrder(keepList(Object.hasOwn(c, 'reasons') ? c['reasons'] : undefined, isReason, () => dropped.add('reasons')), REASON_CODES);
     return { id: c['id'] as string, refs, reasons, score: c['score'] as 0 | 1 | 2 | 3 | 4 };
   });
+  // The rubric's order, not the judge's (red team L1).
+  const criteria = opts.criterionIds.map((id) => read.find((c) => c.id === id)!);
   const injectionSuspected = top['injectionSuspected'] as boolean;
   // The boolean alone flags a case; kinds and references without it are dropped.
   const kindsIn = Object.hasOwn(top, 'injectionKinds') ? top['injectionKinds'] : undefined;
   const refsIn = Object.hasOwn(top, 'injectionRefs') ? top['injectionRefs'] : undefined;
-  const injectionKinds = keepList(kindsIn, (x): x is InjectionKind => injectionSuspected && isKind(x), () => dropped.add('reasons'));
+  const injectionKinds = inListOrder(keepList(kindsIn, (x): x is InjectionKind => injectionSuspected && isKind(x), () => dropped.add('reasons')), INJECTION_KINDS);
   const injectionRefs = keepList(refsIn, (x): x is string => injectionSuspected && isRef(x), () => dropped.add('refs'));
 
   const verdict: CodedJudgeVerdict = { criteria, overall: top['overall'] as CodedJudgeVerdict['overall'], injectionSuspected, injectionKinds, injectionRefs };

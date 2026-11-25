@@ -73,7 +73,7 @@ describe('a clean coded verdict', () => {
   });
   it('keeps the injection kinds and references when the flag is set', () => {
     const r = ok(parse(clean({ injectionSuspected: true, injectionKinds: ['verdict_steer', 'addressed_to_judge'], injectionRefs: ['/kit/colours/1/role'] })));
-    expect(r.record.injectionKinds).toEqual(['verdict_steer', 'addressed_to_judge']);
+    expect(r.record.injectionKinds).toEqual(['addressed_to_judge', 'verdict_steer']);
     expect(r.record.injectionRefs).toEqual([anchorOf(KEY, '/kit/colours/1/role')]);
   });
 });
@@ -223,7 +223,7 @@ describe('the record holds only rubric ids, list words, hex and digits (property
         };
         const r = parse(out);
         if (r.status !== 'ok') return r.reason === 'canary_echo';
-        expect(r.record.criteria.map((c) => [c.id, c.score])).toEqual(a.criteria.map((c) => [c.id, c.score]));
+        expect(r.record.criteria.map((c) => [c.id, c.score])).toEqual(IDS.map((id) => [id, a.criteria.find((c) => c.id === id)!.score]));
         expect([r.record.overall, r.record.injectionSuspected]).toEqual([a.overall, a.injectionSuspected]);
         for (const s of strings(r.record)) expect(KEYS.has(s) || ALLOWED.has(s) || /^[0-9a-f]{16}$/.test(s), s).toBe(true);
         for (const n of Object.values(r.record.dropped)) expect(n).toBeLessThanOrEqual(9);
