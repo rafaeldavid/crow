@@ -10,7 +10,7 @@ import { parseCodedVerdict, REASON_CODES, type CodedOptions, type ParsedCoded } 
 import { intake } from './intake.js';
 import { implementationsFor, NEWEST_VERSIONS, type PolicyVersions } from './kept.js';
 import { runPipeline, type JudgeProvider, type JudgeRequest, type PanelSeat } from './pipeline.js';
-import { APPEAL_PROMPT_TEMPLATE_3_HASH, buildPrompt, LINE_BREAK, TEMPLATE_PAIR, TEMPLATE_PAIR_2, TEMPLATE_PAIR_3 } from './prompt.js';
+import { APPEAL_PROMPT_TEMPLATE_3_HASH, APPEAL_PROMPT_TEMPLATE_HASH, buildPrompt, LINE_BREAK, TEMPLATE_PAIR, TEMPLATE_PAIR_2, TEMPLATE_PAIR_3 } from './prompt.js';
 import { anchorIndex, anchorKey, anchorOf, judgedText, resolves, workView, type WorkView } from './refs.js';
 import type { JudgmentRubric } from './terms.js';
 import { UntrustedData } from './untrusted.js';
@@ -235,7 +235,7 @@ describe('crashes and hangs: the filter never throws and stays fast on 65,536 ch
 
 describe('ADR-0036: kept versions and the one-format refusal', () => {
   it('pair 3’s first template with pair 1’s appeal template, or the reverse, is not carried', () => {
-    expect(implementationsFor({ ...NEWEST_VERSIONS, promptTemplateHash: TEMPLATE_PAIR_3.firstHash, appealPromptTemplateHash: TEMPLATE_PAIR.appealHash, aggregationVersion: 'agg-6' }).ok).toBe(false);
+    expect(implementationsFor({ ...NEWEST_VERSIONS, promptTemplateHash: TEMPLATE_PAIR_3.firstHash, appealPromptTemplateHash: APPEAL_PROMPT_TEMPLATE_HASH, aggregationVersion: 'agg-6' }).ok).toBe(false);
     expect(implementationsFor({ ...NEWEST_VERSIONS, promptTemplateHash: TEMPLATE_PAIR.firstHash, appealPromptTemplateHash: APPEAL_PROMPT_TEMPLATE_3_HASH, aggregationVersion: 'agg-6' }).ok).toBe(false);
     expect(implementationsFor({ ...NEWEST_VERSIONS, promptTemplateHash: TEMPLATE_PAIR_3.firstHash, appealPromptTemplateHash: APPEAL_PROMPT_TEMPLATE_3_HASH, aggregationVersion: 'agg-6 ' }).ok).toBe(false);
   });
