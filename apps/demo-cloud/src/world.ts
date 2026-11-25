@@ -318,9 +318,21 @@ const lc = (s: string) => s.toLowerCase();
 const hex = (b: Uint8Array) => [...b].map((x) => x.toString(16).padStart(2, '0')).join('');
 const jkey = (i: number) => `j:${String(i).padStart(12, '0')}`;
 const SEPOLIA_EXPLORER = 'https://sepolia.etherscan.io';
-/** A deal lane below 0.01 test ETH gets 0.03 from the funding lane: about 19 test deals on Sepolia at a 1 gwei tip (1.56 million gas a deal, measured). */
-const LANE_FLOOR = 10_000_000_000_000_000n;
-const LANE_TOP_UP = 30_000_000_000_000_000n;
+/**
+ * A deal lane holds at least what its next send costs, and after the once-a-minute pass at least 0.03 test ETH; the
+ * funding lane adds 0.1 below that, and `chain.keepLanes` makes a lane short for the send in hand (below) be filled
+ * before it signs. Sized for the largest transaction the relayer sends, a standing seller's contract deployment
+ * (ADR-0040 section 4): 18,007,470 gas used with a gas limit of 19,210,420 on Sepolia, at 0.13 gwei (about 0.00234 test
+ * ETH), tx 0x72c2f53cec090e08dd904a8e2fa2bf3a082db2f784f5aeef1820d615e6f8719e, block 12208509, 2026-11-25 [measured, a
+ * receipt]; `cast estimate` gave 18,295,444. A send reserves its gas limit at the fee cap, so the sizing uses the limit,
+ * 19.2 million gas, at a 1 gwei tip plus twice the base fee (15 wei then): 0.0192 test ETH, and 0.0384 at the tip's
+ * 2 gwei clamp. The floor covers one deployment at 1 gwei and a half again (0.029 rounded up to 0.03). The top-up of
+ * 0.1 pays about five deployments at 1 gwei, or about 64 ordinary deals of 1.56 million gas [measured]; the funding
+ * lane's 2.6 test ETH on 2026-11-25 fills the three lanes 8 times over. Until 2026-11-25 these were 0.01 and 0.03,
+ * sized for an ordinary deal alone, and a lane at 0.011 refused the first take's deployment.
+ */
+const LANE_FLOOR = 30_000_000_000_000_000n;
+const LANE_TOP_UP = 100_000_000_000_000_000n;
 /**
  * New addresses the faucet grants one client (IP address) per window, an hour by default: 50, so one agent can run a
  * series of test deals without waiting out the hour (one grant a deal as the try command's buyer, two when it plays
@@ -840,6 +852,8 @@ export class PublicWorld {
       // the stored cursor; it comes within a pass's wait when a deal is open (`nextPass`). The lanes' rows
       // are read here (one list), and the first pass lands them (T-219).
       await o.live.chain.attach(new StorageLanes(storage));
+      // From the first request: each deal lane's send checks its own cost, so a deployment never waits for the minute's pass.
+      o.live.chain.keepLanes(LANE_FLOOR, LANE_TOP_UP);
       const evm = await EvmSettlement.restore(o.live.chain, genesis, { books, events: events.all(), mandates: mandates.all() }, now);
       chain = evm;
       const cursor = (await storage.get<Cursor>('cursor')) ?? null;
