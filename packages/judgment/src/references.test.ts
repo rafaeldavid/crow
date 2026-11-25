@@ -3,6 +3,7 @@ import { sha256 } from '@holdback/core/crypto';
 import { describe, expect, it } from 'vitest';
 import { runChecks } from './checks/index.js';
 import { MAX_CIPHERTEXT_BYTES as STORE_MAX } from '@holdback/core/crypto';
+import { JUDGED_MAX_PLAINTEXT_BYTES } from './intake.js';
 import { loadReferences, REFERENCE_MAX_BYTES as MAX_CIPHERTEXT_BYTES, referenceLookups } from './references.js';
 import { UntrustedData } from './untrusted.js';
 import type { JudgmentCheck } from './terms.js';
@@ -49,7 +50,7 @@ describe('loadReferences: the size cap and the first unavailable reference', () 
     expect(unavailable.map((u) => u.reason)).toEqual(['not_returned']);
   });
 
-  it('reports a reference above the store ceiling as too large, without hashing it', async () => {
+  it('reports a reference above the judged-intake limit as too large, without hashing it', async () => {
     const big = new Uint8Array(MAX_CIPHERTEXT_BYTES + 1);
     const hash = sha256(big);
     const { references, unavailable } = await loadReferences([ref('a', `mem://ciphertext/${hash}`, hash)], async () => big);
@@ -57,12 +58,13 @@ describe('loadReferences: the size cap and the first unavailable reference', () 
     expect(unavailable).toEqual([{ sha256: hash, uri: `mem://ciphertext/${hash}`, reason: 'too_large' }]);
   });
 
-  it('the cap is the store ceiling, 10,485,760 bytes, the limit POST /v1/ciphertext enforces', () => {
-    expect(MAX_CIPHERTEXT_BYTES).toBe(STORE_MAX);
-    expect(MAX_CIPHERTEXT_BYTES).toBe(10_485_760);
+  it('the cap is the judged-intake limit, 1,048,576 bytes (D108), below the 10,485,760-byte store ceiling', () => {
+    expect(MAX_CIPHERTEXT_BYTES).toBe(JUDGED_MAX_PLAINTEXT_BYTES);
+    expect(MAX_CIPHERTEXT_BYTES).toBe(1_048_576);
+    expect(STORE_MAX).toBe(10_485_760);
   });
 
-  it('takes a reference of exactly the store ceiling: it refuses nothing a store would have taken', async () => {
+  it('takes a reference of exactly the judged-intake limit', async () => {
     const atCap = new Uint8Array(MAX_CIPHERTEXT_BYTES);
     const hash = sha256(atCap);
     const { references, unavailable } = await loadReferences([ref('a', `mem://ciphertext/${hash}`, hash)], async () => atCap);
@@ -76,7 +78,7 @@ describe('the check fails closed on a reference above the cap, so the preflight 
     const big = new Uint8Array(MAX_CIPHERTEXT_BYTES + 1).fill(0x61);
     const hash = sha256(big);
     const { outcomes } = runChecks([ref('a', `mem://ciphertext/${hash}`, hash)], { data: UntrustedData.wrap('id,v\n1,a\n'), mime: 'text/csv', references: new Map([[hash, big]]) });
-    expect(outcomes[0]).toEqual({ checkId: 'a', required: true, passed: false, detail: `reference is ${MAX_CIPHERTEXT_BYTES + 1} bytes; the cap is ${MAX_CIPHERTEXT_BYTES}` });
+    expect(outcomes[0]).toEqual({ checkId: 'a', required: true, passed: false, detail: `reference is ${MAX_CIPHERTEXT_BYTES + 1} bytes; judgment reads at most ${MAX_CIPHERTEXT_BYTES} (the judged-intake limit)` });
   });
 });
 

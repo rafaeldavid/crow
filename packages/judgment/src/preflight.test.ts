@@ -6,7 +6,7 @@ import type { MimeType } from '@holdback/core';
 import fc from 'fast-check';
 import { describe, expect, it } from 'vitest';
 import { ADJUDICATOR, delivery, fakeUnwrap, GOOD_CSV, NONCES, POLICY, RUBRIC, seal, sha256, utf8 } from './_helpers.js';
-import { intake, MAX_PLAINTEXT_BYTES, type IntakeError } from './intake.js';
+import { intake, JUDGED_MAX_PLAINTEXT_BYTES, type IntakeError } from './intake.js';
 import { runPipeline, type JudgeProvider, type PanelSeat } from './pipeline.js';
 import { preflightDelivery, type Preflight } from './preflight.js';
 import type { JudgmentAcceptance, JudgmentCheck } from './terms.js';
@@ -198,7 +198,8 @@ describe('preflightDelivery: any bytes', () => {
   });
 
   it('escalates, as the adjudicator does, when a check runs out of its work budget', async () => {
-    const rows = Array.from({ length: 300 }, () => 'a'.repeat(9000)).join('\n');
+    // 100 cells of 9,000 characters: 900 kB, inside the judged-intake limit (D108).
+    const rows = Array.from({ length: 100 }, () => 'a'.repeat(9000)).join('\n');
     const slow: JudgmentCheck = { id: 'slow', type: 'regex_match_rate_min', required: true, column: 'v', pattern: '[a-z]{0,1000}[a-z]{0,1000}Z', minBps: 0 };
     const p = await agree(csv(`v\n${rows}`, { deterministicChecks: [slow], rubric: RUBRIC }));
     expect(p.result).toBe('escalate');
@@ -218,10 +219,10 @@ describe('preflightDelivery: what intake refuses', () => {
     expect(p.refused).toEqual({ code: 'mime_mismatch', detail: 'delivered text/plain; the commitment agreed application/json' });
   });
 
-  it('refuses a file over the 10 MB cap', async () => {
-    const p = await agree({ ...csv(''), plaintext: new Uint8Array(MAX_PLAINTEXT_BYTES + 1).fill(0x61) });
-    expect(p.refused?.code).toBe('payload_too_large');
-    expect(p.bytes).toBe(MAX_PLAINTEXT_BYTES + 1);
+  it('refuses a file over the judged-intake limit (D108), as the adjudicator does', async () => {
+    const p = await agree({ ...csv(''), plaintext: new Uint8Array(JUDGED_MAX_PLAINTEXT_BYTES + 1).fill(0x61) });
+    expect(p.refused).toEqual({ code: 'payload_too_large', detail: `plaintext is ${JUDGED_MAX_PLAINTEXT_BYTES + 1} bytes; judgment reads at most ${JUDGED_MAX_PLAINTEXT_BYTES} (the judged-intake limit)` });
+    expect(p.bytes).toBe(JUDGED_MAX_PLAINTEXT_BYTES + 1);
   });
 
   it('refuses bytes that are not UTF-8', async () => {
@@ -229,8 +230,8 @@ describe('preflightDelivery: what intake refuses', () => {
     expect(p.refused).toEqual({ code: 'not_utf8', detail: 'plaintext is not valid UTF-8' });
   });
 
-  it('accepts a file of exactly 10 MB at intake', async () => {
-    const p = await agree({ ...csv('', { deterministicChecks: [], rubric: NO_RUBRIC }), plaintext: new Uint8Array(MAX_PLAINTEXT_BYTES).fill(0x61) });
+  it('accepts a file of exactly the judged-intake limit', async () => {
+    const p = await agree({ ...csv('', { deterministicChecks: [], rubric: NO_RUBRIC }), plaintext: new Uint8Array(JUDGED_MAX_PLAINTEXT_BYTES).fill(0x61) });
     expect(p.refused).toBeUndefined();
     expect(p.result).toBe('accept');
   });

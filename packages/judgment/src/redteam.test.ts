@@ -178,10 +178,11 @@ describe('I. judges see what the checks see', () => {
   });
   it('I2 an unseeded sample still shows judges rows past the first 100,000 characters', async () => {
     const good = Array.from({ length: 2500 }, (_, k) => `${k},Person ${k},p${k}@example.com,2024-01-02,true`);
-    const bad = Array.from({ length: 50000 }, (_, k) => `${100000 + k},asdf qwer,zzz@zzz.zzz,2024-01-02,true`);
+    // 20,000 bad rows keep the file under the judged-intake limit (D108) and far past the first 100,000 characters.
+    const bad = Array.from({ length: 20000 }, (_, k) => `${100000 + k},asdf qwer,zzz@zzz.zzz,2024-01-02,true`);
     const csv = ['customer_id,name,email,signup_date,email_valid', ...good, ...bad].join('\n');
     const prov = allPass();
-    await run({ text: csv, provider: prov, acceptance: { deterministicChecks: [{ id: 'rows', type: 'row_count_range', required: true, min: 50000, max: 60000 }], rubric: RUBRIC } });
+    await run({ text: csv, provider: prov, acceptance: { deterministicChecks: [{ id: 'rows', type: 'row_count_range', required: true, min: 20000, max: 30000 }], rubric: RUBRIC } });
     expect(prov.calls[0]!.user).toContain('asdf qwer');
   });
 });

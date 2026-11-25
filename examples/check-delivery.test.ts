@@ -174,7 +174,8 @@ describe('examples/check-delivery.ts: refusals, limits and other inputs', () => 
   });
 
   it('exits 2 when a check runs out of its work budget, as the adjudicator escalates', async () => {
-    const rows = Array.from({ length: 300 }, () => 'a'.repeat(9000)).join('\n');
+    // 100 cells of 9,000 characters: 900 kB, inside the judged-intake limit (D108).
+    const rows = Array.from({ length: 100 }, () => 'a'.repeat(9000)).join('\n');
     const terms = csvTerms([{ id: 'slow', type: 'regex_match_rate_min', required: true, column: 'v', pattern: '[a-z]{0,1000}[a-z]{0,1000}Z', minBps: 0 }]);
     const r = await cli([terms, tmp('slow.csv', `v\n${rows}`)]);
     expect(r.code).toBe(2);

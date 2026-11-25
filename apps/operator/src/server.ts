@@ -52,6 +52,7 @@ import { privateKeyToAccount } from 'viem/accounts';
 import type { Sha256, Signature, Timestamp, TokenAmount } from '@holdback/core';
 import { CryptoError, sha256 } from '@holdback/core/crypto';
 import { MAX_CIPHERTEXT_BYTES, StoreError, type CiphertextStore } from '@holdback/core/store';
+import { JUDGED_MAX_PLAINTEXT_BYTES } from '@holdback/judgment';
 import { ENVELOPE_SPEC } from './envelope-spec.js';
 import { FeedbackDesk, FeedbackError, MAX_REPORT_BYTES, parseReport, type FeedbackOptions } from './feedback.js';
 import { startupGuards } from './guards.js';
@@ -1571,6 +1572,8 @@ export class Operator {
       ...(r ? { reads: { limit: r.reads, windowSec, per: 'client' }, writes: { limit: r.writes, windowSec, per: 'signer' } } : {}),
       // T-315: the largest ciphertext POST /v1/ciphertext stores; absent on a node with no store.
       ...(this.o.store ? { maxCiphertextBytes: this.maxCiphertextBytes } : {}),
+      // D108 (T-624): the largest plaintext this build's adjudicators judge; a larger delivery is rejected at intake.
+      maxJudgedPlaintextBytes: JUDGED_MAX_PLAINTEXT_BYTES,
       // Refusals are not stored (a corrected call reuses its key); successes are kept until this node restarts.
       idempotency: { replays: 'success-only', retention: 'process' },
     };
