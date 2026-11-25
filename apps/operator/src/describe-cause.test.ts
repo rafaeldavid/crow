@@ -54,6 +54,16 @@ describe('describeCause (T-609)', () => {
     expect(performance.now() - started).toBeLessThan(500);
   });
 
+  it('cuts the path of every frame shape to its last two parts, spaces in a folder name included', () => {
+    const where = (frame: string) => describeCause(Object.assign(new Error('x'), { stack: `Error: x\n    ${frame}` })).replace('Error: x ', '');
+    expect(where('at pay (file:///Users/someone/code/apps/operator/src/pay.ts:3:4)')).toBe('at pay (src/pay.ts:3:4)');
+    expect(where('at async relay (/Users/someone/My Projects/src/relay.ts:3:4)')).toBe('at async relay (src/relay.ts:3:4)');
+    expect(where('at /Users/someone/My Projects/src/top.ts:3:4')).toBe('at src/top.ts:3:4');
+    expect(where('at async file:///Users/someone/src/top.ts:3:4')).toBe('at async src/top.ts:3:4');
+    expect(where('at new World (worker.js:3:4)')).toBe('at new World (worker.js:3:4)');
+    expect(where('at eval (eval at f (/Users/someone/src/a.js:1:2), <anonymous>:3:4)')).not.toContain('someone');
+  });
+
   it('bounds the line, and takes a thrown value that is no error', () => {
     expect(describeCause(new Error('x '.repeat(5_000))).length).toBeLessThanOrEqual(801);
     expect(describeCause('boom')).toBe('boom');

@@ -3,7 +3,7 @@
 - **Lane:** settlement
 - **Phase:** 2
 - **Depends on:** T-232 (pinned reads), T-549 (contract signers)
-- **Paths this task may touch:** `packages/settlement/src/interface.ts`, `packages/settlement/evm/`, `apps/operator/src/`, `apps/demo-cloud/src/`, `docs/api.md`, `docs/operations.md`, this file
+- **Paths this task may touch:** `packages/settlement/src/interface.ts`, `packages/settlement/evm/`, `apps/operator/src/`, `apps/demo-cloud/src/`, `docs/api.md`, `docs/operations.md`, `.github/workflows/ci.yml` (the anvil job's file list), this file
 - **Human gate:** yes: merge and deploy wait for Rafa (the coordinator's brief, 2026-11-25)
 - **Status:** review
 - **Agent/session:** Claude Code side session, 2026-11-25
@@ -61,6 +61,15 @@ Times are UTC on 2026-11-25. The live evidence is public: the operators' `GET /v
 - [measured] On the branch with `main` merged (`7384d28a`): `pnpm typecheck`, `eslint .` and `pnpm validate:spec` pass.
 - [measured] `vitest run packages/settlement apps/operator apps/demo-cloud apps/adjudicator`, with anvil: 1342 tests passed and 3 were skipped; 102 test files passed and 2 were skipped. No snapshot changed.
 - [measured] Two earlier runs failed in `deploy-script.test.ts` only, for reasons outside the change. First, 27 cases: Finder wrote `.DS_Store` files into this checkout's submodules, and the script refuses uncommitted changes under `contracts/lib`. The passing runs told git to ignore `.DS_Store` through `GIT_CONFIG_*` variables, which changes no config. Second, 3 cases: the Mac slept from 12:17 to 12:48 local time during the run, and two of them timed out across it; the third's cause is inferred to be the same.
+
+### CI on pull request 811
+
+The first run, at `c3188f4`, failed three checks from two causes. Both are deterministic.
+
+- [measured] `test (3/4)`, and `check` which only sums the jobs up: `tests/ci-gated.test.ts` found `write-faults.anvil.test.ts` gated on Foundry and named by no CI job. The local checks had left `tests/` out. Fix: the anvil job's `world` leg names the file.
+- [measured] CodeQL, `js/polynomial-redos` (high) at `describe-cause.ts`: the regular expression that cut a stack frame's path was not anchored, so it was tried from every character of the line. The review's fix had removed its exponential case only. [inferred] The 600-character bound on the line made it harmless in practice. Fix: the path is cut by splitting, with no regular expression over it.
+- Found while naming the file in CI, before it ran there: the third anvil case injected 10 faults and assumed five tries a read, but a pinned read stops after 1 s here. [measured] With each faulted answer 250 ms late it answered 500; at 150 ms it passed. Now every balance read fails until the operator calls `submit`. [measured] All the file's cases pass at 250 ms, and the third fails without the `.catch` it covers.
+- [measured] After the fixes: `vitest run tests apps/operator` and the anvil file give 1727 passed, 2 skipped.
 
 ## Decisions
 

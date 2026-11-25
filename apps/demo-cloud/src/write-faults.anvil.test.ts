@@ -6,7 +6,7 @@
 import { createServer, type Server } from 'node:http';
 import type { AddressInfo } from 'node:net';
 import { canonicalKeccak } from '@holdback/core';
-import { LiveChain, type DeploymentFile } from '@holdback/settlement/live';
+import { LiveChain, type DeploymentFile, type EvmSettlement } from '@holdback/settlement/live';
 import { EvmWorld } from '@holdback/settlement/evm';
 import type { Hex } from 'viem';
 import { afterAll, beforeAll, describe, expect, it, vi } from 'vitest';
@@ -70,6 +70,7 @@ describe.skipIf(!ready)(`operator writes over an RPC that fails a read (anvil; T
   let rpc: Awaited<ReturnType<typeof faultyRpc>>;
   let demo: Awaited<ReturnType<typeof serve>>;
   let chain: LiveChain;
+  let evm: EvmSettlement;
   let discovery: J;
   const errors: string[] = [];
 
@@ -85,6 +86,7 @@ describe.skipIf(!ready)(`operator writes over an RPC that fails a read (anvil; T
     demo = await serve(world);
     for (const end = Date.now() + 90_000; !world.ready() && Date.now() < end; ) await sleep(250);
     expect(world.ready()).toBe(true);
+    evm = world.chain as EvmSettlement;
     discovery = (await (await fetch(`${demo.urls[0]}/.well-known/holdback.json`)).json()) as J;
   }, 180_000);
   afterAll(async () => {
@@ -157,20 +159,32 @@ describe.skipIf(!ready)(`operator writes over an RPC that fails a read (anvil; T
     expect(res.body.escrowState).toBe('Held');
   }, 90_000);
 
-  it('funds when the balances read for the advisory notices fails every retry', async () => {
+  it('funds when every balance read before the relay fails, the advisory notices\' among them', async () => {
     const deal = await signedAgreement();
     // Past the balance cache (BALANCE_TTL_MS, 4 s), so the reads before the relay go to the node, as on a signed
     // agreement that arrives later than its prepare.
     await sleep(4_200);
-    // Two reads of the deal's state before the relay, five tries each (the pinned read's bound, T-232), on the buyer's
-    // balance: the request limit's, which already goes on without it, then the advisory notices'.
-    const fault = rpc.arm(balanceOf(deployment.token.address, deal.buyer.address), 10);
-    errors.length = 0;
-    const res = await post(deal.agreement.path, deal.agreement.body, crypto.randomUUID());
-    rpc.clear();
-    expect(res.status, `${JSON.stringify(res.body)} ${errors.join(' ')}`).toBe(200);
-    expect(res.body.escrowState).toBe('Held');
-    expect(fault.hits).toBe(10);
+    // Every read of the buyer's balance fails until the operator hands the write to the settlement layer, and none
+    // after: the request limit's read of the deal's state, which already goes on without it, and the advisory notices'.
+    // No count of tries, which would depend on how fast the node answers.
+    let relaying = false;
+    const submit = evm.submit.bind(evm);
+    const spy = vi.spyOn(evm, 'submit').mockImplementation((...args) => {
+      relaying = true;
+      return submit(...args);
+    });
+    try {
+      const buyers = balanceOf(deployment.token.address, deal.buyer.address);
+      const fault = rpc.arm((r) => !relaying && buyers(r), Number.POSITIVE_INFINITY);
+      errors.length = 0;
+      const res = await post(deal.agreement.path, deal.agreement.body, crypto.randomUUID());
+      expect(res.status, `${JSON.stringify(res.body)} ${errors.join(' ')}`).toBe(200);
+      expect(res.body.escrowState).toBe('Held');
+      expect(fault.hits).toBeGreaterThanOrEqual(2);
+    } finally {
+      rpc.clear();
+      spy.mockRestore();
+    }
   }, 90_000);
 
   it('answers the mined result when a receipt poll fails after the broadcast', async () => {

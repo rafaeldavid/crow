@@ -56,9 +56,19 @@ function frame(e: object): string {
     .split('\n')
     .map((l) => l.trim())
     .find((l) => l.startsWith('at ') && l.length <= LINE_MAX && /:\d+:\d+\)?$/.test(l));
-  if (!at) return '';
-  // No part of a path holds a slash, so the match cannot backtrack across parts.
-  return ` ${scrub(at.replace(/(?:file:\/\/)?\/?(?:[^\s():/]*\/)+(?=[^\s():/]+\/[^\s():/]+:\d)/, ''))}`;
+  return at ? ` ${scrub(shortPath(at))}` : '';
+}
+
+/**
+ * A frame, `at fn (path:1:2)` or `at path:1:2` (after `async`, perhaps), with its path cut to the last two parts. By
+ * splitting, with no regular expression over the path: one that looks for where a path starts is tried from every
+ * character of the line (CodeQL js/polynomial-redos on PR 811). A path may hold spaces, so a space does not end it.
+ */
+function shortPath(at: string): string {
+  const bracket = at.indexOf(' (');
+  const from = bracket >= 0 ? bracket + 2 : at.startsWith('at async ') ? 'at async '.length : 'at '.length;
+  const parts = at.slice(from).split('/');
+  return parts.length > 2 ? `${at.slice(0, from)}${parts.slice(-2).join('/')}` : at;
 }
 
 export function describeCause(e: unknown): string {
