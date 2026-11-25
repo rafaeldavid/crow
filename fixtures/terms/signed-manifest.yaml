@@ -1,12 +1,13 @@
 # Terms that name the signature_valid check kind (ADR-0045, schema v0.13): the delivery is one JSON document whose
-# manifest a recorder signed. No build evaluates the kind yet, so the primary declines an offer on these terms
-# (fixtures/scenarios/neutrality.adjudicator-lacks-check-kind). The key fingerprint is a placeholder.
+# manifest a recorder signed, and the terms pin the recorder's key by fingerprint. The fingerprint is that of a throwaway
+# test key (spec/test-vectors/signature-valid, vector p256/good); fixtures/data/signed-manifest holds its signed document.
+# The rubric is empty, so acceptance rests on the checks alone and no panel sits.
 # Field rules are as in clean-customers-2000.yaml.
 schemaVersion: "0.8"
 clubId: data-services-v1
 deliverable:
   kind: dataset
-  description: "One recorded run as one JSON document: `manifest` is the run's manifest, `manifest_text` is the exact text the recorder signed, `manifest_sig` is its signature and `pubkey_pem` is the recorder's public key."
+  description: "One recorded run as one JSON document: `manifest` is the run's manifest, `manifest_text` is the exact text the recorder signed, `manifest_sig` is its signature and `pubkey` is the recorder's public key."
   format: application/json
 acceptance:
   deterministicChecks:
@@ -15,7 +16,7 @@ acceptance:
       type: signature_valid
       required: true
       alg: ecdsa-p256-sha256
-      publicKey: { pointer: /pubkey_pem, format: spki-pem, spkiSha256: "sha256:5e7f0c7d3f6a1b2c4d8e9f00112233445566778899aabbccddeeff0011223344" }
+      publicKey: { pointer: /pubkey, format: spki-pem, spkiSha256: "sha256:82c992af54306f8dc04bb2cc7ede4eaa8255c66f10f75a0fbb2d301227559027" }
       message: { pointer: /manifest_text, encoding: utf8, jsonEquals: /manifest }
       signature: { pointer: /manifest_sig, encoding: base64, format: der }
   rubric:

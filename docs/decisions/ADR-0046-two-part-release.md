@@ -142,6 +142,7 @@ At intake, before any check or judge runs, a decider:
 
 - **Each adjudicator's record gains `proofKinds`,** beside the `checkKinds` of ADR-0045 and outside `policy`, so no `policyHash` moves.
 - **The primary posts no acceptance** for an offer under a rule or a verifier it does not run. The offer expires unfunded.
+- **A decider that lacks a `proofKinds` entry signs nothing at any role** (D92, the rule of `checkKinds`); the deal runs to the next decider or its default.
 - **The parties' tools read `proofKinds` for all three named adjudicators** before they sign (D32). An operator may warn and never refuses (D31).
 - **A conformance file ships with the reference page:** a content key, a commitment ID, a buyer key and the sealed key they give, made in two languages.
 
@@ -193,3 +194,5 @@ At intake, before any check or judge runs, a decider:
 2. **A key mismatch.** Recommended: reject, like any failed required check. The alternative escalates, so that a second adjudicator recomputes before a final reject.
 3. **The named note hash of the amendments row.** Recommended: add it to this version only if the amendments build starts before the freeze. The `nonce` carries the hash until then.
 4. **The review of the derived seal.** Recommended: a second-family review before the contract build starts, with the fallback of section 3 ready.
+5. **Two names for "commitment".** Section 2 calls `publicInputs[0]` "the commitment", and section 3 salts the seal with "the commitment ID", the deal's own ID. An implementer who salts with `publicInputs[0]` meets a fixed point: that hash covers the sealed key it would derive. Recommended: call `publicInputs[0]` the key commitment everywhere, and state that the salt is the delivery's `commitmentId` (raised by the second-family review of 2026-11-25, s09).
+6. **A limit on `proofs` and `publicInputs`.** Under `on_decision_and_key` an accept posts the delivery again, and neither list has a maximum length. A seller can make the accept too large to land, so the hold runs to its default and refunds the buyer. The seller loses its own sale; the buyer waits until the deadline. Recommended: a `maxItems` on both lists in the schema bump, as for an encoding limit (D31 allows it), and a gas estimate in the decider before it signs (raised by the second-family review of 2026-11-25, s10).

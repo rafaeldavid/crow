@@ -821,7 +821,7 @@ export class StubSettlement {
       return this.refuse(name, call, via, problem('registry_mismatch', `the offer binds registry ${c.terms.adjudication.registryHash}; as primary ${name} accepts new deals only under its current registry ${this.registry.hash}`));
     }
     // ADR-0045 §10: nor one naming a check kind its build does not run, as the adjudicator service declines it.
-    const unrun = c.terms.acceptance?.deterministicChecks.find((k) => !CHECK_TYPES.has(k.type));
+    const unrun = c.terms.acceptance?.deterministicChecks.find((k) => !CHECK_TYPES.has(k.type) || this.scenario.lacksCheckKinds?.[name]?.includes(k.type));
     if (unrun) return this.refuse(name, call, via, problem('adjudicator_unavailable', `${name} does not run the check kind ${unrun.type}, which check ${unrun.id} names, so it declines the offer`));
     const seed = this.ctx.rng.hex32();
     const message = await this.sign(name, {
@@ -1023,6 +1023,10 @@ export class StubSettlement {
       this.judgments.push(view);
     }
     if (!view) {
+      // D92: it signs no decision on terms that name a check kind its build does not run, at any role (as the adjudicator service does).
+      const lacked = this.scenario.lacksCheckKinds?.[name];
+      const unrun = c.terms.acceptance?.deterministicChecks.find((k) => !CHECK_TYPES.has(k.type) || lacked?.includes(k.type));
+      if (unrun) return this.refuse(name, call, 'direct', problem('adjudicator_unavailable', `${name} does not run the check kind ${unrun.type}, which check ${unrun.id} names, so as ${role} adjudicator it signs no decision`));
       // ADR-0036: the bound policy, read by hash, and the bound registry, by hash; never the build's default in their place.
       const bound = this.policyFor(c.terms);
       if (!bound) return this.refuse(name, call, 'direct', problem('policy_mismatch', `policy-hash-mismatch: no build registered policy ${c.terms.adjudication.policyHash}`));

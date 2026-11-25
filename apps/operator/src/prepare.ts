@@ -427,6 +427,7 @@ async function offer(ctx: PrepareContext, input: Record<string, unknown>): Promi
     ...moneyAddressNotices(ctx, terms),
     ...(await bondNotices(ctx, terms)),
     ...declineNotices(turns, terms),
+    ...(await checkKindNotices(ctx, terms, turns)),
   ];
   const total = BigInt(terms.price.amount) + BigInt(terms.adjudication.fee.amount);
   const named = (role: AdjudicatorRole) => (filled[role] ? `${role} ${filled[role]} (this operator's default)` : `${role} ${slate[role]}`);
@@ -588,15 +589,43 @@ export function moneyAddressNotices(ctx: Pick<PrepareContext, 'contracts'>, t: P
 const declineNotices = (turns: Partial<Record<AdjudicatorRole, string>>, c: Pick<AnyCommitmentTerms, 'adjudication'>): string[] =>
   ROLE_OF.filter(([role]) => turns[role]).map(([role, field]) => `this operator's ${role} adjudicator ${c.adjudication[field]} will decline its ${role} turn on these terms: ${turns[role]}. You may still choose it`);
 
+/** The kinds of schema v0.12, which a record with no `checkKinds` list runs (ADR-0045 section 8). */
+const V012_KINDS = ['csv_columns_exact', 'row_count_range', 'unique_key', 'null_rate_max', 'regex_match_rate_min', 'iso8601_date_column', 'json_schema', 'reference_row_match_min', 'hidden_characters_max'];
+
+/**
+ * D92, D31: an advisory notice for each named adjudicator whose registered `checkKinds` lacks a kind the terms name. It signs
+ * no decision on them at its role, so the deal would run to the next adjudicator or its default. Nothing is refused.
+ * A role this node's own adjudicator already declines (`turns`) has its notice from that answer.
+ */
+export async function checkKindNotices(
+  ctx: Pick<PrepareContext, 'registration'>,
+  c: Pick<AnyCommitmentTerms, 'adjudication'> & { acceptance?: { deterministicChecks?: ReadonlyArray<{ id: string; type: string }> } },
+  turns: Partial<Record<AdjudicatorRole, string>> = {},
+): Promise<string[]> {
+  const checks = c.acceptance?.deterministicChecks ?? [];
+  if (checks.length === 0) return [];
+  const out: string[] = [];
+  for (const [role, field] of ROLE_OF) {
+    if (turns[role]) continue;
+    const address = c.adjudication[field];
+    const reg = await ctx.registration(address).catch(() => null);
+    if (!reg) continue;
+    const listed = new Set((reg as { checkKinds?: string[] }).checkKinds ?? V012_KINDS);
+    const unrun = checks.find((k) => !listed.has(k.type));
+    if (unrun) out.push(`the ${role} adjudicator ${address} does not list the check kind ${unrun.type} in checkKinds, which check ${unrun.id} names, so it signs no decision on these terms and the deal runs to the next adjudicator or its default outcome. You may still choose it`);
+  }
+  return out;
+}
+
 /**
  * T-221 review: an advisory notice on relayed terms for each of this node's own adjudicators that would decline its
  * role on them, so the parties do not rely on it (D31: the parties chose it; nothing is refused). `primaryAccepted`:
  * the primary has already taken its turn, so only the fallback and the appeal adjudicator are asked.
  */
-export async function turnNotices(ctx: Pick<PrepareContext, 'declines'>, c: AnyCommitment, o: { primaryAccepted?: boolean } = {}): Promise<string[]> {
+export async function turnNotices(ctx: Pick<PrepareContext, 'declines'> & Partial<Pick<PrepareContext, 'registration'>>, c: AnyCommitment, o: { primaryAccepted?: boolean } = {}): Promise<string[]> {
   const turns = await turnProblems(ctx, c);
   if (o.primaryAccepted) delete turns.primary;
-  return declineNotices(turns, c);
+  return [...declineNotices(turns, c), ...(ctx.registration ? await checkKindNotices({ registration: ctx.registration }, c as never, turns) : [])];
 }
 
 /**

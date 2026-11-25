@@ -103,6 +103,8 @@ export interface Scenario {
    */
   outside: string[];
   adjudicators: { primary: string; fallback: string; appeal: string };
+  /** ADR-0045 section 10, D92: check kinds a named adjudicator's build does not run. It then signs no decision on terms that name one. */
+  lacksCheckKinds?: Record<string, string[]>;
   operators: string[];
   /** Starting balances in base units (decimal strings). */
   faucet: Record<string, string>;
@@ -393,7 +395,7 @@ function parseExpect(raw: unknown, shorthand: unknown): ScenarioExpect {
   return out;
 }
 
-const TOP = ['name', 'description', 'club', 'terms', 'parties', 'fails', 'outside', 'adjudicators', 'operators', 'faucet', 'steps', 'expect', 'expect_terminal'] as const;
+const TOP = ['name', 'description', 'club', 'terms', 'parties', 'fails', 'outside', 'adjudicators', 'lacks_check_kinds', 'operators', 'faucet', 'steps', 'expect', 'expect_terminal'] as const;
 
 /** Parses a scenario file. Throws ScenarioError with a path for anything it does not understand. */
 export function parseScenario(source: string, fileName: string): Scenario {
@@ -452,6 +454,17 @@ export function parseScenario(source: string, fileName: string): Scenario {
     steps: top.steps.map((s, i) => parseStep(s, `steps[${i + 1}]`, operators, actors, names)),
     expect: parseExpect(top.expect, top.expect_terminal),
   };
+  if (top.lacks_check_kinds !== undefined) {
+    const raw = top.lacks_check_kinds;
+    if (!isObj(raw)) fail('lacks_check_kinds', 'must map an adjudicator to a list of check kinds');
+    const lacks: Record<string, string[]> = {};
+    for (const [who, kinds] of Object.entries(raw)) {
+      if (!Object.values(adjudicators).includes(who)) fail(`lacks_check_kinds.${who}`, 'not an adjudicator of this scenario');
+      if (!Array.isArray(kinds) || kinds.length === 0) fail(`lacks_check_kinds.${who}`, 'must be a non-empty list of check kinds');
+      lacks[who] = (kinds as unknown[]).map((k, i) => str(k, `lacks_check_kinds.${who}[${i}]`));
+    }
+    scenario.lacksCheckKinds = lacks;
+  }
   if (top.description !== undefined) scenario.description = str(top.description, 'description');
   if (top.club !== undefined) scenario.club = str(top.club, 'club');
   if (top.terms !== undefined) scenario.terms = str(top.terms, 'terms');
