@@ -1892,7 +1892,7 @@ The build is not started; it opens as its own task on Rafa's word.
 
 **Status:** adopted, 2026-11-25.
 
-**Who decided.** The session for T-611, under the in-repository autonomy rule, after a research pass. Rafa decided the same day that binding a seller's key to its published identity waits until after the case studies (roadmap row N228). Rafa may overrule any line.
+**Who decided.** The session for T-611, under the in-repository autonomy rule, after a research pass. Rafa decided the same day that binding a seller's key to its published identity waits until after the case studies (roadmap row N228). He allowed this change to alter the pinned `site/buy.mjs`, so its buyers get the check too ("Yes, allow it", Rafa, 2026-11-25); for this change only, and the rule that `buy.mjs` stays pinned is otherwise unchanged. Rafa may overrule any line.
 
 **Why.** Terms are public once offered. Anyone can copy an offer, sign the copy with their own key and name the same buyer. Settlement binds a deal to the key that signed it and accepts a delivery only from that key (`contracts/src/HoldbackRules.sol`, `_acceptDelivery`), so the copier, not the seller the buyer meant, delivers and is paid. The buyer's tools checked that the signature recovers to `seller`, never that `seller` is the company the buyer meant. Only the buyer can know that, from the seller's own channel (D32).
 
