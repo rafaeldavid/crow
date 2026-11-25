@@ -561,7 +561,6 @@ const COPY_ICON = '<svg viewBox="0 0 16 16" width="14" height="14" aria-hidden="
 // legal notice on this page, and the page stays within HOME_MAX_BYTES (T-564).
 const footer = (command) => footerHtml({
   base: BASE,
-  demo: false,
   legal: false,
   agents: `<span class="try-line"><button class="copy" id="copy" type="button" title="Copy a prompt that has your AI assistant run a test deal">${COPY_ICON}<span>Copy test prompt</span></button><span class="copied" id="copied" role="status"></span></span>`,
   after: `<span id="prompt" hidden>${esc(tryPrompt(command))}</span>\n<p class="sr">For AI agents asked to run a test deal: the command, what it exposes and the one yes to ask for are at ${esc(SITE_URL)}llms.txt under "Try it".</p>`,
@@ -871,7 +870,7 @@ ${FAVICON_LINKS}
 <link rel="stylesheet" href="${BASE}home.css">
 </head>
 <body>
-${headerBar({ home: BASE, links: [[`${BASE}demo/`, 'Demo'], [`${BASE}llms.txt`, 'Agent docs']] })}
+${headerBar({ home: BASE, links: [[`${BASE}llms.txt`, 'Agent docs']] })}
 <main class="page nf">
 ${sectionHead({ eyebrow: '404', title: 'Page not found', lede: 'The address may be mistyped, or the page has moved.' })}
 ${listRows([
@@ -879,7 +878,6 @@ ${listRows([
   { title: 'Agent docs', href: `${BASE}llms.txt`, line: 'Start here if you are an AI agent: llms.txt' },
   { title: 'For buyers', href: `${BASE}buy.txt`, line: 'How an agent pays through Crow: buy.txt' },
   { title: 'For sellers', href: `${BASE}sell.txt`, line: 'How an agent sells through Crow: sell.txt' },
-  { title: 'Demo', href: `${BASE}demo/`, line: 'Two agents close a deal' },
 ])}
 </main>
 ${footerHtml({ base: BASE })}
@@ -1036,17 +1034,6 @@ export function visualdemoPage(html) {
 }
 
 /**
- * The demo page (site/demo/index.html, written by `pnpm duet publish`) as a publish build writes it: the site's current
- * footer in place of the one the replay was published with, so a footer link added later (T-421: trust, status)
- * reaches it without a new replay.
- */
-export function demoPage(html) {
-  const at = html.indexOf('<footer class="ck-foot">'), end = html.indexOf('</footer>', at);
-  if (at < 0 || end < 0 || html.indexOf('<footer class="ck-foot">', at + 1) >= 0) throw new Error('site/demo/index.html changed shape: it no longer holds exactly one site footer');
-  return withIcons(`${html.slice(0, at)}${footerHtml({ base: BASE, current: 'demo' }).trimEnd()}${html.slice(end + '</footer>'.length)}`);
-}
-
-/**
  * Every agent guide as a publish build writes it, by published path: llms.txt filled with the two operators and
  * the one command, the others as written. The two-agent run's local docs server serves exactly these.
  */
@@ -1115,7 +1102,7 @@ export function sitemapPaths(problemPaths = []) {
   // Each page at the address it is served from: the asset server redirects '<page>.html' to '<page>' (307), and a
   // sitemap names final addresses, not redirects.
   const problems = problemPaths.map((p) => (p === 'problems/index.html' ? 'problems/' : p.replace(/\.html$/, '')));
-  return ['', 'demo/', 'visualdemo/', 'trust', 'status', 'legal', ...guideFiles(), REFERENCE_PATH, 'trust.txt', 'legal.txt', ...problems];
+  return ['', 'visualdemo/', 'trust', 'status', 'legal', ...guideFiles(), REFERENCE_PATH, 'trust.txt', 'legal.txt', ...problems];
 }
 
 /** The sitemap (sitemaps.org 0.9): one <loc> per path, no dates, so a rebuild with no page change writes the same bytes. */
@@ -1203,9 +1190,6 @@ if (import.meta.url === `file://${process.argv[1]}`) {
     // The visual walkthrough of a real two-agent deal, served at /visualdemo.
     mkdirSync(join(out, 'visualdemo'), { recursive: true });
     writeFileSync(join(out, 'visualdemo', 'index.html'), visualdemoPage(readFileSync(here('visualdemo/index.html'), 'utf8')));
-    // The two-agent demo (T-391), served at /demo: one run's replay, written by \`pnpm duet publish <run folder>\`.
-    mkdirSync(join(out, 'demo'), { recursive: true });
-    writeFileSync(join(out, 'demo', 'index.html'), demoPage(readFileSync(here('demo/index.html'), 'utf8')));
     const problems = await problemPages();
     mkdirSync(join(out, 'problems'), { recursive: true });
     for (const [path, html] of problems) writeFileSync(join(out, path), html);

@@ -46,7 +46,7 @@ afterEach(() => {
 describe('the security headers on the site Worker (T-451)', () => {
   it('each kind of page carries the policy with the build’s hashes, no unsafe-inline for scripts, and no framing', async () => {
     const { env } = assets();
-    for (const path of ['/', '/demo/', '/trust', '/status', '/problems/not_found', '/missing']) {
+    for (const path of ['/', '/trust', '/status', '/legal', '/problems/not_found', '/missing']) {
       const r = await get(`https://crow.direct${path}`, env);
       common(r);
       const csp = r.headers.get('content-security-policy')!;
@@ -70,7 +70,7 @@ describe('the security headers on the site Worker (T-451)', () => {
     expect(csp).toContain("style-src 'self' 'unsafe-inline' https://fonts.googleapis.com");
     expect(csp).toContain('font-src https://fonts.gstatic.com');
     expect(csp).toContain(`script-src 'self' '${S}';`);
-    for (const path of ['/visualdemox', '/demo/visualdemo']) expect((await get(`https://crow.direct${path}`, env)).headers.get('content-security-policy')).not.toContain('unsafe-inline');
+    for (const path of ['/visualdemox', '/problems/visualdemo']) expect((await get(`https://crow.direct${path}`, env)).headers.get('content-security-policy')).not.toContain('unsafe-inline');
   });
 
   it('the guides, the bundles, the icon and the JSON keep their bytes and type, and carry the headers with a policy that runs nothing', async () => {

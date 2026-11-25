@@ -5,7 +5,8 @@
 // GET /version.json adds the live version's creation time to the build's commit, for Crow Control (T-413, build-info.js).
 // GET /status/operators.json relays the two operators' public discovery reads for the status page (T-421, status.js),
 // and GET /.well-known/security.txt serves the security.txt asset the build writes at the site root (T-421).
-// Every answer, the 301s included, gets the security headers on its way out (T-451, headers.js).
+// Every answer, the 301s included, gets the security headers on its way out (T-451, headers.js). A retired page's
+// address answers a 301 to the page that took its place (T-586), so old links keep working.
 import { buildInfo, buildResponse, isBuildRead } from './build-info.js';
 import { STATUS_PATH, statusResponse } from './status.js';
 import { inlineHashes, isPage, secured } from './headers.js';
@@ -13,6 +14,14 @@ import { inlineHashes, isPage, secured } from './headers.js';
 const CANONICAL = 'https://crow.direct';
 const SECURITY_TXT = '/.well-known/security.txt';
 const FORWARDED = new Set(['escrow.stream', 'www.escrow.stream']);
+// T-586 (Rafa, 2026-11-25): retired pages and where their readers go now. The demo page and its "Learn more" view
+// (/demo/#learn-more; a browser never sends the fragment) moved to the homepage, which carries the demo.
+export const RETIRED = new Map([['/demo', '/']]);
+/** Where a retired page's address goes now: the page itself, its folder form, or any address under it; else null. */
+export function retiredTarget(pathname) {
+  for (const [from, to] of RETIRED) if (pathname === from || pathname.startsWith(`${from}/`) || pathname === `${from}.html`) return to;
+  return null;
+}
 const isLocal = (host) => host === 'localhost' || host === '127.0.0.1' || host === '[::1]' || host.endsWith('.localhost');
 
 export default {
@@ -29,6 +38,8 @@ async function route(request, env, ctx, url) {
   // http://crow.direct/llms.txt reads the guide over TLS; HSTS then keeps a browser on HTTPS. Local runs stay on HTTP.
   if (url.protocol === 'http:' && !isLocal(url.hostname)) return Response.redirect(`${FORWARDED.has(url.hostname) ? CANONICAL : `https://${url.host}`}${url.pathname}${url.search}`, 301);
   if (FORWARDED.has(url.hostname)) return Response.redirect(`${CANONICAL}${url.pathname}${url.search}`, 301);
+  const retired = retiredTarget(url.pathname);
+  if (retired) return Response.redirect(`${url.origin}${retired}`, 301);
   if (isBuildRead(request, '/version.json')) return buildResponse(buildInfo({ worker: 'crow-site', commit: await builtCommit(request, env), metadata: env.CF_VERSION_METADATA }), request.method);
   if (url.pathname === STATUS_PATH) return statusResponse(request, { cache: globalThis.caches?.default, waitUntil: (p) => ctx?.waitUntil(p) });
   // RFC 9116 names /.well-known/security.txt. The build writes the file at the root, where the asset upload takes it

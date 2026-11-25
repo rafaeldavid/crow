@@ -107,7 +107,7 @@ const notFound = read('404.html');
 expect(notFound === notFoundPage(), 'site/404.html is stale: run node site/build.mjs');
 const nfHead = Buffer.from(notFound).subarray(0, POINTER_WITHIN).toString('utf8');
 expect(Buffer.byteLength(notFound) <= 4000 && /<!-- Not found \(404\)\. For AI agents: [^>]*llms\.txt[^>]*buy\.txt[^>]*sell\.txt[^>]*-->/.test(nfHead) && nfHead.includes(`href="${BASE}llms.txt"`), `site/404.html must be at most 4,000 bytes and point to llms.txt, buy.txt and sell.txt in its first ${POINTER_WITHIN} bytes`);
-for (const path of ['', 'llms.txt', 'buy.txt', 'sell.txt', 'demo/']) expect(notFound.includes(` href="${BASE}${path}">`), `site/404.html does not link ${BASE}${path}`);
+for (const path of ['', 'llms.txt', 'buy.txt', 'sell.txt']) expect(notFound.includes(` href="${BASE}${path}">`), `site/404.html does not link ${BASE}${path}`);
 
 // 2. Placeholders.
 const configure = md.slice(md.indexOf('## Configure'), md.indexOf('## ', md.indexOf('## Configure') + 3));
@@ -200,13 +200,16 @@ const { PROBLEMS, PROBLEM_BASE } = await import(here('../apps/operator/src/probl
 const problems = await problemPages();
 // T-400: every page the build writes carries a title, a description and a link-preview card, and the site's one
 // footer (site/footer.ts); the share image is 1200 by 630 px; no page follows the system's dark mode (light only).
-const built = new Map([['index.html', html], ['404.html', read('404.html')], ['demo/index.html', read('demo/index.html')], ['visualdemo/index.html', visualdemoPage(read('visualdemo/index.html'))], ...['trust.html', 'status.html', 'legal.html'].filter((f) => existsSync(here(f))).map((f) => [f, read(f)]), ...problems]);
+const built = new Map([['index.html', html], ['404.html', read('404.html')], ['visualdemo/index.html', visualdemoPage(read('visualdemo/index.html'))], ...['trust.html', 'status.html', 'legal.html'].filter((f) => existsSync(here(f))).map((f) => [f, read(f)]), ...problems]);
 for (const [path, h] of built) {
   expect(/<title>[^<]+<\/title>/.test(h) && ['name="description"', 'property="og:title"', 'property="og:description"', 'property="og:url"', 'property="og:image"', 'name="twitter:card" content="summary_large_image"'].every((t) => h.includes(t)), `${path} lacks its title, description or link-preview card (site/footer.ts)`);
   expect(h.includes('<footer class="ck-foot">') && h.includes('© 2026 Crow · Verifiable settlement for AI commerce'), `${path} lacks the site's footer (site/footer.ts)`);
   expect(!/prefers-color-scheme/.test(h), `${path} follows the system's dark mode: the site is light only`);
 }
 expect(!/prefers-color-scheme/.test(HOME_CSS), 'home.css follows the system dark mode: the site is light only');
+// T-586: the demo page is retired (the homepage carries the demo; the site Worker answers /demo with a 301), so no page links it.
+for (const [path, h] of built) expect(!/href="(?:https:\/\/crow\.direct)?\/demo(?:\/|\.html)?["#?]/.test(h), `${path} links the retired demo page /demo/: link the homepage instead`);
+expect(!existsSync(here('demo')), 'site/demo/ is back: the demo page is retired (T-586); its last copy is docs/archive/site/demo/');
 const og = readFileSync(here(OG_IMAGE.path));
 expect(og.subarray(1, 4).toString() === 'PNG' && og.readUInt32BE(16) === OG_IMAGE.width && og.readUInt32BE(20) === OG_IMAGE.height, `site/${OG_IMAGE.path} must be a ${OG_IMAGE.width} by ${OG_IMAGE.height} px PNG`);
 expect(PROBLEM_BASE === `${SITE_URL}problems/`, `problem pages live at ${SITE_URL}problems/, the operator links ${PROBLEM_BASE}`);
@@ -422,7 +425,7 @@ for (const [p, text] of guides) for (const { line, char } of nonAscii(text)) exp
 for (const [p, text] of filledGuides) if (!nonAscii(guides.get(p) ?? '').length) for (const { line, char } of nonAscii(text)) expect(false, `the published ${p} line ${line} holds ${char}: a filled value is not ASCII`);
 
 // 15. One brand kit (T-402): a colour (hex, rgb(), hsl()) or a font stack is written only in site/brand/tokens.css.
-// The sources of the home page, the 404 and problem pages, the footer, the early-access dialog and the demo page, and
+// The sources of the home page, the 404 and problem pages, the footer, the early-access dialog, the two-agent replay, and
 // the kit's own components.css, write none: they read the tokens. Nothing is allow-listed today; an entry needs its
 // reason beside it. site/visualdemo/ and site/og.html (the share image's source, drawn once by hand) are not read here.
 const KIT_READERS = ['build.mjs', 'footer.ts', 'drawer.ts', 'home-demo.mjs', 'home.js', 'trust.mjs', '../tools/duet/replay.ts', 'brand/components.css', 'brand/kit.mjs', 'brand/icons.mjs'];
@@ -443,16 +446,12 @@ expect((read('brand/tokens.css').match(/:root \{/g) ?? []).length === 1, 'site/b
 
 // 16. The trust surfaces (T-421).
 const trust = existsSync(here('trust.mjs')) ? await import('./trust.mjs') : {};
-const siteBuild = await import('./build.mjs');
 for (const [file, fn] of [['trust.html', 'trustPage'], ['status.html', 'statusPage'], ['legal.html', 'legalPage']]) {
   expect(typeof trust[fn] === 'function', `site/trust.mjs exports no ${fn}()`);
   expect(existsSync(here(file)) && typeof trust[fn] === 'function' && read(file) === trust[fn]({ site: SITE_URL, base: BASE }), `site/${file} is not what site/build.mjs renders: run node site/build.mjs`);
 }
 expect(typeof trust.PAGES_CSS === 'string' && existsSync(here('pages.css')) && read('pages.css') === trust.PAGES_CSS, 'site/pages.css is not what site/build.mjs renders: run node site/build.mjs');
-expect(typeof siteBuild.demoPage === 'function', 'site/build.mjs exports no demoPage(): the demo page keeps an old footer');
-const footed = new Map([...built, ...(typeof siteBuild.demoPage === 'function' ? [['demo/index.html (published)', siteBuild.demoPage(read('demo/index.html'))]] : [])]);
-for (const [path, h] of footed) {
-  if (path === 'demo/index.html') continue; // the committed replay; the publish build swaps in the site's footer (demoPage)
+for (const [path, h] of built) {
   // The home page links the legal notice from its demo line instead of its footer (T-564), checked below.
   for (const p of ['trust', 'status', ...(path === 'index.html' ? [] : ['legal'])]) expect(h.includes(`href="${BASE}${p}"`), `${path}'s footer does not link ${BASE}${p} (site/footer.ts)`);
 }
@@ -588,8 +587,6 @@ expect(typeof trust.SECURITY_CONTACT === 'string' && read('../SECURITY.md').incl
   expect(want.length > 0, 'site/brand/kit.mjs exports no iconLinks(): the pages have no one place for the favicon links');
   const iconsIn = (h) => (typeof kit.iconTags === 'function' && h.includes('</head>') ? kit.iconTags(h) : []);
   const pages = new Map([...built, ...problems]);
-  pages.delete('demo/index.html'); // the committed replay; the publish build adds the links (demoPage, below)
-  if (typeof siteBuild.demoPage === 'function') pages.set('demo/index.html (published)', siteBuild.demoPage(read('demo/index.html')));
   for (const [path, h] of pages) expect(want.length > 0 && JSON.stringify(iconsIn(h)) === JSON.stringify(want), `${path} does not carry exactly the favicon links of iconLinks() (site/brand/kit.mjs) in its head`);
   const files = ICON_FILES;
   for (const f of files) expect(existsSync(here(`brand/icons/${f}`)), `site/brand/icons/${f} is missing: run node site/brand/icons.mjs`);

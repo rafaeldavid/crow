@@ -236,7 +236,7 @@ const qaHtml = (x) => `<section class="qa" id="${x.id}">
 ${sourceLine(x.sources)}
 </section>`;
 /** The header both pages share: the kit's header bar, its one button opening the early-access drawer. */
-const header = (base) => headerBar({ home: base, links: [[`${base}demo/`, 'Demo'], [`${base}llms.txt`, 'Agent docs']], button: { label: 'Request early access', href: `${base}#join-form`, attrs: 'data-join' } });
+const header = (base) => headerBar({ home: base, links: [[`${base}llms.txt`, 'Agent docs']], button: { label: 'Request early access', href: `${base}#join-form`, attrs: 'data-join' } });
 
 /** The two pages' styles, served as pages.css: the kit's parts they use, then their own layout. */
 export const PAGES_CSS = kitCss({ parts: ['bar', 'button', 'pill', 'head', 'table', 'notice', 'dialog', 'footer'] }) + `/* the trust and status pages (site/trust.mjs, T-421): light only, one column, the kit's tokens */
