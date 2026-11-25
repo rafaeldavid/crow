@@ -54,12 +54,22 @@ describe('a clean coded verdict', () => {
       dropped: ZERO,
     });
   });
-  it('takes the lists left out, and keeps the rubric order the judge wrote', () => {
-    const v = { criteria: [...IDS].reverse().map((id) => ({ id, reasons: ['complete'], score: 3 })), overall: 'fail', injectionSuspected: false };
+  it('takes the lists left out, and records the criteria in rubric order whatever order the judge wrote (red team L1)', () => {
+    const v = { criteria: [...IDS].reverse().map((id, i) => ({ id, reasons: ['complete'], score: i })), overall: 'fail', injectionSuspected: false };
     const r = ok(parse(v));
-    expect(r.record.criteria.map((c) => c.id)).toEqual([...IDS].reverse());
-    expect(r.record.criteria[0]).toEqual({ id: 'distinct', refs: [], reasons: ['complete'], score: 3 });
+    expect(r.record.criteria.map((c) => c.id)).toEqual(IDS);
+    expect(r.verdict.criteria.map((c) => c.id)).toEqual(IDS);
+    expect(r.record.criteria[2]).toEqual({ id: 'distinct', refs: [], reasons: ['complete'], score: 0 });
     expect(r.record.dropped).toEqual(ZERO);
+  });
+  it('keeps reason codes and injection kinds in closed-list order, so their order carries nothing (red team M2)', () => {
+    const r = ok(parse(withCriterion(0, { reasons: ['other', 'incomplete', 'meets_terms'] }), {}));
+    expect(r.record.criteria[0]!.reasons).toEqual(['meets_terms', 'incomplete', 'other']);
+    expect(r.verdict.criteria[0]!.reasons).toEqual(['meets_terms', 'incomplete', 'other']);
+    const k = ok(parse(clean({ injectionSuspected: true, injectionKinds: ['other', 'hidden_text', 'instruction_override'] })));
+    expect(k.record.injectionKinds).toEqual(['instruction_override', 'hidden_text', 'other']);
+    const a = ok(parse(withCriterion(0, { reasons: ['complete', 'accurate', 'consistent', 'well_formed'] })));
+    expect(a.record.criteria[0]!.reasons).toEqual(['complete', 'accurate', 'consistent']);
   });
   it('keeps the injection kinds and references when the flag is set', () => {
     const r = ok(parse(clean({ injectionSuspected: true, injectionKinds: ['verdict_steer', 'addressed_to_judge'], injectionRefs: ['/kit/colours/1/role'] })));
