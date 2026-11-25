@@ -1,4 +1,4 @@
-// Hand-written types for spec/schemas v0.13 (signed encoding 0.8: the EIP-712 domain version in eip712.ts; ADR-0023,
+// Hand-written types for spec/schemas v0.14 (signed encoding 0.8: the EIP-712 domain version in eip712.ts; ADR-0023,
 // ADR-0024, ADR-0029, ADR-0033). Values reach these types only through the parsers in parse.ts, which validate against the
 // schema files. Phase 1 narrows the commitment to guaranteed_on_decision and maxSubmissions = 1 (ADR-0007).
 import type { TokenAmount } from './money/index.js';
@@ -95,7 +95,16 @@ export type DeterministicCheck =
   | (CheckBase & { type: 'json_schema'; schema: Record<string, unknown> })
   | (CheckBase & { type: 'reference_row_match_min'; reference: ContentRef; keyColumn: string; minBps: Bps })
   | (CheckBase & { type: 'hidden_characters_max'; max: HiddenCharacterMax })
-  | (CheckBase & SignatureValidParams);
+  | (CheckBase & SignatureValidParams)
+  | (CheckBase & { type: 'passes_through'; series: CheckSeries[]; waypoints: number[][]; tolerance: number })
+  | (CheckBase & { type: 'monotonic_column'; series: CheckSeries; minStep?: number; maxStep?: number })
+  | (CheckBase & { type: 'equal_lengths'; series: { pointer: string }[] });
+
+/**
+ * ADR-0047: a series of integers the data checks read. `pointer`: a JSON array at an RFC 6901 pointer in a JSON
+ * delivery. `column`: one column of the tabular view (CSV, or a JSON array of flat objects). Every bound is an integer.
+ */
+export type CheckSeries = { pointer: string } | { column: string };
 
 /** ADR-0045: every parameter is a string, so no number enters the hashed terms. */
 export interface SignatureValidParams {
