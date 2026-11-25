@@ -4415,6 +4415,7 @@ var init_buy_with_signer = __esmMin((async () => {
 			seller: sellerOf(process.env["CROW_SELLER"] || void 0, own?.seller),
 			...expect()
 		});
+		if (own) own = await signer.inToken(own);
 		const quote = await signer.quote(first, JSON.parse(third), options ? JSON.parse(options) : void 0);
 		const offer = await signer.readOffer(quote.commitmentId, own ? { defaults: own } : defaults ? { defaults } : {});
 		const differences = [...offer.differences ?? [], ...["price"].filter((f) => own?.[f] !== void 0 && jcs(own[f]).toLowerCase() !== jcs(offer[f]).toLowerCase()).map((f) => ({

@@ -290,7 +290,8 @@ describe('site/serve.mjs sells one request on a local world (T-606)', () => {
       await until('the adapter to serve', () => /serves POST http:\/\/127\.0\.0\.1:\d+\/quote/.test(run.out()), said);
       const url = /serves POST (http:\/\/127\.0\.0\.1:\d+)\/quote/.exec(run.out())![1]!;
 
-      const buyer = await makeKeys(join(fresh('crow-serve-buyer-'), 'keys'), { operators: world.operators, log: () => {}, clock: world.now });
+      // D101: the buyer quotes by hand here, not with quote, so it names the seller it expects.
+      const buyer = await makeKeys(join(fresh('crow-serve-buyer-'), 'keys'), { operators: world.operators, seller: privateKeyToAccount(sellerKey).address, log: () => {}, clock: world.now });
       const ask = (authorization?: string) =>
         fetch(`${url}/quote`, { method: 'POST', headers: { 'content-type': 'application/json', 'idempotency-key': 'request-1', ...(authorization ? { authorization } : {}) }, body: JSON.stringify({ buyer: buyer.address, buyerEncryptionPublicKey: buyer.encryptionPublicKey, scope }) });
       expect((await ask()).status).toBe(401); // quoteAuth: no token, no offer

@@ -7,7 +7,7 @@
 - **Human gate:** no (the site deploy that publishes the new bundles waits for Rafa)
 - **Status:** review
 - **Agent/session:** buyer-seller-pin (a session started from the coordinator, 2026-11-25)
-- **Roadmap row:** none
+- **Roadmap row:** none (the long-term binding is N228, held until after the case studies)
 
 ## What exists
 
@@ -39,10 +39,20 @@ Make the buyer's tools refuse an offer whose `seller` differs from the address t
 
 ## Evidence
 
-Fill this in before review. Label each item measured, inferred or guessed.
+- Measured: `pnpm exec vitest run examples/buyer-signer-addresses.test.ts`: 19 of 19 passed. A copy of the deal signed by another key, at its own payout address, is refused by `readOffer`, naming `seller`; the real quoted offer passes `checkOffer`. An offer the key did not ask for is refused without a named seller and passes with its signer named.
+- Measured: `examples/buy-with-signer.test.ts` (D101 test): `CROW_SELLER` naming another address refuses the offer (exit 1, `refusing to sign: seller is …`), the right address stops for approval (exit 3), and a terms file seller that differs from `CROW_SELLER` is refused.
+- Measured: `examples/take.test.ts` on anvil (D101 test): `CROW_SELLER` naming another address refuses the standing offer before it shows anything (exit 1); the named seller contract shows it (exit 3). The bytecode pin test in the same file failed locally against this machine's `forge build`, whose nested submodule `contracts/lib/commerce-payments` is dirty; this branch changes no contract or bytecode.
+- Measured: after the review, `buyer-signer-outcome.test.ts` and `serve.test.ts`, which read offers their key never quoted, name the seller; with them, 49 of 49 tests in the four affected files passed.
+- Measured: `node site/build.mjs && node site/check.mjs`: PASS. The buyer's first-deal path is 4,958 of 5,000 tokens; the plain-HTTP buyer's path is within its 9,450-token ceiling after tightening two sentences of `ref/http-buyer.txt`.
+- Measured: `pnpm typecheck` and ESLint on the changed files: clean. `examples/buy-with-signer.ts` stays at 50 lines.
+- Bundles: the PR lists the old and new SHA-256 of `site/buy.mjs` and `site/take.mjs`. The deploy that publishes them waits for Rafa.
 
 ## Decisions
 
 D101.
 
 ## Handoff
+
+- **Review** (one, Opus): ISSUES, one blocking finding, fixed: two existing test files called `checkOffer` on offers their key never quoted. Also fixed: `take.ts` checks `CROW_SELLER` is an address; one test title. Left as is: `ref/http-buyer.txt`'s approve line no longer lists the fields (the bullets above it do; the page is at its token ceiling).
+- **Coordination:** the proposed task "Buyer tool opens every delivery it paid for" also edits `examples/buyer-signer.ts` and `examples/take.ts`. This change adds a key option, one getter, two refusals in `readOffer`/`checkOffer` and `sellerOf` to `buyer-signer.ts`, and three lines to `take.ts`'s `show`.
+- **N228 (held):** the research findings on binding a seller's key to its published identity are below, for when the case studies are done. Build nothing for them before then.

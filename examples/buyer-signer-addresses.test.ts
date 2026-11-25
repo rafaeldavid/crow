@@ -504,7 +504,7 @@ describe('a copy of an offer signed by another key (D101)', () => {
     await expect(right.checkOffer(id, await right.readOffer(id))).resolves.toMatchObject({ seller: copier.address });
   }, 60_000);
 
-  it('the named seller is saved in the key file, so the approve run refuses the copy too; an approval naming another seller is refused', async () => {
+  it('the named seller is saved in the key file and read again by loadKeys; an approval naming another seller is refused', async () => {
     seller.set({});
     const dir = store();
     const signer = await makeKeys(dir, { operators: demo.urls, seller: seller.address, log: () => {} });

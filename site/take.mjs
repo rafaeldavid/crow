@@ -51096,6 +51096,7 @@ async function show(cardUrl, offerId, store, budget) {
 	const entry = entryOf(card, offerId);
 	if (card.seller !== void 0 && lc(card.seller) !== entry.seller) refuse(`the card's seller is ${shown(card.seller)}, and its standing entry names ${entry.seller}`);
 	const expected = process.env["CROW_SELLER"];
+	if (expected && !ADDRESS.test(lc(expected))) refuse("CROW_SELLER is not an address: 0x and 40 hex characters");
 	if (expected && lc(expected) !== entry.seller) refuse(`seller is ${entry.seller}, not the expected ${shown(expected)} (CROW_SELLER): another key signed this standing offer, so it is not the seller you named`);
 	const signer = await makeKeys(store, {});
 	const keys = keyFileOf(store, signer.address);
