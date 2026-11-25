@@ -1,3 +1,4 @@
+import { Script, createContext } from 'node:vm';
 import fc from 'fast-check';
 import { describe, expect, it } from 'vitest';
 import { compileSafeRegex, MAX_SUBJECT_CHARS } from './safe-regex.js';
@@ -7,6 +8,27 @@ const compile = (p: string) => {
   if (!r.ok) throw new Error(r.error);
   return r.value;
 };
+
+/**
+ * Native RegExp as the oracle, with a time limit. Native RegExp backtracks, so a few random nested
+ * patterns take seconds on a subject that does not match (one pinned case takes about 7 s, while our
+ * engine takes under 1 ms). The limit is a vm timeout, which stops a running regex. A pattern that hits
+ * it is skipped, never compared, so load cannot turn a pass into a failure.
+ */
+const ORACLE_LIMIT_MS = 250;
+const oracleContext = createContext({ p: '', s: '' });
+const oracleScript = new Script("[new RegExp('^(?:' + p + ')$', 'u').test(s), new RegExp(p, 'u').test(s)]");
+function oracle(pattern: string, subject: string): { full: boolean; search: boolean } | undefined {
+  oracleContext.p = pattern;
+  oracleContext.s = subject;
+  try {
+    const [full, search] = oracleScript.runInContext(oracleContext, { timeout: ORACLE_LIMIT_MS }) as [boolean, boolean];
+    return { full, search };
+  } catch (e) {
+    if ((e as { code?: string }).code === 'ERR_SCRIPT_EXECUTION_TIMEOUT') return undefined;
+    throw e;
+  }
+}
 
 describe('safe regex: supported subset agrees with RegExp', () => {
   const cases: Array<[string, string[], string[]]> = [
@@ -94,8 +116,10 @@ describe('safe regex: supported subset agrees with RegExp', () => {
     fc.assert(
       fc.property(part.filter((p) => p.length <= 120), fc.string({ unit: fc.constantFrom('a', 'b', 'c'), maxLength: 8 }), (p, s) => {
         const m = compile(p);
-        expect(m.fullMatch(s)).toBe(new RegExp(`^(?:${p})$`, 'u').test(s));
-        expect(m.search(s)).toBe(new RegExp(p, 'u').test(s));
+        const native = oracle(p, s);
+        fc.pre(native !== undefined);
+        expect(m.fullMatch(s)).toBe(native!.full);
+        expect(m.search(s)).toBe(native!.search);
       }),
       { seed: 25, numRuns: 2000 },
     );
