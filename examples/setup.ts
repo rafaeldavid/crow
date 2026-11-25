@@ -26,6 +26,13 @@
 //                               file that fails and names each failing check, and prints the deadline of each still
 //                               due. Exit 4: a funded deal still waits for its work. --schedule prints the entry for this
 //                               machine's scheduler that runs it every 5 minutes, and installs nothing.
+//   node setup.mjs publish      a template folder's standing offer (T-552, setup-publish.ts): the seller contract's
+//                               address from the key, the template with one filled example, the key's signature, the
+//                               finished work stored once when there is one, the contract's mandate from the faucet,
+//                               and the card entry take.mjs reads. It needs no ETH; the first take deploys the contract.
+//                               It signs only with --expect, the hash of the example it showed first (exit 3);
+//                               --preview sends nothing; --replace signs the current template in place of a live one;
+//                               --revoke prints the live template's signed revocation, which any account with ETH sends.
 //   node setup.mjs status       the folder's state: the role, the steps done, the addresses, the open deals. No secret.
 //   node setup.mjs list --website <https URL>
 //                               the listing step (T-486, D76): sends the website, and nothing else, to
@@ -37,8 +44,9 @@
 // Every setting is a flag: --folder <path> (default ~/.crow/<name>), --name <name> (default seller), --operators
 // <url>,<url> (default Crow's two), --buyer <url> (default Crow's test buyer), --list-at <url> (default Crow's list)
 // and --test-world (a local test world, never the live service: it needs --operators, first-deal needs --buyer and
-// list needs --list-at, and every line then says so). The command reads no
-// HOLDBACK_* or CROW_* variable: the bundle's first line removes them, and NODE_TLS_REJECT_UNAUTHORIZED, before any
+// list needs --list-at, and every line then says so). With --test-world, --deployment <file> pins a local chain's
+// deployment (chain 31337 only) for publish and deliver, in place of the HOLDBACK_DEPLOYMENT the command never reads.
+// The command reads no HOLDBACK_* or CROW_* variable: the bundle's first line removes them, and NODE_TLS_REJECT_UNAUTHORIZED, before any
 // module runs, and main() removes them again. It refuses to run with NODE_OPTIONS, NODE_EXTRA_CA_CERTS or
 // NODE_USE_ENV_PROXY set, naming the variable. A NODE_OPTIONS that loads code has run by then: no file can stop what
 // Node did before it started the file. Without --test-world the operators and the buyer are https hosts that are not
@@ -66,6 +74,7 @@ import { list, listingAdvice, listingOf, LISTING_URL } from './setup-list.ts';
 import { reasonLine } from './seller-refusal.ts';
 import { SAMPLE, SAMPLE_PRICE_UNITS, startSampleApi } from './setup-sample-api.ts';
 import { deliver } from './setup-deliver.ts';
+import { publish } from './setup-publish.ts';
 import { startWorkApi, WORK_CREDENTIAL_ENV, workFor, workPath } from './setup-work-api.ts';
 import { addressOf, FILES, formsOf, holdingAddressOf, locked, pinnedReader, readKey, readState, realPath, seller, writeState, writeWhole, type Call, type FirstDeal, type J, type State } from './setup-seller.ts';
 import { commitmentIdOf, jcs } from './verify.ts';
@@ -103,6 +112,10 @@ const USAGE = [
   "                one pass over the folder's funded deals, then it exits: it delivers each one whose work passes the agreed",
   '                checks, holds a file that fails and names each failing check, and prints the deadline of each still due.',
   '                Exit 4: a funded deal still waits for its work. --schedule prints the entry that runs it every 5 minutes.',
+  '  publish [--offer-id <id>] [--expires <UTC time>] [--expect <hash>] [--preview | --replace | --revoke]',
+  "                a template folder's standing offer. Without --expect it shows one filled example and exits 3, sending nothing;",
+  '                with the --expect it printed, it signs that template for the seller contract and writes the card entry.',
+  '                It needs no ETH; the first take deploys the contract.',
   "  status        prints the folder's state. It reads no key and sends nothing.",
   '  list --website <https URL> | --skip [--list-at <url>]',
   "                sends the website, and nothing else, to Crow's list of who uses it; --skip declines and sends nothing.",
@@ -127,7 +140,8 @@ const OWN: Record<string, { values: string[]; switches: string[] }> = {
   seller: { values: ['--payout', '--card', '--template', '--file'], switches: ['--sample', '--allow-git', '--allow-synced', '--allow-served'] },
   check: { values: ['--work'], switches: [] },
   'first-deal': { values: ['--buyer'], switches: ['--again', '--preview'] },
-  deliver: { values: [], switches: ['--schedule'] },
+  deliver: { values: ['--deployment'], switches: ['--schedule'] },
+  publish: { values: ['--offer-id', '--expires', '--expect', '--deployment'], switches: ['--preview', '--replace', '--revoke'] },
   status: { values: [], switches: [] },
   list: { values: ['--website', '--list-at'], switches: ['--skip'] },
 };
@@ -577,6 +591,7 @@ const COMMANDS: Record<string, (c: Call) => number | Promise<number>> = {
   check,
   'first-deal': firstDeal,
   deliver,
+  publish,
   status,
   list: listStep,
 };
@@ -617,6 +632,19 @@ export async function main(argv: readonly string[]): Promise<number> {
     const operators = operatorsOf(flags.get('--operators'), testWorld);
     const name = flags.get('--name') ?? 'seller';
     if (!/^[a-z0-9][a-z0-9-]{0,39}$/.test(name)) throw new WrongCall('--name takes 1 to 40 lowercase letters, digits and hyphens');
+    // A local chain's deployment, pinned from a file on --test-world only: the command reads no HOLDBACK_DEPLOYMENT.
+    const deployment = flags.get('--deployment');
+    if (deployment !== undefined) {
+      if (!testWorld) throw new WrongCall('--deployment pins a local test chain, and needs --test-world. Nothing was sent');
+      let d: { chainId?: unknown };
+      try {
+        d = JSON.parse(readFileSync(deployment, 'utf8')) as { chainId?: unknown };
+      } catch {
+        throw new WrongCall('--deployment takes a deployment file in JSON. Nothing was sent');
+      }
+      if (d?.chainId !== 31337) throw new WrongCall("--deployment takes a local chain's deployment (chain 31337) only. Nothing was sent");
+      process.env['HOLDBACK_DEPLOYMENT'] = JSON.stringify(d);
+    }
     // The folder by its real path, every link followed: what the command checks is where it writes.
     const folder = realPath(resolve(flags.get('--folder') ?? join(homedir(), '.crow', name)));
     const hide: Call['hide'] = (value, whole = false) => {
