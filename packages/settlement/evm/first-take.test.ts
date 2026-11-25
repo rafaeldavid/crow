@@ -47,7 +47,7 @@ describe.skipIf(!ready)(`a standing seller's contract not yet deployed, on anvil
   });
 
   /** A settlement whose genesis admits the two seller contracts by mandate, and `extra` agents beside them. */
-  async function setup(extra: Address[] = []): Promise<Setup> {
+  async function setup(extra: Address[] = [], sellerMandateExpiresAt = '2027-01-01T00:00:00Z'): Promise<Setup> {
     const cast = evmCast();
     const token = world.deployment.token.toLowerCase();
     const { genesis, club } = await evmGenesis({ cast, token, chainId: world.chainId, rules: world.deployment.rules, start: START, buyer: 100_000_000_000n });
@@ -59,7 +59,7 @@ describe.skipIf(!ready)(`a standing seller's contract not yet deployed, on anvil
     const mandates: Mandate[] = [];
     for (const [i, agent] of [seller, other.seller, ...extra].entries()) {
       const principal = testActor(`first-take-principal-${i}`);
-      const body = { principal: principal.address, agent, clubId: club.id, scope: { roles: ['buyer', 'seller'], maxPerCommitment: big, maxDaily: big, expiresAt: '2027-01-01T00:00:00Z' }, nonce: keccak256(stringToBytes(`first-take/${i}`)), issuedAt: START } as Omit<Mandate, 'signature'>;
+      const body = { principal: principal.address, agent, clubId: club.id, scope: { roles: ['buyer', 'seller'], maxPerCommitment: big, maxDaily: big, expiresAt: i === 0 ? sellerMandateExpiresAt : '2027-01-01T00:00:00Z' }, nonce: keccak256(stringToBytes(`first-take/${i}`)), issuedAt: START } as Omit<Mandate, 'signature'>;
       mandates.push({ ...body, signature: await signMessage(principal.key, domain, { ...body, type: 'Mandate' } as UnsignedMessage) } as Mandate);
     }
     const chain = await EvmSettlement.create(world, { ...genesis, mandates: [...genesis.mandates, ...mandates] }, Object.values(cast).map((a) => a.address));
@@ -74,16 +74,16 @@ describe.skipIf(!ready)(`a standing seller's contract not yet deployed, on anvil
   const at = (x: Setup) => world.rpc('evm_setNextBlockTimestamp', [Math.floor(Date.parse(x.chain.now()) / 1000)]);
 
   /** A take by the cast's buyer of a template `key` signed for `seller` (ADR-0040 §1). */
-  async function take(x: Setup, tag: string, o: { key?: TestActor; seller?: Address; template?: (t: StandingOffer) => StandingOffer } = {}) {
+  async function take(x: Setup, tag: string, o: { key?: TestActor; seller?: Address; template?: (t: StandingOffer) => StandingOffer; createdAt?: Timestamp } = {}) {
     const key = o.key ?? x.cast.seller;
     const seller = o.seller ?? x.seller;
     const draft = new EvmDeal(x.chain, x.cast, x.club, tag, undefined, undefined, undefined, { seller, sellerPayoutAddress: x.cast.seller.address });
     const made = templateFrom(draft.terms, { rules: world.deployment.rules, expiresAt: new Date(Date.parse(draft.terms.createdAt) + 86_400_000).toISOString().replace('.000Z', 'Z') as Timestamp, offerId: `offer/${tag}` });
     const template = o.template ? o.template(made) : made;
-    const fill: TakeFill = { buyer: draft.terms.buyer, buyerPaymentAddress: draft.terms.buyerPaymentAddress, buyerEncryptionPublicKey: draft.terms.buyerEncryptionPublicKey, nonceSeed: keccak256(stringToBytes(`seed/${tag}`)), createdAt: draft.terms.createdAt };
+    const fill: TakeFill = { buyer: draft.terms.buyer, buyerPaymentAddress: draft.terms.buyerPaymentAddress, buyerEncryptionPublicKey: draft.terms.buyerEncryptionPublicKey, nonceSeed: keccak256(stringToBytes(`seed/${tag}`)), createdAt: o.createdAt ?? draft.terms.createdAt };
     const terms = takeTerms(template, fill, seller);
     const deal = new EvmDeal(x.chain, x.cast, x.club, tag, undefined, undefined, undefined, { seller, sellerPayoutAddress: x.cast.seller.address, nonce: terms.nonce });
-    expect(deal.terms).toEqual(terms);
+    if (!o.createdAt) expect(deal.terms).toEqual(terms);
     const keySignature = await privateKeyToAccount(key.key).sign({ hash: templateDigest(template, seller, world.chainId) });
     const blob = encodeStandingSignature(TAKE, template, keySignature, fill);
     const offer = (over: Partial<CommitmentTerms> = {}): Submission => {
@@ -140,6 +140,43 @@ describe.skipIf(!ready)(`a standing seller's contract not yet deployed, on anvil
     await must(x.chain, x.cast, t.offer());
   }, 120_000);
 
+  it('a take dated after the chain\'s time is refused naming the time, not as an unsigned offer', async () => {
+    const x = await setup();
+    const ahead = new Date(Date.parse(x.chain.now()) + 60_000).toISOString().replace('.000Z', 'Z') as Timestamp;
+    const t = await take(x, 'dated-ahead', { createdAt: ahead });
+    const r = await submit(x, t.offer());
+    expect(r.ok ? 'ok' : [r.problem.type, r.problem.detail]).toEqual(['invalid_signature', expect.stringMatching(/^the seller contract approves a take only from its createdAt on, and this take's createdAt \S+ is after the chain's newest block time \S+; date the take at or before/)]);
+  }, 120_000);
+
+  it('attack.deployment-gas-drain: first takes of two sellers at once stay within a budget of one deployment a day', async () => {
+    const x = await setup();
+    x.chain.deployBudget = { perDay: 1, maxGas: 25_000_000n };
+    const a = await take(x, 'budget-race-a');
+    const b = await take(x, 'budget-race-b', { key: x.other.key, seller: x.other.seller });
+    for (const t of [a, b]) {
+      await must(x.chain, x.cast, t.offer());
+      await must(x.chain, x.cast, t.deal.accept());
+    }
+    const before = await txCount();
+    const results = await Promise.all([submit(x, await a.deal.agreeAndFund()), submit(x, await b.deal.agreeAndFund())]);
+    expect(results.map((r) => (r.ok ? 'ok' : r.problem.type)).sort()).toEqual(['ok', 'relay_refused']);
+    expect(await txCount()).toBe(before + 2);
+    expect([await codeAt(x.seller), await codeAt(x.other.seller)].filter((c) => c !== '0x')).toHaveLength(1);
+  }, 120_000);
+
+  it('attack.deployment-gas-drain: no deployment for a seller whose mandate expired between the offer and the funding', async () => {
+    const x = await setup([], new Date(Date.parse(START) + 120_000).toISOString().replace('.000Z', 'Z'));
+    const t = await take(x, 'mandate-expires');
+    await must(x.chain, x.cast, t.offer());
+    await must(x.chain, x.cast, t.deal.accept());
+    x.chain.advance(180);
+    const before = await txCount();
+    const r = await submit(x, await t.deal.agreeAndFund());
+    expect(r.ok ? 'ok' : [r.problem.type, r.problem.detail]).toEqual(['relay_refused', expect.stringMatching(/^this operator deploys a seller contract only for a seller it admits/)]);
+    expect(await txCount()).toBe(before);
+    expect(await codeAt(x.seller)).toBe('0x');
+  }, 120_000);
+
   it('neutrality.deploy-front-run-take-still-funds: a deployment someone made first is skipped; two first takes close together deploy once', async () => {
     const x = await setup();
     const a = await take(x, 'race-a');
@@ -192,13 +229,13 @@ describe.skipIf(!ready)(`a standing seller's contract not yet deployed, on anvil
   }, 120_000);
 
   it('attack.deployment-gas-drain: no deployment for a seller without a mandate, past the budget, above its gas, or for a funding that would fail', async () => {
-    // A seller contract this node does not admit: the take is refused at the offer, and nothing is sent.
+    // A seller contract this node does not admit: the take is refused at the offer, before any creation is simulated, and nothing is sent.
     const x = await setup();
     const unknownKey = testActor('unadmitted-standing-key');
     const stranger = await take(x, 'unadmitted', { key: unknownKey, seller: standingSellerAddress(unknownKey.address) });
     const before = await txCount();
     const r = await submit(x, stranger.offer());
-    expect(r.ok ? 'ok' : r.problem.type).toBe('scope_exceeded');
+    expect(r.ok ? 'ok' : [r.problem.type, r.problem.detail]).toEqual(['invalid_signature', expect.stringMatching(/^this operator reads a seller contract before its deployment only for a seller it admits by mandate/)]);
     expect(await txCount()).toBe(before);
 
     // The budget: one deployment a day. The first seller's take deploys; the second seller's is declined, with nothing sent.
@@ -221,7 +258,7 @@ describe.skipIf(!ready)(`a standing seller's contract not yet deployed, on anvil
     // Above the gas a deployment may take: declined, nothing sent.
     x.chain.deployBudget = { perDay: 20, maxGas: 100_000n };
     const tooMuch = await submit(x, await second.deal.agreeAndFund());
-    expect(tooMuch.ok ? 'ok' : [tooMuch.problem.type, tooMuch.problem.detail]).toEqual(['relay_refused', expect.stringMatching(/^the seller contract's deployment needs about \d+ gas, above this operator's budget of 100000 for one/)]);
+    expect(tooMuch.ok ? 'ok' : [tooMuch.problem.type, tooMuch.problem.detail]).toEqual(['relay_refused', expect.stringMatching(/^the seller contract's deployment needs about \d+ gas, above this operator's budget of 100000 gas for one/)]);
     expect(await txCount()).toBe(mid);
 
     // A funding the contract would refuse (a payment address holding nothing): refused by the simulation with the

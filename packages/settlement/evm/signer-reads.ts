@@ -30,7 +30,7 @@ const EXECUTION = /execution reverted|revert|out of gas|outofgas|invalid opcode|
  *   PUSH1 0 DUP1 REVERT                                                   no
  *   JUMPDEST PUSH1 0x20 PUSH1 0 RETURN                                    the answer's first word
  */
-export const RULES_CHECKER: Hex = '0x6020360380602060003760206000826000600035' + '5afa3d6020111516602357600080fd5b60206000f3' as Hex;
+const RULES_CHECKER: Hex = '0x6020360380602060003760206000826000600035' + '5afa3d6020111516602357600080fd5b60206000f3' as Hex;
 
 /** The gas a check gets: the relayer's cap per transaction (live.ts), which bounds what a wallet can use on chain too. */
 const CHECK_GAS = 3_000_000n;

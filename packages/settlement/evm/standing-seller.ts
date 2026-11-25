@@ -11,7 +11,7 @@ import { STANDING_SELLER_CREATION_CODE } from './standing-seller-code.js';
 export const CREATE2_DEPLOYER: Address = '0x4e59b44847b379578588920cA78FbF26c0B4956C';
 /** The salt a standing seller deploys at: 0, the seller tools' default (ADR-0040 §4). */
 export const STANDING_SALT: Hex = `0x${'00'.repeat(32)}`;
-/** keccak256 of the pinned creation code: what a buyer's command pins to check an address before deployment. */
+/** keccak256 of the pinned creation code: what a buyer's tool can pin to compute the same address before deployment. */
 export const STANDING_SELLER_CREATION_CODE_HASH: Hex = keccak256(STANDING_SELLER_CREATION_CODE);
 
 /** The init code for `key`: the creation code and the constructor's one argument. */

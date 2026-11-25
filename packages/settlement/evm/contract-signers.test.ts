@@ -296,8 +296,7 @@ describe.skipIf(!ready)(`contract signers on anvil (T-549)${ready ? '' : ' (SKIP
       expect(terms.timing.disputeBy).toBe(iso(at + later * 1000 + 5_400_000));
       const read = <T>(functionName: string, args: unknown[]) => world.publicClient.readContract({ address: SELLER_CONTRACT, abi: x.sellerAbi, functionName, args }) as Promise<T>;
       expect(await read<Hex32>('templateHash', [standingOfferView(template)])).toBe(templateHash(template));
-    // The hash a node reads from a chain blob before the contract exists (T-549 PR 4) is the contract's too.
-    expect(templateHashOfView(standingOfferView(template))).toBe(templateHash(template));
+      expect(templateHashOfView(standingOfferView(template))).toBe(templateHash(template));
       expect(await read<Hex32>('commitmentId', [await read('termsOf', [standingOfferView(template), fillView(fill)])])).toBe(commitmentId(terms));
     }
   }, 120_000);
