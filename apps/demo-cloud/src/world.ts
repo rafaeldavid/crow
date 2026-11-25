@@ -191,6 +191,13 @@ export function needsPanel(c: { acceptance?: { rubric?: { criteria?: readonly un
 }
 
 /**
+ * N222: whether a world fails closed instead of scripting when a live judge variable is missing. A world that settles on
+ * a chain (`live`) does unless its options say otherwise; SimChain does not. The test harnesses that run the demo on
+ * anvil and want its scripted, marked judges say so with `requireLiveJudges: false`.
+ */
+export const requiresLiveJudges = (o: Pick<PublicWorldOptions, 'live' | 'requireLiveJudges'>): boolean => o.requireLiveJudges ?? o.live !== undefined;
+
+/**
  * T-574 (Rafa, 2026-11-20: "Decline new judged deals until following day, until we have sufficient Crow usage, then
  * revisit"): in a live world, why Crow's primary declines a new deal that can convene a judge panel, or null. It declines
  * while today's budget, less `reserved` (what the funded judged deals still waiting for a Crow panel may need), cannot
@@ -860,7 +867,7 @@ export class PublicWorld {
     const registrations = await StorageRegistrations.load(storage, (prefix, rows) => telemetry.rows(prefix, rows));
     replayed();
     // Live or scripted judges, fixed for this instance: the registry it binds depends on which.
-    const panel = panelConfig({ env: o.env, storage, now, failClosed: o.requireLiveJudges ?? !!o.live, ...(o.judgeProvider ? { judgeProvider: o.judgeProvider } : {}), ...(o.liveCallsPerDay !== undefined ? { liveCallsPerDay: o.liveCallsPerDay } : {}) });
+    const panel = panelConfig({ env: o.env, storage, now, failClosed: requiresLiveJudges(o), ...(o.judgeProvider ? { judgeProvider: o.judgeProvider } : {}), ...(o.liveCallsPerDay !== undefined ? { liveCallsPerDay: o.liveCallsPerDay } : {}) });
     const faucetAmount = o.faucetAmount ?? 1_000n * TUSD;
     const faucetMaxAmount = o.faucetMaxAmount ?? DEMO_FAUCET_MAX_GRANT;
     if (faucetAmount > faucetMaxAmount) throw new Error(`faucetAmount ${faucetAmount} is above faucetMaxAmount ${faucetMaxAmount}`);

@@ -15,7 +15,7 @@ import { MemoryFeedbackStore, SIM_MAX_CIPHERTEXT_BYTES, signRegistration, testAc
 import { MemoryStorage, PublicWorld, type PublicWorldOptions } from './index.js';
 import { checkExchange } from '../../../tests/contract/openapi-check.ts';
 import { JudgeBudget } from './judges.js';
-import { DEMO_FAUCET_MAX_GRANT, DEMO_MAX_CIPHERTEXT_BYTES, TimeoutBudgetRows, buildCommit, relayerFacts } from './world.js';
+import { DEMO_FAUCET_MAX_GRANT, DEMO_MAX_CIPHERTEXT_BYTES, TimeoutBudgetRows, buildCommit, relayerFacts, requiresLiveJudges } from './world.js';
 
 type J = any; // eslint-disable-line @typescript-eslint/no-explicit-any
 
@@ -1275,6 +1275,16 @@ describe('live judges fail closed on a chain world when a model variable is miss
     const calls: string[] = [];
     return { calls, provider: { complete: (r: Parameters<typeof inner.complete>[0]) => (calls.push(r.model), inner.complete(r)) } };
   };
+
+  // Red team of PR 797 (L2): the default had no test, since every world above names the flag. A chain world, the
+  // Worker's Sepolia world among them (worker.ts passes `live` and never the flag), fails closed unless told otherwise.
+  it('fails closed by default on any world with a chain, and only where the options say otherwise', () => {
+    const live = {} as NonNullable<PublicWorldOptions['live']>;
+    expect(requiresLiveJudges({ live })).toBe(true);
+    expect(requiresLiveJudges({ live, requireLiveJudges: false })).toBe(false);
+    expect(requiresLiveJudges({})).toBe(false);
+    expect(requiresLiveJudges({ requireLiveJudges: true })).toBe(true);
+  });
 
   it('declines a judged offer with a clear reason, says so in discovery, and still accepts a checks-only offer', async () => {
     const { urls } = await serve({ env: incomplete, requireLiveJudges: true });
