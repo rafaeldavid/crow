@@ -974,6 +974,7 @@ export class EvmSettlement implements Settlement {
     let p = this.runtimes.get(k);
     if (!p) {
       if (this.runtimes.size >= 256) this.runtimes.clear();
+      // eslint-disable-next-line no-restricted-syntax -- a creation reads no state: its code follows from the init code alone, at any block.
       p = this.world.publicClient.call({ data: standingInitCode(key) }).then((r) => {
         if (!r.data || r.data === '0x') throw new Error(`the seller contract's creation for key ${key} returned no code`);
         return r.data;
@@ -1493,6 +1494,8 @@ export class EvmSettlement implements Settlement {
       if (used >= perDay) refuse('relay_refused', `this operator deploys at most ${perDay} standing sellers' contracts a day at its own gas and has deployed ${used} today; ${elsewhere}`);
       const dep = standingDeployment(s.key);
       const from = options.sender ? privateKeyToAccount(options.sender).address : this.world.senderFor(id);
+      // At the latest block: the deployment reads no state but whether its address is free, which the code read above and the send check again.
+      // eslint-disable-next-line no-restricted-syntax -- see the line above
       const gas = await this.world.publicClient.estimateGas({ account: from, to: dep.to, data: dep.data }).catch(async (e: unknown) => {
         // Deployed by someone else since the read: skipped. Any other failure is no deployment, and no funding.
         if ((await this.codeNow(s.seller)) !== '0x') return null;

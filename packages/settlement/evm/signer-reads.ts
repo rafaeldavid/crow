@@ -104,13 +104,14 @@ export function chainSignerCheck(client: PublicClient, ctx: CheckContext, at: Re
           ? await at.call(tx)
           : // A live chain passes its newest block, a mined step its own; a block-less check reads the latest (a test's stub chain).
             (
+              // eslint-disable-next-line no-restricted-syntax -- the block comes from block() below: the transaction's own, or the node's newest (T-232)
               await client.call({
                 account: tx.from,
                 to: tx.to,
                 data: tx.data,
                 gas: tx.gas,
                 gasPrice: tx.gasPrice,
-                ...(await block()), // eslint-disable-line no-restricted-syntax -- the block comes from block() above: the transaction's own, or the node's newest (T-232)
+                ...(await block()),
                 stateOverride: tx.overrides.map((o) => ({ address: o.address, ...(o.code ? { code: o.code } : {}), ...(o.balance ? { balance: BigInt(o.balance) } : {}) })),
               })
             ).data;
