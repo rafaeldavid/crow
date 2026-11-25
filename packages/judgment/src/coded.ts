@@ -221,9 +221,8 @@ export function parseCodedVerdict(raw: string, opts: CodedOptions): ParsedCoded 
   // The boolean alone flags a case; kinds and references without it are dropped.
   const kindsIn = Object.hasOwn(top, 'injectionKinds') ? top['injectionKinds'] : undefined;
   const refsIn = Object.hasOwn(top, 'injectionRefs') ? top['injectionRefs'] : undefined;
-  const none = (_x: unknown): _x is never => false;
-  const injectionKinds = keepList(kindsIn, injectionSuspected ? isKind : none, () => dropped.add('reasons'));
-  const injectionRefs = keepList(refsIn, injectionSuspected ? isRef : none, () => dropped.add('refs'));
+  const injectionKinds = keepList(kindsIn, (x): x is InjectionKind => injectionSuspected && isKind(x), () => dropped.add('reasons'));
+  const injectionRefs = keepList(refsIn, (x): x is string => injectionSuspected && isRef(x), () => dropped.add('refs'));
 
   const verdict: CodedJudgeVerdict = { criteria, overall: top['overall'] as CodedJudgeVerdict['overall'], injectionSuspected, injectionKinds, injectionRefs };
   // The normalized verdict is checked against the schema's coded branch: a defence in depth, never expected to fail.

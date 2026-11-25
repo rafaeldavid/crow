@@ -58209,9 +58209,8 @@ function parseCodedVerdict(raw, opts) {
 	const injectionSuspected = top["injectionSuspected"];
 	const kindsIn = Object.hasOwn(top, "injectionKinds") ? top["injectionKinds"] : void 0;
 	const refsIn = Object.hasOwn(top, "injectionRefs") ? top["injectionRefs"] : void 0;
-	const none = (_x) => false;
-	const injectionKinds = keepList(kindsIn, injectionSuspected ? isKind : none, () => dropped.add("reasons"));
-	const injectionRefs = keepList(refsIn, injectionSuspected ? isRef : none, () => dropped.add("refs"));
+	const injectionKinds = keepList(kindsIn, (x) => injectionSuspected && isKind(x), () => dropped.add("reasons"));
+	const injectionRefs = keepList(refsIn, (x) => injectionSuspected && isRef(x), () => dropped.add("refs"));
 	const verdict = {
 		criteria,
 		overall: top["overall"],

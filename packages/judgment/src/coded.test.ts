@@ -181,7 +181,11 @@ describe('the record holds only rubric ids, list words, hex and digits (property
   const strings = (v: unknown, out: string[] = []): string[] => {
     if (typeof v === 'string') out.push(v);
     else if (Array.isArray(v)) v.forEach((x) => strings(x, out));
-    else if (v && typeof v === 'object') for (const [k, x] of Object.entries(v)) (out.push(`key:${k}`), strings(x, out));
+    else if (v && typeof v === 'object')
+      for (const [k, x] of Object.entries(v)) {
+        out.push(`key:${k}`);
+        strings(x, out);
+      }
     return out;
   };
   const KEYS = new Set(['format', 'criteria', 'id', 'refs', 'reasons', 'score', 'overall', 'injectionSuspected', 'injectionKinds', 'injectionRefs', 'dropped', 'keys'].map((k) => `key:${k}`));
