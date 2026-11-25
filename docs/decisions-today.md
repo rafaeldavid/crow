@@ -1928,3 +1928,33 @@ The build is not started; it opens as its own task on Rafa's word.
 **Dropped:** converting only the columns a check reads. It would still recurse on a column a check reads, and leaves `enum`, `const` and `uniqueItems` as they were.
 
 **Litmus tests.** Neutrality: stronger; two adjudicators reach the same result on a deeply nested delivery whatever their stack size. The hold: unchanged. Defended judgment: unchanged, apart from the detail line.
+
+## D103. A pattern that meets a string too long to match fails the check (T-614)
+
+**Status:** adopted, 2026-11-25.
+
+**Who decided.** The session `overlong-pattern`, under the in-repository autonomy rule. Rafa may overrule any line.
+
+**Why.** The pattern engine reads at most 10,000 code points of a string. It answered "no match" for a longer one. `not` turned that answer into a pass, so a required "must not contain" rule passed padded work, and on a checks-only deal the seller was paid (measured). `oneOf` could pass the same way. A string the engine does not read has no answer, so no result may rest on one.
+
+**Decided:**
+
+- **Fail the `json_schema` check.** The engine throws `SubjectTooLong` instead of answering. No schema keyword catches it, so the check fails wherever the pattern sits: under `not`, `anyOf`, `oneOf` and any nesting, and also where another branch would have passed. The line is `a pattern met a string over 10000 code points`. A required check rejects the delivery.
+- **Fail closed by default.** A new caller of the engine that does nothing gets a failed check.
+- **`regex_match_rate_min` is unchanged.** It does not count such a cell as a match. More matches only help that check, so the cell never helps it pass. It opts in by calling `countsAsMatch`.
+- **A pattern that is not read decides nothing.** A keyword that fails first still ends its schema object. So `"maxLength": 10000` beside a pattern in an `anyOf` branch is a definite failure for a long string, and a buyer can use it to let another branch accept long strings.
+- **One key order where order decides.** Key order can change pass or fail only under `not`, `anyOf` and `oneOf`: a keyword that fails first keeps a later pattern from being read, and elsewhere either way fails the check. The commitment ID hashes the terms with sorted keys, so two nodes may hold one deal's terms in two key orders. Under those three, `json_schema` reads keywords in a fixed order (tests of the value itself, then `pattern`, then keywords that hold subschemas) and property names sorted. Everywhere else it reads both as written, as before. So `maxLength` beside a pattern is read first under those three whatever the terms' order.
+- **Not changed:** outside those three, which failure line a check reports, and whether it runs out of budget before a failure, can still follow the key order, as before.
+- **Counts only.** No timer, and no step is charged more or less than before. A schema with no `not`, `anyOf` or `oneOf` whose patterns meet no over-long string gives the same result, line and charge as before.
+- **Version.** The checks are not a kept version (D99). The rule belongs to the build, so the primary, fallback and appeal adjudicators deploy from one build. A deal already signed is judged under the new rule after the deploy.
+- **Effect** (measured): no existing scenario snapshot changes. None of the 41 `json_schema` checks in the repository's data files before this change holds a pattern under `not`, `anyOf` or `oneOf`. Over 32,365 random schemas without those three, on strings under the cap and small budgets, results, lines and charges equal `main`'s.
+
+**Dropped:**
+
+- **Inconclusive.** It escalates, even for an optional check. The appeal adjudicator runs the same checks and signs nothing, so the seller could force the default outcome by padding.
+- **One sorted order for the whole schema** (the first build of this change). Sorting put `properties` ahead of `required` and `type`. A seller could then spend the budget before the cheap failure, and turn a reject into an escalation (red team, measured).
+- **A third answer, "unknown", carried through `not`, `anyOf`, `oneOf` and `allOf`.** It would keep a pass that another branch proves. Every keyword, now and later, would have to carry it, and one that did not would pass again.
+- **A larger cap.** Any cap leaves a longer string.
+- **Refusing a negated pattern at the offer.** D31: the terms are not wrong, and `oneOf` has the same problem.
+
+**Litmus tests.** Neutrality: unchanged. The hold: unchanged. Defended judgment: strengthened.

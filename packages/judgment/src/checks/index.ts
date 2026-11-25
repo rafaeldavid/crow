@@ -6,7 +6,7 @@
 // fullwidth digits or hidden characters cannot be folded into passing values.
 //
 // A check that cannot be evaluated (bad pattern, unsupported schema keyword, missing reference,
-// unknown type, hostile shape) fails closed. A check that runs out of the shared work budget is
+// unknown type, hostile shape, a string too long for a schema pattern) fails closed. A check that runs out of the shared work budget is
 // inconclusive: it is recorded as not passed, and the pipeline escalates instead of rejecting.
 import { err, ok, type MimeType, type Result } from '@holdback/core';
 import { MAX_CIPHERTEXT_BYTES as STORE_MAX_BYTES, sha256 } from '@holdback/core/crypto';
@@ -17,7 +17,7 @@ import type { UntrustedData } from '../untrusted.js';
 import { chargeChars, codePoints, MAX_CANONICAL_DEPTH, SET_UNITS, TooDeep } from './cost.js';
 import { isIso8601 } from './iso8601.js';
 import { compileJsonSchema, type Validator } from './json-schema.js';
-import { BudgetExhausted, compileSafeRegex, StepBudget, type SafeRegex } from './safe-regex.js';
+import { BudgetExhausted, compileSafeRegex, countsAsMatch, MAX_SUBJECT_CHARS, StepBudget, SubjectTooLong, type SafeRegex } from './safe-regex.js';
 import { evaluateSignatureValid, validateSignatureCheck, type ParsedDelivery } from './signature-valid.js';
 import { evaluateEqualLengths, validateEqualLengths } from './equal-lengths.js';
 import { evaluateMonotonicColumn, validateMonotonicColumn } from './monotonic-column.js';
@@ -388,7 +388,8 @@ function evaluate(check: JudgmentCheck, prepared: Prepared, run: Run): Outcome {
       for (let r = 0; r < t.rows; r++) {
         budget.spend(1);
         const s = cellText(cellAt(t, r, i));
-        if (s !== null && re.fullMatch(s, budget)) matches++;
+        // A cell too long to match is not counted. More matches only help this check, so that never helps it pass (D103).
+        if (s !== null && countsAsMatch(re, s, budget)) matches++;
       }
       // Zero rows match vacuously; row_count_range governs emptiness.
       const ok = t.rows === 0 || matches * 10_000 >= check.minBps * t.rows;
@@ -471,6 +472,9 @@ export function runChecks(checks: readonly JudgmentCheck[], input: CheckInput, b
       } else if (e instanceof TooDeep) {
         // D102: enum, const and uniqueItems refuse a delivered value past the cap, at a fixed count.
         o = fail(`a value is nested deeper than ${MAX_CANONICAL_DEPTH} levels`);
+      } else if (e instanceof SubjectTooLong) {
+        // D103: a json_schema pattern met a string the engine does not read, so nothing shows the delivery meets the check.
+        o = fail(`a pattern met a string over ${MAX_SUBJECT_CHARS} code points`);
       } else {
         // Hostile shapes (for example JSON nested deep enough to exhaust the stack) fail the check, never the pipeline.
         o = fail('check could not be evaluated on this input');

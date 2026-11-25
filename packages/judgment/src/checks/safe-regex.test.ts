@@ -1,7 +1,7 @@
 import { Script, createContext } from 'node:vm';
 import fc from 'fast-check';
 import { describe, expect, it } from 'vitest';
-import { BudgetExhausted, compileSafeRegex, MAX_SUBJECT_CHARS, StepBudget } from './safe-regex.js';
+import { BudgetExhausted, compileSafeRegex, MAX_SUBJECT_CHARS, StepBudget, SubjectTooLong } from './safe-regex.js';
 
 const compile = (p: string) => {
   const r = compileSafeRegex(p);
@@ -156,8 +156,8 @@ describe('safe regex: refusals', () => {
 
   it('refuses patterns longer than 200 characters', () => expect(compileSafeRegex('a'.repeat(201)).ok).toBe(false));
 
-  it('does not match subjects longer than the cap', () => {
-    expect(compile('a*').fullMatch('a'.repeat(MAX_SUBJECT_CHARS + 1))).toBe(false);
+  it('gives no answer for a subject longer than the cap', () => {
+    expect(() => compile('a*').fullMatch('a'.repeat(MAX_SUBJECT_CHARS + 1))).toThrow(SubjectTooLong);
     expect(compile('a*').fullMatch('a'.repeat(MAX_SUBJECT_CHARS))).toBe(true);
   });
 });
@@ -231,8 +231,8 @@ describe('safe regex: subject length', () => {
   it('measures the cap in code points, surrogate pairs counted once', () => {
     const wide = '\u{1F600}';
     expect(compile('.*').fullMatch(wide.repeat(MAX_SUBJECT_CHARS))).toBe(true);
-    expect(compile('.*').fullMatch(`${wide.repeat(MAX_SUBJECT_CHARS)}a`)).toBe(false);
-    expect(compile('a').search(`${'\uD800'.repeat(MAX_SUBJECT_CHARS)}a`)).toBe(false);
+    expect(() => compile('.*').fullMatch(`${wide.repeat(MAX_SUBJECT_CHARS)}a`)).toThrow(SubjectTooLong);
+    expect(() => compile('a').search(`${'\uD800'.repeat(MAX_SUBJECT_CHARS)}a`)).toThrow(SubjectTooLong);
     expect(compile('a').search(`${'\uD800'.repeat(MAX_SUBJECT_CHARS - 1)}a`)).toBe(true);
   });
 });

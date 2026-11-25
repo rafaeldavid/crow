@@ -25,8 +25,15 @@ export const MAX_STATES = 5_000;
  * state plus one, so no pattern within MAX_STATES reaches this limit; it holds if the simplification misses a case.
  */
 export const MAX_COMPILE_STEPS = 50_000;
-/** Longer subjects never match; this bounds the work per cell. */
+/** The engine reads no subject over this many code points; this bounds the work per cell. */
 export const MAX_SUBJECT_CHARS = 10_000;
+/**
+ * The engine has no answer for a subject over MAX_SUBJECT_CHARS. It throws instead of answering "no match", which a
+ * caller can turn into a pass (`not`, `oneOf`), so a caller that does nothing fails closed: runChecks records the check
+ * as failed (D103). One instance, and not an Error, so a throw captures no stack.
+ */
+export class SubjectTooLong {}
+const SUBJECT_TOO_LONG = new SubjectTooLong();
 
 type Pred = (cp: number) => boolean;
 type Node =
@@ -63,7 +70,7 @@ export class BudgetExhausted extends Error {
 }
 
 export interface SafeRegex {
-  /** True iff the whole subject matches (anchors implied). */
+  /** True iff the whole subject matches (anchors implied). Both methods throw SubjectTooLong for a subject over the cap. */
   fullMatch(subject: string, budget?: StepBudget): boolean;
   /** True iff some substring matches, honoring a leading ^ and trailing $ (RegExp.test semantics). */
   search(subject: string, budget?: StepBudget): boolean;
@@ -397,6 +404,26 @@ function fits(subject: string, budget?: StepBudget): boolean {
   return codePoints(subject) <= MAX_SUBJECT_CHARS;
 }
 
+function mustFit(subject: string, budget?: StepBudget): void {
+  if (!fits(subject, budget)) throw SUBJECT_TOO_LONG;
+}
+
+/**
+ * A full match for a count that more matches can only help, as in regex_match_rate_min: a subject over the cap is not
+ * counted. Never use it where "no match" can help a result.
+ */
+export function countsAsMatch(re: SafeRegex, subject: string, budget?: StepBudget): boolean {
+  // Past two caps in UTF-16 units the length alone decides, with no charge, so no throw either: it would cost far more
+  // than the cell's unit. Below that, the engine's count of the code points is charged.
+  if (subject.length > 2 * MAX_SUBJECT_CHARS) return false;
+  try {
+    return re.fullMatch(subject, budget);
+  } catch (e) {
+    if (e instanceof SubjectTooLong) return false;
+    throw e;
+  }
+}
+
 interface Nfa {
   states: State[];
   start: number;
@@ -428,7 +455,10 @@ export function compileSafeRegex(pattern: string): Result<SafeRegex, string> {
     const options = new Parser(cps).parse();
     const whole = nfa(alt(options));
     // A whole-subject match is anchored at both ends, so where the anchors bind does not matter.
-    const full = (s: string, b?: StepBudget) => fits(s, b) && simulate(whole.states, whole.start, s, true, true, b);
+    const full = (s: string, b?: StepBudget) => {
+      mustFit(s, b);
+      return simulate(whole.states, whole.start, s, true, true, b);
+    };
     // A search binds ^ to the first alternative and $ to the last, as RegExp does: `^a|b` finds the b in "xb".
     type Part = Nfa & { anchoredStart: boolean; anchoredEnd: boolean };
     let parts: Part[];
@@ -442,7 +472,10 @@ export function compileSafeRegex(pattern: string): Result<SafeRegex, string> {
       if (middle.length) parts.push({ ...nfa(alt(middle)), anchoredStart: false, anchoredEnd: false });
       if (last.length) parts.push({ ...nfa(last[0]!), anchoredStart: false, anchoredEnd: true });
     }
-    const search = (s: string, b?: StepBudget) => fits(s, b) && parts.some((p) => simulate(p.states, p.start, s, p.anchoredStart, p.anchoredEnd, b));
+    const search = (s: string, b?: StepBudget) => {
+      mustFit(s, b);
+      return parts.some((p) => simulate(p.states, p.start, s, p.anchoredStart, p.anchoredEnd, b));
+    };
     const states = whole.states.length + (parts.length > 1 ? parts.reduce((n, p) => n + p.states.length, 0) : 0);
     return ok({ fullMatch: full, search, states });
   } catch (e) {

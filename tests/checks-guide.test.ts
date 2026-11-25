@@ -65,7 +65,8 @@ describe('site/ref/checks.txt and the check code', () => {
     const limits = section('Pattern and work limits');
     expect(limits).toContain(`${n(MAX_PATTERN_CHARS)} characters; repeat counts up to ${n(MAX_REPEAT)}; compiled, ${n(MAX_STATES)} states and ${n(MAX_COMPILE_STEPS)} compile steps`);
     expect(limits).toContain(`${n(MAX_SCHEMA_STATES)} states together`);
-    expect(limits).toContain(`over ${n(MAX_SUBJECT_CHARS)} code points matches no pattern`);
+    expect(limits).toContain(`No pattern reads a string over ${n(MAX_SUBJECT_CHARS)} code points`);
+    expect(limits).toContain(`\`a pattern met a string over ${MAX_SUBJECT_CHARS} code points\``);
     expect(limits).toContain(`"maxLength": ${MAX_SUBJECT_CHARS}`);
     expect(limits).toContain(`share ${n(CHECK_BUDGET)} work units`);
     const signed = section('Checking a signature');
@@ -102,15 +103,18 @@ describe('site/ref/checks.txt and the check code', () => {
     expect(limits).toContain(`\`${valueLine}\``);
   });
 
-  it('is right that a `not` pattern passes a string too long to match, and that maxLength stops it', () => {
-    const delivery = JSON.stringify({ s: 'secret'.padEnd(MAX_SUBJECT_CHARS + 1, 'a') });
-    const check = (rule: object): JudgmentCheck => ({ id: 'no-word', type: 'json_schema', required: true, schema: { properties: { s: rule } } });
-    expect(run([check({ not: { pattern: 'secret' } })], delivery)[0]!.passed).toBe(true);
-    expect(run([check({ maxLength: MAX_SUBJECT_CHARS, not: { pattern: 'secret' } })], delivery)[0]!.passed).toBe(false);
-    // Nested under other keywords, the gap is the same.
-    expect(run([check({ allOf: [{ not: { anyOf: [{ pattern: 'secret' }, { pattern: 'token' }] } }] })], delivery)[0]!.passed).toBe(true);
-    // At the limit itself the string is still read, so the rule holds.
-    const atLimit = JSON.stringify({ s: 'secret'.padEnd(MAX_SUBJECT_CHARS, 'a') });
-    expect(run([check({ not: { pattern: 'secret' } })], atLimit)[0]!.passed).toBe(false);
+  it('is right that a pattern that meets a longer string fails the check, and what lets a branch take one', () => {
+    const long = 'a'.repeat(MAX_SUBJECT_CHARS + 1);
+    const check = (schema: object): JudgmentCheck => ({ id: 'no-word', type: 'json_schema', required: true, schema });
+    const outcome = (rule: object) => run([check({ properties: { s: rule } })], JSON.stringify({ s: long }))[0]!;
+    const unread = { checkId: 'no-word', required: true, passed: false, detail: `a pattern met a string over ${MAX_SUBJECT_CHARS} code points` };
+    for (const rule of [{ not: { pattern: 'secret' } }, { anyOf: [{ pattern: 'secret' }, { type: 'string' }] }, { oneOf: [{ pattern: 'secret' }, { type: 'string' }] }]) {
+      expect(outcome(rule), JSON.stringify(rule)).toEqual(unread);
+    }
+    expect(outcome({ anyOf: [{ pattern: '^b', maxLength: MAX_SUBJECT_CHARS }, { minLength: MAX_SUBJECT_CHARS + 1 }] }).passed).toBe(true);
+    // At the limit itself the string is still read.
+    expect(run([check({ not: { pattern: 'secret' } })], JSON.stringify('a'.repeat(MAX_SUBJECT_CHARS)))[0]!.passed).toBe(true);
+    const column: JudgmentCheck = { id: 'cells', type: 'regex_match_rate_min', required: true, column: 's', pattern: 'a*', minBps: 5000 };
+    expect(run([column], JSON.stringify([{ s: long }, { s: 'a' }]))[0]!.detail).toBe('match 1/2');
   });
 });

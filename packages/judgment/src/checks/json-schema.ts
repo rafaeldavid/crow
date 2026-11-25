@@ -15,6 +15,10 @@ export const MAX_SCHEMA_STATES = 4 * MAX_STATES;
  * Returns undefined when valid, or a short reason. Spends one budget unit per subschema visit, one per name a
  * keyword looks up, and the size of what it reads: the canonical form for enum, const and uniqueItems, the length
  * for minLength and maxLength.
+ *
+ * It throws when the schema cannot be decided on the value: SubjectTooLong from `pattern`, BudgetExhausted, and the error
+ * canonical form raises on a value it refuses. No keyword catches one, so no `not`, `anyOf` or `oneOf` can turn it into
+ * a pass (D103).
  */
 export type Validator = (value: unknown, budget?: StepBudget) => string | undefined;
 
@@ -26,6 +30,25 @@ class SchemaError extends Error {}
 const isObject = (v: unknown): v is Record<string, unknown> => typeof v === 'object' && v !== null && !Array.isArray(v);
 const own = (o: object, k: string) => Object.prototype.hasOwnProperty.call(o, k);
 const typeOf = (v: unknown): string => (v === null ? 'null' : Array.isArray(v) ? 'array' : typeof v);
+/**
+ * The order of a schema object's keywords under `not`, `anyOf` and `oneOf`: tests of the value itself first, cheap ones
+ * before `pattern`, and the keywords that hold subschemas last. Only under those three can key order decide pass or fail:
+ * a keyword that fails first keeps a later pattern from being read, and elsewhere either way fails the check. The
+ * commitment ID hashes the terms with sorted keys, so two nodes may hold one deal's schema in two key orders. Elsewhere
+ * keywords are read as written, so a cheap failure the author put first still ends the work first (D103).
+ */
+const FIXED_ORDER = [
+  'type', 'required', 'minimum', 'maximum', 'exclusiveMinimum', 'exclusiveMaximum', 'minItems', 'maxItems', 'minLength', 'maxLength',
+  'const', 'enum', 'pattern', 'uniqueItems', 'properties', 'additionalProperties', 'items', 'allOf', 'anyOf', 'oneOf', 'not',
+];
+const byName = (a: string, b: string) => (a < b ? -1 : a > b ? 1 : 0);
+/** A name outside the list (an annotation, or a keyword compile refuses) ranks first, by name. */
+const byKeyword = (a: string, b: string) => FIXED_ORDER.indexOf(a) - FIXED_ORDER.indexOf(b) || byName(a, b);
+/** The entries of `o` as written, or in `order` when one is given. */
+function entries(o: object, order?: (a: string, b: string) => number): [string, unknown][] {
+  const all: [string, unknown][] = Object.entries(o);
+  return order ? all.sort(([a], [b]) => order(a, b)) : all;
+}
 
 /** Whether `s` has fewer than `n` code points; it counts, and charges the count, only when the length cannot tell. */
 function shorter(s: string, n: number, budget: StepBudget | undefined): boolean {
@@ -57,16 +80,18 @@ function nonNegInt(v: unknown, k: string): number {
   return v;
 }
 
-function compile(schema: unknown, depth: number, budget: { nodes: number; states: number }): Validator {
+/** `fixed`: this schema sits under `not`, `anyOf` or `oneOf`, so its read order is FIXED_ORDER and property names are sorted. */
+function compile(schema: unknown, depth: number, budget: { nodes: number; states: number }, fixed: boolean): Validator {
   if (depth > MAX_SCHEMA_DEPTH) throw new SchemaError(`schema deeper than ${MAX_SCHEMA_DEPTH}`);
   if (++budget.nodes > MAX_SCHEMA_NODES) throw new SchemaError(`schema has more than ${MAX_SCHEMA_NODES} subschemas`);
   if (schema === true) return () => undefined;
   if (schema === false) return () => 'false schema';
   if (!isObject(schema)) throw new SchemaError('a schema must be an object or boolean');
-  const sub = (s: unknown) => compile(s, depth + 1, budget);
+  const sub = (s: unknown) => compile(s, depth + 1, budget, fixed);
+  const choice = (s: unknown) => compile(s, depth + 1, budget, true);
   const checks: Validator[] = [];
 
-  for (const [k, v] of Object.entries(schema)) {
+  for (const [k, v] of entries(schema, fixed ? byKeyword : undefined)) {
     if (ANNOTATIONS.has(k)) continue;
     switch (k) {
       case 'type': {
@@ -81,7 +106,7 @@ function compile(schema: unknown, depth: number, budget: { nodes: number; states
         if (!Array.isArray(v)) throw new SchemaError('enum must be an array');
         // The canonical forms of the entries before the first one canonical form refuses. A scan in order matches
         // one of those, or reaches the refused entry and raises its error.
-        const entries = new Set<string>();
+        const allowed = new Set<string>();
         let refused: { at: number; error: unknown } | undefined;
         for (const [i, e] of v.entries()) {
           const c = canon(e);
@@ -89,14 +114,14 @@ function compile(schema: unknown, depth: number, budget: { nodes: number; states
             refused = { at: i, error: c.error };
             break;
           }
-          entries.add(c.text);
+          allowed.add(c.text);
         }
         checks.push((x, b) => {
           if (v.length === 0) return 'not in enum';
           if (refused?.at === 0) throw refused.error;
           const key = canonical(x, b);
           b?.spend(SET_UNITS);
-          if (entries.has(key)) return undefined;
+          if (allowed.has(key)) return undefined;
           if (refused) throw refused.error;
           return 'not in enum';
         });
@@ -112,7 +137,7 @@ function compile(schema: unknown, depth: number, budget: { nodes: number; states
       }
       case 'properties': {
         if (!isObject(v)) throw new SchemaError('properties must be an object');
-        const props = Object.entries(v).map(([name, s]) => [name, sub(s)] as const);
+        const props = entries(v, fixed ? byName : undefined).map(([name, s]) => [name, sub(s)] as const);
         checks.push((x, b) => {
           if (!isObject(x)) return undefined;
           for (const [name, val] of props) {
@@ -235,7 +260,7 @@ function compile(schema: unknown, depth: number, budget: { nodes: number; states
       case 'allOf':
       case 'oneOf': {
         if (!Array.isArray(v) || v.length === 0) throw new SchemaError(`${k} must be a non-empty array`);
-        const vals = v.map(sub);
+        const vals = v.map(k === 'allOf' ? sub : choice);
         checks.push((x, b) => {
           const passing = vals.filter((val) => val(x, b) === undefined).length;
           if (k === 'allOf') return passing === vals.length ? undefined : 'allOf not satisfied';
@@ -245,7 +270,7 @@ function compile(schema: unknown, depth: number, budget: { nodes: number; states
         break;
       }
       case 'not': {
-        const val = sub(v);
+        const val = choice(v);
         checks.push((x, b) => (val(x, b) === undefined ? 'matches not' : undefined));
         break;
       }
@@ -265,7 +290,7 @@ function compile(schema: unknown, depth: number, budget: { nodes: number; states
 
 export function compileJsonSchema(schema: unknown): Result<Validator, string> {
   try {
-    return ok(compile(schema, 0, { nodes: 0, states: 0 }));
+    return ok(compile(schema, 0, { nodes: 0, states: 0 }, false));
   } catch (e) {
     if (e instanceof SchemaError) return err(e.message);
     throw e;

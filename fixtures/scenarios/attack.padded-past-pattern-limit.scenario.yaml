@@ -1,0 +1,38 @@
+# @settlement sim @judges recorded @mode guaranteed_on_decision @seed 614
+name: attack.padded-past-pattern-limit
+description: >-
+  T-614, D103. Atlas's terms say the handover note holds no email address and no TODO marker, written as three
+  json_schema rules with not, anyOf and oneOf. Tidewater delivers both and pads the note to 10,001 characters, one
+  more than the pattern engine reads. Before D103 the unread note counted as not matching, so all three rules passed
+  and the seller was paid. Now each rule fails because its pattern met a string too long to match. Bench A rejects with
+  no panel, Atlas gets the price back and Bench A earns the fee.
+club: fixtures/clubs/data-services-v1.yaml
+terms: fixtures/terms/handover-note.yaml
+parties:
+  buyer: atlas-buyer
+  seller: tidewater-seller
+adjudicators:
+  primary: bench-a
+  fallback: bench-b
+  appeal: bench-c
+operators: [op-1, op-2]
+faucet:
+  atlas-buyer: "10000000000"
+  bench-a: "25000000000"
+  bench-b: "25000000000"
+  bench-c: "25000000000"
+steps:
+  - offer:              { by: seller, via: op-1 }
+  - adjudicator_accept: { via: op-1 }
+  - agree_and_fund:     { by: buyer, via: op-1 }
+  - deliver:            { by: seller, via: op-1, file: data/handover-note/padded.json }
+  - advance_clock:      { seconds: 5 }
+  - judge:              { adjudicator: bench-a }
+  - settle:             { trigger: anyone }
+expect:
+  terminal: Refunded
+  balances:
+    atlas-buyer: "9950000000"
+    tidewater-seller: "0"
+    bench-a: "25050000000"
+    escrow: "0"
