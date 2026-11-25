@@ -135,7 +135,7 @@ Unit-test this function exhaustively with table-driven cases.
 | T20 | Policy swap after agreement | The adjudicator changes its prompt template or aggregation rule after both parties sign | `policyHash` bound in the commitment; each verdict's template hash checked against it; a mismatch invalidates the decision | `error.policy-hash-mismatch` |
 | T8 | Correlated error | Most adjudicators run the same models | Family diversity; cross-family agreement required for accept; from `agg-4`, valid verdicts from two families for any decision, so a fault in one family cannot leave the other to decide alone (ADR-0043); pairwise agreement monitored; alert when one family diverges | Calibration report; `packages/judgment/src/faults.test.ts`, `apps/adjudicator/src/judge-faults.test.ts` |
 | T9 | Bad-faith buyer rejection | The buyer sees the work and rejects to keep it | Two-sided hold: the buyer never sees plaintext before acceptance. The buyer cannot block judgment | `happy-path` + `neutrality.buyer-silent` |
-| T10 | Seller non-delivery | — | Anyone can reclaim after deliverBy | `reclaim-no-delivery` |
+| T10 | Seller non-delivery | — | Anyone can reclaim after deliverBy | `neutrality.seller-withholds-delivery` |
 | T11 | Double spend, races | Parallel fund calls | Idempotency keys; serializable state transitions; settled-once guard | `error.concurrent-overdraft`, property tests |
 | T12 | Replay or forged messages | Reuse of a signed offer | EIP-712 with nonce, expiry, chainId and verifying contract; rulebook hash; scope check | `error.replay`, `error.scope-exceeded` |
 | T13 | Agent key compromise | A stolen key signs large commitments | The payment address's balance and the principal's own wallet bound the loss: money leaves only on the payment address's signatures for one deal. On a chain the contracts read no mandate (ADR-0038, D69). The cap per commitment and the mandate's expiry bind only through the operators that relay a deal and a counterparty that checks. The daily cap binds only through each operator's own count. A principal cannot revoke a mandate today. On a live commitment the loss is bounded by the holds already funded, and the protocol offers no recourse; recourse lies between the principal and its agent provider (residual 12, D22) | none yet: `error.revoked-agent` waits for revocation (ADR-0038) |
@@ -169,7 +169,7 @@ judges:
     model: "<pinned dated model id>"     # never an alias
     status: active                        # candidate | active | retired
     calibratedAt: 2026-11-02
-    metrics: { falseAccept: 0.012, falseReject: 0.04, n: 40 }
+    metrics: { falseAcceptBps: 120, falseRejectBps: 400, n: 40 }   # integers, in basis points (ADR-0022)
   - id: second-family-a
     provider: openai-compatible
     family: "<family>"

@@ -43,3 +43,8 @@ reason = "2026-11-19: derivative 2.2.0 is unmaintained; an informational notice 
 id = "RUSTSEC-2024-0436"
 ignoreUntil = 2027-01-18
 reason = "2026-11-19: paste 1.0.15 is unmaintained; an informational notice with no fixed version. A compile-time macro only (proc-macro), from ark-ff 0.5.0 through risc0-groth16 3.0.6 to risc0-zkvm 3.1.0; no code of it runs in the prover or the verifier."
+
+[[IgnoredVulns]]
+id = "RUSTSEC-2026-0592"
+ignoreUntil = 2026-12-05
+reason = "2026-11-25: url 2.5.8, stack overflow in Url::origin() on nested blob: URLs; fixed in 2.5.9, published 2026-11-20. Not adopted yet: Crow waits until a release has been public for 14 days. Not reachable (measured, git grep): the prototype's own code never calls the url crate; it arrives only through risc0 tooling dependencies, and the prototype is part of nothing deployed. On 2026-12-05, bump to 2.5.9 (cargo update -p url --precise 2.5.9) and delete this entry."

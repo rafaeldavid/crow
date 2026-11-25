@@ -16,8 +16,8 @@ The goal is fast, deterministic feedback that agents can trust, plus readable ev
 | **Scenario fixtures (expect tests)** | End-to-end behavior per scenario: states, balances, events, judgments, receipts | `pnpm snap` (testkit) | Yes |
 | Differential tests | SimChain and the EVM contract produce the same transcript for every scenario except the SimChain-only fixtures (`LOCAL_EXCLUSIONS` in `packages/testkit/src/runner.ts`), which use party appeals or bonds, not in phase one, and the exact lines pinned in `LOCAL_KNOWN_DIFFERENCES` (same file, D88); any other difference fails | `pnpm snap --settlement=local` | Yes, from Phase 2 |
 | Contract tests | Invariants, fuzzing, no admin paths | Foundry (`forge test`, invariant tests) | Yes, from Phase 2 |
-| Formal model | Liveness and safety of the commitment state machine under any single actor halting | TLA+ with TLC (`formal/check.sh`, T-204) | Yes: on every pull request, the safety configs of both profiles (phase one and the full protocol) with their reach witnesses, and the broken variants; on pushes to `main`, every config, liveness included |
-| Calibration and red team | Judge accuracy, injection resistance, drift | `pnpm calibrate` | No (on demand, before registry promotion) |
+| Formal model | Liveness and safety of the commitment state machine under any single actor halting | TLA+ with TLC (`formal/check.sh`, T-204) | Yes, when `formal/` or `ci.yml` changes: on a pull request, the safety configs of both profiles (phase one and the full protocol) with their reach witnesses, and the broken variants; on a push to `main`, every config, liveness included |
+| Calibration and red team | Judge accuracy, injection resistance, drift | Not built yet: `pnpm calibrate` is T-301 (`docs/judgment-and-defenses.md`) | No (on demand, before registry promotion) |
 | Demo dry run | The experience works for a newcomer | Manual checklist (T-013) | No |
 | Agent simulation | Model agents of different sizes, given only outsider knowledge and a behaviour profile, use the HTTP API as buyers and sellers; `sim:check` recomputes conservation, terms-compliance, terminal-or-explained and matching records from the settlement log | `pnpm sim:world`, subagents, `pnpm sim:check` (`tools/sim/README.md`, T-021) | No (exploration; its unit tests run in CI, and findings become fixtures) |
 | Two-agent run | A buyer and a seller, each a raw tool-use loop over a model API from a different vendor (Anthropic, DeepSeek), make one deal through Crow with only the docs, an owner's brief and fenced tools; the run leaves a record, the seven measures and a replay page | `pnpm duet run` (`tools/duet/README.md`, T-391); live runs need both keys | Its scripted runs, yes: they prove the harness, not the models |
@@ -36,9 +36,9 @@ fixtures/scenarios/
   attack.injection-encoded-base64.expect.md
   neutrality.operator-refuses.scenario.yaml
   neutrality.operator-refuses.expect.md
-  error.scope-exceeded.scenario.yaml
-  error.scope-exceeded.expect.md
-  todo.milestone-delivery.scenario.yaml        # known unsupported; expect file records the current error
+  error.invalid-signature.scenario.yaml
+  error.invalid-signature.expect.md
+  todo.provider-outage.scenario.yaml           # a known gap; the expect file records today's behaviour
 fixtures/data/                                 # CSV inputs and deliverables referenced by scenarios
 ```
 
@@ -92,8 +92,9 @@ pnpm snap                       # run all; fail on diff
 pnpm snap happy-path            # run one
 pnpm snap --update happy-path   # rewrite the snapshot; commit only after reviewing the diff
 pnpm snap --settlement=local    # same fixtures against the EVM contract (Phase 2)
-pnpm snap --judges=live <name>  # same fixture with live judges; prints the diff, never updates snapshots
 ```
+
+The runner refuses `--judges=live`: it makes no network or model API calls.
 
 ### Live judges (T-028)
 
@@ -101,7 +102,7 @@ Live providers (`apps/adjudicator/src/providers/live.ts`) never run in CI or `pn
 
 ### Recorded judges
 
-Recorded mode replays verdicts stored in `fixtures/recordings/<scenario>/<judgeId>.json`. They are captured from live runs with `pnpm snap --judges=live --record <name>`. Recordings include the model ID, the prompt template hash and the input hash; a template, rubric or input change invalidates them, and the runner fails loudly.
+Recorded mode replays verdicts stored in `fixtures/recordings/<scenario>/<role>/<judgeId>.json`. `pnpm snap --judges=fake --record <name>` writes stub recordings; the runner refuses live judges, so it captures none from a live run. Recordings include the model ID, the prompt template hash and the input hash; a template, rubric or input change invalidates them, and the runner fails loudly.
 
 **After a change that moves commitment IDs** (a `schemaVersion` or domain bump, a policy hash), every judge input moves and a panel can seat other judges, since the draw hashes the commitment ID. Re-seat, never re-judge: `pnpm exec tsc -b packages/testkit && node scripts/reseat-recordings.mjs [fixture...]` refreshes the bindings of every judge still seated, gives a newly seated judge the verdict of an unseated one of the same role (same family first, `capturedFrom` kept), and prints each verdict that changed seat; it never changes a verdict. Then `pnpm snap --update <every fixture>`, check that only panel and hash lines moved, and name each moved authored verdict in the commit and, if the fixture's description names judges, in the description (T-212 item 3).
 
@@ -117,21 +118,23 @@ An adversarial run only tests the protocol if no party can sign as another. A ru
 - Every new defense adds an `attack.` fixture.
 - Every new actor or timeout adds a `neutrality.` fixture.
 - Do not snapshot UI markup, provider SDK internals or log formatting.
-- Do not test model quality in CI. Use `pnpm calibrate` for that.
+- Do not test model quality in CI. That belongs to the calibration harness, which is not built yet (T-301).
 
 ## CI layout (T-022)
 
-`.github/workflows/ci.yml` runs these jobs in parallel:
+`.github/workflows/ci.yml` runs these jobs. Its `changes` job reads the changed files and decides which run; the file itself says exactly when (T-313, T-504).
 
 | Job | Runs |
 | --- | --- |
 | `typecheck, lint, spec, snap` | `pnpm typecheck`, `pnpm lint`, `pnpm validate:spec`, `pnpm snap` |
+| `docs tests` | Only on a pull request that changes nothing but `docs/` and root Markdown files: the test files the job names (T-521). It stands in for the static job, the test shards and the contracts, anvil and formal jobs; `check` and `gitleaks` still run |
 | `test (i/4)` | `pnpm build`, then `pnpm test --shard=i/4`, four shards |
-| `contracts (forge test, anvil tests)` | `forge test` and `forge build` in `contracts/`, then the vitest suites that need anvil (`packages/settlement/evm`, the snap runner's test); any skipped test fails the job (T-203, T-205, T-035) |
-| `formal (TLC)` | `formal/check.sh`: on pull requests `safety` (the `safety-*` configs of `formal/phase-one/` and `formal/full/`, with the reach witnesses in `formal/reach.list`) and `broken/`; on pushes to `main` every config, liveness included (T-204) |
-| `check` | Fails unless the static job, every shard, the contracts job and the formal job succeeded. This is the one status to require in branch protection. |
-| `gitleaks` | Secret scan, unchanged |
+| `contracts (forge test)` | `forge test` in `contracts/` (T-203) |
+| `anvil tests, settlement` and `anvil tests, world` | The vitest suites that need anvil, in two legs whose files the job lists; any skipped test fails the job (T-205, T-035, T-313) |
+| `formal (TLC)` | `formal/check.sh`, only when `formal/` or `ci.yml` changed: on pull requests `safety` (the `safety-*` configs of `formal/phase-one/` and `formal/full/`, with the reach witnesses in `formal/reach.list`) and `broken/`; on pushes to `main` every config, liveness included (T-204) |
+| `check` | Fails unless every job the changed files call for succeeded. |
+| `gitleaks` | Secret scan |
 
 - **Shards.** `vitest.config.ts` assigns test files to shards by measured cost, longest first, rather than by Vitest's path-hash split. A file missing from its cost table costs 2 (tenths of a second), so a new file is still run; only the balance drifts. To refresh the table, copy the per-file times that the default reporter prints in a CI test shard's log (`gh run view <id> --log`). Those times include `beforeAll` hooks. The JSON reporter's per-file times leave the hooks out, which drops the demo-transcript files to near zero.
-- **Property-test runs.** `HOLDBACK_PROPERTY_RUNS` caps the run count of the SimChain properties (`packages/settlement/sim/properties.test.ts`). Pull requests set it to 40. Pushes to `main`, the nightly `schedule` run and local runs (including `pnpm verify`) leave it unset, which means the full counts. The seed is fixed, so a capped run checks exactly the first cases of the full run and a failure reproduces with the same seed. The deepest event kinds (`appeal.filed`, SimChain only; `default.triggered`; `commitment.settled`) need about 100 cases at this seed, so they are asserted only at the full count.
+- **Property-test runs.** `HOLDBACK_PROPERTY_RUNS` caps the run count of the SimChain properties (`packages/settlement/sim/properties.test.ts`). Pull requests set it to 40. Pushes to `main` and local runs (including `pnpm verify`) leave it unset, which means the full counts. The seed is fixed, so a capped run checks exactly the first cases of the full run and a failure reproduces with the same seed. The deepest event kinds (`appeal.filed`, SimChain only; `default.triggered`; `commitment.settled`) need about 100 cases at this seed, so they are asserted only at the full count.
 - **Heavy files.** The 9 MB adversarial screen inputs stay in every run: they test the screen at the 10 MB intake cap.

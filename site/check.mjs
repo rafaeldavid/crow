@@ -47,7 +47,7 @@
 //    Without a publish build it checks the pages it knows by name; with one (site/deploy.mjs builds before it checks),
 //    every .html file the build wrote, so a page added to the publish step alone is caught at the latest at deploy.
 // 18. The content security policy (T-451): no page carries an inline event handler or a javascript: URL, and only the
-//    visual walkthrough a style attribute; with a publish build, csp-hashes.json is current against its pages, and
+//    style attribute; with a publish build, csp-hashes.json is current against its pages, and
 //    every inline script and style of every page it wrote is allowed by the policy the site Worker sends for that
 //    page's path (apps/site/headers.js), as is every script and stylesheet it loads from elsewhere, every outside
 //    origin its scripts fetch and every image it shows.
@@ -73,7 +73,7 @@ import { OG_IMAGE } from './footer.ts';
 import { trustFacts } from './trust.mjs';
 import { ICON_FILES } from './brand/kit.mjs';
 import { GOALS, goalBundle, goalCommand, goalSha256, goalUrl, NODE_MIN, NODE_PERMISSION, PREFLIGHT, preflightCommand, REFERENCE_PATH, referenceText, SETUP_MJS_URL, setupBundle, setupCommand, setupSha256, TAKE_COMMANDS, TAKE_MJS_URL, takeBundle, takeInstall, takeSha256 } from './build.mjs';
-import { ASSETS, BASE, BUY_COMMANDS, CARD_SCHEMA, HOME_CSS, HOME_JS, notFoundPage, visualdemoPage, BUY_MJS_URL, BUY_URL, buyBundle, buyInstall, buySha256, filled, page, pins, problemPages, publishedGuides, SELL_URL, SITE_URL, sourceCommitOf, strip, TEST_SELLER_URL, tryBundle, tryCommand, trySha256, TRY_URL } from './build.mjs';
+import { ASSETS, BASE, BUY_COMMANDS, CARD_SCHEMA, HOME_CSS, HOME_JS, notFoundPage, BUY_MJS_URL, BUY_URL, buyBundle, buyInstall, buySha256, filled, page, pins, problemPages, publishedGuides, SELL_URL, SITE_URL, sourceCommitOf, strip, TEST_SELLER_URL, tryBundle, tryCommand, trySha256, TRY_URL } from './build.mjs';
 import { STATUS_PATH } from '../apps/site/status.js';
 import { apiRoutes, citedSections, duplicateSentences, hasSection, FIRST_DEAL_BUDGET, guideFiles, guideSource, measurePaths, namedCalls, namedReferences, referenceFiles, nonAscii, routeKnown, SETUP_MAX_BYTES } from './guides.mjs';
 
@@ -110,7 +110,7 @@ const notFound = read('404.html');
 expect(notFound === notFoundPage(), 'site/404.html is stale: run node site/build.mjs');
 const nfHead = Buffer.from(notFound).subarray(0, POINTER_WITHIN).toString('utf8');
 expect(Buffer.byteLength(notFound) <= 4000 && /<!-- Not found \(404\)\. For AI agents: [^>]*llms\.txt[^>]*buy\.txt[^>]*sell\.txt[^>]*-->/.test(nfHead) && nfHead.includes(`href="${BASE}llms.txt"`), `site/404.html must be at most 4,000 bytes and point to llms.txt, buy.txt and sell.txt in its first ${POINTER_WITHIN} bytes`);
-for (const path of ['', 'llms.txt', 'buy.txt', 'sell.txt', 'demo/']) expect(notFound.includes(` href="${BASE}${path}">`), `site/404.html does not link ${BASE}${path}`);
+for (const path of ['', 'llms.txt', 'buy.txt', 'sell.txt']) expect(notFound.includes(` href="${BASE}${path}">`), `site/404.html does not link ${BASE}${path}`);
 
 // 2. Placeholders.
 const configure = md.slice(md.indexOf('## Configure'), md.indexOf('## ', md.indexOf('## Configure') + 3));
@@ -203,13 +203,17 @@ const { PROBLEMS, PROBLEM_BASE } = await import(here('../apps/operator/src/probl
 const problems = await problemPages();
 // T-400: every page the build writes carries a title, a description and a link-preview card, and the site's one
 // footer (site/footer.ts); the share image is 1200 by 630 px; no page follows the system's dark mode (light only).
-const built = new Map([['index.html', html], ['404.html', read('404.html')], ['demo/index.html', read('demo/index.html')], ['visualdemo/index.html', visualdemoPage(read('visualdemo/index.html'))], ...['trust.html', 'status.html', 'legal.html'].filter((f) => existsSync(here(f))).map((f) => [f, read(f)]), ...problems]);
+const built = new Map([['index.html', html], ['404.html', read('404.html')], ...['trust.html', 'status.html', 'legal.html'].filter((f) => existsSync(here(f))).map((f) => [f, read(f)]), ...problems]);
 for (const [path, h] of built) {
   expect(/<title>[^<]+<\/title>/.test(h) && ['name="description"', 'property="og:title"', 'property="og:description"', 'property="og:url"', 'property="og:image"', 'name="twitter:card" content="summary_large_image"'].every((t) => h.includes(t)), `${path} lacks its title, description or link-preview card (site/footer.ts)`);
   expect(h.includes('<footer class="ck-foot">') && h.includes('© 2026 Crow · Verifiable settlement for AI commerce'), `${path} lacks the site's footer (site/footer.ts)`);
   expect(!/prefers-color-scheme/.test(h), `${path} follows the system's dark mode: the site is light only`);
 }
 expect(!/prefers-color-scheme/.test(HOME_CSS), 'home.css follows the system dark mode: the site is light only');
+// T-586: the demo page and the visual walkthrough are retired (the homepage carries the demo; the site Worker answers
+// /demo and /visualdemo with a 301), so no page links them.
+for (const [path, h] of built) expect(!/href="(?:https:\/\/crow\.direct)?\/(?:visual)?demo(?:\/|\.html)?["#?]/.test(h), `${path} links a retired page (/demo/ or /visualdemo/): link the homepage instead`);
+for (const p of ['demo', 'visualdemo']) expect(!existsSync(here(p)), `site/${p}/ is back: the page is retired (T-586); its last copy is docs/archive/site/${p}/`);
 const og = readFileSync(here(OG_IMAGE.path));
 expect(og.subarray(1, 4).toString() === 'PNG' && og.readUInt32BE(16) === OG_IMAGE.width && og.readUInt32BE(20) === OG_IMAGE.height, `site/${OG_IMAGE.path} must be a ${OG_IMAGE.width} by ${OG_IMAGE.height} px PNG`);
 expect(PROBLEM_BASE === `${SITE_URL}problems/`, `problem pages live at ${SITE_URL}problems/, the operator links ${PROBLEM_BASE}`);
@@ -369,7 +373,7 @@ for (const [p, text] of guides) {
     const path = u.pathname.slice(BASE.length);
     // What a publish build writes, the two test agents, which apps/test-agents serves on routes of this host, and the
     // operators' live state, which the site's Worker serves (apps/site/status.js).
-    const ok = guides.has(path) || published.has(path) || ['', 'problems/', 'visualdemo/'].includes(path) || problems.has(`${path.replace(/\.html$/, '')}.html`) || /^agents\/test-(seller|buyer)(\/agent\.json)?$/.test(path) || `/${path}` === STATUS_PATH;
+    const ok = guides.has(path) || published.has(path) || ['', 'problems/'].includes(path) || problems.has(`${path.replace(/\.html$/, '')}.html`) || /^agents\/test-(seller|buyer)(\/agent\.json)?$/.test(path) || `/${path}` === STATUS_PATH;
     expect(ok, `${p} links ${u.href}, which neither the publish build, the test agents nor the site's Worker serve`);
   }
   for (const [, f] of text.matchAll(/`((?:examples|fixtures|spec)\/[A-Za-z0-9_./-]+\.[a-z]+)`/g)) expect(existsSync(here(`../${f}`)), `${p} names ${f}, which is not in the repository`);
@@ -425,9 +429,9 @@ for (const [p, text] of guides) for (const { line, char } of nonAscii(text)) exp
 for (const [p, text] of filledGuides) if (!nonAscii(guides.get(p) ?? '').length) for (const { line, char } of nonAscii(text)) expect(false, `the published ${p} line ${line} holds ${char}: a filled value is not ASCII`);
 
 // 15. One brand kit (T-402): a colour (hex, rgb(), hsl()) or a font stack is written only in site/brand/tokens.css.
-// The sources of the home page, the 404 and problem pages, the footer, the early-access dialog and the demo page, and
+// The sources of the home page, the 404 and problem pages, the footer, the early-access dialog, the two-agent replay, and
 // the kit's own components.css, write none: they read the tokens. Nothing is allow-listed today; an entry needs its
-// reason beside it. site/visualdemo/ and site/og.html (the share image's source, drawn once by hand) are not read here.
+// reason beside it. site/og.html (the share image's source, drawn once by hand) is not read here.
 const KIT_READERS = ['build.mjs', 'footer.ts', 'drawer.ts', 'home-demo.mjs', 'home.js', 'trust.mjs', '../tools/duet/replay.ts', 'brand/components.css', 'brand/kit.mjs', 'brand/icons.mjs'];
 // 'path' -> the reason it may write a colour or a font stack
 const KIT_ALLOWED = new Map([['brand/icons.mjs', 'the favicon\'s plain white square (#ffffff, Rafa 2026-11-14, T-428): the icon sits on a browser\'s tab bar, not on a page, so no page token applies; the crow is --ink']]);
@@ -446,16 +450,12 @@ expect((read('brand/tokens.css').match(/:root \{/g) ?? []).length === 1, 'site/b
 
 // 16. The trust surfaces (T-421).
 const trust = existsSync(here('trust.mjs')) ? await import('./trust.mjs') : {};
-const siteBuild = await import('./build.mjs');
 for (const [file, fn] of [['trust.html', 'trustPage'], ['status.html', 'statusPage'], ['legal.html', 'legalPage']]) {
   expect(typeof trust[fn] === 'function', `site/trust.mjs exports no ${fn}()`);
   expect(existsSync(here(file)) && typeof trust[fn] === 'function' && read(file) === trust[fn]({ site: SITE_URL, base: BASE }), `site/${file} is not what site/build.mjs renders: run node site/build.mjs`);
 }
 expect(typeof trust.PAGES_CSS === 'string' && existsSync(here('pages.css')) && read('pages.css') === trust.PAGES_CSS, 'site/pages.css is not what site/build.mjs renders: run node site/build.mjs');
-expect(typeof siteBuild.demoPage === 'function', 'site/build.mjs exports no demoPage(): the demo page keeps an old footer');
-const footed = new Map([...built, ...(typeof siteBuild.demoPage === 'function' ? [['demo/index.html (published)', siteBuild.demoPage(read('demo/index.html'))]] : [])]);
-for (const [path, h] of footed) {
-  if (path === 'demo/index.html') continue; // the committed replay; the publish build swaps in the site's footer (demoPage)
+for (const [path, h] of built) {
   // The home page links the legal notice from its demo line instead of its footer (T-564), checked below.
   for (const p of ['trust', 'status', ...(path === 'index.html' ? [] : ['legal'])]) expect(h.includes(`href="${BASE}${p}"`), `${path}'s footer does not link ${BASE}${p} (site/footer.ts)`);
 }
@@ -591,8 +591,6 @@ expect(typeof trust.SECURITY_CONTACT === 'string' && read('../SECURITY.md').incl
   expect(want.length > 0, 'site/brand/kit.mjs exports no iconLinks(): the pages have no one place for the favicon links');
   const iconsIn = (h) => (typeof kit.iconTags === 'function' && h.includes('</head>') ? kit.iconTags(h) : []);
   const pages = new Map([...built, ...problems]);
-  pages.delete('demo/index.html'); // the committed replay; the publish build adds the links (demoPage, below)
-  if (typeof siteBuild.demoPage === 'function') pages.set('demo/index.html (published)', siteBuild.demoPage(read('demo/index.html')));
   for (const [path, h] of pages) expect(want.length > 0 && JSON.stringify(iconsIn(h)) === JSON.stringify(want), `${path} does not carry exactly the favicon links of iconLinks() (site/brand/kit.mjs) in its head`);
   const files = ICON_FILES;
   for (const f of files) expect(existsSync(here(`brand/icons/${f}`)), `site/brand/icons/${f} is missing: run node site/brand/icons.mjs`);
@@ -611,13 +609,10 @@ expect(typeof trust.SECURITY_CONTACT === 'string' && read('../SECURITY.md').incl
 {
   const csp = await import('./csp.mjs');
   const headers = await import('../apps/site/headers.js');
-  /** The path the site Worker serves a built file at: index.html as its folder, x.html without the extension. */
-  const served = (f) => (f === 'index.html' ? '/' : f.endsWith('/index.html') ? `/${f.slice(0, -'index.html'.length)}` : `/${f.replace(/\.html$/, '')}`);
-  const walkthrough = (f) => /(^|\/)visualdemo\//.test(f);
   const markup = (f, h) => {
     expect(!/\son[a-z]+\s*=\s*\\?["']/i.test(h), `${f} carries an inline event handler (on…=), which the content security policy blocks: use addEventListener in a script`);
     expect(!/javascript:/i.test(h), `${f} carries a javascript: URL, which the content security policy blocks`);
-    expect(walkthrough(f) || !/<[a-z][^>]*\sstyle\s*=|\sstyle=\\"/i.test(h), `${f} carries a style attribute, which the content security policy blocks outside the visual walkthrough: use a class`);
+    expect(!/<[a-z][^>]*\sstyle\s*=|\sstyle=\\"/i.test(h), `${f} carries a style attribute, which the content security policy blocks: use a class`);
   };
   for (const [path, h] of new Map([...built, ...problems])) markup(path, h);
   const site = here('../reports/site-out/');
@@ -640,7 +635,7 @@ expect(typeof trust.SECURITY_CONTACT === 'string' && read('../SECURITY.md').incl
       const h = readFileSync(join(dir, f), 'utf8');
       markup(`reports/site-out/${f}`, h);
       if (attempt(`reports/site-out/${f}`, () => csp.elements(h)) === null) continue;
-      const policy = headers.contentSecurityPolicy(written, served(f));
+      const policy = headers.contentSecurityPolicy(written);
       const directive = (name) => (policy.split('; ').find((d) => d.startsWith(`${name} `)) ?? '').split(' ').slice(1);
       const { scripts, styles } = csp.inlineBlocks(h);
       for (const s of scripts) expect(directive('script-src').includes(`'${csp.cspHash(s)}'`), `reports/site-out/${f}: an inline script (${csp.cspHash(s).slice(0, 19)}…) is not in the policy's script-src`);

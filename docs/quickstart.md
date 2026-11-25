@@ -8,7 +8,7 @@ Two economics to know before you start: the buyer holds the price **plus the adj
 
 ## 1. Install, build, start the sim
 
-Node 22 and pnpm (through corepack), then:
+Node 22.18 or later and pnpm (through corepack), then:
 
 ```sh
 corepack enable

@@ -144,12 +144,14 @@ async function post(url: string, headers: Record<string, string>, body: unknown,
 }
 
 /** Anthropic's Messages API with tools. The system prompt, the tools and the newest message are marked for caching. */
-export function anthropic(model: string, key: string, f: typeof fetch = fetch): Provider {
+export function anthropic(model: string, key: string, f: typeof fetch = fetch, workspace?: string): Provider {
+  // A key scoped to a workspace needs the workspace's ID in a header beside it (N215): an ID, not a secret.
+  const headers = { 'x-api-key': key, 'anthropic-version': '2023-06-01', ...(workspace ? { 'anthropic-workspace-id': workspace } : {}) };
   return {
     vendor: 'anthropic',
     model,
     async ping(signal) {
-      await post(ANTHROPIC_URL, { 'x-api-key': key, 'anthropic-version': '2023-06-01' }, { model: providerModelId(model), max_tokens: 1, messages: [{ role: 'user', content: 'ping' }] }, f, signal);
+      await post(ANTHROPIC_URL, headers, { model: providerModelId(model), max_tokens: 1, messages: [{ role: 'user', content: 'ping' }] }, f, signal);
     },
     async turn(system, history, tools, signal) {
       const messages: J[] = history.map((t) => {
@@ -162,7 +164,7 @@ export function anthropic(model: string, key: string, f: typeof fetch = fetch): 
       const last = messages.at(-1)?.content?.at?.(-1);
       if (last) last.cache_control = { type: 'ephemeral' };
       const wire = tools.map((t, i) => ({ name: t.name, description: t.description, input_schema: t.input, ...(i === tools.length - 1 ? { cache_control: { type: 'ephemeral' } } : {}) }));
-      const b = await post(ANTHROPIC_URL, { 'x-api-key': key, 'anthropic-version': '2023-06-01' }, { model: providerModelId(model), max_tokens: MAX_OUTPUT_TOKENS, system: [{ type: 'text', text: system, cache_control: { type: 'ephemeral' } }], tools: wire, messages }, f, signal);
+      const b = await post(ANTHROPIC_URL, headers, { model: providerModelId(model), max_tokens: MAX_OUTPUT_TOKENS, system: [{ type: 'text', text: system, cache_control: { type: 'ephemeral' } }], tools: wire, messages }, f, signal);
       const content: J[] = Array.isArray(b?.content) ? b.content : [];
       return {
         text: content.filter((c) => c.type === 'text').map((c) => String(c.text ?? '')).join('\n'),
@@ -257,11 +259,14 @@ export function scripted(steps: readonly ScriptStep[], model = 'scripted'): Prov
   };
 }
 
+/** The workspace ID a workspace-scoped Anthropic key needs, sent as `anthropic-workspace-id`. Left out: no header. */
+export const WORKSPACE_ENV = 'HOLDBACK_AGENT_ANTHROPIC_WORKSPACE_ID';
+
 /** A live provider for a vendor, or the one line that says which variable is missing. Nothing is sent here. */
 export function liveProvider(vendor: 'anthropic' | 'deepseek', model: string, env: Env): Provider | string {
   const key = env[KEY_ENV[vendor]];
   if (!key) return `${vendor} needs ${KEY_ENV[vendor]} in the environment: nothing was sent`;
-  if (vendor === 'anthropic') return anthropic(model, key);
+  if (vendor === 'anthropic') return anthropic(model, key, fetch, env[WORKSPACE_ENV] || undefined);
   const base = env[BASE_URL_ENV];
   if (!base || !base.startsWith('https://')) return `deepseek needs an https ${BASE_URL_ENV} in the environment: nothing was sent`;
   return openaiCompatible(model, key, base);

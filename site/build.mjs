@@ -18,8 +18,8 @@ import { join } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { rolldown } from 'rolldown';
 import { drawerScript, JOIN_URL } from './drawer.ts';
-import { CARDS, cardTags, FOOTER_CSS, footerHtml } from './footer.ts';
-import { headerBar, ICON_FILES, iconBytes, iconLinks, iconTags, kitCss, listRows, sectionHead, TOKENS } from './brand/kit.mjs';
+import { CARDS, cardTags, footerHtml } from './footer.ts';
+import { headerBar, ICON_FILES, iconBytes, iconLinks, kitCss, listRows, sectionHead, TOKENS } from './brand/kit.mjs';
 import { AUDIT_DEMO_CSS, AUDIT_DEMO_JS } from './home-demo.mjs';
 /** The demo line above the hero's eyebrow (T-564): the hero's own words still come from llms.txt,
  * which opens with the same fact for agents ("Test tokens only"). */
@@ -626,7 +626,6 @@ const COPY_ICON = '<svg viewBox="0 0 16 16" width="14" height="14" aria-hidden="
 // legal notice on this page, and the page stays within HOME_MAX_BYTES (T-564).
 const footer = (command) => footerHtml({
   base: BASE,
-  demo: false,
   legal: false,
   agents: `<span class="try-line"><button class="copy" id="copy" type="button" title="Copy a prompt that has your AI assistant run a test deal">${COPY_ICON}<span>Copy test prompt</span></button><span class="copied" id="copied" role="status"></span></span>`,
   after: `<span id="prompt" hidden>${esc(tryPrompt(command))}</span>\n<p class="sr">For AI agents asked to run a test deal: the command, what it exposes and the one yes to ask for are at ${esc(SITE_URL)}llms.txt under "Try it".</p>`,
@@ -903,18 +902,10 @@ input:focus-visible, button:focus-visible, a:focus-visible { outline: 2px solid 
 
 /**
  * The favicon links every page's head carries (T-428): the crow on a white square, from the brand kit (site/brand/icons/,
- * iconLinks()). A page this build writes puts ${FAVICON_LINKS} in its head; a page kept as it was made (the demo, the visual
- * walkthrough) goes through withIcons(), which takes out its own icon links and adds these. site/check.mjs group 17
- * fails the build when a built page lacks them.
+ * iconLinks()). A page this build writes puts ${FAVICON_LINKS} in its head. site/check.mjs group 17 fails the build
+ * when a built page lacks them.
  */
 export const FAVICON_LINKS = iconLinks({ base: BASE });
-export function withIcons(html) {
-  const at = html.indexOf('</head>');
-  if (at < 0) throw new Error('withIcons: the page has no </head>');
-  let head = html.slice(0, at);
-  for (const tag of iconTags(html)) head = head.includes(`${tag}\n`) ? head.replace(`${tag}\n`, '') : head.replace(tag, '');
-  return `${head}${FAVICON_LINKS}\n${html.slice(at)}`;
-}
 
 /**
  * 404.html: what the site answers for an address it does not have (Cloudflare serves it with status 404). A visitor
@@ -936,7 +927,7 @@ ${FAVICON_LINKS}
 <link rel="stylesheet" href="${BASE}home.css">
 </head>
 <body>
-${headerBar({ home: BASE, links: [[`${BASE}demo/`, 'Demo'], [`${BASE}llms.txt`, 'Agent docs']] })}
+${headerBar({ home: BASE, links: [[`${BASE}llms.txt`, 'Agent docs']] })}
 <main class="page nf">
 ${sectionHead({ eyebrow: '404', title: 'Page not found', lede: 'The address may be mistyped, or the page has moved.' })}
 ${listRows([
@@ -944,7 +935,6 @@ ${listRows([
   { title: 'Agent docs', href: `${BASE}llms.txt`, line: 'Start here if you are an AI agent: llms.txt' },
   { title: 'For buyers', href: `${BASE}buy.txt`, line: 'How an agent pays through Crow: buy.txt' },
   { title: 'For sellers', href: `${BASE}sell.txt`, line: 'How an agent sells through Crow: sell.txt' },
-  { title: 'Demo', href: `${BASE}demo/`, line: 'Two agents close a deal' },
 ])}
 </main>
 ${footerHtml({ base: BASE })}
@@ -1087,31 +1077,6 @@ export function guidePage(txt, name = 'sell.txt', install = () => buyInstall()) 
 export const sellerPage = (txt) => guidePage(txt, 'sell.txt');
 
 /**
- * The visual walkthrough (site/visualdemo/index.html, a standalone page kept as it was made) as a publish build writes
- * it: its title in words, the site's card, and the site's footer, all from site/footer.ts.
- */
-export function visualdemoPage(html) {
-  const out = html
-    .replace(/<title>[^<]*<\/title>/, `<title>${esc(CARDS.visualdemo.title)}</title>`)
-    .replace(/<meta name="description"[^>]*>/, cardTags({ site: SITE_URL, ...CARDS.visualdemo }))
-    .replace('</head>', `<style>${FOOTER_CSS}</style>\n</head>`)
-    .replace('</body>', `${footerHtml({ base: BASE })}\n</body>`);
-  if (!out.includes('og:image') || !out.includes('class="ck-foot"')) throw new Error('site/visualdemo/index.html changed shape: its title, description, head or body was not found');
-  return withIcons(out);
-}
-
-/**
- * The demo page (site/demo/index.html, written by `pnpm duet publish`) as a publish build writes it: the site's current
- * footer in place of the one the replay was published with, so a footer link added later (T-421: trust, status)
- * reaches it without a new replay.
- */
-export function demoPage(html) {
-  const at = html.indexOf('<footer class="ck-foot">'), end = html.indexOf('</footer>', at);
-  if (at < 0 || end < 0 || html.indexOf('<footer class="ck-foot">', at + 1) >= 0) throw new Error('site/demo/index.html changed shape: it no longer holds exactly one site footer');
-  return withIcons(`${html.slice(0, at)}${footerHtml({ base: BASE, current: 'demo' }).trimEnd()}${html.slice(end + '</footer>'.length)}`);
-}
-
-/**
  * Every agent guide as a publish build writes it, by published path: llms.txt filled with the two operators and
  * the one command, the others as written. The two-agent run's local docs server serves exactly these.
  */
@@ -1180,7 +1145,7 @@ export function sitemapPaths(problemPaths = []) {
   // Each page at the address it is served from: the asset server redirects '<page>.html' to '<page>' (307), and a
   // sitemap names final addresses, not redirects.
   const problems = problemPaths.map((p) => (p === 'problems/index.html' ? 'problems/' : p.replace(/\.html$/, '')));
-  return ['', 'demo/', 'visualdemo/', 'trust', 'status', 'legal', ...guideFiles(), REFERENCE_PATH, 'trust.txt', 'legal.txt', ...problems];
+  return ['', 'trust', 'status', 'legal', ...guideFiles(), REFERENCE_PATH, 'trust.txt', 'legal.txt', ...problems];
 }
 
 /** The sitemap (sitemaps.org 0.9): one <loc> per path, no dates, so a rebuild with no page change writes the same bytes. */
@@ -1271,12 +1236,6 @@ if (import.meta.url === `file://${process.argv[1]}`) {
     writeFileSync(join(out, CARD_SCHEMA), readFileSync(here(CARD_SCHEMA)));
     // T-428: the favicon set from the brand kit, at the site's root, so /favicon.ico answers a client that asks blind.
     for (const f of ICON_FILES) writeFileSync(join(out, f), iconBytes(f));
-    // The visual walkthrough of a real two-agent deal, served at /visualdemo.
-    mkdirSync(join(out, 'visualdemo'), { recursive: true });
-    writeFileSync(join(out, 'visualdemo', 'index.html'), visualdemoPage(readFileSync(here('visualdemo/index.html'), 'utf8')));
-    // The two-agent demo (T-391), served at /demo: one run's replay, written by \`pnpm duet publish <run folder>\`.
-    mkdirSync(join(out, 'demo'), { recursive: true });
-    writeFileSync(join(out, 'demo', 'index.html'), demoPage(readFileSync(here('demo/index.html'), 'utf8')));
     const problems = await problemPages();
     mkdirSync(join(out, 'problems'), { recursive: true });
     for (const [path, html] of problems) writeFileSync(join(out, path), html);

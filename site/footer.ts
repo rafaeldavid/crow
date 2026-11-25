@@ -1,20 +1,16 @@
 // The site's footer and its link-preview cards (T-400, Rafa 2026-11-13): one source for every HTML page the build
-// writes, so the next wording change is one edit. site/build.mjs uses it for the home page, the 404 page, the problem
-// pages and the visual walkthrough; tools/duet/replay.ts for the demo page, inline so that page stays one file.
+// writes, so the next wording change is one edit. site/build.mjs uses it for the home page, the 404 page and the problem
+// pages; tools/duet/replay.ts for the two-agent replay, inline so that page stays one file.
 //
 // The footer itself is the kit's (site/brand/, T-402). On a page shorter than the window it sits at the window's
 // foot; on a longer page it follows the content.
 
-import { footer, kitCss } from './brand/kit.mjs';
+import { footer } from './brand/kit.mjs';
 
 /** The tagline (D56), said in words: the mark is a logo, prose says Crow. */
 export const TAGLINE = 'Verifiable settlement for AI commerce';
 /** The settled pitch line, in its settled order. */
 export const PITCH_LINE = 'Buy from any agent. Sell to any agent.';
-
-/** The footer's styles: the kit's pill and footer parts, with the kit's tokens on the footer itself, so the footer
- * looks the same on a page with colours of its own (the visual walkthrough). Pages that read the whole kit need none. */
-export const FOOTER_CSS = kitCss({ parts: ['pill', 'footer'], scope: '.ck-foot' });
 
 /** Where the public code lives. */
 export const CODE_URL = 'https://github.com/rafaeldavid/crow';
@@ -22,15 +18,16 @@ export const CODE_URL = 'https://github.com/rafaeldavid/crow';
 /**
  * The footer (T-402; Rafa 2026-11-13: simple, little content): Crow, links to pages that exist (T-421 added the trust and
  * status pages, T-564 the legal notice) and, on the home page, the copy-the-prompt button; then the legal line and the tagline (Rafa dropped the pill, 2026-11-13). `current` marks
- * the page's own link; the home page omits the Demo and Legal links. `agents` follows the links; `after` follows the bar.
+ * the page's own link; the home page omits the Legal link. `agents` follows the links; `after` follows the bar. The Demo
+ * link went with the demo page (T-586, 2026-11-25): the homepage carries the demo; 'demo' stays a `current` value only
+ * because the two-agent replay (tools/duet/replay.ts) still passes it.
  */
-export const footerHtml = (o: { base: string; current?: 'demo' | 'trust' | 'status' | 'legal'; demo?: boolean; legal?: boolean; agents?: string; after?: string }): string =>
+export const footerHtml = (o: { base: string; current?: 'demo' | 'trust' | 'status' | 'legal'; legal?: boolean; agents?: string; after?: string }): string =>
   footer({
     home: o.base,
     tagline: TAGLINE,
     legal: '© 2026 Crow',
     links: [
-      ...(o.demo === false ? [] : [{ href: `${o.base}demo/`, label: 'Demo', current: o.current === 'demo' }]),
       { href: `${o.base}llms.txt`, label: 'Agent docs' },
       { href: `${o.base}trust`, label: 'Trust', current: o.current === 'trust' },
       { href: `${o.base}status`, label: 'Status', current: o.current === 'status' },
@@ -75,11 +72,11 @@ export const cardTags = (o: { site: string; path: string; title: string; descrip
 /** The card text for each page, in one place. */
 export const CARDS = {
   home: { path: '', title: `Crow · ${TAGLINE}`, description: `${TAGLINE}. ${PITCH_LINE}` },
+  // The two-agent replay's card (tools/duet/replay.ts). The site no longer serves it at /demo/ (T-586): /demo answers 301.
   demo: { path: 'demo/', title: 'Crow · Watch two agents close a deal', description: "Two companies' agents agree the checks, set the payment aside and settle when the work passes, through Crow. A sample deal on test money." },
   notFound: { path: '', title: 'Page not found · Crow', description: `${TAGLINE}. ${PITCH_LINE}` },
   problems: { path: 'problems/', title: 'Crow · API problem types', description: "The problem types Crow's operators answer with, one page each: what went wrong and what to do next." },
   trust: { path: 'trust', title: 'Crow · Trust: money, keys and data', description: 'How Crow handles money, keys and data, for your company’s security team: where a deal’s payment sits, who can move it, what is kept, and what is not there yet. Each statement links to its source.' },
   legal: { path: 'legal', title: 'Crow · Legal notice', description: 'Crow is a demo on a test network, with test tokens that are worth nothing. No real money moves through Crow.' },
   status: { path: 'status', title: 'Crow · Status', description: 'Whether each part of Crow answers right now: the two operators, the site, the test seller and the Sepolia network, checked when you open the page.' },
-  visualdemo: { path: 'visualdemo/', title: 'Crow · A deal, step by step', description: 'A real test deal on Crow, replayed: a buyer agent, a seller agent and the reviewer, every message, call and encrypted hand-off.' },
 } as const;

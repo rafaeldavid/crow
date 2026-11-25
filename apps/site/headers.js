@@ -11,16 +11,11 @@
 // check (eth-sepolia.blockscout.com). The status page reads the operators through the site's own relay
 // (/status/operators.json), so the policy names no operator.
 //
-// One page is looser, and only for styles: the visual walkthrough (/visualdemo/, a standalone page kept as it was
-// made, site/build.mjs) loads a Google font and colours four legend swatches with style attributes, so its style-src
-// allows inline styles and fonts.googleapis.com, and its font-src fonts.gstatic.com. Its script is hashed as elsewhere.
-//
 // Cache-Control, CORS and every other header stay as the asset server or the route sent them; bodies are not touched,
 // so the guides, try.mjs and buy.mjs keep their bytes and their pinned SHA-256.
 
 export const HASHES_PATH = '/csp-hashes.json';
 const CONNECT = ['https://join.crow.direct', 'https://eth-sepolia.blockscout.com'];
-const WALKTHROUGH = '/visualdemo';
 
 /** The headers every answer carries. */
 export const COMMON = Object.freeze({
@@ -40,20 +35,19 @@ const NOT_A_PAGE = Object.freeze({
 const quoted = (hashes) => (hashes ?? []).map((h) => `'${h}'`);
 
 /**
- * The content security policy for an HTML page at `pathname`.
+ * The content security policy for an HTML page, the same for every page since the visual walkthrough, the one page
+ * with a looser policy, was retired (T-586).
  * @param {{ scripts: string[], styles: string[] } | null} hashes the build's inline hashes (`sha256-…`), or null when
  *   the file could not be read: then no inline script or style is allowed.
- * @param {string} pathname the request's path
  */
-export function contentSecurityPolicy(hashes, pathname) {
-  const walkthrough = pathname === WALKTHROUGH || pathname.startsWith(`${WALKTHROUGH}/`);
-  const styles = walkthrough ? ["'self'", "'unsafe-inline'", 'https://fonts.googleapis.com'] : ["'self'", ...quoted(hashes?.styles)];
+export function contentSecurityPolicy(hashes) {
+  const styles = ["'self'", ...quoted(hashes?.styles)];
   return [
     "default-src 'none'",
     `script-src ${["'self'", ...quoted(hashes?.scripts)].join(' ')}`,
     `style-src ${styles.join(' ')}`,
     "img-src 'self'",
-    `font-src ${walkthrough ? 'https://fonts.gstatic.com' : "'self'"}`,
+    "font-src 'self'",
     `connect-src 'self' ${CONNECT.join(' ')}`,
     "manifest-src 'self'",
     "form-action 'self'",
@@ -68,13 +62,13 @@ export const isPage = (response) => /^text\/html\b/i.test((response.headers.get(
 /**
  * The response with the security headers set and everything else as it was.
  * @param {Response} response
- * @param {{ pathname: string, hashes: { scripts: string[], styles: string[] } | null }} o
+ * @param {{ hashes: { scripts: string[], styles: string[] } | null }} o
  */
-export function secured(response, { pathname, hashes }) {
+export function secured(response, { hashes }) {
   const out = new Response(response.body, response);
   for (const [k, v] of Object.entries(COMMON)) out.headers.set(k, v);
   if (isPage(response)) {
-    out.headers.set('content-security-policy', contentSecurityPolicy(hashes, pathname));
+    out.headers.set('content-security-policy', contentSecurityPolicy(hashes));
     out.headers.set('cross-origin-opener-policy', 'same-origin');
     out.headers.set('cross-origin-resource-policy', 'same-origin');
   } else {
