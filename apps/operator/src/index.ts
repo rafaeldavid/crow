@@ -1,4 +1,5 @@
 export * from './accounts.js';
+export { describeCause } from './describe-cause.js';
 export * from './fetch.js';
 export * from './guards.js';
 export * from './idempotency.js';

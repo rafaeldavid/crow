@@ -121,8 +121,11 @@ export interface EvmChain {
    * `gasCap`: the most gas this one transaction may be sent with, in place of the relayer's cap (a standing seller's
    * deployment, ADR-0040 §4, which takes about 18 million gas on Sepolia). `gasMarginPct`: the gas sent above the
    * estimate, in percent (25 by default); a deployment that loses a race to its address burns all of it (EIP-684).
+   * `onBroadcast` (a live chain): called once, just before this transaction first goes to an RPC node; an error thrown
+   * before it means this transaction was never sent (T-609). A lane's gas top-up and an earlier row's rebroadcast are
+   * the node's own and do not call it.
    */
-  send(tx: { key?: Hex; lane?: string; to: Address; data: Hex; value?: bigint; note?: RelayNote; gasCap?: bigint; gasMarginPct?: number }, at?: number): Promise<Mined>;
+  send(tx: { key?: Hex; lane?: string; to: Address; data: Hex; value?: bigint; note?: RelayNote; gasCap?: bigint; gasMarginPct?: number; onBroadcast?: () => void }, at?: number): Promise<Mined>;
   /** T-219, a live chain only. The rows no caller waits on: left open by a restart, or by an RPC error after the broadcast. */
   inFlight?(): readonly LaneRow[];
   /** The open row that sent `hash`, if any. */

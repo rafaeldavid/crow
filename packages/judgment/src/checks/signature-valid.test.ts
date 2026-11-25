@@ -55,7 +55,7 @@ describe('signature_valid: every committed vector', () => {
 describe('signature_valid: registry', () => {
   it('is in the closed registry, so an adjudicator lists it in checkKinds', () => {
     expect(CHECK_TYPES.has('signature_valid')).toBe(true);
-    expect(CHECK_TYPES.size).toBe(10);
+    expect(CHECK_TYPES.size).toBe(13);
   });
 });
 

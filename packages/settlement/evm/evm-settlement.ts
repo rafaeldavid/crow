@@ -89,7 +89,7 @@ import {
 import { decodeEventLog, decodeFunctionData, encodeFunctionData, encodePacked, getAddress, hashTypedData, keccak256, parseTransaction, stringToBytes, toHex, type Abi, type AbiEvent, type Hex, type Log } from 'viem';
 import { privateKeyToAccount } from 'viem/accounts';
 import type { Genesis } from '../sim/simchain.js';
-import type { DryRunSubmission, Settlement, Submission, SubmitOptions, SubmitResult, TimeoutKind } from '../src/interface.js';
+import { NothingSent, type DryRunSubmission, type Settlement, type Submission, type SubmitOptions, type SubmitResult, type TimeoutKind } from '../src/interface.js';
 import { oversizedPartySignature, Refusal, refuse, toJson } from '../src/util.js';
 import { RelayRefused, type EvmChain, type LaneRow, type Mined, type RelayNote } from './chain.js';
 import {
@@ -127,7 +127,9 @@ export interface EvmSubmitOptions extends SubmitOptions {
  * the hashes of the relayed transactions whose receipts this submission applied: `process` releases their rows only
  * once the submission's answer is stored with its book (review, 2026-11-04).
  */
-type Relay = EvmSubmitOptions & { note?: RelayNote; landed?: string[] };
+type Relay = EvmSubmitOptions & { note?: RelayNote; landed?: string[]; onBroadcast?: () => void };
+/** `send`'s `onBroadcast` from a relay's options, when the submission watches for it. */
+const broadcast = (o: Relay): { onBroadcast?: () => void } => (o.onBroadcast ? { onBroadcast: o.onBroadcast } : {});
 
 /** What `recover` did with the rows a restart left open, one count per row. */
 export interface RecoverReport {
@@ -877,9 +879,10 @@ export class EvmSettlement implements Settlement {
       for (const h of landed) this.done(h);
     };
     let id: Hex32;
+    let sent = false;
     try {
       const note: RelayNote = { commitmentId: lane, call: '', via: options.via ?? 'direct', submission: s, ...(key !== undefined ? { idempotencyKey: key, body } : {}) };
-      id = await this.apply(s, { ...options, note, landed }, dryRun);
+      id = await this.apply(s, { ...options, note, landed, onBroadcast: () => void (sent = true) }, dryRun);
     } catch (e) {
       // A refusal after a receipt (a revert on chain) has no answer to replay. Any other error keeps the row: the sync
       // or a restart lands that receipt with its answer.
@@ -888,6 +891,9 @@ export class EvmSettlement implements Settlement {
         // The revert as a fact, beside the words that describe it: `Reverted` is thrown where that message is written.
         return e instanceof Reverted ? { ok: false, problem: e.problem, reverted: true } : { ok: false, problem: e.problem };
       }
+      // T-609: say so when it is certain. A live chain calls `onBroadcast`; the anvil scenario world does not, so it
+      // claims nothing. Neither does a failure while a transaction that may be this commitment's waits for its receipt.
+      if (this.wall && !dryRun && !sent && !this.mayBeWaiting(lane)) throw new NothingSent(e);
       throw e;
     }
     const book = this.books.get(id)!;
@@ -914,6 +920,15 @@ export class EvmSettlement implements Settlement {
     if (book.posted) await this.settlePosted(id, book).catch(() => undefined);
     release();
     return result;
+  }
+
+  /**
+   * True while an open lane row may be a transaction of `commitment`: a relay noted for it, or a row with no note on its
+   * deal lane, which is a standing seller's contract deployment (`sendDeployment` writes no note; T-609 review).
+   */
+  private mayBeWaiting(commitment: Hex32): boolean {
+    const lane = lc(this.world.senderFor(commitment));
+    return (this.world.openRows?.() ?? []).some((r) => (r.note ? lc(r.note.commitmentId) === lc(commitment) : lc(r.from) === lane));
   }
 
   /** True when a kept copy holds Idempotency-Key `key` with another body (T-230). */
@@ -959,6 +974,10 @@ export class EvmSettlement implements Settlement {
       gasPrice: async () => (await this.world.gasPrice?.()) ?? 1_000_000_000n,
       ...(block === undefined ? { plannedCode: (address: Address, signature: Hex) => this.plannedCode(address, signature) } : {}),
     };
+    // T-609: a check of the state now on a live chain is asked again, whole and at a fresh block, when a node fails one
+    // of its reads, as every pinned read is (T-232). The rule throws only for a failed read: a wrong signature is false.
+    const pinned = block === undefined && !at ? this.world.pinned?.bind(this.world) : undefined;
+    if (pinned) return (digest, signature, signer) => pinned((n) => chainSignerCheck(this.world.publicClient, ctx, { blockNumber: n })(digest, signature, signer), undefined, 'now');
     return chainSignerCheck(this.world.publicClient, ctx, block !== undefined ? { blockNumber: block } : at ? { call: at } : newest ? { blockNumber: newest } : {});
   }
 
@@ -989,7 +1008,8 @@ export class EvmSettlement implements Settlement {
     if (!p) {
       if (this.runtimes.size >= 256) this.runtimes.clear();
       // eslint-disable-next-line no-restricted-syntax -- a creation reads no state: its code follows from the init code alone, at any block.
-      p = this.world.publicClient.call({ data: standingInitCode(key) }).then((r) => {
+      const create = () => this.world.publicClient.call({ data: standingInitCode(key) });
+      p = (this.world.pinned ? this.world.pinned(create) : create()).then((r) => {
         if (!r.data || r.data === '0x') throw new Error(`the seller contract's creation for key ${key} returned no code`);
         return r.data;
       });
@@ -999,10 +1019,10 @@ export class EvmSettlement implements Settlement {
     return p;
   }
 
-  /** The code at `address` now: at the node's newest block on a live chain, the latest on anvil. */
+  /** The code at `address` now: at the node's newest block on a live chain, asked again as a pinned read; the latest on anvil. */
   private async codeNow(address: Address): Promise<Hex> {
-    const blockNumber = this.world.newest ? await this.world.newest('now') : undefined;
-    return (await this.world.publicClient.getCode({ address, ...(blockNumber !== undefined ? { blockNumber } : {}) })) ?? '0x';
+    const at = async (blockNumber: bigint | undefined) => (await this.world.publicClient.getCode({ address, ...(blockNumber !== undefined ? { blockNumber } : {}) })) ?? '0x';
+    return this.world.pinned ? this.world.pinned(at, undefined, 'now') : at(undefined);
   }
 
   /**
@@ -1552,7 +1572,8 @@ export class EvmSettlement implements Settlement {
     const from = options.sender ? privateKeyToAccount(options.sender).address : this.world.senderFor(id);
     // At the latest block: the deployment reads no state but whether its address is free, which the code read above and the send check again.
     // eslint-disable-next-line no-restricted-syntax -- see the line above
-    const gas = await this.world.publicClient.estimateGas({ account: from, to: dep.to, data: dep.data }).catch(async (e: unknown) => {
+    const estimate = () => this.world.publicClient.estimateGas({ account: from, to: dep.to, data: dep.data });
+    const gas = await (this.world.pinned ? this.world.pinned(estimate) : estimate()).catch(async (e: unknown) => {
       // Deployed by someone else since the read: skipped. Any other failure is no deployment, and no funding.
       if ((await this.codeNow(s.seller)) !== '0x') return null;
       throw e;
@@ -1561,7 +1582,7 @@ export class EvmSettlement implements Settlement {
     if (gas > maxGas) refuse('relay_refused', `the seller contract's deployment needs about ${gas} gas, above this operator's budget of ${maxGas} gas for one; ${elsewhere}`);
     let mined: Mined;
     try {
-      mined = await this.world.send({ ...(options.sender ? { key: options.sender } : { lane: id }), ...dep, gasCap: (maxGas * 105n) / 100n, gasMarginPct: 5 }, this.wall ? undefined : time);
+      mined = await this.world.send({ ...(options.sender ? { key: options.sender } : { lane: id }), ...dep, gasCap: (maxGas * 105n) / 100n, gasMarginPct: 5, ...broadcast(options) }, this.wall ? undefined : time);
     } catch (e) {
       // Declined before the broadcast (out of test ETH, gas above the cap): nothing went out.
       if (e instanceof RelayRefused) refuse('relay_refused', `this operator cannot deploy the seller contract now: ${e.message}; ${elsewhere}`);
@@ -1758,7 +1779,7 @@ export class EvmSettlement implements Settlement {
     // T-219: what the relayer lane's row keeps, so a restart before the receipt applies this call as this relay.
     const note: RelayNote | undefined = key || !options.note ? undefined : { ...options.note, call: fn, ...(ctx.delivery && options.note.submission.kind !== 'deliver' ? { delivery: ctx.delivery } : {}) };
     try {
-      mined = await this.world.send({ ...(key ? { key } : { lane: id }), to, data, ...(note ? { note } : {}) }, this.wall ? undefined : time);
+      mined = await this.world.send({ ...(key ? { key } : { lane: id }), to, data, ...(note ? { note } : {}), ...broadcast(options) }, this.wall ? undefined : time);
     } catch (e) {
       // The relayer declines (out of test ETH, gas above its cap): the signed message stays valid elsewhere (D27).
       if (e instanceof RelayRefused) refuse('relay_refused', `this operator cannot relay it now: ${e.message}; submit the same signed message through another operator or directly to the settlement layer`);
@@ -2875,7 +2896,7 @@ export class EvmSettlement implements Settlement {
     let mined: Mined;
     try {
       const note = options.sender || !options.note ? undefined : { ...options.note, call: 'transferWithAuthorization' };
-      mined = await this.world.send({ ...(options.sender ? { key: options.sender } : { lane: id }), to: token, data, ...(note ? { note } : {}) }, this.wall ? undefined : secs(this.now()));
+      mined = await this.world.send({ ...(options.sender ? { key: options.sender } : { lane: id }), to: token, data, ...(note ? { note } : {}), ...broadcast(options) }, this.wall ? undefined : secs(this.now()));
     } catch (e) {
       if (e instanceof RelayRefused) refuse('relay_refused', `this operator cannot relay the operator fee now: ${e.message}`);
       throw e;

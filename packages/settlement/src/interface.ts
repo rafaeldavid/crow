@@ -39,6 +39,20 @@ export type TimeoutKind = 'expire_offer' | 'reclaim' | 'fallback' | 'default' | 
 
 export const TIMEOUT_KINDS: readonly TimeoutKind[] = ['expire_offer', 'reclaim', 'fallback', 'default', 'apply_default', 'appeal_expiry', 'settle'];
 
+/**
+ * `submit` failed for a reason that is not a refusal (an RPC node that kept failing a read, say) before this node sent
+ * any transaction for it, with none of the commitment's relays waiting for a receipt (T-609). So the same request is
+ * safe to send again, with the same Idempotency-Key. `cause` is the error itself; `name` and `message` repeat its own,
+ * so a log or a notice that names an error's class reads as it did without the wrapper. An error that is not a
+ * `NothingSent` says nothing either way: a transaction may be out.
+ */
+export class NothingSent extends Error {
+  constructor(cause: unknown) {
+    super(cause instanceof Error ? cause.message : String(cause), { cause });
+    if (cause instanceof Error) this.name = cause.name;
+  }
+}
+
 /** One submission to the settlement layer. Signatures are checked against the settlement layer's own facts. */
 export type Submission =
   /** Either wire form: at private and judgment the bodies are privateTerms ciphertext, and settlement reads their hashes (ADR-0024). */

@@ -40,6 +40,16 @@ net.Socket.prototype.connect = function (...args) {
   return connect.apply(this, args);
 };
 process.on('exit', () => note({ env: Object.keys(process.env).sort() }));
+// With SERVE_TEST_PAUSE_MS set, the process stops that long right after it writes its ready line, as a busy machine's
+// scheduler may: a signal sent on that line then always arrives before the next line of the command runs.
+if (process.env.SERVE_TEST_PAUSE_MS) {
+  const write = process.stdout.write.bind(process.stdout);
+  process.stdout.write = (chunk, ...rest) => {
+    const sent = write(chunk, ...rest);
+    if (String(chunk).includes('serves POST')) Atomics.wait(new Int32Array(new SharedArrayBuffer(4)), 0, 0, Number(process.env.SERVE_TEST_PAUSE_MS));
+    return sent;
+  };
+}
 `;
 
 const children: ChildProcessWithoutNullStreams[] = [];
@@ -65,7 +75,8 @@ function serve(args: string[], env: Record<string, string> = {}, beside: Record<
   child.stdout.on('data', (d: Buffer) => (out += d.toString()));
   child.stderr.on('data', (d: Buffer) => (err += d.toString()));
   child.stdin.end();
-  const exited = new Promise<number | null>((resolve) => child.on('close', (code) => resolve(code)));
+  // The exit status, or the name of the signal that killed the process, so a failure says which.
+  const exited = new Promise<number | NodeJS.Signals>((resolve) => child.on('close', (code, signal) => resolve(code ?? signal!)));
   const recorded = (): J[] => readFileSync(record, 'utf8').split('\n').filter(Boolean).map((l) => JSON.parse(l));
   return { dir, child, exited, out: () => out, err: () => err, hosts: () => recorded().filter((r) => r.host !== undefined).map((r) => r.host as string), envAtExit: () => recorded().find((r) => r.env !== undefined)?.env as string[] | undefined };
 }
@@ -249,6 +260,27 @@ describe('site/serve.mjs refuses a start (T-606)', () => {
     }
   }, 60_000);
 
+  it('stopped by a signal while a start still waits, exits 0 and says it served nothing', async () => {
+    for (const signal of ['SIGTERM', 'SIGINT'] as const) {
+      const silent = createTcpServer(() => {});
+      const held: Socket[] = [];
+      const asked = new Promise<void>((resolve) => silent.on('connection', (socket) => (held.push(socket), resolve())));
+      await new Promise<void>((resolve) => silent.listen(0, '127.0.0.1', resolve));
+      try {
+        const port = (silent.address() as AddressInfo).port;
+        const run = serve([work(sellerJson(1))], env({ HOLDBACK_OPERATORS: `http://127.0.0.1:${port},http://localhost:${port}` }));
+        await asked; // the start is under way: it has asked an operator, which never answers
+        run.child.kill(signal);
+        expect(await run.exited, run.out() + run.err()).toBe(0);
+        expect(run.out()).toContain(`${signal}: the adapter stops before it serves; the journal keeps every open deal.`);
+        expect(run.out()).not.toContain('serves POST');
+      } finally {
+        for (const socket of held) socket.destroy();
+        silent.close();
+      }
+    }
+  }, 60_000);
+
   it('without a template of its own, since the file carries none', async () => {
     const config: J = sellerJson(1);
     delete config.template;
@@ -352,5 +384,21 @@ describe('site/serve.mjs sells one request on a local world (T-606)', () => {
     expect(said()).toContain('serves POST');
     run.child.kill('SIGTERM');
     expect(await run.exited).toBe(0);
+  }, 60_000);
+
+  it('stops gracefully on a signal sent as soon as it says it serves', async () => {
+    for (const signal of ['SIGTERM', 'SIGINT'] as const) {
+      const env = { HOLDBACK_KEY: generatePrivateKey(), HOLDBACK_OPERATORS: world.operators.join(','), [JOB_ENV]: randomBytes(32).toString('base64url'), [ASK_ENV]: randomBytes(32).toString('base64url'), SERVE_TEST_PAUSE_MS: '500' };
+      const run = serve([work(sellerJson(1))], env);
+      let sent = false;
+      run.child.stdout.on('data', () => {
+        if (sent || !run.out().includes('serves POST')) return;
+        sent = true;
+        run.child.kill(signal);
+      });
+      expect(await run.exited, run.out() + run.err()).toBe(0);
+      expect(sent).toBe(true);
+      expect(run.out()).toContain(`${signal}: the adapter stops after the step in progress`);
+    }
   }, 60_000);
 });

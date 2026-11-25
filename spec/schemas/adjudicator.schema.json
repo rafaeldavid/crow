@@ -1,6 +1,6 @@
 {
   "$schema": "https://json-schema.org/draft/2020-12/schema",
-  "$id": "https://holdback.dev/schemas/v0.13/adjudicator.schema.json",
+  "$id": "https://holdback.dev/schemas/v0.14/adjudicator.schema.json",
   "title": "Adjudicator registration",
   "type": "object",
   "required": [
