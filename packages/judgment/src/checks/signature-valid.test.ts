@@ -98,6 +98,8 @@ describe('signature_valid: attacks fail', () => {
     expect(mutated((c) => (c.publicKey.pointer = 1.5))).toMatch(/pointer/);
     expect(mutated((c) => (c.message.pointer = 7))).toMatch(/pointer/);
     expect(mutated((c) => (c.message.jsonEquals = 1.0))).toMatch(/jsonEquals/);
+    // Second-family review (s02 C3): a null jsonEquals passed as absent here, then threw at judging; check-terms asks this.
+    expect(mutated((c) => (c.message.jsonEquals = null))).toMatch(/jsonEquals must be an RFC 6901/);
     expect(mutated((c) => (c.maxBytes = 5))).toBeTypeOf('string');
     expect(mutated((c) => (c.required = 1))).toBeTypeOf('string');
     expect(mutated((c) => (c.id = 'Bad Id'))).toBeTypeOf('string');
@@ -175,6 +177,26 @@ describe('signature_valid: work budget and determinism', () => {
     const r = run(good.check, good.delivery, new StepBudget(10));
     expect(r.inconclusive).toEqual(['manifest-signature']);
     expect(r.outcomes[0]).toMatchObject({ passed: false, detail: 'inconclusive: the check work budget for this delivery ran out' });
+  });
+
+  it('charges a utf8 message before scanning it, so a message refused as text still spends its length', () => {
+    // Second-family review (s07 C1): the lone-surrogate scan and the encode ran before any charge, so 20 checks over a
+    // 10 MiB message refused at the scan spent nothing (measured 692 ms on an M-series Mac).
+    const doc = JSON.parse(good.delivery) as Record<string, unknown>;
+    doc.manifest_text = `${'a'.repeat(100_000)}\ud800`;
+    const b = new StepBudget(50_000_000);
+    expect(run(good.check, JSON.stringify(doc), b).outcomes[0]).toMatchObject({ passed: false, detail: 'message: not well-formed text' });
+    expect(50_000_000 - b.remaining).toBe(100_001);
+  });
+
+  it('charges a passing utf8 message once per byte plus one verification, as section 6 sets', () => {
+    const doc = JSON.parse(good.delivery) as Record<string, unknown>;
+    const bytes = Buffer.byteLength(doc.manifest_text as string, 'utf8');
+    const b = new StepBudget(50_000_000);
+    expect(run(good.check, good.delivery, b).outcomes[0]!.passed).toBe(true);
+    // The jsonEquals comparison spends one unit per value on top; it is the only other charge.
+    expect(50_000_000 - b.remaining - bytes - 200_000).toBeGreaterThan(0);
+    expect(50_000_000 - b.remaining - bytes - 200_000).toBeLessThan(1_000);
   });
 
   it('gives the same outcome and the same remaining budget on every run', () => {

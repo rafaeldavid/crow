@@ -55,7 +55,7 @@ export function validateSignatureCheck(check: unknown): string | undefined {
   if (!hasShape(publicKey, ['pointer', 'format', 'spkiSha256'])) return 'publicKey needs exactly pointer, format and spkiSha256';
   if (!hasShape(message, ['pointer', 'encoding'], ['jsonEquals'])) return 'message needs pointer and encoding, and may have jsonEquals';
   if (!hasShape(signature, ['pointer', 'encoding', 'format'])) return 'signature needs exactly pointer, encoding and format';
-  for (const [name, p] of [['publicKey.pointer', publicKey.pointer], ['message.pointer', message.pointer], ['message.jsonEquals', message.jsonEquals ?? ''], ['signature.pointer', signature.pointer]] as const) {
+  for (const [name, p] of [['publicKey.pointer', publicKey.pointer], ['message.pointer', message.pointer], ['message.jsonEquals', message.jsonEquals === undefined ? '' : message.jsonEquals], ['signature.pointer', signature.pointer]] as const) {
     if (!isPointer(p)) return `${name} must be an RFC 6901 JSON pointer of at most ${MAX.pointer} characters`;
   }
   if (publicKey.format !== 'spki-pem' && publicKey.format !== 'spki-base64') return 'publicKey.format must be spki-pem or spki-base64';
@@ -142,7 +142,12 @@ export function evaluateSignatureValid(check: SignatureCheck, delivered: string 
   if (format === 'der' ? signature.length > MAX.derBytes : signature.length !== MAX.rawBytes) return fail('signature: wrong length');
 
   let message: Uint8Array;
+  let prepaid = 0;
   if (check.message.encoding === 'utf8') {
+    // Part of the hashing charge, paid before the scan and the encode run, so a message refused here still spends its
+    // length. A string's UTF-16 units never exceed its UTF-8 bytes, so the total charge does not change.
+    prepaid = strings.message.length;
+    budget.spend(prepaid);
     if (LONE_SURROGATE.test(strings.message)) return fail('message: not well-formed text');
     message = new TextEncoder().encode(strings.message);
   } else {
@@ -154,7 +159,7 @@ export function evaluateSignatureValid(check: SignatureCheck, delivered: string 
   }
 
   if (format === 'der' && !isStrictDer(signature)) return fail('signature: not valid DER');
-  budget.spend(message.length + SIGNATURE_WORK.perVerification);
+  budget.spend(message.length - prepaid + SIGNATURE_WORK.perVerification);
   if (!verifySignature(check.alg, spki, message, signature, format)) return fail('signature does not verify');
 
   if (check.message.jsonEquals !== undefined) {
