@@ -11,11 +11,11 @@ T-358, ADR-0033. The same four addresses as two-addresses-released. Tidewater de
 | Pragmas | settlement=sim · judges=recorded · mode=guaranteed_on_decision · seed=359 |
 | Prefix | none (normal flow: reaches a terminal state, invariants hold) |
 | Settlement | SimChain (T-006) driving @holdback/core `step` |
-| Judgment | @holdback/judgment (checks, screen, panel) · registry config/judges.yaml 0x8aa4…4549 · policy bench-a/p1 0x40b5…1e88 |
+| Judgment | @holdback/judgment (checks, screen, panel) · registry config/judges.yaml 0x8aa4…4549 · policy bench-a/p1 0xd136…9300 |
 | Club | fixtures/clubs/data-services-v1.yaml (loaded) · rulebook 0xd9bc…492d |
 | Buyer | atlas-buyer 0xedDE…9334 |
 | Seller | tidewater-seller 0x5e0A…124f |
-| Terms | fixtures/terms/clean-customers-2000.yaml (loaded) · commitment 0x082f…ef47 · price 2,000.000000 tUSD · fee 50.000000 tUSD |
+| Terms | fixtures/terms/clean-customers-2000.yaml (loaded) · commitment 0x9b13…be18 · price 2,000.000000 tUSD · fee 50.000000 tUSD |
 | Adjudicators | primary bench-a 0xb009…97B1 · fallback bench-b 0xf893…3094 · appeal bench-c 0xfE94…C675 |
 | Operators | op-1 · op-2 |
 
@@ -46,13 +46,13 @@ T-358, ADR-0033. The same four addresses as two-addresses-released. Tidewater de
 - **Intake:** plaintext 0x3ee0…8312 · text/csv · 471196 bytes (fixtures/data/dataset-cleaning/customers.clean.row-drop.csv) · hash verified ✓ · normalized
 - **Deterministic checks:** cols ✓ · rows ✗ (8740 rows; expected 9400 to 9600) · uniq ✓ · dates ✓ · id_nulls ✓ · name_nulls ✓ · email_nulls ✓ · emails (optional) ✓ · hidden ✓
 - **Screen:** clean
-- **Panel:** not run · first-instance template 0x4d32…629b · rubric 0x4201…7925 · seed source: commit-reveal (commitment 0xc953…6781, seed 0x69af…49ca, recomputed: match)
+- **Panel:** not run · first-instance template 0xabb5…4dd2 · rubric 0x4201…7925 · seed source: commit-reveal (commitment 0xc953…6781, seed 0x69af…49ca, recomputed: match)
 - **Aggregate:** reject. Reasons: required deterministic check failed: rows.
 - **Signed:** reject.
 
 ## Receipts and log
 
-- Events 0–7. Chain head 0x3623…03cb. Replay of 6 SimChain submissions from genesis matches the settlement state.
+- Events 0–7. Chain head 0xe992…d012. Replay of 6 SimChain submissions from genesis matches the settlement state.
 - Receipts from op-1: 5 (rcpt-0001–rcpt-0005). The runner labels them without signing; the operator API signs real receipts.
 
 ## Invariants

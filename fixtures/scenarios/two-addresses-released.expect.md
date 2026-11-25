@@ -11,11 +11,11 @@ T-358, ADR-0033. Atlas signs with one key and pays from another address, its tre
 | Pragmas | settlement=sim · judges=recorded · mode=guaranteed_on_decision · seed=358 |
 | Prefix | none (normal flow: reaches a terminal state, invariants hold) |
 | Settlement | SimChain (T-006) driving @holdback/core `step` |
-| Judgment | @holdback/judgment (checks, screen, panel) · registry config/judges.yaml 0x8aa4…4549 · policy bench-a/p1 0x40b5…1e88 |
+| Judgment | @holdback/judgment (checks, screen, panel) · registry config/judges.yaml 0x8aa4…4549 · policy bench-a/p1 0xd136…9300 |
 | Club | fixtures/clubs/data-services-v1.yaml (loaded) · rulebook 0xd9bc…492d |
 | Buyer | atlas-buyer 0xcF8c…1ffb |
 | Seller | tidewater-seller 0xb582…D3A3 |
-| Terms | fixtures/terms/audit-report.yaml (loaded) · commitment 0xfae0…6ca0 · price 1,500.000000 tUSD · fee 50.000000 tUSD |
+| Terms | fixtures/terms/audit-report.yaml (loaded) · commitment 0xad9d…1193 · price 1,500.000000 tUSD · fee 50.000000 tUSD |
 | Adjudicators | primary bench-a 0xfEcA…a5e2 · fallback bench-b 0xfe73…EAA7 · appeal bench-c 0x5c30…Ca68 |
 | Operators | op-1 · op-2 |
 
@@ -47,13 +47,13 @@ T-358, ADR-0033. Atlas signs with one key and pays from another address, its tre
 - **Intake:** plaintext 0xbd9b…f287 · application/json · 5098 bytes (fixtures/data/audit-report/report.json) · hash verified ✓ · normalized
 - **Deterministic checks:** report ✓ · proof ✓ · scope ✓ · coverage ✓ · hidden ✓
 - **Screen:** clean
-- **Panel:** not run · first-instance template 0x4d32…629b · rubric 0x551e…5e6a · seed source: commit-reveal (commitment 0xc2dd…3ebd, seed 0x5da3…eb98, recomputed: match)
+- **Panel:** not run · first-instance template 0xabb5…4dd2 · rubric 0x551e…5e6a · seed source: commit-reveal (commitment 0xc2dd…3ebd, seed 0x5da3…eb98, recomputed: match)
 - **Aggregate:** accept. Reasons: all deterministic checks passed and the rubric is empty.
 - **Signed:** accept.
 
 ## Receipts and log
 
-- Events 0–8. Chain head 0xa220…5fbb. Replay of 6 SimChain submissions from genesis matches the settlement state.
+- Events 0–8. Chain head 0x646e…c83d. Replay of 6 SimChain submissions from genesis matches the settlement state.
 - Receipts from op-1: 5 (rcpt-0001–rcpt-0005). The runner labels them without signing; the operator API signs real receipts.
 
 ## Invariants

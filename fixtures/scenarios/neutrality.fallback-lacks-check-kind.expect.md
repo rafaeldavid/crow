@@ -11,11 +11,11 @@ ADR-0045 section 10, D92. The terms name signature_valid. Bench A accepts, then 
 | Pragmas | settlement=sim · judges=recorded · mode=guaranteed_on_decision · seed=74 |
 | Prefix | neutrality. (an actor fails: terms-compliant terminal state anyway) |
 | Settlement | SimChain (T-006) driving @holdback/core `step` |
-| Judgment | @holdback/judgment (checks, screen, panel) · registry config/judges.yaml 0x8aa4…4549 · policy bench-a/p1 0x40b5…1e88 |
+| Judgment | @holdback/judgment (checks, screen, panel) · registry config/judges.yaml 0x8aa4…4549 · policy bench-a/p1 0xd136…9300 |
 | Club | fixtures/clubs/data-services-v1.yaml (loaded) · rulebook 0xd9bc…492d |
 | Buyer | atlas-buyer 0xA33f…b81B |
 | Seller | tidewater-seller 0x2893…1601 |
-| Terms | fixtures/terms/signed-manifest.yaml (loaded) · commitment 0x5adf…7d0d · price 1,500.000000 tUSD · fee 50.000000 tUSD |
+| Terms | fixtures/terms/signed-manifest.yaml (loaded) · commitment 0x93d5…db5b · price 1,500.000000 tUSD · fee 50.000000 tUSD |
 | Adjudicators | primary bench-a 0x5B5f…e19f · fallback bench-b 0xD33d…2e1b · appeal bench-c 0x1a8A…297E |
 | Operators | op-1 · op-2 |
 
@@ -59,7 +59,7 @@ Outages:
 
 ## Receipts and log
 
-- Events 0–11. Chain head 0xebc4…0a69. Replay of 8 SimChain submissions from genesis matches the settlement state.
+- Events 0–11. Chain head 0xc69d…568a. Replay of 8 SimChain submissions from genesis matches the settlement state.
 - Receipts from op-1: 5 (rcpt-0001–rcpt-0005). The runner labels them without signing; the operator API signs real receipts.
 - Receipts from op-2: 3 (rcpt-0006–rcpt-0008). The runner labels them without signing; the operator API signs real receipts.
 

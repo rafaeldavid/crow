@@ -1,7 +1,7 @@
 // Scenario fixtures are declarative YAML. The parser builds plain data from the core schema only
 // (no custom tags, no functions, bounded aliases) and checks every key against a closed set, so a
 // fixture can describe a run but can never carry code.
-import { PROBLEM_TYPES, type ProblemType } from '@holdback/core';
+import { PROBLEM_TYPES, type Hex32, type ProblemType } from '@holdback/core';
 import { parseDocument } from 'yaml';
 import { parsePragmas, type Pragmas } from './pragma.js';
 import { prefixOf, TERMINAL_STATES, type ScenarioExpect } from './prefix.js';
@@ -105,6 +105,11 @@ export interface Scenario {
   adjudicators: { primary: string; fallback: string; appeal: string };
   /** ADR-0045 section 10, D92: check kinds a named adjudicator's build does not run. It then signs no decision on terms that name one. */
   lacksCheckKinds?: Record<string, string[]>;
+  /**
+   * ADR-0036: the versions the scenario's adjudicators run as their default from the start, in place of
+   * kept-policies.json's default: a fixture written for one policy keeps testing it when the build's default moves.
+   */
+  build?: { screenVersion?: string; promptTemplateHash?: Hex32; appealPromptTemplateHash?: Hex32; aggregationVersion?: string };
   operators: string[];
   /** Starting balances in base units (decimal strings). */
   faucet: Record<string, string>;
@@ -395,7 +400,7 @@ function parseExpect(raw: unknown, shorthand: unknown): ScenarioExpect {
   return out;
 }
 
-const TOP = ['name', 'description', 'club', 'terms', 'parties', 'fails', 'outside', 'adjudicators', 'lacks_check_kinds', 'operators', 'faucet', 'steps', 'expect', 'expect_terminal'] as const;
+const TOP = ['name', 'description', 'club', 'terms', 'parties', 'fails', 'outside', 'adjudicators', 'lacks_check_kinds', 'build', 'operators', 'faucet', 'steps', 'expect', 'expect_terminal'] as const;
 
 /** Parses a scenario file. Throws ScenarioError with a path for anything it does not understand. */
 export function parseScenario(source: string, fileName: string): Scenario {
@@ -464,6 +469,20 @@ export function parseScenario(source: string, fileName: string): Scenario {
       lacks[who] = (kinds as unknown[]).map((k, i) => str(k, `lacks_check_kinds.${who}[${i}]`));
     }
     scenario.lacksCheckKinds = lacks;
+  }
+  if (top.build !== undefined) {
+    const raw = top.build;
+    if (!isObj(raw)) fail('build', 'must be {screen?, prompt_template?, appeal_prompt_template?, aggregation?}');
+    const keys = { screen: 'screenVersion', prompt_template: 'promptTemplateHash', appeal_prompt_template: 'appealPromptTemplateHash', aggregation: 'aggregationVersion' } as const;
+    const build: NonNullable<Scenario['build']> = {};
+    for (const [k, v] of Object.entries(raw)) {
+      if (!(k in keys)) fail(`build.${k}`, `not a build field (${Object.keys(keys).join(', ')})`);
+      const value = str(v, `build.${k}`);
+      if (k.endsWith('template') && !/^0x[0-9a-f]{64}$/.test(value)) fail(`build.${k}`, 'must be a template hash, 0x and 64 lowercase hex digits');
+      (build as Record<string, string>)[keys[k as keyof typeof keys]] = value;
+    }
+    if ((build.promptTemplateHash === undefined) !== (build.appealPromptTemplateHash === undefined)) fail('build', 'prompt_template and appeal_prompt_template name one template pair: give both or neither');
+    scenario.build = build;
   }
   if (top.description !== undefined) scenario.description = str(top.description, 'description');
   if (top.club !== undefined) scenario.club = str(top.club, 'club');
