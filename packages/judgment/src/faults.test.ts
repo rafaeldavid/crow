@@ -12,7 +12,7 @@ import fc from 'fast-check';
 import { describe, expect, it } from 'vitest';
 import { ADJUDICATOR, delivery, fakeUnwrap, GOOD_CSV, NONCES, POLICY, RUBRIC, seal, utf8 } from './_helpers.js';
 import { intake } from './intake.js';
-import { KEPT, NEWEST_VERSIONS, type KeptTable } from './kept.js';
+import { KEPT, NEWEST_VERSIONS, type KeptTable, type ProseAggregation } from './kept.js';
 import { runPipeline, type JudgeProvider, type JudgeRequest, type JudgeResponse, type PanelSeat, type PipelineInput } from './pipeline.js';
 import type { JudgmentAcceptance } from './terms.js';
 
@@ -254,7 +254,7 @@ describe('T-570: no seat\'s output aborts the panel (red team H1)', () => {
   });
 
   it('a verdict filter that throws on one seat makes that seat an error, and the panel still returns', async () => {
-    const agg = KEPT.aggregations.get(NEWEST_VERSIONS.aggregationVersion)!;
+    const agg = KEPT.aggregations.get(NEWEST_VERSIONS.aggregationVersion) as ProseAggregation;
     const kept: KeptTable = { ...KEPT, aggregations: new Map([[NEWEST_VERSIONS.aggregationVersion, { ...agg, parseVerdict: (raw, o) => (raw.includes('THROW') ? (() => { throw new RangeError('boom'); })() : agg.parseVerdict(raw, o)) }]]) };
     const provider: JudgeProvider = { complete: async (req) => (req.judgeId === 'gpt-a' ? { kind: 'ok', text: 'THROW' } : answer('fail')) };
     const draft = await run(provider, { kept });

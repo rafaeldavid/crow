@@ -1,6 +1,7 @@
 // Fake judges for tests, fixtures and the recorded demo: deterministic, no network, no model.
 // The default fake is honest-shaped: it scores every criterion the prompt names and passes.
 import type { JudgeProvider, JudgeRequest, JudgeResponse } from '../pipeline.js';
+import { RULE_9_PAIR_3 } from '../prompt.js';
 
 const IDS_PREFIX = '6. "criteria" must contain each of these ids exactly once: ';
 
@@ -12,8 +13,13 @@ export function criterionIdsOf(system: string): string[] {
   return list === '(none)' ? [] : list.split(', ');
 }
 
-/** A schema-valid verdict over the prompt's criteria. */
+/** A schema-valid verdict over the prompt's criteria, in the format the template asks for (ADR-0050). */
 export function honestVerdict(req: JudgeRequest, overall: 'pass' | 'fail' = 'pass', score: 0 | 1 | 2 | 3 | 4 = overall === 'pass' ? 4 : 1): JudgeResponse {
+  if (req.system.includes(RULE_9_PAIR_3)) {
+    const reasons = [overall === 'pass' ? 'meets_terms' : 'incomplete'];
+    const criteria = criterionIdsOf(req.system).map((id) => ({ id, refs: [], reasons, score }));
+    return { kind: 'ok', text: JSON.stringify({ criteria, overall, injectionSuspected: false, injectionKinds: [], injectionRefs: [] }), latencyMs: 1 };
+  }
   const criteria = criterionIdsOf(req.system).map((id) => ({ id, score, evidence: overall === 'pass' ? 'Meets the criterion in the rows shown.' : 'Falls short in the rows shown.' }));
   return { kind: 'ok', text: JSON.stringify({ criteria, overall, injectionSuspected: false, rationale: `fake judge: ${overall}` }), latencyMs: 1 };
 }

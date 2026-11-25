@@ -277,13 +277,16 @@ describe('attack.coded-junk-when-failing: a delivery asks judges to write junk o
     return fails && comply ? { ...v, rationale: 'terrible work', criteria: v.criteria.map((c) => ({ ...c, reasons: ['terrible', 'incomplete'] })) } : v;
   };
   it('does not move the decision: the failing seats count, their junk is dropped', async () => {
-    const complied = draftOf(await judge(WORK, 'text/plain', answer(true)));
-    const clean = draftOf(await judge(WORK, 'text/plain', answer(false)));
-    expect(complied.aggregate.decision).toBe(clean.aggregate.decision);
-    expect(complied.aggregate.decision).toBe('reject');
-    expect({ ...complied.aggregate, reasons: [] }).toEqual({ ...clean.aggregate, reasons: [] });
-    expect(codedSeat(complied, 0).dropped).toEqual({ reasons: 4, refs: 0, keys: 1 });
-    expect(complied.panel.members.every((m) => m.status === 'ok')).toBe(true);
+    // With the note the screen flags the delivery and the case escalates either way; without it, as if the request
+    // were hidden from the screen, the two failing seats reject it either way.
+    for (const [work, decision] of [[WORK, 'escalate'], [REPORT, 'reject']] as const) {
+      const complied = draftOf(await judge(work, 'text/plain', answer(true)));
+      const clean = draftOf(await judge(work, 'text/plain', answer(false)));
+      expect(complied.aggregate).toEqual(clean.aggregate);
+      expect(complied.aggregate.decision).toBe(decision);
+      expect(codedSeat(complied, 0).dropped).toEqual({ reasons: 4, refs: 0, keys: 1 });
+      expect(complied.panel.members.every((m) => m.status === 'ok')).toBe(true);
+    }
   });
 });
 
@@ -327,6 +330,7 @@ describe('the fake judges answer in the format the template asks for', () => {
     const c = await run(CODED);
     expect(c.panel.members.map((m) => (m.verdict as CodedRecordVerdict).format)).toEqual(['coded-1', 'coded-1', 'coded-1']);
     expect(c.panel.members.map((m) => m.verdict?.overall)).toEqual(['pass', 'fail', 'pass']);
+    expect(c.panel.members.map((m) => (m.verdict as CodedRecordVerdict).dropped)).toEqual(SEATS.map(() => ({ reasons: 0, refs: 0, keys: 0 })));
     const p = await run(NEWEST_VERSIONS);
     expect(p.panel.members.every((m) => m.verdict && 'rationale' in m.verdict)).toBe(true);
   });

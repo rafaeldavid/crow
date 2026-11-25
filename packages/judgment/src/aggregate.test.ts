@@ -194,6 +194,8 @@ describe('aggregate: the decision table is pinned to AGGREGATION_VERSION', () =>
     'agg-4': 'ce2941a18e78b435a7c7b5011562b7e79f098db8ea6925a5702c878846b7de52',
     // ADR-0049: agg-4's decisions; agg-5 adds the cut reasons and the cut filter, which the next test and cut.test.ts pin.
     'agg-5': 'ce2941a18e78b435a7c7b5011562b7e79f098db8ea6925a5702c878846b7de52',
+    // ADR-0050: agg-5's rule over the scores of a coded verdict; the coded filter is pinned by coded.test.ts.
+    'agg-6': 'ce2941a18e78b435a7c7b5011562b7e79f098db8ea6925a5702c878846b7de52',
   };
   // Built inside each test: the arbitraries are declared further down this file.
   const corpus = () => fc.sample(arbInputPublic, { seed: 2718, numRuns: 3000 }).map(buildPublic);
@@ -216,6 +218,7 @@ describe('aggregate: the decision table is pinned to AGGREGATION_VERSION', () =>
     'agg-3': '54149ef79b20c9a607bcad0f694be045ae556effc4ab0d10915e8f1f7e488b21',
     'agg-4': '164860c833455d206e1cf3910fc5e6a5467105e77d026d36b8990a844a028e6d',
     'agg-5': '164860c833455d206e1cf3910fc5e6a5467105e77d026d36b8990a844a028e6d',
+    'agg-6': '164860c833455d206e1cf3910fc5e6a5467105e77d026d36b8990a844a028e6d',
   };
   const panelCorpus = unflaggedPanelCorpus;
   const panelDigestOf = (impl: { aggregate: typeof aggregate }) => createHash('sha256').update(panelCorpus().map((i) => impl.aggregate(i).decision).join(',')).digest('hex');
