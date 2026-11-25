@@ -6683,6 +6683,18 @@ var init_hashTypedData = __esmMin((() => {
 	init_typedData();
 }));
 
+// node_modules/.pnpm/viem@2.57.13_typescript@6.0.3/node_modules/viem/_esm/utils/signature/recoverMessageAddress.js
+async function recoverMessageAddress({ message, signature }) {
+	return recoverAddress({
+		hash: hashMessage(message),
+		signature
+	});
+}
+var init_recoverMessageAddress = __esmMin((() => {
+	init_hashMessage();
+	init_recoverAddress();
+}));
+
 // node_modules/.pnpm/viem@2.57.13_typescript@6.0.3/node_modules/viem/_esm/utils/signature/recoverTypedDataAddress.js
 async function recoverTypedDataAddress(parameters) {
 	const { domain, message, primaryType, signature, types } = parameters;
@@ -62884,7 +62896,7 @@ function reasonLine(r) {
 }
 
 // examples/seller-adapter-core.ts
-/* @__PURE__ */ init_concat(), init_isAddressEqual(), init_keccak256(), init_recoverTypedDataAddress(), init_toHex();
+/* @__PURE__ */ init_concat(), init_isAddressEqual(), init_keccak256(), init_recoverMessageAddress(), init_recoverTypedDataAddress(), init_toHex();
 const DEFAULTS = {
 	port: 8791,
 	sellerApi: {
@@ -62992,7 +63004,8 @@ const FILE_KEYS = [
 	"quoteAuth",
 	"quoteRateLimit",
 	"alerts",
-	"redelivery"
+	"redelivery",
+	"shareDelivery"
 ];
 /** Options removed in T-331, each with what to do instead. A configuration that still sets one is refused. */
 const REMOVED = [
@@ -63078,6 +63091,11 @@ function configFrom(f, file, files) {
 	if (f.events !== void 0 && (typeof f.events !== "string" || f.events === "")) throw new Error(`${file}: events must be a file path`);
 	if (f.reportSalt !== void 0 && typeof f.reportSalt !== "boolean") throw new Error(`${file}: reportSalt must be true or false`);
 	if (f.signingKey !== void 0 && f.signingKey !== "standing" && f.signingKey !== "per-deal") throw new Error(`${file}: signingKey must be "standing" or "per-deal"`);
+	if (f.shareDelivery !== void 0 && ![
+		"held-reject",
+		"delivered",
+		"never"
+	].includes(f.shareDelivery)) throw new Error(`${file}: shareDelivery must be "held-reject", "delivered" or "never"`);
 	if (own && Array.isArray(f.termsRules) && f.termsRules.some((r) => r?.rubric === true)) {
 		let t;
 		try {
@@ -63103,6 +63121,7 @@ function configFrom(f, file, files) {
 		...f.reportMapping === void 0 ? {} : { reportMapping: beside(f.reportMapping, "reportMapping") },
 		...pass("reportSalt"),
 		...pass("signingKey"),
+		...pass("shareDelivery"),
 		scope: f.scope ?? DEFAULTS.scope,
 		...own ? {
 			...pass("options"),
@@ -63115,7 +63134,7 @@ function configFrom(f, file, files) {
 			...DEFAULTS.timing,
 			...f.timing ?? {}
 		},
-		rubricTiming: { ...f.rubricTiming ?? DEFAULTS.rubricTiming },
+		rubricTiming: f.rubricTiming !== void 0 ? { ...f.rubricTiming } : Object.fromEntries(Object.entries(DEFAULTS.rubricTiming ?? {}).filter(([k]) => !(isRecord(f.timing) && Object.hasOwn(f.timing, k)))),
 		journal: f.journal ?? DEFAULTS.journal,
 		...f.events === void 0 ? {} : { events: f.events },
 		pollMs: f.pollMs ?? DEFAULTS.pollMs,
@@ -64070,6 +64089,23 @@ async function createSellerAdapter(c, env, io) {
 		save();
 		return seller.call("POST", v.path, v.body);
 	}
+	/**
+	* T-625: a delivery this adapter's own key signs, prepared and signed as Agent.deliver does it, kept in the journal,
+	* then sent, as remoteDeliver keeps the signer's. The buyer's early accept needs this signed body (GET
+	* /deals/<id>/delivery); a deal whose delivery is already signed sends that same body again.
+	*/
+	async function localDeliver(deal, bytes) {
+		const agent = signerOf(deal);
+		if (deal.signedDelivery) return agent.call("POST", deal.signedDelivery.path, deal.signedDelivery.body);
+		const { prepared, intent } = await agent.prepareDelivery(deal.terms, bytes);
+		const { path, body } = await agent.sign(prepared, intent);
+		deal.signedDelivery = {
+			path,
+			body
+		};
+		save();
+		return agent.call("POST", path, body);
+	}
 	let mandateUntil = 0;
 	/** The end of the seller's latest mandate in the club that covers selling, as every operator lists it; 0 for none. */
 	async function mandateEnd(address = seller.address) {
@@ -64590,7 +64626,7 @@ async function createSellerAdapter(c, env, io) {
 				ready: false,
 				note: `delivering ${pre.bytes} bytes, ${pre.plaintextSha256}`
 			});
-			await (remote ? remoteDeliver(deal, bytes) : signerOf(deal).deliver(deal.terms, bytes));
+			await (remote ? remoteDeliver(deal, bytes) : localDeliver(deal, bytes));
 			record(deal, {
 				stage: "delivered",
 				note: `${pre.bytes} bytes, ${pre.plaintextSha256}`
@@ -64997,6 +65033,55 @@ async function createSellerAdapter(c, env, io) {
 			...why === void 0 ? {} : { refusal: why }
 		});
 	}
+	/** T-625: how far a buyer's signed request time may be from this adapter's clock, in seconds. */
+	const DELIVERY_REQUEST_SKEW_SEC = 300;
+	/**
+	* GET /deals/<commitmentId>/delivery?at=<unix seconds>&signature=<0x…> (T-625): the signed delivery, to the deal's
+	* buyer only, when `shareDelivery` allows it now. The buyer signs `crow.delivery:<commitmentId>:<at>` (EIP-191) with
+	* the key the terms name as buyer, within DELIVERY_REQUEST_SKEW_SEC of this clock. Anyone else, and any deal this
+	* adapter does not share now, gets 404, so the route links no deal to this seller.
+	*/
+	async function deliveryShared(req, commitmentId) {
+		if (req.method !== "GET") return send(405, {
+			type: "method_not_allowed",
+			detail: "this route takes GET"
+		});
+		const none = () => send(404, {
+			type: "not_found",
+			detail: "this adapter shares no such delivery with this signer now"
+		});
+		const id = commitmentId.toLowerCase();
+		const deal = Object.hasOwn(journal.deals, id) ? journal.deals[id] : void 0;
+		const mode = c.shareDelivery ?? "held-reject";
+		if (!deal?.signedDelivery || mode === "never") return none();
+		const q = new URL(req.url).searchParams;
+		const at = Number(q.get("at"));
+		const signature = q.get("signature") ?? "";
+		if (!Number.isSafeInteger(at) || Math.abs(Date.now() / 1e3 - at) > DELIVERY_REQUEST_SKEW_SEC || !/^0x[0-9a-fA-F]{130}$/.test(signature)) return none();
+		const by = await recoverMessageAddress({
+			message: `crow.delivery:${id}:${at}`,
+			signature
+		}).catch(() => null);
+		if (!by || !isAddressEqual(by, deal.terms.buyer)) return none();
+		try {
+			if ((await seller.call("GET", `/v1/commitments/${id}`))?.escrowState !== "Delivered") return none();
+			if (mode === "held-reject") {
+				const record = await seller.call("GET", `/v1/commitments/${id}/judgment`).catch(() => null);
+				if (record?.aggregate?.decision !== "reject" || String(record?.role) !== "primary") return none();
+			}
+		} catch {
+			return send(503, {
+				type: "unavailable",
+				detail: "the operators did not answer; try again"
+			});
+		}
+		log(`${id} handed its signed delivery to the buyer ${deal.terms.buyer} (${mode}).`);
+		return send(200, {
+			commitmentId: id,
+			delivery: deal.signedDelivery.body,
+			submitPath: deal.signedDelivery.path
+		});
+	}
 	/** T-503: a stored refund is answered again while it has at least this long left, in ms of settlement-layer time. */
 	const REFUND_REUSE_MS = 6e5;
 	/** T-503: how long a signed refund stays valid, in ms: 23 hours, inside the 24 hours verify.ts allows a settlement. */
@@ -65211,6 +65296,8 @@ async function createSellerAdapter(c, env, io) {
 		}));
 		const refundFor = refusal.ready ? /^\/deals\/(0x[0-9a-fA-F]{64})\/refund$/.exec(path)?.[1] : void 0;
 		if (refundFor) return refundSigned(req, refundFor);
+		const deliveryFor = /^\/deals\/(0x[0-9a-fA-F]{64})\/delivery$/.exec(path)?.[1];
+		if (deliveryFor) return deliveryShared(req, deliveryFor);
 		const dealFor = /^\/deals\/(0x[0-9a-fA-F]{64})$/.exec(path)?.[1];
 		if (dealFor) return dealState(req, dealFor);
 		if (path !== "/quote") return send(404, {

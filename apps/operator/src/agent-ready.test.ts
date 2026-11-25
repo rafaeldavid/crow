@@ -154,8 +154,9 @@ describe('planned routes (D39)', () => {
   it('answer 501 not_implemented with a Link to their source, from x-holdback-planned', async () => {
     const doc = JSON.parse(readFileSync(new URL('../../../spec/openapi.json', import.meta.url), 'utf8')) as J;
     const planned = doc['x-holdback-planned'] as Array<{ method: string; path: string; source: string }>;
-    // The two feedback routes are served since T-032; registration is served and the /keys route withdrawn (ADR-0030).
-    expect(planned.length).toBeGreaterThanOrEqual(15);
+    // The two feedback routes are served since T-032; registration is served and the /keys route withdrawn (ADR-0030);
+    // /judgments is served since T-625.
+    expect(planned.length).toBeGreaterThanOrEqual(14);
     expect(planned.filter((p) => p.path.startsWith('/v1/adjudicators') && !p.path.endsWith('/quote'))).toEqual([]);
     expect(planned.filter((p) => p.path.startsWith('/v1/feedback'))).toEqual([]);
     for (const p of planned) {

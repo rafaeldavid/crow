@@ -11778,7 +11778,11 @@ async function view(a, id, o, cache) {
 			t.adjudication?.appealAdjudicator
 		].map(lc$1) : [];
 		add("adjudicator's record signature", signer === lc$1(j.adjudicator) && named.includes(signer), `recovered to ${signer || "nothing"}; the record names ${lc$1(j.adjudicator)}; the terms name ${named.join(", ") || "no adjudicators (terms unread)"}`);
-		add("judgment names the delivery", [...of("judgment.decided"), ...of("appeal.decided")].map((e) => lc$1(e.payload?.recordHash)).includes(lc$1(recordHash)) && lc$1(j.deliveryHash) === lc$1(d?.payload?.deliveryHash), "a decided event carries this recordHash, and the record names the recorded deliveryHash");
+		const decidedEvents = [...of("judgment.decided"), ...of("appeal.decided")];
+		const decided = decidedEvents.map((e) => lc$1(e.payload?.recordHash));
+		const names = lc$1(j.deliveryHash) === lc$1(d?.payload?.deliveryHash);
+		if (decidedEvents.filter((e) => e.payload?.role === void 0 || e.payload?.role === j.role).length) add("judgment names the delivery", decided.includes(lc$1(recordHash)) && names, "a decided event carries this recordHash, and the record names the recorded deliveryHash");
+		else add("judgment names the delivery", names, `the record names the recorded deliveryHash; no decided event of the ${String(j.role).slice(0, 20)} role exists, so the record was published and not signed into a decision (a held reject, ADR-0051, or one the parties closed during the hold)`);
 		const ev = [...of("judgment.decided"), ...of("appeal.decided")].find((e) => lc$1(e.payload?.recordHash) === lc$1(recordHash));
 		judgment = {
 			adjudicator: lc$1(j.adjudicator),
@@ -65997,7 +66001,7 @@ function reasonLine(r) {
 }
 
 // examples/seller-adapter-core.ts
-/* @__PURE__ */ init_concat(), init_isAddressEqual(), init_keccak256(), init_recoverTypedDataAddress(), init_toHex();
+/* @__PURE__ */ init_concat(), init_isAddressEqual(), init_keccak256(), init_recoverMessageAddress(), init_recoverTypedDataAddress(), init_toHex();
 const DEFAULTS = {
 	port: 8791,
 	sellerApi: {
@@ -66105,7 +66109,8 @@ const FILE_KEYS = [
 	"quoteAuth",
 	"quoteRateLimit",
 	"alerts",
-	"redelivery"
+	"redelivery",
+	"shareDelivery"
 ];
 /** Options removed in T-331, each with what to do instead. A configuration that still sets one is refused. */
 const REMOVED = [
@@ -66191,6 +66196,11 @@ function configFrom(f, file, files) {
 	if (f.events !== void 0 && (typeof f.events !== "string" || f.events === "")) throw new Error(`${file}: events must be a file path`);
 	if (f.reportSalt !== void 0 && typeof f.reportSalt !== "boolean") throw new Error(`${file}: reportSalt must be true or false`);
 	if (f.signingKey !== void 0 && f.signingKey !== "standing" && f.signingKey !== "per-deal") throw new Error(`${file}: signingKey must be "standing" or "per-deal"`);
+	if (f.shareDelivery !== void 0 && ![
+		"held-reject",
+		"delivered",
+		"never"
+	].includes(f.shareDelivery)) throw new Error(`${file}: shareDelivery must be "held-reject", "delivered" or "never"`);
 	if (own && Array.isArray(f.termsRules) && f.termsRules.some((r) => r?.rubric === true)) {
 		let t;
 		try {
@@ -66216,6 +66226,7 @@ function configFrom(f, file, files) {
 		...f.reportMapping === void 0 ? {} : { reportMapping: beside(f.reportMapping, "reportMapping") },
 		...pass("reportSalt"),
 		...pass("signingKey"),
+		...pass("shareDelivery"),
 		scope: f.scope ?? DEFAULTS.scope,
 		...own ? {
 			...pass("options"),
@@ -66228,7 +66239,7 @@ function configFrom(f, file, files) {
 			...DEFAULTS.timing,
 			...f.timing ?? {}
 		},
-		rubricTiming: { ...f.rubricTiming ?? DEFAULTS.rubricTiming },
+		rubricTiming: f.rubricTiming !== void 0 ? { ...f.rubricTiming } : Object.fromEntries(Object.entries(DEFAULTS.rubricTiming ?? {}).filter(([k]) => !(isRecord$1(f.timing) && Object.hasOwn(f.timing, k)))),
 		journal: f.journal ?? DEFAULTS.journal,
 		...f.events === void 0 ? {} : { events: f.events },
 		pollMs: f.pollMs ?? DEFAULTS.pollMs,
@@ -67201,6 +67212,23 @@ async function createSellerAdapter(c, env, io) {
 		save();
 		return seller.call("POST", v.path, v.body);
 	}
+	/**
+	* T-625: a delivery this adapter's own key signs, prepared and signed as Agent.deliver does it, kept in the journal,
+	* then sent, as remoteDeliver keeps the signer's. The buyer's early accept needs this signed body (GET
+	* /deals/<id>/delivery); a deal whose delivery is already signed sends that same body again.
+	*/
+	async function localDeliver(deal, bytes) {
+		const agent = signerOf(deal);
+		if (deal.signedDelivery) return agent.call("POST", deal.signedDelivery.path, deal.signedDelivery.body);
+		const { prepared, intent } = await agent.prepareDelivery(deal.terms, bytes);
+		const { path, body } = await agent.sign(prepared, intent);
+		deal.signedDelivery = {
+			path,
+			body
+		};
+		save();
+		return agent.call("POST", path, body);
+	}
 	let mandateUntil = 0;
 	/** The end of the seller's latest mandate in the club that covers selling, as every operator lists it; 0 for none. */
 	async function mandateEnd(address = seller.address) {
@@ -67721,7 +67749,7 @@ async function createSellerAdapter(c, env, io) {
 				ready: false,
 				note: `delivering ${pre.bytes} bytes, ${pre.plaintextSha256}`
 			});
-			await (remote ? remoteDeliver(deal, bytes) : signerOf(deal).deliver(deal.terms, bytes));
+			await (remote ? remoteDeliver(deal, bytes) : localDeliver(deal, bytes));
 			record(deal, {
 				stage: "delivered",
 				note: `${pre.bytes} bytes, ${pre.plaintextSha256}`
@@ -68128,6 +68156,55 @@ async function createSellerAdapter(c, env, io) {
 			...why === void 0 ? {} : { refusal: why }
 		});
 	}
+	/** T-625: how far a buyer's signed request time may be from this adapter's clock, in seconds. */
+	const DELIVERY_REQUEST_SKEW_SEC = 300;
+	/**
+	* GET /deals/<commitmentId>/delivery?at=<unix seconds>&signature=<0x…> (T-625): the signed delivery, to the deal's
+	* buyer only, when `shareDelivery` allows it now. The buyer signs `crow.delivery:<commitmentId>:<at>` (EIP-191) with
+	* the key the terms name as buyer, within DELIVERY_REQUEST_SKEW_SEC of this clock. Anyone else, and any deal this
+	* adapter does not share now, gets 404, so the route links no deal to this seller.
+	*/
+	async function deliveryShared(req, commitmentId) {
+		if (req.method !== "GET") return send(405, {
+			type: "method_not_allowed",
+			detail: "this route takes GET"
+		});
+		const none = () => send(404, {
+			type: "not_found",
+			detail: "this adapter shares no such delivery with this signer now"
+		});
+		const id = commitmentId.toLowerCase();
+		const deal = Object.hasOwn(journal.deals, id) ? journal.deals[id] : void 0;
+		const mode = c.shareDelivery ?? "held-reject";
+		if (!deal?.signedDelivery || mode === "never") return none();
+		const q = new URL(req.url).searchParams;
+		const at = Number(q.get("at"));
+		const signature = q.get("signature") ?? "";
+		if (!Number.isSafeInteger(at) || Math.abs(Date.now() / 1e3 - at) > DELIVERY_REQUEST_SKEW_SEC || !/^0x[0-9a-fA-F]{130}$/.test(signature)) return none();
+		const by = await recoverMessageAddress({
+			message: `crow.delivery:${id}:${at}`,
+			signature
+		}).catch(() => null);
+		if (!by || !isAddressEqual(by, deal.terms.buyer)) return none();
+		try {
+			if ((await seller.call("GET", `/v1/commitments/${id}`))?.escrowState !== "Delivered") return none();
+			if (mode === "held-reject") {
+				const record = await seller.call("GET", `/v1/commitments/${id}/judgment`).catch(() => null);
+				if (record?.aggregate?.decision !== "reject" || String(record?.role) !== "primary") return none();
+			}
+		} catch {
+			return send(503, {
+				type: "unavailable",
+				detail: "the operators did not answer; try again"
+			});
+		}
+		log(`${id} handed its signed delivery to the buyer ${deal.terms.buyer} (${mode}).`);
+		return send(200, {
+			commitmentId: id,
+			delivery: deal.signedDelivery.body,
+			submitPath: deal.signedDelivery.path
+		});
+	}
 	/** T-503: a stored refund is answered again while it has at least this long left, in ms of settlement-layer time. */
 	const REFUND_REUSE_MS = 6e5;
 	/** T-503: how long a signed refund stays valid, in ms: 23 hours, inside the 24 hours verify.ts allows a settlement. */
@@ -68342,6 +68419,8 @@ async function createSellerAdapter(c, env, io) {
 		}));
 		const refundFor = refusal.ready ? /^\/deals\/(0x[0-9a-fA-F]{64})\/refund$/.exec(path)?.[1] : void 0;
 		if (refundFor) return refundSigned(req, refundFor);
+		const deliveryFor = /^\/deals\/(0x[0-9a-fA-F]{64})\/delivery$/.exec(path)?.[1];
+		if (deliveryFor) return deliveryShared(req, deliveryFor);
 		const dealFor = /^\/deals\/(0x[0-9a-fA-F]{64})$/.exec(path)?.[1];
 		if (dealFor) return dealState(req, dealFor);
 		if (path !== "/quote") return send(404, {
@@ -69178,6 +69257,11 @@ const TIMING = {
 	appealWindowSec: 0,
 	appealDecideSec: 60
 };
+/** ADR-0051: what an offer with a rubric takes over TIMING, so Crow's adjudicators can hold a panel's reject a day. */
+const RUBRIC_TIMING = {
+	judgeWithinSec: 87e3,
+	appealDecideSec: 87e3
+};
 const ZERO_ADDRESS = `0x${"0".repeat(40)}`;
 function readState(folder) {
 	let text;
@@ -69529,6 +69613,7 @@ async function seller(c) {
 					signingKey: "per-deal",
 					payoutAddress: payout.address,
 					timing: own.timing,
+					rubricTiming: RUBRIC_TIMING,
 					pollMs: 3e3,
 					..."redelivery" in own ? { redelivery: own.redelivery } : {}
 				}, null, 2)}\n`;
@@ -71584,7 +71669,7 @@ async function run(c, state, offerId, given) {
 }
 
 // examples/seller-worker-pin.ts
-const SELLER_WORKER_SHA256 = "892c7fd8f874eecfbfc5f39b6cad3e9f20430c45e2abdf2f9442e1158ed57e2b";
+const SELLER_WORKER_SHA256 = "4bad53b7719b4f7e50624a67a56bbea9c40b770f68bc3bc963dd18f148b41da3";
 
 // examples/setup-cloudflare.ts
 const plain$2 = (s, max = 300) => plain$8(String(s ?? "")).slice(0, max);
@@ -71948,7 +72033,7 @@ async function workerBytes(c) {
 		if (bytes.length > MAX_WORKER_BYTES) throw new Error(`${SELLER_WORKER_URL} is over ${MAX_WORKER_BYTES} bytes`);
 	}
 	const sha = createHash("sha256").update(bytes).digest("hex");
-	if (sha !== "892c7fd8f874eecfbfc5f39b6cad3e9f20430c45e2abdf2f9442e1158ed57e2b") throw new Error(`the Worker file's SHA-256 is ${sha}, not ${SELLER_WORKER_SHA256}, the one this setup.mjs carries: it is not the Worker this version writes`);
+	if (sha !== "4bad53b7719b4f7e50624a67a56bbea9c40b770f68bc3bc963dd18f148b41da3") throw new Error(`the Worker file's SHA-256 is ${sha}, not ${SELLER_WORKER_SHA256}, the one this setup.mjs carries: it is not the Worker this version writes`);
 	return bytes;
 }
 /** The card's quote entry in the card's folder: other offers kept, the draft's marks dropped. */

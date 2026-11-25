@@ -817,6 +817,32 @@ describe('live judges (T-028), with a stand-in for the models', () => {
     expect(world.telemetry.usage()).toMatchObject({ heldRejects: { held: 1, rescued: 1 } });
   }, 90_000);
 
+  // T-625, from the partner C rehearsal: after an escalation the appeal's record replaced the primary's at /judgment.
+  // GET /judgments serves both, oldest first, /judgment stays the latest, and a reopened world serves the same.
+  it('serves every judgment record after an escalation: the primary\'s and the appeal\'s, and again after a reopen', async () => {
+    // Only the claude family answers, so the primary escalates and the appeal panel cannot decide.
+    const split = markerFake(Object.fromEntries(liveRegistry().active.filter((e) => e.family !== 'claude').map((e) => [e.id, 'timeout' as const])));
+    const storage = new MemoryStorage();
+    const first = await serve({ judgeProvider: split, liveCallsPerDay: 60 }, storage);
+    const { offer, buyer, seller } = await rubricOffer(first.urls, { timing: { appealDecideSec: 3_600 } });
+    await buyer.waitFor(offer.id, ['AcceptedByAdjudicator']);
+    await buyer.agreeAndFund(offer.terms, 40_000_000n);
+    await seller.deliver(offer.terms, new TextEncoder().encode(DIFF));
+    let list: J;
+    for (const end = Date.now() + 20_000; Date.now() < end; await new Promise((r) => setTimeout(r, 100))) {
+      list = await buyer.call('GET', `/v1/commitments/${offer.id}/judgments`).catch(() => null);
+      if (list?.items?.length === 2) break;
+    }
+    expect(list!.items.map((r: J) => [r.role, r.aggregate.decision])).toEqual([['primary', 'escalate'], ['appeal', expect.any(String)]]);
+    const latest = (await buyer.call('GET', `/v1/commitments/${offer.id}/judgment`)) as J;
+    expect(latest.recordHash).toBe(list!.items[1].recordHash);
+    await first.close();
+    running.splice(running.indexOf(first), 1);
+    const again = await serve({ judgeProvider: split, liveCallsPerDay: 60 }, storage);
+    const reread = (await (await fetch(`${again.urls[1]}/v1/commitments/${offer.id}/judgments`)).json()) as J;
+    expect(reread.items.map((r: J) => r.recordHash)).toEqual(list!.items.map((r: J) => r.recordHash));
+  }, 90_000);
+
   it('keeps the count across a rebuild from storage', async () => {
     const storage = new MemoryStorage();
     const { provider } = standIn();
@@ -1098,8 +1124,8 @@ describe('telemetry (T-031)', () => {
     const everything = await storage.list({ prefix: '' });
     // `ar`: the demo adjudicators' own registrations (T-221), which hold no request data. `lc`: the daily caps (T-422),
     // keyed by the client hashed with the world's secret; the IP check below covers them. `jd`: each adjudicator's judged
-    // result (A-4, T-530), the same record `jr` publishes, with its outcome and no key.
-    expect(new Set([...everything.keys()].map((k) => k.split(':')[0]))).toEqual(new Set(['meta', 'j', 'fa', 'ct', 'jr', 'jd', 'rl', 'tm', 'ar', 'lc', 'fc']));
+    // result (A-4, T-530), the same record `jr` publishes, with its outcome and no key. `jrr`: every record by role (T-625).
+    expect(new Set([...everything.keys()].map((k) => k.split(':')[0]))).toEqual(new Set(['meta', 'j', 'fa', 'ct', 'jr', 'jrr', 'jd', 'rl', 'tm', 'ar', 'lc', 'fc']));
     const stored = JSON.stringify([...everything.values()], (_k, v) => (v instanceof Uint8Array ? undefined : v)).toLowerCase();
     for (const secret of [...Object.values(canaries), 'c0ffeec0ffee', 'canary-query', 'canary-body', ip]) expect(stored).not.toContain(secret.toLowerCase());
   }, 60_000);

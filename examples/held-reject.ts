@@ -5,13 +5,16 @@
 // (site/buy.mjs) is unchanged. Test tokens only.
 //
 //   node examples/held-reject.ts <commitmentId>                       says whether a reject is held, until when, and why
-//   node examples/held-reject.ts <commitmentId> --accept <delivery.json>  accepts the posted delivery at the agreed price;
-//                                                                     the file is the signed delivery the seller handed you
+//   node examples/held-reject.ts <commitmentId> --accept <delivery.json | seller adapter URL>  accepts the posted
+//                                                                     delivery at the agreed price: the signed delivery the
+//                                                                     seller handed you, or fetched from its adapter (T-625)
 //   node examples/held-reject.ts <commitmentId> --settle <toSellerBps>  prints the settlement with the buyer's signature,
 //                                                                     for the seller to countersign
 //   node examples/held-reject.ts <commitmentId> --submit <file>       posts a settlement both parties signed
 //
-// No read serves the seller's signed delivery, so an accept needs the copy the seller hands over (D32): ask for it.
+// No operator read serves the seller's signed delivery, so an accept needs the copy the seller hands over (D32). A seller
+// on Crow's adapter hands it to the deal's buyer at GET <adapter>/deals/<id>/delivery while a reject is held (T-625):
+// give --accept the adapter's address (the quote URL without /quote) and this command signs the request with your key.
 // Env: HOLDBACK_KEY (the buyer's signing key, 0x and 64 hex digits), HOLDBACK_ENCRYPTION_KEY (its encryption secret
 // key, base64url; for --accept only), HOLDBACK_OPERATORS (comma-separated; default Crow's two nodes), and
 // HOLDBACK_CHAIN_ID with HOLDBACK_VERIFYING_CONTRACT for the EIP-712 domain, as for the other examples.
@@ -71,6 +74,21 @@ export async function settlementFor(agent: Agent, id: string, toSellerBps: numbe
   return { type: 'MutualSettlement', commitmentId: id, deliveryHash: String(posted.deliveryHash).toLowerCase(), payouts, releaseKey: toSeller > 0n, nonce: freshNonce(), expiresAt };
 }
 
+/** T-625: the signed delivery from the seller's adapter, asked for with this buyer's signature over the deal and the time. */
+export async function deliveryFrom(agent: Agent, adapter: string, id: string): Promise<J> {
+  const at = Math.floor(Date.now() / 1000);
+  // A fresh nonce each request: the adapter answers each signed request once (T-625 red team L1).
+  const nonce = Buffer.from(crypto.getRandomValues(new Uint8Array(16))).toString('hex');
+  const signature = await agent.account.signMessage({ message: `crow.delivery:${id}:${at}:${nonce}` });
+  const url = `${adapter.replace(/\/+$/, '').replace(/\/quote$/, '')}/deals/${id}/delivery?at=${at}&nonce=${nonce}&signature=${signature}`;
+  const res = await fetch(url, { signal: AbortSignal.timeout(30_000) });
+  if (res.status === 404) throw new Refusal(`refusing: the seller's adapter does not share this delivery with you now (404); ask the seller for its signed delivery, or settle (--settle)`);
+  if (!res.ok) throw new Refusal(`refusing: the seller's adapter answered ${res.status}; try again, or ask the seller for its signed delivery`);
+  const body = (await res.json()) as J;
+  if (String(body?.delivery?.commitmentId).toLowerCase() !== id) throw new Refusal('refusing: the seller\'s adapter answered a delivery for another deal');
+  return body.delivery;
+}
+
 export async function main(args: readonly string[], env: Record<string, string | undefined> = process.env): Promise<number> {
   const [id, flag, value] = args;
   const known = [undefined, '--accept', '--settle', '--submit'];
@@ -105,7 +123,7 @@ export async function main(args: readonly string[], env: Record<string, string |
       if (view.escrowState !== 'Delivered') throw new Refusal('refusing: after an escalation the buyer alone cannot accept; settle with the seller instead (--settle)');
       if (!env['HOLDBACK_ENCRYPTION_KEY']) throw new Refusal('refusing: --accept opens your own envelope first, so it needs HOLDBACK_ENCRYPTION_KEY');
       const terms = await agent.call('GET', `/v1/commitments/${id_}/terms`);
-      const delivery = JSON.parse(readFileSync(value!, 'utf8'));
+      const delivery = /^https?:\/\//.test(value!) ? await deliveryFrom(agent, value!, id_) : JSON.parse(readFileSync(value!, 'utf8'));
       // The early accept checks the handed delivery against the posted one, opens this buyer's envelope in it and
       // checks the work's hash before it signs (examples/verify.ts, openOwnEnvelope).
       const state = await agent.earlyAccept(terms, delivery);

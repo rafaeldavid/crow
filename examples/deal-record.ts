@@ -424,8 +424,20 @@ async function view(a: Answers, id: Hex, o: Options, cache: Map<string, Uint8Arr
     const named = t ? [t.adjudication?.adjudicator, t.adjudication?.fallbackAdjudicator, t.adjudication?.appealAdjudicator].map(lc) : [];
     add("adjudicator's record signature", signer === lc(j.adjudicator) && named.includes(signer), `recovered to ${signer || 'nothing'}; the record names ${lc(j.adjudicator)}; the terms name ${named.join(', ') || 'no adjudicators (terms unread)'}`);
     // `appeal.decided`: SimChain only, where the full protocol's party appeal is decided (ADR-0031 section 8); no phase-one chain emits it.
-    const decided = [...of('judgment.decided'), ...of('appeal.decided')].map((e) => lc(e.payload?.recordHash));
-    add('judgment names the delivery', decided.includes(lc(recordHash)) && lc(j.deliveryHash) === lc(d?.payload?.deliveryHash), 'a decided event carries this recordHash, and the record names the recorded deliveryHash');
+    const decidedEvents = [...of('judgment.decided'), ...of('appeal.decided')];
+    const decided = decidedEvents.map((e) => lc(e.payload?.recordHash));
+    const names = lc(j.deliveryHash) === lc(d?.payload?.deliveryHash);
+    // T-625, ADR-0051: a record published and not signed into a decision (a held reject, or one the parties settled or
+    // accepted during the hold) has no decided event of its own role. It is checked by the delivery it names; a decided
+    // event for its role that carries another recordHash still fails.
+    const ownTurn = decidedEvents.filter((e) => e.payload?.role === undefined || e.payload?.role === j.role);
+    // T-625 (red team L6): a later turn's decision (the fallback after the primary, the appeal after either) supersedes
+    // an unsigned record of an earlier turn: it does not decide the deal, so it fails here.
+    const TURN: Record<string, number> = { primary: 0, fallback: 1, appeal: 2 };
+    const later = decidedEvents.find((e) => TURN[String(e.payload?.role)] !== undefined && TURN[String(e.payload?.role)]! > (TURN[String(j.role)] ?? 3));
+    if (!ownTurn.length && later) add('judgment names the delivery', false, `the record is the ${String(j.role).slice(0, 20)}'s and was never signed, and the ${String(later.payload.role).slice(0, 20)}'s decision decided the deal: read its record at /judgments`);
+    else if (ownTurn.length) add('judgment names the delivery', decided.includes(lc(recordHash)) && names, 'a decided event carries this recordHash, and the record names the recorded deliveryHash');
+    else add('judgment names the delivery', names, `the record names the recorded deliveryHash; no decided event of the ${String(j.role).slice(0, 20)} role exists, so the record was published and not signed into a decision (a held reject, ADR-0051, or one the parties closed during the hold)`);
     // SimChain only: as above.
     const ev = [...of('judgment.decided'), ...of('appeal.decided')].find((e) => lc(e.payload?.recordHash) === lc(recordHash));
     judgment = {

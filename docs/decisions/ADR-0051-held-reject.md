@@ -94,3 +94,16 @@ Labels: **measured** (read at `origin/main` `323ebd9b`, or run on this branch), 
 ## Fixtures
 
 `held-reject-buyer-accepts`, `held-reject-settled`, `held-reject-signed-at-end`, `held-reject-short-window-signs-at-once`, `held-reject-accept-signed-at-once`, `neutrality.held-reject-adjudicator-offline`, `attack.held-reject-restart-no-second-panel`, `attack.held-reject-missed-deadline`, `attack.held-reject-changed-delivery`, `attack.held-reject-fee-dodge` (the red team's). The red team's named tests are in `apps/adjudicator/src/hold.redteam.test.ts`. The accept fixture has no `attack.` prefix: that prefix fails a first-instance release, which is what it shows.
+
+## Amendment, 2026-11-25: the gaps the partner C rehearsal found (T-625, D109)
+
+The judged-deal rehearsal on the live build `4b6821c` showed the hold working after an escalation, and found five gaps [measured, the private rehearsal record]. Four are fixed here:
+
+- **The buyer's accept can run against an adapter seller.** The seller adapter now keeps every delivery its own key signs, as it kept the remote signer's, and hands it to the deal's buyer at `GET /deals/<commitmentId>/delivery`, signed by the buyer's key. `shareDelivery` is the seller's choice: `"held-reject"` (the default: only while the deal is `Delivered` and the primary's published reject is not yet signed), `"delivered"`, or `"never"`. The body carries the buyer's own envelope, so the buyer can read the work before it pays (D32). The seller's alternative at that moment is a refund in which it keeps the work.
+- **A held record passes the buyer's deal record.** "Judgment names the delivery" no longer needs a decided event when no decision of the record's own role exists: the record was published and not signed, whether still held or closed by a settlement or an accept during the hold.
+- **Every judgment record is served.** `GET /v1/commitments/{id}/judgments`, planned since the API review of 2026-11-02, now lists every record, the latest for each role and attempt, oldest first. `GET /judgment` stays the latest. OpenAPI document revision 0.4; no `spec/schemas` change.
+- **A rubric default never replaces a seller's value** (D31). From a configuration file, the adapter's `rubricTiming` default fills only the windows the file's `timing` leaves out; a `rubricTiming` the seller writes applies as written.
+
+Not fixed here: **a filter abstention's detail on the member entry.** The member entry in `judgment.schema.json` takes no other field, so it is an API-contract change with a schema version bump, and PR 835 (T-616, ADR-0050) moves the same schema to v0.15 and rewrites the member's verdict. It belongs in that version bump.
+
+**When the buyer's lone accept is reachable** [measured in `packages/judgment/src/aggregate.ts`]: only when the primary itself rejects, so the deal stays `Delivered`. The primary rejects when a required deterministic check fails, or when two thirds of the valid verdicts fail (from two families after any fault) with no screen flag, no suspected injection and no judge output a filter rejected. A single filter abstention at the primary escalates (`aggregate.ts:209`), and after an escalation only a settlement works on today's contracts (ADR-0048 section 7 adds the buyer's accept there in the next version).

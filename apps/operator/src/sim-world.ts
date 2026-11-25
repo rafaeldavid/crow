@@ -204,6 +204,8 @@ export async function startSimWorld(options: SimWorldOptions = {}): Promise<SimW
   // (ADR-0030): the nodes are one operator, so a registration posted to either is served by both.
   const store = new MemoryCiphertextStore();
   const latest = new Map<Hex32, Judgment>();
+  /** T-625: every record by commitment, one for each role and attempt, in the order first published. */
+  const all = new Map<Hex32, Map<string, Judgment>>();
   const base = simRegistry(chain);
   const registrations = base.registrations!;
   const domain = holdbackDomain(SIM_CHAIN_ID);
@@ -249,7 +251,7 @@ export async function startSimWorld(options: SimWorldOptions = {}): Promise<SimW
       await startOperator({
         settlement: chain,
         // T-221 review: prepare fills in no default that would decline the terms, and notes one the parties named.
-        registry: { ...base, get mandates() { return chain.agentMandates(); }, faucet, defaultAdjudicators, declines: declinesOf(() => Object.values(adjudicators)), judgment: (id) => latest.get(id) ?? null },
+        registry: { ...base, get mandates() { return chain.agentMandates(); }, faucet, defaultAdjudicators, declines: declinesOf(() => Object.values(adjudicators)), judgment: (id) => latest.get(id) ?? null, judgments: (id) => [...(all.get(id)?.values() ?? [])] },
         store,
         maxCiphertextBytes: options.maxCiphertextBytes ?? SIM_MAX_CIPHERTEXT_BYTES,
         ...operatorFee,
@@ -283,6 +285,9 @@ export async function startSimWorld(options: SimWorldOptions = {}): Promise<SimW
         },
         publishRecord: async (record) => {
           latest.set(record.commitmentId, record);
+          const by = all.get(record.commitmentId) ?? new Map<string, Judgment>();
+          by.set(`${record.role}|${record.attempt}`, record);
+          all.set(record.commitmentId, by);
           return `${operators[0]!.url}/v1/commitments/${record.commitmentId}/judgment`;
         },
       },

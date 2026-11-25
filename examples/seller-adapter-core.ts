@@ -6,15 +6,15 @@
 // It imports no Node module but node:crypto, which the Workers runtime provides with the nodejs_compat flag.
 // What the adapter does, and how a seller runs it, is in seller-adapter.ts.
 import { createHash, createHmac, randomBytes, randomUUID, timingSafeEqual } from 'node:crypto';
-import { concat, isAddressEqual, keccak256, recoverTypedDataAddress, stringToHex, type Hex } from 'viem';
+import { concat, isAddressEqual, keccak256, recoverMessageAddress, recoverTypedDataAddress, stringToHex, type Hex } from 'viem';
 import { generatePrivateKey, toAccount } from 'viem/accounts';
-import { preflightDelivery } from '@holdback/judgment';
+import { holdUntil, preflightDelivery } from '@holdback/judgment';
 import { plain } from './plain.ts';
 import { Agent } from './agent.ts';
 import { convertReport, parseReportMapping, ReportNotConverted, type ReportMapping } from './report-converter.ts';
 import { FilesNotAdded, isRedirect, sellerApiClient, WrongScope, WrongWorkspace, type SellerApi, type SellerApiConfig, type Values } from './seller-adapter-api.ts';
 import { reasonLine, reasonOf, type RefusalDetail, type RefusalReason } from './seller-refusal.ts';
-import { commitmentIdOf, freshNonce, isAddressText, jcs, knownPins, moneyAddressWarnings, operatorFeeOf, publicOfferTerms, typedDataFile, typedOf, verifyPrepared } from './verify.ts';
+import { commitmentIdOf, deliveryHashOf, freshNonce, isAddressText, jcs, jcsHash, knownPins, moneyAddressWarnings, operatorFeeOf, publicOfferTerms, typedDataFile, typedOf, verifyPrepared } from './verify.ts';
 
 type J = any; // eslint-disable-line @typescript-eslint/no-explicit-any
 
@@ -121,6 +121,14 @@ export interface SellerAdapterConfig {
    * POST /deals/<commitmentId>/refund (T-503): the seller signs a full refund of a deal it delivered nothing into.
    */
   redelivery?: { refetchEverySec?: number; readyAuth?: { kind: 'bearer'; env: string } };
+  /**
+   * T-625: when the adapter hands the deal's buyer the signed delivery at GET /deals/<commitmentId>/delivery, which a
+   * buyer's early accept needs (ADR-0051, "A held reject"). It carries the buyer's own envelope, so the buyer can read
+   * the work before it pays: handing it over is your choice (D32). `"held-reject"`, the default: only while the deal
+   * is Delivered and its primary adjudicator's published reject is not yet signed, when a refund is the alternative.
+   * `"delivered"`: whenever the deal is Delivered. `"never"`: not at all. The buyer signs each request with its key.
+   */
+  shareDelivery?: 'held-reject' | 'delivered' | 'never';
   /** The fields a scope must have, and no others. */
   scope: Record<string, ScopeRule>;
   /** The options a buyer may add to a quote, `{"options": {…}}`, and no others. Your API gets them with the scope. */
@@ -161,9 +169,11 @@ export interface SellerAdapterConfig {
   /** Windows in whole seconds. Your API's `deliverWithinSec`, when a quote carries one, replaces this one; a terms rule replaces both. */
   timing: { offerExpiresInSec: number; fundWithinSec: number; deliverWithinSec: number; judgeWithinSec: number; fallbackWithinSec: number; appealWindowSec: number; appealDecideSec: number };
   /**
-   * ADR-0051: the windows an offer with a rubric takes over `timing`; a terms rule's windows still win. The default gives
-   * Crow's adjudicators a day to hold a panel's reject, so the buyer can accept or you can settle before it is signed.
-   * `{}` keeps `timing` for every offer. An offer decided by checks alone always takes `timing`.
+   * ADR-0051: the windows an offer with a rubric takes over `timing`; your API's `deliverWithinSec` and a terms rule's
+   * windows still win. The default gives Crow's adjudicators a day to hold a panel's reject, so the buyer can accept or
+   * you can settle before it is signed. From a configuration file it fills only the windows your `timing` leaves out
+   * (T-625, D31); a `rubricTiming` you write applies as written, and `{}` keeps `timing` for every offer. An offer
+   * decided by checks alone always takes `timing`.
    */
   rubricTiming?: Partial<SellerAdapterConfig['timing']>;
   /** The journal file. Its directory must exist. */
@@ -223,7 +233,7 @@ export const DEFAULTS: Omit<SellerAdapterConfig, 'template'> = {
 // ---- End of the defaults. ----
 
 /** The fields a configuration file may set: every field of the configuration but `log`. */
-export const FILE_KEYS = ['port', 'sellerApi', 'template', 'reportMapping', 'reportSalt', 'scope', 'options', 'termsRules', 'payoutAddress', 'clubId', 'adjudicators', 'mandate', 'signingKey', 'events', 'timing', 'rubricTiming', 'journal', 'pollMs', 'quoteAuth', 'quoteRateLimit', 'alerts', 'redelivery'];
+export const FILE_KEYS = ['port', 'sellerApi', 'template', 'reportMapping', 'reportSalt', 'scope', 'options', 'termsRules', 'payoutAddress', 'clubId', 'adjudicators', 'mandate', 'signingKey', 'events', 'timing', 'rubricTiming', 'journal', 'pollMs', 'quoteAuth', 'quoteRateLimit', 'alerts', 'redelivery', 'shareDelivery'];
 /** Options removed in T-331, each with what to do instead. A configuration that still sets one is refused. */
 const REMOVED: Array<[string, (c: J) => boolean, string]> = [
   ['stream', (c) => c?.stream !== undefined, 'the adapter learns of a funded hold by polling every pollMs; remove the field'],
@@ -293,6 +303,7 @@ export function configFrom(f: J, file: string, files: ConfigFiles): SellerAdapte
   if (f.events !== undefined && (typeof f.events !== 'string' || f.events === '')) throw new Error(`${file}: events must be a file path`);
   if (f.reportSalt !== undefined && typeof f.reportSalt !== 'boolean') throw new Error(`${file}: reportSalt must be true or false`);
   if (f.signingKey !== undefined && f.signingKey !== 'standing' && f.signingKey !== 'per-deal') throw new Error(`${file}: signingKey must be "standing" or "per-deal"`);
+  if (f.shareDelivery !== undefined && !['held-reject', 'delivered', 'never'].includes(f.shareDelivery)) throw new Error(`${file}: shareDelivery must be "held-reject", "delivered" or "never"`);
   if (own && Array.isArray(f.termsRules) && f.termsRules.some((r: J) => r?.rubric === true)) {
     // A rule that adds the optional rubric needs a template that holds one: refuse the file, not a buyer's quote.
     let t: J;
@@ -310,11 +321,13 @@ export function configFrom(f: J, file: string, files: ConfigFiles): SellerAdapte
     sellerApi: { ...(api.baseUrl === undefined ? {} : { baseUrl: api.baseUrl }), ...(api.auth === undefined ? {} : { auth: api.auth }), ...(api.workspace === undefined ? {} : { workspace: api.workspace }), quote: api.quote, start: api.start, result: api.result },
     template: own ? beside(f.template, 'template') : files.shippedTemplate,
     ...(f.reportMapping === undefined ? {} : { reportMapping: beside(f.reportMapping, 'reportMapping') }),
-    ...pass('reportSalt'), ...pass('signingKey'),
+    ...pass('reportSalt'), ...pass('signingKey'), ...pass('shareDelivery'),
     scope: f.scope ?? DEFAULTS.scope,
     ...(own ? { ...pass('options'), ...pass('termsRules') } : { options: f.options ?? DEFAULTS.options, termsRules: f.termsRules ?? DEFAULTS.termsRules }),
     timing: { ...DEFAULTS.timing, ...(f.timing ?? {}) },
-    rubricTiming: { ...(f.rubricTiming ?? DEFAULTS.rubricTiming) },
+    // T-625, D31: a default never replaces a value the seller set. The rubric default fills only the windows the file's
+    // timing leaves out; a rubricTiming the file names is the seller's own and applies as written.
+    rubricTiming: f.rubricTiming !== undefined ? { ...f.rubricTiming } : Object.fromEntries(Object.entries(DEFAULTS.rubricTiming ?? {}).filter(([k]) => !(isRecord(f.timing) && Object.hasOwn(f.timing, k)))),
     journal: f.journal ?? DEFAULTS.journal,
     ...(f.events === undefined ? {} : { events: f.events }),
     pollMs: f.pollMs ?? DEFAULTS.pollMs,
@@ -1256,6 +1269,20 @@ export async function createSellerAdapter(c: SellerAdapterConfig, env: Readonly<
     save(); // kept before it is sent: a send that fails sends this same body on the next pass
     return seller.call('POST', v.path, v.body);
   }
+  /**
+   * T-625: a delivery this adapter's own key signs, prepared and signed as Agent.deliver does it, kept in the journal,
+   * then sent, as remoteDeliver keeps the signer's. The buyer's early accept needs this signed body (GET
+   * /deals/<id>/delivery); a deal whose delivery is already signed sends that same body again.
+   */
+  async function localDeliver(deal: Deal, bytes: Uint8Array): Promise<J> {
+    const agent = signerOf(deal);
+    if (deal.signedDelivery) return agent.call('POST', deal.signedDelivery.path, deal.signedDelivery.body);
+    const { prepared, intent } = await agent.prepareDelivery(deal.terms, bytes);
+    const { path, body } = await agent.sign(prepared, intent);
+    deal.signedDelivery = { path, body };
+    save(); // kept before it is sent: a send that fails sends this same body on the next pass
+    return agent.call('POST', path, body);
+  }
   let mandateUntil = 0; // when the latest mandate in the club ends, in settlement-layer time; 0: none known
   /** The end of the seller's latest mandate in the club that covers selling, as every operator lists it; 0 for none. */
   async function mandateEnd(address: string = seller.address): Promise<number> {
@@ -1593,6 +1620,13 @@ export async function createSellerAdapter(c: SellerAdapterConfig, env: Readonly<
         record(deal, { stage: 'closed', ready: false, note: said });
         return alert({ type: 'delivery.deadline_passed', commitmentId: id, deliverBy, attempts: deal.refusals }, said);
       }
+      // T-625 (red team M3): a delivery signed and kept, whose send failed, is sent again as signed; the adapter fetches no
+      // other result and records the kept body's bytes, so the journal names what the settlement layer holds.
+      if (deal.signedDelivery && deal.stage === 'delivering') {
+        const kept = deal.signedDelivery.body;
+        await (remote ? remoteDeliver(deal, new Uint8Array()) : localDeliver(deal, new Uint8Array()));
+        return record(deal, { stage: 'delivered', note: `${String(kept.ciphertext?.bytes ?? '?')} ciphertext bytes, ${String(kept.plaintextSha256)}, the signed delivery kept from the first send` });
+      }
       if (deal.stage === 'refused') {
         const due = deal.ready === true || (refusal.refetchEverySec !== undefined && (deal.nextFetchAt === undefined || Date.parse(deal.nextFetchAt) <= now));
         if (!due) return; // the delivery waits for the seller's fixed report
@@ -1653,7 +1687,7 @@ export async function createSellerAdapter(c: SellerAdapterConfig, env: Readonly<
       // T-501 review: a deal whose job moved to another deal delivers nothing, whatever this pass read before.
       if (deal.jobMovedTo !== undefined || (deal.stage as Stage) === 'closed') return;
       record(deal, { stage: 'delivering', ready: false, note: `delivering ${pre.bytes} bytes, ${pre.plaintextSha256}` });
-      await (remote ? remoteDeliver(deal, bytes) : signerOf(deal).deliver(deal.terms, bytes));
+      await (remote ? remoteDeliver(deal, bytes) : localDeliver(deal, bytes));
       record(deal, { stage: 'delivered', note: `${pre.bytes} bytes, ${pre.plaintextSha256}` });
       if (deal.refusals) alert({ type: 'delivery.fixed', commitmentId: id, attempt, plaintextSha256: pre.plaintextSha256, bytes: pre.bytes }, `the fixed report passed the check run and is delivered, ${pre.bytes} bytes, ${pre.plaintextSha256}`);
     }
@@ -1906,6 +1940,93 @@ export async function createSellerAdapter(c: SellerAdapterConfig, env: Readonly<
     return send(200, { commitmentId: id, stage: deal.stage, ...(why === undefined ? {} : { refusal: why }) });
   }
 
+  /** T-625: how old a buyer's signed request may be, in seconds; a request time in the future is refused. */
+  const DELIVERY_REQUEST_MAX_AGE_SEC = 300;
+  /**
+   * T-625 (red team M2): concurrent requests share the decision in flight, a "no" is reused for SHARE_REFUSAL_MS, and a
+   * "yes" is never reused once made, so a deal that closes is not shared on an old answer. Each deal takes at most
+   * SHARE_REQUESTS_PER_MIN decisions a minute; past that it answers 429, so one buyer's loop cannot spend the operators'
+   * read budget the deal loop needs.
+   */
+  const SHARE_REFUSAL_MS = 10_000;
+  const SHARE_REQUESTS_PER_MIN = 10;
+  const shareDecisions = new Map<string, { until: number; ok: Promise<boolean> }>();
+  const shareRequests = new Map<string, number[]>();
+  /** T-625 (red team L1): signatures already answered, by signature, until they are too old to be accepted again. */
+  const usedRequests = new Map<string, number>();
+  /**
+   * T-625: may this adapter hand `deal`'s signed delivery to its buyer now? Read from every operator (one that lies or
+   * lags is caught, red team H1): the deal must be Delivered. For "held-reject", also the primary's published reject
+   * of this very delivery, signed by the primary the terms name, on a rubric deal whose hold by ADR-0051's rule has
+   * not ended (red team M1).
+   */
+  async function mayShare(deal: Deal, mode: 'held-reject' | 'delivered'): Promise<boolean> {
+    const id = deal.id;
+    // One decision a deal at a time, reused for SHARE_DECISION_MS: concurrent requests share its reads.
+    const cached = shareDecisions.get(id);
+    if (cached && Date.now() < cached.until) return cached.ok;
+    const decide = async (): Promise<boolean> => {
+      const state = await seller.trusted<string>(`/v1/commitments/${id}`, (x) => x?.escrowState);
+      if (state !== 'Delivered') return false;
+      if (mode === 'delivered') return true;
+      const record = await seller.trusted<J>(`/v1/commitments/${id}/judgment`, (x) => x);
+      const terms = deal.terms;
+      const body = { ...record };
+      delete body.recordHash;
+      delete body.signature;
+      delete body.recordUri;
+      if (record?.role !== 'primary' || record?.aggregate?.decision !== 'reject') return false;
+      if (String(record.commitmentId).toLowerCase() !== id || String(record.deliveryHash).toLowerCase() !== deliveryHashOf(deal.signedDelivery!.body)) return false;
+      if (jcsHash(body) !== String(record.recordHash).toLowerCase()) return false;
+      const by = await recoverMessageAddress({ message: { raw: record.recordHash as Hex }, signature: record.signature as Hex }).catch(() => null);
+      if (!by || !isAddressEqual(by, terms.adjudication.adjudicator as Hex)) return false;
+      const until = holdUntil({ commitment: terms, role: 'primary', deadline: terms.timing.judgeBy }, 'reject', record.decidedAt);
+      return until !== null && (await seller.settlementNow()) < Date.parse(until);
+    };
+    // Operators that disagree or do not answer share nothing.
+    const ok = decide().catch(() => false);
+    const entry = { until: Infinity, ok };
+    shareDecisions.set(id, entry); // in flight: concurrent requests wait on this one
+    void ok.then((yes) => {
+      entry.until = yes ? 0 : Date.now() + SHARE_REFUSAL_MS;
+    });
+    return ok;
+  }
+  /**
+   * GET /deals/<commitmentId>/delivery?at=<unix seconds>&nonce=<16 to 64 hex digits>&signature=<0x...> (T-625): the signed
+   * delivery, to the deal's buyer only, when `shareDelivery` allows it now (mayShare). The buyer signs
+   * `crow.delivery:<commitmentId>:<at>:<nonce>`
+   * (EIP-191) with the key the terms name as buyer, at most DELIVERY_REQUEST_MAX_AGE_SEC before this clock; each signed
+   * request is answered once. The signature is recovered before the journal is read, and anyone else, any deal this
+   * adapter does not share now and any malformed request gets the same 404, so the route links no deal to this seller.
+   * A buyer that is a contract (ERC-1271) cannot sign this request: ask the seller for its signed delivery instead.
+   */
+  async function deliveryShared(req: Request, commitmentId: string): Promise<Response> {
+    if (req.method !== 'GET') return send(405, { type: 'method_not_allowed', detail: 'this route takes GET' });
+    const none = () => send(404, { type: 'not_found', detail: 'this adapter shares no such delivery with this signer now' });
+    const id = commitmentId.toLowerCase();
+    const q = new URL(req.url).searchParams;
+    const at = Number(q.get('at'));
+    const nonce = (q.get('nonce') ?? '').toLowerCase();
+    const signature = (q.get('signature') ?? '').toLowerCase();
+    const nowSec = Math.floor(Date.now() / 1000);
+    if (!Number.isSafeInteger(at) || at > nowSec + 5 || nowSec - at > DELIVERY_REQUEST_MAX_AGE_SEC || !/^[0-9a-f]{16,64}$/.test(nonce) || !/^0x[0-9a-f]{130}$/.test(signature)) return none();
+    const by = await recoverMessageAddress({ message: `crow.delivery:${id}:${at}:${nonce}`, signature: signature as Hex }).catch(() => null);
+    for (const [sig, until] of usedRequests) if (until < nowSec) usedRequests.delete(sig);
+    if (!by || usedRequests.has(signature)) return none();
+    const deal = Object.hasOwn(journal.deals, id) ? journal.deals[id]! : undefined;
+    const mode = c.shareDelivery ?? 'held-reject';
+    if (!deal?.signedDelivery || mode === 'never' || !isAddressEqual(by, deal.terms.buyer as Hex)) return none();
+    usedRequests.set(signature, at + DELIVERY_REQUEST_MAX_AGE_SEC);
+    const recent = (shareRequests.get(id) ?? []).filter((t) => Date.now() - t < 60_000);
+    if (recent.length >= SHARE_REQUESTS_PER_MIN && shareDecisions.get(id)?.until !== Infinity) return send(429, { type: 'rate_limited', detail: 'too many delivery requests for this deal; try again in a minute' }, { 'retry-after': '60' });
+    recent.push(Date.now());
+    shareRequests.set(id, recent);
+    if (!(await mayShare(deal, mode))) return none();
+    log(`${id} handed its signed delivery to the buyer ${deal.terms.buyer} (${mode}).`);
+    return send(200, { commitmentId: id, delivery: deal.signedDelivery.body, submitPath: deal.signedDelivery.path });
+  }
+
   /** T-503: a stored refund is answered again while it has at least this long left, in ms of settlement-layer time. */
   const REFUND_REUSE_MS = 600_000;
   /** T-503: how long a signed refund stays valid, in ms: 23 hours, inside the 24 hours verify.ts allows a settlement. */
@@ -2014,6 +2135,8 @@ export async function createSellerAdapter(c: SellerAdapterConfig, env: Readonly<
     if (jobFor) return jobNamed(req, jobFor).catch(() => send(400, { type: 'invalid_body', detail: 'the body could not be read' }));
     const refundFor = refusal.ready ? /^\/deals\/(0x[0-9a-fA-F]{64})\/refund$/.exec(path)?.[1] : undefined;
     if (refundFor) return refundSigned(req, refundFor);
+    const deliveryFor = /^\/deals\/(0x[0-9a-fA-F]{64})\/delivery$/.exec(path)?.[1];
+    if (deliveryFor) return deliveryShared(req, deliveryFor);
     const dealFor = /^\/deals\/(0x[0-9a-fA-F]{64})$/.exec(path)?.[1];
     if (dealFor) return dealState(req, dealFor);
     if (path !== '/quote') return send(404, { type: 'not_found', detail: 'this adapter serves POST /quote, GET /defaults and GET /deals/<commitmentId>' });

@@ -50398,7 +50398,11 @@ async function view(a, id, o, cache) {
 			t.adjudication?.appealAdjudicator
 		].map(lc$1) : [];
 		add("adjudicator's record signature", signer === lc$1(j.adjudicator) && named.includes(signer), `recovered to ${signer || "nothing"}; the record names ${lc$1(j.adjudicator)}; the terms name ${named.join(", ") || "no adjudicators (terms unread)"}`);
-		add("judgment names the delivery", [...of("judgment.decided"), ...of("appeal.decided")].map((e) => lc$1(e.payload?.recordHash)).includes(lc$1(recordHash)) && lc$1(j.deliveryHash) === lc$1(d?.payload?.deliveryHash), "a decided event carries this recordHash, and the record names the recorded deliveryHash");
+		const decidedEvents = [...of("judgment.decided"), ...of("appeal.decided")];
+		const decided = decidedEvents.map((e) => lc$1(e.payload?.recordHash));
+		const names = lc$1(j.deliveryHash) === lc$1(d?.payload?.deliveryHash);
+		if (decidedEvents.filter((e) => e.payload?.role === void 0 || e.payload?.role === j.role).length) add("judgment names the delivery", decided.includes(lc$1(recordHash)) && names, "a decided event carries this recordHash, and the record names the recorded deliveryHash");
+		else add("judgment names the delivery", names, `the record names the recorded deliveryHash; no decided event of the ${String(j.role).slice(0, 20)} role exists, so the record was published and not signed into a decision (a held reject, ADR-0051, or one the parties closed during the hold)`);
 		const ev = [...of("judgment.decided"), ...of("appeal.decided")].find((e) => lc$1(e.payload?.recordHash) === lc$1(recordHash));
 		judgment = {
 			adjudicator: lc$1(j.adjudicator),
