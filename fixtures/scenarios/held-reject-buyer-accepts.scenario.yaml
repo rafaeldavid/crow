@@ -1,0 +1,38 @@
+# @settlement sim @judges recorded @mode guaranteed_on_decision @seed 601
+name: held-reject-buyer-accepts
+description: >-
+  ADR-0051 (T-619). A rubric deal with the windows Crow's tools write: judgeWithinSec 87,000 s. Tidewater
+  delivers a CSV that drops rows, and Bench A's required row-count check fails, so it judges a reject. It
+  publishes the reject and holds it for judgeWithinSec less 600 s, so the deal stays Delivered. Atlas wants
+  the work anyway and accepts early during the hold: Tidewater is paid the price.
+club: fixtures/clubs/data-services-v1.yaml
+terms: fixtures/terms/clean-customers-2000-held.yaml
+parties:
+  buyer: atlas-buyer
+  seller: tidewater-seller
+adjudicators:
+  primary: bench-a
+  fallback: bench-b
+  appeal: bench-c
+operators: [op-1, op-2]
+faucet:
+  atlas-buyer: "10000000000"
+  bench-a: "25000000000"
+  bench-b: "25000000000"
+  bench-c: "25000000000"
+steps:
+  - offer:              { by: seller, via: op-1 }
+  - adjudicator_accept: { via: op-1 }
+  - agree_and_fund:     { by: buyer, via: op-1 }
+  - deliver:            { by: seller, via: op-1, file: data/dataset-cleaning/customers.clean.row-drop.csv }
+  - advance_clock:      { seconds: 5 }
+  - judge:              { adjudicator: bench-a }
+  - early_accept:       { by: buyer, via: op-1 }
+  - verify_key_release: { by: buyer, via: op-1 }
+expect:
+  terminal: Released
+  balances:
+    atlas-buyer: "8000000000"  # the price paid; the $50 fee comes back, as on every early accept today
+    tidewater-seller: "2000000000"
+    bench-a: "25000000000"  # judged, earns nothing: the residual ADR-0048 fixes
+    escrow: "0"

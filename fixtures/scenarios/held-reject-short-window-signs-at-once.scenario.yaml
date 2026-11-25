@@ -1,0 +1,31 @@
+# @settlement sim @judges recorded @mode guaranteed_on_decision @seed 604
+name: held-reject-short-window-signs-at-once
+description: >-
+  ADR-0051 (T-619). The same rejected delivery on today's short windows (judgeWithinSec 120 s, at most
+  the 600 s margin): the hold is 0 s, so Bench A signs the reject at once and Atlas is refunded, as before
+  the hold existed.
+club: fixtures/clubs/data-services-v1.yaml
+terms: fixtures/terms/clean-customers-2000.yaml
+parties:
+  buyer: atlas-buyer
+  seller: tidewater-seller
+adjudicators:
+  primary: bench-a
+  fallback: bench-b
+  appeal: bench-c
+operators: [op-1, op-2]
+faucet:
+  atlas-buyer: "10000000000"
+  bench-a: "25000000000"
+  bench-b: "25000000000"
+  bench-c: "25000000000"
+steps:
+  - offer:              { by: seller, via: op-1 }
+  - adjudicator_accept: { via: op-1 }
+  - agree_and_fund:     { by: buyer, via: op-1 }
+  - deliver:            { by: seller, via: op-1, file: data/dataset-cleaning/customers.clean.row-drop.csv }
+  - advance_clock:      { seconds: 5 }
+  - judge:              { adjudicator: bench-a }
+  - settle:             { trigger: anyone }
+expect:
+  terminal: Refunded
