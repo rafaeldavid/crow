@@ -514,7 +514,8 @@ contract StandingSellerAttackTest is StandingSellerBase {
 
     /// The same, from a valid take: a cut of its blob, or one byte changed in it, answers yes for the take's digest
     /// only when it decodes to the take's own values. `abi.decode` reads neither the signature's trailing padding nor
-    /// its absence, so such a blob is the same take in other bytes, which the rules contract does not store.
+    /// its absence, and the key's signature may come back in its 64-byte form, so such a blob is the same take in other
+    /// bytes, which the rules contract does not store.
     function testFuzz_attack_standingBlobMalformed_fromAValidTake(uint256 cut, uint256 at, uint8 xor) public {
         IS.StandingOffer memory o = _offer();
         IS.Fill memory f = _fill(1);
@@ -546,9 +547,49 @@ contract StandingSellerAttackTest is StandingSellerBase {
                 abi.decode(blob, (uint8, IS.StandingOffer, bytes, IS.Fill));
             assertEq(k, TAKE);
             assertEq(ss.templateHash(o2), ss.templateHash(o));
-            assertEq(keccak256(s2), keccak256(sig));
+            // The key's signature, or the same signature in its EIP-2098 64-byte form: Solady's ECDSA, and the
+            // off-chain `standingKeyOf`, read both as the key's. Changing the length word from 65 to 64 gives that form
+            // whenever v is 27, since s is low.
+            assertTrue(keccak256(s2) == keccak256(sig) || keccak256(s2) == keccak256(_compact(sig)));
             assertEq(keccak256(abi.encode(f2)), keccak256(abi.encode(f)));
         } catch {}
+    }
+
+    /// The EIP-2098 64-byte form of a 65-byte signature: r, then s with v - 27 in its top bit.
+    function _compact(bytes memory sig) internal pure returns (bytes memory) {
+        (bytes32 r, bytes32 s) = abi.decode(sig, (bytes32, bytes32));
+        return abi.encodePacked(r, bytes32(uint256(s) | (uint256(uint8(sig[64]) - 27) << 255)));
+    }
+
+    /// Regression (CI run 45628031606, main at 08eb54f7): the counterexample that flips the key signature's length
+    /// word from 65 to 64. The blob still names the take's own template, key and fill, so the yes is right.
+    function test_attack_standingBlobMalformed_fromAValidTake_compactKeySignature() public {
+        testFuzz_attack_standingBlobMalformed_fromAValidTake(
+            9415675830583510059520467764709570885989032761661,
+            4660714426626826352247221995680244665074143805987558179199,
+            1
+        );
+    }
+
+    /// The same class, built directly: a take whose key signature is in its 64-byte form answers yes for the take's
+    /// digest, the same answer as the 65-byte form, and funds the same commitment, so the other form cannot fund it
+    /// again.
+    function test_attack_standingBlob_compactKeySignature_isTheSameTake() public {
+        IS.StandingOffer memory o = _offer();
+        IS.Fill memory f = _fill(1);
+        bytes memory sig = _offerSig(o, KEY_PK);
+        bytes memory short = _compact(sig);
+        assertEq(short.length, 64);
+        bytes32 digest = rules.typedDataHash(hx.id(ss.termsOf(o, f)));
+        assertEq(ss.isValidSignature(digest, _blob(TAKE, o, sig, f)), YES);
+        assertEq(ss.isValidSignature(digest, _blob(TAKE, o, short, f)), YES);
+        (H.Terms memory t, bytes32 id) = _take(o, short, f);
+        assertEq(id, hx.id(t));
+        _expectTakeRefused(
+            t,
+            _blob(TAKE, o, sig, f),
+            abi.encodeWithSelector(IHoldbackRules.WrongStage.selector, IHoldbackRules.Stage.Held)
+        );
     }
 
     /// A malformed blob at funding is a plain `BadSignature`, as `Erc1271GasBurn.t.sol` shows for a reverting signer.
