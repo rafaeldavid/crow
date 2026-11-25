@@ -71,6 +71,23 @@ function captureAgrees(): { sent: Sent[]; restore(): void } {
 
 const stateOf = async (url: string, id: string) => ((await (await fetch(`${url}/v1/commitments/${id}`)).json()) as J).escrowState;
 
+/** A throttle window longer than any test here, so no count opens again however slowly a loaded machine runs (T-622). */
+const NO_NEW_WINDOW_MS = 3_600_000;
+
+/**
+ * Counts the bodies of at least `length` characters that are parsed from here to restore(). Each is one unit of the body
+ * work the red team's F3 found (T-422): the operator's read of a body, which comes before its fingerprint.
+ */
+function countBodyReads(length: number): { count(): number; restore(): void } {
+  const parse = JSON.parse;
+  let reads = 0;
+  JSON.parse = ((text: string, reviver?: Parameters<typeof JSON.parse>[1]) => {
+    if (typeof text === 'string' && text.length >= length) reads++;
+    return parse(text, reviver);
+  }) as typeof JSON.parse;
+  return { count: () => reads, restore: () => void (JSON.parse = parse) };
+}
+
 describe('attack.t422: get around the daily cap on funded deals', () => {
   it('attack.t422-double-slash-path: a funded agree sent to //x/v1/commitments/<id>/agree is refused at the cap', async () => {
     const { urls } = await serveWorld({ fundedDealsPerClientPerDay: 1 });
@@ -243,7 +260,7 @@ describe('attack.t422: the replay budget floods the one World object', () => {
   // replay of a 1 MB body is T-422's measurement (75 ms), so the bound is the budget times that.
   it('attack.t422-replay-cpu: replays of one accepted 1 MiB write past the replay budget cost the object no body work', async () => {
     const writes = 12;
-    const { urls, other } = await serveWorld({ rateLimit: { writes, reads: 1200, windowMs: 60_000 } });
+    const { urls, other } = await serveWorld({ rateLimit: { writes, reads: 1200, windowMs: NO_NEW_WINDOW_MS } });
     const a = freshAgent(urls);
     // The faucet ignores fields it does not know, so one grant can carry a body of about 1 MiB of small objects.
     const pad = Array.from({ length: 17_000 }, (_, i) => ({ k: 'v'.repeat(40), i }));
@@ -251,14 +268,7 @@ describe('attack.t422: the replay budget floods the one World object', () => {
     expect(body.length).toBeGreaterThan(900_000);
     const first = await post(`${urls[0]}/v1/faucet`, body, 'heavy-1');
     expect(first.status).toBe(200);
-    // Each time a body this size is parsed is one unit of the work F3 found: the operator's read of the body, which
-    // comes before its fingerprint and the stored answer.
-    const parse = JSON.parse;
-    let bodyReads = 0;
-    JSON.parse = ((text: string, reviver?: Parameters<typeof JSON.parse>[1]) => {
-      if (typeof text === 'string' && text.length >= body.length) bodyReads++;
-      return parse(text, reviver);
-    }) as typeof JSON.parse;
+    const reads = countBodyReads(body.length);
     try {
       const statuses: number[] = [];
       for (let i = 0; i < 3 * writes; i++) statuses.push((await post(`${urls[0]}/v1/faucet`, body, 'heavy-1')).status);
@@ -266,14 +276,14 @@ describe('attack.t422: the replay budget floods the one World object', () => {
       const burst = Array.from({ length: writes }, () => post(`${urls[0]}/v1/faucet`, body, 'heavy-1'));
       const stranger = await fetch(`${other[0]}/v1/commitments?limit=1`);
       const burstStatuses = await Promise.all(burst.map(async (r) => (await r).status));
-      console.log(`replays answered: ${statuses.filter((x) => x === 200).length} of ${statuses.length}, then a burst of ${writes}: ${burstStatuses.filter((x) => x === 429).length} refused; body reads: ${bodyReads}`);
+      console.log(`replays answered: ${statuses.filter((x) => x === 200).length} of ${statuses.length}, then a burst of ${writes}: ${burstStatuses.filter((x) => x === 429).length} refused; body reads: ${reads.count()}`);
       expect(statuses).toEqual([...Array<number>(writes).fill(200), ...Array<number>(2 * writes).fill(429)]);
       expect(burstStatuses).toEqual(Array<number>(writes).fill(429));
       // One body read for each answered replay, none for the 3 budgets' worth refused at entry.
-      expect(bodyReads).toBe(writes);
+      expect(reads.count()).toBe(writes);
       expect(stranger.status).toBe(200);
     } finally {
-      JSON.parse = parse;
+      reads.restore();
     }
   }, 120_000);
 });
@@ -337,25 +347,41 @@ describe('attack.t422: smaller faults', () => {
   });
 });
 
-describe('attack.t422: a known key with another body does the body work before the throttle refuses', () => {
-  it('attack.t422-known-key-cpu: a client with no write budget left still costs the object a parse and a hash per request', async () => {
-    const { urls } = await serveWorld({ rateLimit: { writes: 2, reads: 1200, windowMs: 60_000 } });
+describe('attack.t422: a known key with another body gets no body work past the replay budget', () => {
+  // T-622: counts the body work instead of timing it. The clock version compared two loops that cost the same, both
+  // refused before their bodies are read, and bounded one average at twice the other: 9 of 300 runs failed under load.
+  // This proves the operator's counts on the faucet route.
+  it('attack.t422-known-key-cpu: other bodies under a known key, past the replay budget, cost the object no body work', async () => {
+    const writes = 2;
+    const { urls } = await serveWorld({ rateLimit: { writes, reads: 1200, windowMs: NO_NEW_WINDOW_MS } });
     const a = freshAgent(urls);
     expect((await post(`${urls[0]}/v1/faucet`, JSON.stringify({ address: a.address }), 'known-1')).status).toBe(200);
     expect((await post(`${urls[0]}/v1/faucet`, JSON.stringify({ address: freshAgent(urls).address }), 'known-2')).status).toBe(200);
     // The write budget is spent. Now heavy bodies under the known key, each another request than the key's.
     const pad = Array.from({ length: 17_000 }, (_, i) => ({ k: 'v'.repeat(40), i }));
-    const n = 30;
-    const statuses: number[] = [];
-    // The replay budget (the write budget, 2) admits two known-key requests to the body work; the rest are refused at entry.
-    for (let i = 0; i < 2; i++) await post(`${urls[0]}/v1/faucet`, JSON.stringify({ address: a.address, pad, i }), 'known-1');
-    const t0 = performance.now();
-    for (let i = 0; i < n; i++) statuses.push((await post(`${urls[0]}/v1/faucet`, JSON.stringify({ address: a.address, pad, i }), 'known-1')).status);
-    const heavy = (performance.now() - t0) / n;
-    const t1 = performance.now();
-    for (let i = 0; i < n; i++) await post(`${urls[0]}/v1/faucet`, JSON.stringify({ address: a.address, pad, i }), 'unknown-key');
-    const fresh = (performance.now() - t1) / n;
-    console.log(`statuses: ${[...new Set(statuses)].join(',')}; ms per known-key request: ${heavy.toFixed(0)}; ms per unknown-key request (refused at entry): ${fresh.toFixed(0)}`);
-    expect(heavy).toBeLessThan(fresh * 2);
+    const heavy = (i: number) => JSON.stringify({ address: a.address, pad, i });
+    expect(heavy(0).length).toBeGreaterThan(900_000);
+    const reads = countBodyReads(heavy(0).length);
+    /** `n` requests in turn under `key`: the statuses they got, and the bodies read for them. */
+    const send = async (n: number, key: string) => {
+      const before = reads.count();
+      const statuses: number[] = [];
+      for (let i = 0; i < n; i++) statuses.push((await post(`${urls[0]}/v1/faucet`, heavy(i), key)).status);
+      return { statuses, bodyReads: reads.count() - before };
+    };
+    const refused = (n: number) => Array<number>(n).fill(429);
+    try {
+      // The replay budget (the write budget's size) admits this many to the body work; the write budget then refuses them.
+      const admitted = await send(writes, 'known-1');
+      const past = await send(30, 'known-1');
+      const unknown = await send(30, 'unknown-key');
+      console.log(`body reads: ${admitted.bodyReads} of ${writes} inside the replay budget, ${past.bodyReads} of 30 past it, ${unknown.bodyReads} of 30 under an unknown key`);
+      // These reads also show the counter sees the operator's.
+      expect(admitted).toEqual({ statuses: refused(writes), bodyReads: writes });
+      expect(past).toEqual({ statuses: refused(30), bodyReads: 0 });
+      expect(unknown).toEqual({ statuses: refused(30), bodyReads: 0 });
+    } finally {
+      reads.restore();
+    }
   }, 120_000);
 });
