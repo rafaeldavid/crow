@@ -1,6 +1,7 @@
 # ADR-0050: Judges return coded verdicts, and the public record keeps no judge text
 
 - **Status:** Accepted in direction, 2026-11-25 (Rafa: "ok fix it", on judges answering in a structured format with a fixed size and privacy control). Order (Rafa: "Cut rule, then T-616"): ADR-0049's `agg-5` is built first; this ADR is built after it merges, as aggregation version `agg-6` and template pair 3. The default moves to `agg-6` only after the live calibration in section 7, through Rafa's deploys.
+- **Built:** T-616, 2026-11-25, on branch `t-616-coded-verdicts`: schema v0.15, template pair 3 and `agg-6`, carried beside the prose versions; the default is unchanged. The build notes at the end record where the build settles a detail this ADR left open.
 - **Date:** 2026-11-25
 - **Raised by:** Rafa, 2026-11-25: judges should "submit code as judgement, not raw text, so the code (like JSON or YAML format) has a fixed character count (e.g. 1000) and privacy controlled". The same day a live deal was refunded although every check and every valid verdict passed the work, and its public judgment record retold the refunded work's design.
 - **Research:** a research pass on 2026-11-25 (T-616 task file, Context), with file and line references.
@@ -86,7 +87,9 @@ The judge writes one JSON object, references and reasons before the score:
 
 Today: "Judge output must match `spec/schemas/judge-verdict.schema.json`, or the judge abstains." ADR-0049 adds a sentence for `agg-5`. Under this ADR the rule reads:
 
-> Judge output must match the output schema its bound policy names, or the judge abstains. In a coded verdict, evidence the pipeline cannot use (a reason code, a reference, an unknown key) is dropped and counted. Free text over its cap is cut under the policies that bind it (ADR-0049). Nothing else is repaired.
+> Judge output must match the output schema its bound policy names, or the judge abstains. Two exceptions: free text over its length cap is cut to the cap and the cut is recorded (ADR-0049), and in a coded verdict, evidence the pipeline cannot use (a reason code, a reference, an unknown key) is dropped and counted (ADR-0050). Nothing else is repaired.
+
+The sentence folds into the rule ADR-0049 put in `CLAUDE.md` and `docs/team.md` rather than replacing it, so both exceptions stand in one place (coordinator and Rafa, 2026-11-25).
 
 ### 6. ADR-0049
 
@@ -114,3 +117,15 @@ Today: "Judge output must match `spec/schemas/judge-verdict.schema.json`, or the
 - **Prose kept but sealed to the parties.** Needs private records, which phase one refuses (ADR-0027, later).
 - **Verbatim pointers in the record.** Readable for anyone, but carries the seller's key names and text into a public record.
 - **Codes with no references.** Simpler, but a party or a court could not tell what a score points at.
+
+## Build notes (T-616)
+
+The build settles these details [documented, T-616 task file, Decisions]:
+
+- **A coded `reasons` list may be empty** after the filter. The template asks for one to three; when the filter drops every code a judge wrote, the seat keeps its score with no code. The task's schema draft said `minItems: 1`; with it, dropping the last code would have to abstain the seat, which section 2 rules out.
+- **A prose seat carries no `format` key** in the record. Its absence means `prose-1`, so every v0.14 record and every replay record of `agg-3` to `agg-5` stays byte-identical. A coded seat carries `format: "coded-1"`.
+- **The anchor key** is SHA-256 of the tag `holdback/judgment/anchor/v1` and the plaintext bytes as delivered, a leading byte-order mark included (`packages/judgment/src/refs.ts`).
+- **References resolve against** the delivered JSON (a pointer) or the lines the judges read (a line number), as the prompt splits them under every Unicode line break. Injection references without the flag are dropped, like the kinds.
+- **A prose-shaped answer under pair 3 still counts**: its `evidence` and `rationale` are unknown keys, dropped and counted, and its scores stand.
+- **`agg-6` is `agg-5`'s rule** read through a coded seat's ids, scores, `overall` and flag; its decision digests equal `agg-5`'s (`aggregate.test.ts`).
+
