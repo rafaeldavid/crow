@@ -8,12 +8,22 @@
 // reported); alternation `|`; quantifiers * + ? {n} {n,} {n,m}, greedy or lazy (laziness does not
 // change whether a string matches); `^` only as the first character and `$` only as the last.
 // Refused: backreferences, lookarounds, named groups, word boundaries, Unicode property escapes,
-// \u and \x escapes, flags, and patterns whose NFA would exceed MAX_STATES.
+// \u and \x escapes, flags, and patterns whose NFA would exceed MAX_STATES or whose compile would take
+// more than MAX_COMPILE_STEPS steps.
+//
+// Compiling is bounded by counts, never by time, so every adjudicator on the same build accepts and
+// refuses the same patterns. The parser simplifies the tree without changing the language it matches,
+// so that each compile step adds NFA states, and MAX_COMPILE_STEPS stops the rest.
 import { err, ok, type Result } from '@holdback/core';
 
 export const MAX_PATTERN_CHARS = 200;
 export const MAX_REPEAT = 1000;
 export const MAX_STATES = 5_000;
+/**
+ * Compiler steps (one per tree node built) per pattern. A simplified tree takes at most four steps per
+ * state plus one, so no pattern within MAX_STATES reaches this limit; it holds if the simplification misses a case.
+ */
+export const MAX_COMPILE_STEPS = 50_000;
 /** Longer subjects never match; this bounds the work per cell. */
 export const MAX_SUBJECT_CHARS = 10_000;
 
@@ -23,6 +33,10 @@ type Node =
   | { t: 'seq'; items: Node[] }
   | { t: 'alt'; options: Node[] }
   | { t: 'repeat'; node: Node; min: number; max: number };
+
+/** Matches only the empty string. */
+const EMPTY: Node = { t: 'seq', items: [] };
+const isEmpty = (n: Node) => n.t === 'seq' && n.items.length === 0;
 
 /**
  * Work allowance shared by every check on one delivery, in NFA state visits. Linear time per cell
@@ -62,6 +76,57 @@ const SYNTAX = new Set([...'^$\\.*+?()[]{}|/-'].map((c) => c.codePointAt(0)!));
 const CONTROL: Record<string, number> = { t: 0x09, n: 0x0a, r: 0x0d, f: 0x0c, v: 0x0b };
 const CLASS_ESCAPES: Record<string, Pred> = { d: DIGIT, D: not(DIGIT), w: WORD, W: not(WORD), s: SPACE, S: not(SPACE) };
 
+// A class `[...]` compiles to sorted, merged code-point ranges, tested by binary search: a test costs
+// about log2 of the class's size, whatever the class lists, so one budget unit stays small.
+type Range = readonly [number, number];
+const MAX_CODE_POINT = 0x10ffff;
+function merge(ranges: readonly Range[]): Range[] {
+  const out: Array<[number, number]> = [];
+  for (const [lo, hi] of [...ranges].sort((a, b) => a[0] - b[0])) {
+    const last = out.at(-1);
+    if (last && lo <= last[1] + 1) last[1] = Math.max(last[1], hi);
+    else out.push([lo, hi]);
+  }
+  return out;
+}
+/** The code points outside `ranges`, which must be merged. */
+function complement(ranges: readonly Range[]): Range[] {
+  const out: Range[] = [];
+  let from = 0;
+  for (const [lo, hi] of ranges) {
+    if (lo > from) out.push([from, lo - 1]);
+    from = hi + 1;
+  }
+  if (from <= MAX_CODE_POINT) out.push([from, MAX_CODE_POINT]);
+  return out;
+}
+function inRanges(ranges: readonly Range[]): Pred {
+  const los = Int32Array.from(ranges, (r) => r[0]);
+  const his = Int32Array.from(ranges, (r) => r[1]);
+  return (cp) => {
+    let a = 0;
+    let b = los.length - 1;
+    while (a <= b) {
+      const m = (a + b) >> 1;
+      if (cp < los[m]!) b = m - 1;
+      else if (cp > his[m]!) a = m + 1;
+      else return true;
+    }
+    return false;
+  };
+}
+const DIGIT_RANGES = merge([[0x30, 0x39]]);
+const WORD_RANGES = merge([[0x30, 0x39], [0x41, 0x5a], [0x5f, 0x5f], [0x61, 0x7a]]);
+const SPACE_RANGES = merge([...[...SPACE_SET].map((cp): Range => [cp, cp]), [0x2000, 0x200a]]);
+const CLASS_RANGES: Record<string, Range[]> = {
+  d: DIGIT_RANGES,
+  D: complement(DIGIT_RANGES),
+  w: WORD_RANGES,
+  W: complement(WORD_RANGES),
+  s: SPACE_RANGES,
+  S: complement(SPACE_RANGES),
+};
+
 class Parser {
   private i = 0;
   constructor(private readonly cps: number[]) {}
@@ -83,15 +148,19 @@ class Parser {
       this.i++;
       options.push(this.sequence());
     }
-    return options.length === 1 ? options[0]! : { t: 'alt', options };
+    if (options.length === 1) return options[0]!;
+    return options.every(isEmpty) ? EMPTY : { t: 'alt', options };
   }
 
+  /** Nested sequences are flattened (an empty one adds nothing), and a one-item sequence is the item. */
   private sequence(): Node {
     const items: Node[] = [];
     for (let c = this.peek(); c !== undefined && c !== '|' && c !== ')'; c = this.peek()) {
-      items.push(this.quantified(this.atom()));
+      const item = this.quantified(this.atom());
+      if (item.t === 'seq') items.push(...item.items);
+      else items.push(item);
     }
-    return { t: 'seq', items };
+    return items.length === 1 ? items[0]! : { t: 'seq', items };
   }
 
   private atom(): Node {
@@ -138,7 +207,7 @@ class Parser {
       negate = true;
       this.i++;
     }
-    const preds: Pred[] = [];
+    const ranges: Range[] = [];
     for (;;) {
       const c = this.peek();
       if (c === undefined) throw new PatternError('missing ]');
@@ -152,24 +221,23 @@ class Parser {
         const hi = this.classAtom();
         if (typeof lo !== 'number' || typeof hi !== 'number') throw new PatternError('a class escape cannot bound a range');
         if (lo > hi) throw new PatternError('character class range out of order');
-        preds.push(range(lo, hi));
-      } else {
-        preds.push(typeof lo === 'number' ? (x) => x === lo : lo);
-      }
+        ranges.push([lo, hi]);
+      } else if (typeof lo === 'number') ranges.push([lo, lo]);
+      else ranges.push(...lo);
     }
-    const any: Pred = (cp) => preds.some((p) => p(cp));
-    return negate ? not(any) : any;
+    const merged = merge(ranges);
+    return inRanges(negate ? complement(merged) : merged);
   }
 
-  /** A code point, or a predicate for \d \w \s and their negations. */
-  private classAtom(): number | Pred {
+  /** A code point, or the ranges of \d \w \s and their negations. */
+  private classAtom(): number | readonly Range[] {
     const c = this.peek()!;
     this.i++;
     if (c !== '\\') return c.codePointAt(0)!;
     const e = this.peek();
-    if (e !== undefined && e in CLASS_ESCAPES) {
+    if (e !== undefined && e in CLASS_RANGES) {
       this.i++;
-      return CLASS_ESCAPES[e]!;
+      return CLASS_RANGES[e]!;
     }
     if (e !== undefined && e in CONTROL) {
       this.i++;
@@ -204,6 +272,9 @@ class Parser {
     if (this.peek() === '?') this.i++; // lazy: same language
     const after = this.peek();
     if (after !== undefined && '*+?{'.includes(after)) throw new PatternError(`quantifier ${after} follows a quantifier at ${this.i}`);
+    // Same language: a repeat of the empty string, or zero repeats, is the empty string; {1} is the part itself.
+    if (max === 0 || isEmpty(node)) return EMPTY;
+    if (min === 1 && max === 1) return node;
     return { t: 'repeat', node, min, max };
   }
 }
@@ -213,6 +284,7 @@ type State = { k: 'char'; test: Pred; out: number } | { k: 'split'; a: number; b
 
 class Compiler {
   readonly states: State[] = [{ k: 'match' }];
+  private steps = 0;
 
   private push(s: State): number {
     if (this.states.length >= MAX_STATES) throw new PatternError(`pattern too large (over ${MAX_STATES} states)`);
@@ -222,6 +294,7 @@ class Compiler {
 
   /** Compiles `node` so that on success it continues at `next`; returns the entry state. */
   build(node: Node, next: number): number {
+    if (++this.steps > MAX_COMPILE_STEPS) throw new PatternError(`pattern too costly to compile (over ${MAX_COMPILE_STEPS} steps)`);
     switch (node.t) {
       case 'char':
         return this.push({ k: 'char', test: node.test, out: next });
