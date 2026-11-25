@@ -5,7 +5,7 @@ import { createHash, createHmac } from 'node:crypto';
 import { mkdtempSync, readFileSync, writeFileSync } from 'node:fs';
 import { createServer as createHttpsServer, request as httpsRequest } from 'node:https';
 import { createServer as createHttpServer, request as httpRequest } from 'node:http';
-import type { AddressInfo } from 'node:net';
+import { createServer as createTcpServer, type AddressInfo, type Socket } from 'node:net';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { fileURLToPath } from 'node:url';
@@ -351,6 +351,69 @@ describe('seller adapter: one configuration file (T-331)', () => {
     expect(await exited).toBe(0);
     expect(out + err).not.toContain(acct('seller-1').privateKey.slice(2));
   }, 30_000);
+
+  /** The adapter's own command line as a process, with `preload` loaded first when given. `exited` is the exit status, or the name of the signal that killed it. */
+  function commandLine(env: Record<string, string>, preload?: string) {
+    const dir = mkdtempSync(join(tmpdir(), 't606-signal-'));
+    writeFileSync(join(dir, 'seller.json'), JSON.stringify({ port: 0, sellerApi: { quote: 'http://127.0.0.1:9/quote', start: 'http://127.0.0.1:9/jobs', result: 'http://127.0.0.1:9/jobs/{jobId}' } }));
+    if (preload !== undefined) writeFileSync(join(dir, 'preload.mjs'), preload);
+    const child = spawn(process.execPath, [...(preload === undefined ? [] : ['--import', join(dir, 'preload.mjs')]), here('./seller-adapter.ts'), join(dir, 'seller.json')], { cwd: dir, env: { ...process.env, ...env } });
+    let out = '', err = '';
+    child.stdout.on('data', (d: Buffer) => (out += d.toString()));
+    child.stderr.on('data', (d: Buffer) => (err += d.toString()));
+    const exited = new Promise<number | NodeJS.Signals>((r) => child.on('close', (code, signal) => r(code ?? signal!)));
+    return { child, exited, out: () => out, said: () => `${out}${err}` };
+  }
+  // Stops the process for 500 ms right after it writes its ready line, as a busy machine's scheduler may: a signal sent
+  // on that line then always arrives before the next line of the command runs.
+  const PAUSE_AT_READY = `const write = process.stdout.write.bind(process.stdout);
+process.stdout.write = (chunk, ...rest) => {
+  const sent = write(chunk, ...rest);
+  if (String(chunk).includes('serves POST')) Atomics.wait(new Int32Array(new SharedArrayBuffer(4)), 0, 0, 500);
+  return sent;
+};
+`;
+
+  it('stops gracefully on a signal sent as soon as it says it serves (T-606)', async () => {
+    for (const signal of ['SIGTERM', 'SIGINT'] as const) {
+      const run = commandLine({ HOLDBACK_KEY: acct('seller-1').privateKey, HOLDBACK_OPERATORS: world.info.operators.join(',') }, PAUSE_AT_READY);
+      try {
+        let sent = false;
+        run.child.stdout.on('data', () => {
+          if (sent || !run.out().includes('serves POST')) return;
+          sent = true;
+          run.child.kill(signal);
+        });
+        expect(await run.exited, run.said()).toBe(0);
+        expect(sent).toBe(true);
+        expect(run.out()).toContain(`${signal}: the adapter stops after the step in progress`);
+      } finally {
+        run.child.kill('SIGKILL');
+      }
+    }
+  }, 60_000);
+
+  it('stopped by a signal while a start still waits, exits 0 and says it served nothing (T-606)', async () => {
+    for (const signal of ['SIGTERM', 'SIGINT'] as const) {
+      const silent = createTcpServer(() => {}); // takes each connection and never answers
+      const held: Socket[] = [];
+      const asked = new Promise<void>((resolve) => silent.on('connection', (socket) => (held.push(socket), resolve())));
+      await new Promise<void>((resolve) => silent.listen(0, '127.0.0.1', resolve));
+      const port = (silent.address() as AddressInfo).port;
+      const run = commandLine({ HOLDBACK_KEY: acct('seller-1').privateKey, HOLDBACK_OPERATORS: `http://127.0.0.1:${port},http://localhost:${port}` });
+      try {
+        await asked; // the start is under way: it has asked an operator, which never answers
+        run.child.kill(signal);
+        expect(await run.exited, run.said()).toBe(0);
+        expect(run.out()).toContain(`${signal}: the adapter stops before it serves; the journal keeps every open deal.`);
+        expect(run.out()).not.toContain('serves POST');
+      } finally {
+        run.child.kill('SIGKILL');
+        for (const socket of held) socket.destroy();
+        silent.close();
+      }
+    }
+  }, 60_000);
 
   it('stops with the usage when no file is named, and names a file it cannot read', () => {
     const run = (...args: string[]) => spawnSync(process.execPath, [here('./seller-adapter.ts'), ...args], { encoding: 'utf8', env: { ...process.env, HOLDBACK_KEY: '', HOLDBACK_OPERATORS: '' } });
