@@ -123,6 +123,26 @@ function freeText(value: unknown): string[] {
   return out;
 }
 
+/**
+ * Each base64 or base64url text in a string, decoded, for the canary scan (agg-5; red team M1 and L1 of T-618). A
+ * run is decoded whole, at each of the four offsets from the base64 grid, and split at `=` padding, where Node's
+ * decoder stops; runs broken by whitespace (MIME lines) are joined and decoded too. The output is capped at
+ * MAX_OUTPUT_CHARS, so the work grows linearly with it. agg-4's filter decoded windows of at most 4,096 characters
+ * from the start of each run, which a canary across a window boundary, off the grid or after padding escaped; inside
+ * agg-4's caps no such run fit a field, but agg-5 cuts the field and counts the seat.
+ */
+function* decodedBase64(t: string): Generator<string> {
+  for (const text of [t, t.replace(/\s+/g, '')]) {
+    for (const m of text.matchAll(/[A-Za-z0-9+/_=-]{16,65536}/g)) {
+      const encoding = /[-_]/.test(m[0]) ? 'base64url' : 'base64';
+      for (const piece of m[0].split(/=+/)) {
+        if (piece.length < 16) continue;
+        for (let o = 0; o < 4; o++) yield Buffer.from(piece.slice(o), encoding).toString('latin1');
+      }
+    }
+  }
+}
+
 /** The canary in any case, with any separators, split across fields, or base64-encoded. */
 function echoesCanary(raw: string, parsed: unknown, canary: string): boolean {
   const c = squash(canary);
@@ -131,9 +151,7 @@ function echoesCanary(raw: string, parsed: unknown, canary: string): boolean {
   const texts = parsed === undefined ? [] : freeText(parsed);
   if (squash(texts.join('')).includes(c)) return true;
   for (const t of [raw, ...texts]) {
-    for (const m of t.matchAll(/[A-Za-z0-9+/_=-]{16,4096}/g)) {
-      if (squash(Buffer.from(m[0], /[-_]/.test(m[0]) ? 'base64url' : 'base64').toString('latin1')).includes(c)) return true;
-    }
+    for (const decoded of decodedBase64(t)) if (squash(decoded).includes(c)) return true;
   }
   return false;
 }
@@ -161,6 +179,12 @@ export function cutToCap(s: string, cap: number): string | undefined {
   if (afterCodePoints(s, cap) < 0) return undefined;
   if (cap < CUT_MARK.length) return s.slice(0, Math.max(0, afterCodePoints(s, cap)));
   return `${s.slice(0, afterCodePoints(s, cap - CUT_MARK.length))}${CUT_MARK}`;
+}
+
+/** s with the mark at its end, within `cap` code points: its first cap - 5 code points and the mark. */
+function withMark(s: string, cap: number): string {
+  const end = afterCodePoints(s, cap - CUT_MARK.length);
+  return `${end < 0 ? s : s.slice(0, end)}${CUT_MARK}`;
 }
 
 const isRecord = (v: unknown): v is Record<string, unknown> => v !== null && typeof v === 'object' && !Array.isArray(v);
@@ -279,14 +303,20 @@ export function parseVerdict(raw: string, opts: VerdictOptions): ParsedVerdict {
   let redactedUrls = 0;
   for (const [i, c] of verdict.criteria.entries()) {
     if (!hasUrl(c.evidence)) continue;
-    const redacted = refang(c.evidence).replace(URL_ALL, () => {
+    let kept = refang(c.evidence).replace(URL_ALL, () => {
       redactedUrls++;
       return URL_REDACTION;
     });
-    // A replacement can lengthen the evidence past its cap: the same cut, recorded the same way.
-    const recut = cutToCap(redacted, EVIDENCE_MAX);
+    // A replacement can lengthen the evidence past its cap: the same cut, recorded the same way. A redaction that
+    // swallowed the mark of an earlier cut gets it back (red team I1).
+    const recut = cutToCap(kept, EVIDENCE_MAX);
     if (recut !== undefined) evidenceCut.add(i);
-    c.evidence = recut ?? redacted;
+    else if (evidenceCut.has(i) && !kept.endsWith(CUT_MARK)) kept = withMark(kept, EVIDENCE_MAX);
+    kept = recut ?? kept;
+    // A cut can complete a URL pattern ("203.0.113.77x" cut to "203.0.113.77[cut]", red team L2): then the evidence
+    // keeps only the redaction.
+    if (hasUrl(kept)) kept = URL_REDACTION;
+    c.evidence = kept;
   }
   cut.evidence = evidenceCut.size;
   return anyCut(cut) ? { status: 'ok', verdict, redactedUrls, cut } : { status: 'ok', verdict, redactedUrls };
