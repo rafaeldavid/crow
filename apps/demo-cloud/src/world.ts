@@ -1408,7 +1408,20 @@ export class PublicWorld {
     return n;
   }
 
+  /**
+   * One pass. A pass that throws counts as one that changed nothing, so a request does not bring the alarm forward of
+   * the Durable Object's doubling retry (worker.ts, alarm; T-604).
+   */
   async work(): Promise<void> {
+    try {
+      await this.pass();
+    } catch (e) {
+      this.idlePasses++;
+      throw e;
+    }
+  }
+
+  private async pass(): Promise<void> {
     // A broken world takes no new work: the stored write failure, before an adjudicator acts or a transaction goes out.
     if (this.failed) await this.persisting;
     this.telemetry.invoked();

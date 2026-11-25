@@ -8,6 +8,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { Agent } from '../../../examples/agent.ts';
 import { MemoryStorage } from './storage.js';
 import { SECURITY_TXT_URL } from './headers.js';
+import { PublicWorld } from './world.js';
 import * as entry from './worker.js';
 import worker, { World, type Env } from './worker.js';
 
@@ -37,12 +38,12 @@ function deploy() {
     storage,
     restart,
     /** Fires each alarm due by `until`, as the runtime does: cleared, then the handler, with the clock at its time. */
-    async fire(until: number) {
+    async fire(until: number, info?: { isRetry?: boolean }) {
       while (alarm.at !== null && alarm.at <= until) {
         vi.setSystemTime(Math.max(alarm.at, Date.now()));
         alarm.at = null;
         alarm.fired++;
-        await object.alarm();
+        await object.alarm(info);
       }
     },
   };
@@ -170,6 +171,95 @@ describe('the adjudicator alarm (T-057)', () => {
   });
 });
 
+// T-604: an alarm whose handler throws waits out the runtime's retry backoff, and a deal waits with it. So the World
+// catches a pass that throws and arms the alarm again itself, for the first few failures in a row. The count lives in
+// memory, and the runtime may drop an idle instance after 10 s. So no wait it arms reaches 10 s, and it rethrows after
+// the last one and on every retry the runtime itself starts: a failure that never clears ends with the runtime's own
+// retries, never in a loop. The fake runtime in `deploy` has no backoff and never resets an instance.
+describe('a pass that throws (T-604)', () => {
+  /** Fires the next alarm with the pass's first step throwing. Requests between passes are served as usual. */
+  async function failedPass(dep: ReturnType<typeof deploy>, o: { message?: string; isRetry?: boolean; during?: () => void } = {}) {
+    const tick = vi.spyOn(PublicWorld.prototype as unknown as { tick(): void }, 'tick').mockImplementationOnce(() => {
+      o.during?.();
+      throw new Error(o.message ?? 'the RPC did not answer (test)');
+    });
+    try {
+      await dep.fire(dep.alarm.at!, { isRetry: o.isRetry ?? false });
+    } finally {
+      tick.mockRestore();
+    }
+  }
+  const warnings = () => vi.spyOn(console, 'warn').mockImplementation(() => undefined);
+  afterEach(() => void vi.restoreAllMocks());
+
+  it('once: the alarm does not throw, logs one line, and the pass 1 s later takes the step', async () => {
+    const warn = warnings();
+    const dep = deploy();
+    const { state } = await offered();
+    await failedPass(dep);
+    expect(warn.mock.calls).toEqual([['demo world: an adjudicator pass failed, and the alarm runs the next one in 1 s: the RPC did not answer (test)']]);
+    expect(dep.alarm.at).toBe(Date.now() + 1000);
+    await dep.fire(Date.now() + 1000);
+    expect(await state()).toBe('AcceptedByAdjudicator');
+  });
+
+  it('cuts every URL in the line to its host, also one the RPC client rewrote from the configured string', async () => {
+    const warn = warnings();
+    const dep = deploy();
+    // viem drops a URL's credentials and lowercases its scheme and host, so the configured string is not in its message.
+    dep.restart({ SEPOLIA_RPC_URLS: 'HTTPS://user:pass-secret@RPC.invalid:443/v3/path-secret' });
+    await offered();
+    await failedPass(dep, { message: 'HTTP request failed. URL: https://rpc.invalid/v3/path-secret Body: {} then wss://u:ws-secret@ws.invalid/k/ws-path-secret' });
+    expect(warn.mock.calls[0]![0]).toMatch(/URL: https:\/\/rpc\.invalid\/… Body: \{\} then wss:\/\/ws\.invalid\/…$/);
+    expect(warn.mock.calls[0]![0]).not.toMatch(/secret/);
+  });
+
+  it('again and again: waits 1, 2, 4 and 8 s, a read brings none forward, then it throws to the runtime; a good pass resets it', async () => {
+    const warn = warnings();
+    const dep = deploy();
+    const { state } = await offered();
+    const waits: number[] = [];
+    for (let i = 0; i < 4; i++) {
+      await failedPass(dep);
+      const at = dep.alarm.at!;
+      waits.push(at - Date.now());
+      expect(await state()).toBe('Offered');
+      expect(dep.alarm.at, `a read after failure ${i + 1}`).toBe(at);
+    }
+    // Each is under the 10 s after which the runtime may drop an idle instance, and its count with it.
+    expect(waits).toEqual([1000, 2000, 4000, 8000]);
+    await expect(failedPass(dep)).rejects.toThrow('the RPC did not answer (test)');
+    expect(dep.alarm.at, 'the World arms nothing for it').toBeNull();
+    expect(warn.mock.calls.at(-1)![0]).toBe("demo world: an adjudicator pass failed, and the runtime's retries take it from here: the RPC did not answer (test)");
+    // A request arms it again, as after any lost alarm; that pass goes through.
+    await state();
+    await dep.fire(dep.alarm.at!);
+    expect(await state()).toBe('AcceptedByAdjudicator');
+    await offered();
+    await failedPass(dep);
+    expect(dep.alarm.at).toBe(Date.now() + 1000);
+  });
+
+  it("a runtime retry that fails is rethrown, also in a new instance that has no count, so no loop starts over", async () => {
+    warnings();
+    const dep = deploy();
+    await offered();
+    dep.restart();
+    await expect(failedPass(dep, { isRetry: true })).rejects.toThrow('the RPC did not answer (test)');
+    expect(dep.alarm.at).toBeNull();
+  });
+
+  it('keeps an alarm a request set for sooner while the pass ran', async () => {
+    warnings();
+    const dep = deploy();
+    await offered();
+    for (let i = 0; i < 3; i++) await failedPass(dep);
+    // The fourth wait is 8 s; during that pass something arms the alarm 500 ms out.
+    await failedPass(dep, { during: () => void (dep.alarm.at = Date.now() + 500) });
+    expect(dep.alarm.at).toBe(Date.now() + 500);
+  });
+});
+
 // T-313: a world whose storage write was rejected stays failed (world.ts, `broken`). The Durable Object drops it, so
 // the next request or alarm opens a fresh world from storage, as a restart does.
 describe('a failed storage write (T-313)', () => {
@@ -199,14 +289,15 @@ describe('a failed storage write (T-313)', () => {
     expect(BigInt(granted)).toBeGreaterThan(0n);
     expect((await third.call('GET', `/v1/balances/${unlucky.address}`)).amount).toBe('0');
 
-    // An alarm whose pass hits a rejected write throws, as before. The runtime keeps a thrown alarm set and retries it:
-    // the retry opens a fresh world, and its pass accepts the offer.
-    const at = dep.alarm.at!;
-    expect(at).not.toBeNull();
+    // An alarm whose pass hits a rejected write logs it and arms the alarm again (T-604): that pass opens a fresh world,
+    // and accepts the offer.
+    expect(dep.alarm.at).not.toBeNull();
     failures = 1;
-    await expect(dep.fire(at)).rejects.toThrow('storage put failed (test)');
-    dep.alarm.at = at;
-    await dep.fire(at);
+    const warn = vi.spyOn(console, 'warn').mockImplementation(() => undefined);
+    await dep.fire(dep.alarm.at!);
+    expect([failures, warn.mock.calls.length, dep.alarm.at! - Date.now()]).toEqual([0, 1, 1000]);
+    warn.mockRestore();
+    await dep.fire(dep.alarm.at!);
     expect(await state()).toBe('AcceptedByAdjudicator');
 
     // The stored journal has every entry in order, and a restart replays it to the same state.

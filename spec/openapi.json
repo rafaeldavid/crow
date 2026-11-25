@@ -8011,7 +8011,7 @@
               },
               "judges": {
                 "type": "object",
-                "description": "Who judges rubric deals here: `panel` (live or scripted), the registry, the models and today's live budget, with today's tokens by model (`tokensToday.byModel`, counts only)",
+                "description": "Who judges rubric deals here: `panel` (live, scripted, or unavailable while a chain world's live judge settings are incomplete), the registry, the models and today's live budget, with today's tokens by model (`tokensToday.byModel`, counts only)",
                 "x-holdback-untrusted": true
               },
               "build": {

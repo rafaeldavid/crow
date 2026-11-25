@@ -1184,6 +1184,17 @@ export function referenceText(guides) {
 export const ASSETS = ['crow.png', 'crow-2x.webp', 'crow-mark.svg', 'favicon.png', 'og.png'];
 /** A party's card's JSON Schema (T-474, D74): a publish build copies it as it is, served at https://crow.direct/card.schema.json. */
 export const CARD_SCHEMA = 'card.schema.json';
+/**
+ * HoldbackStandingSeller's creation code as its own file (T-605), so a client that implements ref/standing.txt itself
+ * gets the bytes over HTTP: the string examples/standing-seller-code.ts pins, which setup.mjs and take.mjs carry. The
+ * page pins its keccak256 (examples/standing-reference.test.ts).
+ */
+export const STANDING_CODE_FILE = 'standing-seller.hex';
+export function standingCodeText(source = readFileSync(here('../examples/standing-seller-code.ts'), 'utf8')) {
+  const hex = /^ {2}'(0x(?:[0-9a-f]{2})+)';$/m.exec(source)?.[1];
+  if (!hex) throw new Error('examples/standing-seller-code.ts holds no creation code string');
+  return `${hex}\n`;
+}
 
 /** llms.txt's two values read from their sources (T-495): the request log's retention and the oldest Node the goal commands run on. */
 export const fillFacts = (md) => md.replace('{{REQUEST_LOG_DAYS}}', String(trustFacts().requestLogDays)).replaceAll('{{NODE_MIN}}', NODE_MIN);
@@ -1318,6 +1329,7 @@ if (import.meta.url === `file://${process.argv[1]}`) {
     writeFileSync(join(out, 'version.json'), `${JSON.stringify({ commit: buildCommit() }, null, 2)}\n`);
     for (const f of ASSETS) writeFileSync(join(out, f), readFileSync(here(f)));
     writeFileSync(join(out, CARD_SCHEMA), readFileSync(here(CARD_SCHEMA)));
+    writeFileSync(join(out, STANDING_CODE_FILE), standingCodeText());
     // T-428: the favicon set from the brand kit, at the site's root, so /favicon.ico answers a client that asks blind.
     for (const f of ICON_FILES) writeFileSync(join(out, f), iconBytes(f));
     const problems = await problemPages();
