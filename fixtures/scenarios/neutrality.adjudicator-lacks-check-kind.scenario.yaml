@@ -1,4 +1,6 @@
 # @settlement sim @judges recorded @mode guaranteed_on_decision @seed 61
+# The scenario runner accepts with its own copy of the decline rule (packages/testkit/src/stub-settlement.ts), so this
+# fixture shows what the refusal does to the deal. apps/adjudicator/src/check-kinds.test.ts tests the real service.
 name: neutrality.adjudicator-lacks-check-kind
 description: >-
   ADR-0045 section 10. Tidewater offers terms that name the signature_valid check kind, and Bench A, the named
@@ -25,6 +27,8 @@ steps:
   - adjudicator_accept: { via: op-1 }                 # Bench A declines: it does not run signature_valid
   - agree_and_fund:     { by: buyer, via: op-1 }      # refused: no acceptance, so no hold forms
   - advance_clock:      { seconds: 900 }              # past offerExpiresAt (offer + 900 s)
+  # This step records the expiry. SimChain only: the phase-one contracts record nothing for an unfunded offer, which
+  # lapses at offerExpiresAt (ADR-0031, SC-6).
   - expire:             { via: op-2 }
 expect:
   problem: { step: 2, type: adjudicator_unavailable }

@@ -604,8 +604,8 @@ export class Adjudicator {
   }
 
   /**
-   * ADR-0045 §10: as primary it declines an offer that names a check kind outside its record's checkKinds, required or
-   * not, so no hold forms on a check nobody here runs. A turn taken after funding does not ask this: stage 1 fails such
+   * ADR-0045 §10, the check-kind half: as primary it declines an offer that names a kind outside its record's checkKinds, required or
+   * not, so it joins no hold on a check it does not run. A turn taken after funding does not ask this: stage 1 fails such
    * a check there. Sealed terms show this service no checks.
    */
   #checkKindProblem(c: DecisionTask['commitment']): Problem | null {
