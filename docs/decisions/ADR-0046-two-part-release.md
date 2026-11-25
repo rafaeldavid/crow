@@ -63,7 +63,7 @@ The delivery gains `proofs`, a list of `{ kind, format, verifier, publicInputs, 
 ```
 
 - **`kind` and `verifier` are closed lists.** `key_opens` and `derived-seal/1` are the first entries. A new one is an ADR and a schema bump. A verifier is pinned built-in code, never an address to call or code to load.
-- **`publicInputs[0]` is the commitment:** the EIP-712 struct hash of the buyer's `EncryptedKey`, the value the contract computes today for the envelope it releases. `sha256` is the SHA-256 of the sealed key's text, so any tool can check a released key with one hash.
+- **`publicInputs[0]` is the commitment:** the EIP-712 struct hash of the buyer's `EncryptedKey`, the value the contract computes today for the envelope it releases. `sha256` is the SHA-256 of the sealed key's text, so any tool can check a released key with one hash. For `key_opens`, `sha256` hashes the sealed key's text, not proof bytes; a later kind that carries proof bytes uses it as the delivery-proofs note (2026-11-24) defined it.
 - **Under `on_decision_and_key`, `proofs[0]` is this entry.** A later `key_opens` entry, for another verifier, must commit to the same key.
 - **The sealed key may also sit in `encryptedKeys`, as today.** That copy is optional transport for an early accept. When present it must hash to the commitment, and a delivery may address one envelope to the buyer at most.
 - The EIP-712 types become `Delivery(bytes32 commitmentId,uint8 attempt,Ciphertext ciphertext,string plaintextSha256,string plaintextMime,EncryptedKey[] encryptedKeys,DeliveryProof[] proofs,uint64 submittedAt)` and `DeliveryProof(string kind,string format,string verifier,bytes32[] publicInputs,string sha256)`.
