@@ -38,6 +38,7 @@ import {
   type Judgment,
   type Problem,
   type Result,
+  type Timestamp,
   type TokenAmount,
 } from '@holdback/core';
 import { ContentKey, decodePublicKey, encodePublicKey, encryptionKeyPairFromSecretKey, open as openContent, unwrapKey, wrapKey, wrapKeyForRecipients } from '@holdback/core/crypto';
@@ -45,6 +46,7 @@ import { CHECK_TYPES, describeUnavailable, intake, loadReferences, panelPlan, ru
 import { concat, keccak256, stringToBytes, toBytes, type Hex } from 'viem';
 import { privateKeyToAccount } from 'viem/accounts';
 import { quicknetValue } from './drand.js';
+import { holdUntil } from './hold.js';
 import { checkPolicyBinding, KEPT_POLICIES, policyHashOf, registryMarkProblem, withdrawnProblem, type KeptPolicies } from './policy.js';
 import { panelSeed, roundFor } from './randomness.js';
 import type { AdjudicatorSettlement, DecisionTask } from './settlement-port.js';
@@ -174,7 +176,8 @@ export interface AdjudicatorConfig {
    * Where a judged result is kept from the moment the panel returns until the service stops (A-4, T-530), so a restart
    * signs the same decision and never runs the panel again for that (commitment, role, attempt). It holds the record,
    * which is published anyway, and the outcome; never a key. Unset: memory only, and a restart before the decision lands
-   * runs the panel again, with nothing of the first verdict published or signed.
+   * runs the panel again, with nothing of the first verdict published or signed. ADR-0051: only a service with a store
+   * holds a rubric deal's reject; without one it signs every decision at once.
    */
   judgedStore?: JudgedStore;
 }
@@ -219,12 +222,15 @@ export interface RunReport {
   decided: Array<{ commitmentId: Hex32; role: DecisionTask['role']; outcome: DecisionOutcome }>;
   /** Judged, record published, but no Decision: the appeal panel was inconclusive after an escalation. */
   undecided: Hex32[];
+  /** ADR-0051: a reject judged and published, signed at `until` (the turn's window minus the margin). Nothing signed yet. */
+  held: Array<{ commitmentId: Hex32; role: DecisionTask['role']; until: Timestamp }>;
   refused: Array<{ commitmentId: Hex32; problem: Problem }>;
   /** T-372: a list the pass reads that did not answer in time; the pass went on with the other lists. */
   unavailable: Array<{ step: 'appeal expiries' | 'offers' | 'takeovers' | 'tasks'; problem: Problem }>;
 }
 
-type Outcome = { decision: Decision; record: Judgment } | { decision: null; record: Judgment };
+/** `heldUntil` (ADR-0051): the reject is judged and published, and signed at that time; absent, nothing will be signed. */
+type Outcome = { decision: Decision; record: Judgment } | { decision: null; record: Judgment; heldUntil?: Timestamp };
 
 interface Preflight {
   policy: AdjudicatorPolicy;
@@ -448,7 +454,7 @@ export class Adjudicator {
 
   async #pass(seen: Set<Hex32>): Promise<RunReport> {
     const port = this.#port;
-    const report: RunReport = { accepted: [], declined: [], expired: [], triggered: [], decided: [], undecided: [], refused: [], unavailable: [] };
+    const report: RunReport = { accepted: [], declined: [], expired: [], triggered: [], decided: [], undecided: [], held: [], refused: [], unavailable: [] };
     // T-211: its own decisions hold its bond until their appeal closes, and a sham deal's parties never close it. So it
     // expires them itself once due, first, so the bond they free counts for what follows. Phase one has neither.
     for (const id of port.phaseOne ? [] : await this.#list('appeal expiries', report, () => port.appealExpiriesDue(this.address))) {
@@ -518,6 +524,10 @@ export class Adjudicator {
     const r = await this.decideTask(task);
     if (!r.ok) {
       report.refused.push({ commitmentId: task.commitment.id, problem: r.error });
+      return;
+    }
+    if (!r.value.decision && 'heldUntil' in r.value && r.value.heldUntil) {
+      report.held.push({ commitmentId: task.commitment.id, role: task.role, until: r.value.heldUntil });
       return;
     }
     if (!r.value.decision) {
@@ -843,6 +853,13 @@ export class Adjudicator {
    */
   async decideTask(task: DecisionTask): Promise<Result<Outcome, Problem>> {
     const key = judgedKey(task);
+    // ADR-0051: a reject held in memory, published, for this very delivery, waits without the preflight's reads, so a
+    // held deal costs a pass nothing until its hold ends (red team M1). The preflight runs again before it is signed.
+    const early = this.#judged.get(key);
+    if (this.#cfg.judgedStore && early?.published && early.outcome === 'reject' && early.record.deliveryHash === deliveryHash(task.delivery)) {
+      const until = holdUntil(task, 'reject', early.record.decidedAt);
+      if (until && Date.parse(this.#port.now()) < Date.parse(until)) return ok({ decision: null, record: early.record, heldUntil: until });
+    }
     const pre = await this.#preflight(task);
     if (!pre.ok) return pre;
     let judged = this.#judged.get(key);
@@ -888,6 +905,12 @@ export class Adjudicator {
     }
     // Signing is deterministic (RFC 6979), so a retry signs the identical Decision.
     if (judged.outcome === null) return ok({ decision: null, record: judged.record });
+    // ADR-0051: a reject on a rubric deal is held until the turn's window, read from the signed terms, less the margin.
+    // The hold counts from the kept record's decidedAt, so a restart holds to the same second and never judges again.
+    // Only a service that keeps its judged results in judgedStore holds: without one a restart would run the panel again
+    // (red team M2), so it signs at once, as before.
+    const heldUntil = this.#cfg.judgedStore ? holdUntil(task, judged.outcome, judged.record.decidedAt) : null;
+    if (heldUntil && Date.parse(this.#port.now()) < Date.parse(heldUntil)) return ok({ decision: null, record: judged.record, heldUntil });
     return ok({ decision: await this.#sign(task, pre.value, judged), record: judged.record });
   }
 
