@@ -1085,6 +1085,8 @@ export class PublicWorld {
           rateLimit: rate,
           notes: notesFor(club.id, m, { amount: faucetAmount, maxAmount: faucetMaxAmount, windowSec: faucetWindowSec }, panel, operatorFee, chainFacts),
           demo: () => demo(i === 1 ? 1 : 0),
+          // T-609: the cause of each 500, in Workers Logs under the Request-Id the caller was answered with.
+          onInternal: (f) => o.onError?.(new Error(`internal on ${f.method} ${f.route} (Request-Id ${f.requestId}, node ${i + 1}${f.nothingSent ? ', nothing sent' : ''}): ${f.cause}`)),
           notices,
           ...(feedback ? { feedback } : {}),
           // The fields the request log keeps, picked here: the path and traceparent never reach telemetry.

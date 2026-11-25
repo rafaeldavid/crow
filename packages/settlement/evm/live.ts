@@ -432,12 +432,12 @@ export class LiveChain implements EvmChain {
    * Sends on the key's own lane, or the named lane, after the lane's previous transaction is mined and any row a restart
    * left on that lane is resolved. A deal lane with a store writes the transaction's row, with `note`, before the broadcast.
    */
-  send(tx: { key?: Hex; lane?: string; to: Address; data: Hex; value?: bigint; note?: RelayNote; gasCap?: bigint; gasMarginPct?: number }): Promise<Mined> {
+  send(tx: { key?: Hex; lane?: string; to: Address; data: Hex; value?: bigint; note?: RelayNote; gasCap?: bigint; gasMarginPct?: number; onBroadcast?: () => void }): Promise<Mined> {
     const account = tx.key ? privateKeyToAccount(tx.key) : this.account(tx.lane);
     const lane = tx.key || tx.lane === undefined || tx.lane === FUNDING_LANE ? null : 1 + laneOf(tx.lane);
     return this.serialized(account.address, async () => {
       for (const r of this.inFlight()) if (lc(r.from) === lc(account.address)) await this.resolve(r);
-      return this.sendNow(account, tx.to, tx.data, tx.value ?? 0n, lane, tx.note, tx.gasCap ?? GAS_CAP, tx.gasMarginPct ?? 25);
+      return this.sendNow(account, tx.to, tx.data, tx.value ?? 0n, lane, tx.note, tx.gasCap ?? GAS_CAP, tx.gasMarginPct ?? 25, tx.onBroadcast);
     });
   }
 
@@ -636,7 +636,7 @@ export class LiveChain implements EvmChain {
     return next;
   }
 
-  private async sendNow(account: PrivateKeyAccount, to: Address, data: Hex, value: bigint, lane: number | null, note: RelayNote | undefined, cap: bigint, marginPct: number): Promise<Mined> {
+  private async sendNow(account: PrivateKeyAccount, to: Address, data: Hex, value: bigint, lane: number | null, note: RelayNote | undefined, cap: bigint, marginPct: number, onBroadcast?: () => void): Promise<Mined> {
     await this.verify();
     const from = account.address;
     const k = `${lc(from)}|${lc(to)}|${data}`;
@@ -661,6 +661,7 @@ export class LiveChain implements EvmChain {
       this.rows.set(rowId(row), row);
       f.row = row;
     }
+    onBroadcast?.();
     try {
       f.hashes.push(await this.broadcast(f.raw, from));
     } catch (e) {
@@ -695,7 +696,7 @@ export class LiveChain implements EvmChain {
    */
   private async nextNonce(from: Address): Promise<number> {
     // eslint-disable-next-line no-restricted-syntax -- T-232: the pending count has no block; the pinned mined count below is its floor.
-    const pending = await this.publicClient.getTransactionCount({ address: from, blockTag: 'pending' });
+    const pending = await this.pinned(() => this.publicClient.getTransactionCount({ address: from, blockTag: 'pending' }));
     const mined = await this.pinned((blockNumber) => this.publicClient.getTransactionCount({ address: from, blockNumber }));
     return pending > mined ? pending : mined;
   }
@@ -707,14 +708,19 @@ export class LiveChain implements EvmChain {
   /**
    * Waits for the receipt of any hash sent at the flight's nonce. Every rebroadcast window it sends the same raw
    * transaction again; after two windows it replaces it once at the same nonce with fees up by a quarter (nodes require
-   * at least a tenth), within the cap, when it holds the lane's key. Past the deadline it gives up.
+   * at least a tenth), within the cap, when it holds the lane's key. Past the deadline it gives up. A poll an RPC node
+   * fails is asked again at the next one (T-609: the transaction is already out, so failing the caller for one bad
+   * answer helps nobody); polls that fail without a break for five poll intervals throw the last error, as does a
+   * failed poll past the deadline, and the row stays open.
    */
   private async fly(f: Flight, account: PrivateKeyAccount | undefined): Promise<Mined> {
+    let failingSince: number | undefined;
     for (;;) {
+      let failed: { error: unknown } | undefined;
       for (const hash of f.hashes) {
         const r = await this.publicClient.getTransactionReceipt({ hash }).catch((e: unknown) => {
-          if (e instanceof TransactionReceiptNotFoundError) return null;
-          throw e;
+          if (!(e instanceof TransactionReceiptNotFoundError)) failed = { error: e };
+          return null;
         });
         if (r) {
           this.nonces.set(lc(f.from), f.nonce + 1);
@@ -726,6 +732,8 @@ export class LiveChain implements EvmChain {
         }
       }
       const now = Date.now();
+      if (!failed) failingSince = undefined;
+      else if (now - (failingSince ??= now) >= 5 * this.pollMs || now > f.deadline) throw failed.error;
       if (now > f.deadline) throw new GaveUp(`a transaction from ${f.from} (nonce ${f.nonce}) was not mined within ${Math.round(this.timeoutMs / 1000)} s: ${f.hashes.join(', ')}`);
       if (now - f.checkpoint > this.rebroadcastMs) {
         f.checkpoint = now;
@@ -781,7 +789,7 @@ export class LiveChain implements EvmChain {
   /** EIP-1559 fees: the median tip of the last 20 blocks, clamped to 0.1 to 2 gwei, and twice the next base fee; refused above the cap. */
   private async feesNow(): Promise<{ max: bigint; tip: bigint }> {
     if (!this.fees || Date.now() - this.fees.at > 12_000) {
-      const h = await this.publicClient.getFeeHistory({ blockCount: 20, rewardPercentiles: [50] });
+      const h = await this.pinned(() => this.publicClient.getFeeHistory({ blockCount: 20, rewardPercentiles: [50] }));
       const tips = (h.reward ?? []).map((r) => r[0] ?? 0n).sort((a, b) => (a < b ? -1 : a > b ? 1 : 0));
       const median = tips.length ? tips[Math.floor(tips.length / 2)]! : MIN_TIP;
       const tip = median < MIN_TIP ? MIN_TIP : median > MAX_TIP ? MAX_TIP : median;
@@ -795,15 +803,18 @@ export class LiveChain implements EvmChain {
 
   /**
    * A mined block's time. A node behind that block answers null, which viem throws as BlockNotFoundError without trying
-   * the next RPC: ask again at the receipt poll's pace, five tries in all (T-216 round 1).
+   * the next RPC: ask again at the receipt poll's pace, five tries in all (T-216 round 1). Any other failed read is
+   * asked again the same way, but only within five poll intervals: an RPC that hangs takes seconds a try, and the lane
+   * waits meanwhile (T-609).
    */
   private async blockTime(n: bigint): Promise<number> {
     const hit = this.blockTimes.get(n);
     if (hit !== undefined) return hit;
     let block: { timestamp: bigint } | undefined;
+    const until = Date.now() + 5 * this.pollMs;
     for (let tries = 1; !block; tries++) {
       block = await this.publicClient.getBlock({ blockNumber: n }).catch(async (e: unknown) => {
-        if (!(e instanceof BlockNotFoundError) || tries >= 5) throw e;
+        if (tries >= 5 || (!(e instanceof BlockNotFoundError) && Date.now() >= until)) throw e;
         await sleep(this.pollMs);
         return undefined;
       });
