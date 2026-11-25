@@ -730,6 +730,9 @@ if (existsSync(here('../reports/site-out/llms.txt'))) expect(existsSync(here('..
   const takeTxt = ref('take.txt'), takeOut = filledGuides.get('ref/take.txt') ?? '', takeLine = takeInstall();
   expect(count(takeTxt, '{{TAKE_INSTALL}}') === 1 && /```sh\n\s*\{\{TAKE_INSTALL\}\}/.test(takeTxt), 'ref/take.txt must carry {{TAKE_INSTALL}} once, in an sh block');
   expect(takeLine.includes(`curl -fsSL ${TAKE_MJS_URL} -o take.mjs.part `) && takeLine.endsWith(`echo "${takeSha256()}  take.mjs.part" | shasum -a 256 -c && mv take.mjs.part take.mjs`) && !/npm/.test(takeLine) && takeOut.includes(takeLine), `the published ref/take.txt does not carry the command that fetches ${TAKE_MJS_URL} as take.mjs.part and checks its current sha256 before naming it take.mjs`);
+  // The guide's dating of a take is the constant the command uses (examples/take.ts, BLOCK_BACK_SEC).
+  const blockBack = /export const BLOCK_BACK_SEC = (\d+);/.exec(read('../examples/take.ts'))?.[1];
+  expect(blockBack !== undefined && takeTxt.includes(`dated ${blockBack} s before the operators' time`), `ref/take.txt must say a take is dated ${blockBack} s before the operators' time, as BLOCK_BACK_SEC in examples/take.ts`);
   if (existsSync(here('../reports/site-out/llms.txt'))) expect(existsSync(here('../reports/site-out/take.mjs')) && read('../reports/site-out/take.mjs') === takeFile, 'reports/site-out/take.mjs is missing or differs from site/take.mjs: build with --out again');
 }
 

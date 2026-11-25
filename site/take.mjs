@@ -23,9 +23,10 @@ Object.defineProperty(globalThis, 'crowEntry', { value: 'take', enumerable: fals
 Object.defineProperty(globalThis, 'crowCommands', { value: Object.freeze({"take":"node take.mjs"}), enumerable: false, configurable: false, writable: false });
 
 import { createRequire } from "node:module";
+import * as nc from "node:crypto";
+import { createHash } from "node:crypto";
 import { chmodSync, existsSync, mkdirSync, readFileSync, readdirSync, renameSync, writeFileSync } from "node:fs";
 import { join, relative } from "node:path";
-import * as nc from "node:crypto";
 import { fileURLToPath, pathToFileURL } from "node:url";
 
 // \0rolldown/runtime.js
@@ -49439,6 +49440,12 @@ const DETERMINISTIC_DEPLOYER = "0x4e59b44847b379578588920ca78fbf26c0b4956c";
 const BLOCK_BACK_SEC = 24;
 /** The most of a card this file reads. */
 const CARD_MAX_BYTES = 1048576;
+/** How long after an operator takes the standing delivery this file waits to see every operator record it, per operator. */
+const DELIVERY_SEEN_MS = 9e4;
+/** The chains this file signs on: Sepolia and a local chain (CLAUDE.md, hard rule 1). */
+const TEST_CHAINS = [11155111, 31337];
+/** The files this file opens: text, which the buyer signer returns (buyer-signer.ts, openDelivery). */
+const TEXT_MIME = /^(text\/[a-z0-9.+-]+|application\/(json|xml|yaml|x-ndjson|ld\+json))(;.*)?$/i;
 const HEX32 = /^0x[0-9a-f]{64}$/;
 const ADDRESS = /^0x[0-9a-f]{40}$/;
 const DEC = /^(0|[1-9][0-9]{0,77})$/;
@@ -49463,9 +49470,21 @@ function sellerAddressOf(key, salt) {
 /** The card in a seller's page or its agent.json: the JSON itself, or the page's `<script type="application/json" id="crow-agent">` block. */
 function cardFrom(text) {
 	if (/^\s*\{/.test(text)) return JSON.parse(text);
-	const block = /<script\b[^>]*\bid\s*=\s*["']crow-agent["'][^>]*>([\s\S]*?)<\/script>/i.exec(text);
-	if (!block) throw new Error("the page holds no crow-agent card: no <script id=\"crow-agent\"> block, and it is not JSON");
-	return JSON.parse(block[1]);
+	const blocks = [...text.matchAll(/<script\b[^>]*?\sid\s*=\s*["']crow-agent["'][^>]*>([\s\S]*?)<\/script>/gi)];
+	if (blocks.length === 0) throw new Error("the page holds no crow-agent card: no <script id=\"crow-agent\"> block, and it is not JSON");
+	if (blocks.length > 1) throw new Error(`the page holds ${blocks.length} crow-agent blocks, not one: take the card from its agent.json`);
+	return JSON.parse(blocks[0][1]);
+}
+/** The body of `res`, refused once it passes `max` bytes, read no further than that. */
+async function capped(res, max, what) {
+	const parts = [];
+	let n = 0;
+	for await (const chunk of res.body ?? []) {
+		n += chunk.byteLength;
+		if (n > max) throw new Error(`${what} is above the ${max} bytes this file reads`);
+		parts.push(chunk);
+	}
+	return new Uint8Array(Buffer.concat(parts));
 }
 /** Fetches a card: https, or http on this machine only; no redirect, since the card's origin is who the seller is. */
 async function fetchCard(url) {
@@ -49482,8 +49501,7 @@ async function fetchCard(url) {
 		signal: AbortSignal.timeout(15e3)
 	});
 	if (!res.ok) throw new Error(`the card at ${u.origin}${u.pathname.slice(0, 120)} answered ${res.status}`);
-	const body = new Uint8Array(await res.arrayBuffer());
-	if (body.byteLength > 1048576) throw new Error(`the card is ${body.byteLength} bytes, above the ${CARD_MAX_BYTES} this file reads`);
+	const body = await capped(res, CARD_MAX_BYTES, "the card");
 	return {
 		origin: u.origin,
 		card: cardFrom(new TextDecoder("utf-8", { fatal: true }).decode(body))
@@ -49546,14 +49564,15 @@ function entryOf(card, offerId) {
 	if (offers.length !== 1) refuse(`the card lists ${offers.length} offers with the id ${shown(offerId)}, not one`);
 	const s = offers[0]["standing"];
 	if (!isRecord(s)) refuse(`the card's offer ${shown(offerId)} has no standing entry: it is not a standing offer, so take it with buy.mjs`);
-	const e = only(s, "standing", [
+	const e = s;
+	for (const k of [
 		"chainId",
 		"seller",
 		"key",
 		"salt",
 		"template",
 		"signature"
-	]);
+	]) if (e[k] === void 0) refuse(`standing has no ${k}`);
 	if (!Number.isSafeInteger(e["chainId"]) || e["chainId"] < 1) refuse("standing.chainId is not a chain ID");
 	for (const k of ["seller", "key"]) if (!ADDRESS.test(lc(e[k])) || typeof e[k] !== "string") refuse(`standing.${k} is not an address`);
 	if (typeof e["salt"] !== "string" || !HEX32.test(lc(e["salt"]))) refuse("standing.salt is not 32 bytes as 0x and 64 hex characters");
@@ -49577,6 +49596,7 @@ function entryOf(card, offerId) {
 */
 async function checkEntry(e, pin) {
 	if (!pin.chain) refuse("take.mjs takes a standing offer on a chain: the operators serve SimChain");
+	if (!TEST_CHAINS.includes(pin.domain.chainId)) refuse(`chain ${pin.domain.chainId} is not Sepolia (11155111) or a local chain (31337): this file moves test tokens only`);
 	if (e.chainId !== pin.domain.chainId) refuse(`the standing offer is on chain ${e.chainId}, not the pinned chain ${pin.domain.chainId}`);
 	if (lc(e.template.rules) !== lc(pin.domain.verifyingContract)) refuse(`the template names the rules deployment ${shown(e.template.rules)}, not the pinned ${pin.domain.verifyingContract}`);
 	const want = sellerAddressOf(e.key, e.salt);
@@ -49591,6 +49611,8 @@ async function checkEntry(e, pin) {
 		return refuse(`the template does not encode: ${printable(String(x.message).slice(0, 200))}`);
 	}
 	if (!await recoversFrom(digest, e.signature, e.key)) refuse(`the template's signature is not the key ${e.key}'s under the seller contract's domain`);
+	const mime = String(e.template.delivery?.plaintextMime ?? "text/plain");
+	if (!TEXT_MIME.test(mime)) refuse(`the standing delivery's file is ${shown(mime)}: this file opens text files only, so it would pay for a file it cannot write`);
 }
 /** The filled take: its terms, ID, and the seller contract's take blob. Checks the take is public and passes the API's schema. */
 function takeOf(e, fill, buyerSignature = `0x${"00".repeat(65)}`) {
@@ -49701,7 +49723,33 @@ async function checkServed(e, agent) {
 		].map(lc).sort();
 		const got = (Array.isArray(d.encryptedKeys) ? d.encryptedKeys : []).map((k) => lc(k?.recipient)).sort();
 		if (jcs(got) !== jcs(want)) refuse(`the standing delivery has envelopes for ${shown(got)}, not one for each of the three adjudicators ${shown(want)}`);
+		const bytes = Number(d.ciphertext?.bytes);
+		let ct;
+		try {
+			const res = await fetch(uri, {
+				redirect: "error",
+				signal: AbortSignal.timeout(3e4)
+			});
+			if (!res.ok) throw new Error(`it answered ${res.status}`);
+			ct = await capped(res, Number.isSafeInteger(bytes) && bytes > 0 ? bytes : 0, "the standing delivery's file");
+		} catch (x) {
+			return refuse(`the operator does not serve the standing delivery's file at ${shown(uri)} (${printable(String(x.message).slice(0, 120))}): a take of it would be funded and never delivered`);
+		}
+		if (ct.byteLength !== bytes || `sha256:${createHash("sha256").update(ct).digest("hex")}` !== d.ciphertext.sha256) refuse(`the file at ${shown(uri)} is not the one the template names (its bytes or sha256 differ)`);
 	}
+}
+/**
+* Advice, refusing nothing (D31): each adjudicator the template names that the operators' discovery does not list.
+* A seller can name an adjudicator it registered itself, and the buyer agrees to it by funding.
+*/
+async function adjudicatorNotices(e, agent) {
+	const listed = await agent.trusted("/.well-known/holdback.json", (x) => Array.isArray(x.demo?.adjudicators) ? x.demo.adjudicators.map((r) => lc(r?.address)) : []);
+	const a = e.template.terms.adjudication;
+	return [
+		["primary", a.adjudicator],
+		["fallback", a.fallbackAdjudicator],
+		["appeal", a.appealAdjudicator]
+	].filter(([, addr]) => !listed.includes(lc(addr))).map(([role, addr]) => `The ${role} adjudicator ${lc(addr)} is not one the operators' discovery lists: the seller chose it, and it decides whether you pay. Approve only if you trust it.`);
 }
 /** What the principal approves: the filled terms in full, the fees, the deadlines with their distance, the delivery. */
 async function offerOf(e, terms, id, agent, pin) {
@@ -49809,7 +49857,8 @@ async function show(cardUrl, offerId, store, budget) {
 	const { terms, id } = takeOf(entry, fill);
 	if (!(now < Date.parse(terms.timing.offerExpiresAt))) refuse(`the take's offer expires at ${terms.timing.offerExpiresAt}, already past: the template's offer window is shorter than ${24} s`);
 	const offer = await offerOf(entry, terms, id, agent, pin);
-	for (const w of moneyAddressWarnings("payout", offer.sellerPayoutAddress, pin, offer.adjudicators)) console.error(w);
+	const notices = [...moneyAddressWarnings("payout", offer.sellerPayoutAddress, pin, offer.adjudicators), ...await adjudicatorNotices(entry, agent)];
+	for (const w of notices) console.error(printable(w));
 	const approve = [
 		...["HOLDBACK_OPERATORS", "HOLDBACK_DEPLOYMENT"].filter((k) => process.env[k]).map((k) => `${k}=${sh(process.env[k])}`),
 		command("take", import.meta.url),
@@ -49833,6 +49882,7 @@ async function show(cardUrl, offerId, store, budget) {
 		} : { kind: "the seller delivers after funding, before deliverBy" },
 		...offer,
 		timeline: timeline(terms, now),
+		...notices.length ? { notices } : {},
 		...BigInt(offer.fees.total.amount) > BigInt(budget) ? {} : { approve }
 	};
 	writeJson(takeFile(store, signer.address), {
@@ -49877,10 +49927,11 @@ async function waitState(agent, id, states, until) {
 	throw new Error(`${id} is ${seen.join(" / ")}, not ${states.join(" or ")}, by ${new Date(until).toISOString()}`);
 }
 /** The principal's yes: checks the shown take again, posts it, waits for the acceptance, funds, delivers, opens. */
-async function approve(store, id, budget) {
+async function approve(store, id, budget, stopAfterFunding) {
 	const r = readRecord(store, id);
 	const keys = keyFileOf(store, r.address);
 	const { agent, pin } = await connect(keys.privateKey, keys.encryptionSecretKey);
+	if (keys.paid) return afterFunding(agent, store, r, await loadKeys(store, r.address), stopAfterFunding);
 	await checkEntry(r.entry, pin);
 	await checkServed(r.entry, agent);
 	const buyerSignature = await signTerms(keys.privateKey, holdbackDomain(pin.domain.chainId, pin.domain.verifyingContract), takeTerms(r.entry.template, r.fill, r.entry.seller));
@@ -49902,12 +49953,15 @@ async function approve(store, id, budget) {
 	const offerEnds = Date.parse(terms.timing.offerExpiresAt);
 	if (!(await agent.settlementNow() < offerEnds)) refuse(`the take's offer expired at ${terms.timing.offerExpiresAt}: run take.mjs with the card again for a new take`);
 	let signer = await loadKeys(store, r.address);
-	if (!keys.paid) try {
+	try {
 		await signer.testFunds(offer.fees.total.amount);
 	} catch (e) {
 		if (!(e instanceof FaucetLimited)) throw e;
-		console.error(printable(`Stopped: the faucet refused a grant (429: ${e.detail}). It grants again ${e.retryAfterSec === null ? "within the hour" : `in ${e.retryAfterSec} s`}. Nothing is signed or paid. Run the same approve line again before ${terms.timing.offerExpiresAt}.`));
-		return 1;
+		const held = String(await agent.trusted(`/v1/balances/${r.address}`, (x) => x.amount) ?? "0");
+		if (!DEC.test(held) || BigInt(held) < BigInt(offer.fees.total.amount)) {
+			console.error(printable(`Stopped: the faucet refused a grant (429: ${e.detail}). It grants again ${e.retryAfterSec === null ? "within the hour" : `in ${e.retryAfterSec} s`}. Nothing is signed or paid. Run the same approve line again before ${terms.timing.offerExpiresAt}.`));
+			return 1;
+		}
 	}
 	if (!(await Promise.all(agent.sources().map((api) => agent.call("GET", `/v1/commitments/${id}`, void 0, api).then(() => true, () => false)))).some(Boolean)) say({
 		posted: id,
@@ -49937,28 +49991,66 @@ async function approve(store, id, budget) {
 		funded: id,
 		paid: (await signer.agreeAndFund(id)).total
 	});
-	const d = standingDeliveryFor(r.entry.template, id);
-	if (d && !r.delivered) {
-		if (String((await agent.call("GET", `/v1/commitments/${id}`)).escrowState) === "Held") say({
-			delivered: id,
-			state: (await relay(agent, `/v1/commitments/${id}/deliveries`, {
-				...d,
-				signature: encodeStandingSignature(2, r.entry.template, r.entry.signature, r.fill)
-			})).escrowState
-		});
-		writeJson(takeFile(store, r.address), {
-			...r,
-			delivered: true
-		});
+	return afterFunding(agent, store, r, signer, stopAfterFunding);
+}
+/** A funded take: its standing delivery, then (unless told to stop) its outcome and the file. */
+async function afterFunding(agent, store, r, signer, stop) {
+	if (stop) {
+		console.error(printable(`Funded ${r.commitmentId} and stopped. Later, run: ${command("take", import.meta.url)} resume ${sh(store)} ${r.commitmentId}`));
+		return 0;
 	}
-	return finish(signer, store);
+	await deliverStanding(agent, store, r);
+	return finish(signer, store, r);
+}
+/** Whether every operator's events show a delivery for `id`. */
+const deliveryRecorded = (agent, id) => agent.trusted(`/v1/commitments/${id}/events?limit=200`, (x) => Array.isArray(x?.items) && x.items.some((e) => e.type === "delivery.submitted")).catch(() => false);
+/**
+* Posts the template's standing delivery for a funded take, to each operator in turn, until every operator's events
+* show a delivery for it: an operator that answers but relays nothing, or misreports the state, is passed over. A
+* delivery already recorded (another run's, or the seller's own) ends it too. The record says delivered only then.
+* When no operator gets it recorded, it throws with the next step; the hold is funded, and resume tries again.
+*/
+async function deliverStanding(agent, store, r) {
+	const id = r.commitmentId;
+	const d = standingDeliveryFor(r.entry.template, id);
+	if (!d || r.delivered) return;
+	const body = {
+		...d,
+		signature: encodeStandingSignature(2, r.entry.template, r.entry.signature, r.fill)
+	};
+	let why = "no operator answered", taken = false;
+	for (const api of agent.sources()) {
+		if (await deliveryRecorded(agent, id)) break;
+		try {
+			const out = await agent.call("POST", `/v1/commitments/${id}/deliveries`, body, api);
+			taken = true;
+			say({
+				delivered: id,
+				via: new URL(api).origin,
+				state: out.escrowState
+			});
+		} catch (e) {
+			why = String(e.message ?? e).slice(0, 200);
+		}
+		for (const end = Date.now() + DELIVERY_SEEN_MS; Date.now() < end && !await deliveryRecorded(agent, id);) await sleep(2e3);
+	}
+	const next = `${command("take", import.meta.url)} resume ${sh(store)} ${id}`;
+	if (await deliveryRecorded(agent, id)) return writeJson(takeFile(store, r.address), {
+		...r,
+		delivered: true
+	});
+	if (!taken) throw new Error(`the take ${id} is funded, and every operator refused its standing delivery (${printable(why)}). Run: ${next}. It posts it again, and past deliverBy it reclaims the hold`);
+	console.error(printable(`Warning: an operator took the standing delivery of ${id}, but the operators do not agree it is recorded. Following the outcome; if it stays Held, run: ${next}`));
 }
 /** Follows a funded take to its outcome (watch, reclaim past deliverBy, open), and writes the file on a release. */
-async function finish(s, store) {
+async function finish(s, store, r) {
 	const id = s.commitmentId;
 	const done = await s.openDelivery(id, { onReport: say });
 	const file = done.work === null ? null : join(store, `${id}.work`);
 	if (file) writeFileSync(file, done.work, { mode: 384 });
+	const want = r?.entry.template.delivery?.plaintextSha256, hex = (x) => String(x).replace(/^sha256:/, "").toLowerCase();
+	const other = done.plaintextSha256 !== null && want !== void 0 && hex(done.plaintextSha256) !== hex(want);
+	if (other) console.error(printable(`Warning: the released file (sha256 ${hex(done.plaintextSha256)}) is not the standing delivery you were shown (sha256 ${hex(want)}): the seller's key delivered another file first, and the checks passed it.`));
 	console.log(printable(JSON.stringify({
 		commitmentId: id,
 		buyer: s.address,
@@ -49967,13 +50059,43 @@ async function finish(s, store) {
 		...done.settlement ? { settlement: done.settlement } : {},
 		file,
 		plaintextSha256: done.plaintextSha256,
+		...other ? {
+			shownPlaintextSha256: want,
+			otherFile: true
+		} : {},
 		transactions: done.transactions
 	})));
 	return 0;
 }
+/** A take record for a funded deal, when this store holds one. */
+function recordOf(store, id) {
+	try {
+		return readRecord(store, id);
+	} catch {
+		return;
+	}
+}
+/** After a restart: each funded take's standing delivery when it is still to post, then its outcome. */
+async function resume(store, id) {
+	const deals = id ? [await loadKeys(store, id)] : await openDeals(store);
+	if (deals.length === 0) console.error(printable(`No funded take in ${store} is waiting for its outcome.`));
+	let failed = 0;
+	for (const s of deals) try {
+		const r = recordOf(store, s.commitmentId);
+		if (r && !r.delivered) {
+			const keys = keyFileOf(store, r.address);
+			await deliverStanding((await connect(keys.privateKey, keys.encryptionSecretKey)).agent, store, r);
+		}
+		await finish(s, store, r && recordOf(store, s.commitmentId));
+	} catch (e) {
+		failed++;
+		say({ error: String(e.message ?? e) });
+	}
+	return failed ? 1 : 0;
+}
 const USAGE = `usage:
   node take.mjs <card URL> <offer id> <key store directory> <the most you pay, base units>   show the filled take, then stop (exit 3)
-  node take.mjs approve <key store directory> <commitment ID> <the most you pay, base units>   the principal's yes: post, fund, deliver, open
+  node take.mjs approve <key store directory> <commitment ID> <the most you pay, base units> [--stop-after-funding]   the principal's yes: post, fund, deliver, open
   node take.mjs resume <key store directory> [<commitment ID>]   follow each funded take to its outcome`;
 /** The command line. Returns the exit status: 0 done, 1 refused or failed, 2 usage, 3 stopped for the principal's yes. */
 async function main(args) {
@@ -49984,16 +50106,13 @@ async function main(args) {
 			return first === void 0 ? 2 : 0;
 		}
 		if (first === "approve") {
-			if (!a || !HEX32.test(lc(b)) || !DEC.test(c ?? "")) return console.error(USAGE), 2;
-			return await approve(a, lc(b), c);
+			const stop = args.includes("--stop-after-funding"), rest = args.filter((x) => x !== "--stop-after-funding");
+			if (rest.length !== 4 || !HEX32.test(lc(rest[2])) || !DEC.test(rest[3] ?? "")) return console.error(USAGE), 2;
+			return await approve(rest[1], lc(rest[2]), rest[3], stop);
 		}
 		if (first === "resume") {
 			if (!a) return console.error(USAGE), 2;
-			const deals = b ? [await loadKeys(a, lc(b))] : await openDeals(a);
-			if (deals.length === 0) console.error(printable(`No funded take in ${a} is waiting for its outcome.`));
-			let failed = 0;
-			for (const s of deals) await finish(s, a).catch((e) => (failed++, say({ error: String(e.message ?? e) })));
-			return failed ? 1 : 0;
+			return await resume(a, b ? lc(b) : void 0);
 		}
 		if (!a || !b || !DEC.test(c ?? "")) return console.error(USAGE), 2;
 		return await show(first, a, b, c);

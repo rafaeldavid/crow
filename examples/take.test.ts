@@ -14,7 +14,7 @@ import { join } from 'node:path';
 import { seal, wrapKeyForRecipients } from '@holdback/core/crypto';
 import { templateDigest, templateFrom, type Address, type CommitmentTerms, type Hex32, type StandingOffer, type TakeFill } from '@holdback/core';
 import Ajv2020 from 'ajv/dist/2020.js';
-import { concat, createPublicClient, createWalletClient, encodeAbiParameters, http } from 'viem';
+import { concat, createPublicClient, createWalletClient, encodeAbiParameters, http, type Hex } from 'viem';
 import { generatePrivateKey, mnemonicToAccount, privateKeyToAccount } from 'viem/accounts';
 import { foundry } from 'viem/chains';
 import { afterAll, beforeAll, describe, expect, it } from 'vitest';
@@ -55,9 +55,8 @@ const refusal = async (p: Promise<unknown> | (() => unknown)) => {
 };
 
 describe('take.ts: what it refuses from a card (T-551)', () => {
-  it('pins the creation code forge builds, so the address it computes is the contract the deployer makes', () => {
-    const out = join(root, 'contracts/out/HoldbackStandingSeller.sol/HoldbackStandingSeller.json');
-    if (!existsSync(out)) return; // the anvil job builds it; the address itself is checked on anvil below
+  const out = join(root, 'contracts/out/HoldbackStandingSeller.sol/HoldbackStandingSeller.json');
+  it.skipIf(!existsSync(out))(`pins the creation code forge builds, so the address it computes is the contract the deployer makes${existsSync(out) ? '' : ' (SKIPPED: needs contracts/out; the anvil case checks the address)'}`, () => {
     expect(STANDING_SELLER_CREATION_CODE, 'examples/standing-seller-code.ts is not contracts/out: copy bytecode.object again, then build the site').toBe(JSON.parse(readFileSync(out, 'utf8')).bytecode.object);
   });
 
@@ -66,6 +65,20 @@ describe('take.ts: what it refuses from a card (T-551)', () => {
     expect(cardFrom(JSON.stringify(card))).toEqual(card);
     expect(cardFrom(`<html><body><script type="application/json" id="crow-agent">${JSON.stringify(card)}</script></body></html>`)).toEqual(card);
     expect(() => cardFrom('<html></html>')).toThrow(/no crow-agent card/);
+    // A planted block beside the real one is refused, and a data-id attribute is not the id.
+    const block = `<script type="application/json" id="crow-agent">${JSON.stringify(card)}</script>`;
+    expect(() => cardFrom(`<!-- ${block} -->${block}`)).toThrow(/2 crow-agent blocks/);
+    expect(() => cardFrom(`<script type="text/plain" data-id="crow-agent">${JSON.stringify(card)}</script>`)).toThrow(/no crow-agent card/);
+  });
+
+  it('refuses any chain but Sepolia or a local chain, and a standing file it could not open as text', async () => {
+    const mainnet = { ...pin, domain: { ...pin.domain, chainId: 1 } } as Pin;
+    expect(await refusal(checkEntry({ ...(await entry()), chainId: 1 }, mainnet))).toMatch(/chain 1 is not Sepolia .* test tokens only/);
+    const delivery = { ciphertext: { uri: 'https://op.example/v1/ciphertext/x', sha256: `sha256:${'0'.repeat(64)}`, bytes: 1, cipher: 'aes-256-gcm' }, plaintextSha256: `sha256:${'1'.repeat(64)}`, plaintextMime: 'application/octet-stream', encryptedKeys: [], submittedAt: '2026-10-30T10:00:00Z' };
+    const seller = sellerAddressOf(key.address.toLowerCase() as Address, ZERO);
+    const template = { ...templateFrom(baseTerms, { rules: RULES, expiresAt: '2027-01-01T00:00:00Z', offerId: 'csv-1' }), delivery } as StandingOffer;
+    const binary: StandingEntry = { chainId: 31337, seller, key: key.address.toLowerCase() as Address, salt: ZERO, template, signature: await key.sign({ hash: templateDigest(template, seller, 31337) }) };
+    expect(await refusal(checkEntry(binary, pin))).toMatch(/opens text files only/);
   });
 
   it('takes a well-formed entry: the template signed by the key, at the address the key and the salt give, and builds a public take that passes the API schema', async () => {
@@ -120,6 +133,8 @@ describe('take.ts: what it refuses from a card (T-551)', () => {
     expect(await refusal(() => entryOf(card, 'other'))).toMatch(/lists 0 offers with the id "other"/);
     expect(await refusal(() => entryOf({ ...card, offers: [{ id: 'csv-1', terms: {} }] }, 'csv-1'))).toMatch(/has no standing entry/);
     expect(await refusal(() => entryOf(withField((s) => (s.signature = '0x1234')), 'csv-1'))).toMatch(/64- or 65-byte signature/);
+    // A field a later card adds to the entry itself, outside the signed template, is left unread, as the schema allows.
+    expect(entryOf(withField((s) => (s.note = 'later field')), 'csv-1').seller).toBe(card.offers[0]!.standing.seller);
   });
 
   it('a card with a standing entry passes the card schema, and so does the schema\'s own example', async () => {
@@ -193,7 +208,11 @@ describe.skipIf(!anvilReady)(`site/take.mjs on anvil, against a deployed seller 
     const delivery = { ciphertext: { uri: stored.uri, sha256: stored.id, bytes: stored.bytes, cipher: 'aes-256-gcm' }, plaintextSha256: sealed.plaintextSha256, plaintextMime: 'text/csv', encryptedKeys: wrapKeyForRecipients(sealed.key, keys), submittedAt: createdAt };
     const template = templateFrom(terms, { rules: a.deployment.rules.toLowerCase(), expiresAt: new Date(Date.parse(createdAt) + 86_400_000).toISOString().replace('.000Z', 'Z'), offerId: 'customers-2', delivery } as J);
     const signature = await sellerKey.sign({ hash: templateDigest(template, seller, a.deployment.chainId) });
-    card = JSON.parse(JSON.stringify({ type: 'crow-agent', name: 'A standing seller', seller, offers: [{ id: 'customers-2', description: 'Two customers as CSV.', standing: { chainId: a.deployment.chainId, seller, key: sellerKey.address.toLowerCase(), salt: ZERO, template, signature } }] }));
+    // A second offer whose file the store never held: its template is signed and well formed all the same.
+    const lost = templateFrom(terms, { rules: a.deployment.rules.toLowerCase(), expiresAt: template.expiresAt, offerId: 'lost-file', delivery: { ...delivery, ciphertext: { ...delivery.ciphertext, uri: `${op}/v1/ciphertext/sha256:${'ab'.repeat(32)}` } } } as J);
+    const lostSignature = await sellerKey.sign({ hash: templateDigest(lost, seller, a.deployment.chainId) });
+    const standing = (t: StandingOffer, sig: Hex) => ({ chainId: a.deployment.chainId, seller, key: sellerKey.address.toLowerCase(), salt: ZERO, template: t, signature: sig });
+    card = JSON.parse(JSON.stringify({ type: 'crow-agent', name: 'A standing seller', seller, offers: [{ id: 'customers-2', description: 'Two customers as CSV.', standing: standing(template, signature) }, { id: 'lost-file', description: 'A file the store lost.', standing: standing(lost, lostSignature) }] }));
     // The seller's page, on this machine: from here on the seller signs nothing.
     server = createServer((_req, res) => {
       res.writeHead(200, { 'content-type': 'text/html' });
@@ -226,5 +245,28 @@ describe.skipIf(!anvilReady)(`site/take.mjs on anvil, against a deployed seller 
     expect(result).toMatchObject({ commitmentId: offer.commitmentId, outcome: 'Released' });
     expect(readFileSync(result.file, 'utf8')).toBe(CSV);
     for (const op of a.urls) expect((await call(op, 'GET', `/v1/commitments/${offer.commitmentId}`)).escrowState).toBe('Released');
+  }, 300_000);
+
+  it('attack.standing-ciphertext-missing: refuses a standing delivery whose file no operator serves, before it shows anything', async () => {
+    const shown = await run([cardUrl, 'lost-file', store, '100000000'], env);
+    expect(shown.code, shown.err).toBe(1);
+    expect(shown.err).toMatch(/does not serve the standing delivery's file .* funded and never delivered/);
+    expect(shown.out).toBe('');
+  }, 120_000);
+
+  it('a take funded with --stop-after-funding gets its standing delivery and its file from resume', async () => {
+    const shown = await run([cardUrl, 'customers-2', store, '100000000'], env);
+    expect(shown.code, shown.err).toBe(3);
+    const id = JSON.parse(shown.out).commitmentId;
+    const funded = await run(['approve', store, id, '100000000', '--stop-after-funding'], env);
+    expect(funded.code, funded.err).toBe(0);
+    expect(funded.err).toMatch(new RegExp(`resume \\S+ ${id}`));
+    expect((await call(a.urls[0], 'GET', `/v1/commitments/${id}`)).escrowState).toBe('Held');
+    const resumed = await run(['resume', store, id], env);
+    expect(resumed.code, resumed.err).toBe(0);
+    const result = JSON.parse(resumed.out.trim().split('\n').at(-1)!);
+    expect(result).toMatchObject({ commitmentId: id, outcome: 'Released' });
+    expect(result.otherFile).toBeUndefined();
+    expect(readFileSync(result.file, 'utf8')).toBe(CSV);
   }, 300_000);
 });
