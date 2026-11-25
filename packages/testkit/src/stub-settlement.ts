@@ -265,7 +265,8 @@ export class StubSettlement {
    */
   private buildState: { versions: PolicyVersions; registryFile: string } | null = null;
   private get build(): { versions: PolicyVersions; registryFile: string } {
-    this.buildState ??= { versions: buildDefaultVersions(this.root), registryFile: REGISTRY_FILE };
+    // A scenario's `build:` pins the versions it was written for, whatever kept-policies.json's default is.
+    this.buildState ??= { versions: { ...buildDefaultVersions(this.root), ...(this.scenario.build ?? {}) }, registryFile: REGISTRY_FILE };
     return this.buildState;
   }
   private set build(b: { versions: PolicyVersions; registryFile: string }) {
