@@ -1958,3 +1958,15 @@ The build is not started; it opens as its own task on Rafa's word.
 - **Refusing a negated pattern at the offer.** D31: the terms are not wrong, and `oneOf` has the same problem.
 
 **Litmus tests.** Neutrality: unchanged. The hold: unchanged. Defended judgment: strengthened.
+
+## D104. A reject returns the price after a grace period the terms set (ADR-0048)
+
+**Status:** adopted, 2026-11-25.
+
+Rafa, 2026-11-25: "Yes, adopt it". The terms gain `timing.rejectGraceSec`, default 0. Above 0, a reject pays the decider's fee and holds the price for that period: the buyer alone may accept the posted delivery at the agreed price, or both parties may sign a split; when the period ends, anyone triggers the refund. An accept is never delayed. With 0, and for deals decided by checks alone, nothing changes. No contract change now: it ships with the next contract version (D85), with a schema version bump and the changes ADR-0048 lists. Raised by a live deal on 2026-11-25 in which judge outputs failed the verdict schema and a delivery that passed every check was refunded at once, with no move left to a buyer who wanted the work. The open points (the field's name, the split during the period, a buyer's accept while the deal is escalated or with the fallback, and the setup tools' defaults for rubric deals) take the research note's defaults until Rafa says otherwise.
+
+## D105. Free text over its cap is cut and the verdict is kept (ADR-0049)
+
+**Status:** adopted, 2026-11-25.
+
+Rafa, 2026-11-25: "Yes, adopt it". A judge's free text over its length cap (300 characters for evidence and injection evidence, 600 for the rationale) is cut to the cap, ends with `[cut]`, and the adjudicator records the cut in the aggregate's reasons; the verdict counts. Every other schema failure stays an abstention, and the cut never touches scores, ids, booleans or `overall`. The canary and URL scans run on the full text before the cut. No schema change: it ships as aggregation version `agg-5`, with today's filter frozen for `agg-3` and `agg-4`. The hard rule gains one sentence, which lands with the build: "One exception: free text over its length cap is cut to the cap and the cut is recorded. Nothing else is repaired." The caps are a privacy and injection bound, not a protocol constraint; the harm was the penalty, which on 2026-11-25 discarded half a panel's verdicts and refunded a delivery that passed every check.
