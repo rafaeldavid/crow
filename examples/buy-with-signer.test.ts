@@ -128,7 +128,8 @@ describe('buy-with-signer.ts: the approval stop', () => {
     dirs.push(`${store}-files`);
     expect(result.saved).toEqual({ work: `${store}-files/${id}.work.json` });
     const line = recordLine(done);
-    expect(line).toMatchObject({ commitmentId: id, file: `${store}-files/${id}.record.json`, checks: { failed: 0 }, disagreements: [] });
+    expect(line).toMatchObject({ commitmentId: id, file: `${store}-files/${id}.record.json`, checks: { failed: [] }, disagreements: [] });
+    expect(line.checks.notRun, 'only the checks that need a handed-over delivery').toEqual(['delivery hash', "seller's delivery signature"]);
     expect(readFileSync(result.saved.work, 'utf8')).toBe(result.work);
     const written = JSON.parse(readFileSync(line.file, 'utf8')) as J;
     expect(written).toMatchObject({ record: 'holdback-deal-record/1', commitmentId: id, party: 'buyer', outcome: { escrowState: 'Released' } });

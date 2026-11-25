@@ -106,6 +106,14 @@ const resume = (store: string, id: string, extra: string[] = []) => new Promise<
   child.on('exit', (code) => (clearTimeout(timer), resolve({ code, out, err })));
 });
 
+/** The file the command says it saved holds the bytes the seller's signed delivery hashes. */
+async function expectSavedAs(result: J, delivery: J): Promise<Buffer> {
+  expect(result.saved, JSON.stringify(result.saved)).toEqual({ work: expect.stringMatching(/\.work\.csv$/) });
+  const bytes = readFileSync(result.saved.work);
+  expect(`sha256:${Buffer.from(await crypto.subtle.digest('SHA-256', new Uint8Array(bytes))).toString('hex')}`).toBe(delivery.plaintextSha256);
+  return bytes;
+}
+
 describe('a deal that ends Settled finishes in the buyer\'s tools (T-390)', () => {
   it('a settlement with the key released after a posted delivery: watch reports it, and resume returns with the payouts and the work', async () => {
     gate = (() => {
@@ -165,9 +173,26 @@ describe('a deal that ends Settled finishes in the buyer\'s tools (T-390)', () =
     const opened = await resume(d.store, d.id, ['--delivery', file]);
     expect(opened.code, opened.err).toBe(0);
     expect(JSON.parse(opened.out)).toMatchObject({ outcome: 'Settled', work: CSV, settlement: { keyReleased: true, note: null, deliveryHash: deliveryHashOf(late).toLowerCase() } });
+    // T-617: the command saves the late work it opened, as a file that hashes to the seller's signed hash.
+    stores.push(`${d.store}-files`);
+    await expectSavedAs(JSON.parse(opened.out), late);
     const refused = await resume(d.store, d.id, ['--delivery', wrong]);
     expect(refused.code).toBe(1);
     expect(refused.err).toMatch(/not your envelope in the delivery you passed/);
     expect(readdirSync(d.store).some((f) => f.endsWith('.watch.json'))).toBe(true);
+  }, 90_000);
+
+  it('saves late work that starts with a byte order mark with the mark, so the file still hashes to the signed hash (T-617)', async () => {
+    const d = await funded(false);
+    const { prepared, intent } = await seller.prepareDelivery(d.terms, new TextEncoder().encode(`\uFEFF${CSV}`));
+    const late = (await seller.sign(prepared, intent)).body;
+    await settle(d, { releaseKey: true, deliveryHash: deliveryHashOf(late) as Hex, delivery: late });
+    const file = join(d.store, 'late-delivery.json');
+    writeFileSync(file, JSON.stringify(late));
+    const opened = await resume(d.store, d.id, ['--delivery', file]);
+    expect(opened.code, opened.err).toBe(0);
+    stores.push(`${d.store}-files`);
+    const bytes = await expectSavedAs(JSON.parse(opened.out), late);
+    expect([...bytes.subarray(0, 3)]).toEqual([0xef, 0xbb, 0xbf]);
   }, 90_000);
 });
