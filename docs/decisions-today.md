@@ -1693,3 +1693,22 @@ The build is not started; it opens as its own task on Rafa's word.
 **Dropped:** changing SimChain to refund in one step. It leaves the bond payout difference (4 of the 9 lines), and it removes a state from `spec/schemas/commitment-state.schema.json`, which takes an ADR and a version bump. Also dropped: a list of fixture names without lines, which would hide a new difference in a listed fixture; and a rule that ignores default payouts, which would hide a balance difference.
 
 **Litmus tests.** Neutrality: strengthened; a fixture that tells a different story on the contract now fails, and the two store fixtures keep running on the contract. The hold: unchanged. Defended judgment: unchanged.
+
+## D89. The screen's NFKC signal counts only characters that fold to a letter (ADR-0044, T-577)
+
+**Status:** adopted, 2026-11-25.
+
+**Who decided.** Rafa answered "Yes" on 2026-11-20 to "Should the screen stop flagging honest reports for their typography?". The coordinator's session chose the rule under the in-repository autonomy rule. Rafa may overrule any line.
+
+**Why.** The screen flags 8 of 24 genuine security reports delivered on the form, 7 of them for an ellipsis or a superscript digit alone (T-557, measured). On a rubric deal a flag sends the work to the strict appeal path.
+
+**Decided:**
+
+- **Rule.** From `screen-2`, the NFKC signal counts only characters whose NFKC form holds a letter. Digits and punctuation no longer flag alone. The other signals are unchanged.
+- **Effect.** 1 of 24 form deliveries flags, against 8 (measured). The one left is the `override` phrase on quoted code, a separate known limit.
+- **Cost.** 4 attack cases of 26 stop flagging: punctuation splitting a phrase, fullwidth digits in a request, and superscript digits as decimal codes. Each has a plain-ASCII twin that `screen-1` misses too, because the judges and the phrase patterns read the folded text (measured on the corpus; inferred from the code).
+- **Version.** `screen-2` merges as a kept version, bound to no new deal. `screen-1` stays frozen for the deals bound to it. The default moves in a second deploy, on Rafa's word.
+
+**Dropped:** letters and digits (keeps flagging exponents, the commonest honest trigger after the ellipsis); a run-length or ratio threshold (tuned to a small corpus); a form rewrite alone (protects only sellers who follow it). The research pass on the most capable model was stopped at Rafa's word to save tokens.
+
+**Litmus tests.** Neutrality: unchanged. The hold: unchanged. Defended judgment: every catch that changes what the judges read stays.

@@ -41,6 +41,11 @@
       "version": "screen-1",
       "status": "kept",
       "since": "ADR-0035, PR 386"
+    },
+    {
+      "version": "screen-2",
+      "status": "kept",
+      "since": "T-577, ADR-0044, 2026-11-25: carried beside screen-1; the default moves in a second deploy"
     }
   ],
   "templatePairs": [

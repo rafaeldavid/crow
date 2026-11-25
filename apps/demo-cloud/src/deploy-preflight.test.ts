@@ -261,8 +261,8 @@ describe('the deal guard (ADR-0036 section 4)', () => {
   });
 
   it('refuses a new default the live build does not carry: a new default ships in two deploys', () => {
-    const next = { ...KEPT_POLICIES, default: { ...KEPT_POLICIES.default, screenVersion: 'screen-2' }, screens: [...KEPT_POLICIES.screens, { version: 'screen-2', status: 'kept' as const }] };
-    expect(guardDecision({ ...facts, next }).refused).toMatch(/^Refused: the new default names screen-2, which the live build does not carry, so a rollback could not judge a deal accepted under it\. Ship it in two deploys/);
+    const next = { ...KEPT_POLICIES, default: { ...KEPT_POLICIES.default, screenVersion: 'screen-3' }, screens: [...KEPT_POLICIES.screens, { version: 'screen-3', status: 'kept' as const }] };
+    expect(guardDecision({ ...facts, next }).refused).toMatch(/^Refused: the new default names screen-3, which the live build does not carry, so a rollback could not judge a deal accepted under it\. Ship it in two deploys/);
     // The second deploy, once the live build carries it, passes.
     expect(guardDecision({ ...facts, live: { ...live, kept: next }, next }).refused).toBeNull();
   });
