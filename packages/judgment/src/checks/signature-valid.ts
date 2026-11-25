@@ -25,7 +25,7 @@ export const SIGNATURE_WORK = { perVerification: 200_000, perComparedValue: 1 } 
 const isObject = (v: unknown): v is Record<string, unknown> => typeof v === 'object' && v !== null && !Array.isArray(v);
 
 /** True when `value` is an object with every `required` key and no key outside `required` and `optional`. */
-function hasShape(value: unknown, required: string[], optional: string[] = []): value is Record<string, unknown> {
+export function hasShape(value: unknown, required: string[], optional: string[] = []): value is Record<string, unknown> {
   if (!isObject(value)) return false;
   const keys = Object.keys(value);
   return required.every((k) => keys.includes(k)) && keys.every((k) => required.includes(k) || optional.includes(k));
@@ -44,7 +44,7 @@ const codePoints = (s: string): number => {
   }
   return n;
 };
-const isPointer = (p: unknown): p is string => typeof p === 'string' && p.length <= 2 * MAX.pointer && codePoints(p) <= MAX.pointer && /^(\/([^~/]|~[01])*)*$/.test(p);
+export const isPointer = (p: unknown): p is string => typeof p === 'string' && p.length <= 2 * MAX.pointer && codePoints(p) <= MAX.pointer && /^(\/([^~/]|~[01])*)*$/.test(p);
 
 /** Static validation for offer time: why the terms' check is malformed, or undefined. Every parameter must be a string. */
 export function validateSignatureCheck(check: unknown): string | undefined {
@@ -67,7 +67,7 @@ export function validateSignatureCheck(check: unknown): string | undefined {
 }
 
 /** The value at an RFC 6901 pointer, through own members only, as `{ value }`; `undefined` when nothing is there. */
-function resolve(document: unknown, pointer: string): { value: unknown } | undefined {
+export function resolve(document: unknown, pointer: string): { value: unknown } | undefined {
   let value = document;
   for (const token of pointer.split('/').slice(1)) {
     const key = token.replaceAll('~1', '/').replaceAll('~0', '~');

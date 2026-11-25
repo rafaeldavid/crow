@@ -1,0 +1,42 @@
+# @settlement sim @judges recorded @mode guaranteed_on_decision @seed 85
+name: neutrality.data-checks-primary-offline
+description: >-
+  ADR-0047, ADR-0001. The terms and the delivery of recorded-path-accepted. Bench A accepts and the hold is funded,
+  then Bench A goes offline after the delivery and never decides. After judgeBy anyone triggers the fallback. Bench B
+  runs the same three data checks on the same bytes, reaches the same result (all pass), and $1,500 releases to
+  Tidewater with the key to Atlas. Bench B, not Bench A, earns the fee.
+fails: bench-a
+club: fixtures/clubs/data-services-v1.yaml
+terms: fixtures/terms/recorded-path.yaml
+parties:
+  buyer: atlas-buyer
+  seller: tidewater-seller
+adjudicators:
+  primary: bench-a
+  fallback: bench-b
+  appeal: bench-c
+operators: [op-1, op-2]
+faucet:
+  atlas-buyer: "10000000000"
+  bench-a: "25000000000"
+  bench-b: "25000000000"
+  bench-c: "25000000000"
+steps:
+  - offer:              { by: seller, via: op-1 }
+  - adjudicator_accept: { via: op-1 }
+  - agree_and_fund:     { by: buyer, via: op-1 }
+  - deliver:            { by: seller, via: op-1, file: data/recorded-path/run.json }
+  - offline:            { actor: bench-a }
+  - judge:              { adjudicator: bench-a }      # no call: Bench A is offline
+  - advance_clock:      { seconds: 604920 }           # past judgeBy (offer + 7 d + 120 s)
+  - trigger_fallback:   { via: op-2 }
+  - judge:              { adjudicator: bench-b }
+  - verify_key_release: { by: buyer, via: op-2 }
+expect:
+  terminal: Released
+  balances:
+    atlas-buyer: "8450000000"
+    tidewater-seller: "1500000000"
+    bench-a: "25000000000"
+    bench-b: "25050000000"
+    escrow: "0"

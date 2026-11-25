@@ -10,7 +10,7 @@ Any operator node serves this API. It adds speed and convenience, never authorit
 - **Authentication:** none at the transport layer. Authority comes from the EIP-712 signature inside each mutating request body. Reads are public, so commitment metadata is public too (`docs/neutrality.md`, residual 9).
 - **Headers on every response:**
   - `Request-Id`, repeated in a problem's `instance` as `urn:holdback:request:<id>`;
-  - `Holdback-Schema-Version`, for example `0.13`;
+  - `Holdback-Schema-Version`, for example `0.14`;
   - the security headers: HSTS, `nosniff`, no framing, a content security policy that allows nothing, no referrer, a same-origin resource policy and a permissions policy. A non-browser client (curl, an agent) may ignore them. CORS is not set. A request over plain `http://` gets a 301 (read) or 308 (write) to HTTPS and is never processed (`docs/operations.md`, "Security headers").
 - **Trace context:** operators accept a W3C `traceparent` header and log it. Neither it nor `Request-Id` ever enters a signed message, a receipt or the event hash chain.
 - **Limits (F8):** an operator publishes its own in discovery as `limits`: `reads` and `writes`, each `{limit, windowSec, per}`, `maxCiphertextBytes` and `idempotency`. `limits.maxCiphertextBytes` is the largest ciphertext `POST /v1/ciphertext` stores, in bytes, absent on a node with no ciphertext store, and never above the protocol's 10 MiB. Numbers on this page are the public demo's; discovery is the source.

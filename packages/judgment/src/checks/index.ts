@@ -19,6 +19,9 @@ import { isIso8601 } from './iso8601.js';
 import { compileJsonSchema, type Validator } from './json-schema.js';
 import { BudgetExhausted, compileSafeRegex, StepBudget, type SafeRegex } from './safe-regex.js';
 import { evaluateSignatureValid, validateSignatureCheck, type ParsedDelivery } from './signature-valid.js';
+import { evaluateEqualLengths, validateEqualLengths } from './equal-lengths.js';
+import { evaluateMonotonicColumn, validateMonotonicColumn } from './monotonic-column.js';
+import { evaluatePassesThrough, validatePassesThrough } from './passes-through.js';
 import { cellAt, cellText, isNonScalar, jsonTable, toTable, type Cell, type Table } from './table.js';
 
 export type CheckType = JudgmentCheck['type'];
@@ -56,6 +59,9 @@ const REGISTRY = {
   reference_row_match_min: true,
   hidden_characters_max: true,
   signature_valid: true,
+  passes_through: true,
+  monotonic_column: true,
+  equal_lengths: true,
 } as const satisfies Record<CheckType, true>;
 export const CHECK_TYPES: ReadonlySet<CheckType> = new Set(Object.keys(REGISTRY) as CheckType[]);
 
@@ -162,6 +168,12 @@ function prepare(check: JudgmentCheck): Prepared {
     }
     case 'signature_valid':
       return reason(validateSignatureCheck(check));
+    case 'passes_through':
+      return reason(validatePassesThrough(check));
+    case 'monotonic_column':
+      return reason(validateMonotonicColumn(check));
+    case 'equal_lengths':
+      return reason(validateEqualLengths(check));
     default:
       return {};
   }
@@ -315,6 +327,9 @@ function evaluate(check: JudgmentCheck, prepared: Prepared, run: Run): Outcome {
     return e === undefined ? pass() : fail(`schema: ${e}`);
   }
   if (check.type === 'signature_valid') return evaluateSignatureValid(check, run.json, budget);
+  if (check.type === 'passes_through') return evaluatePassesThrough(check, run, budget);
+  if (check.type === 'monotonic_column') return evaluateMonotonicColumn(check, run, budget);
+  if (check.type === 'equal_lengths') return evaluateEqualLengths(check, run, budget);
   if (check.type === 'hidden_characters_max') {
     // Counted on the text as delivered, every occurrence, legitimate or not (D17). A JSON delivery is counted decoded (D99).
     budget.spend(1);

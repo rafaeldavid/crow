@@ -13,7 +13,7 @@ let exampleResults: ReturnType<typeof validateExamplesFresh> | undefined;
 const loadSpec = () => (spec ??= loadSpecFresh());
 const validateExamples = () => (exampleResults ??= validateExamplesFresh(loadSpec()));
 
-const V = 'https://holdback.dev/schemas/v0.13';
+const V = 'https://holdback.dev/schemas/v0.14';
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
 const example = (name: string): any => structuredClone(loadSpec().examples.find((e: { name: string }) => e.name === name).data);
 
@@ -80,10 +80,10 @@ describe('spec/', () => {
   // adds AdjudicatorRegistration, a new type, and keeps both at 0.7. ADR-0033: v0.11 adds the buyer's payment address
   // and the seller's payout address to the terms, so both move to 0.8. ADR-0040 and ADR-0041: v0.12 widens the parties'
   // signatures and changes no signed struct, so both stay at 0.8. ADR-0045: v0.13 adds the signature_valid check kind
-  // and an adjudicator's checkKinds list, and changes no signed struct, so both stay at 0.8.
-  it('moves every schema $id to v0.13 and keeps the commitment schemaVersion at 0.8', () => {
+  // and an adjudicator's checkKinds list, and ADR-0047: v0.14 adds the three data check kinds; neither changes a signed struct, so both stay at 0.8.
+  it('moves every schema $id to v0.14 and keeps the commitment schemaVersion at 0.8', () => {
     const { schemas, ajv } = loadSpec();
-    for (const id of schemas.values()) expect(id).toMatch(/\/schemas\/v0\.13\//);
+    for (const id of schemas.values()) expect(id).toMatch(/\/schemas\/v0\.14\//);
     const validate = ajv.getSchema(`${V}/commitment.schema.json`);
     const c = example('commitment');
     expect(c.schemaVersion).toBe('0.8');
@@ -972,7 +972,7 @@ describe('spec/', () => {
       expect(registrationBodyHash(listed)).toBe(listed.registration.bodyHash);
       expect(example('adjudicator').checkKinds).toBeUndefined();
       expect(verdicts('adjudicator', example('adjudicator'))).toEqual([true, true]);
-      listed.checkKinds.push('equal_lengths');
+      listed.checkKinds.push('speed_max');
       expect(verdicts('adjudicator', listed)).toEqual([true, true]);
     });
 
@@ -1006,6 +1006,63 @@ describe('spec/', () => {
       const a = example('adjudicator');
       a.policy.checkKinds = ['json_schema'];
       expect(verdicts('adjudicator', a)).toEqual([false, false]);
+    });
+  });
+
+  // ADR-0047 (D98): each case runs under both validators, Ajv over spec/schemas and the compiled one the operators run.
+  describe('the three data check kinds, v0.14 (ADR-0047)', () => {
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    type Edit = (x: any) => void;
+    const verdicts = (doc: unknown) => [loadSpec().ajv.getSchema(`${V}/commitment.schema.json`)(doc), parsers.commitment(doc).ok];
+    const KIND = { monotonic: 0, lengths: 1, path: 2 } as const;
+    const terms = (which: keyof typeof KIND, edit: Edit = () => {}) => {
+      const c = example('commitment.data-checks');
+      edit(c.acceptance.deterministicChecks[KIND[which]]);
+      return c;
+    };
+
+    it('ships example terms with one check of each kind, and their commitment ID', () => {
+      const c = example('commitment.data-checks');
+      expect(c.acceptance.deterministicChecks.map((k: { type: string }) => k.type)).toEqual(['monotonic_column', 'equal_lengths', 'passes_through']);
+      expect(verdicts(c)).toEqual([true, true]);
+      expect(commitmentId(c)).toBe(c.id);
+    });
+
+    it.each<[string, keyof typeof KIND, Edit]>([
+      ['a monotonic check with no step bounds', 'monotonic', (k) => { delete k.minStep; delete k.maxStep; }],
+      ['a monotonic check on a column', 'monotonic', (k) => (k.series = { column: 't_ms' })],
+      ['a path on columns', 'path', (k) => (k.series = [{ column: 'q1' }, { column: 'q2' }])],
+      ['a path with one series and the safe range as bounds', 'path', (k) => { k.series = [{ pointer: '' }]; k.waypoints = [[Number.MAX_SAFE_INTEGER], [-Number.MAX_SAFE_INTEGER]]; k.tolerance = Number.MAX_SAFE_INTEGER; }],
+      ['1,024 waypoints', 'path', (k) => (k.waypoints = Array.from({ length: 1024 }, () => [0, 0]))],
+      ['32 series to compare', 'lengths', (k) => (k.series = Array.from({ length: 32 }, (_, i) => ({ pointer: `/${i}` })))],
+    ])('takes %s', (_, which, edit) => {
+      expect(verdicts(terms(which, edit))).toEqual([true, true]);
+    });
+
+    it.each<[string, keyof typeof KIND, Edit]>([
+      ['a decimal tolerance', 'path', (k) => (k.tolerance = 0.5)],
+      ['a tolerance as a string', 'path', (k) => (k.tolerance = '500')],
+      ['a negative tolerance', 'path', (k) => (k.tolerance = -1)],
+      ['a tolerance beyond the safe range', 'path', (k) => (k.tolerance = 2 ** 53)],
+      ['a decimal coordinate', 'path', (k) => (k.waypoints[0][0] = 10000.5)],
+      ['a coordinate beyond the safe range', 'path', (k) => (k.waypoints[0][0] = -(2 ** 53))],
+      ['no waypoints', 'path', (k) => (k.waypoints = [])],
+      ['1,025 waypoints', 'path', (k) => (k.waypoints = Array.from({ length: 1025 }, () => [0, 0]))],
+      ['33 series on a path', 'path', (k) => (k.series = Array.from({ length: 33 }, () => ({ column: 'a' })))],
+      ['a series with a pointer and a column', 'path', (k) => (k.series[0].column = 'q1')],
+      ['a column name of 129 characters', 'monotonic', (k) => (k.series = { column: 'a'.repeat(129) })],
+      ['an extra parameter on a path', 'path', (k) => (k.ordered = true)],
+      ['a decimal minStep', 'monotonic', (k) => (k.minStep = 1.5)],
+      ['a negative maxStep', 'monotonic', (k) => (k.maxStep = -16)],
+      ['a list of series on a monotonic check', 'monotonic', (k) => (k.series = [k.series])],
+      ['an extra parameter on a monotonic check', 'monotonic', (k) => (k.strict = true)],
+      ['a column series to compare lengths', 'lengths', (k) => (k.series[0] = { column: 't_ms' })],
+      ['one series to compare lengths', 'lengths', (k) => (k.series = k.series.slice(0, 1))],
+      ['33 series to compare lengths', 'lengths', (k) => (k.series = Array.from({ length: 33 }, () => ({ pointer: '/a' })))],
+      ['a pointer without a leading slash', 'lengths', (k) => (k.series[0].pointer = 'telemetry/t_ms')],
+      ...(['series', 'waypoints', 'tolerance'] as const).map((f): [string, 'path', Edit] => [`a path without ${f}`, 'path', (k) => delete k[f]]),
+    ])('refuses %s', (_, which, edit) => {
+      expect(verdicts(terms(which, edit))).toEqual([false, false]);
     });
   });
 
