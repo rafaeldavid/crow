@@ -6,6 +6,7 @@ import { readFileSync } from 'node:fs';
 import { join } from 'node:path';
 import { UntrustedData, validateCheck, type JudgmentCheck } from '../packages/judgment/src/index.ts';
 import { CHECK_BUDGET, CHECK_TYPES, runChecks } from '../packages/judgment/src/checks/index.ts';
+import { MAX_CANONICAL_DEPTH } from '../packages/judgment/src/checks/cost.ts';
 import { MAX_COMPILE_STEPS, MAX_PATTERN_CHARS, MAX_REPEAT, MAX_STATES, MAX_SUBJECT_CHARS } from '../packages/judgment/src/checks/safe-regex.ts';
 import { MAX_SCHEMA_STATES } from '../packages/judgment/src/checks/json-schema.ts';
 import { SERIES_LIMITS } from '../packages/judgment/src/checks/series.ts';
@@ -75,6 +76,30 @@ describe('site/ref/checks.txt and the check code', () => {
     expect(recorded).toContain(`name at most ${SERIES_LIMITS.column} characters`);
     expect(recorded).toContain(`\`series\`, 2 to ${SERIES_LIMITS.series}, \`pointer\` only`);
     expect(recorded).toContain(`\`series\`, 1 to ${SERIES_LIMITS.series}, one per axis; \`waypoints\`, 1 to ${n(SERIES_LIMITS.waypoints)}`);
+  });
+
+  it('states the nesting cap and its lines as the code writes them', () => {
+    const limits = section('Pattern and work limits');
+    expect(limits).toContain(`nested deeper than ${n(MAX_CANONICAL_DEPTH)} levels`);
+    // `arrays` arrays, one inside the next, around `inner`: the outermost is level 1.
+    const nest = (arrays: number, inner = '') => `${'['.repeat(arrays)}${inner}${']'.repeat(arrays)}`;
+    const column: JudgmentCheck = { id: 'rows', type: 'row_count_range', required: true, min: 1, max: 1 };
+    const unique: JudgmentCheck = { id: 'items', type: 'json_schema', required: true, schema: { uniqueItems: true } };
+    const constant: JudgmentCheck = { id: 'pin', type: 'json_schema', required: true, schema: { const: [] } };
+    const enumerated: JudgmentCheck = { id: 'one-of', type: 'json_schema', required: true, schema: { enum: [[]] } };
+    const cell = (value: string) => run([column], `[{"c":${value}}]`)[0]!;
+    // At the cap the cell is read; one level more, an array or a number, is not.
+    expect(cell(nest(MAX_CANONICAL_DEPTH)).passed).toBe(true);
+    const cellLine = `JSON row 0 has a cell nested deeper than ${MAX_CANONICAL_DEPTH} levels`;
+    expect(cell(nest(MAX_CANONICAL_DEPTH + 1)).detail).toBe(cellLine);
+    expect(cell(nest(MAX_CANONICAL_DEPTH, '1')).detail).toBe(cellLine);
+    expect(limits).toContain(cellLine.replace('row 0', 'row <n>'));
+    // For uniqueItems the item is level 1; for const and enum the compared value is.
+    const valueLine = `a value is nested deeper than ${MAX_CANONICAL_DEPTH} levels`;
+    expect(run([unique], `[${nest(MAX_CANONICAL_DEPTH)}]`)[0]!.passed).toBe(true);
+    expect(run([unique], `[${nest(MAX_CANONICAL_DEPTH + 1)}]`)[0]!.detail).toBe(valueLine);
+    for (const check of [constant, enumerated]) expect(run([check], nest(MAX_CANONICAL_DEPTH + 1))[0]!.detail, check.id).toBe(valueLine);
+    expect(limits).toContain(`\`${valueLine}\``);
   });
 
   it('is right that a `not` pattern passes a string too long to match, and that maxLength stops it', () => {
