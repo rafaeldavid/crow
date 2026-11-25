@@ -12,7 +12,7 @@ import { anthropic, KEY_ENV, liveProvider, scripted, WORKSPACE_ENV, type ScriptS
 import { Recorder, Secrets } from './record.ts';
 import { Toolbox } from './tools.ts';
 import { readFileSync } from 'node:fs';
-import { Budget, BUDGET_STOP, dealIds, measureRun, parseRuns, sellBrief, trySell } from './approvals.ts';
+import { Budget, BUDGET_STOP, dealIds, frontPage, measureRun, parseRuns, sellBrief, trySell } from './approvals.ts';
 import type { Provider } from './providers.ts';
 import type { Event } from './record.ts';
 import type { Fence } from './tools.ts';
@@ -62,6 +62,38 @@ describe('the hard budget', () => {
     const big = 'x'.repeat(600_000); // about 200,000 tokens at three characters a token: USD 1 at the cache-write price
     await expect(b.guard(p).turn('system', [{ role: 'user', text: big }], [])).rejects.toThrow(/the budget/);
     expect(p.calls).toBe(0);
+  });
+});
+
+describe('a draft front page (P-15)', () => {
+  it('answers /llms.txt with the draft and passes every other GET to the upstream, even a "//host" path', async () => {
+    const seen: string[] = [];
+    const upstream = createServer((q, s) => { seen.push(q.url ?? ''); s.writeHead(200, { 'content-type': 'text/plain' }).end('the live page'); });
+    await new Promise<void>((ok) => upstream.listen(0, '127.0.0.1', ok));
+    const draft = await frontPage('a draft front page', `http://127.0.0.1:${(upstream.address() as { port: number }).port}`);
+    try {
+      expect(await (await fetch(`${draft.url}/llms.txt`)).text()).toBe('a draft front page');
+      expect(await (await fetch(`${draft.url}/sell.txt?x=1`)).text()).toBe('the live page');
+      expect(await (await fetch(`${draft.url}//other.invalid/p`)).text()).toBe('the live page');
+      expect(seen).toEqual(['/sell.txt?x=1', '//other.invalid/p']);
+      expect((await fetch(`${draft.url}/llms.txt`, { method: 'POST' })).status).toBe(405);
+    } finally { await draft.close(); upstream.close(); }
+  });
+});
+
+describe("the toolbox's alias (P-15's draft front page)", () => {
+  it('keeps a "//host" path on the alias, never on the named host', async () => {
+    const seen: string[] = [];
+    const to = createServer((q, s) => { seen.push(q.url ?? ''); s.end('from the alias'); });
+    await new Promise<void>((ok) => to.listen(0, '127.0.0.1', ok));
+    const dir = realpathSync(mkdtempSync(join(tmpdir(), 'approvals-alias-')));
+    made.push(dir);
+    const secrets = new Secrets();
+    const tools = new Toolbox({ role: 'seller', work: dir, owner: dir, repo: dir, operators: ['http://127.0.0.1:1'], allow: [{ origin: 'https://crow.direct' }], secrets, rec: new Recorder(join(dir, 'r.jsonl'), secrets), alias: { from: 'https://crow.direct', to: `http://127.0.0.1:${(to.address() as { port: number }).port}` } });
+    try {
+      expect((await tools.call('fetch_url', { url: 'https://crow.direct//other.invalid/p?q=1' })).content).toContain('from the alias');
+      expect(seen).toEqual(['//other.invalid/p?q=1']);
+    } finally { to.close(); await tools.close(); }
   });
 });
 
@@ -117,6 +149,18 @@ describe('the measures of a run', () => {
     const m = measureRun(events, 'seller', 'sell', 'r');
     expect(m.approvals).toBe(3);
     expect(m.approvals_by_step.map((s) => s.tool)).toEqual(['fetch_url', 'write_file', 'run_command']);
+  });
+
+  it('counts every read of crow.direct as one approval when they are allowed once, and other origins each (P-15)', () => {
+    const more = [...events,
+      ev('seller', 'tool', 6, { turn: 3, name: 'fetch_url', input: { url: 'https://crow.direct/ref/intake.txt' }, isError: false }),
+      ev('seller', 'tool', 6, { turn: 3, name: 'fetch_url', input: { url: 'https://crow.direct/sell.txt' }, isError: false }),
+      ev('seller', 'tool', 6, { turn: 3, name: 'fetch_url', input: { url: 'https://api.crow.direct/.well-known/holdback.json' }, isError: false }),
+      ev('seller', 'tool', 6, { turn: 3, name: 'fetch_url', input: { url: 'https://crow.direct.evil.example/llms.txt' }, isError: true })];
+    const m = measureRun(more, 'seller', 'sell', 'r');
+    expect([m.approvals, m.site_reads, m.approvals_reads_once]).toEqual([7, 3, 5]);
+    const none = measureRun(events.filter((e) => e['name'] !== 'fetch_url'), 'seller', 'sell', 'r');
+    expect([none.approvals, none.site_reads, none.approvals_reads_once]).toEqual([2, 0, 2]);
   });
 
   it('takes the final state from both operators and the seconds from the first call to the final event', () => {

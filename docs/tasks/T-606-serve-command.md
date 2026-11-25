@@ -5,7 +5,7 @@
 - **Depends on:** T-331, T-472
 - **Paths this task may touch:** `examples/serve.ts`, `examples/serve.test.ts`, `site/serve-entry.mjs`, `site/serve.mjs`, `site/ref/serve.txt`, `site/build.mjs`, `site/check.mjs`, `site/llms.txt` (the Reference list), `site/ref/seller-adapter.txt` (one pointer), `tests/site-bundles.test.ts`, `examples/seller-adapter.ts` and `examples/seller-adapter.test.ts` (the follow-up below), `tests/cut-feature-alignment.known.json` (one line for the new bundle), `eslint.config.js` (the ignore list); this file.
 - **Human gate:** no. The site deploy waits for Rafa.
-- **Status:** review
+- **Status:** done (merged in pull requests 803 and 813, 2026-11-25)
 - **Agent/session:** p17-seller-config, 2026-11-25; branch `t-606-serve-command`
 - **Roadmap row:** N167
 - **Change kind:** 4 (a published client command and its guide); the local checks named by the brief, and one reviewer

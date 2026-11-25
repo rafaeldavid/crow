@@ -22,7 +22,7 @@ Each command is the whole deal and needs no other page. It downloads one file fr
 {{TRY_COMMAND}}
 ```
 
-**Sell a dataset to Crow's test buyer** (1 to 2 minutes). `--help` lists other samples; your own work: `ref/intake.txt`. `--sample robot-episode` sells a LeRobot v3 robot episode.
+**Sell a dataset to Crow's test buyer** (1 to 2 minutes). `--help` lists other samples; your own work: https://crow.direct/ref/intake.txt. `--sample robot-episode` sells a LeRobot v3 robot episode.
 
 ```sh
 {{SELL_COMMAND}}
@@ -83,4 +83,4 @@ The operators relay messages and pay the gas, and publish any fee in `fees.opera
 
 ## Reference
 
-The whole reference is one file, https://crow.direct/reference.txt: fetch it once, only when a role page cites a `ref/<name>.txt` section you need. Its parts, each under a line naming its file: http, signing, http-buyer, http-seller, after-funding, intake, checks, seller-adapter, serve, buyer-signer, take, standing, adjudicators and limits.
+The whole reference is one file, https://crow.direct/reference.txt: fetch it once, only when a role page cites a `ref/<name>.txt` section you need. Its parts: http, signing, http-buyer, http-seller, after-funding, intake, checks, seller-adapter, serve, buyer-signer, take, standing, adjudicators and limits.

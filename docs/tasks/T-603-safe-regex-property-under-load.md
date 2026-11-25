@@ -5,7 +5,7 @@
 - **Depends on:** none
 - **Paths this task may touch:** `packages/judgment/src/checks/safe-regex.test.ts`; this file.
 - **Human gate:** no.
-- **Status:** in review
+- **Status:** done (merged in pull request 802, 2026-11-25)
 - **Agent/session:** flaky-safe-regex, 2026-11-25; branch `fix-flaky-safe-regex`
 - **Roadmap row:** none (flaky test, 2026-11-25)
 - **Change kind:** tests only

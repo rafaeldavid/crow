@@ -54378,30 +54378,34 @@ function scalar(v, budget) {
 			return String(v);
 	}
 }
-function write(v, budget, parts, depth) {
+/** Past MAX_CANONICAL_DEPTH: a TypeError, as canonical form's other refusals are, that a caller can name. */
+var TooDeep = class extends TypeError {
+	constructor() {
+		super(`canonical JSON: nested deeper than ${MAX_CANONICAL_DEPTH}`);
+	}
+};
+/** Writes `v` at `depth` if it is a scalar, or opens it on `stack`. Charges as the recursive walk did, in its order. */
+function visit(v, budget, parts, depth, stack) {
 	budget?.spend(1);
-	if (depth > 1e3) throw new TypeError(`canonical JSON: nested deeper than ${MAX_CANONICAL_DEPTH}`);
+	if (depth > 1e3) throw new TooDeep();
 	const s = scalar(v, budget);
 	if (s !== void 0) parts.push(s);
 	else if (Array.isArray(v)) {
 		parts.push("[");
-		for (let i = 0; i < v.length; i++) {
-			if (i > 0) parts.push(",");
-			write(v[i], budget, parts, depth + 1);
-		}
-		parts.push("]");
+		stack.push({
+			array: v,
+			next: 0
+		});
 	} else if (typeof v === "object" && Object.getPrototypeOf(v) === Object.prototype) {
 		const entries = Object.entries(v);
 		for (const [k, x] of entries) if (x === void 0) throw new TypeError(`canonical JSON: undefined at key ${k}`);
 		chargeSort(budget, entries.length);
 		entries.sort(([a], [b]) => a < b ? -1 : a > b ? 1 : 0);
 		parts.push("{");
-		for (let i = 0; i < entries.length; i++) {
-			if (i > 0) parts.push(",");
-			parts.push(str(entries[i][0], budget), ":");
-			write(entries[i][1], budget, parts, depth + 1);
-		}
-		parts.push("}");
+		stack.push({
+			entries,
+			next: 0
+		});
 	} else throw new TypeError(`canonical JSON: unsupported ${typeof v}`);
 }
 /**
@@ -54418,7 +54422,27 @@ function canonical(v, budget) {
 		return s;
 	}
 	const parts = [];
-	write(v, budget, parts, 1);
+	const stack = [];
+	visit(v, budget, parts, 1, stack);
+	while (stack.length > 0) {
+		const open = stack[stack.length - 1];
+		const i = open.next;
+		if ("array" in open ? i === open.array.length : i === open.entries.length) {
+			parts.push("array" in open ? "]" : "}");
+			stack.pop();
+			continue;
+		}
+		open.next++;
+		if (i > 0) parts.push(",");
+		let child;
+		if ("array" in open) child = open.array[i];
+		else {
+			const [k, x] = open.entries[i];
+			parts.push(str(k, budget), ":");
+			child = x;
+		}
+		visit(child, budget, parts, stack.length + 1, stack);
+	}
 	return parts.join("");
 }
 
@@ -56089,7 +56113,10 @@ function cell(v, budget) {
 		text: canonical(v, budget)
 	};
 }
-/** A parsed JSON delivery as a table, charging the budget for each cell and each row's keys. */
+/**
+* A parsed JSON delivery as a table, charging the budget for each cell and each row's keys. A cell nested deeper than
+* MAX_CANONICAL_DEPTH levels makes it no table.
+*/
 function jsonTable(parsed, budget) {
 	if (!Array.isArray(parsed)) return err("JSON deliverable is not an array of objects");
 	const first = parsed[0];
@@ -56107,7 +56134,12 @@ function jsonTable(parsed, budget) {
 		if (keysOf(Object.keys(r)) !== key) return err(`JSON row ${i} has different keys from row 0`);
 		for (const c of columns) {
 			budget?.spend(1);
-			cells.push(cell(r[c], budget));
+			try {
+				cells.push(cell(r[c], budget));
+			} catch (e) {
+				if (e instanceof TooDeep) return err(`JSON row ${i} has a cell nested deeper than ${MAX_CANONICAL_DEPTH} levels`);
+				throw e;
+			}
 		}
 	}
 	return ok({
@@ -56793,7 +56825,8 @@ function runChecks(checks, input, budget = new StepBudget(CHECK_BUDGET)) {
 				if (e instanceof BudgetExhausted) {
 					inconclusive.push(id);
 					o = fail$1("inconclusive: the check work budget for this delivery ran out");
-				} else o = fail$1("check could not be evaluated on this input");
+				} else if (e instanceof TooDeep) o = fail$1(`a value is nested deeper than ${MAX_CANONICAL_DEPTH} levels`);
+				else o = fail$1("check could not be evaluated on this input");
 			}
 			const out = {
 				checkId: id,

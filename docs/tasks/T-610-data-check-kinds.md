@@ -5,7 +5,7 @@
 - **Depends on:** T-597 (`signature_valid`, PR 795), T-590 (schema v0.13 and `checkKinds`)
 - **Paths this task may touch:** `packages/judgment/src/checks/` (three new files and their tests, a shared `series.ts`, registration lines in `index.ts`, three exports in `signature-valid.ts`), `packages/core/src/types.ts` and the generated `validators.generated.ts`, `spec/schemas/`, `spec/examples/`, `spec/README.md`, the generated `spec/openapi.json` and the version in `spec/openapi/paths.json`, `tests/spec.test.ts`, the schema version in `apps/operator/src/server.ts` and its tests, `apps/adjudicator/src/check-kinds.test.ts`, `examples/mandate.test.ts`, `docs/api.md` and `site/ref/` (the version they name), `site/setup.mjs`, `site/take.mjs` and `site/serve.mjs` (rebuilt), `fixtures/`, `docs/decisions/ADR-0047-*`, `docs/decisions-today.md` (D98), this file
 - **Human gate:** no. A deploy of the operators or the site waits for Rafa.
-- **Status:** review
+- **Status:** done (merged in pull request 809, 2026-11-25)
 - **Agent/session:** p04-data-checks, 2026-11-25
 - **Roadmap row:** N225
 

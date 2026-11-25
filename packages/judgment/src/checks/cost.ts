@@ -65,30 +65,32 @@ function scalar(v: unknown, budget: StepBudget | undefined): string | undefined 
   return undefined;
 }
 
-function write(v: unknown, budget: StepBudget | undefined, parts: string[], depth: number): void {
+/** Past MAX_CANONICAL_DEPTH: a TypeError, as canonical form's other refusals are, that a caller can name. */
+export class TooDeep extends TypeError {
+  constructor() {
+    super(`canonical JSON: nested deeper than ${MAX_CANONICAL_DEPTH}`);
+  }
+}
+
+/** An array, or an object's sorted entries, begun and not yet closed, and the index of the next child to write. */
+type Open = { array: readonly unknown[]; next: number } | { entries: ReadonlyArray<readonly [string, unknown]>; next: number };
+
+/** Writes `v` at `depth` if it is a scalar, or opens it on `stack`. Charges as the recursive walk did, in its order. */
+function visit(v: unknown, budget: StepBudget | undefined, parts: string[], depth: number, stack: Open[]): void {
   budget?.spend(1);
-  if (depth > MAX_CANONICAL_DEPTH) throw new TypeError(`canonical JSON: nested deeper than ${MAX_CANONICAL_DEPTH}`);
+  if (depth > MAX_CANONICAL_DEPTH) throw new TooDeep();
   const s = scalar(v, budget);
   if (s !== undefined) parts.push(s);
   else if (Array.isArray(v)) {
     parts.push('[');
-    for (let i = 0; i < v.length; i++) {
-      if (i > 0) parts.push(',');
-      write(v[i], budget, parts, depth + 1);
-    }
-    parts.push(']');
+    stack.push({ array: v, next: 0 });
   } else if (typeof v === 'object' && Object.getPrototypeOf(v) === Object.prototype) {
     const entries = Object.entries(v as Record<string, unknown>);
     for (const [k, x] of entries) if (x === undefined) throw new TypeError(`canonical JSON: undefined at key ${k}`);
     chargeSort(budget, entries.length);
     entries.sort(([a], [b]) => (a < b ? -1 : a > b ? 1 : 0));
     parts.push('{');
-    for (let i = 0; i < entries.length; i++) {
-      if (i > 0) parts.push(',');
-      parts.push(str(entries[i]![0], budget), ':');
-      write(entries[i]![1], budget, parts, depth + 1);
-    }
-    parts.push('}');
+    stack.push({ entries, next: 0 });
   } else throw new TypeError(`canonical JSON: unsupported ${typeof v}`);
 }
 
@@ -105,7 +107,29 @@ export function canonical(v: unknown, budget?: StepBudget): string {
     if (s === undefined) throw new TypeError(`canonical JSON: unsupported ${typeof v}`);
     return s;
   }
+  // An explicit stack, not recursion (D102): the walk's own stack use stays the same at every depth, so only the
+  // count above decides how deep a value may nest.
   const parts: string[] = [];
-  write(v, budget, parts, 1);
+  const stack: Open[] = [];
+  visit(v, budget, parts, 1, stack);
+  while (stack.length > 0) {
+    const open = stack[stack.length - 1]!;
+    const i = open.next;
+    if ('array' in open ? i === open.array.length : i === open.entries.length) {
+      parts.push('array' in open ? ']' : '}');
+      stack.pop();
+      continue;
+    }
+    open.next++;
+    if (i > 0) parts.push(',');
+    let child: unknown;
+    if ('array' in open) child = open.array[i];
+    else {
+      const [k, x] = open.entries[i]!;
+      parts.push(str(k, budget), ':');
+      child = x;
+    }
+    visit(child, budget, parts, stack.length + 1, stack);
+  }
   return parts.join('');
 }

@@ -5,7 +5,7 @@
 - **Depends on:** T-593, T-599 (PR 799) and T-597 (PR 795), all merged; this branch merges `origin/main` `91430b55`
 - **Paths this task may touch:** `packages/judgment/src/checks/` (`cost.ts` new, `index.ts`, `json-schema.ts`, `safe-regex.ts`, `table.ts`, `csv.ts` and their tests), `packages/judgment/src/normalize.ts`, `site/setup.mjs` and `site/serve.mjs` (rebuilt), `docs/decisions-today.md` (D96), `docs/tasks/T-607-every-step-charged.md`
 - **Human gate:** no (the deploys that carry it are Rafa's)
-- **Status:** review
+- **Status:** done (merged in pull request 807, 2026-11-25)
 - **Agent/session:** work-budget-gaps
 - **Roadmap row:** none (security fix, 2026-11-25)
 
