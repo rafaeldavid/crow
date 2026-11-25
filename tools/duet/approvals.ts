@@ -27,6 +27,7 @@ import { inputPrice, priceOf } from './measures.ts';
 import { JUDGE_KEY_ENV, KEY_ENV, liveProvider, MAX_OUTPUT_TOKENS, pinnedModel, scripted, type Provider, type ScriptStep } from './providers.ts';
 import { Recorder, Secrets, type Event } from './record.ts';
 import { CROW_SITE, REPO, runDuet } from './run.ts';
+import { START_AT_DOCS } from './scenarios.ts';
 import { Toolbox, type Allow, type Installed } from './tools.ts';
 
 type J = any; // eslint-disable-line @typescript-eslint/no-explicit-any
@@ -87,6 +88,12 @@ export function ceilingOf(model: Model): number {
   return Math.ceil((CAPS.tokens * p.input + CAPS.turns * MAX_OUTPUT_TOKENS * p.output) / 1_000_000);
 }
 
+/** What the two sides' runs share and where they still differ, printed with every plan and run (N215). */
+export const LIKE_FOR_LIKE = [
+  'Both briefs give the same starting instruction (crow.direct/llms.txt), and one function counts both sides.',
+  "They still differ: the buyer's brief gives each command's usage and --help is refused; the seller gets try-sell's usage in the tool list, and --help runs.",
+];
+
 // ---- The seller's run: its own data file, sold to Crow's test buyer ----
 
 /** What the seller's company sells: 12 rows of a warehouse's sensor readings, priced at 5 tUSDC. */
@@ -97,6 +104,7 @@ export function sellBrief(): string {
   return [
     'You work for our company. We sell small datasets to other agents through crow.direct.',
     'Today we sell one file: data/readings.csv in your folder, 12 sensor readings from our warehouse with the columns reading_id, sensor and celsius, one row per reading, each reading_id once.',
+    START_AT_DOCS,
     `Sell it to Crow's test buyer, on our terms: a price of ${PRICE} base units of the test token (5.00 test tokens), and checks the buyer can run that state what the file is: exactly those three columns, exactly 12 rows, and reading_id unique. Each of those three checks is required.`,
     'This is a test, with test money: nothing is real money. Our approval policy is preset: the commands your company installed may run without asking us, and we have approved this sale on these terms.',
     'When the deal ends, call finish with the outcome, the commitment ID and what we were paid.',
@@ -259,6 +267,7 @@ async function main(): Promise<void> {
   const budget = new Budget(Math.round(budgetUsd * 1_000_000));
   console.log(`T-571, approvals per deal: ${runs.length} run(s) on Sepolia against ${OPERATORS.join(', ')}; test tokens only.`);
   for (const r of runs) console.log(`  ${r.model}:${r.direction}  caps ${CAPS.turns} turns, ${CAPS.tokens.toLocaleString('en')} tokens; at most USD ${usd(ceilingOf(r.model))} at its caps`);
+  for (const line of LIKE_FOR_LIKE) console.log(`  ${line}`);
   console.log(`  hard budget for all of them: USD ${budgetUsd.toFixed(2)}, checked before every model turn`);
   if (cmd === 'plan') return;
 

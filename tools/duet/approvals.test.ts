@@ -4,13 +4,15 @@ import { mkdirSync, mkdtempSync, realpathSync, rmSync, writeFileSync } from 'nod
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { afterAll, describe, expect, it } from 'vitest';
-import { buyerBriefCold, BUYER_USAGE, scenario } from './scenarios.ts';
+import { createServer } from 'node:http';
+import { runAgent } from './loop.ts';
+import { buyerBriefCold, BUYER_USAGE, scenario, START_AT_DOCS } from './scenarios.ts';
 import { runDuet } from './run.ts';
-import { anthropic, KEY_ENV, liveProvider, WORKSPACE_ENV } from './providers.ts';
+import { anthropic, KEY_ENV, liveProvider, scripted, WORKSPACE_ENV, type ScriptStep } from './providers.ts';
 import { Recorder, Secrets } from './record.ts';
 import { Toolbox } from './tools.ts';
 import { readFileSync } from 'node:fs';
-import { Budget, BUDGET_STOP, dealIds, measureRun, parseRuns, trySell } from './approvals.ts';
+import { Budget, BUDGET_STOP, dealIds, measureRun, parseRuns, sellBrief, trySell } from './approvals.ts';
 import type { Provider } from './providers.ts';
 import type { Event } from './record.ts';
 import type { Fence } from './tools.ts';
@@ -206,4 +208,49 @@ describe("the buyer's run (N215): the usage line once, no probe, the guide read"
     expect(m.approvals_by_step.map((s) => s.tool).every((t) => ['fetch_url', 'run_command', 'write_file'].includes(t))).toBe(true);
     expect(m.approvals).toBeGreaterThanOrEqual(5);
   }, 240_000);
+});
+
+describe('a scripted run with a known number of approvals', () => {
+  /** Plays the calls through the real loop, fences and record, then measures the record alone. */
+  async function measured(role: 'buyer' | 'seller', calls: (url: string) => Array<{ name: string; input: Record<string, unknown> }>) {
+    const dir = realpathSync(mkdtempSync(join(tmpdir(), 'approvals-count-')));
+    made.push(dir);
+    const [work, owner] = [join(dir, 'work'), join(dir, 'owner')];
+    for (const p of [work, owner]) mkdirSync(p);
+    writeFileSync(join(work, 'note.txt'), 'a note');
+    const server = createServer((_q, s) => s.end('a guide'));
+    await new Promise<void>((ok) => server.listen(0, '127.0.0.1', ok));
+    const origin = `http://127.0.0.1:${(server.address() as { port: number }).port}`;
+    try {
+      const secrets = new Secrets();
+      const rec = new Recorder(join(owner, 'r.jsonl'), secrets);
+      const tools = new Toolbox({ role, work, owner, repo: dir, operators: [origin], allow: [{ origin }], secrets, rec });
+      const steps: ScriptStep[] = calls(origin).map((c) => () => ({ calls: [c] }));
+      const end = await runAgent({ role, provider: scripted(steps), brief: 'brief', tools, caps: { turns: 20, tokens: 1_000_000 }, rec, signal: new AbortController().signal });
+      expect(end.status).toBe('finished');
+      return measureRun(rec.events, role, role === 'buyer' ? 'buy' : 'sell', 'r');
+    } finally { server.close(); }
+  }
+  const finish = { name: 'finish', input: { outcome: 'done', report: 'done' } };
+  const free = [{ name: 'list_files', input: {} }, { name: 'read_file', input: { path: 'note.txt' } }, { name: 'wait', input: { seconds: 1 } }];
+
+  for (const role of ['buyer', 'seller'] as const) {
+    it(`reports exactly 2 for a ${role} with one web read and one file write among free calls`, async () => {
+      const m = await measured(role, (url) => [{ name: 'fetch_url', input: { url: `${url}/a` } }, ...free, { name: 'write_file', input: { path: 'terms.json', content: '{}' } }, finish]);
+      expect(m.approvals).toBe(2);
+      expect(m.approvals_by_step.map((s) => s.tool)).toEqual(['fetch_url', 'write_file']);
+    });
+
+    it(`reports exactly 0 for a ${role} that only reads its folder and waits`, async () => {
+      const m = await measured(role, () => [...free, finish]);
+      expect(m.approvals).toBe(0);
+      expect(m.approvals_by_step).toEqual([]);
+    });
+  }
+
+  it('starts both sides with the same instruction', () => {
+    const facts = { docs: { guide: 'http://x/g', sell: 'http://x/s', buy: 'http://x/b' }, sellerPage: 'http://x/sellers/a/', jobApi: { quote: 'http://j/q', start: 'http://j/s', result: 'http://j/r' }, adapterPort: 4567, keyStore: '/k', token: 'tUSD', local: true };
+    expect(sellBrief()).toContain(START_AT_DOCS);
+    expect(buyerBriefCold(scenario('paid'), facts)).toContain(START_AT_DOCS);
+  });
 });

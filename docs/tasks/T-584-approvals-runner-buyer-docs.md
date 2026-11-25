@@ -32,9 +32,18 @@ Make a buyer run measure `buy.txt`. The buyer starts from crow.direct as the sel
 - Running a live buyer (Rafa's keys). Comparing buyers with sellers (N214).
 - Changing `buy.txt` or `llms.txt`.
 
+## Like for like
+
+Both briefs carry the same starting instruction (`START_AT_DOCS`), and `measureRun` counts both sides. Two differences remain, and the runner prints them with every plan and run:
+
+- The buyer's brief gives each command's usage once, and `--help` and empty calls are refused. The seller gets the usage of `try-sell` in the tool list, and its `--help` runs.
+- The seller's 2026-11-20 runs used a brief with no starting instruction. Compare a buyer's count only with a seller run made after this change [the seller was not rerun].
+
+The 2026-11-25 buyer runs used the earlier wording, "its page for buyers" where it now says "its page for your side".
+
 ## Evidence
 
-- **Measured:** `pnpm typecheck` clean; `pnpm lint` clean; `pnpm exec vitest run tools/duet`: 3 files, 68 tests passed.
+- **Measured:** `pnpm typecheck` clean; `pnpm lint` clean; `pnpm exec vitest run tools/duet`: 3 files, 73 tests passed (after the review fixes).
 - **Live runs:** by Rafa, in the Handoff below. The scripted buyer alone proves the harness path, not that a model can follow the guide.
 
 ## Handoff
