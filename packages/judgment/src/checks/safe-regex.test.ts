@@ -63,6 +63,43 @@ describe('safe regex: supported subset agrees with RegExp', () => {
       { seed: 8, numRuns: 500 },
     );
   });
+
+  it('character classes agree with RegExp across the code points', () => {
+    const classes = ['[a-c]', '[^a-c]', '[\\d]', '[\\D]', '[^\\D]', '[\\w.\\-]', '[\\W]', '[\\s]', '[^\\s]', '[\\S\\d]', '[^@\\s]', '[\\s\\S]', '[a-ca-cb-d]', '[\\t\\n\\r\\f\\v]', '[é-ÿ　]', '[^\u{10000}-\u{10ffff}]'];
+    const points: number[] = [];
+    for (let cp = 0; cp <= 0x10ffff; cp += cp < 0x3100 ? 1 : 251) points.push(cp);
+    points.push(0x10ffff, 0xfeff, 0xd800, 0xdfff);
+    for (const c of classes) {
+      const m = compile(c);
+      const native = new RegExp(`^${c}$`, 'u');
+      for (const cp of points) {
+        const s = String.fromCodePoint(cp);
+        if (m.fullMatch(s) !== native.test(s)) expect.fail(`${c} on U+${cp.toString(16)}`);
+      }
+    }
+  });
+
+  it('agrees with RegExp on random nested patterns (property)', () => {
+    const atom = fc.constantFrom('a', 'b', '.', '[ab]', '()', '(?:)', '(|)', '(a|)', '(|b)');
+    const quant = fc.constantFrom('', '', '*', '+', '?', '{0}', '{1}', '{2}', '{0,0}', '{1,1}', '{0,1}', '{1,3}', '{2,}', '*?');
+    const { part } = fc.letrec<{ part: string; seq: string }>((tie) => ({
+      part: fc.oneof(
+        { depthSize: 'small', withCrossShrink: true },
+        fc.tuple(atom, quant).map(([a, q]) => a + q),
+        fc.tuple(tie('seq'), quant).map(([s, q]) => `(${s})${q}`),
+        fc.tuple(tie('seq'), tie('seq'), quant).map(([s, t, q]) => `(?:${s}|${t})${q}`),
+      ),
+      seq: fc.array(tie('part'), { minLength: 1, maxLength: 3 }).map((xs) => xs.join('')),
+    }));
+    fc.assert(
+      fc.property(part.filter((p) => p.length <= 120), fc.string({ unit: fc.constantFrom('a', 'b', 'c'), maxLength: 8 }), (p, s) => {
+        const m = compile(p);
+        expect(m.fullMatch(s)).toBe(new RegExp(`^(?:${p})$`, 'u').test(s));
+        expect(m.search(s)).toBe(new RegExp(p, 'u').test(s));
+      }),
+      { seed: 25, numRuns: 2000 },
+    );
+  });
 });
 
 describe('safe regex: refusals', () => {
