@@ -94,7 +94,7 @@ describe('check-terms', () => {
   });
 
   describe('an unfilled placeholder', () => {
-    it('warns on {{order_text}} left in a template: the filler leaves it as written', () => {
+    it('warns on {{order_text}} left in a template: the seller tool now refuses it at load (P-10)', () => {
       const template = { deliverable: { kind: 'document', description: 'Run {{order_text}} for {{client}}.', format: 'text/plain' }, checks: [{ id: 'r', type: 'json_schema', required: true, schema: { const: '{{order_text}}' } }] };
       expect(kinds(template)).toEqual(['placeholder deliverable.description', 'placeholder checks[0].schema.const']);
       expect(line(checkTerms(template)[0]!)).toBe('warning: deliverable.description: the placeholder "{{order_text}}". Why it may matter: the seller adapter fills only a name of letters and digits, with or without .length, so every offer keeps this one as written.');

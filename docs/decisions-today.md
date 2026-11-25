@@ -1737,3 +1737,33 @@ The build is not started; it opens as its own task on Rafa's word.
 **Dropped:** RFC 8785 over the signed value, with or without decimals; the whole key in the terms; WebCrypto; a certificate chain; a wall-clock limit; `checkKinds` inside `policy`; a proof field on the delivery now (it waits for N226).
 
 **Litmus tests.** Neutrality: holds; the verifier is built-in code in every adjudicator, and three fixtures show a deal with the check still ends by its terms when an adjudicator declines or goes offline. The hold: unchanged. Defended judgment: strengthened; a deterministic check can now verify a proof the seller attaches.
+
+## D91. A release needs the work to pass and the key the seller committed (ADR-0046)
+
+**Status:** needs Rafa, 2026-11-25.
+
+**Proposed** by the session for roadmap row N226, the two-part release (plan task P-20), after a research pass (`docs/research/2026-11-25-two-part-release.md`). A decision Rafa can overrule. Design only: no code, schema or contract changed with it.
+
+**Why now.** Rafa, 2026-11-23: payment is released only if the work passes the agreed checks and the key works. Today an accept pays for any key that is not empty, and an early accept or a waiver releases an envelope nobody checked (measured, research note section 1). Phase one has no party appeal, so nothing in the protocol returns that money. The next contract version is already due for D85's two fixes.
+
+**Proposed:**
+
+- **The terms name the release rule.** `settlement.release` is `on_decision_and_key`, or `on_decision` for today's rule, which a standing delivery keeps.
+- **The seller commits to the buyer's sealed key in the signed delivery.** The commitment is one hash in a new `proofs` list, in the shape the delivery-proofs note reserved. Its first kind is `key_opens` and its first verifier `derived-seal/1`.
+- **The buyer's sealed key becomes a pure function** of the content key, the commitment ID and the buyer's key, by HKDF-SHA256. Its layout stays, and the buyer opens it as today. In a scratch run two holders of one content key derived the same sealed key, and one seal took 1.7 ms (measured).
+- **A decider recomputes that sealed key** from the content key that opened the work. A match passes. A mismatch fails like a required check: reject and refund. A decider that cannot open its own envelope still signs nothing (D81).
+- **The rules contract pays only in a call that carries the committed key.** An accept with another key reverts. An early accept and a settlement with the key release only the committed key.
+- **No stage, deadline, timeout or stored word is added.** Two signed types change, and the EIP-712 domain moves to 0.9.
+- **A buyer's own signature still stands for both parts.** Nothing checks the key for a buyer that accepts early or signs a waiver. A proof the buyer can run itself joins the same list later, with no contract change.
+- **One contract version carries this rule and D85's two fixes.** The amendments row adds no contract change for its waiver and its replacement, and its in-place amendment stays out.
+
+**Open for Rafa:**
+
+1. One step, as proposed, or two (accept first, then the key within a window), which also closes the key-in-calldata limit at the cost of a stage and a second transaction.
+2. On a key mismatch, reject as proposed, or escalate so that a second adjudicator recomputes.
+3. Whether the amendments row's named note hash rides in this version. Proposed: only if its build starts before the freeze.
+4. A second-family review of the derived seal before the contract build starts.
+
+**Dropped:** a signed flag from the decider; a bare hash-locked content key, which would publish the work; a zero-knowledge proof checked on chain; the commitment as a top-level delivery field; the in-place amendment in the same version; and a release in two amounts, which the row does not ask for and no deal has asked for (research note section 13).
+
+**Litmus tests.** Neutrality: holds; the verifier is built-in code in every decider, the contract's check is a hash comparison, and six fixtures show a deal under the rule ending by its terms when the primary, both first deciders, every operator, the seller or the buyer is gone, or an adjudicator lacks the kind. The hold: no stage or timeout changes, and nothing new is stored. Defended judgment: strengthened; the key check is one more deterministic check before the panel, and a decider's wrong seal can no longer pay the seller.

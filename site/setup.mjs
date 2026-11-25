@@ -59388,7 +59388,7 @@ var WrongScope = class extends Error {
 };
 /** A further file could not be fetched or added: the delivery waits, and the seller is alerted. */
 var FilesNotAdded = class extends Error {};
-const PLACEHOLDER$1 = /\{\{([A-Za-z][A-Za-z0-9]*)(?:\.([A-Za-z][A-Za-z0-9]*))?\}\}/g;
+const PLACEHOLDER = /\{\{([A-Za-z][A-Za-z0-9]*)(?:\.([A-Za-z][A-Za-z0-9]*))?\}\}/g;
 const WHOLE = /^\{\{([A-Za-z][A-Za-z0-9]*)(?:\.([A-Za-z][A-Za-z0-9]*))?\}\}$/;
 const TOKEN = /^[A-Za-z0-9!#$%&'*+.^_`|~-]{1,100}$/;
 const RESERVED_HEADERS = [
@@ -59457,9 +59457,9 @@ const NAMES = {
 };
 /** Throws unless every placeholder in `text` is a name this call may use; `whole`: the string is a whole body value. */
 function checkText(at, text, use, fields, whole) {
-	const rest = text.replace(PLACEHOLDER$1, "");
+	const rest = text.replace(PLACEHOLDER, "");
 	if (rest.includes("{{") || rest.includes("}}")) throw new Error(`${at}: a placeholder is {{name}} or {{scope.<field>}}, nothing else`);
-	for (const [m, name, field] of text.matchAll(PLACEHOLDER$1)) {
+	for (const [m, name, field] of text.matchAll(PLACEHOLDER)) {
 		if (!NAMES[use].includes(name)) throw new Error(`${at} uses {{${name}}}, which this call cannot fill (it takes ${NAMES[use].join(", ")})`);
 		if (field !== void 0) {
 			if (name !== "scope" && name !== "options") throw new Error(`${at} uses ${m}: only scope and options have fields`);
@@ -59487,7 +59487,7 @@ function fillBody(node, v) {
 			const x = valueOf(v, whole[1], whole[2]);
 			return x === void 0 ? OMIT : structuredClone(x);
 		}
-		return node.replace(PLACEHOLDER$1, (_m, name, field) => asText(valueOf(v, name, field)));
+		return node.replace(PLACEHOLDER, (_m, name, field) => asText(valueOf(v, name, field)));
 	}
 	if (Array.isArray(node)) return node.map((n) => fillBody(n, v)).filter((n) => n !== OMIT);
 	if (isRecord$3(node)) return Object.fromEntries(Object.entries(node).map(([k, x]) => [k, fillBody(x, v)]).filter(([, x]) => x !== OMIT));
@@ -59500,7 +59500,7 @@ function segment(at, s) {
 }
 /** The address a URL template names for these values: placeholders encoded, then checked under the base URL. */
 function urlFor(at, template, v, base) {
-	const filled = template.replace(PLACEHOLDER$1, (_m, name, field) => {
+	const filled = template.replace(PLACEHOLDER, (_m, name, field) => {
 		const text = asText(valueOf(v, name, field));
 		if (name === "file") return text.split("/").map((s) => segment(at, s)).join("/");
 		return text === "" ? "" : segment(at, text);
@@ -59944,7 +59944,7 @@ function sellerApiClient(api, env, fields, fetcher) {
 	});
 	const startScope = /* @__PURE__ */ new Set();
 	let startOptions = false;
-	for (const [, n, f] of startText.matchAll(PLACEHOLDER$1)) {
+	for (const [, n, f] of startText.matchAll(PLACEHOLDER)) {
 		if (n === "scope") for (const x of f === void 0 ? fields.scope : [f]) startScope.add(x);
 		if (n === "options") startOptions = true;
 	}
@@ -59968,7 +59968,7 @@ function sellerApiClient(api, env, fields, fetcher) {
 		if (workspace && named.includes(p.what) && !url.pathname.split("/").includes(workspace.segment)) throw new Error(`${p.label} would go to ${url.pathname}, which does not name the pinned workspace: nothing was sent`);
 		const headers = Object.create(null);
 		for (const [k, t] of Object.entries(p.headers)) {
-			const filled = t.replace(PLACEHOLDER$1, (_m, name, field) => asText(valueOf(v, name, field)));
+			const filled = t.replace(PLACEHOLDER, (_m, name, field) => asText(valueOf(v, name, field)));
 			if (CONTROL.test(filled)) throw new Error(`${p.what}: header ${k} would carry a control character`);
 			headers[k] = filled;
 		}
@@ -60682,7 +60682,6 @@ var Refused$1 = class extends Error {
 };
 const BASE_UNITS$1 = /^(0|[1-9][0-9]{0,77})$/;
 /** `{{name}}` or `{{name.length}}`; with a backslash before it, `\{{name}}`, it is the text `{{name}}`. */
-const PLACEHOLDER = /(\\?)\{\{([A-Za-z][A-Za-z0-9]*)(\.length)?\}\}/g;
 const WHOLE_PLACEHOLDER = /^\{\{([A-Za-z][A-Za-z0-9]*)(\.length)?\}\}$/;
 const BEFORE_HOLD$1 = [
 	"Offered",
@@ -60738,9 +60737,11 @@ function fill(node, scope) {
 	if (typeof node === "string") {
 		const whole = WHOLE_PLACEHOLDER.exec(node);
 		if (whole) return structuredClone(value(whole[1], whole[2]));
-		return node.replace(PLACEHOLDER, (m, escaped, name, length) => {
+		return node.replace(ANY_PLACEHOLDER, (m, escaped, inner) => {
 			if (escaped) return m.slice(1);
-			const v = value(name, length);
+			const shape = /^([A-Za-z][A-Za-z0-9]*)(\.length)?$/.exec(inner);
+			if (!shape) return m;
+			const v = value(shape[1], shape[2]);
 			return Array.isArray(v) ? v.join(", ") : String(v);
 		});
 	}
@@ -60748,15 +60749,27 @@ function fill(node, scope) {
 	if (node && typeof node === "object") return Object.fromEntries(Object.entries(node).map(([k, v]) => [k, fill(v, scope)]));
 	return node;
 }
-/** Throws unless every placeholder in `node` names a scope field (and `.length` a list). `where` names the file or rule. */
-function checkPlaceholders(where, node, scope) {
-	if (typeof node === "string") for (const [, escaped, name, length] of node.matchAll(PLACEHOLDER)) {
+/** Any `{{...}}` run, with its backslash if any: the filler reads only the shape `PLACEHOLDER` names, and leaves the rest. */
+const ANY_PLACEHOLDER = /(\\?)\{\{([^{}]*)\}\}/g;
+/**
+* Throws unless every placeholder in `node` names a scope field (and `.length` a list). A `{{...}}` the filler cannot
+* read, such as `{{order_text}}`, is refused too: it would stay in the offered terms. `where` names the file or rule;
+* `path` is the place inside it, as `deliverable.description`.
+*/
+function checkPlaceholders(where, node, scope, path = "") {
+	if (typeof node === "string") for (const [, escaped, inner] of node.matchAll(ANY_PLACEHOLDER)) {
 		if (escaped) continue;
+		const shape = /^([A-Za-z][A-Za-z0-9]*)(\.length)?$/.exec(inner);
+		const at = path ? ` at ${path}` : "";
+		const fields = Object.keys(scope).join(", ");
+		if (!shape) throw new Error(`${where}: {{${plain$5(inner).slice(0, 60)}}}${at} is not a placeholder the filler can read: a name of letters and digits, with or without .length (scope fields: ${fields})`);
+		const [, name, length] = shape;
 		const rule = scope[name];
-		if (!rule) throw new Error(`${where} uses {{${name}}}, which the scope rules do not define`);
-		if (length && rule.type !== "strings") throw new Error(`${where} uses {{${name}.length}}, and ${name} is not a list`);
+		if (!rule) throw new Error(`${where}: {{${name}}}${at} is not a field the scope gives (scope fields: ${fields})`);
+		if (length && rule.type !== "strings") throw new Error(`${where}: {{${name}.length}}${at} needs a list, and ${name} is not a list`);
 	}
-	else if (node && typeof node === "object") for (const v of Object.values(node)) checkPlaceholders(where, v, scope);
+	else if (Array.isArray(node)) node.forEach((v, i) => checkPlaceholders(where, v, scope, `${path}[${i}]`));
+	else if (node && typeof node === "object") for (const [k, v] of Object.entries(node)) checkPlaceholders(where, v, scope, path ? `${path}.${k}` : k);
 }
 /**
 * The template, checked. One token (plan section 2c): a fee that names no token takes the settlement layer's from
