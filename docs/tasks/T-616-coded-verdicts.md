@@ -5,7 +5,7 @@
 - **Depends on:** ADR-0049's `agg-5` build (session agg5-cut-rule) merged first; this task edits the same files (`packages/judgment/src/verdict.ts`, `pipeline.ts`, `kept.ts`)
 - **Paths this task may touch:** `spec/schemas/judge-verdict.schema.json`, `spec/schemas/judgment.schema.json`, every other `spec/schemas/*.json` for the `$id` bump, `spec/openapi.json`, `spec/examples/`, `spec/README.md`, `packages/core/src/{types,parse,validators.generated}.ts`, `packages/judgment/src/` (a coded filter, `refs.ts`, template pair 3 in `prompt.ts`, `kept.ts`, `pipeline.ts`, a frozen copy of the prose filter, tests), `apps/adjudicator/src/kept-policies.json`, `apps/adjudicator/src/test-adjudicator.ts`, the scripted-judge readers (`apps/test-agents/src/seller.ts`, `examples/demo-sepolia.ts`), `packages/testkit/src/`, `fixtures/replay/`, new `fixtures/scenarios/attack.*` files, `docs/judgment-and-defenses.md`, `CLAUDE.md` and `docs/team.md` (the hard rule's wording only), `site/llms.txt`, `site/ref/limits.txt`, the rebuilt `site/*.mjs` bundles, ADR-0049's status line, this file, ADR-0050, D106
 - **Human gate:** no for the pull request; yes for the deploys (carry pair 3 and `agg-6`, the calibration on Sepolia, then the default), which are Rafa's
-- **Status:** todo (design written; build held until `agg-5` merges)
+- **Status:** review
 - **Agent/session:** partner-c-design-pack, 2026-11-25; branch `t-616-coded-verdicts`
 - **Roadmap row:** none (incident follow-up, 2026-11-25)
 
@@ -75,18 +75,18 @@ This is the shape after the filter's normalization (ADR-0050 section 2); the jud
 
 ## Acceptance criteria
 
-- [ ] Schema v0.15 as drafted; every v0.14 example and record validates; coded examples added; `pnpm validate:spec` passes.
-- [ ] Today's prose filter frozen as its own module; `agg-3`, `agg-4`, `agg-5` and pairs 1 and 2 byte-identical; the 96 replay records do not move.
-- [ ] The coded filter: decision fields strict, evidence dropped and counted, canary scanned on the raw output first; references resolved against the work (RFC 6901 for JSON, `L<n>` for text) and kept as anchors.
-- [ ] Template pair 3 states the closed lists and the reference format in words and prints line numbers for text deliveries.
-- [ ] A policy pairing a template and an aggregation of different formats is refused before any judge is called.
-- [ ] The judgment record under `agg-6` holds only rubric ids, list words, hex and digits (a property test).
-- [ ] Partner C's appeal replayed under pair 3 / `agg-6` with three seats adding a habitual `rationale` accepts.
-- [ ] Attack fixtures: a canary as a property name never reaches the record and abstains; keys holding a URL or an instruction never reach the record; a delivery that asks for junk only when failing does not move the decision; no recorded attack moves to accept under pair 3.
-- [ ] The scripted judges' mark moves to the `placeholder-` model prefix and its readers check it.
-- [ ] The hard rule's wording updated in `CLAUDE.md` and `docs/team.md` (ADR-0050 section 5); ADR-0049's status gains its one line.
-- [ ] A red team over the attack list in ADR-0050, Consequences; findings fixed or filed.
-- [ ] `pnpm verify` passes.
+- [x] Schema v0.15 as drafted (two deviations, Decisions); every v0.14 example and record validates; coded examples added; `pnpm validate:spec` passes.
+- [x] Today's prose filter frozen as its own module; `agg-3`, `agg-4`, `agg-5` and pairs 1 and 2 byte-identical; the replay records do not move (144 at `origin/main` `49e7da1f`, after `agg-5`; the task's 96 predates it).
+- [x] The coded filter: decision fields strict, evidence dropped and counted, canary scanned on the raw output first; references resolved against the work (RFC 6901 for JSON, `L<n>` for text) and kept as anchors.
+- [x] Template pair 3 states the closed lists and the reference format in words and prints line numbers for text deliveries.
+- [x] A policy pairing a template and an aggregation of different formats is refused before any judge is called.
+- [x] The judgment record under `agg-6` holds only rubric ids, list words, hex and digits (a property test).
+- [x] Partner C's appeal replayed under pair 3 / `agg-6` with three seats adding a habitual `rationale` accepts.
+- [x] Attack fixtures: a canary as a property name never reaches the record and abstains; keys holding a URL or an instruction never reach the record; a delivery that asks for junk only when failing does not move the decision; no recorded attack moves to accept under pair 3.
+- [x] The scripted judges' mark moves to the `placeholder-` model prefix and its readers check it.
+- [x] The hard rule's wording updated in `CLAUDE.md` and `docs/team.md` (ADR-0050 section 5); ADR-0049's status gains its one line.
+- [ ] A red team over the attack list in ADR-0050, Consequences; findings fixed or filed. (The parent session runs it.)
+- [ ] `pnpm verify` passes: every judgment, spec, snap and demo step passes; `forge build` and the contracts-built tests fail in this worktree only (see Evidence).
 
 ## Out of scope
 
@@ -97,13 +97,54 @@ This is the shape after the filter's normalization (ADR-0050 section 2); the jud
 
 ## Evidence
 
-Fill this in before review. Label each item measured, inferred or guessed.
+Measured on 2026-11-25 on `t-616-coded-verdicts`, unless labelled otherwise.
+
+- **Schema v0.15** [measured]: `pnpm validate:spec` passes, 40 of 40 examples (the two coded ones new) and `spec/openapi.json` fresh. `tests/spec.test.ts` holds v0.15's taken and refused cases under both Ajv and the compiled validators: 41 cases, including the prose parser refusing a coded verdict and a coded seat refusing a locator where an anchor goes.
+- **Kept versions unchanged** [measured]: `verdict.ts`, `aggregate.ts`, `kept/*.ts` and pairs 1 and 2 are byte-identical to `49e7da1f` (`git diff` is empty for them). All 144 replay records of pairs 1 and 2 under `agg-3`, `agg-4` and `agg-5` are unchanged; 24 records added for pair 3 with `agg-6` (`fixtures/replay/kept-policies.json`, 168 records). `agg-6`'s two decision digests equal `agg-5`'s (`aggregate.test.ts`).
+- **The coded filter** [measured]: `coded.test.ts`, 54 tests: 17 decision faults abstain with metadata-only detail; 18 evidence faults are dropped and counted with scores unchanged; 9 canary placements abstain (a property name, a criterion key, a dropped code, a dropped reference, base64 in a key, `\u` escapes in a key, split across two keys, prose output); `__proto__`, `constructor` and nesting 5,000 deep are dropped; 120 references of 500 characters are dropped in under 500 ms. `refs.test.ts`: pointers, lines and anchors as ADR-0050 section 3 defines them, and a holder resolves every anchor.
+- **Template pair 3** [measured]: replaces rules 3 and 5 of pair 1 and adds rules 9 to 11; states the 16 codes, the 6 kinds and both reference forms in words; numbers each line of a whole text, CSV or Markdown delivery; numbers no JSON delivery and no sample. Pair 1's and pair 2's prompts are unchanged with or without a MIME type. Hashes: first `0xf65c7859…d11f`, appeal `0x6839cb0c…93cc`.
+- **Mixed formats refused** [measured]: pair 3 with `agg-3` or `agg-5`, and pairs 1 and 2 with `agg-6`, return `policy_mismatch` with no judge call (`coded.pipeline.test.ts`); `checkPolicyBinding` declines them too (`bound-policy.test.ts`).
+- **The record holds only rubric ids, list words, hex and digits** [measured]: two property tests, 400 runs on the filter and 60 on the pipeline; a mark planted in any key, code or reference never appears in the serialized draft. A coded seat is at most 2,591 characters for a 12-criterion rubric (measured with the longest ids, codes and kinds).
+- **Partner C's appeal under pair 3 and `agg-6`** [measured]: the private record (`partner-c-record.test.ts`, run with `CROW_PARTNER_C_DEAL`) accepts, 5 passes from two families, each Claude seat's habitual rationale dropped (`keys: 1`), no filter abstention. `agg-4` and `agg-5` give their earlier results. The public model in `coded.pipeline.test.ts` accepts with each Claude seat's five unknown keys dropped. The Claude seats' coded outputs are rebuilt from the DeepSeek flash verdict [inferred: no live coded output exists yet].
+- **Attack fixtures** [measured, `coded.pipeline.test.ts`]: a canary as a property name abstains, flags the screen and never reaches the record; keys holding a URL or an instruction are dropped (3 and 4 counted) and never reach the record; a delivery that asks for junk only when failing leaves the aggregate equal to the clean run (escalate when the screen sees the note, reject when it does not).
+- **No recorded attack moves to accept under pair 3** [measured, `packages/testkit/src/coded-attacks.test.ts`]: the five attack fixtures with recorded judges end escalate then reject, Refunded, under prose and under pair 3 with `agg-6`. The coded answers are built from the recordings [inferred model: each judge keeps its recorded scores, overall and flag, and a judge with no recording in a role answers as in its other role].
+- **The scripted mark** [measured]: `markedFake` passes a coded verdict unchanged; the Sepolia demo's `panelKind`, the test seller and the offer player check the `placeholder-` prefix first (`test-adjudicator.test.ts`, `demo-sepolia.test.ts`).
+- **Bundles** [measured, sha256]: `setup.mjs` `6275515f…` to `dbcc8990…`; `serve.mjs` `85c014da…` to `00b0b2fd…`; `take.mjs` `15cb5fd6…` to `da23f1e7…`; `seller-worker.mjs` `1b163543…` to `8b5da668…`, with its pin. `buy.mjs` `b5992bfd…` and `try.mjs` `71634a90…` unchanged. Validators grew from 1,038,668 to 1,121,023 bytes; each bundle from 115 KB to 157 KB larger. `node site/build.mjs && node site/check.mjs`: PASS.
+- **Commands** [measured]:
+  - `pnpm typecheck`, `pnpm lint`: exit 0. `pnpm validate:spec`: ok. `pnpm snap`: 63 passed, no snapshot changed. `pnpm snap --settlement=local`: pass. `pnpm demo`: pass. `forge test`: 592 passed.
+  - `pnpm test`, first full run (before `forge build` ran in this worktree): 6,633 passed, 2 failed, 3 expected fail, 326 skipped. One failure (`tests/cut-feature-alignment.test.ts`, the new tests named `appealHash`) is fixed. The other is `apps/own-seller/src/frozen.test.ts`, which fails on any branch that changes `packages/`; CI's shallow checkout skips it [inferred from `.github/workflows/ci.yml`].
+  - `pnpm verify`: FAIL on `forge build` and `test`. `forge build` cloned the contracts' nested submodules in this worktree (`contracts/lib/commerce-payments` now shows modified) and wrote a `contracts/out` whose creation code differs from the pinned one. With it, 28 more tests fail: 27 in `packages/settlement/evm/deploy-script.test.ts` and `examples/take.test.ts`'s creation-code pin. This branch changes no file under `contracts/`, `packages/settlement` or `examples/take.ts` [measured with `git diff`], so the failures belong to this worktree's contracts build [inferred]. Second full run: 6,922 passed, 29 failed (those 28 and the frozen-path test), 3 expected fail, 10 skipped.
 
 ## Decisions
 
 - Aggregation label `agg-6` and template pair 3, after `agg-5` (coordinator, relaying Rafa, 2026-11-25).
 - References kept as anchors, not verbatim (ADR-0050 section 3).
+- The default stays screen-1, pair 2 and `agg-5`; `NEWEST_VERSIONS` stays pair 1 with `agg-5` (coordinator and Rafa, 2026-11-25).
+- One format per policy, checked in `implementationsFor`, so the pipeline and `checkPolicyBinding` both refuse a mix before any judge is called.
+- Deviation from the schema draft: a coded `reasons` list may be empty. With `minItems: 1`, dropping a judge's last unknown code would abstain the seat, which ADR-0050 section 2 rules out.
+- Deviation from the schema draft: a prose seat carries no `format` key; its absence means `prose-1`. Writing `prose-1` would move every `agg-3` to `agg-5` record. A coded seat requires `format: "coded-1"`, and in the record `injectionKinds`, `injectionRefs` and each criterion's `refs` are always present.
+- Core's `parseJudgeVerdict` now validates the prose branch only (`judge-verdict#prose`), so `verdict.ts` and `kept/verdict-0.ts` stay byte-identical and never accept a coded verdict. `parseAnyJudgeVerdict` reads the whole file and backs `parsers['judge-verdict']`.
+- `agg-6` reuses `aggregate.ts`'s rule through `scoredView` (ids, scores, `overall`, flag; empty free text), so `aggregate.ts` is unchanged. A later change to `aggregate.ts` has to freeze it for both `agg-5` and `agg-6`.
+- The canary scan reads keys too (`allText`), and copies `agg-5`'s base64 decoder rather than exporting it from `verdict.ts`.
+- The anchor key is SHA-256 of `holdback/judgment/anchor/v1` and the plaintext bytes as delivered; intake drops a leading byte-order mark, and `plaintextBytes` restores it from the record's byte count.
+- Pointers resolve against the delivered JSON (not the normalized text); line numbers count the lines the judges read. Injection references without the flag are dropped, like the kinds.
+- A prose-shaped answer under pair 3 counts: `evidence` and `rationale` are unknown keys, dropped and counted.
+- The scripted mark: `markedFake` still marks a prose verdict (the demo-cloud tests read that mark), and passes a coded verdict unchanged; the readers check the `placeholder-` prefix first and the rationale mark for older prose records.
+- `site/llms.txt` is unchanged: Crow's adjudicators accept new deals under the prose default only, so its line stays true. `site/ref/limits.txt` now says it per policy.
+- The task's "no recorded attack moves to accept" runs as a what-if over the five attack fixtures with recorded judges (`coded-attacks.test.ts`): each judge keeps its recorded scores, overall and flag, and a judge drawn into a panel it has no recording for answers as it did in its other role.
 
 ## Handoff
 
-Design written (ADR-0050, D106, this file). Build held until the `agg-5` pull request merges, to avoid two writers on `verdict.ts` and `pipeline.ts`. Then: merge `origin/main` into `t-616-coded-verdicts` (no rewrite), build in the order of the acceptance criteria, red team, open the pull request. The coordinator wants a report before building.
+Done on `t-616-coded-verdicts`: schema v0.15; the coded filter, references and anchors; template pair 3 and `agg-6`, carried beside the prose default; the one-format refusal; the replay records for pair 3 with `agg-6`; the attack fixtures; partner C's replay; the scripted mark; the hard rule, ADR-0049's status line, ADR-0050 section 5 and build notes, D106, the defenses doc, `site/ref/limits.txt` and the rebuilt bundles. No pull request opened (the coordinator opens it).
+
+Paths touched beyond the task's list, all mechanical:
+- The schema-version bump: `apps/operator/src/server.ts` (`SCHEMA_VERSION` 0.15) and its two tests, `examples/mandate.test.ts`, `docs/api.md`, `site/ref/http.txt`, `site/ref/signing.txt`, `spec/openapi/paths.json`, `tests/spec.test.ts`, as T-610's v0.14 bump did.
+- `packages/core/src/parse.ts`, `validators-codegen.ts` and `validators.test.ts` (the per-format validators).
+- The verdict union's prose readers: `apps/demo/src/source/simchain.ts` and `apps/demo/agents/agents.test.ts` (a narrowing each).
+- `apps/adjudicator/src/bound-policy.test.ts` (pair 3 carried, the mix declined) and `apps/test-agents/scripts/play-offers.ts` (the mark reader).
+- Nothing under `apps/demo-cloud` or the adjudicator's decide path.
+
+Not done:
+- The red team over ADR-0050's attack list (the parent session runs it). Start with `coded.ts` (duplicate keys and `__proto__`, deep nesting, covert bits in codes and counts), `refs.ts` (anchor guessing on small work, U+2028 and forged `L<n>` prefixes) and `prompt.ts` (pair 3's numbering).
+- The deploys and the calibration, which are Rafa's: carry pair 3 and `agg-6`, run the calibration on Sepolia, then move the default (Calibration plan).
+- `docs/api.md` line 401 and the operator's discovery text still describe the fake-judge mark as the rationale prefix as well as the model prefix; true for prose records, and left for the deploy that moves the default.
