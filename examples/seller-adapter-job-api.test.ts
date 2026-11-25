@@ -229,6 +229,40 @@ describe('seller adapter, a job API of another shape (T-366): deals', () => {
     expect(await deliveries(buyer, id)).toHaveLength(1);
   }, 30_000);
 
+  it('a repeatable start whose API is down is not sent again once deliverBy has passed (N167)', async () => {
+    stub = await startJobStub({ key: KEY, startsDown: true, readsUntilComplete: 0 });
+    const { running, lines } = await adapter(configFile(stub.base));
+    const buyer = agent('buyer-2');
+    const { body: q } = await quote(running, buyer);
+    const id = q.commitmentId as Hex;
+    await fund(buyer, id);
+    const starts = () => stub!.requests.filter((r) => r.path === '/api/v2/runs').length;
+    await until('the 503 to the start', () => lines.some((l) => l.includes(`${id} waits at starting: the seller API answered 503 to the start`)));
+    world.advance(2 * 86_400 + 60); // past deliverBy
+    stub.startsUp();
+    await until('the deal to close', () => stageOf(running, id) === 'closed');
+    const after = starts();
+    await new Promise((r) => setTimeout(r, 400)); // several passes at pollMs 50
+    expect(starts()).toBe(after);
+    expect(stub.runs()).toHaveLength(0); // no start was ever accepted
+    expect(running.deals().find((d) => d.id === id)?.note).toMatch(/the deal is \w+; no job started|the delivery deadline passed before the job started/);
+  }, 30_000);
+
+  it('a repeatable start whose API is down is sent again while the hold is Held and deliverBy is ahead (N167)', async () => {
+    stub = await startJobStub({ key: KEY, startsDown: true, readsUntilComplete: 0 });
+    const { running, lines } = await adapter(configFile(stub.base));
+    const buyer = agent('buyer-2');
+    const { body: q } = await quote(running, buyer);
+    const id = q.commitmentId as Hex;
+    await fund(buyer, id);
+    await until('the 503 to the start', () => lines.some((l) => l.includes(`${id} waits at starting: the seller API answered 503 to the start`)));
+    const before = stub.requests.filter((r) => r.path === '/api/v2/runs').length;
+    await until('a second start', () => stub!.requests.filter((r) => r.path === '/api/v2/runs').length > before);
+    stub.startsUp();
+    expect((await buyer.waitFor(id, ['Released', 'Refunded'])).escrowState).toBe('Released');
+    expect(stub.runs()).toHaveLength(1);
+  }, 30_000);
+
   it('a start the API cannot repeat safely is sent once; a lost answer holds the deal until a person names the job (T-408)', async () => {
     stub = await startJobStub({ key: KEY, failFirstStart: true, readsUntilComplete: 0 });
     const api = jobStubSellerApi(stub.base);

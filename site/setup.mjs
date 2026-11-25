@@ -60644,17 +60644,15 @@ async function createSellerAdapter(c, env, io) {
 					deliverBy
 				}, `the start was sent and no job ID came back; the adapter will not send it again. Find the job at the seller's API and name it with POST /deals/${id}/job before ${deliverBy}`);
 			}
-			if (!sellerApi.startRepeatable) {
-				const state = await escrowState();
-				if (state !== "Held") return record(deal, {
-					stage: "closed",
-					note: `the deal is ${state}; no job started`
-				});
-				if (Date.parse(deal.terms.timing.deliverBy) <= await seller.settlementNow()) return record(deal, {
-					stage: "closed",
-					note: "the delivery deadline passed before the job started"
-				});
-			}
+			const state = await escrowState();
+			if (state !== "Held") return record(deal, {
+				stage: "closed",
+				note: `the deal is ${state}; no job started`
+			});
+			if (Date.parse(deal.terms.timing.deliverBy) <= await seller.settlementNow()) return record(deal, {
+				stage: "closed",
+				note: "the delivery deadline passed before the job started"
+			});
 			record(deal, { startAttempts: (deal.startAttempts ?? 0) + 1 });
 			const jobId = await sellerApi.start({
 				commitmentId: id,

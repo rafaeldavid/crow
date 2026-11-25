@@ -1526,12 +1526,10 @@ export async function createSellerAdapter(c: SellerAdapterConfig, env: Readonly<
         record(deal, { stage: 'start-unknown', note: `the start was sent and no job ID came back; name the job with POST /deals/${id}/job before ${deliverBy}` });
         return alert({ type: 'job.start_unknown', commitmentId: id, deliverBy }, `the start was sent and no job ID came back; the adapter will not send it again. Find the job at the seller's API and name it with POST /deals/${id}/job before ${deliverBy}`);
       }
-      if (!sellerApi.startRepeatable) {
-        // The one start: only while the hold is funded and the deadline is ahead.
-        const state = await escrowState();
-        if (state !== 'Held') return record(deal, { stage: 'closed', note: `the deal is ${state}; no job started` });
-        if (Date.parse(deal.terms.timing.deliverBy) <= (await seller.settlementNow())) return record(deal, { stage: 'closed', note: 'the delivery deadline passed before the job started' });
-      }
+      // Every start, the first or a repeat: only while the hold is funded and the deadline is ahead (N167).
+      const state = await escrowState();
+      if (state !== 'Held') return record(deal, { stage: 'closed', note: `the deal is ${state}; no job started` });
+      if (Date.parse(deal.terms.timing.deliverBy) <= (await seller.settlementNow())) return record(deal, { stage: 'closed', note: 'the delivery deadline passed before the job started' });
       // Recorded before the call: a crash or a lost answer after it is seen on the next pass. A repeatable start
       // carries the deal's ID as its key, so a repeat returns the same job.
       record(deal, { startAttempts: (deal.startAttempts ?? 0) + 1 });
