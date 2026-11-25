@@ -7,7 +7,7 @@
 // These run under this build's newest aggregation, agg-4 (ADR-0043). Aggregation agg-3, kept for the deals bound to it,
 // still signs a reject on one family's verdicts when the faulty family holds one seat of three and its fault is not a
 // filter abstention (ONE_FAMILY_REJECT_AT_AGG3); the last describe block holds it there.
-import { canonicalJson } from '@holdback/core';
+import { canonicalJson, type JudgeVerdict } from '@holdback/core';
 import fc from 'fast-check';
 import { describe, expect, it } from 'vitest';
 import { ADJUDICATOR, delivery, fakeUnwrap, GOOD_CSV, NONCES, POLICY, RUBRIC, seal, utf8 } from './_helpers.js';
@@ -191,7 +191,7 @@ describe('T-570: no seat\'s output aborts the panel (red team H1)', () => {
     const gpt = draft.panel.members.find((m) => m.judgeId === 'gpt-a')!;
     expect(gpt.status).toBe('ok');
     expect(JSON.stringify(gpt.verdict)).not.toMatch(/\uFFFD|\p{Cs}/u);
-    for (const c of gpt.verdict!.criteria) {
+    for (const c of (gpt.verdict as JudgeVerdict).criteria) {
       expect([...c.evidence]).toHaveLength(300);
       expect(c.evidence.endsWith(cut ? '[cut]' : '\u{1F600}')).toBe(true);
     }

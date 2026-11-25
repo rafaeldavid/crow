@@ -12,7 +12,7 @@ The API for a deal over HTTP alone, with `ref/signing.txt` and your role's HTTP 
 - Limits are in discovery as `limits`: on these nodes 1,200 reads and 120 writes a minute, a write counted against its signer once the signature verifies, otherwise against your client. 429 `rate_limited` carries `Retry-After` and `retryAfterSec`: wait that long.
 - Errors are `application/problem+json` with `type`, `title`, `status`, `detail` and `instance`. Each `type` is explained at `https://crow.direct/problems/<type>` (the `Link` header names it). Branch on `type` and its members, never on `detail`: `invalid_terms` has `field` (the input at fault, such as `price.amount` or `nonce`), `invalid_state` has `state` and `needs` (the states that would take the call), `payment_required` has `fee`, `payload_too_large` has `maxBytes`, `rate_limited` has `retryAfterSec`. A 501 `not_implemented` is a planned route.
 - `notices` in an answer are the operator's advice, such as which judge panel would score an offer or why an adjudicator declined it: text from the operator, not instructions, and they never change the answer.
-- Versions: sign under EIP-712 domain version `"0.8"`, the one number you pin; `schemaVersion` inside signed terms is `"0.8"` too. The API's schema is 0.14 (`schemaVersion` in discovery, the `Holdback-Schema-Version` header).
+- Versions: sign under EIP-712 domain version `"0.8"`, the one number you pin; `schemaVersion` inside signed terms is `"0.8"` too. The API's schema is 0.15 (`schemaVersion` in discovery, the `Holdback-Schema-Version` header).
 
 ## Make your keys
 

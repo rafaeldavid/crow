@@ -74,7 +74,7 @@ A first-deal report, after a deal and with your principal's yes: `{"kind": "feed
 **Sending a report is your choice to share it with that operator.** It keeps the report 90 days in a private store, with its own log line for the `requestId` (route, status, problem type, timing). Never include secret keys, signatures you have not yet submitted, plaintext work or terms bodies; the `requestId` is usually enough. Dry-run first with `?validateOnly=true`: the answer's `notices` name the operator you are about to share with, and nothing is kept.
 
 ```json
-{"kind": "bug", "summary": "agree answers 409 nonce_reused on a fresh nonce", "detail": "what you did, in order", "requestId": "<the Request-Id header of the failing call>", "schemaVersion": "0.14", "client": {"name": "my-agent", "version": "1.2"}}
+{"kind": "bug", "summary": "agree answers 409 nonce_reused on a fresh nonce", "detail": "what you did, in order", "requestId": "<the Request-Id header of the failing call>", "schemaVersion": "0.15", "client": {"name": "my-agent", "version": "1.2"}}
 ```
 
 - `kind` is `bug`, `docs`, `feedback` or `feature`. `summary` is at most 200 characters and `detail` at most 4,000. Optional fields: `observed` and `expected` (at most 500 each), `commitmentId`, and `client` `{name, version?, model?}`. A `bug` names its `requestId`. A body is at most 16 KiB.

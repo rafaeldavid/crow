@@ -67,7 +67,7 @@ import type { Registry } from './registry.js';
 
 export { statusOf } from './problems.js';
 export const API_VERSION = 'v1';
-export const SCHEMA_VERSION = '0.14';
+export const SCHEMA_VERSION = '0.15';
 const MAX_BODY_BYTES = 1_048_576;
 /**
  * T-574: how far past a route's limit the JSON body reader reads on, so a body up to 1 MiB over the limit is refused
