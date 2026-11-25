@@ -8,8 +8,8 @@
 // this machine. Node 22.18 or later, with npm install viem@2.57.13 tweetnacl@1.0.3.
 Object.defineProperty(globalThis, 'crowCommands', { value: Object.freeze({"buy-with-signer":"node buy.mjs","pay-from-wallet":"node buy.mjs pay","deal-record":"node buy.mjs record"}), enumerable: false, configurable: false, writable: false });
 
-import { chmodSync, existsSync, mkdirSync, readFileSync, readdirSync, renameSync, writeFileSync } from "node:fs";
-import { join, relative } from "node:path";
+import { chmodSync, existsSync, lstatSync, mkdirSync, readFileSync, readdirSync, renameSync, writeFileSync } from "node:fs";
+import { basename, dirname, join, normalize, relative, resolve, sep } from "node:path";
 import nacl from "tweetnacl";
 import { encodeAbiParameters, getAddress, hashStruct, hashTypedData, keccak256, parseAbiParameters, recoverMessageAddress, recoverTypedDataAddress, toBytes } from "viem";
 import { generatePrivateKey, privateKeyToAccount } from "viem/accounts";
@@ -4296,11 +4296,120 @@ var init_pay_from_wallet = __esmMin((async () => {
 	}
 }));
 
+// examples/deal-files.ts
+/** `<key store>-files`, beside the store; a store named "." or ".." is resolved first. */
+function folderFor(store) {
+	let s = normalize(store);
+	while (s.length > 1 && s.endsWith(sep)) s = s.slice(0, -1);
+	if ([
+		"",
+		".",
+		".."
+	].includes(basename(s))) s = resolve(store);
+	return join(dirname(s), `${basename(s)}-files`);
+}
+/** Writes a new file, mode 0600. False when something, a link included, is there already. */
+function writeNew(path, text) {
+	try {
+		writeFileSync(path, text, {
+			flag: "wx",
+			mode: 384
+		});
+		return true;
+	} catch (e) {
+		if (e.code === "EEXIST") return false;
+		throw e;
+	}
+}
+/** The record, or a throw once `ms` have passed. */
+async function within(read, ms) {
+	let timer;
+	const late = new Promise((_, reject) => {
+		timer = setTimeout(() => reject(/* @__PURE__ */ new Error(`not read within ${ms / 1e3} s`)), ms);
+	});
+	try {
+		return await Promise.race([read, late]);
+	} finally {
+		clearTimeout(timer);
+	}
+}
+/** Saves what one finished deal leaves. It never throws: what failed is named in `problems`. */
+async function saveDealFiles(d) {
+	const saved = {
+		work: null,
+		record: null
+	};
+	const problems = [];
+	const done = () => problems.length ? {
+		...saved,
+		problems
+	} : saved;
+	const id = d.commitmentId.toLowerCase();
+	if (!/^0x[0-9a-f]{64}$/.test(id)) {
+		problems.push("nothing was saved: the commitment ID is not 0x and 64 hex digits");
+		return done();
+	}
+	let folder;
+	try {
+		folder = folderFor(d.store);
+		mkdirSync(folder, {
+			recursive: true,
+			mode: 448
+		});
+		if (!lstatSync(folder).isDirectory()) throw new Error(`${folder} is a link or a file, not a folder of its own`);
+	} catch (e) {
+		problems.push(`nothing was saved: ${why(e)}`);
+		return done();
+	}
+	if (d.work !== null) {
+		const path = join(folder, `${id}.work.${ENDINGS.get(d.format) ?? "txt"}`);
+		try {
+			if (writeNew(path, d.work) || lstatSync(path).isFile() && readFileSync(path, "utf8") === d.work) saved.work = path;
+			else problems.push(`the work was not saved: ${path} already holds something else`);
+		} catch (e) {
+			problems.push(`the work was not saved: ${why(e)}`);
+		}
+	}
+	try {
+		const record = await within(d.record(), d.recordWithinMs ?? RECORD_WITHIN_MS);
+		const text = `${JSON.stringify(record, null, 2)}\n`;
+		for (let n = 1; n <= MOST_RECORDS && saved.record === null; n++) {
+			const path = join(folder, `${id}.record${n === 1 ? "" : `-${n}`}.json`);
+			if (writeNew(path, text)) saved.record = path;
+		}
+		if (saved.record === null) problems.push(`the record was not saved: ${folder} holds ${MOST_RECORDS} records of this deal already`);
+		else {
+			const count = (ok) => (record.checks ?? []).filter((c) => c.ok === ok).length;
+			saved.checks = {
+				passed: count(true),
+				notRun: count(null),
+				failed: count(false)
+			};
+			saved.disagreements = (record.disagreements ?? []).map((x) => x.section);
+		}
+	} catch (e) {
+		problems.push(`the record was not saved: ${why(e)}`);
+	}
+	return done();
+}
+var ENDINGS, RECORD_WITHIN_MS, MOST_RECORDS, why;
+var init_deal_files = __esmMin((() => {
+	ENDINGS = /* @__PURE__ */ new Map([
+		["text/csv", "csv"],
+		["application/json", "json"],
+		["text/markdown", "md"]
+	]);
+	RECORD_WITHIN_MS = 3e4;
+	MOST_RECORDS = 100;
+	why = (e) => String(e?.message ?? e).slice(0, 300);
+}));
+
 // examples/buy-with-signer.ts
 var buy_with_signer_exports = /* @__PURE__ */ __exportAll({});
 var args, stop, at, termsFile, dl, deliveryFile, first, store, third, fourth, defaults, options, usage, asked, say, expect, sh, approveOf, finish, testFunds, pay;
 var init_buy_with_signer = __esmMin((async () => {
 	init_help();
+	init_deal_files();
 	init_buyer_signer();
 	init_verify();
 	args = process.argv.slice(2);
@@ -4334,6 +4443,13 @@ var init_buy_with_signer = __esmMin((async () => {
 			onReport: say,
 			...deliveryFile ? { delivery: JSON.parse(readFileSync(deliveryFile, "utf8")) } : {}
 		});
+		const saved = await saveDealFiles({
+			store,
+			commitmentId: s.commitmentId,
+			work: done.work,
+			format: s.shownOffer?.deliverable?.format,
+			record: () => s.record()
+		});
 		console.log(printable(JSON.stringify({
 			commitmentId: s.commitmentId,
 			buyer: s.address,
@@ -4341,7 +4457,8 @@ var init_buy_with_signer = __esmMin((async () => {
 			outcome: done.outcome,
 			...done.settlement ? { settlement: done.settlement } : {},
 			work: done.work,
-			transactions: done.transactions
+			transactions: done.transactions,
+			saved
 		})));
 	};
 	testFunds = (s, amount) => s.testFunds(amount).then(() => true, (e) => {

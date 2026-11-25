@@ -2,7 +2,7 @@
 // own adapter configuration file, the shipped adapter and its stub API, and the command's approval stop. The sim's
 // faucet admits each fresh buyer key, so the command funds and opens a delivered deal on a local chain.
 import { spawn } from 'node:child_process';
-import { mkdtempSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
+import { existsSync, mkdtempSync, readdirSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
 import { createServer, type Server } from 'node:http';
 import type { AddressInfo } from 'node:net';
 import { tmpdir } from 'node:os';
@@ -121,6 +121,18 @@ describe('buy-with-signer.ts: the approval stop', () => {
     expect(result).toMatchObject({ commitmentId: id, buyer, outcome: 'Released', paid: shown.fees.total });
     expect(JSON.parse(result.work)).toMatchObject({ commit: SAMPLE.commit });
     expect(adapter.deals().find((d) => d.id === id)?.stage).toBe('delivered');
+    // T-617: the run saved the work and the deal record beside the key store, and says where.
+    dirs.push(`${store}-files`);
+    expect(result.saved).toMatchObject({ work: `${store}-files/${id}.work.json`, record: `${store}-files/${id}.record.json`, checks: { failed: 0 }, disagreements: [] });
+    expect(readFileSync(result.saved.work, 'utf8')).toBe(result.work);
+    const written = JSON.parse(readFileSync(result.saved.record, 'utf8')) as J;
+    expect(written).toMatchObject({ record: 'holdback-deal-record/1', commitmentId: id, party: 'buyer', outcome: { escrowState: 'Released' } });
+    // The saved record holds the work's hash check, which the record command makes only when it is given the key.
+    expect(written.checks).toContainEqual(expect.objectContaining({ check: 'plaintext sha256', ok: true }));
+    for (const name of readdirSync(store).filter((f) => /^0x[0-9a-f]{40}\.json$/.test(f))) {
+      const key = JSON.parse(readFileSync(join(store, name), 'utf8')) as J;
+      for (const secret of [key.privateKey, key.encryptionSecretKey]) expect(readFileSync(result.saved.record, 'utf8')).not.toContain(String(secret).replace(/^0x/, ''));
+    }
   }, 90_000);
 
   it('refuses an offer that changed between the stop and the approval, naming the field, and funds nothing', async () => {
@@ -307,6 +319,8 @@ describe('buy-with-signer.ts: the approval stop', () => {
     const funded = await buy(['approve', store, shown.commitmentId, BUDGET, '--stop-after-funding']);
     expect(funded.code, funded.err).toBe(0);
     expect(funded.out).toBe('');
+    dirs.push(`${store}-files`);
+    expect(existsSync(`${store}-files`), 'a run that stops after funding has no outcome to save').toBe(false);
     expect(JSON.parse(funded.err.trimEnd().split('\n').at(-1)!)).toEqual({ funded: shown.commitmentId, paid: shown.fees.total });
     const r = await buy(['resume', store]);
     expect(r.code, r.err).toBe(0);
@@ -315,5 +329,7 @@ describe('buy-with-signer.ts: the approval stop', () => {
     const again = await buy(['approve', store, shown.commitmentId, BUDGET]);
     expect(again.code, again.err).toBe(0);
     expect(JSON.parse(again.out)).toMatchObject({ commitmentId: shown.commitmentId, outcome: 'Released' });
+    // A second run keeps the first files: the same work file, and the next record.
+    expect(JSON.parse(again.out).saved).toMatchObject({ work: JSON.parse(r.out).saved.work, record: `${store}-files/${shown.commitmentId}.record-2.json` });
   }, 120_000);
 });
