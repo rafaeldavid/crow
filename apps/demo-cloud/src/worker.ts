@@ -75,6 +75,13 @@ const WORLD_NAMES = {
 /** contracts/deployments/sepolia.json, embedded in the bundle (scripts/embed.mjs). */
 const sepoliaDeployment = (): DeploymentFile => JSON.parse(readFileSync(new URL('../../../contracts/deployments/sepolia.json', import.meta.url), 'utf8')) as DeploymentFile;
 type Settlement = keyof typeof WORLD_NAMES;
+/**
+ * T-604: after a pass that threw, the World arms the alarm itself this long after, then twice as long after each such
+ * pass in a row, this many times. Every wait stays under the 10 s after which the runtime may drop an idle instance, and
+ * the count with it.
+ */
+const RETRY_MS = 1000;
+const QUICK_RETRIES = 4;
 const NODE = 'x-holdback-node';
 const ORIGIN = 'x-holdback-origin';
 const CLIENT = 'x-holdback-client';
@@ -116,6 +123,9 @@ function redact(message: string, env: Env): string {
   return out;
 }
 
+/** Every URL in a line cut to its scheme and host: an RPC client may rewrite a keyed URL, and redact then misses it. */
+const hostsOnly = (line: string): string => line.replace(/\b(?:https?|wss?):\/\/[^\s"'<>]+/gi, (u) => (URL.canParse(u) ? `${new URL(u).origin}/…` : 'a URL'));
+
 /** The Sepolia chain from holdback-op1's environment and the embedded deployment. Throws on a missing secret. */
 function sepolia(env: Env): LiveSettlement {
   const key = env.SEPOLIA_RELAYER_KEY;
@@ -129,6 +139,8 @@ function sepolia(env: Env): LiveSettlement {
 export class World {
   private world: Promise<PublicWorld> | undefined;
   private flushTimer: ReturnType<typeof setTimeout> | undefined;
+  /** Passes in a row, in this instance, that threw (alarm). */
+  private failedPasses = 0;
 
   constructor(
     private readonly state: DurableObjectState,
@@ -167,10 +179,10 @@ export class World {
     this.flushLater(world);
     const next = world.nextPass();
     if (next === null) return;
-    // An alarm whose handler threw stays set, overdue, while the runtime backs off its retries; a request then
-    // re-arms it a second out rather than wait (measured: adjudicators idle for minutes after one failed version),
-    // never later, even when the next pass due is a takeover hours away. An alarm set after the next pass (a slow
-    // cadence, then a write brings new work) is brought forward.
+    // An alarm whose handler threw (a world that cannot open, or a pass alarm() rethrows) stays set, overdue, while the
+    // runtime backs off its retries; a request then re-arms it a second out rather than wait (measured: adjudicators
+    // idle for minutes after one failed version), never later, even when the next pass due is a takeover hours away.
+    // An alarm set after the next pass (a slow cadence, then a write brings new work) is brought forward.
     const at = await this.state.storage.getAlarm();
     const overdue = at !== null && at < Date.now() - 5000;
     if (at === null || at > next || overdue) {
@@ -215,13 +227,36 @@ export class World {
 
   /**
    * One adjudicator pass (or a chain world's setup step), then the next alarm if a case still awaits the adjudicators
-   * or setup is left; telemetry flushes on the same pass. A pass that breaks the world throws, so the runtime retries
-   * the alarm, and the retry opens a fresh world.
+   * or setup is left; telemetry flushes on the same pass.
+   *
+   * A pass that throws is logged (T-604). The first QUICK_RETRIES such passes in a row are not rethrown: the alarm is
+   * armed again 1, 2, 4 and 8 s out, or left where a request set it sooner. A rethrow would leave the wait to the
+   * runtime's own backoff, and a deal with it. The next one in a row is rethrown, and so is any failure on a retry the
+   * runtime started (isRetry): the count lives in memory, so a World that always caught would start over in each new
+   * instance and never stop. A pass that broke the world has dropped it (retire), so the next one opens a fresh world.
+   * A world that cannot open is not caught: the runtime resets an object whose blockConcurrencyWhile callback throws,
+   * and retries the alarm itself.
    */
-  async alarm(): Promise<void> {
+  async alarm(info?: { isRetry?: boolean }): Promise<void> {
     const opened = this.open();
     const world = await opened;
-    await world.work().finally(() => this.retire(opened, world));
+    try {
+      await world.work().finally(() => this.retire(opened, world));
+    } catch (e) {
+      const quick = !info?.isRetry && this.failedPasses < QUICK_RETRIES;
+      const wait = RETRY_MS * 2 ** this.failedPasses++;
+      const next = quick ? `the alarm runs the next one in ${wait / 1000} s` : "the runtime's retries take it from here";
+      console.warn(`demo world: an adjudicator pass failed, and ${next}: ${hostsOnly(redact(e instanceof Error ? e.message : String(e), this.env))}`);
+      if (!quick) throw e;
+      const at = await this.state.storage.getAlarm();
+      if (at === null || at > Date.now() + wait) {
+        await this.state.storage.setAlarm(Date.now() + wait);
+        if (!world.broken) world.telemetry.alarmSet();
+      }
+      if (!world.broken) this.flushLater(world);
+      return;
+    }
+    this.failedPasses = 0;
     await this.schedule(world);
   }
 
