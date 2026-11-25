@@ -6,8 +6,8 @@
   "provider": "anthropic",
   "family": "claude",
   "model": "placeholder-claude-b-20260601",
-  "promptTemplateHash": "0xfc6d93d5441808bbfa690c0402a0ee185eab48c508025f59cf3c4f9f5d8332f1",
-  "inputHash": "0xf41c52a242aa5ac774aaed3cd0503ff45ab5a5117bb1b90ce53cad41f30ef32c",
+  "promptTemplateHash": "0xa0bb1a5d8fa8ac53294a41556df71c098f73220d24efd9522e922f9004248659",
+  "inputHash": "0x3b326be3b8c0f64e9f7089c0efaa6f3522540b4fdfccf710ed62ad5f925f65de",
   "rubricHash": "0x4201c2a950347823c494fcfc89f88fab1ca670b2086f66ed726aa9c7b0ec7925",
   "capturedFrom": "authored",
   "verdict": {

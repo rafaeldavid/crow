@@ -11,11 +11,11 @@ T-206 H-2 (ADR-0012, the formal model's KeyOnlyWithPayment). Tidewater delivers 
 | Pragmas | settlement=sim · judges=recorded · mode=guaranteed_on_decision · seed=47 |
 | Prefix | error. (the system must refuse a step; invariants hold) |
 | Settlement | SimChain (T-006) driving @holdback/core `step` |
-| Judgment | @holdback/judgment (checks, screen, panel) · registry config/judges.yaml 0x8aa4…4549 · policy bench-a/p1 0x40b5…1e88 |
+| Judgment | @holdback/judgment (checks, screen, panel) · registry config/judges.yaml 0x8aa4…4549 · policy bench-a/p1 0xd136…9300 |
 | Club | fixtures/clubs/data-services-v1.yaml (loaded) · rulebook 0xd9bc…492d |
 | Buyer | atlas-buyer 0x36f8…B956 |
 | Seller | tidewater-seller 0x4Fe3…8139 |
-| Terms | fixtures/terms/clean-customers-2000.yaml (loaded) · commitment 0x8f10…b068 · price 2,000.000000 tUSD · fee 50.000000 tUSD |
+| Terms | fixtures/terms/clean-customers-2000.yaml (loaded) · commitment 0xfa55…b805 · price 2,000.000000 tUSD · fee 50.000000 tUSD |
 | Adjudicators | primary bench-a 0xaf59…3Ad2 · fallback bench-b 0xA7b4…Cb62 · appeal bench-c 0x2650…307A |
 | Operators | op-1 · op-2 |
 
@@ -50,13 +50,13 @@ Refusals:
 - **Intake:** plaintext 0x3ee0…8312 · text/csv · 471196 bytes (fixtures/data/dataset-cleaning/customers.clean.row-drop.csv) · hash verified ✓ · normalized
 - **Deterministic checks:** cols ✓ · rows ✗ (8740 rows; expected 9400 to 9600) · uniq ✓ · dates ✓ · id_nulls ✓ · name_nulls ✓ · email_nulls ✓ · emails (optional) ✓ · hidden ✓
 - **Screen:** clean
-- **Panel:** not run · first-instance template 0x4d32…629b · rubric 0x4201…7925 · seed source: commit-reveal (commitment 0x94e4…bdde, seed 0x94a2…b276, recomputed: match)
+- **Panel:** not run · first-instance template 0xabb5…4dd2 · rubric 0x4201…7925 · seed source: commit-reveal (commitment 0x94e4…bdde, seed 0x94a2…b276, recomputed: match)
 - **Aggregate:** reject. Reasons: required deterministic check failed: rows.
 - **Signed:** reject.
 
 ## Receipts and log
 
-- Events 0–7. Chain head 0x2e81…2529. Replay of 6 SimChain submissions from genesis matches the settlement state.
+- Events 0–7. Chain head 0xdbab…dcb8. Replay of 6 SimChain submissions from genesis matches the settlement state.
 - Receipts from op-1: 5 (rcpt-0001–rcpt-0005). The runner labels them without signing; the operator API signs real receipts.
 
 ## Invariants
