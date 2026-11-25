@@ -160,6 +160,12 @@ export interface SellerAdapterConfig {
   signingKey?: 'standing' | 'per-deal';
   /** Windows in whole seconds. Your API's `deliverWithinSec`, when a quote carries one, replaces this one; a terms rule replaces both. */
   timing: { offerExpiresInSec: number; fundWithinSec: number; deliverWithinSec: number; judgeWithinSec: number; fallbackWithinSec: number; appealWindowSec: number; appealDecideSec: number };
+  /**
+   * ADR-0051: the windows an offer with a rubric takes over `timing`; a terms rule's windows still win. The default gives
+   * Crow's adjudicators a day to hold a panel's reject, so the buyer can accept or you can settle before it is signed.
+   * `{}` keeps `timing` for every offer. An offer decided by checks alone always takes `timing`.
+   */
+  rubricTiming?: Partial<SellerAdapterConfig['timing']>;
   /** The journal file. Its directory must exist. */
   journal: string;
   /**
@@ -202,6 +208,8 @@ export const DEFAULTS: Omit<SellerAdapterConfig, 'template'> = {
   ],
   // 15 minutes to accept, 30 to fund, 7 days to deliver, 2 minutes for each adjudicator, 5 for appeals.
   timing: { offerExpiresInSec: 900, fundWithinSec: 1800, deliverWithinSec: 604_800, judgeWithinSec: 120, fallbackWithinSec: 120, appealWindowSec: 0, appealDecideSec: 300 }, // phase one: no party appeal (ADR-0033 §2b)
+  // An offer with a rubric: a day plus 600 s for the primary and for an escalation, so a reject is held a day (ADR-0051).
+  rubricTiming: { judgeWithinSec: 87_000, appealDecideSec: 87_000 },
   journal: 'seller-adapter.journal.json',
   pollMs: 5000,
   // After a refused result, fetch it again every 10 minutes until deliverBy. To be told, and to say when it is fixed:
@@ -215,7 +223,7 @@ export const DEFAULTS: Omit<SellerAdapterConfig, 'template'> = {
 // ---- End of the defaults. ----
 
 /** The fields a configuration file may set: every field of the configuration but `log`. */
-export const FILE_KEYS = ['port', 'sellerApi', 'template', 'reportMapping', 'reportSalt', 'scope', 'options', 'termsRules', 'payoutAddress', 'clubId', 'adjudicators', 'mandate', 'signingKey', 'events', 'timing', 'journal', 'pollMs', 'quoteAuth', 'quoteRateLimit', 'alerts', 'redelivery'];
+export const FILE_KEYS = ['port', 'sellerApi', 'template', 'reportMapping', 'reportSalt', 'scope', 'options', 'termsRules', 'payoutAddress', 'clubId', 'adjudicators', 'mandate', 'signingKey', 'events', 'timing', 'rubricTiming', 'journal', 'pollMs', 'quoteAuth', 'quoteRateLimit', 'alerts', 'redelivery'];
 /** Options removed in T-331, each with what to do instead. A configuration that still sets one is refused. */
 const REMOVED: Array<[string, (c: J) => boolean, string]> = [
   ['stream', (c) => c?.stream !== undefined, 'the adapter learns of a funded hold by polling every pollMs; remove the field'],
@@ -271,11 +279,12 @@ export function configFrom(f: J, file: string, files: ConfigFiles): SellerAdapte
   };
   const own = f.template !== undefined;
   if (own && f.scope === undefined) throw new Error(`${file}: scope is required with your own template: the fields a buyer's scope must have`);
-  if (f.timing !== undefined) {
-    if (!isRecord(f.timing)) throw new Error(`${file}: timing must be an object of windows`);
-    for (const [k, v] of Object.entries(f.timing)) {
-      if (!(WINDOWS as readonly string[]).includes(k)) throw new Error(`${file}: timing has a window the offer does not take: ${plain(k).slice(0, 60)}`);
-      if (!wholeAtLeast(v, 0)) throw new Error(`${file}: timing.${k} must be a whole number of seconds, 0 or more`);
+  for (const field of ['timing', 'rubricTiming'] as const) {
+    if (f[field] === undefined) continue;
+    if (!isRecord(f[field])) throw new Error(`${file}: ${field} must be an object of windows`);
+    for (const [k, v] of Object.entries(f[field])) {
+      if (!(WINDOWS as readonly string[]).includes(k)) throw new Error(`${file}: ${field} has a window the offer does not take: ${plain(k).slice(0, 60)}`);
+      if (!wholeAtLeast(v, 0)) throw new Error(`${file}: ${field}.${k} must be a whole number of seconds, 0 or more`);
     }
   }
   if (f.port !== undefined && !(wholeAtLeast(f.port, 0) && f.port <= 65_535)) throw new Error(`${file}: port must be a whole number from 0 to 65535`);
@@ -305,6 +314,7 @@ export function configFrom(f: J, file: string, files: ConfigFiles): SellerAdapte
     scope: f.scope ?? DEFAULTS.scope,
     ...(own ? { ...pass('options'), ...pass('termsRules') } : { options: f.options ?? DEFAULTS.options, termsRules: f.termsRules ?? DEFAULTS.termsRules }),
     timing: { ...DEFAULTS.timing, ...(f.timing ?? {}) },
+    rubricTiming: { ...(f.rubricTiming ?? DEFAULTS.rubricTiming) },
     journal: f.journal ?? DEFAULTS.journal,
     ...(f.events === undefined ? {} : { events: f.events }),
     pollMs: f.pollMs ?? DEFAULTS.pollMs,
@@ -595,6 +605,9 @@ function holds(w: J, scope: J, options: J): boolean {
   return typeof v === 'number' && (w.atLeast === undefined || v >= w.atLeast) && (w.atMost === undefined || v <= w.atMost);
 }
 
+/** True when a rubric has at least one criterion, so a panel scores the work (ADR-0051). */
+const hasCriteria = (rubric: J): boolean => isRecord(rubric) && Array.isArray(rubric.criteria) && rubric.criteria.length > 0;
+
 /**
  * The offer's deliverable, checks, rubric and windows for one quote: the template and `timing`, your API's window,
  * then each rule whose conditions hold, in order. A refusing rule throws 400 naming its fields.
@@ -603,12 +616,13 @@ function termsFor(c: SellerAdapterConfig, template: J, scope: J, options: J, del
   const filled = fill(template, scope);
   let checks: J[] = filled.checks;
   const deliverable = { ...filled.deliverable };
-  const timing = { ...c.timing, ...(deliverWithinSec === undefined ? {} : { deliverWithinSec }) };
+  const timing = { ...c.timing };
+  const ruled: Partial<SellerAdapterConfig['timing']> = {};
   let rubric: J = filled.rubric;
   for (const r of c.termsRules ?? []) {
     if (!r.when.every((w) => holds(w, scope, options))) continue;
     if (r.refuse !== undefined) throw new Refused(400, 'invalid_request', `${r.when.map((w) => w.field).join(' and ')}: ${r.refuse}`);
-    Object.assign(timing, r.timing);
+    Object.assign(ruled, r.timing);
     if (r.dropChecks) checks = checks.filter((k) => !r.dropChecks!.includes(k.id));
     for (const k of fill(r.checks ?? [], scope)) {
       const at = checks.findIndex((x) => x.id === k.id);
@@ -617,6 +631,11 @@ function termsFor(c: SellerAdapterConfig, template: J, scope: J, options: J, del
     if (r.describe) deliverable.description = `${deliverable.description} ${fill(r.describe, scope)}`;
     if (r.rubric !== undefined) rubric = r.rubric ? filled.optionalRubric : undefined;
   }
+  // ADR-0051: an offer with a rubric takes rubricTiming over timing; your API's deliverWithinSec wins over both, and a
+  // rule's windows over all three (red team L3).
+  if (hasCriteria(rubric)) Object.assign(timing, c.rubricTiming ?? {});
+  if (deliverWithinSec !== undefined) timing.deliverWithinSec = deliverWithinSec;
+  Object.assign(timing, ruled);
   return { deliverable, checks, ...(rubric === undefined ? {} : { rubric }), timing };
 }
 
@@ -1135,7 +1154,9 @@ export async function createSellerAdapter(c: SellerAdapterConfig, env: Readonly<
   const defaults = JSON.stringify({
     version: 1, deliverable: template.deliverable, checks: template.checks, ...(template.rubric === undefined ? {} : { rubric: template.rubric }),
     ...(template.optionalRubric === undefined ? {} : { optionalRubric: template.optionalRubric }),
-    timing: c.timing, ...(template.fee === undefined ? {} : { fee: template.fee }), scope: c.scope, options: c.options ?? {},
+    // ADR-0051: a template whose own rubric has criteria publishes the windows its offers take, and rubricTiming beside them.
+    timing: hasCriteria(template.rubric) ? { ...c.timing, ...(c.rubricTiming ?? {}) } : c.timing, ...(c.rubricTiming && Object.keys(c.rubricTiming).length ? { rubricTiming: c.rubricTiming } : {}),
+    ...(template.fee === undefined ? {} : { fee: template.fee }), scope: c.scope, options: c.options ?? {},
   });
   const reportMapping = c.reportMapping === undefined ? undefined : readMapping(c.reportMapping, io.readText);
   // The salt belongs to a template that allows it: the shipped one, or yours when you say so (T-431). The shell
