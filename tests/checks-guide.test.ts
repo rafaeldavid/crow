@@ -82,5 +82,10 @@ describe('site/ref/checks.txt and the check code', () => {
     const check = (rule: object): JudgmentCheck => ({ id: 'no-word', type: 'json_schema', required: true, schema: { properties: { s: rule } } });
     expect(run([check({ not: { pattern: 'secret' } })], delivery)[0]!.passed).toBe(true);
     expect(run([check({ maxLength: MAX_SUBJECT_CHARS, not: { pattern: 'secret' } })], delivery)[0]!.passed).toBe(false);
+    // Nested under other keywords, the gap is the same.
+    expect(run([check({ allOf: [{ not: { anyOf: [{ pattern: 'secret' }, { pattern: 'token' }] } }] })], delivery)[0]!.passed).toBe(true);
+    // At the limit itself the string is still read, so the rule holds.
+    const atLimit = JSON.stringify({ s: 'secret'.padEnd(MAX_SUBJECT_CHARS, 'a') });
+    expect(run([check({ not: { pattern: 'secret' } })], atLimit)[0]!.passed).toBe(false);
   });
 });

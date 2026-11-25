@@ -3,7 +3,7 @@
 - **Lane:** demo (the site's agent docs)
 - **Phase:** 2
 - **Depends on:** T-597 (`signature_valid`), T-610 (the three data kinds), T-593 and T-599 (pattern and match budgets)
-- **Paths this task may touch:** `site/ref/checks.txt`, `docs/api.md` ("Acceptance: checks and rubric"), `tests/checks-guide.test.ts` (new), this file
+- **Paths this task may touch:** `site/ref/checks.txt`, `site/setup.txt` (the `work/` lines; added by the coordinator on 2026-11-25), `docs/api.md` ("Acceptance: checks and rubric"), `tests/checks-guide.test.ts` (new), this file
 - **Human gate:** no for the merge. The site deploy is Rafa's.
 - **Status:** review
 - **Agent/session:** p18-check-docs
@@ -47,6 +47,13 @@ ADR-0045 (D90, D92), ADR-0047 (D98), D93, D96; `packages/judgment/src/checks/`; 
 - **The outcome of a check that runs out** (inferred from `preDecision` and `signedOutcome`, not run on a deal): the primary or fallback escalates; the appeal adjudicator on the same build also finds it inconclusive and signs nothing; the default outcome follows.
 - **`tests/checks-guide.test.ts`:** the page's list equals the registry; its signature and data examples pass the schema and `validateCheck`; the data examples pass one recording and fail a changed one with the lines the page describes; the stated limits equal the code's constants; the `not` + `pattern` statement holds.
 
+## Added by the coordinator, 2026-11-25 (wave three)
+
+- **The `not` pattern gap.** The page now says that a "must not contain" rule passes a string over 10,000 code points unread, however deep the `pattern` sits under the `not`, and that `maxLength` goes on the same string. The test runs the nested form and the string of exactly 10,000 code points (measured).
+- **The depth cap's number.** An editor note in "Pattern and work limits" marks its place. The published page drops the note (measured). The number waits for that pull request.
+- **`work/` in `setup.txt`.** The page already told the `first-deal` path to `mkdir -p`. It now says that `first-deal` makes no `work/`, and how to add finished work sooner: `mkdir -p work` and `work/ready.<ext>`. `seller --template` without `--file` deletes that file (read in `examples/setup-seller.ts`). `first-deal`, `deliver` and `publish` find the file on disk (read in `setup-work-api.ts` and `setup-publish.ts`).
+- **The setup page's cap.** The published page was 9,988 of 10,000 bytes and is now at or under the cap. The new lines took their bytes from wording elsewhere on the page. No phrase `site/check.mjs` requires changed.
+
 ## Decisions
 
 - The `checkKinds` rule moved from the signature section to the list of check types, since it covers all four new kinds.
@@ -55,11 +62,11 @@ ADR-0045 (D90, D92), ADR-0047 (D98), D93, D96; `packages/judgment/src/checks/`; 
 
 ## Handoff
 
-Done: the page, the `docs/api.md` rows and the test. Not done: the site deploy (Rafa's), so crow.direct serves the old page.
+Done: the two pages, the `docs/api.md` rows and the test. Not done: the depth cap's line, which waits for its pull request, and the site deploy (Rafa's), so crow.direct serves the old pages. To add the line: replace the `%% T-612:` note in `site/ref/checks.txt` ("Pattern and work limits") with one bullet, read the number from the code, and hold it in `tests/checks-guide.test.ts`.
 
 Follow-ups, not fixed here:
 
-1. A `json_schema` `not` + `pattern` rule passes a string over 10,000 code points. The page tells the buyer to add `maxLength`. The engine could fail the check instead; that changes judgment and needs a task of its own.
+1. A `json_schema` `not` + `pattern` rule passes a string over 10,000 code points. The page tells the buyer to add `maxLength`. The engine could fail the check instead; that changes judgment. The coordinator's wave-three confirmation holds it as a triage row until an outside deal writes such a rule without `maxLength`.
 2. No operator or adjudicator runs `validateCheck` at the offer (ADR-0045 section 10, second half; T-610's note).
 3. The page's `hidden_characters_max` line does not say that a JSON delivery's string escapes are decoded before the count (D99).
 4. The page does not say that check IDs must be unique (D100).
