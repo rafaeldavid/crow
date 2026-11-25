@@ -116,3 +116,5 @@ d7715672aa47ef45f33ac0878b076ed4b7e14189:tools/envelope-proof/methods/guest/Carg
 42254ebbf34a894948a6fef757575169f6caafde:contracts/deployments/sepolia.json:generic-api-key:45
 42254ebbf34a894948a6fef757575169f6caafde:examples/deployments.ts:generic-api-key:91
 42254ebbf34a894948a6fef757575169f6caafde:contracts/deployments/sepolia-2026-11-13T0532Z-domain-0.8.json:generic-api-key:45
+3ecc4d03c4438d30e58610a71f3f64c2e6c2ab2e:site/card.schema.json:generic-api-key:155
+3ecc4d03c4438d30e58610a71f3f64c2e6c2ab2e:site/card.schema.json:generic-api-key:162
