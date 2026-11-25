@@ -1,0 +1,39 @@
+# Terms that name the signature_valid check kind (ADR-0045, schema v0.13): the delivery is one JSON document whose
+# manifest a recorder signed. No build evaluates the kind yet, so the primary declines an offer on these terms
+# (fixtures/scenarios/neutrality.adjudicator-lacks-check-kind). The key fingerprint is a placeholder.
+# Field rules are as in clean-customers-2000.yaml.
+schemaVersion: "0.8"
+clubId: data-services-v1
+deliverable:
+  kind: dataset
+  description: "One recorded run as one JSON document: `manifest` is the run's manifest, `manifest_text` is the exact text the recorder signed, `manifest_sig` is its signature and `pubkey_pem` is the recorder's public key."
+  format: application/json
+acceptance:
+  deterministicChecks:
+    - { id: order, type: json_schema, required: true, schema: { type: object, required: [manifest], properties: { manifest: { type: object, required: [buyer_nonce] } } } }
+    - id: manifest-signature
+      type: signature_valid
+      required: true
+      alg: ecdsa-p256-sha256
+      publicKey: { pointer: /pubkey_pem, format: spki-pem, spkiSha256: "sha256:5e7f0c7d3f6a1b2c4d8e9f00112233445566778899aabbccddeeff0011223344" }
+      message: { pointer: /manifest_text, encoding: utf8, jsonEquals: /manifest }
+      signature: { pointer: /manifest_sig, encoding: base64, format: der }
+  rubric:
+    passThreshold: 0
+    criteria: []
+price: { token: tUSD, amount: "1500000000" }
+adjudication:
+  policyId: bench-a/p1
+  fee: { token: tUSD, amount: "50000000" }
+timing:
+  offerExpiresInSec: 900
+  fundWithinSec: 1800
+  deliverWithinSec: 604800
+  judgeWithinSec: 120
+  fallbackWithinSec: 120
+  appealWindowSec: 0
+  appealDecideSec: 300
+  maxSubmissions: 1
+settlement: { mode: guaranteed_on_decision, token: tUSD }
+remedy: { onReject: full_refund }
+disclosure: { level: public }

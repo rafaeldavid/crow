@@ -12,7 +12,7 @@ Validation as of November 3, 2026 (measured, `pnpm validate:spec`): all 33 examp
 - a model ID containing "latest";
 - an extra field in a judge verdict.
 
-The `$id` URLs (`https://holdback.dev/schemas/v0.12/…`) are namespaces for resolving `$ref` between files. They are not hosted. Replace the domain if the project gets one.
+The `$id` URLs (`https://holdback.dev/schemas/v0.13/…`) are namespaces for resolving `$ref` between files. They are not hosted. Replace the domain if the project gets one.
 
 ## Annotations
 
@@ -20,6 +20,15 @@ The `$id` URLs (`https://holdback.dev/schemas/v0.12/…`) are namespaces for res
 - **Every free-text string is marked or constrained.** A string with no `date-time` format, pattern, enum or const must carry the marker. URIs count as free text: they are marked and capped at 2048 characters. Identifiers instead get a pattern: club IDs, token IDs, and `Ident` for judge, provider, family, model and version labels. `tests/spec.test.ts` lints this, with an empty allowlist.
 
 ## Changelog
+
+- **v0.13 (2026-11-25, D90, ADR-0045), additive:** every `$id`, the `Holdback-Schema-Version` header and the OpenAPI `x-holdback-schema-version` move to 0.13. No typed-data struct changes, so the EIP-712 domain version and `commitment.schemaVersion` stay 0.8, and no signature or commitment ID moves. Every document that passed v0.12 passes v0.13.
+  - **`signature_valid`:** a tenth `DeterministicCheck` branch with `alg`, `publicKey {pointer, format, spkiSha256}`, `message {pointer, encoding, jsonEquals?}` and `signature {pointer, encoding, format}`. `alg` is a closed list, `ecdsa-p256-sha256` or `ed25519`; Ed25519 takes a `raw` signature only. Every parameter is a string. A pointer is an RFC 6901 JSON pointer of at most 512 characters (the new `$defs/JsonPointer`, marked `x-holdback-untrusted`). The limits on the strings the pointers resolve to are the evaluator's, not the schema's. A signed part may hold decimals: the schema never reads it.
+  - **`checkKinds`:** an optional list on the adjudicator record, beside `policy`: unique names of the check kinds the adjudicator runs, at most 100 of at most 40 characters (`^[a-z0-9_]+$`). The names are a pattern, not an enum, so a reader accepts a record that lists a newer kind. `policyHash` does not cover it; `registration.bodyHash` does. An absent list means the nine kinds of v0.12.
+  - **No build evaluates `signature_valid` yet.** The reference adjudicator publishes `checkKinds` with the nine kinds it runs. As primary it declines an offer that names any other kind, in a required or an optional check, and the offer's `notices` say why (ADR-0045 section 10; `fixtures/scenarios/neutrality.adjudicator-lacks-check-kind`). So a deal it is primary for never reaches a hold on this kind.
+  - **At judging, as before:** stage 1 records a kind it does not run as a failed check. A required one rejects the delivery. An optional one does not, so the panel can still accept. A fallback or appeal adjudicator declines nothing for it, and a party reads all three lists before it signs.
+  - **Not built:** the other half of ADR-0045 section 10, a decline for a check that fails stage 1's static validation, and the parties' own preflight on `checkKinds`.
+  - **Examples:** new `commitment.signature-valid` and `adjudicator.check-kinds` examples. `tests/spec.test.ts` holds the refused cases.
+  - **Old readers** refuse a v0.13 offer that names the kind, and an adjudicator record that carries `checkKinds`, since both objects are closed.
 
 - **v0.12 (2026-11-19, D82, D84, ADR-0040, ADR-0041), widens the parties' signatures:** every `$id`, the `Holdback-Schema-Version` header and the OpenAPI `x-holdback-schema-version` move to 0.12. No typed-data struct changes, so the EIP-712 domain version and `commitment.schemaVersion` stay 0.8, and no signature or commitment ID moves.
   - **`PartySignature`** (new in `common.schema.json`): any non-empty byte string as lowercase hex. A buyer or a seller may be a contract that answers ERC-1271, such as a standing seller's contract (ADR-0040) or a spend-controls vault that buys (ADR-0041), and the rules contract already checks both, through SignatureCheckerLib. It branches on the address, not the length: an address with no code gives a 64-byte (EIP-2098) or 65-byte signature, recovered by ECDSA with v 27 or 28; an address with code is asked `isValidSignature`, whatever the length. Marked `x-holdback-untrusted`: a contract's bytes are data.

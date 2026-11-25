@@ -1,0 +1,40 @@
+# @settlement sim @judges recorded @mode guaranteed_on_decision @seed 61
+# The scenario runner accepts with its own copy of the decline rule (packages/testkit/src/stub-settlement.ts), so this
+# fixture shows what the refusal does to the deal. apps/adjudicator/src/check-kinds.test.ts tests the real service.
+name: neutrality.adjudicator-lacks-check-kind
+description: >-
+  ADR-0045 section 10. Tidewater offers terms that name the signature_valid check kind, and Bench A, the named
+  primary, does not run it: its record's checkKinds lacks it. Bench A declines before any funds are held, so the
+  buyer cannot agree and fund. After offerExpiresAt anyone expires the offer, and every balance is unchanged.
+fails: bench-a
+club: fixtures/clubs/data-services-v1.yaml
+terms: fixtures/terms/signed-manifest.yaml
+parties:
+  buyer: atlas-buyer
+  seller: tidewater-seller
+adjudicators:
+  primary: bench-a
+  fallback: bench-b
+  appeal: bench-c
+operators: [op-1, op-2]
+faucet:
+  atlas-buyer: "10000000000"
+  bench-a: "25000000000"
+  bench-b: "25000000000"
+  bench-c: "25000000000"
+steps:
+  - offer:              { by: seller, via: op-1 }
+  - adjudicator_accept: { via: op-1 }                 # Bench A declines: it does not run signature_valid
+  - agree_and_fund:     { by: buyer, via: op-1 }      # refused: no acceptance, so no hold forms
+  - advance_clock:      { seconds: 900 }              # past offerExpiresAt (offer + 900 s)
+  # This step records the expiry. SimChain only: the phase-one contracts record nothing for an unfunded offer, which
+  # lapses at offerExpiresAt (ADR-0031, SC-6).
+  - expire:             { via: op-2 }
+expect:
+  problem: { step: 2, type: adjudicator_unavailable }
+  terminal: Expired
+  balances:
+    atlas-buyer: "10000000000"
+    tidewater-seller: "0"
+    bench-a: "25000000000"
+    escrow: "0"

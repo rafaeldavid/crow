@@ -1,5 +1,8 @@
+import { readFileSync } from 'node:fs';
 import { describe, expect, it } from 'vitest';
 import { rulebookHash } from '../packages/core/src/canonical.ts';
+import { commitmentId, registrationBodyHash } from '../packages/core/src/eip712.ts';
+import { parsers } from '../packages/core/src/parse.ts';
 // @ts-expect-error -- plain ESM helper without type declarations
 import { loadSpec as loadSpecFresh, validateExamples as validateExamplesFresh } from '../scripts/spec.mjs';
 
@@ -10,7 +13,7 @@ let exampleResults: ReturnType<typeof validateExamplesFresh> | undefined;
 const loadSpec = () => (spec ??= loadSpecFresh());
 const validateExamples = () => (exampleResults ??= validateExamplesFresh(loadSpec()));
 
-const V = 'https://holdback.dev/schemas/v0.12';
+const V = 'https://holdback.dev/schemas/v0.13';
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
 const example = (name: string): any => structuredClone(loadSpec().examples.find((e: { name: string }) => e.name === name).data);
 
@@ -76,10 +79,11 @@ describe('spec/', () => {
   // EarlyAccept and Decision, so the EIP-712 domain version and commitment.schemaVersion move to 0.7. ADR-0030: v0.10
   // adds AdjudicatorRegistration, a new type, and keeps both at 0.7. ADR-0033: v0.11 adds the buyer's payment address
   // and the seller's payout address to the terms, so both move to 0.8. ADR-0040 and ADR-0041: v0.12 widens the parties'
-  // signatures and changes no signed struct, so both stay at 0.8.
-  it('moves every schema $id to v0.12 and keeps the commitment schemaVersion at 0.8', () => {
+  // signatures and changes no signed struct, so both stay at 0.8. ADR-0045: v0.13 adds the signature_valid check kind
+  // and an adjudicator's checkKinds list, and changes no signed struct, so both stay at 0.8.
+  it('moves every schema $id to v0.13 and keeps the commitment schemaVersion at 0.8', () => {
     const { schemas, ajv } = loadSpec();
-    for (const id of schemas.values()) expect(id).toMatch(/\/schemas\/v0\.12\//);
+    for (const id of schemas.values()) expect(id).toMatch(/\/schemas\/v0\.13\//);
     const validate = ajv.getSchema(`${V}/commitment.schema.json`);
     const c = example('commitment');
     expect(c.schemaVersion).toBe('0.8');
@@ -896,6 +900,112 @@ describe('spec/', () => {
         q[extra] = 'x';
         expect(validate(q), extra).toBe(false);
       }
+    });
+  });
+
+  // Each case runs under both validators: Ajv over spec/schemas, and the compiled one the operators' parsers run.
+  describe('signature_valid and checkKinds, v0.13 (ADR-0045, D90)', () => {
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    type Edit = (x: any) => void;
+    const verdicts = (name: 'commitment' | 'adjudicator', doc: unknown) => [
+      loadSpec().ajv.getSchema(`${V}/${name}.schema.json`)(doc),
+      parsers[name](doc).ok,
+    ];
+    /** The example's terms with its three checks, after `edit` on the P-256 check ('ecdsa') or the Ed25519 one. */
+    const terms = (which: 'ecdsa' | 'ed25519', edit: Edit = () => {}) => {
+      const c = example('commitment.signature-valid');
+      edit(c.acceptance.deterministicChecks[which === 'ecdsa' ? 1 : 2]);
+      return c;
+    };
+
+    it('ships example terms with one check per algorithm, with and without jsonEquals', () => {
+      const c = example('commitment.signature-valid');
+      const checks = c.acceptance.deterministicChecks.filter((k: { type: string }) => k.type === 'signature_valid');
+      expect(checks.map((k: { alg: string; message: { jsonEquals?: string } }) => [k.alg, k.message.jsonEquals])).toEqual([
+        ['ecdsa-p256-sha256', '/manifest'],
+        ['ed25519', undefined],
+      ]);
+      expect(verdicts('commitment', c)).toEqual([true, true]);
+      expect(commitmentId(c)).toBe(c.id);
+    });
+
+    it.each<[string, 'ecdsa' | 'ed25519', Edit]>([
+      ['a raw ECDSA signature', 'ecdsa', (k) => (k.signature.format = 'raw')],
+      ['an spki-base64 key and a base64 message with jsonEquals', 'ecdsa', (k) => { k.publicKey.format = 'spki-base64'; k.message.encoding = 'base64'; }],
+      ['the root pointer and escaped segments', 'ecdsa', (k) => { k.message.jsonEquals = ''; k.message.pointer = '/a~0b/~1c//0'; }],
+      ['a pointer of 512 characters', 'ecdsa', (k) => (k.signature.pointer = `/${'a'.repeat(511)}`)],
+    ])('takes %s', (_, which, edit) => {
+      expect(verdicts('commitment', terms(which, edit))).toEqual([true, true]);
+    });
+
+    it.each<[string, 'ecdsa' | 'ed25519', Edit]>([
+      ['an unknown alg', 'ecdsa', (k) => (k.alg = 'ecdsa-secp256k1-sha256')],
+      ['ed25519 with a DER signature', 'ed25519', (k) => (k.signature.format = 'der')],
+      ['an extra property on the check', 'ecdsa', (k) => (k.timeoutMs = '100')],
+      ['an extra property on publicKey', 'ecdsa', (k) => (k.publicKey.key = 'x')],
+      ['an extra property on message', 'ecdsa', (k) => (k.message.canonicalization = 'jcs')],
+      ['an extra property on signature', 'ed25519', (k) => (k.signature.lowS = 'false')],
+      ['a numeric parameter in place of a string', 'ecdsa', (k) => (k.publicKey.pointer = 1)],
+      ['an added numeric parameter', 'ecdsa', (k) => (k.maxMessageBytes = 1024)],
+      ['a pointer without a leading slash', 'ecdsa', (k) => (k.message.pointer = 'manifest_text')],
+      ['a pointer with a bare tilde', 'ecdsa', (k) => (k.message.jsonEquals = '/a~2b')],
+      ['a pointer ending in a tilde', 'ed25519', (k) => (k.publicKey.pointer = '/a~')],
+      ['a URI fragment pointer', 'ecdsa', (k) => (k.signature.pointer = '#/manifest_sig')],
+      ['a pointer of 513 characters', 'ecdsa', (k) => (k.signature.pointer = `/${'a'.repeat(512)}`)],
+      ['a fingerprint without its prefix', 'ecdsa', (k) => (k.publicKey.spkiSha256 = k.publicKey.spkiSha256.slice(7))],
+      ['an uppercase fingerprint', 'ecdsa', (k) => (k.publicKey.spkiSha256 = `sha256:${'A'.repeat(64)}`)],
+      ['an unknown key format', 'ecdsa', (k) => (k.publicKey.format = 'jwk')],
+      ['an unknown message encoding', 'ecdsa', (k) => (k.message.encoding = 'jcs')],
+      ['a hex signature encoding', 'ecdsa', (k) => (k.signature.encoding = 'hex')],
+      ...['alg', 'publicKey', 'message', 'signature'].map((f): [string, 'ecdsa', Edit] => [`a check without ${f}`, 'ecdsa', (k) => delete k[f]]),
+      ...(['publicKey.pointer', 'publicKey.format', 'publicKey.spkiSha256', 'message.pointer', 'message.encoding', 'signature.pointer', 'signature.encoding', 'signature.format'] as const).map(
+        (path): [string, 'ecdsa', Edit] => [`a check without ${path}`, 'ecdsa', (k) => { const [at, f] = path.split('.') as [string, string]; delete k[at][f]; }],
+      ),
+    ])('refuses %s', (_, which, edit) => {
+      expect(verdicts('commitment', terms(which, edit))).toEqual([false, false]);
+    });
+
+    it('takes an adjudicator record with a checkKinds list, with none, and with a kind this schema does not name', () => {
+      const listed = example('adjudicator.check-kinds');
+      expect(listed.checkKinds).toContain('signature_valid');
+      expect(verdicts('adjudicator', listed)).toEqual([true, true]);
+      expect(registrationBodyHash(listed)).toBe(listed.registration.bodyHash);
+      expect(example('adjudicator').checkKinds).toBeUndefined();
+      expect(verdicts('adjudicator', example('adjudicator'))).toEqual([true, true]);
+      listed.checkKinds.push('equal_lengths');
+      expect(verdicts('adjudicator', listed)).toEqual([true, true]);
+    });
+
+    it('lists every kind of this schema in the example record', () => {
+      const branches = JSON.parse(readFileSync('spec/schemas/commitment.schema.json', 'utf8')).$defs.DeterministicCheck.oneOf;
+      expect(example('adjudicator.check-kinds').checkKinds.toSorted()).toEqual(branches.map((b: { properties: { type: { const: string } } }) => b.properties.type.const).toSorted());
+    });
+
+    it('keeps checkKinds outside policyHash and inside the registration bodyHash', () => {
+      const listed = example('adjudicator.check-kinds');
+      const plain = example('adjudicator');
+      expect(listed.policy).toEqual(plain.policy);
+      expect(listed.policyHash).toBe(plain.policyHash);
+      const without = structuredClone(listed);
+      delete without.checkKinds;
+      expect(registrationBodyHash(without)).not.toBe(registrationBodyHash(listed));
+    });
+
+    it.each<[string, unknown]>([
+      ['a repeated kind', ['json_schema', 'json_schema']],
+      ['a kind that is not a string', [9]],
+      ['a kind with a space', ['json schema']],
+      ['a kind of 41 characters', ['a'.repeat(41)]],
+      ['101 kinds', Array.from({ length: 101 }, (_, i) => `kind_${i}`)],
+      ['one name in place of a list', 'json_schema'],
+    ])('refuses checkKinds with %s', (_, checkKinds) => {
+      expect(verdicts('adjudicator', { ...example('adjudicator'), checkKinds })).toEqual([false, false]);
+    });
+
+    it('refuses checkKinds inside policy', () => {
+      const a = example('adjudicator');
+      a.policy.checkKinds = ['json_schema'];
+      expect(verdicts('adjudicator', a)).toEqual([false, false]);
     });
   });
 
