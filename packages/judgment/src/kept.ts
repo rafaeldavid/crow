@@ -16,7 +16,7 @@ import * as agg3 from './kept/agg-3.js';
 import * as screen0 from './kept/screen-0.js';
 import * as screen1 from './kept/screen-1.js';
 import { strideSample0 } from './kept/stride-0.js';
-import { strideSample1, TEMPLATE_PAIR, type StrideSampler, type TemplatePair } from './prompt.js';
+import { strideSample1, TEMPLATE_PAIR, TEMPLATE_PAIR_2, type StrideSampler, type TemplatePair } from './prompt.js';
 import { screen, screenTerms, SCREEN_VERSION, type ScreenInput, type ScreenResult } from './screen.js';
 import { parseVerdict } from './verdict.js';
 
@@ -65,14 +65,17 @@ export const KEPT: KeptTable = {
     [screen1.SCREEN_VERSION, SCREEN_1],
     [SCREEN_VERSION, SCREEN_2],
   ]),
-  templatePairs: [TEMPLATE_PAIR],
+  templatePairs: [TEMPLATE_PAIR, TEMPLATE_PAIR_2],
   aggregations: new Map([
     [agg3.AGGREGATION_VERSION, AGG_3],
     [AGGREGATION_VERSION, AGG_4],
   ]),
 };
 
-/** The newest version of each: what a new build offers as its default unless its kept-policies file says otherwise. */
+/**
+ * The newest version of each: what a new build offers as its default unless its kept-policies file says otherwise. The
+ * template pair stays pair 1 until a default names pair 2: pair 2 changes the prompt every recording was taken under.
+ */
 export const NEWEST_VERSIONS: PolicyVersions = {
   screenVersion: SCREEN_VERSION,
   promptTemplateHash: TEMPLATE_PAIR.firstHash,

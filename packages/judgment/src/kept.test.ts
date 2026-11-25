@@ -108,10 +108,13 @@ describe('selection by the bound policy (ADR-0036 section 6)', () => {
     expect(implementationsFor(swapped).ok).toBe(false);
   });
 
-  it('keeps screen-0, screen-1 and screen-2, one template pair, agg-3 and agg-4', () => {
+  it('keeps screen-0, screen-1 and screen-2, template pairs 1 and 2, agg-3 and agg-4', () => {
     expect(keptLabels(KEPT)).toEqual({
       screens: ['screen-0', 'screen-1', 'screen-2'],
-      templatePairs: [{ promptTemplateHash: NEWEST_VERSIONS.promptTemplateHash, appealPromptTemplateHash: NEWEST_VERSIONS.appealPromptTemplateHash }],
+      templatePairs: [
+        { promptTemplateHash: NEWEST_VERSIONS.promptTemplateHash, appealPromptTemplateHash: NEWEST_VERSIONS.appealPromptTemplateHash },
+        { promptTemplateHash: '0x8c862c9079f9336ba4a266d94d2372fe2b60c656166118f7499c1a3f8d40f8b3', appealPromptTemplateHash: '0x35d1ff26221dda1207b071c683aadb63c3116d0bb09c7e94f0c3c601e28246c1' },
+      ],
       aggregations: ['agg-3', 'agg-4'],
     });
   });
