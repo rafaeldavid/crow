@@ -5,7 +5,7 @@
 - **Depends on:** T-232 (pinned reads), T-549 (contract signers)
 - **Paths this task may touch:** `packages/settlement/src/interface.ts`, `packages/settlement/evm/`, `apps/operator/src/`, `apps/demo-cloud/src/`, `docs/api.md`, `docs/operations.md`, this file
 - **Human gate:** yes: merge and deploy wait for Rafa (the coordinator's brief, 2026-11-25)
-- **Status:** in progress
+- **Status:** review
 - **Agent/session:** Claude Code side session, 2026-11-25
 - **Roadmap row:** none
 
@@ -27,12 +27,12 @@ Non-goals: a new problem type or schema change, and the adjudicator pass that wa
 
 ## Acceptance criteria
 
-- [ ] A test on anvil reproduces 500 `internal` on an offer and on a funded agreement before the fix.
-- [ ] The same test passes after it.
-- [ ] An `internal` raised before any broadcast says nothing was sent, carries `retryAfterSec`, and the same Idempotency-Key succeeds later.
-- [ ] Each `internal` logs one line with the Request-Id, the route and the cause.
-- [ ] The packages' tests pass with anvil.
-- [ ] One review of the settlement change, blocking findings only (change recipe, kind 5).
+- [x] A test on anvil reproduces 500 `internal` on an offer and on a funded agreement before the fix.
+- [x] The same test passes after it.
+- [x] An `internal` raised before any broadcast says nothing was sent, carries `retryAfterSec`, and the same Idempotency-Key succeeds later.
+- [x] Each `internal` logs one line with the Request-Id, the route and the cause.
+- [x] The packages' tests pass with anvil.
+- [x] One review of the settlement change, blocking findings only (change recipe, kind 5).
 
 ## Evidence
 
@@ -58,7 +58,9 @@ Times are UTC on 2026-11-25. The live evidence is public: the operators' `GET /v
 
 ### Local checks
 
-(the final run's numbers)
+- [measured] On the branch with `main` merged (`7384d28a`): `pnpm typecheck`, `eslint .` and `pnpm validate:spec` pass.
+- [measured] `vitest run packages/settlement apps/operator apps/demo-cloud apps/adjudicator`, with anvil: 1342 tests passed and 3 were skipped; 102 test files passed and 2 were skipped. No snapshot changed.
+- [measured] Two earlier runs failed in `deploy-script.test.ts` only, for reasons outside the change. First, 27 cases: Finder wrote `.DS_Store` files into this checkout's submodules, and the script refuses uncommitted changes under `contracts/lib`. The passing runs told git to ignore `.DS_Store` through `GIT_CONFIG_*` variables, which changes no config. Second, 3 cases: the Mac slept from 12:17 to 12:48 local time during the run, and two of them timed out across it; the third's cause is inferred to be the same.
 
 ## Decisions
 
