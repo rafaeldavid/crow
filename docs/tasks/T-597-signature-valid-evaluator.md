@@ -28,7 +28,7 @@ Stage 1 runs the `signature_valid` check as ADR-0045 specifies, so a deal can re
 
 - **`@noble/curves` is a direct dependency of `packages/judgment` at exactly 1.9.1,** the version the adjudicator app and the root already pin. The lockfile already held 1.9.1 (published 2025-05-14); only the importer entry is new.
 - **The pure verifier is its own file** (`signature.ts`): strict base64, the PEM reader, the key-shape check and `verifySignature`. N226 can call it.
-- **`neutrality.adjudicator-lacks-check-kind` is removed.** No schema v0.13 kind is left that a build lacks. The scenario file gains `lacks_check_kinds`, which `neutrality.fallback-lacks-check-kind` uses. The decline rule stays, with its tests (`apps/adjudicator/src/check-kinds.test.ts`) now using a kind a later schema may add.
+- **`neutrality.adjudicator-lacks-check-kind` stays,** with `lacks_check_kinds` giving Bench A a build without `signature_valid`, since no schema v0.13 kind is left that a build lacks. `neutrality.fallback-lacks-check-kind` uses the same field. The unit tests (`apps/adjudicator/src/check-kinds.test.ts`) use a kind a later schema may add. The red team restored the fixture: it is the decline's only end-to-end and local-chain run.
 - **Work units:** 1 per message byte decoded (base64) or hashed, 200,000 per verification, 1 per value `jsonEquals` visits. The record's guess, kept; not yet measured at the store's limit (see Handoff).
 - **The detail lines are ADR-0045 section 5's, and the vectors' README fixes the open ordering questions** by following section 4's steps (publicKey, then message, then signature).
 
