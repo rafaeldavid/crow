@@ -256,7 +256,7 @@ function newRun(input: CheckInput, budget: StepBudget, checks: readonly Judgment
     budget.spend(counts.total);
     return counts;
   });
-  // Uses left per reference, so a table no later check needs is not held: twenty references at once would not fit.
+  // Uses left per reference, so a run holds no reference table that no later check needs.
   const uses = new Map<string, number>();
   for (const c of checks) if (c.type === 'reference_row_match_min') uses.set(c.reference.sha256, (uses.get(c.reference.sha256) ?? 0) + 1);
   const references = new Map<string, () => Result<Indexed, string>>();
