@@ -64838,6 +64838,15 @@ async function main(argv) {
 		return 2;
 	}
 	let adapter;
+	for (const signal of ["SIGTERM", "SIGINT"]) process.once(signal, () => {
+		const running = adapter;
+		if (running === void 0) {
+			console.log(`${(/* @__PURE__ */ new Date()).toISOString()} ${signal}: the adapter stops before it serves; the journal keeps every open deal.`);
+			process.exit(0);
+		}
+		console.log(`${(/* @__PURE__ */ new Date()).toISOString()} ${signal}: the adapter stops after the step in progress; the journal keeps every open deal.`);
+		running.close().then(() => process.exit(0));
+	});
 	try {
 		const settings = loadConfig(file);
 		if (!Object.hasOwn(JSON.parse(readFileSync(file, "utf8")), "template")) throw new Error(`${file}: template is required: serve.mjs carries no deal template, so name your own, with its scope`);
@@ -64848,10 +64857,6 @@ async function main(argv) {
 		console.error(`serve: ${plain$1(e.message)}`);
 		return 2;
 	}
-	for (const signal of ["SIGTERM", "SIGINT"]) process.once(signal, () => {
-		console.log(`${(/* @__PURE__ */ new Date()).toISOString()} ${signal}: the adapter stops after the step in progress; the journal keeps every open deal.`);
-		adapter.close().then(() => process.exit(0));
-	});
 }
 
 // site/serve-entry.mjs

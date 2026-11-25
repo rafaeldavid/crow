@@ -50,7 +50,25 @@ export async function main(argv: readonly string[]): Promise<number | undefined>
     console.error(USAGE);
     return 2;
   }
-  let adapter: RunningAdapter;
+  // The handlers go in before the start: startSellerAdapter prints its ready line before it returns, so one installed
+  // after it left a signal sent on that line to the operating system, which killed the process (a failed CI run).
+  // From that line to the assignment of `adapter` below, only synchronous code and microtasks run, and Node runs a
+  // signal's handler between turns of its event loop. So after the ready line, the handler finds the adapter.
+  let adapter: RunningAdapter | undefined;
+  for (const signal of ['SIGTERM', 'SIGINT'] as const) {
+    process.once(signal, () => {
+      const running = adapter;
+      // Still starting, perhaps waiting on an operator that never answers: no quote is served and no pass has run.
+      if (running === undefined) {
+        console.log(`${new Date().toISOString()} ${signal}: the adapter stops before it serves; the journal keeps every open deal.`);
+        process.exit(0);
+      }
+      // As seller-adapter.ts's own command line: it stops taking quotes, lets the step in progress finish and record
+      // itself in the journal, then exits. The next start resumes every open deal from the journal.
+      console.log(`${new Date().toISOString()} ${signal}: the adapter stops after the step in progress; the journal keeps every open deal.`);
+      void running.close().then(() => process.exit(0));
+    });
+  }
   try {
     const settings = loadConfig(file); // it throws on a file that is not one JSON object, so the read below parses
     if (!Object.hasOwn(JSON.parse(readFileSync(file, 'utf8')) as object, 'template')) {
@@ -69,14 +87,6 @@ export async function main(argv: readonly string[]): Promise<number | undefined>
   } catch (e) {
     console.error(`serve: ${plain((e as Error).message)}`);
     return 2;
-  }
-  // As seller-adapter.ts's own command line: it stops taking quotes, lets the step in progress finish and record
-  // itself in the journal, then exits. The next start resumes every open deal from the journal.
-  for (const signal of ['SIGTERM', 'SIGINT'] as const) {
-    process.once(signal, () => {
-      console.log(`${new Date().toISOString()} ${signal}: the adapter stops after the step in progress; the journal keeps every open deal.`);
-      void adapter.close().then(() => process.exit(0));
-    });
   }
   return undefined;
 }
