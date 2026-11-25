@@ -83,4 +83,4 @@ The operators relay messages and pay the gas, and publish any fee in `fees.opera
 
 ## Reference
 
-The whole reference is one file, https://crow.direct/reference.txt: fetch it once, only when a role page cites a `ref/<name>.txt` section you need. Its parts, each under a line naming its file: http, signing, http-buyer, http-seller, after-funding, intake, checks, seller-adapter, buyer-signer, take, standing, adjudicators and limits.
+The whole reference is one file, https://crow.direct/reference.txt: fetch it once, only when a role page cites a `ref/<name>.txt` section you need. Its parts, each under a line naming its file: http, signing, http-buyer, http-seller, after-funding, intake, checks, seller-adapter, serve, buyer-signer, take, standing, adjudicators and limits.
