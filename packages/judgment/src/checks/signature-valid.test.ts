@@ -6,7 +6,7 @@ import { ed25519 } from '@noble/curves/ed25519';
 import { p256 } from '@noble/curves/nist';
 import fc from 'fast-check';
 import { parseCommitment } from '@holdback/core';
-import { describe, expect, it } from 'vitest';
+import { describe, expect, it, vi } from 'vitest';
 import type { JudgmentCheck } from '../terms.js';
 import { UntrustedData } from '../untrusted.js';
 import { CHECK_TYPES, evaluateChecks, runChecks, validateCheck } from './index.js';
@@ -183,6 +183,24 @@ describe('signature_valid: work budget and determinism', () => {
       return JSON.stringify([run(good.check, good.delivery, b), b.remaining]);
     });
     expect(new Set(outs).size).toBe(1);
+  });
+
+  it('parses the delivery once per run, however many JSON checks the terms hold', () => {
+    const checks = [
+      ...Array.from({ length: 10 }, (_, i) => ({ ...(good.check as object), id: `sig-${i}` })),
+      ...Array.from({ length: 10 }, (_, i) => ({ id: `schema-${i}`, type: 'json_schema', required: true, schema: { type: 'object' } })),
+    ] as unknown as JudgmentCheck[];
+    const parse = vi.spyOn(JSON, 'parse');
+    try {
+      const r = runChecks(checks, { data: UntrustedData.wrap(good.delivery), mime: 'application/json' });
+      expect(r.outcomes.every((o) => o.passed)).toBe(true);
+      expect(parse.mock.calls.filter(([text]) => text === good.delivery)).toHaveLength(1);
+    } finally {
+      parse.mockRestore();
+    }
+    // A delivery that is not JSON fails each kind with its own detail line, as before.
+    const bad = runChecks([checks[0]!, checks[10]!], { data: UntrustedData.wrap('{'), mime: 'application/json' }).outcomes;
+    expect(bad.map((o) => o.detail)).toEqual(['not a JSON document', 'deliverable is not valid JSON']);
   });
 
   it('opens no timer: the source holds no clock or timer call', () => {

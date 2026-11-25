@@ -17,7 +17,7 @@ import type { UntrustedData } from '../untrusted.js';
 import { isIso8601 } from './iso8601.js';
 import { compileJsonSchema } from './json-schema.js';
 import { BudgetExhausted, compileSafeRegex, StepBudget } from './safe-regex.js';
-import { evaluateSignatureValid, validateSignatureCheck } from './signature-valid.js';
+import { evaluateSignatureValid, validateSignatureCheck, type ParsedDelivery } from './signature-valid.js';
 import { cellText, isNonScalar, toTable, type Cell, type Table } from './table.js';
 
 export type CheckType = JudgmentCheck['type'];
@@ -147,21 +147,17 @@ type Outcome = { passed: boolean; detail?: string };
 const pass = (detail?: string): Outcome => (detail === undefined ? { passed: true } : { passed: true, detail });
 const fail = (detail: string): Outcome => ({ passed: false, detail });
 
-function evaluate(check: JudgmentCheck, input: CheckInput, table: () => ReturnType<typeof toTable>, budget: StepBudget): Outcome {
+function evaluate(check: JudgmentCheck, input: CheckInput, table: () => ReturnType<typeof toTable>, json: () => ParsedDelivery, budget: StepBudget): Outcome {
   const invalid = validateCheck(check);
   if (invalid) return fail(`check invalid: ${invalid}`);
   if (check.type === 'json_schema') {
-    let value: unknown;
-    try {
-      value = JSON.parse(input.data.reveal());
-    } catch {
-      return fail('deliverable is not valid JSON');
-    }
+    const doc = json();
+    if (!doc.ok) return fail('deliverable is not valid JSON');
     const v = compileJsonSchema(check.schema);
-    const e = v.ok ? v.value(value, budget) : v.error;
+    const e = v.ok ? v.value(doc.value, budget) : v.error;
     return e === undefined ? pass() : fail(`schema: ${e}`);
   }
-  if (check.type === 'signature_valid') return evaluateSignatureValid(check, input.data.reveal(), budget);
+  if (check.type === 'signature_valid') return evaluateSignatureValid(check, json, budget);
   if (check.type === 'hidden_characters_max') {
     // Counted on the text as delivered, every occurrence, legitimate or not (D17).
     const counts: HiddenCounts = countHidden(input.data.reveal());
@@ -270,11 +266,24 @@ export function runChecks(checks: readonly JudgmentCheck[], input: CheckInput, b
     }
     return cached;
   };
+  // The delivery read as JSON once per run and shared by every JSON check, none of which changes it: the parse is not
+  // charged to the budget, so one parse per check let the terms' checks multiply that unmetered work.
+  let parsed: ParsedDelivery | undefined;
+  const json = (): ParsedDelivery => {
+    if (parsed === undefined) {
+      try {
+        parsed = { ok: true, value: JSON.parse(input.data.reveal()) as unknown };
+      } catch {
+        parsed = { ok: false };
+      }
+    }
+    return parsed;
+  };
   const inconclusive: string[] = [];
   const outcomes = checks.map((check) => {
     let o: Outcome;
     try {
-      o = evaluate(check, input, table, budget);
+      o = evaluate(check, input, table, json, budget);
     } catch (e) {
       if (e instanceof BudgetExhausted) {
         inconclusive.push(check.id);

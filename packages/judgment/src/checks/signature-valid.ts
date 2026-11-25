@@ -16,6 +16,8 @@ import {
 
 type SignatureCheck = Extract<JudgmentCheck, { type: 'signature_valid' }>;
 export type SignatureOutcome = { passed: boolean; detail?: string };
+/** The delivery as JSON.parse read it, or ok false when it is not JSON. Stage 1 parses once per run and shares it. */
+export type ParsedDelivery = { ok: true; value: unknown } | { ok: false };
 
 /** Work units (section 6). Part of the kind: a change to them is a change to judgment and takes a new policy version. */
 export const SIGNATURE_WORK = { perVerification: 200_000, perComparedValue: 1 } as const;
@@ -89,6 +91,14 @@ function jsonEqual(left: unknown, right: unknown, budget: StepBudget): boolean {
   return true;
 }
 
+function parseDelivery(text: string): ParsedDelivery {
+  try {
+    return { ok: true, value: JSON.parse(text) as unknown };
+  } catch {
+    return { ok: false };
+  }
+}
+
 const LONE_SURROGATE = /[\uD800-\uDBFF](?![\uDC00-\uDFFF])|(?<![\uD800-\uDBFF])[\uDC00-\uDFFF]/;
 
 const fail = (detail: string): SignatureOutcome => ({ passed: false, detail });
@@ -97,15 +107,12 @@ const fail = (detail: string): SignatureOutcome => ({ passed: false, detail });
  * The check's result on the delivered text, in the order of ADR-0045 section 4, stopping at the first failure. A detail
  * names the step and never quotes the message, the key or the signature. Throws only BudgetExhausted.
  */
-export function evaluateSignatureValid(check: SignatureCheck, delivered: string, budget: StepBudget): SignatureOutcome {
+export function evaluateSignatureValid(check: SignatureCheck, delivered: string | (() => ParsedDelivery), budget: StepBudget): SignatureOutcome {
   const invalid = validateSignatureCheck(check);
   if (invalid) return fail(`check invalid: ${invalid}`);
-  let document: unknown;
-  try {
-    document = JSON.parse(delivered);
-  } catch {
-    return fail('not a JSON document');
-  }
+  const parsed = typeof delivered === 'string' ? parseDelivery(delivered) : delivered();
+  if (!parsed.ok) return fail('not a JSON document');
+  const document = parsed.value;
 
   const strings = {} as Record<'publicKey' | 'message' | 'signature', string>;
   for (const name of ['publicKey', 'message', 'signature'] as const) {
