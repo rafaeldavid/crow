@@ -150,7 +150,7 @@ The operators and the evidence:
 - **The relayer pays test ETH.** One Sepolia-only relayer secret on operator node 1 pays gas through a funding lane and three deal lanes. It has no role in any contract (`docs/operations.md`, Secrets).
 - **The demo adjudicators' keys are generated in a Durable Object.** The world derives the three adjudicators' keys, both operators' keys and the club's keys from one random secret that it creates and stores (`apps/demo-cloud/src/world.ts`, `meta.secret`). Crow therefore runs the primary, fallback and appeal adjudicators of the demo.
 - **Both operator nodes serve one world.** Node 2 has its own receipt key and forwards to the same Durable Object (`docs/operations.md`, "What is live").
-- **Live judges are capped at 30 calls a day.** Past the cap, panels are scripted and every verdict says so. The DeepSeek model IDs are provider aliases with no dated snapshot (`config/judges-live.yaml`).
+- **Live judges are capped at 100 calls a day by default** (`LIVE_JUDGE_CALLS_PER_DAY`, one budget for both nodes). Past the cap, Crow's adjudicators decline new judged deals until the next UTC day, and a deal already being judged gets no scripted verdict (T-574). The DeepSeek model IDs are provider aliases with no dated snapshot (`config/judges-live.yaml`).
 - **The deployer is a throwaway key** with no authority on chain.
 
 ## Appendix B. Where the sources disagreed, and how each was settled

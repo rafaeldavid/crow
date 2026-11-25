@@ -133,6 +133,17 @@ export interface AdjudicatorConfig {
    */
   offerGate?: (c: DecisionTask['commitment']) => Promise<Problem | null>;
   /**
+   * T-581: the host's count of the deals this service accepts, asked last at acceptance. `take` counts the deal or says
+   * why not, and is asked only when this service is about to sign an acceptance; `giveBack` returns the count when the
+   * acceptance is not submitted; `check` answers as `take` would without counting, for `declines`. A decline only leaves
+   * the offer unaccepted: it expires at offerExpiresAt with nothing held (D29; neutrality.adjudicator-never-accepts).
+   */
+  acceptLimit?: {
+    check(c: DecisionTask['commitment']): Promise<Problem | null>;
+    take(c: DecisionTask['commitment']): Promise<Problem | null>;
+    giveBack(c: DecisionTask['commitment']): Promise<void>;
+  };
+  /**
    * T-574: the host's own reason not to convene a panel of `size` seats for this turn, asked just before the panel runs
    * and only when no judged result is kept. Refused, the turn is retried on each pass with no record. Unset, or null: run.
    */
@@ -521,6 +532,21 @@ export class Adjudicator {
     if (adjudication.adjudicator.toLowerCase() !== this.address) return err(problem('not_your_turn', 'not the primary adjudicator'));
     const declined = this.#offerProblem(c) ?? (await this.#referenceProblem(c)) ?? (await this.#cfg.offerGate?.(c)) ?? null;
     if (declined) return err(declined);
+    // T-581: counted last, once every other reason to decline has passed, and given back unless the acceptance is submitted.
+    const limited = (await this.#cfg.acceptLimit?.take(c)) ?? null;
+    if (limited) return err(limited);
+    let submitted = false;
+    try {
+      const r = await this.#signAccept(c);
+      submitted = r.ok;
+      return r;
+    } finally {
+      if (!submitted) await this.#cfg.acceptLimit?.giveBack(c);
+    }
+  }
+
+  async #signAccept(c: DecisionTask['commitment']): Promise<Result<AdjudicatorAcceptance, Problem>> {
+    const { adjudication } = c;
     const unsigned: Omit<AdjudicatorAcceptance, 'signature'> = {
       type: 'AdjudicatorAcceptance',
       commitmentId: c.id,
@@ -581,7 +607,7 @@ export class Adjudicator {
    * (T-221 review). The fallback's cover and the appeal's timing are still checked at the turn. null: it would take it.
    */
   async declines(c: DecisionTask['commitment'], role: DecisionTask['role']): Promise<Problem | null> {
-    if (role === 'primary') return this.#offerProblem(c) ?? (await this.#referenceProblem(c)) ?? (await this.#cfg.offerGate?.(c)) ?? null;
+    if (role === 'primary') return this.#offerProblem(c) ?? (await this.#referenceProblem(c)) ?? (await this.#cfg.offerGate?.(c)) ?? (await this.#cfg.acceptLimit?.check(c)) ?? null;
     const consented = c.adjudication.adjudicator.toLowerCase() === this.address;
     return this.#termsMismatch(c) ?? (await this.#turnProblem(c, role, { consented, cover: false, ahead: true })) ?? (await this.#runnable(c, role));
   }

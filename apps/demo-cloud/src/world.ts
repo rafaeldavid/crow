@@ -70,7 +70,7 @@ import type { TimeoutKind } from '@holdback/settlement';
 import { mandateFor, SIM_CHAIN_ID, SIM_RULEBOOK, simClub, SimChain, TOKEN, wideScope, type Genesis, type JournalEntry } from '@holdback/settlement/sim';
 import { panelConfig, type JudgeProvider, type PanelConfig } from './judges.js';
 import { StorageLanes } from './lanes.js';
-import { capOf, DailyCaps, MAX_BODY_BYTES, routedUrl, DEFAULT_DAILY_CAPS, DEFAULT_RATE, FLOOD_CEILING, problemResponse, wholeNumberVar } from './limits.js';
+import { JudgedDealsPerPair, capOf, DailyCaps, DEFAULT_JUDGED_DEALS_PER_PAIR, secondsToUtcMidnight, MAX_BODY_BYTES, routedUrl, DEFAULT_DAILY_CAPS, DEFAULT_RATE, FLOOD_CEILING, problemResponse, wholeNumberVar } from './limits.js';
 import type { WorldStorage } from './storage.js';
 import { dealFacts, Telemetry, type DayFacts, type TelemetryOptions } from './telemetry.js';
 
@@ -99,8 +99,12 @@ export interface PublicWorldOptions {
   fundedDealsPerClientPerDay?: number;
   /** T-422: new ciphertext bytes stored per client per UTC day, at each node. Default CIPHERTEXT_BYTES_PER_CLIENT_PER_DAY from `env`, else 256 MiB. */
   ciphertextBytesPerClientPerDay?: number;
+  /** T-581: judged deals Crow's adjudicators take per seller and buyer pair per UTC day, while live. Default JUDGED_DEALS_PER_PAIR_PER_DAY from `env`, else 3. */
+  judgedDealsPerPairPerDay?: number;
+  /** T-581: deals the relayer funds per UTC day across all clients and both nodes. Default FUNDED_DEALS_PER_DAY from `env`, else 200. */
+  fundedDealsPerDay?: number;
   /**
-   * Live judge calls a day across the demo. Default LIVE_JUDGE_CALLS_PER_DAY from `env`, else 30.
+   * Live judge calls a day across the demo. Default LIVE_JUDGE_CALLS_PER_DAY from `env`, else 100.
    * Live judging needs HOLDBACK_ANTHROPIC_API_KEY, HOLDBACK_OPENAI_COMPATIBLE_API_KEY and
    * HOLDBACK_OPENAI_COMPATIBLE_BASE_URL in `env` (Worker secrets); without them the panel is scripted.
    */
@@ -194,6 +198,39 @@ export async function judgedDealGate(panel: Pick<PanelConfig, 'live' | 'resumesA
   if (panel.budget.perDay < need) return problem('adjudicator_unavailable', `judge_budget_spent: this demo's live judge budget (${panel.budget.perDay} calls a day) cannot hold a panel of ${need / 2} seats on any day, so Crow's adjudicators accept no deal that can need one; ${offer}`);
   if ((await panel.budget.remaining()) - reserved >= need) return null;
   return problem('adjudicator_unavailable', `judge_budget_spent: this demo's live judge budget for today (${panel.budget.perDay} calls, UTC day) cannot hold another panel beside the judged deals already funded, so Crow's adjudicators accept no new deal that can need one; retry after ${panel.resumesAt()}, or ${offer}`);
+}
+
+type JudgedTerms = { id: string; buyer: string; seller: string; adjudication: { adjudicator: string } } & Parameters<typeof needsPanel>[0];
+
+/**
+ * T-581: the hooks behind the judged-deal limit per seller and buyer pair. `acceptLimit` counts when Crow accepts as
+ * primary (AdjudicatorConfig.acceptLimit). `turnLimit` counts a fallback or appeal turn of a deal whose primary is not one
+ * of Crow's adjudicators, before its panel is convened (Opus red team of 2026-11-25, M2): over the limit, the panel is not
+ * convened and the deal's own deadlines decide (D29). A deal is counted once, by its ID, whatever role takes it. Both
+ * count only while live judges run (`live`), since only they spend the budget.
+ */
+export function judgedDealLimits(o: { perPair: JudgedDealsPerPair; live: () => boolean; ours: () => ReadonlySet<string>; now: () => number }) {
+  const counts = (c: Parameters<typeof needsPanel>[0]) => o.live() && needsPanel(c);
+  const over = (when: 'accept' | 'panel') => {
+    const n = o.perPair.perDay;
+    const limit = `Crow's adjudicators take at most ${n} deal${n === 1 ? '' : 's'} a UTC day that can need a judge panel (a rubric, or an optional check) between one seller and one buyer, and this pair has reached it`;
+    const at = new Date(o.now() + secondsToUtcMidnight(o.now()) * 1000).toISOString();
+    return problem('adjudicator_unavailable', when === 'accept'
+      ? `judged_deals_per_pair: ${limit}. Nothing is held: the offer stays unaccepted and expires by its terms. Retry after ${at}, offer a deal decided by required checks alone, or name another adjudicator`
+      : `judged_deals_per_pair: ${limit}, so this panel is not convened and nothing is decided; the turn is tried again on each pass until its deadline, and if no panel runs by then the deal ends by its terms (its default outcome); retry after ${at}`);
+  };
+  return {
+    acceptLimit: {
+      check: async (c: JudgedTerms) => (counts(c) && !(await o.perPair.check(c, c.id)) ? over('accept') : null),
+      take: async (c: JudgedTerms) => (counts(c) && !(await o.perPair.take(c, c.id)) ? over('accept') : null),
+      giveBack: async (c: JudgedTerms) => (counts(c) ? o.perPair.giveBack(c, c.id) : undefined),
+    },
+    turnLimit: async (task: { role: string; commitment: JudgedTerms }): Promise<Problem | null> => {
+      if (task.role === 'primary' || !counts(task.commitment)) return null;
+      if (o.ours().has(lc(task.commitment.adjudication.adjudicator))) return null; // counted when Crow accepted
+      return (await o.perPair.take(task.commitment, task.commitment.id)) ? null : over('panel');
+    },
+  };
 }
 
 /**
@@ -855,7 +892,7 @@ export class PublicWorld {
       judgment: (id) => records.get(id) ?? null,
       // POST /v1/faucet: the amount the request names, up to the cap (the default grant when it names none), and a
       // mandate in the demo club.
-      faucet: grantFrom({ storage, ledger, club, principal, domain, token, symbol, amount: faucetAmount, maxAmount: faucetMaxAmount, windowSec: faucetWindowSec, perClient: faucetPerClient, now, ...(live ? { live } : {}) }),
+      faucet: grantFrom({ storage, ledger, club, principal, domain, token, symbol, amount: faucetAmount, maxAmount: faucetMaxAmount, windowSec: faucetWindowSec, perClient: faucetPerClient, secret, now, ...(live ? { live } : {}) }),
     };
     // ADR-0023: one schedule for both nodes (one operator), paid to one world address; from Worker variables. On a
     // chain the minimum also carries the gas these nodes pay for a deal (D33, amended 2026-11-03).
@@ -877,7 +914,15 @@ export class PublicWorld {
     const capLimits = {
       fundedDeals: o.fundedDealsPerClientPerDay ?? wholeNumberVar(o.env, 'FUNDED_DEALS_PER_CLIENT_PER_DAY', DEFAULT_DAILY_CAPS.fundedDeals),
       ciphertextBytes: o.ciphertextBytesPerClientPerDay ?? wholeNumberVar(o.env, 'CIPHERTEXT_BYTES_PER_CLIENT_PER_DAY', DEFAULT_DAILY_CAPS.ciphertextBytes),
+      fundedDealsAll: o.fundedDealsPerDay ?? wholeNumberVar(o.env, 'FUNDED_DEALS_PER_DAY', DEFAULT_DAILY_CAPS.fundedDealsAll),
     };
+    // T-581 (Rafa, 2026-11-24): the judged deals Crow's adjudicators take per seller and buyer pair a UTC day, counted
+    // when Crow accepts as primary, or when an outside primary leaves Crow a fallback or appeal panel to convene, so it
+    // holds however the deal reached the settlement layer; while live judges run, since only they spend the budget. One
+    // count for all three of Crow's adjudicators (limits.ts, JudgedDealsPerPair).
+    const judgedPerPair = new JudgedDealsPerPair(storage, now, secret, o.judgedDealsPerPairPerDay ?? wholeNumberVar(o.env, 'JUDGED_DEALS_PER_PAIR_PER_DAY', DEFAULT_JUDGED_DEALS_PER_PAIR));
+    let ourAddresses: ReadonlySet<string> = new Set();
+    const { acceptLimit, turnLimit } = judgedDealLimits({ perPair: judgedPerPair, live: () => panel.live, ours: () => ourAddresses, now });
     // Each node's deploy time, as the Worker in front last said (T-413); null until it does.
     const deployedAt: Array<string | null> = [null, null];
     const demo = async (node: 0 | 1 = 0): Promise<WorldDemoFacts> => {
@@ -1021,8 +1066,10 @@ export class PublicWorld {
         name: nameOf(a, panel.live),
         // T-574: past the day's live budget, decline a new deal that needs a panel, until the next UTC day.
         offerGate: async (c) => judgedDealGate(panel, c, (await registrations.policy(c.adjudication.policyHash))?.panelSize, reservedJudgeCalls()),
+        // T-581: judged deals per buyer address a day, counted when the acceptance is signed.
+        acceptLimit,
         // T-574: past the budget, an appeal panel is not convened, so it signs nothing (red team M1).
-        judgeGate: async (task, size) => appealPanelGate(panel, task, size),
+        judgeGate: async (task, size) => (await appealPanelGate(panel, task, size)) ?? (await turnLimit(task)),
         registry: panel.registry,
         registryUri: panel.registryUri,
         keptRegistries: panel.kept,
@@ -1076,6 +1123,7 @@ export class PublicWorld {
     telemetry.rows('ar', registrations.count());
     if (registrations.policiesKept() > 0) telemetry.rows('ph', registrations.policiesKept());
     const keys = [principal, key('demo-club-operator'), ...adjKeys.map((a) => a.keys), key('demo-operator-1'), key('demo-operator-2')];
+    ourAddresses = new Set(Object.values(adjudicators).map((x) => lc(x.address)));
     const world = new PublicWorld(o, telemetry, secret, chain, keys, operators, adjudicators, panel, declined, turnsDeclined, waiting, journalLength, publicUrls, live);
     reservedJudgeCalls = () => world.reservedJudgeCalls();
     world.caps = new DailyCaps(storage, now, secret, capLimits);
@@ -1488,6 +1536,10 @@ export class PublicWorld {
     const state = typeof id === 'string' && /^0x[0-9a-fA-F]{64}$/.test(id) ? await this.chain.state(id as Hex32).catch(() => null) : null;
     if (state && !PRE_FUNDING_STATES.has(state.escrowState)) return { request: forward };
     const t = await caps.takeFunding(n, via.client, fingerprint);
+    if (!t.ok && t.reason === 'global') {
+      const d = caps.limits.fundedDealsAll;
+      return problemResponse('rate_limited', `the relayer funds at most ${d} deal${d === 1 ? '' : 's'} a day (UTC) across all clients, and today's are used. Nothing about the deal changed: retry after 00:00 UTC, or submit it to the settlement layer (on Sepolia, the rules contract) yourself and pay your own gas`, { retryAfterSec: t.retryAfterSec });
+    }
     if (!t.ok) {
       const d = caps.limits.fundedDeals;
       return problemResponse('rate_limited', `this operator relays at most ${d} funded deal${d === 1 ? '' : 's'} a day (UTC) per client (an IPv4 address or an IPv6 /64), and this client has reached it. Nothing about the deal changed: retry after 00:00 UTC, send the same signed request to another operator, or submit it to the settlement layer (on Sepolia, the rules contract) yourself`, { retryAfterSec: t.retryAfterSec });
@@ -1612,10 +1664,15 @@ function grantFrom(w: {
   maxAmount: bigint;
   windowSec: number;
   perClient: number;
+  /** The world's secret: it hashes the client into the storage row's key, so no row names an address (limits.ts does the same). */
+  secret: string;
   now: () => number;
   live?: LiveWorld;
 }): NonNullable<Registry['faucet']> {
-  const perClient = new Map<string, { start: number; count: number }>();
+  // T-581: the per-client count lives in storage (`fc:<client hash>`), so a restart or an evicted Durable Object does not
+  // reset it. Rows of closed windows are deleted at most once per window.
+  let prunedAt = 0;
+  let counting: Promise<unknown> = Promise.resolve();
   const granting = new Set<string>();
   let today = { day: '', minted: 0 };
   // ADR-0033 §5: the tokens go to the payment address when the request names one, the mandate always to `address`, the
@@ -1630,12 +1687,33 @@ function grantFrom(w: {
     const retryAfterSec = (at: number) => Math.max(1, Math.ceil((at - now) / 1000));
     const last = await w.storage.get<number>(`fa:${address}`);
     if (last !== undefined && now - last < windowMs) return { ok: false, problem: problem('rate_limited', `${address} was funded in the last ${w.windowSec} seconds; one grant per address per window`), retryAfterSec: retryAfterSec(last + windowMs) };
-    let c = perClient.get(client);
-    if (!c || now - c.start >= windowMs) perClient.set(client, (c = { start: now, count: 0 }));
-    if (c.count >= w.perClient) return { ok: false, problem: problem('rate_limited', 'too many faucet grants from this client; retry later'), retryAfterSec: retryAfterSec(c.start + windowMs) };
-    if (granting.has(address)) return { ok: false, problem: problem('rate_limited', `a grant to ${address} is in progress; one grant per address per window`), retryAfterSec: retryAfterSec(now + 15_000) };
-    c.count++;
-    granting.add(address);
+    const clientKey = `fc:${canonicalKeccak({ faucetClient: client, secret: w.secret }).slice(2, 34)}`;
+    // One check-and-count at a time, so two grants racing from one client cannot both read the same count.
+    const step = counting.then(async (): Promise<FaucetOutcome | null> => {
+      let c = await w.storage.get<{ start: number; count: number }>(clientKey);
+      if (!c || now - c.start >= windowMs) c = { start: now, count: 0 };
+      if (c.count >= w.perClient) return { ok: false, problem: problem('rate_limited', 'too many faucet grants from this client; retry later'), retryAfterSec: retryAfterSec(c.start + windowMs) };
+      if (granting.has(address)) return { ok: false, problem: problem('rate_limited', `a grant to ${address} is in progress; one grant per address per window`), retryAfterSec: retryAfterSec(now + 15_000) };
+      c.count++;
+      await w.storage.put({ [clientKey]: c });
+      // Marked in progress only once the count is stored, so a failed write leaves no address stuck (T-581 review, item 2).
+      granting.add(address);
+      // Rows of closed windows, pruned at most once a window, inside the queue so no count written meanwhile is deleted
+      // (item 3). Pruning is best effort: a failure leaves rows for the next pass and refuses nothing.
+      if (now - prunedAt >= windowMs) {
+        prunedAt = now;
+        try {
+          const closed = [...(await w.storage.list<{ start: number }>({ prefix: 'fc:' })).entries()].filter(([k, v]) => k !== clientKey && now - v.start >= windowMs).map(([k]) => k);
+          for (let i = 0; i < closed.length; i += 128) await w.storage.delete(closed.slice(i, i + 128));
+        } catch {
+          prunedAt = 0;
+        }
+      }
+      return null;
+    });
+    counting = step.catch(() => undefined);
+    const refused = await step;
+    if (refused) return refused;
     try {
       return await grant(address, paymentAddress, amount, now, windowMs, retryAfterSec);
     } finally {

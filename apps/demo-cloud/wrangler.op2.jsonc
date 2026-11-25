@@ -16,7 +16,7 @@
   "main": "dist/worker.js",
   "compatibility_date": "2025-09-15",
   "compatibility_flags": ["nodejs_compat"],
-  "workers_dev": true,
+  "workers_dev": false,
   "routes": [
     { "pattern": "api2.crow.direct", "custom_domain": true },
     { "pattern": "api2.escrow.stream", "custom_domain": true }
