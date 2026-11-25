@@ -14,8 +14,9 @@
 //                 new (T-330). It records what it showed.
 //   checkOffer    reads the offer again and refuses unless it equals what readOffer showed, and unless the price, the
 //                 fees, the deliverable, the checks, the deadlines, the adjudicators and the buyer's own address and
-//                 encryption key equal what the buyer approved. The settlement mode, the disclosure level, the club,
-//                 its rulebook hash and the primary adjudicator's policy and registry are shown too, and both
+//                 encryption key equal what the buyer approved, and the seller is the one makeKeys was given (D101).
+//                 An offer this key did not ask for with quote needs that seller: anyone can copy a public offer.
+//                 The settlement mode, the disclosure level, the club, its rulebook hash and the primary adjudicator's policy and registry are shown too, and both
 //                 readOffer and checkOffer refuse them unless they equal what the buyer expects (Options.expect) and
 //                 what every operator publishes (T-332).
 //   agreeAndFund  signs the agreement, the funding and the operator fee, each rebuilt from the approved terms and
@@ -114,8 +115,9 @@ export type Offer = {
 type Signed = 'settlement' | 'disclosure' | 'clubId' | 'rulebookHash' | 'policyId' | 'policyHash' | 'registryHash' | 'maxSubmissions';
 /**
  * What the buyer approved. `seller`, `rubric`, `fees.total`, `commitmentId`, `differences` and the seven fields of
- * T-332 are optional: without `rubric` the offer must have none, and without `seller` any seller whose signature
- * recovers passes. The seven are checked against `Options.expect` and the operators either way.
+ * T-332 are optional: without `rubric` the offer must have none. `seller`, when given, is compared too; the seller
+ * makeKeys was given always is (D101), and an offer this key did not ask for with quote is refused without that one.
+ * The seven are checked against `Options.expect` and the operators either way.
  */
 export type Approved = Pick<Offer, 'price' | 'deliverable' | 'checks' | 'deadlines' | 'adjudicators'> & Partial<Pick<Offer, Signed>> & {
   fees: { adjudication: Money; operator: Money; total?: Money };
@@ -217,6 +219,12 @@ export type KeyOptions = Options & {
    * never from a seller, an operator or a message (ADR-0033 section 6).
    */
   paymentAddress?: string | undefined;
+  /**
+   * The seller's signing address, as the seller gave it by its own channel: its page or card at its own origin, or a
+   * message from it (D101). Saved in the key file. readOffer and checkOffer refuse an offer another key signed, naming
+   * `seller`: anyone can copy a public offer and sign the copy. Never take it from the offer or an operator.
+   */
+  seller?: string | undefined;
 };
 /**
  * What watch tells the buyer's agent.
@@ -276,6 +284,8 @@ type Saved = {
   createdAt: string;
   /** The buyer's payment address, lowercase, when it is not the signing address (ADR-0033). */
   paymentAddress?: string;
+  /** The seller's signing address the buyer expects, lowercase (D101). */
+  seller?: string;
   /** The Idempotency-Key of the quote request, so a retry after a crash replays the seller's answer. */
   quoteKey?: string;
   commitmentId?: Hex;
@@ -526,6 +536,9 @@ function save(store: string, s: Saved): void {
   renameSync(`${file}.tmp`, file);
 }
 
+/** D101: the refusal for an offer another key signed, naming the field and where the expected address comes from. */
+const sellerDiffers = (got: string, want: string) => `seller is ${shown(got)}, not the expected ${shown(want)}: another key signed this offer. The address you expect is the one the seller gave you by its own channel; an offer signed by any other key is a copy`;
+
 /** One deal's buyer keys and the buyer steps they sign. Make one with makeKeys; reopen one with loadKeys. */
 export class BuyerSigner {
   /** The buyer's address in this deal: the per-deal signing key's. */
@@ -561,6 +574,10 @@ export class BuyerSigner {
   get paid(): Paid | undefined {
     return this.#saved.paid;
   }
+  /** The seller's signing address makeKeys was given (D101), lowercase; undefined when none was. */
+  get expectedSeller(): string | undefined {
+    return this.#saved.seller;
+  }
 
   /** Use makeKeys, loadKeys or openDeals. */
   constructor(store: string, saved: unknown, options: Options = {}) {
@@ -576,6 +593,7 @@ export class BuyerSigner {
     this.encryptionPublicKey = Buffer.from(nacl.box.keyPair.fromSecretKey(new Uint8Array(Buffer.from(s.encryptionSecretKey, 'base64url'))).publicKey).toString('base64url');
     if (s.version !== 1 || s.address !== this.address) throw new Error(`the key file for ${s.address} in ${store} is not one this file wrote`);
     if (s.paymentAddress !== undefined && !/^0x[0-9a-f]{40}$/.test(s.paymentAddress)) throw new Error(`the key file for ${s.address} in ${store} names a payment address that is not one`);
+    if (s.seller !== undefined && !/^0x[0-9a-f]{40}$/.test(s.seller)) throw new Error(`the key file for ${s.address} in ${store} names a seller that is not an address`);
   }
 
   /**
@@ -679,6 +697,9 @@ export class BuyerSigner {
    */
   async quote(quoteUrl: string, scope: unknown, options?: unknown): Promise<Quote> {
     if (this.#saved.commitmentId) throw new Error(`this key already serves ${this.#saved.commitmentId}: one key, one deal. Call makeKeys for another deal`);
+    // D101: with no seller named, the quote URL's origin is who the seller is, so it must be one nobody on the way can answer for.
+    const u = new URL(quoteUrl);
+    if (u.protocol !== 'https:' && !(u.protocol === 'http:' && ['127.0.0.1', 'localhost', '[::1]'].includes(u.hostname))) throw new Error(`the quote URL must be https (or http on this machine), not ${u.protocol}//${u.hostname}`);
     const name = this.#quoteCredentialEnv;
     const credential = name === undefined ? undefined : process.env[name];
     // The variable's name in the error, never its value.
@@ -691,12 +712,15 @@ export class BuyerSigner {
     if (options === undefined) delete this.#saved.options;
     else this.#saved.options = options;
     save(this.store, this.#saved);
+    // No redirect (PR 814 red team): the ID must come from the origin the buyer named, not one it points to.
     const res = await fetch(quoteUrl, {
       method: 'POST',
+      redirect: 'manual',
       headers: { 'content-type': 'application/json', 'idempotency-key': this.#saved.quoteKey, ...(credential ? { authorization: `Bearer ${credential}` } : {}) },
       body: JSON.stringify({ buyer: this.address, buyerEncryptionPublicKey: this.encryptionPublicKey, ...(this.#saved.paymentAddress === undefined ? {} : { buyerPaymentAddress: this.#saved.paymentAddress }), scope, ...(options === undefined ? {} : { options }) }),
       signal: AbortSignal.timeout(120_000),
     });
+    if (res.status >= 300 && res.status < 400) throw new Error(`the seller's quote route answered ${res.status}, a redirect: a quote comes from the URL you named only, so nothing is followed. Ask the seller for its quote URL`);
     const q = (await res.json().catch(() => null)) as J;
     // The seller's own words for a refusal, as printable text, at most 200 characters: untrusted, shown and never followed.
     const why = typeof q?.detail === 'string' ? `: ${q.detail.replace(/[^\x20-\x7e]/g, '?').slice(0, 200)}` : '';
@@ -883,6 +907,8 @@ export class BuyerSigner {
       defaults = fillWith(defaultsOf(given), this.#saved.scope) as Defaults;
     }
     const { offer } = await this.#served(id);
+    // D101: a copy of an offer signed by another key is refused before it is shown.
+    if (this.#saved.seller !== undefined && offer.seller !== this.#saved.seller) refuse(sellerDiffers(offer.seller, this.#saved.seller));
     const { pin, agent } = await this.#connect();
     // ADR-0033 section 7: advisory lines for an odd money address. They refuse nothing; checkOffer refuses a payment address that is not this buyer's.
     for (const w of [...moneyAddressWarnings('payout', offer.sellerPayoutAddress, pin, offer.adjudicators), ...moneyAddressWarnings('payment', offer.buyerPaymentAddress, pin, offer.adjudicators)]) this.#log(w);
@@ -906,7 +932,8 @@ export class BuyerSigner {
    * readOffer showed with this key, differences included (compared again with the same defaults), and what the buyer
    * approved: the price, each fee, the deliverable, the checks, the rubric, the deadlines, the adjudicators, the
    * differences when given, the seven signed fields of T-332 when given, and this key's own address and encryption key
-   * as the buyer. The seven are also checked against Options.expect and the operators, as readOffer does. Waits up to `timeoutMs` for
+   * as the buyer. The seller must be the one makeKeys was given; without one, only an offer this key asked for with
+   * quote passes (D101). The seven are also checked against Options.expect and the operators, as readOffer does. Waits up to `timeoutMs` for
    * the primary adjudicator to take the deal. Once it passes, agreeAndFund signs exactly these terms.
    */
   async checkOffer(commitmentId: string, approved: Approved, options: { timeoutMs?: number } = {}): Promise<Offer> {
@@ -914,13 +941,19 @@ export class BuyerSigner {
     if (!ID.test(id)) throw new Error('commitmentId is 0x and 64 hex characters');
     const shownBefore = this.#saved.shown;
     if (shownBefore?.commitmentId !== id) return refuse(`readOffer has not shown ${id} with this key: show the buyer's agent the offer first`);
-    this.#bind(id);
     const { terms, offer: read } = await this.#served(id);
     // The offer read again from every operator, compared with what the buyer's agent was shown.
     // The clock's verdict is the one made when the offer was shown (readOffer): createdAt grows older while it waits.
     const clock = (shownBefore.offer.differences ?? []).filter((d) => CLOCK_FIELDS.includes(d.field));
     const offer: Offer = { ...read, ...(shownBefore.offer.timeline ? { timeline: shownBefore.offer.timeline } : {}), ...(shownBefore.defaults || clock.length ? { differences: [...(shownBefore.defaults ? differencesOf(shownBefore.defaults, read) : []), ...clock] } : {}) };
     for (const [field, of] of OFFER_FIELDS) if (!same(of(offer), of(shownBefore.offer))) refuse(`${field} is ${shown(of(offer))}, not the shown ${shown(of(shownBefore.offer))}`);
+    // D101: the seller is the one the buyer named, from the seller's own channel. Without a name, only an offer this key
+    // asked for at the seller's quote route passes: that route answered its ID, and quote bound this key to it.
+    if (this.#saved.seller !== undefined && offer.seller !== this.#saved.seller) refuse(sellerDiffers(offer.seller, this.#saved.seller));
+    // The approval's seller does not count here: an approval built from the shown offer carries the offer's own seller.
+    if (this.#saved.seller === undefined && this.#saved.quote?.commitmentId !== id) refuse(`seller: this key did not ask for ${id} with quote, so nothing shows that ${offer.seller} is the seller you mean. Give makeKeys the seller's address as the seller gave it by its own channel ({seller}): anyone can copy a public offer and sign the copy`);
+    // Bound only once the seller checks pass, so a refused offer leaves no binding a later save could keep (PR 814 red team).
+    this.#bind(id);
     const want: Array<[string, J, J]> = [
       ['buyer', terms.buyer, this.address],
       ['buyerEncryptionPublicKey', terms.buyerEncryptionPublicKey, this.encryptionPublicKey],
@@ -936,7 +969,7 @@ export class BuyerSigner {
       ['rubric', offer.rubric, approved.rubric ?? EMPTY_RUBRIC],
       ['deadlines', offer.deadlines, approved.deadlines],
       ['adjudicators', offer.adjudicators, approved.adjudicators],
-      ...(approved.seller ? [['seller', offer.seller, approved.seller] as [string, J, J]] : []),
+      ...(approved.seller !== undefined ? [['seller', offer.seller, String(approved.seller).toLowerCase()] as [string, J, J]] : []),
       ...(approved.commitmentId ? [['commitmentId', id, approved.commitmentId] as [string, J, J]] : []),
       ...(approved.differences ? [['differences', offer.differences ?? null, approved.differences] as [string, J, J]] : []),
       // T-332: each of the seven the approval names. Each was checked against Options.expect and the operators above.
@@ -1325,6 +1358,19 @@ export class BuyerSigner {
 }
 
 /**
+ * The seller's address a command was given (D101): from the environment (CROW_SELLER) or the buyer's terms file, the
+ * same address if both, lowercase. Both are the buyer's own configuration; a mismatch between them is refused.
+ */
+export function sellerOf(fromEnv: string | undefined, fromTerms: unknown): string | undefined {
+  for (const [name, a] of [['CROW_SELLER', fromEnv], ["the terms file's seller", fromTerms]] as const) {
+    if (a !== undefined && !isAddressText(a)) throw new Error(`${name} is not an address: 0x and 40 hex characters, with a valid checksum if in mixed case`);
+  }
+  const env = fromEnv?.toLowerCase(), terms = typeof fromTerms === 'string' ? fromTerms.toLowerCase() : undefined;
+  if (env !== undefined && terms !== undefined && env !== terms) throw new Error(`CROW_SELLER is ${env} and the terms file's seller is ${terms}: name one seller`);
+  return env ?? terms;
+}
+
+/**
  * Every key file in `store` with a funded deal and no confirmed outcome in its watch file: what a restarted client
  * watches again. An outcome too few operators reported keeps the deal here.
  */
@@ -1344,12 +1390,13 @@ export async function openDeals(store: string, options: Options = {}): Promise<B
  * the price is on this key, so keep the file while the key holds anything.
  */
 export async function makeKeys(store: string, options: KeyOptions = {}): Promise<BuyerSigner> {
-  const { paymentAddress, ...rest } = options;
+  const { paymentAddress, seller, ...rest } = options;
   if (paymentAddress !== undefined && !isAddressText(paymentAddress)) throw new Error('paymentAddress must be an address: 0x and 40 hex characters, with a valid checksum if in mixed case');
+  if (seller !== undefined && !isAddressText(seller)) throw new Error("seller must be the seller's address: 0x and 40 hex characters, with a valid checksum if in mixed case");
   const privateKey = generatePrivateKey();
   const address = privateKeyToAccount(privateKey).address.toLowerCase();
   const paying = paymentAddress?.toLowerCase();
-  const saved: Saved = { version: 1, address, privateKey, encryptionSecretKey: Buffer.from(nacl.randomBytes(32)).toString('base64url'), createdAt: new Date().toISOString(), ...(paying && paying !== address ? { paymentAddress: paying } : {}) };
+  const saved: Saved = { version: 1, address, privateKey, encryptionSecretKey: Buffer.from(nacl.randomBytes(32)).toString('base64url'), createdAt: new Date().toISOString(), ...(paying && paying !== address ? { paymentAddress: paying } : {}), ...(seller !== undefined ? { seller: seller.toLowerCase() } : {}) };
   save(store, saved);
   return new BuyerSigner(store, saved, rest);
 }

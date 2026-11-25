@@ -27,7 +27,8 @@
 //   - the chain is Sepolia or a local chain.
 // It names, as advice, each adjudicator the operators' discovery does not list, and a released file other than the
 // one shown.
-// What the checks prove is the code and what the key signed. Who the key belongs to rests on the card's origin.
+// What the checks prove is the code and what the key signed. Who the key belongs to rests on the card's origin, or,
+// with CROW_SELLER set to the seller contract's address as the seller gave it by another channel, on that (D101).
 //
 // It dates the take BLOCK_BACK_SEC before the operators' time: the seller contract refuses a take dated after the
 // newest block, and a live chain's newest block lags the wall clock by up to a slot (T-549, known limits).
@@ -42,7 +43,7 @@ import { Agent } from './agent.ts';
 import { FaucetLimited, loadKeys, makeKeys, openDeals, printable, type BuyerSigner, type Offer } from './buyer-signer.ts';
 import { command } from './entry.ts';
 import { STANDING_SELLER_CREATION_CODE } from './standing-seller-code.ts';
-import { commitmentIdOf, jcs, knownPins, moneyAddressWarnings, operatorFeeOf, Refusal, type Pin } from './verify.ts';
+import { commitmentIdOf, isAddressText, jcs, knownPins, moneyAddressWarnings, operatorFeeOf, Refusal, type Pin } from './verify.ts';
 
 type J = any; // eslint-disable-line @typescript-eslint/no-explicit-any
 
@@ -325,6 +326,9 @@ async function show(cardUrl: string, offerId: string, store: string, budget: str
   const { origin, card } = await fetchCard(cardUrl);
   const entry = entryOf(card, offerId);
   if (card.seller !== undefined && lc(card.seller) !== entry.seller) refuse(`the card's seller is ${shown(card.seller)}, and its standing entry names ${entry.seller}`);
+  const expected = process.env['CROW_SELLER'];
+  if (expected && !isAddressText(expected)) refuse('CROW_SELLER is not an address: 0x and 40 hex characters, with a valid checksum if in mixed case');
+  if (expected && lc(expected) !== entry.seller) refuse(`seller is ${entry.seller}, not the expected ${shown(expected)} (CROW_SELLER): another key signed this standing offer, so it is not the seller you named`);
   const signer = await makeKeys(store, {});
   const keys = keyFileOf(store, signer.address);
   const { agent, pin } = await connect(keys.privateKey, keys.encryptionSecretKey);
