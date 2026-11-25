@@ -40,7 +40,7 @@ export interface Warning {
 export const BASE_UNITS = /^(0|[1-9][0-9]{0,77})$/;
 /** The pattern engine refuses a longer pattern (safe-regex.ts); the test holds this to the engine. */
 export const LONGEST_PATTERN_CHARS = 200;
-/** The pattern engine never matches a longer string (safe-regex.ts); the test holds this to the engine. */
+/** The pattern engine reads no longer string (safe-regex.ts); the test holds this to the engine. */
 export const LONGEST_MATCHED_CHARS = 10_000;
 const PLACEHOLDER = /(\\?)\{\{[^{}]*\}\}/g;
 const PLACEHOLDER_ANYWHERE = /\{\{[^{}]*\}\}/;
@@ -108,7 +108,7 @@ function schemaPatterns(schema: J, path: string, out: Warning[]): void {
       pattern(node.pattern, step(here, 'pattern'), out);
       for (const bound of ['minLength', 'maxLength']) {
         if (typeof node[bound] === 'number' && node[bound] > LONGEST_MATCHED_CHARS) {
-          out.push({ kind: 'pattern', path: step(here, bound), found: `${node[bound]} characters on a field that also has a pattern`, why: `Crow's pattern engine never matches a string over ${LONGEST_MATCHED_CHARS} characters, so a longer value never matches this pattern, whatever it holds` });
+          out.push({ kind: 'pattern', path: step(here, bound), found: `${node[bound]} characters on a field that also has a pattern`, why: `Crow's pattern engine reads no string over ${LONGEST_MATCHED_CHARS} characters, and a check whose pattern meets a longer value fails, whatever the value holds` });
         }
       }
     }

@@ -54493,8 +54493,15 @@ const MAX_STATES = 5e3;
 * state plus one, so no pattern within MAX_STATES reaches this limit; it holds if the simplification misses a case.
 */
 const MAX_COMPILE_STEPS = 5e4;
-/** Longer subjects never match; this bounds the work per cell. */
+/** The engine reads no subject over this many code points; this bounds the work per cell. */
 const MAX_SUBJECT_CHARS = 1e4;
+/**
+* The engine has no answer for a subject over MAX_SUBJECT_CHARS. It throws instead of answering "no match", which a
+* caller can turn into a pass (`not`, `oneOf`), so a caller that does nothing fails closed: runChecks records the check
+* as failed (D103). One instance, and not an Error, so a throw captures no stack.
+*/
+var SubjectTooLong = class {};
+const SUBJECT_TOO_LONG = new SubjectTooLong();
 /** Matches only the empty string. */
 const EMPTY = {
 	t: "seq",
@@ -54891,6 +54898,22 @@ function fits(subject, budget) {
 	chargeChars(budget, subject.length);
 	return codePoints$1(subject) <= MAX_SUBJECT_CHARS;
 }
+function mustFit(subject, budget) {
+	if (!fits(subject, budget)) throw SUBJECT_TOO_LONG;
+}
+/**
+* A full match for a count that more matches can only help, as in regex_match_rate_min: a subject over the cap is not
+* counted. Never use it where "no match" can help a result.
+*/
+function countsAsMatch(re, subject, budget) {
+	if (subject.length > 2 * 1e4) return false;
+	try {
+		return re.fullMatch(subject, budget);
+	} catch (e) {
+		if (e instanceof SubjectTooLong) return false;
+		throw e;
+	}
+}
 function nfa(node) {
 	const c = new Compiler();
 	const start = c.build(node, 0);
@@ -54919,7 +54942,10 @@ function compileSafeRegex(pattern) {
 	try {
 		const options = new Parser(cps).parse();
 		const whole = nfa(alt(options));
-		const full = (s, b) => fits(s, b) && simulate(whole.states, whole.start, s, true, true, b);
+		const full = (s, b) => {
+			mustFit(s, b);
+			return simulate(whole.states, whole.start, s, true, true, b);
+		};
 		let parts;
 		if (options.length === 1 || !anchoredStart && !anchoredEnd) parts = [{
 			...whole,
@@ -54947,7 +54973,10 @@ function compileSafeRegex(pattern) {
 				anchoredEnd: true
 			});
 		}
-		const search = (s, b) => fits(s, b) && parts.some((p) => simulate(p.states, p.start, s, p.anchoredStart, p.anchoredEnd, b));
+		const search = (s, b) => {
+			mustFit(s, b);
+			return parts.some((p) => simulate(p.states, p.start, s, p.anchoredStart, p.anchoredEnd, b));
+		};
 		const states = whole.states.length + (parts.length > 1 ? parts.reduce((n, p) => n + p.states.length, 0) : 0);
 		return ok({
 			fullMatch: full,
@@ -54986,6 +55015,44 @@ var SchemaError = class extends Error {};
 const isObject$2 = (v) => typeof v === "object" && v !== null && !Array.isArray(v);
 const own$1 = (o, k) => Object.prototype.hasOwnProperty.call(o, k);
 const typeOf = (v) => v === null ? "null" : Array.isArray(v) ? "array" : typeof v;
+/**
+* The order of a schema object's keywords under `not`, `anyOf` and `oneOf`: tests of the value itself first, cheap ones
+* before `pattern`, and the keywords that hold subschemas last. Only under those three can key order decide pass or fail:
+* a keyword that fails first keeps a later pattern from being read, and elsewhere either way fails the check. The
+* commitment ID hashes the terms with sorted keys, so two nodes may hold one deal's schema in two key orders. Elsewhere
+* keywords are read as written, so a cheap failure the author put first still ends the work first (D103).
+*/
+const FIXED_ORDER = [
+	"type",
+	"required",
+	"minimum",
+	"maximum",
+	"exclusiveMinimum",
+	"exclusiveMaximum",
+	"minItems",
+	"maxItems",
+	"minLength",
+	"maxLength",
+	"const",
+	"enum",
+	"pattern",
+	"uniqueItems",
+	"properties",
+	"additionalProperties",
+	"items",
+	"allOf",
+	"anyOf",
+	"oneOf",
+	"not"
+];
+const byName = (a, b) => a < b ? -1 : a > b ? 1 : 0;
+/** A name outside the list (an annotation, or a keyword compile refuses) ranks first, by name. */
+const byKeyword = (a, b) => FIXED_ORDER.indexOf(a) - FIXED_ORDER.indexOf(b) || byName(a, b);
+/** The entries of `o` as written, or in `order` when one is given. */
+function entries(o, order) {
+	const all = Object.entries(o);
+	return order ? all.sort(([a], [b]) => order(a, b)) : all;
+}
 /** Whether `s` has fewer than `n` code points; it counts, and charges the count, only when the length cannot tell. */
 function shorter(s, n, budget) {
 	if (s.length < n) return true;
@@ -55014,15 +55081,17 @@ function nonNegInt(v, k) {
 	if (typeof v !== "number" || !Number.isSafeInteger(v) || v < 0) throw new SchemaError(`${k} must be a non-negative integer`);
 	return v;
 }
-function compile(schema, depth, budget) {
+/** `fixed`: this schema sits under `not`, `anyOf` or `oneOf`, so its read order is FIXED_ORDER and property names are sorted. */
+function compile(schema, depth, budget, fixed) {
 	if (depth > 32) throw new SchemaError(`schema deeper than ${32}`);
 	if (++budget.nodes > 2e3) throw new SchemaError(`schema has more than ${MAX_SCHEMA_NODES} subschemas`);
 	if (schema === true) return () => void 0;
 	if (schema === false) return () => "false schema";
 	if (!isObject$2(schema)) throw new SchemaError("a schema must be an object or boolean");
-	const sub = (s) => compile(s, depth + 1, budget);
+	const sub = (s) => compile(s, depth + 1, budget, fixed);
+	const choice = (s) => compile(s, depth + 1, budget, true);
 	const checks = [];
-	for (const [k, v] of Object.entries(schema)) {
+	for (const [k, v] of entries(schema, fixed ? byKeyword : void 0)) {
 		if (ANNOTATIONS.has(k)) continue;
 		switch (k) {
 			case "type": {
@@ -55035,7 +55104,7 @@ function compile(schema, depth, budget) {
 			}
 			case "enum": {
 				if (!Array.isArray(v)) throw new SchemaError("enum must be an array");
-				const entries = /* @__PURE__ */ new Set();
+				const allowed = /* @__PURE__ */ new Set();
 				let refused;
 				for (const [i, e] of v.entries()) {
 					const c = canon(e);
@@ -55046,14 +55115,14 @@ function compile(schema, depth, budget) {
 						};
 						break;
 					}
-					entries.add(c.text);
+					allowed.add(c.text);
 				}
 				checks.push((x, b) => {
 					if (v.length === 0) return "not in enum";
 					if (refused?.at === 0) throw refused.error;
 					const key = canonical(x, b);
 					b?.spend(8);
-					if (entries.has(key)) return void 0;
+					if (allowed.has(key)) return void 0;
 					if (refused) throw refused.error;
 					return "not in enum";
 				});
@@ -55069,7 +55138,7 @@ function compile(schema, depth, budget) {
 			}
 			case "properties": {
 				if (!isObject$2(v)) throw new SchemaError("properties must be an object");
-				const props = Object.entries(v).map(([name, s]) => [name, sub(s)]);
+				const props = entries(v, fixed ? byName : void 0).map(([name, s]) => [name, sub(s)]);
 				checks.push((x, b) => {
 					if (!isObject$2(x)) return void 0;
 					for (const [name, val] of props) {
@@ -55185,7 +55254,7 @@ function compile(schema, depth, budget) {
 			case "allOf":
 			case "oneOf": {
 				if (!Array.isArray(v) || v.length === 0) throw new SchemaError(`${k} must be a non-empty array`);
-				const vals = v.map(sub);
+				const vals = v.map(k === "allOf" ? sub : choice);
 				checks.push((x, b) => {
 					const passing = vals.filter((val) => val(x, b) === void 0).length;
 					if (k === "allOf") return passing === vals.length ? void 0 : "allOf not satisfied";
@@ -55195,7 +55264,7 @@ function compile(schema, depth, budget) {
 				break;
 			}
 			case "not": {
-				const val = sub(v);
+				const val = choice(v);
 				checks.push((x, b) => val(x, b) === void 0 ? "matches not" : void 0);
 				break;
 			}
@@ -55215,7 +55284,7 @@ function compileJsonSchema(schema) {
 		return ok(compile(schema, 0, {
 			nodes: 0,
 			states: 0
-		}));
+		}, false));
 	} catch (e) {
 		if (e instanceof SchemaError) return err(e.message);
 		throw e;
@@ -56750,7 +56819,7 @@ function evaluate$1(check, prepared, run) {
 			for (let r = 0; r < t.rows; r++) {
 				budget.spend(1);
 				const s = cellText(cellAt(t, r, i));
-				if (s !== null && re.fullMatch(s, budget)) matches++;
+				if (s !== null && countsAsMatch(re, s, budget)) matches++;
 			}
 			return t.rows === 0 || matches * 1e4 >= check.minBps * t.rows ? pass(`match ${pct(matches, t.rows)}`) : fail$1(`match ${pct(matches, t.rows)} below ${bps(check.minBps)}`);
 		}
@@ -56826,6 +56895,7 @@ function runChecks(checks, input, budget = new StepBudget(CHECK_BUDGET)) {
 					inconclusive.push(id);
 					o = fail$1("inconclusive: the check work budget for this delivery ran out");
 				} else if (e instanceof TooDeep) o = fail$1(`a value is nested deeper than ${MAX_CANONICAL_DEPTH} levels`);
+				else if (e instanceof SubjectTooLong) o = fail$1(`a pattern met a string over ${MAX_SUBJECT_CHARS} code points`);
 				else o = fail$1("check could not be evaluated on this input");
 			}
 			const out = {

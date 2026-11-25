@@ -5,7 +5,7 @@ import { mkdtempSync, readdirSync, readFileSync, rmSync, writeFileSync } from 'n
 import { tmpdir } from 'node:os';
 import { join, relative } from 'node:path';
 import { fileURLToPath } from 'node:url';
-import { compileSafeRegex } from '@holdback/judgment';
+import { compileSafeRegex, SubjectTooLong } from '@holdback/judgment';
 import { afterAll, describe, expect, it } from 'vitest';
 import { BASE_UNITS, checkTerms, line, LONGEST_MATCHED_CHARS, LONGEST_PATTERN_CHARS } from './check-terms.ts';
 import { fill } from './seller-adapter-core.ts';
@@ -184,7 +184,7 @@ describe('check-terms', () => {
       const any = compileSafeRegex('a*');
       if (!any.ok) throw new Error(any.error);
       expect(any.value.search('a'.repeat(LONGEST_MATCHED_CHARS))).toBe(true);
-      expect(any.value.search('a'.repeat(LONGEST_MATCHED_CHARS + 1))).toBe(false);
+      expect(() => any.value.search('a'.repeat(LONGEST_MATCHED_CHARS + 1))).toThrow(SubjectTooLong);
     });
   });
 

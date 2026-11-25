@@ -1,6 +1,6 @@
 export * from './aggregate.js';
 export * from './checks/index.js';
-export { StepBudget, BudgetExhausted } from './checks/safe-regex.js';
+export { StepBudget, BudgetExhausted, SubjectTooLong } from './checks/safe-regex.js';
 export * from './hidden.js';
 export { compileJsonSchema, type Validator } from './checks/json-schema.js';
 export { compileSafeRegex, type SafeRegex } from './checks/safe-regex.js';
