@@ -191,13 +191,13 @@ describe('one discovery document (Simplify 1, F8, F9)', () => {
   it('carries the limits, idempotency retention and the demo facts, and GET / serves it too', async () => {
     const d = (await http('GET', `${api}/.well-known/holdback.json`)).body;
     // T-315: a node that stores ciphertext states the largest it stores; a sim world's, the test service's 1 MiB (T-547).
-    expect(d.limits).toEqual({ maxCiphertextBytes: 1_048_576, idempotency: { replays: 'success-only', retention: 'process' } });
+    expect(d.limits).toEqual({ maxCiphertextBytes: 1_048_576, maxJudgedPlaintextBytes: 1_048_576, idempotency: { replays: 'success-only', retention: 'process' } });
     expect(d.demo).toMatchObject({ clubId: world.info.clubId, token: { id: 'tUSD', decimals: 6 }, faucet: { path: '/v1/faucet' } });
     expect(d.demo.adjudicators.map((a: J) => [a.role, a.address])).toEqual(world.info.adjudicators.map((a) => [a.role, a.address]));
     const root = (await http('GET', `${api}/`)).body;
     expect({ ...root, settlementTime: null, head: null }).toEqual({ ...d, settlementTime: null, head: null });
     const t = (await http('GET', `${throttled.url}/.well-known/holdback.json`)).body;
-    expect(t.limits).toEqual({ reads: { limit: 100, windowSec: 60, per: 'client' }, writes: { limit: 2, windowSec: 60, per: 'signer' }, idempotency: { replays: 'success-only', retention: 'process' } });
+    expect(t.limits).toEqual({ reads: { limit: 100, windowSec: 60, per: 'client' }, writes: { limit: 2, windowSec: 60, per: 'signer' }, maxJudgedPlaintextBytes: 1_048_576, idempotency: { replays: 'success-only', retention: 'process' } });
     expect(t.demo).toBeUndefined();
   });
 

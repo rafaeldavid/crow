@@ -2013,6 +2013,35 @@ Rafa, 2026-11-25: "Yes, adopt it". A judge's free text over its length cap (300 
 
 Rafa, 2026-11-25: "Yes, build it", with the research note's recommended answers: build it now; take the hold from the terms; include the appeal adjudicator's hold; do not hand the buyer the signed reject early. On a deal whose terms carry a rubric, Crow's adjudicators sign an accept or an escalation at once and hold a reject: the primary signs at the record's `decidedAt` plus `judgeWithinSec` minus 600 s, the appeal adjudicator after an escalation at `decidedAt` plus `appealDecideSec` minus 600 s, and neither later than its deadline minus 600 s nor more than a day after the record. Only a service that keeps its judged results holds. The fallback signs at once, and a window of 600 s or less holds nothing. Until the reject is signed the deal stays `Delivered` or `Escalated`, so the buyer can accept or both can settle with today's contracts. Crow's seller tools write 87,000 s for both windows on a rubric deal (`rubricTiming` in the seller adapter); `prepare/offer` keeps its defaults, because clients that verify a prepared offer against the documented 300 s would refuse anything else (measured on `examples/verify.ts`). ADR-0031 section 8 stands: a decision is final when written; only the time of writing moves. When the next contract version ships, ADR-0048 replaces this hold. No contract, schema or signed type changes. Built by T-619.
 
+## D108. Judgment reads at most 1 MiB, so every host judges alike (T-624)
+
+**Status:** adopted, 2026-11-25.
+
+**Who decided.** The coordinator session chose the approach (option A: a judged-intake limit), and the session `heap-bound` set the number under the in-repository autonomy rule. Rafa may overrule any line.
+
+**Why.** A deal's outcome must not depend on where it is judged (ADR-0001). Judgment needed a heap of about 40 to 50 times the delivery's size (measured, T-624; 18 delivery shapes: JSON cells, nesting, rows and empty objects, CSV, plain and two-byte text, base64). At 10 MiB, the most a store keeps, every shape crashed Node with an out-of-memory error at a 128 MB heap, and most also at 256 MB. A 128 MB Durable Object would fail where a large Node adjudicator decides. A seller could then crash one adjudicator and be judged by another. The screen alone on 10 MiB of plain words needed about 384 MB: each global regex replace holds every match, and all three kept screens run several on the whole text. So a bound on JSON alone would not have been enough. Found by PR 818's red team (T-613), widened by T-624's measurements.
+
+**Decided:**
+
+- **A bound, not a rewrite.** Intake judges at most `JUDGED_MAX_PLAINTEXT_BYTES`, 1,048,576 bytes (1 MiB) of plaintext. A larger delivery is refused as `payload_too_large`, the existing seller-fault rule: the adjudicator rejects without a panel, and the seller's preflight refuses it the same way. No check and no screen reads it, so no kept screen version changes.
+- **Normalized length too.** NFKC can lengthen text: U+FDFA, 3 bytes, becomes 18 UTF-16 units, so 1 MiB of it exhausted screen-1 at 256 MB (red team, measured). Intake therefore also refuses, as `payload_too_large`, a delivery whose normalized text is longer than 1,048,576 UTF-16 units, or whose text is once its `\u` escapes are decoded and normalized, since the screen reads that view too.
+- **Linear normalization.** A run of variation selectors made normalization quadratic: 1 MiB took 513 s (red team, measured), beyond a Durable Object's CPU limit while a Node host decides. The walk back over a run now keeps a memo. Its output is unchanged (a property test holds it to the old walk), so no kept screen version moves, and the heap test caps each case at 60 s.
+- **References too.** Stage 1 reads a reference file as it reads the delivery, so a reference over the same limit is unavailable: an adjudicator does not accept terms that name one. The check fails it by name (`reference is <n> bytes; judgment reads at most 1048576 (the judged-intake limit)`).
+- **1 MiB, not 2 MiB.** At 1 MiB, stage 1 and each kept screen fit a 64 MB heap on every shape, half of a Durable Object's 128 MB. At 2 MiB the base64 shape needed more than 112 MB of old space, and a 128 MB isolate also holds young-generation and external memory (measured in Node; the isolate's share is inferred). A test runs every shape at the limit and one byte past it at `--max-old-space-size=64`, `=128` and `=512` and gets the same records.
+- **Published before signing (D31).** Discovery states `limits.maxJudgedPlaintextBytes`. `site/ref/limits.txt`, `ref/http-seller.txt`, `ref/checks.txt` and `docs/api.md` state the number, and `examples/check-terms.ts` warns when a `row_count_range` check accepts more rows than can fit (at least one byte per column per row).
+- **The store cap stays 10 MiB** for storage (`MAX_PLAINTEXT_BYTES`, `limits.maxCiphertextBytes` up to 10,485,760). Crow's Durable Object store keeps 1,048,576 ciphertext bytes, which is less plaintext than the limit, so nothing Crow's own adjudicators judge today changes.
+- **When to raise it.** Raise it when a measured need for larger judged work appears, and with option B's rewrite if that is ever needed. Option B means making the heavy screen passes lean with byte-identical output for every kept version (chunked replaces, a streaming read of JSON strings), plus a value bound for JSON in stage 1. The heap test then sets the new number.
+
+**Dropped:**
+
+- **B, keep 10 MiB judged and rewrite the frozen screens.** It is large and risky: each pass of screen-0, -1 and -2 needs a differential test against its frozen original.
+- **C, publish a heap floor per stored byte.** A host below the floor would act as an offline adjudicator, so the result would still depend on the host.
+- **A JSON value bound only.** Measured: plain text and CSV crash at the same sizes.
+
+**Known residual (red team, Medium).** The limit belongs to this build, not to the signed policy or the registration. A primary and a fallback on different builds can still disagree on a delivery between 1 and 10 MiB, as on any unversioned check change (D102, D103). Binding the limit to the policy needs `spec/schemas/adjudicator.schema.json`, so it would take an ADR and a version bump. Crow's own nodes cannot store a delivery or a reference over the limit.
+
+**Litmus tests.** Neutrality: stronger; every adjudicator on this build with a 64 MB heap or more judges the same deliveries the same way. The hold: unchanged. Defended judgment: unchanged for deliveries up to 1 MiB; a larger one is rejected before judgment, as a 10 MiB one was before.
+
 ## D109. The held reject's gaps from the partner C rehearsal (T-625, ADR-0051 amendment)
 
 **Status:** adopted, 2026-11-25.

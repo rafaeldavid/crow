@@ -50401,7 +50401,15 @@ async function view(a, id, o, cache) {
 		const decidedEvents = [...of("judgment.decided"), ...of("appeal.decided")];
 		const decided = decidedEvents.map((e) => lc$1(e.payload?.recordHash));
 		const names = lc$1(j.deliveryHash) === lc$1(d?.payload?.deliveryHash);
-		if (decidedEvents.filter((e) => e.payload?.role === void 0 || e.payload?.role === j.role).length) add("judgment names the delivery", decided.includes(lc$1(recordHash)) && names, "a decided event carries this recordHash, and the record names the recorded deliveryHash");
+		const ownTurn = decidedEvents.filter((e) => e.payload?.role === void 0 || e.payload?.role === j.role);
+		const TURN = {
+			primary: 0,
+			fallback: 1,
+			appeal: 2
+		};
+		const later = decidedEvents.find((e) => TURN[String(e.payload?.role)] !== void 0 && TURN[String(e.payload?.role)] > (TURN[String(j.role)] ?? 3));
+		if (!ownTurn.length && later) add("judgment names the delivery", false, `the record is the ${String(j.role).slice(0, 20)}'s and was never signed, and the ${String(later.payload.role).slice(0, 20)}'s decision decided the deal: read its record at /judgments`);
+		else if (ownTurn.length) add("judgment names the delivery", decided.includes(lc$1(recordHash)) && names, "a decided event carries this recordHash, and the record names the recorded deliveryHash");
 		else add("judgment names the delivery", names, `the record names the recorded deliveryHash; no decided event of the ${String(j.role).slice(0, 20)} role exists, so the record was published and not signed into a decision (a held reject, ADR-0051, or one the parties closed during the hold)`);
 		const ev = [...of("judgment.decided"), ...of("appeal.decided")].find((e) => lc$1(e.payload?.recordHash) === lc$1(recordHash));
 		judgment = {
