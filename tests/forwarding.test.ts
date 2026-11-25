@@ -60,16 +60,16 @@ describe('the site Worker (crow-site)', () => {
     expect(env.asked).toEqual(['/', '/llms.txt', '/crow.png']);
   });
 
-  it('answers the retired demo page and its Learn more view with a 301 to the homepage, and serves look-alikes as assets (T-586)', async () => {
+  it('answers the retired demo page, its Learn more view and the visual walkthrough with a 301 to the homepage, and serves look-alikes as assets (T-586)', async () => {
     const env = assets();
-    for (const from of ['https://crow.direct/demo', 'https://crow.direct/demo/', 'https://crow.direct/demo/index.html', 'https://crow.direct/demo.html', 'https://www.crow.direct/demo/?ref=x']) {
+    for (const from of ['https://crow.direct/demo', 'https://crow.direct/demo/', 'https://crow.direct/demo/index.html', 'https://crow.direct/demo.html', 'https://www.crow.direct/demo/?ref=x', 'https://crow.direct/visualdemo', 'https://crow.direct/visualdemo/', 'https://crow.direct/visualdemo/index.html']) {
       const r = await (site as Fetcher).fetch(new Request(from), env);
       expect(r.status, from).toBe(301);
       expect(r.headers.get('location'), from).toBe(`${new URL(from).origin}/`);
     }
     expect(env.asked).toEqual([]);
-    for (const path of ['/demos', '/demo-club', '/visualdemo/']) expect((await (site as Fetcher).fetch(new Request(`https://crow.direct${path}`), env)).status, path).toBe(200);
-    expect(env.asked).toEqual(['/demos', '/demo-club', '/visualdemo/']);
+    for (const path of ['/demos', '/demo-club', '/visualdemox', '/problems/visualdemo']) expect((await (site as Fetcher).fetch(new Request(`https://crow.direct${path}`), env)).status, path).toBe(200);
+    expect(env.asked).toEqual(['/demos', '/demo-club', '/visualdemox', '/problems/visualdemo']);
   });
 });
 

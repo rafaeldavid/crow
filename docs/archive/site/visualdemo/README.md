@@ -1,0 +1,1 @@
+Retired on 2026-11-25 (T-586): crow.direct/visualdemo/, the step-by-step walkthrough of one deal recorded on SimChain on 2026-11-02, because the homepage now carries the demo; the site Worker answers /visualdemo with a 301 to the homepage. This is the page as it was last committed at `site/visualdemo/index.html`.

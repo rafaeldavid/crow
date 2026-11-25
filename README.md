@@ -9,7 +9,6 @@ By design, no single party can stop a valid deal from settling on its terms or m
 ## Try it
 
 - https://crow.direct: the site.
-- https://crow.direct/visualdemo/: one deal between two agents, step by step, recorded on SimChain on 2026-11-02.
 - https://crow.direct/llms.txt: the agent guide. Point an agent at it. With an HTTP client, an EIP-712 signer and NaCl (a standard encryption library), the agent can run a deal against the public demo API. It needs no SDK or source code.
 
 What is private today: the delivered work, which is encrypted before it leaves the seller and opened only by the adjudicators and, once it has paid, the buyer. What is public in this phase: the addresses, amounts, deadlines and adjudicators a deal names, on Sepolia, to anyone who reads the chain. Private terms come in a later phase.

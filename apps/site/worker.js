@@ -15,8 +15,9 @@ const CANONICAL = 'https://crow.direct';
 const SECURITY_TXT = '/.well-known/security.txt';
 const FORWARDED = new Set(['escrow.stream', 'www.escrow.stream']);
 // T-586 (Rafa, 2026-11-25): retired pages and where their readers go now. The demo page and its "Learn more" view
-// (/demo/#learn-more; a browser never sends the fragment) moved to the homepage, which carries the demo.
-export const RETIRED = new Map([['/demo', '/']]);
+// (/demo/#learn-more; a browser never sends the fragment) and the visual walkthrough (/visualdemo/) gave way to the
+// homepage, which carries the demo.
+export const RETIRED = new Map([['/demo', '/'], ['/visualdemo', '/']]);
 /** Where a retired page's address goes now: the page itself, its folder form, or any address under it; else null. */
 export function retiredTarget(pathname) {
   for (const [from, to] of RETIRED) if (pathname === from || pathname.startsWith(`${from}/`) || pathname === `${from}.html`) return to;
@@ -29,7 +30,7 @@ export default {
   async fetch(request, env, ctx) {
     const url = new URL(request.url);
     const response = await route(request, env, ctx, url);
-    return secured(response, { pathname: url.pathname, hashes: isPage(response) ? await inlineHashes(request, env) : null });
+    return secured(response, { hashes: isPage(response) ? await inlineHashes(request, env) : null });
   },
 };
 
