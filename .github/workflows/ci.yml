@@ -209,7 +209,7 @@ jobs:
               apps/demo-cloud/src/timeouts.anvil.test.ts apps/demo-cloud/src/first-take.anvil.test.ts apps/adjudicator/src/drand-contract.redteam.test.ts
               apps/demo-cloud/src/write-faults.anvil.test.ts
               examples/e2e-adjudicator.test.ts examples/send-timeout.test.ts examples/signer-anvil.test.ts
-              examples/take.test.ts examples/setup-publish.test.ts
+              examples/take.test.ts examples/setup-publish.test.ts examples/deal-record-chain.test.ts
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
