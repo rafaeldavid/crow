@@ -1999,6 +1999,8 @@ The build is not started; it opens as its own task on Rafa's word.
 
 Rafa, 2026-11-25: "Yes, adopt it". The terms gain `timing.rejectGraceSec`, default 0. Above 0, a reject pays the decider's fee and holds the price for that period: the buyer alone may accept the posted delivery at the agreed price, or both parties may sign a split; when the period ends, anyone triggers the refund. An accept is never delayed. With 0, and for deals decided by checks alone, nothing changes. No contract change now: it ships with the next contract version (D85), with a schema version bump and the changes ADR-0048 lists. Raised by a live deal on 2026-11-25 in which judge outputs failed the verdict schema and a delivery that passed every check was refunded at once, with no move left to a buyer who wanted the work. The open points (the field's name, the split during the period, a buyer's accept while the deal is escalated or with the fallback, and the setup tools' defaults for rubric deals) take the research note's defaults until Rafa says otherwise.
 
+Amended (Rafa, 2026-11-25: "Default for rubric deals"): Crow's setup tools and templates write `rejectGraceSec: 86400`, one day, for every deal with a rubric, and 0 for deals decided by checks alone. A default the parties can change, not a protocol minimum (D31); terms that leave the field out still get 0 (ADR-0048, open point 4).
+
 ## D105. Free text over its cap is cut and the verdict is kept (ADR-0049)
 
 **Status:** adopted, 2026-11-25.
