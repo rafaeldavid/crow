@@ -2041,3 +2041,15 @@ Rafa, 2026-11-25: "Yes, build it", with the research note's recommended answers:
 **Known residual (red team, Medium).** The limit belongs to this build, not to the signed policy or the registration. A primary and a fallback on different builds can still disagree on a delivery between 1 and 10 MiB, as on any unversioned check change (D102, D103). Binding the limit to the policy needs `spec/schemas/adjudicator.schema.json`, so it would take an ADR and a version bump. Crow's own nodes cannot store a delivery or a reference over the limit.
 
 **Litmus tests.** Neutrality: stronger; every adjudicator on this build with a 64 MB heap or more judges the same deliveries the same way. The hold: unchanged. Defended judgment: unchanged for deliveries up to 1 MiB; a larger one is rejected before judgment, as a 10 MiB one was before.
+
+## D109. The held reject's gaps from the partner C rehearsal (T-625, ADR-0051 amendment)
+
+**Status:** adopted, 2026-11-25.
+
+The rehearsal on the live build found five gaps; the coordinator asked for them in one PR. The seller adapter keeps every delivery its own key signs and hands it to the deal's buyer, signed for by the buyer, by `shareDelivery` (default `"held-reject"`: only while the primary's published reject is held in `Delivered`), so the buyer's accept can run; the body lets the buyer read the work before it pays, the seller's choice (D32). The buyer's deal record checks a published, unsigned record by the delivery it names. `GET /v1/commitments/{id}/judgments` serves every record, as the API review of 2026-11-02 planned (OpenAPI revision 0.4). The adapter's rubric default fills only the windows a seller's file leaves out (D31). A filter abstention's detail on the member entry needs a `spec/schemas` version bump and waits for PR 835's v0.15.
+
+## D110. The held reject's delivery share carries no envelope (T-625, ADR-0051 amendment)
+
+**Status:** adopted, 2026-11-26.
+
+The coordinator's call, recorded for Rafa's review. A buyer that could read the work during a hold and then let the refund through would get it free, so the coordinator asked first whether the buyer's lone accept needs the buyer's key envelope. It does not need it from the buyer [measured]: `earlyAccept` takes a key proof that carries the envelope (`HoldbackRules.sol:360`), and the relaying operator builds that proof from the delivery it holds (`evm-settlement.ts`, `early_accept`); the buyer signs only the attempt and the posted delivery hash. So the seller adapter's share, under its default `"held-reject"`, carries the delivery's hashes and no envelope; `held-reject.ts --accept <adapter>` checks the hash against both operators and accepts naming it; the buyer gets the key only with its payment. Such a buyer cannot check its envelope opens before it pays; with the seller's full signed delivery it still can (D32).

@@ -205,6 +205,32 @@ describe('seller adapter: terms set per quote', () => {
     expect(((await (await fetch(`${running.url}/defaults`)).json()) as J).optionalRubric).toEqual(TEMPLATE.optionalRubric);
   }, 45_000);
 
+  // T-625, D31: the rubric default fills only the windows a seller's file leaves out; a window the seller named stays.
+  it('keeps the judging windows a seller names in timing on a rubric offer, and fills only the ones it leaves out', async () => {
+    const dir = tmp('t625-');
+    const api = { quote: 'http://127.0.0.1:1/q', start: 'http://127.0.0.1:1/s', result: 'http://127.0.0.1:1/{jobId}' };
+    const named = join(dir, 'named.json');
+    writeFileSync(named, JSON.stringify({ sellerApi: api, timing: { judgeWithinSec: 120, appealDecideSec: 120 } }));
+    expect(loadConfig(named).rubricTiming).toEqual({});
+    const half = join(dir, 'half.json');
+    writeFileSync(half, JSON.stringify({ sellerApi: api, timing: { judgeWithinSec: 120 } }));
+    expect(loadConfig(half).rubricTiming).toEqual({ appealDecideSec: 87_000 });
+    const silent = join(dir, 'silent.json');
+    writeFileSync(silent, JSON.stringify({ sellerApi: api }));
+    expect(loadConfig(silent).rubricTiming).toEqual({ judgeWithinSec: 87_000, appealDecideSec: 87_000 });
+    // A rubricTiming the seller writes is the seller's own, whatever timing says.
+    const own = join(dir, 'own.json');
+    writeFileSync(own, JSON.stringify({ sellerApi: api, timing: { judgeWithinSec: 120 }, rubricTiming: { judgeWithinSec: 3_600 } }));
+    expect(loadConfig(own).rubricTiming).toEqual({ judgeWithinSec: 3_600 });
+    // On a rubric offer the named windows stay (the sim club's escalation window is 300 s at least).
+    const { running } = await adapter({ options: shipped.options!, termsRules: shipped.termsRules!, timing: { ...shipped.timing, judgeWithinSec: 120, appealDecideSec: 300 }, rubricTiming: loadConfig(named).rubricTiming! }, {});
+    const b = agent('buyer-1');
+    const q = await quoteFor(running, b, SMALL, { panel: true });
+    expect(q.status, JSON.stringify(q.body)).toBe(200);
+    const t = await termsOf(b, q.body.commitmentId);
+    expect([(Date.parse(t.timing.judgeBy) - Date.parse(t.timing.deliverBy)) / 1000, t.timing.appealDecideSec]).toEqual([120, 300]);
+  }, 45_000);
+
   it('refuses a malformed rubric rule, and a rubric rule over a template that holds no optional rubric', async () => {
     await expect(adapter({ termsRules: [{ when: [], rubric: 'yes' as unknown as boolean }] })).rejects.toThrow(/termsRules\[0\]\.rubric must be true or false/);
     const dir = tmp('t331-template-');

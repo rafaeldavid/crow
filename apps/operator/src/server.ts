@@ -1504,6 +1504,16 @@ export class Operator {
         }
         return reg.judgment?.(id as Hex32) ?? fail('not_found', `no judgment record for ${id} on this operator`);
       }
+      // T-625: every record, one for each role and attempt: the primary's stays readable after an appeal decides.
+      if (s.length === 4 && s[3] === 'judgments') {
+        if (outsider && this.levelOf(terms.id, terms.disclosure.level) === 'private') {
+          fail('unauthorized', 'this deal is private: its judgment records are served to a party or an involved adjudicator with a ReadToken (Authorization: Holdback-ReadToken)');
+        }
+        const latest = reg.judgment?.(id as Hex32);
+        const items = reg.judgments?.(id as Hex32) ?? (latest ? [latest] : []);
+        if (!items.length) fail('not_found', `no judgment record for ${id} on this operator`);
+        return { items };
+      }
       if (s.length === 4 && s[3] === 'key') {
         const recipient = q.get('recipient') ?? undefined;
         if (!isAddress(recipient)) fail('invalid_terms', 'key takes ?recipient=<address>');

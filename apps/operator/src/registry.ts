@@ -110,6 +110,11 @@ export interface Registry {
   now?(): Timestamp;
   /** The latest judgment record an adjudicator published for a commitment (GET /v1/commitments/{id}/judgment). */
   judgment?(commitmentId: Hex32): Judgment | null;
+  /**
+   * T-625: every judgment record published for a commitment, the latest for each role and attempt, in the order they
+   * were first published (GET /v1/commitments/{id}/judgments). Absent: the latest record only.
+   */
+  judgments?(commitmentId: Hex32): Judgment[];
 }
 
 /** A SimChain registry. Each call has its own registration store: one node's, unless a world shares one. */
