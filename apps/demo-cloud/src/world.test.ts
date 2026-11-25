@@ -7,7 +7,7 @@ import { generatePrivateKey } from 'viem/accounts';
 import { afterEach, describe, expect, it } from 'vitest';
 import { Agent } from '../../../examples/agent.ts';
 import { serveTwoOrigins } from '../../../examples/two-origins.ts';
-import { LIVE_REGISTRY_URI, liveRegistry, markerFake, placeholderRegistry } from '@holdback/adjudicator';
+import { HOLD_MARGIN_SEC, LIVE_REGISTRY_URI, liveRegistry, markerFake, placeholderRegistry } from '@holdback/adjudicator';
 import { APPEAL_WINDOW_PROBLEM, canonicalKeccak, DRAND_QUICKNET_CHAIN_HASH, holdbackDomain, verifyRegistration, type AdjudicatorRegistration, type RegisteredAdjudicator } from '@holdback/core';
 import { LiveChain, type DeploymentFile } from '@holdback/settlement/live';
 import { encodePublicKey, generateEncryptionKeyPair } from '@holdback/core/crypto';
@@ -359,7 +359,7 @@ async function rubricDeal(urls: string[], diff: string): Promise<{ id: string; s
 }
 
 /** A rubric offer between two fresh agents, offered and not yet accepted; `checksOnly`: the same deal with no rubric. */
-async function rubricOffer(urls: string[], { checksOnly = false } = {}) {
+async function rubricOffer(urls: string[], { checksOnly = false, timing = {} as Record<string, number> } = {}) {
   const index = ((await (await fetch(`${urls[0]}/`)).json()) as J).demo;
   const buyer = freshAgent(urls);
   const seller = freshAgent(urls);
@@ -381,7 +381,7 @@ async function rubricOffer(urls: string[], { checksOnly = false } = {}) {
         { id: 'minimal', description: 'No unrelated changes.', weight: 30, anchors: { '0': 'Rewrites everything', '2': 'Some noise', '4': 'Minimal' } },
       ],
     } }),
-    timing: { judgeWithinSec: 2, fallbackWithinSec: 2, appealWindowSec: 0, appealDecideSec: 2 },
+    timing: { judgeWithinSec: 2, fallbackWithinSec: 2, appealWindowSec: 0, appealDecideSec: 2, ...timing },
   });
   return { offer, buyer, seller };
 }
@@ -783,6 +783,39 @@ describe('live judges (T-028), with a stand-in for the models', () => {
       expect(JSON.stringify(m)).not.toMatch(/fake judge/);
     }
   }, 120_000);
+
+  // ADR-0051: a rubric deal's reject is held for the turn's window less the margin. The deal stays Delivered, the state
+  // read says until when and what each party may do, the Durable Object wakes once at the hold's end, the held deal
+  // reserves no judge call, and the buyer's accept in the hold counts as rescued.
+  it('holds a rubric reject: Delivered with a notice, one wake at its end, nothing reserved; the buyer accepts it', async () => {
+    const failing = markerFake(Object.fromEntries(liveRegistry().active.map((e) => [e.id, 'fail' as const])));
+    const { urls, world } = await serve({ judgeProvider: failing, liveCallsPerDay: 60 });
+    const judgeWithinSec = 3_600;
+    const { offer, buyer, seller } = await rubricOffer(urls, { timing: { judgeWithinSec } });
+    await buyer.waitFor(offer.id, ['AcceptedByAdjudicator']);
+    await buyer.agreeAndFund(offer.terms, 40_000_000n);
+    const { delivery } = await seller.deliverAndShare(offer.terms, new TextEncoder().encode(DIFF));
+    let state: J;
+    for (const end = Date.now() + 15_000; Date.now() < end; await new Promise((r) => setTimeout(r, 100))) {
+      state = await buyer.call('GET', `/v1/commitments/${offer.id}`);
+      if (state.notices?.some((n: string) => /signs the reject at/.test(n))) break;
+    }
+    expect(state!.escrowState).toBe('Delivered');
+    const notice = state!.notices.find((n: string) => /signs the reject at/.test(n)) as string;
+    expect(notice).toMatch(/The primary adjudicator's panel rejected this delivery/);
+    expect(notice).toContain(`/v1/commitments/${offer.id}/accept`);
+    const record = (await buyer.call('GET', `/v1/commitments/${offer.id}/judgment`)) as J;
+    expect(record.aggregate.decision).toBe('reject');
+    const until = /signs the reject at (\S+?),/.exec(notice)![1]!;
+    expect(Date.parse(until)).toBe(Date.parse(record.decidedAt) + (judgeWithinSec - HOLD_MARGIN_SEC) * 1000);
+    expect(world.reservedJudgeCalls()).toBe(0);
+    expect(world.nextPass()).toBe(Date.parse(until));
+    expect(world.telemetry.usage()).toMatchObject({ heldRejects: { held: 1 } });
+    await buyer.earlyAccept(offer.terms, delivery);
+    expect((await buyer.waitFor(offer.id, ['Released'], 15_000)).escrowState).toBe('Released');
+    for (const end = Date.now() + 5_000; Date.now() < end && !(world.telemetry.usage() as J).heldRejects?.rescued; ) await new Promise((r) => setTimeout(r, 100));
+    expect(world.telemetry.usage()).toMatchObject({ heldRejects: { held: 1, rescued: 1 } });
+  }, 90_000);
 
   it('keeps the count across a rebuild from storage', async () => {
     const storage = new MemoryStorage();

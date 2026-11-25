@@ -1037,6 +1037,20 @@ export async function rehearse(o: RehearsalOptions): Promise<RehearsalResult> {
         return await finish('Held');
       }
       step('The seller delivers', `the report passed the adapter's check run, and it delivered the encrypted report${hasRubric ? '; the panel judges it next' : ''}.`);
+      if (name === 'refunded' && o.world) {
+        // ADR-0051: on a rubric deal Crow's adjudicators publish the panel's reject at once and sign it a day later; the
+        // deal stays Delivered meanwhile, and the state read says until when. This world's clock moves past the hold.
+        let held: string | undefined;
+        for (const end = Date.now() + timeoutMs; !held; await sleep(100)) {
+          if (Date.now() > end) throw new Error(`still waiting for the held reject's notice after ${timeoutMs / 1000} s`);
+          const notices = ((await reader.call('GET', `/v1/commitments/${id}`)).notices ?? []) as string[];
+          held = notices.map(String).map((n) => /signs the reject at (\S+?),/.exec(n)?.[1]).find(Boolean);
+        }
+        const sec = Math.ceil((Date.parse(held) - (await reader.settlementNow())) / 1000) + 2;
+        step('The panel rejects the report, and the reject is held', `the record is public now, and the adjudicator signs the reject at ${plain(held)}: until then the buyer may accept or both may settle (ref/after-funding.txt, "A held reject"). Neither does here.`);
+        o.world.advanceClock(sec);
+        step('The hold ends', `this world's clock moved ${sec} s (${span(sec)}) forward, past ${plain(held)}; the adjudicator signs the reject.`);
+      }
     }
 
     // ---- The outcome: the buyer's signer waits for every operator, reclaims after a missed deadline, opens the report ----

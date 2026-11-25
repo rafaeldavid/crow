@@ -11,11 +11,11 @@ T-558. Atlas pays from its own payment address, atlas-wallet, which an on-ramp o
 | Pragmas | settlement=sim · judges=recorded · mode=guaranteed_on_decision · seed=558 |
 | Prefix | neutrality. (an actor fails: terms-compliant terminal state anyway) |
 | Settlement | SimChain (T-006) driving @holdback/core `step` |
-| Judgment | @holdback/judgment (checks, screen, panel) · registry config/judges.yaml 0x8aa4…4549 · policy bench-a/p1 0x40b5…1e88 |
+| Judgment | @holdback/judgment (checks, screen, panel) · registry config/judges.yaml 0x8aa4…4549 · policy bench-a/p1 0xd136…9300 |
 | Club | fixtures/clubs/data-services-v1.yaml (loaded) · rulebook 0xd9bc…492d |
 | Buyer | atlas-buyer 0xB3e2…3344 |
 | Seller | tidewater-seller 0x6397…8Bc5 |
-| Terms | fixtures/terms/clean-customers-2000.yaml (loaded) · commitment 0x5bc6…627a · price 2,000.000000 tUSD · fee 50.000000 tUSD |
+| Terms | fixtures/terms/clean-customers-2000.yaml (loaded) · commitment 0x17f2…54b3 · price 2,000.000000 tUSD · fee 50.000000 tUSD |
 | Adjudicators | primary bench-a 0xB4Bc…C598 · fallback bench-b 0xbddB…b64e · appeal bench-c 0x22BA…5871 |
 | Operators | op-1 · op-2 |
 
@@ -49,7 +49,7 @@ Outages:
 
 ## Receipts and log
 
-- Events 0–3. Chain head 0xb85c…2e1d. Replay of 4 SimChain submissions from genesis matches the settlement state.
+- Events 0–3. Chain head 0x625f…d464. Replay of 4 SimChain submissions from genesis matches the settlement state.
 - Receipts from op-1: 3 (rcpt-0001–rcpt-0003). The runner labels them without signing; the operator API signs real receipts.
 - Receipts from op-2: 1 (rcpt-0004–rcpt-0004). The runner labels them without signing; the operator API signs real receipts.
 

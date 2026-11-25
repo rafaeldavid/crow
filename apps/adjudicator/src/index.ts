@@ -8,3 +8,4 @@ export * from './service.js';
 export * from './simchain-adapter.js';
 export * from './test-adjudicator.js';
 export type * from './settlement-port.js';
+export * from './hold.js';

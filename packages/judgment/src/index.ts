@@ -20,3 +20,4 @@ export * from './terms.js';
 export * from './untrusted.js';
 export * from './verdict.js';
 export * from './kept.js';
+export * from './hold.js';

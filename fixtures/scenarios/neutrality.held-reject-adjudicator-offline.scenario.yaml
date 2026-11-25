@@ -1,0 +1,41 @@
+# @settlement sim @judges recorded @mode guaranteed_on_decision @seed 606
+name: neutrality.held-reject-adjudicator-offline
+description: >-
+  ADR-0051 (T-619). Bench A holds its reject of the row-drop delivery, then goes silent for good. The hold
+  gives it no more power than silence before: once judgeBy passes, anyone triggers the fallback, and Bench B
+  judges and signs at once (a fallback never holds). Atlas is refunded within fallbackBy.
+fails: bench-a
+club: fixtures/clubs/data-services-v1.yaml
+terms: fixtures/terms/clean-customers-2000-held.yaml
+# ADR-0036: pinned to the policy these scenarios test (template pair 2, agg-5), whatever the build's default is.
+build:
+  prompt_template: "0x4d328a15ef96b9aa0f4166efc720a320f82e9c677fdd8beaff431ecefcc9629b"
+  appeal_prompt_template: "0xfc6d93d5441808bbfa690c0402a0ee185eab48c508025f59cf3c4f9f5d8332f1"
+  aggregation: agg-5
+parties:
+  buyer: atlas-buyer
+  seller: tidewater-seller
+adjudicators:
+  primary: bench-a
+  fallback: bench-b
+  appeal: bench-c
+operators: [op-1, op-2]
+faucet:
+  atlas-buyer: "10000000000"
+  bench-a: "25000000000"
+  bench-b: "25000000000"
+  bench-c: "25000000000"
+steps:
+  - offer:              { by: seller, via: op-1 }
+  - adjudicator_accept: { via: op-1 }
+  - agree_and_fund:     { by: buyer, via: op-1 }
+  - deliver:            { by: seller, via: op-1, file: data/dataset-cleaning/customers.clean.row-drop.csv }
+  - advance_clock:      { seconds: 5 }
+  - judge:              { adjudicator: bench-a }
+  - offline:            { actor: bench-a }
+  - advance_clock:      { seconds: 259800 }           # past judgeBy (offer + 48 h + 87,000 s)
+  - trigger_fallback:   { via: op-1 }
+  - judge:              { adjudicator: bench-b }
+  - settle:             { trigger: anyone }
+expect:
+  terminal: Refunded

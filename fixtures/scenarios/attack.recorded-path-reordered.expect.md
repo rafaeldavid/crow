@@ -11,11 +11,11 @@ ADR-0047. The arm visited the second waypoint first. Tidewater reverses the rows
 | Pragmas | settlement=sim · judges=recorded · mode=guaranteed_on_decision · seed=82 |
 | Prefix | attack. (adversarial input: must not auto-accept) |
 | Settlement | SimChain (T-006) driving @holdback/core `step` |
-| Judgment | @holdback/judgment (checks, screen, panel) · registry config/judges.yaml 0x8aa4…4549 · policy bench-a/p1 0x40b5…1e88 |
+| Judgment | @holdback/judgment (checks, screen, panel) · registry config/judges.yaml 0x8aa4…4549 · policy bench-a/p1 0xd136…9300 |
 | Club | fixtures/clubs/data-services-v1.yaml (loaded) · rulebook 0xd9bc…492d |
 | Buyer | atlas-buyer 0x62bC…53D4 |
 | Seller | tidewater-seller 0x436D…9990 |
-| Terms | fixtures/terms/recorded-path.yaml (loaded) · commitment 0x80d4…b1e2 · price 1,500.000000 tUSD · fee 50.000000 tUSD |
+| Terms | fixtures/terms/recorded-path.yaml (loaded) · commitment 0xd6b2…05fd · price 1,500.000000 tUSD · fee 50.000000 tUSD |
 | Adjudicators | primary bench-a 0x1131…58db · fallback bench-b 0x4fC3…526F · appeal bench-c 0x88D9…f02e |
 | Operators | op-1 · op-2 |
 
@@ -46,13 +46,13 @@ ADR-0047. The arm visited the second waypoint first. Tidewater reverses the rows
 - **Intake:** plaintext 0x4cb1…780b · application/json · 865 bytes (fixtures/data/recorded-path/run.reordered.json) · hash verified ✓ · normalized
 - **Deterministic checks:** time ✗ (row 2 is lower than row 1) · lengths ✓ · waypoints ✓
 - **Screen:** clean
-- **Panel:** not run · first-instance template 0x4d32…629b · rubric 0x551e…5e6a · seed source: commit-reveal (commitment 0xb132…793c, seed 0xb350…c909, recomputed: match)
+- **Panel:** not run · first-instance template 0xabb5…4dd2 · rubric 0x551e…5e6a · seed source: commit-reveal (commitment 0xb132…793c, seed 0xb350…c909, recomputed: match)
 - **Aggregate:** reject. Reasons: required deterministic check failed: time.
 - **Signed:** reject.
 
 ## Receipts and log
 
-- Events 0–7. Chain head 0xe4e4…96a1. Replay of 6 SimChain submissions from genesis matches the settlement state.
+- Events 0–7. Chain head 0xf2b0…7216. Replay of 6 SimChain submissions from genesis matches the settlement state.
 - Receipts from op-1: 5 (rcpt-0001–rcpt-0005). The runner labels them without signing; the operator API signs real receipts.
 
 ## Invariants

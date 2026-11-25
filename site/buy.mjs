@@ -8,8 +8,8 @@
 // this machine. Node 22.18 or later, with npm install viem@2.57.13 tweetnacl@1.0.3.
 Object.defineProperty(globalThis, 'crowCommands', { value: Object.freeze({"buy-with-signer":"node buy.mjs","pay-from-wallet":"node buy.mjs pay","deal-record":"node buy.mjs record"}), enumerable: false, configurable: false, writable: false });
 
-import { chmodSync, existsSync, mkdirSync, readFileSync, readdirSync, renameSync, writeFileSync } from "node:fs";
-import { join, relative } from "node:path";
+import { chmodSync, closeSync, constants, existsSync, fstatSync, linkSync, lstatSync, mkdirSync, openSync, readFileSync, readdirSync, renameSync, rmSync, statSync, writeFileSync } from "node:fs";
+import { join, relative, resolve } from "node:path";
 import nacl from "tweetnacl";
 import { encodeAbiParameters, getAddress, hashStruct, hashTypedData, keccak256, parseAbiParameters, recoverMessageAddress, recoverTypedDataAddress, toBytes } from "viem";
 import { generatePrivateKey, privateKeyToAccount } from "viem/accounts";
@@ -2304,7 +2304,7 @@ async function ciphertextOf(sha, first, operators, cache, refused) {
 		const local = [];
 		const b = await bytesFrom(api, `/v1/ciphertext/${sha}`, local);
 		tried.push(...local.map((r) => api === first ? r : `${r} at ${api}`));
-		if (b && await sha256$1(b) === sha) {
+		if (b && await sha256$2(b) === sha) {
 			found = b;
 			break;
 		}
@@ -2482,7 +2482,7 @@ async function view(a, id, o, cache) {
 			let got = null;
 			if (key?.length === 32) try {
 				const aes = await crypto.subtle.importKey("raw", new Uint8Array(key), "AES-GCM", false, ["decrypt"]);
-				got = await sha256$1(new Uint8Array(await crypto.subtle.decrypt({
+				got = await sha256$2(new Uint8Array(await crypto.subtle.decrypt({
 					name: "AES-GCM",
 					iv: ct.slice(0, 12)
 				}, aes, ct.slice(12))));
@@ -2791,7 +2791,7 @@ async function main(argv) {
 	process.stderr.write(`Record of ${r.commitmentId} written${out ? ` to ${out}` : ""}: ${count(true)} checks passed, ${count(null)} not run, ${count(false)} failed. ${r.disagreements.length ? `Operators differ on ${r.disagreements.map((d) => d.section).join(", ")}.` : `The ${r.operators.filter((x) => x.answered).length} answering operators agree.`}\n`);
 	return count(false) || r.disagreements.length ? 1 : 0;
 }
-var ID$1, ADDRESS, CIPHERTEXT_ID, CURSOR, SECTIONS, SETTLED, RECEIPT_TYPES, lc, lowerAll, sha256$1, sum, isMoney$1, lateWorkLine, RETRY, refusedStatus, READ_PATH;
+var ID$1, ADDRESS, CIPHERTEXT_ID, CURSOR, SECTIONS, SETTLED, RECEIPT_TYPES, lc, lowerAll, sha256$2, sum, isMoney$1, lateWorkLine, RETRY, refusedStatus, READ_PATH;
 var init_deal_record = __esmMin((() => {
 	init_entry();
 	init_help();
@@ -2827,7 +2827,7 @@ var init_deal_record = __esmMin((() => {
 	})) };
 	lc = (s) => String(s).toLowerCase();
 	lowerAll = (v) => JSON.parse(JSON.stringify(v ?? null), (_k, x) => typeof x === "string" && /^0x[0-9a-fA-F]+$/.test(x) ? x.toLowerCase() : x);
-	sha256$1 = async (b) => `sha256:${Buffer.from(await crypto.subtle.digest("SHA-256", new Uint8Array(b))).toString("hex")}`;
+	sha256$2 = async (b) => `sha256:${Buffer.from(await crypto.subtle.digest("SHA-256", new Uint8Array(b))).toString("hex")}`;
 	sum = (xs) => xs.reduce((a, x) => a + BigInt(x.amount), 0n);
 	isMoney$1 = (m) => typeof m?.token === "string" && typeof m?.amount === "string" && /^(0|[1-9][0-9]*)$/.test(m.amount);
 	lateWorkLine = (w) => `The work was delivered late and accepted by a mutual settlement, which released its key${w.keyReleasedTo ? ` to ${w.keyReleasedTo}` : ""}; delivery hash ${w.deliveryHash ?? "not confirmed (pass your signed settlement and the delivery: --settlement <file> --delivery <file>)"}.`;
@@ -3061,7 +3061,7 @@ async function loadKeys(store, commitmentIdOrAddress, options = {}) {
 	}
 	throw new Error(`no key in ${store} for ${want}`);
 }
-var WINDOWS, watchFile, DEC, ID, EMPTY_RUBRIC, isMoney, lowerHex, same, refuse, HIDDEN, printable, shown, sleep, FaucetLimited, AGREE_PAUSES_MS, isRecord, PLACEHOLDER, WHOLE_PLACEHOLDER, CLOCK_FIELDS, OFFER_FIELDS, SIGNED_FIELDS, sha256, defaultOperators, EXPECT_KEYS, sellerDiffers, BuyerSigner;
+var WINDOWS, watchFile, DEC, ID, EMPTY_RUBRIC, isMoney, lowerHex, same, refuse, HIDDEN, printable, shown, sleep, FaucetLimited, AGREE_PAUSES_MS, isRecord, PLACEHOLDER, WHOLE_PLACEHOLDER, CLOCK_FIELDS, OFFER_FIELDS, SIGNED_FIELDS, sha256$1, defaultOperators, EXPECT_KEYS, sellerDiffers, BuyerSigner;
 var init_buyer_signer = __esmMin((() => {
 	init_agent();
 	init_entry();
@@ -3152,7 +3152,7 @@ var init_buyer_signer = __esmMin((() => {
 		"registryHash",
 		"maxSubmissions"
 	].includes(f));
-	sha256 = async (b) => `sha256:${Buffer.from(await crypto.subtle.digest("SHA-256", new Uint8Array(b))).toString("hex")}`;
+	sha256$1 = async (b) => `sha256:${Buffer.from(await crypto.subtle.digest("SHA-256", new Uint8Array(b))).toString("hex")}`;
 	defaultOperators = () => (process.env["HOLDBACK_OPERATORS"] || "https://api.crow.direct,https://api2.crow.direct").split(",").map((s) => s.trim().replace(/\/+$/, "")).filter(Boolean);
 	EXPECT_KEYS = [
 		"settlementMode",
@@ -4119,7 +4119,7 @@ var init_buyer_signer = __esmMin((() => {
 				if (options.delivery === void 0) note = `the settlement released the key to late work no operator records as a delivery: pass the signed delivery the seller handed you, with this deal's ID (resume ${this.store} ${id} --delivery <file>), to open it`;
 				else {
 					work = await this.#openLate(id, options.delivery);
-					plaintextSha256 = await sha256(new TextEncoder().encode(work));
+					plaintextSha256 = await sha256$1(new TextEncoder().encode(work));
 					lateHash = deliveryHashOf(options.delivery).toLowerCase();
 				}
 			}
@@ -4128,7 +4128,7 @@ var init_buyer_signer = __esmMin((() => {
 				if (typeof recorded?.uri !== "string" || !sources.some((op) => new URL(op).origin === new URL(recorded.uri).origin)) throw new Error(`the operators record the delivery at ${shown(recorded?.uri)}, not on an operator`);
 				const up = (await this.#answers(sources, path)).map((a) => a.api);
 				work = await new Agent([...up, ...sources.filter((op) => !up.includes(op))], this.#saved.privateKey, agent.encryptionSecretKey, pin.domain, pin.chain).openDelivery(id);
-				plaintextSha256 = await sha256(new TextEncoder().encode(work));
+				plaintextSha256 = await sha256$1(new TextEncoder().encode(work));
 				if (plaintextSha256 !== recorded.plaintextSha256) throw new Error("the work is not UTF-8 text, or is not the delivery the operators record: this file returns text only");
 			}
 			const seen = /* @__PURE__ */ new Set();
@@ -4184,14 +4184,14 @@ var init_buyer_signer = __esmMin((() => {
 			const res = await fetch(uri, { signal: AbortSignal.timeout(3e4) });
 			if (!res.ok) throw new Error(`the ciphertext at ${shown(uri)} answered ${res.status}`);
 			const ct = new Uint8Array(await res.arrayBuffer());
-			if (await sha256(ct) !== d.ciphertext.sha256) throw new Error("the ciphertext does not match the delivery's signed ciphertext.sha256");
+			if (await sha256$1(ct) !== d.ciphertext.sha256) throw new Error("the ciphertext does not match the delivery's signed ciphertext.sha256");
 			const key = openEnvelopeKey(mine, this.address, new Uint8Array(Buffer.from(this.#saved.encryptionSecretKey, "base64url")));
 			const aes = await crypto.subtle.importKey("raw", new Uint8Array(key), "AES-GCM", false, ["decrypt"]);
 			const plain = new Uint8Array(await crypto.subtle.decrypt({
 				name: "AES-GCM",
 				iv: ct.slice(0, 12)
 			}, aes, ct.slice(12)));
-			if (await sha256(plain) !== d.plaintextSha256) throw new Error("the work does not match the delivery's signed plaintextSha256");
+			if (await sha256$1(plain) !== d.plaintextSha256) throw new Error("the work does not match the delivery's signed plaintextSha256");
 			return new TextDecoder("utf-8", { fatal: true }).decode(plain);
 		}
 		/**
@@ -4296,11 +4296,211 @@ var init_pay_from_wallet = __esmMin((async () => {
 	}
 }));
 
+// examples/deal-files.ts
+/** The folder for one deal's files, `<key store>-files` by its full path, made if need be; or why none will do. */
+function ready(d) {
+	const id = d.commitmentId.toLowerCase();
+	if (!/^0x[0-9a-f]{64}$/.test(id)) return { problem: "the commitment ID is not 0x and 64 hex digits" };
+	const folder = `${resolve(d.store)}-files`;
+	try {
+		const store = statSync(d.store);
+		mkdirSync(folder, {
+			recursive: true,
+			mode: 448
+		});
+		const at = lstatSync(folder);
+		if (!at.isDirectory()) return { problem: `${folder} is a link or a file, not a folder of its own` };
+		if (at.uid !== store.uid || (at.mode & ~store.mode & 63) !== 0) return { problem: `${folder} is another user's, or open to other users where the key store is not: set its mode to 700 if it is yours, or move it away` };
+		if (readdirSync(folder).some((name) => KEY_STORE_FILE.test(name))) return { problem: `${folder} holds a key store's files: give this deal a key store of another name` };
+	} catch (e) {
+		return { problem: `${folder} cannot be used${coded(e)}` };
+	}
+	return {
+		folder,
+		id
+	};
+}
+/** Writes a new file in place, mode 0600. False when something is there already; a write cut short leaves nothing. */
+function writeInPlace(path, text) {
+	try {
+		writeFileSync(path, text, {
+			flag: "wx",
+			mode: 384
+		});
+		return true;
+	} catch (e) {
+		if (codeOf(e) === "EEXIST") return false;
+		rmSync(path, { force: true });
+		throw e;
+	}
+}
+/** Writes a new file, whole or not at all: beside it first, then linked to its name, which never replaces. */
+function writeNew(path, text) {
+	const part = `${path}.part-${Math.random().toString(36).slice(2, 10)}`;
+	try {
+		if (!writeInPlace(part, text)) throw new Error("a part file of that name is there");
+		try {
+			linkSync(part, path);
+			return true;
+		} catch (e) {
+			if (codeOf(e) === "EEXIST") return false;
+			if (!NO_HARD_LINKS.has(codeOf(e))) throw e;
+			return writeInPlace(path, text);
+		}
+	} finally {
+		rmSync(part, { force: true });
+	}
+}
+/** Whether `path` is a plain file holding exactly these bytes. It follows no link and waits on no pipe. */
+function holds(path, bytes) {
+	let fd;
+	try {
+		fd = openSync(path, constants.O_RDONLY | (constants.O_NOFOLLOW ?? 0) | (constants.O_NONBLOCK ?? 0));
+		const at = fstatSync(fd);
+		return at.isFile() && at.size === bytes.length && readFileSync(fd).equals(bytes);
+	} catch {
+		return false;
+	} finally {
+		if (fd !== void 0) closeSync(fd);
+	}
+}
+/**
+* Saves the work, when any was released. It never throws. `format` is the seller's own words: only looked up.
+* `signedSha256`, for late work, is the hash the seller signed: the decoder that read that work drops a leading byte
+* order mark, so the file gets it back, and no file is saved that would not hash to the signed one.
+*/
+async function saveWork(d) {
+	if (d.work === null) return { work: null };
+	const no = (problem) => ({
+		work: null,
+		problems: [`the work was not saved: ${problem}`]
+	});
+	try {
+		let text = d.work;
+		if (d.signedSha256 !== void 0) {
+			const signed = String(d.signedSha256);
+			if (await sha256(text) !== signed) {
+				text = `﻿${d.work}`;
+				if (await sha256(text) !== signed) return no("its text does not hash to the signed delivery's hash");
+			}
+		}
+		const at = ready(d);
+		if ("problem" in at) return no(at.problem);
+		const path = join(at.folder, `${at.id}.work.${ENDINGS.get(d.format) ?? "txt"}`);
+		if (writeNew(path, text) || holds(path, Buffer.from(text, "utf8"))) return { work: path };
+		return no(`${path} already holds something else`);
+	} catch (e) {
+		return no(`its file cannot be written${coded(e)}`);
+	}
+}
+/** What `read` gives, or LATE once `ms` have passed. The read goes on: only ending the process stops it. */
+async function within(read, ms) {
+	let timer;
+	const late = new Promise((done) => {
+		timer = setTimeout(() => done(LATE), ms);
+	});
+	try {
+		return await Promise.race([read, late]);
+	} finally {
+		clearTimeout(timer);
+	}
+}
+/** The record's checks by name. The names are dealRecord's own words; each check's reason stays in the file. */
+function summary(record) {
+	const names = (ok) => [...new Set(record.checks.filter((c) => c.ok === ok).map((c) => c.check))];
+	return {
+		checks: {
+			passed: record.checks.filter((c) => c.ok === true).length,
+			failed: names(false),
+			notRun: names(null)
+		},
+		disagreements: record.disagreements.map((x) => x.section)
+	};
+}
+async function saveRecord(d, ms) {
+	const commitmentId = d.commitmentId.toLowerCase();
+	const no = (problem) => ({
+		commitmentId,
+		file: null,
+		problems: [`the record was not saved: ${problem}`]
+	});
+	let told;
+	let text;
+	try {
+		const got = await within(d.record(), ms);
+		if (got === LATE) return no(`not read within ${ms / 1e3} s`);
+		told = summary(got);
+		text = `${JSON.stringify(got, null, 2)}\n`;
+	} catch {
+		return no("it could not be built from the operators' answers");
+	}
+	try {
+		const at = ready(d);
+		if ("problem" in at) return no(at.problem);
+		for (let n = 1; n <= MOST_RECORDS; n++) {
+			const path = join(at.folder, `${at.id}.record${n === 1 ? "" : `-${n}`}.json`);
+			if (writeNew(path, text)) return {
+				commitmentId,
+				file: path,
+				...told
+			};
+		}
+		return no(`${at.folder} holds ${MOST_RECORDS} records of this deal already`);
+	} catch (e) {
+		return no(`its file cannot be written${coded(e)}`);
+	}
+}
+/**
+* Each finished deal's record. `add`, once a deal's outcome is printed: its record is read and saved then, while any
+* other deal is still followed, and told as `{"record": ...}`. `end`, once no deal is followed any more: it waits for
+* the records and then ends the process. With no deal added, it does nothing.
+*/
+function keepRecords(say, o = {}) {
+	const saving = [];
+	return {
+		add(d) {
+			saving.push(saveRecord(d, o.withinMs ?? RECORD_WITHIN_MS).then((record) => say({ record })));
+		},
+		async end() {
+			if (saving.length === 0) return;
+			await Promise.all(saving);
+			(o.end ?? endProcess)();
+		}
+	};
+}
+var ENDINGS, RECORD_WITHIN_MS, MOST_RECORDS, KEY_STORE_FILE, NO_HARD_LINKS, codeOf, coded, sha256, LATE, endProcess;
+var init_deal_files = __esmMin((() => {
+	ENDINGS = /* @__PURE__ */ new Map([
+		["text/csv", "csv"],
+		["application/json", "json"],
+		["text/markdown", "md"]
+	]);
+	RECORD_WITHIN_MS = 3e4;
+	MOST_RECORDS = 100;
+	KEY_STORE_FILE = /^0x[0-9a-f]{40}(\.[a-z-]+)*\.json(\.tmp)?$/;
+	NO_HARD_LINKS = /* @__PURE__ */ new Set([
+		"EPERM",
+		"ENOTSUP",
+		"EOPNOTSUPP",
+		"ENOSYS",
+		"EXDEV"
+	]);
+	codeOf = (e) => {
+		const c = e?.code;
+		return typeof c === "string" && /^E[A-Z]+$/.test(c) ? c : null;
+	};
+	coded = (e) => codeOf(e) ? ` (${codeOf(e)})` : "";
+	sha256 = async (text) => `sha256:${Buffer.from(await crypto.subtle.digest("SHA-256", new TextEncoder().encode(text))).toString("hex")}`;
+	LATE = Symbol("late");
+	endProcess = () => process.stdout.write("", () => process.stderr.write("", () => process.exit(process.exitCode ?? 0)));
+}));
+
 // examples/buy-with-signer.ts
 var buy_with_signer_exports = /* @__PURE__ */ __exportAll({});
-var args, stop, at, termsFile, dl, deliveryFile, first, store, third, fourth, defaults, options, usage, asked, say, expect, sh, approveOf, finish, testFunds, pay;
+var args, stop, at, termsFile, dl, deliveryFile, first, store, third, fourth, defaults, options, usage, asked, say, records, expect, sh, approveOf, finish, testFunds, pay;
 var init_buy_with_signer = __esmMin((async () => {
 	init_help();
+	init_deal_files();
 	init_buyer_signer();
 	init_verify();
 	args = process.argv.slice(2);
@@ -4318,6 +4518,7 @@ var init_buy_with_signer = __esmMin((async () => {
 	} else if (at >= 0 && (!termsFile || termsFile.startsWith("--"))) throw new Error("--expect-terms takes the path of your terms file");
 	else if (first !== "resume" && !/^[0-9]+$/.test(fourth ?? "")) throw new Error(`the most you pay is base units as a decimal string, the fourth argument\n${usage}`);
 	say = (x) => console.error(printable(JSON.stringify(x)));
+	records = keepRecords(say);
 	expect = () => ({ expect: JSON.parse(process.env["CROW_EXPECT"] || "{}") });
 	sh = (s) => /^[\w@%+=:,./-]+$/.test(s) ? s : `'${s.replace(/'/g, "'\\''")}'`;
 	approveOf = (id) => [
@@ -4330,9 +4531,17 @@ var init_buy_with_signer = __esmMin((async () => {
 		...stop ? ["--stop-after-funding"] : []
 	].join(" ");
 	finish = async (s) => {
-		const done = await s.openDelivery(s.commitmentId, {
+		const handed = deliveryFile ? JSON.parse(readFileSync(deliveryFile, "utf8")) : void 0, done = await s.openDelivery(s.commitmentId, {
 			onReport: say,
-			...deliveryFile ? { delivery: JSON.parse(readFileSync(deliveryFile, "utf8")) } : {}
+			...handed ? { delivery: handed } : {}
+		}), deal = {
+			store,
+			commitmentId: s.commitmentId
+		}, saved = await saveWork({
+			...deal,
+			work: done.work,
+			format: s.shownOffer?.deliverable?.format,
+			signedSha256: done.settlement?.deliveryHash ? handed.plaintextSha256 : void 0
 		});
 		console.log(printable(JSON.stringify({
 			commitmentId: s.commitmentId,
@@ -4341,8 +4550,13 @@ var init_buy_with_signer = __esmMin((async () => {
 			outcome: done.outcome,
 			...done.settlement ? { settlement: done.settlement } : {},
 			work: done.work,
-			transactions: done.transactions
+			transactions: done.transactions,
+			saved
 		})));
+		records.add({
+			...deal,
+			record: () => s.record()
+		});
 	};
 	testFunds = (s, amount) => s.testFunds(amount).then(() => true, (e) => {
 		if (!(e instanceof FaucetLimited)) throw e;
@@ -4456,6 +4670,7 @@ var init_buy_with_signer = __esmMin((async () => {
 			process.exitCode = 3;
 		}
 	}
+	await records.end();
 }));
 
 // site/buy-entry.mjs

@@ -2,9 +2,9 @@
   "about": "ADR-0036: every screen version, template pair, aggregation version and judge registry a released build registered. An entry is never deleted. It leaves the build only when marked retired (no open deal binds it) or withdrawn (running it would break a hard rule), each with its decision reference. The default is what a primary on this build accepts new deals under; a new default ships in two deploys, carried first and default second. policyParams lists every set of the other policy fields a released default used, so the deploy guard can tell which versions an older deal's policy hash names.",
   "default": {
     "screenVersion": "screen-1",
-    "promptTemplateHash": "0x4d328a15ef96b9aa0f4166efc720a320f82e9c677fdd8beaff431ecefcc9629b",
-    "appealPromptTemplateHash": "0xfc6d93d5441808bbfa690c0402a0ee185eab48c508025f59cf3c4f9f5d8332f1",
-    "aggregationVersion": "agg-5"
+    "promptTemplateHash": "0xabb5ec9b33cf9a936e140bf8530c217f6629fdf1e08a46fbdf6bd7363ce84dd2",
+    "appealPromptTemplateHash": "0xa0bb1a5d8fa8ac53294a41556df71c098f73220d24efd9522e922f9004248659",
+    "aggregationVersion": "agg-3"
   },
   "policyParams": [
     {

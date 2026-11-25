@@ -1,0 +1,41 @@
+# @settlement sim @judges recorded @mode guaranteed_on_decision @seed 607
+name: attack.held-reject-restart-no-second-panel
+description: >-
+  ADR-0051 (T-619). Bench A judges and holds a reject, then the adjudicators restart on another build in the
+  middle of the hold. The kept result survives: the judge step after the restart is still held to the same
+  second, and the step at the hold's end signs the first reject. One judgment in the record, never a second.
+club: fixtures/clubs/data-services-v1.yaml
+terms: fixtures/terms/clean-customers-2000-held.yaml
+# ADR-0036: pinned to the policy these scenarios test (template pair 2, agg-5), whatever the build's default is.
+build:
+  prompt_template: "0x4d328a15ef96b9aa0f4166efc720a320f82e9c677fdd8beaff431ecefcc9629b"
+  appeal_prompt_template: "0xfc6d93d5441808bbfa690c0402a0ee185eab48c508025f59cf3c4f9f5d8332f1"
+  aggregation: agg-5
+parties:
+  buyer: atlas-buyer
+  seller: tidewater-seller
+adjudicators:
+  primary: bench-a
+  fallback: bench-b
+  appeal: bench-c
+operators: [op-1, op-2]
+faucet:
+  atlas-buyer: "10000000000"
+  bench-a: "25000000000"
+  bench-b: "25000000000"
+  bench-c: "25000000000"
+steps:
+  - offer:              { by: seller, via: op-1 }
+  - adjudicator_accept: { via: op-1 }
+  - agree_and_fund:     { by: buyer, via: op-1 }
+  - deliver:            { by: seller, via: op-1, file: data/dataset-cleaning/customers.clean.row-drop.csv }
+  - advance_clock:      { seconds: 5 }
+  - judge:              { adjudicator: bench-a }
+  - advance_clock:      { seconds: 3600 }
+  - restart_adjudicators: { screen: screen-0 }
+  - judge:              { adjudicator: bench-a }
+  - advance_clock:      { seconds: 82800 }
+  - judge:              { adjudicator: bench-a }
+  - settle:             { trigger: anyone }
+expect:
+  terminal: Refunded

@@ -2,7 +2,7 @@
 // own adapter configuration file, the shipped adapter and its stub API, and the command's approval stop. The sim's
 // faucet admits each fresh buyer key, so the command funds and opens a delivered deal on a local chain.
 import { spawn } from 'node:child_process';
-import { mkdtempSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
+import { existsSync, mkdtempSync, readdirSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
 import { createServer, type Server } from 'node:http';
 import type { AddressInfo } from 'node:net';
 import { tmpdir } from 'node:os';
@@ -61,6 +61,8 @@ const buy = (args: string[], operators = world.info.operators, env: Record<strin
 /** A line the command printed for the buyer to run, run as written by a shell, with this node first on PATH. */
 const shell = (line: string) => collect(spawn('sh', ['-c', line], { cwd: root, env: { ...process.env, HOLDBACK_OPERATORS: '', PATH: `${dirname(process.execPath)}:${process.env['PATH']}` } }));
 const quoteUrl = () => `${adapter.url}/quote`;
+/** The line the command writes for the deal record, after the outcome: the last on stderr. */
+const recordLine = (r: Run) => (JSON.parse(r.err.trimEnd().split('\n').at(-1)!) as J).record as J;
 const stopped = (r: Run) => {
   expect(r.code, r.err).toBe(3);
   const shown = JSON.parse(r.out) as J;
@@ -68,8 +70,9 @@ const stopped = (r: Run) => {
   return shown;
 };
 /** A front to one operator: forwards every request, unless `answer` answers it; `rewrite` may change a JSON answer. */
-async function front(target: string, o: { answer?: (method: string, path: string) => { status: number; headers: Record<string, string>; body: J } | null; rewrite?: (path: string, body: J) => J }) {
+async function front(target: string, o: { hang?: (path: string) => boolean; answer?: (method: string, path: string) => { status: number; headers: Record<string, string>; body: J } | null; rewrite?: (path: string, body: J) => J }) {
   const server = createServer(async (req, res) => {
+    if (o.hang?.(req.url ?? '/')) return; // never answered
     const own = o.answer?.(req.method!, req.url ?? '/');
     if (own) return void res.writeHead(own.status, { 'content-type': 'application/problem+json', ...own.headers }).end(JSON.stringify(own.body));
     const chunks: Buffer[] = [];
@@ -121,6 +124,21 @@ describe('buy-with-signer.ts: the approval stop', () => {
     expect(result).toMatchObject({ commitmentId: id, buyer, outcome: 'Released', paid: shown.fees.total });
     expect(JSON.parse(result.work)).toMatchObject({ commit: SAMPLE.commit });
     expect(adapter.deals().find((d) => d.id === id)?.stage).toBe('delivered');
+    // T-617: the run saved the work and the deal record beside the key store, and says where.
+    dirs.push(`${store}-files`);
+    expect(result.saved).toEqual({ work: `${store}-files/${id}.work.json` });
+    const line = recordLine(done);
+    expect(line).toMatchObject({ commitmentId: id, file: `${store}-files/${id}.record.json`, checks: { failed: [] }, disagreements: [] });
+    expect(line.checks.notRun, 'only the checks that need a handed-over delivery').toEqual(['delivery hash', "seller's delivery signature"]);
+    expect(readFileSync(result.saved.work, 'utf8')).toBe(result.work);
+    const written = JSON.parse(readFileSync(line.file, 'utf8')) as J;
+    expect(written).toMatchObject({ record: 'holdback-deal-record/1', commitmentId: id, party: 'buyer', outcome: { escrowState: 'Released' } });
+    // The saved record holds the work's hash check, which the record command makes only when it is given the key.
+    expect(written.checks).toContainEqual(expect.objectContaining({ check: 'plaintext sha256', ok: true }));
+    for (const name of readdirSync(store).filter((f) => /^0x[0-9a-f]{40}\.json$/.test(f))) {
+      const key = JSON.parse(readFileSync(join(store, name), 'utf8')) as J;
+      for (const secret of [key.privateKey, key.encryptionSecretKey]) expect(readFileSync(line.file, 'utf8')).not.toContain(String(secret).replace(/^0x/, ''));
+    }
   }, 90_000);
 
   it('refuses an offer that changed between the stop and the approval, naming the field, and funds nothing', async () => {
@@ -300,6 +318,27 @@ describe('buy-with-signer.ts: the approval stop', () => {
     }
   }, 90_000);
 
+  it("prints the outcome before it reads the record, and ends within the record's 30 s when an operator never answers (T-617)", async () => {
+    const store = dir();
+    dirs.push(`${store}-files`);
+    const shown = stopped(await buy([quoteUrl(), store, SCOPE, BUDGET, '--stop-after-funding']));
+    expect((await buy(['approve', store, shown.commitmentId, BUDGET, '--stop-after-funding'])).code).toBe(0);
+    const hung = await front(world.info.operators[1]!, { hang: (path) => path.includes('/receipts') });
+    try {
+      const started = Date.now();
+      const child = spawn(process.execPath, ['examples/buy-with-signer.ts', 'resume', store], { cwd: root, env: { ...process.env, HOLDBACK_OPERATORS: [world.info.operators[0], hung.url].join(',') } });
+      let outcomeAt = 0;
+      child.stdout.once('data', () => (outcomeAt = Date.now()));
+      const r = await collect(child);
+      const ended = Date.now();
+      expect(r.code, r.err).toBe(0);
+      expect(JSON.parse(r.out)).toMatchObject({ commitmentId: shown.commitmentId, outcome: 'Released' });
+      expect(ended - outcomeAt, 'the outcome came well before the end').toBeGreaterThan(20_000);
+      expect(ended - started).toBeLessThan(45_000);
+      expect(recordLine(r)).toMatchObject({ file: null, problems: ['the record was not saved: not read within 30 s'] });
+    } finally { await hung.close(); }
+  }, 120_000);
+
   it('approves and stops after funding; resume, in a later process, opens the delivered work', async () => {
     const store = dir();
     const shown = stopped(await buy([quoteUrl(), store, SCOPE, BUDGET, '--stop-after-funding']));
@@ -307,6 +346,8 @@ describe('buy-with-signer.ts: the approval stop', () => {
     const funded = await buy(['approve', store, shown.commitmentId, BUDGET, '--stop-after-funding']);
     expect(funded.code, funded.err).toBe(0);
     expect(funded.out).toBe('');
+    dirs.push(`${store}-files`);
+    expect(existsSync(`${store}-files`), 'a run that stops after funding has no outcome to save').toBe(false);
     expect(JSON.parse(funded.err.trimEnd().split('\n').at(-1)!)).toEqual({ funded: shown.commitmentId, paid: shown.fees.total });
     const r = await buy(['resume', store]);
     expect(r.code, r.err).toBe(0);
@@ -315,5 +356,8 @@ describe('buy-with-signer.ts: the approval stop', () => {
     const again = await buy(['approve', store, shown.commitmentId, BUDGET]);
     expect(again.code, again.err).toBe(0);
     expect(JSON.parse(again.out)).toMatchObject({ commitmentId: shown.commitmentId, outcome: 'Released' });
+    // A second run keeps the first files: the same work file, and the next record.
+    expect(JSON.parse(again.out).saved).toEqual(JSON.parse(r.out).saved);
+    expect(recordLine(again).file).toBe(`${store}-files/${shown.commitmentId}.record-2.json`);
   }, 120_000);
 });
