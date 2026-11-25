@@ -47,7 +47,29 @@
 
 ## Evidence
 
-(Filled before review.)
+Measured on this machine on 2026-11-25, Node 22.23.4, anvil and forge 1.0.0.
+
+- **Tests failed first.** The old `setup.mjs` answered the approve without `--expires` with the smoke test's message ("the operators' answers or this folder changed since"). It accepts that approve when it runs in the same second as the preview, because the default expiry is rounded to the second; the test waits 1.1 s. The two adapter tests failed with no postings. The record test, run again with the postings switched off, failed with `paidTo: null` and `refundedTo: null`.
+- **`packages/settlement/evm`, on anvil:** 25 files, 322 of 322 tests passed, before the review fixes.
+- **`examples/` and `apps/demo-cloud`, on anvil:** 1,202 passed, 1 failed, 2 skipped, before the review fixes. The failure is `examples/take.test.ts`, "pins the creation code forge builds": the local build and the pinned code have the same length and differ only in the last 86 hex characters, the compiler's metadata hash (measured). This worktree checked the submodules out recursively; CI checks out six (inferred cause). This change touches neither `contracts/` nor the pinned code. CI is the check.
+- **After the review fixes and the merge of `origin/main`:** 8 files (the adapter and sync tests, publish, the setup bundle, the record on SimChain and on anvil, the invoice, late work), 168 of 168 passed. `pnpm typecheck`, `pnpm lint` and `node site/check.mjs` passed; `pnpm validate:spec` passed before the merge. No file under `spec/` changed.
+- **Bundles, against `origin/main` at the merge:**
+
+| File | `origin/main` SHA-256 | This branch SHA-256 |
+| --- | --- | --- |
+| `site/setup.mjs` | `a8ed6855365f9657b04188bd13c015e7ef29503e41445a29f6b1530330aa60f6` | `3fecb9a467423e163c746ae0493e9a1f13923cf6165cd9d4438a6eb0999e18c0` |
+| `site/seller-worker.mjs` | `892c7fd8f874eecfbfc5f39b6cad3e9f20430c45e2abdf2f9442e1158ed57e2b` | `fb532fcfa2215fdc90f2ed808e8815d9bf5823e0e3e598edac0e7fc5f04570aa` |
+
+  `buy.mjs`, `try.mjs`, `take.mjs` and `serve.mjs` keep `origin/main`'s bytes. `seller-worker.mjs` moves because it holds the chain adapter's module; its pin (`examples/seller-worker-pin.ts`), inside `setup.mjs`, moves with it.
+
+- **Review** (kind 5, one red team, given the diff, the rules and the ADRs, not this file): no Critical or High finding; seven Low. It ran one script for the quoting and the kept-line filter, and no test. Fixed, test first where code changed:
+  - findings 1 and 2: where the two money addresses are one, or the paid adjudicator is a party's address, the new postings could make a record check or the invoice fail where it said "not run". The adapter now lists no postings there;
+  - finding 3: the message beside a command that signs now says to run it only on the person's yes;
+  - finding 4, in part: an expired preview is named as expired;
+  - finding 5: a kept line with no offer ID counts as no line;
+  - finding 6: a word that holds `=` is now quoted, since zsh expands a leading `=`;
+  - finding 7, in part: the comment in `examples/setup.ts`.
+- **Not run:** nothing against Sepolia or the live operators. Full `pnpm verify` (it is for deploys).
 
 ## Decisions
 
@@ -59,4 +81,21 @@
 
 ## Handoff
 
-(Filled before review.)
+**Done:** both fixes, the review's fixes, and the pull request. The coordinator merges after CI.
+
+**What each deploy turns on (Rafa's):**
+
+- **Both operators** (they share one World, `apps/demo-cloud/wrangler.op2.jsonc`): postings on deals that settle afterwards. The records of today's smoke-test deals keep `paidTo: null`. The record needs no new client: the live `buy.mjs` and `setup.mjs` read the postings. Inferred from the unchanged record code and measured on anvil with the same code, not on Sepolia.
+- **The site:** the new `setup.mjs` and `seller-worker.mjs`. The coordinator then rebuilds the partner page that pins `setup.mjs`.
+- An approve line printed by the `setup.mjs` that is live today is not in `publish-shown.json`. With the new file, such an approve that differs says no preview in this folder printed it.
+
+**Left open:**
+
+- `paidTo` and `refundedTo` stay `null` after an early accept, a default outcome and a decision on a price of 0. The record's "postings follow the outcome" check needs a fix first: it fails SimChain's own early-accept and default postings when the fee is above 0 (inferred from the code, not run). The fix is in `examples/deal-record.ts`, so it moves `buy.mjs` and needs Rafa's yes (D101). After it, `outPostings` can list those two outcomes.
+- Review findings left, all Low:
+  - the invoice and the record still misread a SimChain deal whose addresses collide, as before this change;
+  - finding 4's other case: after a later `--replace`, the message names "this folder";
+  - finding 7: comments at `examples/deal-record.ts` (in `buy.mjs`) and `examples/seller-invoice.ts` still say a chain's events carry no postings, and `first-deal`'s note says "on this settlement layer".
+- Not in this task: `take.mjs approve` does not check `CROW_SELLER` (item 3 of the same triage note).
+
+**To resume:** `git switch t-621-publish-flags-paid-to`; the tests are named in Evidence. The anvil tests need `forge build` in `contracts/` and the submodules as `.github/workflows/ci.yml` checks them out.
