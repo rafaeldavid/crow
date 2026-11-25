@@ -1,6 +1,6 @@
 # Crow reference: writing checks
 
-How to write the deterministic checks a buyer binds, for a CSV and for a JSON report.
+How to write the deterministic checks a buyer binds, for a CSV, a JSON report and recorded data.
 
 ## Writing checks that protect a buyer
 
@@ -22,17 +22,28 @@ On a checks-only deal the checks are the whole deal. Write each as if the seller
 
 - Put `unique_key` on every column that should not repeat, not only the key.
 - There is no numeric range check: write a range as a pattern.
-- Patterns are full matches, at most 200 characters, with no backreferences or lookarounds. An empty cell does not match.
+- Column patterns are full matches; an empty cell does not match. Limits: "Pattern and work limits", below.
 - `minBps` and `maxBps` are basis points: 10000 is 100%.
 - Checks cannot say that values are plausible or real.
 
-The check types: `csv_columns_exact` (`columns`), `row_count_range` (`min`, `max`, counting data rows; the header line does not count), `unique_key` (`columns`), `null_rate_max` (`column`, `maxBps`), `regex_match_rate_min` (`column`, `pattern`, `minBps`), `iso8601_date_column` (`column`), `json_schema` (`schema`), `hidden_characters_max` (`max` per class: `tag`, `bidi`, `variationSelector`, `otherIgnorable`, `total`), `reference_row_match_min` (`reference`, `keyColumn`, `minBps`), `signature_valid` (`alg`, `publicKey`, `message`, `signature`). Each takes an `id` and `required`; a failed required check refunds the buyer.
+The check types: `csv_columns_exact` (`columns`), `row_count_range` (`min`, `max`, counting data rows; the header line does not count), `unique_key` (`columns`), `null_rate_max` (`column`, `maxBps`), `regex_match_rate_min` (`column`, `pattern`, `minBps`), `iso8601_date_column` (`column`), `json_schema` (`schema`), `hidden_characters_max` (`max` per class: `tag`, `bidi`, `variationSelector`, `otherIgnorable`, `total`), `reference_row_match_min` (`reference`, `keyColumn`, `minBps`), `signature_valid` (`alg`, `publicKey`, `message`, `signature`), `passes_through` (`series`, `waypoints`, `tolerance`), `monotonic_column` (`series`, optional `minStep`, `maxStep`), `equal_lengths` (`series`). Each takes an `id` and `required`; a failed required check refunds the buyer. A failed check's line is in the judgment record, `deterministic[].detail` (`GET /v1/commitments/<id>/judgment`).
+
+- **Before you sign,** read `checkKinds` on all three named adjudicators (`GET /v1/adjudicators/<address>`); a record with no list runs none of `signature_valid`, `passes_through`, `monotonic_column`, `equal_lengths`. An adjudicator that lacks a kind your terms name, required or optional, declines the offer as primary and signs no decision in a later turn: the deal runs to the next adjudicator or its default outcome, which returns the price and the fee.
 
 - **`unique_key` with several columns** treats them together as one key: `"columns": ["t_ms", "joint"]` fails only when a row repeats the same pair, so `t_ms` may repeat across joints. For columns that must each be unique, write one `unique_key` per column.
 - **`hidden_characters_max`** counts these code points in the delivered text, before any normalization, and fails when a class's count is over its `max`; name at least one class, and `total` bounds their sum. `tag`: U+E0000 to U+E007F. `bidi`: U+061C, U+200E, U+200F, U+202A to U+202E, U+2066 to U+2069. `variationSelector`: U+FE00 to U+FE0F, U+E0100 to U+E01EF, U+180B to U+180D, U+180F. `otherIgnorable` (zero-width and other invisible characters): U+00AD, U+034F, U+115F, U+1160, U+17B4, U+17B5, U+180E, U+200B to U+200D, U+2060 to U+2064, U+206A to U+206F, U+3164, U+FEFF, U+FFA0, U+1D173 to U+1D17A. `"max": {"total": 0}` fails on any of them.
 - **`reference_row_match_min`** compares the delivery with a file you hold, in the delivery's format: it passes when at least `minBps` of the reference file's rows appear in the delivery, matched on `keyColumn`, with the same value in every column the reference has. Upload the file before the offer with `POST /v1/ciphertext` (`ref/http-seller.txt`, "Encrypt and deliver", shows the call) and put the answer's `uri` and `id` in `"reference": {"uri": "<uri>", "sha256": "<id>"}`. The operator stores the file in the clear, and anyone with its hash can read it, so put nothing in it you would not publish. Upload it to the store the terms' adjudicators read, as for a delivery: each declines the offer when its store cannot return the file. It is at most `limits.maxCiphertextBytes` in discovery (1,048,576 bytes on these nodes), and a reference with Unicode tag characters fails the check. A pass shows the rows are present, not that the seller produced them. The rest: https://github.com/rafaeldavid/crow/blob/main/docs/api.md, "Reference files".
 
 For a report delivered as one JSON document, "Writing checks for a report" below lists the `json_schema` subset and four recipes.
+
+## Pattern and work limits
+
+- A pattern (`regex_match_rate_min`, or `pattern` in `json_schema`) takes no backreferences, lookarounds, named groups, flags, `\b`, `\p{...}`, `\u` or `\x`; `^` anchors only as the first character, `$` only as the last.
+- Limits: 200 characters; repeat counts up to 1,000; compiled, 5,000 states and 50,000 compile steps; one `json_schema` check's patterns, 20,000 states together.
+- A string over 10,000 code points matches no pattern. So **`"not": {"pattern": "..."}` passes it:** put `"maxLength": 10000` beside the `not`.
+- All checks on one delivery share 50,000,000 work units; there is no timer. Matching costs, per code point read, 1 unit, plus 1 per live state and 1 per branch followed. Reading cells, names and text costs units too.
+- A check that runs out is inconclusive (`inconclusive: the check work budget for this delivery ran out`): the deal escalates, even if that check is optional, unless another required check failed (reject). Expect the appeal adjudicator, with the same checks and budget, to sign nothing; the default outcome then returns the price and the fee to the buyer.
+- The terms schema accepts some checks the engine refuses: a pattern over a compile limit, a `json_schema` over a limit or outside the subset, a waypoint with the wrong number of coordinates, `minStep` above `maxStep`. No operator or adjudicator refuses them at the offer, and each fails every delivery (`check invalid: <reason>`). In a clone, after `pnpm install && pnpm build`, `node examples/check-terms.ts terms.json` warns of each.
 
 ## Writing checks for a report
 
@@ -45,7 +56,7 @@ Ignored annotations: `$schema`, `title`, `description`, `$comment`, `examples`, 
 Not supported: `contains`, `if`, `then`, `else`, `$ref`, `$defs`, `format`, `patternProperties`, `prefixItems`, `propertyNames`, `multipleOf`, `dependentRequired`.
 
 - `properties` checks a property only when it is present: name it in `required` too.
-- `pattern` matches anywhere in the string unless you anchor it with `^` and `$`. It has the limits of the patterns above: at most 200 characters, no backreferences or lookarounds.
+- `pattern` matches anywhere in the string unless you anchor it with `^` and `$`. A leading `^` binds only the first top-level `|` alternative, a trailing `$` only the last.
 - A schema holds at most 2,000 subschemas, nested at most 32 deep.
 
 Four recipes for an audit report with a `commit`, a `filesReviewed` list and a `findings` list. Each finding has a `locations` list: a location names a `file` and may add `lines` and an `excerpt`.
@@ -108,14 +119,46 @@ A complete commitment with these checks, the full report schema and an optional 
   "signature": { "pointer": "/manifest_sig", "encoding": "base64", "format": "der" } }
 ```
 
-- **Algorithms:** `ecdsa-p256-sha256` (signature `der` or `raw`) and `ed25519` (`raw` only). The list is closed.
-- **The key** travels in the delivery, as a PEM block labelled `PUBLIC KEY` or as plain base64 of the DER `SubjectPublicKeyInfo`. The terms pin its SHA-256, which `openssl pkey -pubin -outform DER | sha256sum` prints. A different key fails the check before any signature work.
-- **The signed bytes are exact.** Nothing is canonicalised. `message.pointer` names a string: with `utf8` the signed bytes are its UTF-8 encoding, with `base64` they are the decoded string. Decimals in the signed text are fine.
+- **Algorithms,** a closed list: `ecdsa-p256-sha256` (signature `der`, read strictly, or `raw`, r then s; a high s passes) and `ed25519` (`raw` only; strict RFC 8032, not ZIP 215). `signature.encoding` is `base64`.
+- **The key** travels in the delivery. `publicKey.format` `spki-pem`: one PEM block labelled `PUBLIC KEY`, LF or CRLF, an optional final line end, nothing else. `spki-base64`: plain base64 of the DER `SubjectPublicKeyInfo`. A P-256 point must be uncompressed. `spkiSha256` pins the SHA-256 of the DER, which `openssl pkey -pubin -outform DER | sha256sum` prints. A different key fails the check before any signature work.
+- **The signed bytes are exact.** Nothing is canonicalised. `message.pointer` names a string: with `utf8` the signed bytes are its UTF-8 encoding (a lone surrogate fails), with `base64` they are the decoded string. Decimals in the signed text are fine.
 - **`jsonEquals` ties the signed text to an object.** The signed bytes must parse as JSON to the value at the pointer it names, so your `json_schema` checks read fields the key signed. Without it, nothing says the object and the signed text agree. Numbers compare as the same 64-bit double, so `1.0` equals `1`, and digits past double precision are not bound: keep a nonce or an ID as a string. A key repeated in the signed text counts with its last value, as `JSON.parse` reads it.
 - **Base64 has one spelling:** standard alphabet, padding required, no whitespace, no non-zero trailing bits.
-- **Limits:** the key string at most 1,024 characters, the signature string at most 256, a pointer at most 512. The work is bounded by the delivery's shared check budget, with no timer, so every adjudicator gives the same result.
-- **A failed check names the step, never the bytes:** for example `signature does not verify` or `publicKey: fingerprint differs from the terms`. A required failed check refunds the buyer.
-- **Before you sign,** read `checkKinds` on all three named adjudicators. One that does not list `signature_valid` declines the offer as primary, and signs no decision in a later turn: the deal runs to the next adjudicator or its default outcome, which returns the price and the fee. `node spec/test-vectors/signature-valid/verify.mjs --check check.json delivery.json` runs one document against one check.
+- **Limits:** the key string at most 1,024 characters, the signature string at most 256 (DER at most 72 bytes, raw exactly 64), an RFC 6901 pointer at most 512; the message has only the delivery's limit. Work units ("Pattern and work limits"): 200,000 per verification, 1 per message byte (about 2 with `base64`), 1 per value `jsonEquals` compares.
+- **Failure lines,** the first failing step only, never quoting the delivery. In order: `not a JSON document`; for `publicKey`, `message`, `signature` in turn, `<name>: nothing at the pointer`, `<name>: not a string`, and `publicKey: too long` or `signature: too long`; `publicKey: not a PEM public key` or `publicKey: not valid base64`; `publicKey: fingerprint differs from the terms`; `publicKey: not a P-256 key` or `publicKey: not an Ed25519 key`; `signature: not valid base64`; `signature: wrong length`; `message: not well-formed text` or `message: not valid base64`; `signature: not valid DER`; `signature does not verify`; `message: not JSON`; `message: differs from the value at jsonEquals`.
+- **Not proved:** that the signed data are true, that the key sits in a device, or that the run is new (hold the order's nonce, in a signed field, with a `json_schema` `const`). No kind hashes a field: a hash in the signed text does not tie the data it names.
+- **Test vectors** (Python-signed documents, their checks and exact failure lines): https://github.com/rafaeldavid/crow/tree/main/spec/test-vectors/signature-valid. In a clone, after `pnpm install`, `node spec/test-vectors/signature-valid/verify.mjs --check check.json delivery.json` runs one document against one check, without the work budget. Python's `cryptography` accepts the vector `ed25519/small-order-key`; this check refuses it.
+
+## Checking recorded data
+
+`equal_lengths`, `monotonic_column` and `passes_through` check a recording's series:
+
+```json
+[
+  { "id": "lengths", "type": "equal_lengths", "required": true,
+    "series": [ { "pointer": "/telemetry/t_ms" }, { "pointer": "/telemetry/q1_mdeg" }, { "pointer": "/telemetry/q2_mdeg" } ] },
+  { "id": "time", "type": "monotonic_column", "required": true,
+    "series": { "pointer": "/telemetry/t_ms" }, "minStep": 1, "maxStep": 16 },
+  { "id": "waypoints", "type": "passes_through", "required": true,
+    "series": [ { "pointer": "/telemetry/q1_mdeg" }, { "pointer": "/telemetry/q2_mdeg" } ],
+    "waypoints": [ [10000, -45000], [30000, -20000] ], "tolerance": 500 }
+]
+```
+
+- **A series** is `{"pointer": "..."}`, the array at that RFC 6901 pointer (at most 512 characters) in a JSON delivery, or `{"column": "..."}` (name at most 128 characters), a column of a CSV or of a JSON array of flat objects with the same keys.
+- **Integers only,** in the data and the check, within +/-(2^53 - 1). Nothing is rounded: record fixed units (ms, millidegrees). A pointer's entries are JSON numbers as `JSON.parse` reads them (`1.0` is 1, `1e2` is 100, `"1"` fails); so is a number cell in a JSON array of objects. A CSV or string cell is `0`, or digits with an optional `-` and no leading zero, at most 16 digits: no `+`, space, exponent, `-0` or empty cell.
+- **`equal_lengths`:** `series`, 2 to 32, `pointer` only. Passes when every pointer is an array of one length. It reads no entry.
+- **`monotonic_column`:** one `series`; optional integers `minStep` (default 0) and `maxStep` (default none), 0 or more, `minStep` <= `maxStep`. Passes when no row is lower than the row before and each step is within them. `minStep` 1: strictly increasing. `minStep` = `maxStep`: a fixed step. 0 or 1 rows pass: set the count with `json_schema` `minItems`, or `row_count_range` on a table. No decreasing form.
+- **`passes_through`:** `series`, 1 to 32, one per axis; `waypoints`, 1 to 1,024, each one integer per series in that order; integer `tolerance`, 0 or more. Passes when rows r1 < r2 < ... exist so that at row rk every series is within `tolerance` of waypoint k (absolute difference, per axis). Each waypoint needs its own later row, so two equal waypoints need two. All series need the same number of rows.
+- **Failure lines** (N is the series, R the row, from 1; none quotes a value; `monotonic_column` writes `series:` without N):
+  - reading: `not a JSON document`, `series N: nothing at the pointer`, `series N: not an array`, `series N: column not found`, `series N: the column name appears twice`, `series N: row R is not an integer`; an unreadable table gives its reason, such as `JSON deliverable is not an array of objects` or `CSV: ...`;
+  - `passes_through`: `series N has X rows; series 1 has Y`; `reached K of M waypoints in order; waypoint W is not within tolerance after row R` (or `... in any row`);
+  - `monotonic_column`: `row R is lower than row Q`, `row R steps less than minStep after row Q`, `row R steps more than maxStep after row Q` (Q is the row before R);
+  - `equal_lengths`: `series N has X entries; series 1 has Y`.
+- **Work units:** 1 per series, plus 1 per 16 characters of its pointer or 1 per header column; 1 per entry read; 1 per coordinate or step compared.
+- **Tie the series to a key:** add `signature_valid` with `message.jsonEquals` naming an object that holds every series these checks read (here `/telemetry`). Otherwise nothing says a key signed them.
+- **The buyer's order:** waypoints are fixed in the terms, so the buyer picks them before the offer.
+- **Not proved,** even signed: that the recording is real (a seller can compute or edit series that pass all three); physical consistency, such as speed against position; the path between samples (bound gaps with `maxStep` on time); one distance across axes (`tolerance` is per axis).
 
 ## Writing checks for a robot episode
 
@@ -124,7 +167,8 @@ A robot run sold as one JSON document is checked with `json_schema` too. The sel
 - **Bounds are whole numbers.** The terms are hashed and signed, so every bound in a check is an integer. The data need not be: keep joint values in degrees with decimals, as the controller reports them, and the arm's limits are whole numbers in degrees (-360 to 360 for a joint position, 223 degrees per second for a joint speed).
 - **One bound per vector.** The subset has no `prefixItems`, so `items` holds all six values of a joint vector to one bound. Use the widest joint's limit; a joint with a tighter limit is not held to it.
 - **List every section.** `additionalProperties: false` at the top refuses any section it does not name: list `data` and `provenance` as well as `meta`.
-- **Freshness comes from the order.** A `const` on the nonce and the waypoints, and a `minimum` and `maximum` within 1 degree of each waypoint, hold the delivery to a run made after the order, when the buyer draws them. The sample's seller draws its own, because the test buyer issues no orders yet. `signature_valid` verifies the signature (next section); a `json_schema` check alone only pins the signed message's format.
+- **Freshness comes from the order.** A `const` on the nonce and the waypoints, and a `minimum` and `maximum` within 1 degree of each waypoint, hold the delivery to a run made after the order, when the buyer draws them. The sample's seller draws its own, because the test buyer issues no orders yet. `signature_valid` verifies the signature ("Checking a signature", above); a `json_schema` check alone only pins the signed message's format.
+- **Integer series.** `passes_through` and `monotonic_column` do not read the sample's six-value joint vectors: for them, record one integer array per axis ("Checking recorded data", above).
 
 ```json
 { "id": "joint-positions", "type": "json_schema", "required": true, "schema": { "type": "object", "required": ["data"], "properties": { "data": { "type": "object", "required": ["observation.state"], "properties": { "observation.state": {
@@ -138,7 +182,7 @@ A robot run sold as one JSON document is checked with `json_schema` too. The sel
 A robot run's readings sold as one CSV file, one row per sample, take the column checks. The template is `fixtures/terms/telemetry-run.yaml` in [the repository](https://github.com/rafaeldavid/crow/blob/main/fixtures/terms/telemetry-run.yaml): a run ID on every row, a timestamp in ms, and integer readings in fixed units, each held to its range by a pattern.
 
 - **Duration, rate and gaps by counting.** A `regex_match_rate_min` check on the timestamp column with `minBps: 10000` allows only the grid's timestamps, written without leading zeros. `unique_key` forbids a repeat, and `row_count_range` with `min` and `max` both at the grid's size then makes each timestamp appear once: the whole run at the agreed rate, with no gap. With a `minBps` below 10000 the count proves nothing.
-- **No check compares the order of rows or the step between them,** or two columns.
+- **Order and step in one check:** `monotonic_column` on `{"column": "t_ms"}` with `minStep` = `maxStep` = the period; it does not set the first value or the row count. No check compares one column's values with another's.
 
 ## The buyer's own check run
 
