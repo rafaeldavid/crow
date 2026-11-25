@@ -298,3 +298,91 @@ describe('a scripted run with a known number of approvals', () => {
     expect(buyerBriefCold(scenario('paid'), facts)).toContain(START_AT_DOCS);
   });
 });
+
+describe("the buyer's NAME=value settings before a command (P-16, T-611's CROW_SELLER)", () => {
+  const SELLER = `0x${'ab'.repeat(20)}`;
+  const OPERATORS = ['http://127.0.0.1:1', 'http://127.0.0.1:2'];
+  /** A buyer's toolbox whose buy command is a stand-in that prints what reached it. */
+  function buyer() {
+    const base = realpathSync(mkdtempSync(join(tmpdir(), 'p16-settings-')));
+    made.push(base);
+    const [repo, work, owner] = ['repo', 'work', 'owner'].map((n) => { const p = join(base, n); mkdirSync(p); return p; }) as [string, string, string];
+    mkdirSync(join(repo, 'examples'));
+    for (const c of ['buy-with-signer', 'deal-record']) writeFileSync(join(repo, 'examples', `${c}.ts`), "console.log(JSON.stringify({ argv: process.argv.slice(2), seller: process.env.CROW_SELLER ?? null, operators: process.env.HOLDBACK_OPERATORS }));\n");
+    const rec = new Recorder(join(base, 'record.jsonl'), new Secrets());
+    const keyStore = join(owner, 'keys');
+    const tools = new Toolbox({ role: 'buyer', work, owner, repo, operators: OPERATORS, allow: [{ origin: 'https://seller.example' }], secrets: new Secrets(), rec, keyStore, usage: BUYER_USAGE });
+    const quote = ['https://seller.example/quote', keyStore, '{"rows":5}', '5000000'];
+    const buy = (args: string[], command = 'buy-with-signer') => tools.call('run_command', { command, args });
+    const ran = () => rec.events.filter((e) => e.kind === 'command');
+    return { tools, rec, quote, buy, ran, keyStore };
+  }
+  const printed = (content: string) => JSON.parse(content.split('--- stdout\n')[1]!.split('\n')[0]!) as { argv: string[]; seller: string | null; operators: string };
+
+  it("hands CROW_SELLER to the command's environment, not its arguments, and records it", async () => {
+    const b = buyer();
+    const r = await b.buy([`CROW_SELLER=${SELLER}`, ...b.quote]);
+    expect(r.isError).toBe(false);
+    expect(printed(r.content)).toEqual({ argv: b.quote, seller: SELLER, operators: OPERATORS.join(',') });
+    expect(b.ran()[0]!['settings']).toEqual({ CROW_SELLER: SELLER });
+  });
+
+  it('sets no seller when the agent gives none', async () => {
+    const b = buyer();
+    expect(printed((await b.buy(b.quote)).content).seller).toBeNull();
+    expect(b.ran()[0]).not.toHaveProperty('settings');
+  });
+
+  it("takes the docs' HOLDBACK_OPERATORS prefix as already set, and changes nothing", async () => {
+    for (const value of ['$OP1,$OP2', OPERATORS.join(',')]) {
+      const b = buyer();
+      const r = await b.buy([`HOLDBACK_OPERATORS=${value}`, `CROW_SELLER=${SELLER}`, ...b.quote]);
+      expect(printed(r.content)).toEqual({ argv: b.quote, seller: SELLER, operators: OPERATORS.join(',') });
+    }
+  });
+
+  it('refuses every other setting and every bad value, and runs nothing', async () => {
+    for (const settings of [
+      [`CROW_PAYMENT_ADDRESS=${SELLER}`], ['CROW_QUOTE_CREDENTIAL=x'], ['CROW_EXPECT={}'], ['NODE_OPTIONS=--require /tmp/x.js'], ['PATH=/tmp'],
+      ['HOLDBACK_OPERATORS=https://elsewhere.example'], ['CROW_SELLER=0x12'], [`CROW_SELLER=${SELLER} `], [`CROW_SELLER=${SELLER}\nPATH=/tmp`], ['CROW_SELLER='],
+      [`CROW_SELLER=${SELLER}`, `CROW_SELLER=${SELLER}`],
+    ]) {
+      const b = buyer();
+      const r = await b.buy([...settings, ...b.quote]);
+      expect(r.content, settings.join(' ')).toMatch(/^Refused: /);
+      expect(b.ran()).toHaveLength(0);
+    }
+  });
+
+  it("keeps the other fences: the usage rule, the approval policy, and another command's arguments", async () => {
+    const b = buyer();
+    expect((await b.buy([`CROW_SELLER=${SELLER}`, '--help'])).content).toMatch(/does not answer --help/);
+    expect((await b.buy([`CROW_SELLER=${SELLER}`])).content).toMatch(/does not answer --help or an empty call/);
+    expect((await b.buy([`CROW_SELLER=${SELLER}`, 'approve', b.keyStore, `0x${'1'.repeat(64)}`, '5000000'])).content).toMatch(/no approval policy/);
+    expect((await b.buy([`CROW_SELLER=${SELLER}`, `0x${'1'.repeat(64)}`, '--as', 'buyer'], 'deal-record')).content).toMatch(/^Refused: /);
+    expect(b.ran()).toHaveLength(0);
+  });
+
+  it("tells the buyer how to pass a setting without naming one, and tells the seller nothing new", () => {
+    const said = buyer().tools.specs.find((s) => s.name === 'run_command')!.description;
+    expect(said).toMatch(/NAME=value/);
+    expect(said).not.toMatch(/CROW_SELLER/);
+    const base = realpathSync(mkdtempSync(join(tmpdir(), 'p16-seller-')));
+    made.push(base);
+    const seller = new Toolbox({ role: 'seller', work: base, owner: base, repo: base, operators: OPERATORS, allow: [], secrets: new Secrets(), rec: new Recorder(join(base, 'record.jsonl'), new Secrets()) });
+    expect(seller.specs.find((s) => s.name === 'run_command')!.description).not.toMatch(/NAME=value/);
+  });
+
+  it('counts a command with a setting as one approval and says which seller the buyer named', () => {
+    const at = '2026-11-25T00:00:00Z';
+    const events = [
+      { at, role: 'buyer', kind: 'agent.start', model: 'scripted', vendor: 'scripted' },
+      { at, role: 'buyer', kind: 'command', command: 'buy-with-signer', settings: { CROW_SELLER: SELLER } },
+      { at, role: 'buyer', kind: 'tool', name: 'run_command', turn: 1, input: { command: 'buy-with-signer', args: [`CROW_SELLER=${SELLER}`] }, result: 'exit 3' },
+    ] as unknown as Event[];
+    const m = measureRun(events, 'buyer', 'buy', 'x');
+    expect(m.approvals).toBe(1);
+    expect(m.seller_named).toBe(SELLER);
+    expect(measureRun(events.filter((e) => e.kind !== 'command'), 'buyer', 'buy', 'x').seller_named).toBeNull();
+  });
+});

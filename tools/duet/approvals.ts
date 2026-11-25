@@ -298,6 +298,8 @@ export interface Result {
   model: string; vendor: string; direction: Direction; approvals: number; approvals_by_step: Array<{ turn: number; tool: string; what: string }>;
   policy_approvals: { granted: number; refused: number }; turns: number; tokens_in: number; tokens_out: number; cache_read: number; cost_usd: number; seconds: number | null;
   help_probes: number; guide_reads: string[];
+  /** The seller's address the agent gave the buy command as CROW_SELLER (T-611), or null. */
+  seller_named: string | null;
   /** Web reads of https://crow.direct, and the approvals if one approval allowed them all (P-15, N214). */
   site_reads: number; approvals_reads_once: number;
   final_state: string | null; final_state_op2: string | null; commitment_id: string | null; agent_end: string; refusals: number; failed_calls: number; date: string; run: string;
@@ -337,6 +339,7 @@ export function measureRun(events: readonly Event[], role: 'buyer' | 'seller', d
     seconds: Number.isFinite(first) && finalEvent !== undefined ? Math.round((finalEvent - first) / 1000) : null,
     // Calls that asked a command how to use it (no arguments, or --help or -h alone), and the Crow guide pages read.
     help_probes: tools.filter((e) => e['name'] === 'run_command' && ((e['input'] as J)?.args?.length ?? 0) <= 1 && (((e['input'] as J)?.args ?? []).length === 0 || ['--help', '-h'].includes(String((e['input'] as J).args[0])))).length,
+    seller_named: (mine.find((e) => e.kind === 'command' && (e['settings'] as J)?.CROW_SELLER)?.['settings'] as J)?.CROW_SELLER ?? null,
     guide_reads: [...new Set(tools.filter((e) => e['name'] === 'fetch_url').map((e) => { try { const u = new URL(String((e['input'] as J)?.url)); return u.origin === CROW_SITE ? u.pathname : ''; } catch { return ''; } }).filter((p) => /\.txt$|^\/ref\//.test(p)))],
     final_state: stateAt(OPERATORS[0]!), final_state_op2: stateAt(OPERATORS[1]!), commitment_id: id,
     agent_end: String(end?.['outcome'] ?? '').includes(BUDGET_STOP) ? `stopped by the budget: ${String(end?.['outcome']).split(BUDGET_STOP)[1]!.trim().slice(0, 200)}` : `${String(end?.['status'] ?? 'none')}: ${String(end?.['outcome'] ?? '').slice(0, 200)}`,

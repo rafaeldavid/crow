@@ -5,6 +5,8 @@
 //   run_command  one of a fixed list of the repository's client commands, from this checkout, with its arguments
 //                checked one by one: paths inside the agent's own folder, URLs on the allowlist, the buyer's key
 //                store only by its one path. The child gets a minimal environment built here; no model key is in it.
+//                A buyer may put NAME=value settings before buy-with-signer, as the docs do: only CROW_SELLER (an
+//                address) reaches the command, and HOLDBACK_OPERATORS only when it names what is already set.
 //   read_file, write_file, list_files   inside the agent's own folder, never through a symbolic link.
 //   wait, finish
 // Keys live in files and environments the agent never reads: the buyer's key store sits outside its folder, the
@@ -323,11 +325,12 @@ export class Toolbox {
 
   // ---- The client commands ----
 
-  private async run(command: string, args: string[]): Promise<ToolResult> {
+  private async run(command: string, given: string[]): Promise<ToolResult> {
     const commands = this.commands;
     if (!commands.includes(command)) throw new Refused(`${JSON.stringify(command).slice(0, 80)} is not one of your company's installed commands: ${commands.join(', ')}`);
-    if (args.length > 12 || args.some((a) => a.length > 20_000)) throw new Refused('at most 12 arguments of at most 20,000 characters each');
-    if (args.some((a) => a.includes('\0'))) throw new Refused('an argument with a NUL character is refused');
+    if (given.length > 12 || given.some((a) => a.length > 20_000)) throw new Refused('at most 12 arguments of at most 20,000 characters each');
+    if (given.some((a) => a.includes('\0'))) throw new Refused('an argument with a NUL character is refused');
+    const { settings, args } = this.o.role === 'buyer' && command === 'buy-with-signer' ? this.settings(given) : { settings: {}, args: given };
     const line = this.o.usage && Object.hasOwn(this.o.usage, command) ? this.o.usage[command] : undefined;
     if (line && (args.length === 0 || (args.length === 1 && ['--help', '-h'].includes(args[0]!)))) throw new Refused(`${command} does not answer --help or an empty call here: its usage is ${line}, as your company's brief gave it`);
     // An installed command's check sees every call, a usage question included: nothing reaches its script unchecked.
@@ -350,7 +353,29 @@ export class Toolbox {
     if (command === 'adapter-log') return this.adapterLog();
     const checked = await this.check(command, args);
     if (command === 'seller-adapter') return this.startAdapter(checked);
-    return this.exec(command, checked, command === 'buy-with-signer' && ['approve', 'resume'].includes(args[0] ?? '') ? 'long' : 'short');
+    return this.exec(command, checked, command === 'buy-with-signer' && ['approve', 'resume'].includes(args[0] ?? '') ? 'long' : 'short', settings);
+  }
+
+  /**
+   * The NAME=value items before the buy command's arguments (P-16): what a shell would put in the command's
+   * environment. The company allows one new setting, the seller's address the buyer names (CROW_SELLER, T-611); the
+   * docs' HOLDBACK_OPERATORS prefix is taken only when it names what the company already set. All else is refused.
+   */
+  private settings(given: string[]): { settings: Record<string, string>; args: string[] } {
+    const settings: Record<string, string> = {};
+    const seen = new Set<string>();
+    let i = 0;
+    for (; i < given.length; i++) {
+      const m = /^([A-Z][A-Z0-9_]*)=([\s\S]*)$/.exec(given[i]!);
+      if (!m) break;
+      const [, name, value] = m as unknown as [string, string, string];
+      if (seen.has(name)) throw new Refused(`give each setting once: ${name.slice(0, 40)} is there twice`);
+      seen.add(name);
+      if (name === 'CROW_SELLER' && /^0x[0-9a-fA-F]{40}$/.test(value)) settings[name] = value;
+      else if (name === 'CROW_SELLER') throw new Refused('CROW_SELLER is an address: 0x and 40 hex characters');
+      else if (!(name === 'HOLDBACK_OPERATORS' && [this.o.operators.join(','), '$OP1,$OP2'].includes(value))) throw new Refused(`your company's run tool does not set ${name.slice(0, 40)} here${name === 'HOLDBACK_OPERATORS' ? ' to another value: your company has set it already' : ''}`);
+    }
+    return { settings, args: given.slice(i) };
   }
 
   /** The arguments as the command will get them, each one checked; or a refusal naming the one at fault. */
@@ -596,13 +621,13 @@ export class Toolbox {
     return env;
   }
 
-  private exec(command: string, args: string[], kind: 'short' | 'long'): Promise<ToolResult> {
+  private exec(command: string, args: string[], kind: 'short' | 'long', settings: Record<string, string> = {}): Promise<ToolResult> {
     const timeout = (this.o.timeoutMs ?? { short: 180_000, long: 1_200_000 })[kind];
     const extra = this.installedCommand(command);
     const script = extra ? extra.script : join(this.o.repo, SCRIPTS[command]!);
     const started = Date.now();
     return new Promise((done) => {
-      const child = spawn(process.execPath, node(script, args), { cwd: this.o.work, env: this.env(), stdio: ['ignore', 'pipe', 'pipe'] });
+      const child = spawn(process.execPath, node(script, args), { cwd: this.o.work, env: { ...this.env(), ...settings }, stdio: ['ignore', 'pipe', 'pipe'] });
       let out = '', err = '';
       const cap = (s: string, d: Buffer) => (s.length < 2_000_000 ? s + d.toString('utf8') : s);
       child.stdout!.on('data', (d: Buffer) => void (out = cap(out, d)));
@@ -618,7 +643,7 @@ export class Toolbox {
         if (this.o.role === 'buyer') this.learnKeys(); // before any of the output is scrubbed or recorded
         this.ingestFetches();
         const so = this.o.rec.body(out), se = this.o.rec.body(err);
-        this.o.rec.add(this.o.role, 'command', { command, args: args.map((a) => this.o.secrets.scrub(a)), exit: code, signal, ms: Date.now() - started, stdout: so.text, stderr: se.text, stdoutBytes: so.bytes, stderrBytes: se.bytes });
+        this.o.rec.add(this.o.role, 'command', { command, args: args.map((a) => this.o.secrets.scrub(a)), ...(Object.keys(settings).length ? { settings } : {}), exit: code, signal, ms: Date.now() - started, stdout: so.text, stderr: se.text, stdoutBytes: so.bytes, stderrBytes: se.bytes });
         if (command === 'buy-with-signer') {
           // The signer's own last word on a deal: the outcome, and whether it opened the work (its size, never its text).
           for (const line of out.split('\n')) {
@@ -734,7 +759,7 @@ function specs(role: 'buyer' | 'seller', installed: Array<[string, InstalledComm
     : `${repository.length ? `from Crow's public repository (${repository.join(', ')}, as \`node examples/<command>.ts <args>\`) and ` : ''}from elsewhere (${installed.map(([n]) => n).join(', ')})`;
   return [
     { name: 'fetch_url', description: 'GET a URL and read the answer: status, content type and body (up to 60,000 characters; pass offset to read further). Only URLs on your company\'s allowlist; redirects are not followed. GET only: anything that changes state goes through your company\'s commands.', input: { type: 'object', properties: { url: { type: 'string' }, offset: { type: 'integer', minimum: 0 } }, required: ['url'] } },
-    { name: 'run_command', description: `Run one of the client commands your company installed ${from}, from your folder, and read its exit code, stdout and stderr. Installed: ${commands.map((c) => (said(c) ? `${c} (${said(c)})` : c === 'adapter-log' ? 'adapter-log (the new lines the background seller adapter has logged)' : c === 'seller-adapter' ? 'seller-adapter (starts in the background)' : c)).join(', ')}. Pass the arguments as the docs give them, one per array item, with no shell quoting. Your company has set the environment these commands need (HOLDBACK_OPERATORS${role === 'seller' ? ', and HOLDBACK_KEY with your signing key' : ''}); you never see a key.`, input: { type: 'object', properties: { command: { type: 'string', enum: commands }, args: { type: 'array', items: { type: 'string' } } }, required: ['command', 'args'] } },
+    { name: 'run_command', description: `Run one of the client commands your company installed ${from}, from your folder, and read its exit code, stdout and stderr. Installed: ${commands.map((c) => (said(c) ? `${c} (${said(c)})` : c === 'adapter-log' ? 'adapter-log (the new lines the background seller adapter has logged)' : c === 'seller-adapter' ? 'seller-adapter (starts in the background)' : c)).join(', ')}. Pass the arguments as the docs give them, one per array item, with no shell quoting.${role === 'buyer' ? ' If the docs put a NAME=value setting before a command, pass it as its own item before the arguments; a setting your company does not allow is refused.' : ''} Your company has set the environment these commands need (HOLDBACK_OPERATORS${role === 'seller' ? ', and HOLDBACK_KEY with your signing key' : ''}); you never see a key.`, input: { type: 'object', properties: { command: { type: 'string', enum: commands }, args: { type: 'array', items: { type: 'string' } } }, required: ['command', 'args'] } },
     { name: 'read_file', description: 'Read a text file in your folder (up to 60,000 characters; pass offset to read further).', input: { type: 'object', properties: { path: { type: 'string' }, offset: { type: 'integer', minimum: 0 } }, required: ['path'] } },
     { name: 'write_file', description: 'Write a text file in your folder (at most 1 MB), making folders as needed.', input: { type: 'object', properties: { path: { type: 'string' }, content: { type: 'string' } }, required: ['path', 'content'] } },
     { name: 'list_files', description: 'List a folder inside your folder.', input: { type: 'object', properties: { path: { type: 'string' } } } },
