@@ -1,0 +1,16 @@
+{
+  "name": "@holdback/own-seller",
+  "version": "0.0.0",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "build": "tsc -b"
+  },
+  "dependencies": {
+    "viem": "^2.57.13"
+  },
+  "devDependencies": {
+    "@holdback/demo-cloud": "workspace:*",
+    "@holdback/operator": "workspace:*"
+  }
+}

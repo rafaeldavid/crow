@@ -136,7 +136,7 @@ describe('site/setup.mjs: seller --template, then first-deal with Crow\'s test b
     expect(lines[0]).toMatchObject({ step: 'seller', ok: true, sells: 'template', work: { price: '5000000', format: 'text/csv', deliverWithinSec: 82_800, ready: null }, sent: 'nothing' });
     // No sample of the work: one advisory line, and nothing fails for it (D31, D32).
     expect(lines.filter((l) => l.advisory)).toEqual([expect.objectContaining({ step: 'check', check: 'work', ok: true, advisory: true, detail: expect.stringMatching(/^The checks have never run on real work/) })]);
-    expect(lines.filter((l) => l.step === 'check').map((l) => [l.check, l.ok])).toEqual([['folder', true], ['configuration', true], ['template', true], ['work', true], ['secrets', true]]);
+    expect(lines.filter((l) => l.step === 'check').map((l) => [l.check, l.ok])).toEqual([['folder', true], ['configuration', true], ['template', true], ['work', true], ['secrets', true], ['card', true]]);
     expect(stateOf(at.folder)).toMatchObject({ sells: 'template', work: { price: '5000000', format: 'text/csv', deliverWithinSec: 82_800 } });
 
     // Run 1: the offer, the hold, and a stop with the deadline and the path for the work. Exit 0.
@@ -208,7 +208,7 @@ describe('site/setup.mjs: seller --template, then first-deal with Crow\'s test b
     expect(readFileSync(ready, 'utf8')).toBe(GOOD);
     expect(statSync(ready).mode & 0o777).toBe(0o600);
     const checks = jsonLines(made.out).filter((l) => l.step === 'check');
-    expect(checks.map((l) => [l.check, l.ok, l.advisory])).toEqual([['folder', true, undefined], ['configuration', true, undefined], ['template', true, undefined], ['work', true, undefined], ['required-field', true, undefined], ['secrets', true, undefined]]);
+    expect(checks.map((l) => [l.check, l.ok, l.advisory])).toEqual([['folder', true, undefined], ['configuration', true, undefined], ['template', true, undefined], ['work', true, undefined], ['required-field', true, undefined], ['secrets', true, undefined], ['card', true, undefined]]);
     expect(checks.find((l) => l.check === 'required-field').detail).toBe('the work with its last column, url, removed fails the checks');
 
     const run = await node(at, ['first-deal', '--folder', at.folder, ...testWorld()]);

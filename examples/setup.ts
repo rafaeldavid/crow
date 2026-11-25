@@ -33,6 +33,14 @@
 //                               It signs only with --expect, the hash of the example it showed first (exit 3);
 //                               --preview sends nothing; --replace signs the current template in place of a live one;
 //                               --revoke prints the live template's signed revocation, which any account with ETH sends.
+//   node setup.mjs cloudflare   a seller's own Worker on the party's own Cloudflare account (T-478, setup-cloudflare.ts),
+//                               for work whose terms name the buyer's input: it answers each quote with a signed offer
+//                               and starts the job at the party's own API. It writes the deploy for the account and the
+//                               address the person named (exit 3 until both are given), and the card's quote entry.
+//                               --key then pipes the Worker's own signing key to the account's secret store. The person
+//                               runs the login and the deploy. `check --published <URL>` reads the live card
+//                               (setup-published.ts); `leave` exports the Worker's journal and removes the Worker
+//                               (setup-leave.ts), and refuses while a deal is open.
 //   node setup.mjs status       the folder's state: the role, the steps done, the addresses, the open deals. No secret.
 //   node setup.mjs list --website <https URL>
 //                               the listing step (T-486, D76): sends the website, and nothing else, to
@@ -75,6 +83,10 @@ import { reasonLine } from './seller-refusal.ts';
 import { SAMPLE, SAMPLE_PRICE_UNITS, startSampleApi } from './setup-sample-api.ts';
 import { deliver } from './setup-deliver.ts';
 import { publish } from './setup-publish.ts';
+import { CF_DIR, CF_FILES, cloudflare, recordOf, sellerSha256 } from './setup-cloudflare.ts';
+import { leave } from './setup-leave.ts';
+import { checkCardFile, checkPublished, otherOriginsOf, type OwnWorker } from './setup-published.ts';
+import { privateKeyToAccount } from 'viem/accounts';
 import { startWorkApi, WORK_CREDENTIAL_ENV, workFor, workPath } from './setup-work-api.ts';
 import { addressOf, FILES, formsOf, holdingAddressOf, locked, pinnedReader, readKey, readState, realPath, seller, writeState, writeWhole, type Call, type FirstDeal, type J, type State } from './setup-seller.ts';
 import { commitmentIdOf, jcs } from './verify.ts';
@@ -116,6 +128,13 @@ const USAGE = [
   "                a template folder's standing offer. Without --expect it shows one filled example and exits 3, sending nothing;",
   '                with the --expect it printed, it signs that template for the seller contract and writes the card entry.',
   '                It needs no ETH; the first take deploys the contract.',
+  '  cloudflare --config <file> --account <ID> --at <address> (--quote-credential | --open) --quotes-per-day <n> [--offer-id <id>] [--worker-file <path>]',
+  "                a seller's own Worker on your Cloudflare account, for work shaped by each buyer's input: writes the deploy in",
+  "                <folder>/cloudflare and the card's quote entry. Exit 3: an answer is missing. It sends nothing to the account.",
+  "  cloudflare --key   after the person's deploy: pipes the Worker's own signing key to the account's secret store.",
+  '  check --published <URL> [--other-origin <origin>,...]',
+  '                reads a live card and its defaults over https, as a buyer would. It sends no quote.',
+  "  leave         exports the Worker's journal, then removes the Worker; it refuses while a deal is open.",
   "  status        prints the folder's state. It reads no key and sends nothing.",
   '  list --website <https URL> | --skip [--list-at <url>]',
   "                sends the website, and nothing else, to Crow's list of who uses it; --skip declines and sends nothing.",
@@ -138,7 +157,9 @@ class WrongCall extends Error {}
 const COMMON = { values: ['--folder', '--name', '--operators'], switches: ['--test-world'] };
 const OWN: Record<string, { values: string[]; switches: string[] }> = {
   seller: { values: ['--payout', '--card', '--template', '--file'], switches: ['--sample', '--allow-git', '--allow-synced', '--allow-served'] },
-  check: { values: ['--work'], switches: [] },
+  check: { values: ['--work', '--published', '--other-origin'], switches: [] },
+  cloudflare: { values: ['--config', '--account', '--at', '--quotes-per-day', '--offer-id', '--worker-file'], switches: ['--quote-credential', '--open', '--key'] },
+  leave: { values: [], switches: [] },
   'first-deal': { values: ['--buyer'], switches: ['--again', '--preview'] },
   deliver: { values: ['--deployment'], switches: ['--schedule'] },
   publish: { values: ['--offer-id', '--expires', '--expect', '--deployment'], switches: ['--preview', '--replace', '--revoke'] },
@@ -243,8 +264,42 @@ async function listStep(c: Call): Promise<number> {
   return list(c, { website, skip: false, to: new URL(to).href });
 }
 
+/** The folder's own Worker, when it has one: its origin and its bundle's SHA-256, for `check --published` to compare. */
+function oursOf(folder: string): { ours?: OwnWorker } {
+  try {
+    const rec = recordOf(readState(folder));
+    if (!rec || rec.leftAt) return {};
+    const b = JSON.parse(readFileSync(join(folder, CF_DIR, CF_FILES.bundle), 'utf8')) as { seller: { slug: string; card: unknown; config: unknown; files: unknown } };
+    const key = readKey(folder);
+    return { ours: { origin: `https://${rec.at}`, configSha256: sellerSha256(b.seller), workerAddress: rec.workerAddress, sign: (message) => privateKeyToAccount(key).signMessage({ message }) } };
+  } catch {
+    return {};
+  }
+}
+
+/** The card's local check (T-478), for a folder whose state names a card folder. */
+function cardCheckOf(folder: string): Array<ReturnType<typeof checkCardFile>> {
+  let card: string | undefined;
+  try {
+    card = readState(folder)?.card;
+  } catch {
+    return [];
+  }
+  if (card === undefined) return [];
+  let text: string | undefined;
+  try {
+    text = readFileSync(join(card, 'agent.json'), 'utf8');
+  } catch {
+    text = undefined;
+  }
+  return [checkCardFile(text)];
+}
+
 async function check(c: Call): Promise<number> {
-  const results = await runChecks(c.folder, { work: c.flags.get('--work') });
+  const published = c.flags.get('--published');
+  if (published === undefined && c.flags.has('--other-origin')) throw new WrongCall('--other-origin goes with --published');
+  if (published !== undefined && c.flags.has('--work')) throw new WrongCall('give --published or --work, not both');
+  const results = published !== undefined ? await checkPublished(published, { otherOrigins: otherOriginsOf(c.flags.get('--other-origin')), ...oursOf(c.folder) }) : [...(await runChecks(c.folder, { work: c.flags.get('--work') })), ...cardCheckOf(c.folder)];
   for (const r of results) c.say({ step: 'check', ...r });
   return results.every((r) => r.ok) ? 0 : 1;
 }
@@ -592,6 +647,8 @@ const COMMANDS: Record<string, (c: Call) => number | Promise<number>> = {
   'first-deal': firstDeal,
   deliver,
   publish,
+  cloudflare: (c) => cloudflare(c),
+  leave: (c) => leave(c),
   status,
   list: listStep,
 };
