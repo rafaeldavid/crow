@@ -11,11 +11,11 @@ ADR-0036, for the judge registry. The adjudicators run a build whose default reg
 | Pragmas | settlement=sim · judges=recorded · mode=guaranteed_on_decision · seed=47 |
 | Prefix | neutrality. (an actor fails: terms-compliant terminal state anyway) |
 | Settlement | SimChain (T-006) driving @holdback/core `step` |
-| Judgment | @holdback/judgment (checks, screen, panel) · registry config/judges.yaml 0x6dc7…01fd · policy bench-a/p1 0xd136…9300 |
+| Judgment | @holdback/judgment (checks, screen, panel) · registry config/judges.yaml 0x6dc7…01fd · policy bench-a/p1 0x40b5…1e88 |
 | Club | fixtures/clubs/data-services-v1.yaml (loaded) · rulebook 0xd9bc…492d |
 | Buyer | atlas-buyer 0x36f8…B956 |
 | Seller | tidewater-seller 0x4Fe3…8139 |
-| Terms | fixtures/terms/clean-customers-2000.yaml (loaded) · commitment 0xf61d…246b · price 2,000.000000 tUSD · fee 50.000000 tUSD |
+| Terms | fixtures/terms/clean-customers-2000.yaml (loaded) · commitment 0x8d14…980a · price 2,000.000000 tUSD · fee 50.000000 tUSD |
 | Adjudicators | primary bench-a 0xaf59…3Ad2 · fallback bench-b 0xA7b4…Cb62 · appeal bench-c 0x2650…307A |
 | Operators | op-1 · op-2 |
 
@@ -59,16 +59,16 @@ Outages:
 - **Deterministic checks:** cols ✓ · rows ✓ · uniq ✓ · dates ✓ · id_nulls ✓ · name_nulls ✓ · email_nulls ✓ · emails (optional) ✓ · hidden ✓
 - **Bound policy:** judged under screen-1 and registry 0x6dc7…01fd, as the terms bind; the build now defaults to screen-1 and registry 0x8aa4…4549 (ADR-0036)
 - **Screen:** clean
-- **Panel:** 3 judges from 2 families (policy: 3 seats, at least 2 families) · first-instance template 0xabb5…4dd2 · rubric 0x4201…7925 · seed source: commit-reveal (commitment 0x94e4…bdde, seed 0x94a2…b276, recomputed: match)
-  - claude-sonnet-5-5 · anthropic/claude · claude-sonnet-5-5@2026-09-28 · recorded (captured from fake judges) · pass · scores 4/4/4 · input 0x361a…4848
-  - deepseek-v4-pro · openai-compatible/deepseek · deepseek-v4-pro@2026-11-01 · recorded (captured from fake judges) · pass · scores 4/4/4 · input 0x4052…ae12
-  - claude-opus-5-5 · anthropic/claude · claude-opus-5-5@2026-09-21 · recorded (captured from fake judges) · pass · scores 4/4/4 · input 0x328e…7474
+- **Panel:** 3 judges from 2 families (policy: 3 seats, at least 2 families) · first-instance template 0x4d32…629b · rubric 0x4201…7925 · seed source: commit-reveal (commitment 0x94e4…bdde, seed 0x94a2…b276, recomputed: match)
+  - claude-opus-5-5 · anthropic/claude · claude-opus-5-5@2026-09-21 · recorded (captured from fake judges) · pass · scores 4/4/4 · input 0xe595…787e
+  - deepseek-v4-pro · openai-compatible/deepseek · deepseek-v4-pro@2026-11-01 · recorded (captured from fake judges) · pass · scores 4/4/4 · input 0x68a6…bef0
+  - claude-sonnet-5-5 · anthropic/claude · claude-sonnet-5-5@2026-09-28 · recorded (captured from fake judges) · pass · scores 4/4/4 · input 0xf3b7…bdfc
 - **Aggregate:** accept (weighted score 4.00; 3 pass, 0 fail of 3 valid; pass families claude, deepseek). Reasons: 3 of 3 valid verdicts pass, from 2 families, score at or above 3.
 - **Signed:** accept.
 
 ## Receipts and log
 
-- Events 0–8. Chain head 0xf126…352c. Replay of 6 SimChain submissions from genesis matches the settlement state.
+- Events 0–8. Chain head 0x3b04…27bf. Replay of 6 SimChain submissions from genesis matches the settlement state.
 - Receipts from op-1: 6 (rcpt-0001–rcpt-0006). The runner labels them without signing; the operator API signs real receipts.
 
 ## Invariants

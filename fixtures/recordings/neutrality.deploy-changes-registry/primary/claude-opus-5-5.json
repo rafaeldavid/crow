@@ -6,8 +6,8 @@
   "provider": "anthropic",
   "family": "claude",
   "model": "claude-opus-5-5@2026-09-21",
-  "promptTemplateHash": "0xabb5ec9b33cf9a936e140bf8530c217f6629fdf1e08a46fbdf6bd7363ce84dd2",
-  "inputHash": "0x328eeaea60e4da18d783575b47246d2dc8ecb3683cdc7c987b99390104317474",
+  "promptTemplateHash": "0x4d328a15ef96b9aa0f4166efc720a320f82e9c677fdd8beaff431ecefcc9629b",
+  "inputHash": "0xe595cffd23c82e293e446bd9bfc159e3ae3fff3ef6acec071f11177a1c5d787e",
   "rubricHash": "0x4201c2a950347823c494fcfc89f88fab1ca670b2086f66ed726aa9c7b0ec7925",
   "capturedFrom": "fake",
   "verdict": {
