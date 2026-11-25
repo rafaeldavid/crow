@@ -1958,3 +1958,9 @@ The build is not started; it opens as its own task on Rafa's word.
 - **Refusing a negated pattern at the offer.** D31: the terms are not wrong, and `oneOf` has the same problem.
 
 **Litmus tests.** Neutrality: unchanged. The hold: unchanged. Defended judgment: strengthened.
+
+## D104. A reject returns the price after a grace period the terms set (ADR-0048)
+
+**Status:** adopted, 2026-11-25.
+
+Rafa, 2026-11-25: "Yes, adopt it". The terms gain `timing.rejectGraceSec`, default 0. Above 0, a reject pays the decider's fee and holds the price for that period: the buyer alone may accept the posted delivery at the agreed price, or both parties may sign a split; when the period ends, anyone triggers the refund. An accept is never delayed. With 0, and for deals decided by checks alone, nothing changes. No contract change now: it ships with the next contract version (D85), with a schema version bump and the changes ADR-0048 lists. Raised by a live deal on 2026-11-25 in which judge outputs failed the verdict schema and a delivery that passed every check was refunded at once, with no move left to a buyer who wanted the work. The open points (the field's name, the split during the period, a buyer's accept while the deal is escalated or with the fallback, and the setup tools' defaults for rubric deals) take the research note's defaults until Rafa says otherwise.
