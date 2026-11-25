@@ -13,7 +13,7 @@ A standing offer is a template that a seller's key signed once for its seller co
 3. **On the yes, run that line:** `node take.mjs approve keys <commitment ID> <the most you pay>`. It checks everything again, takes test tokens and a mandate from the faucet, posts the take, waits for the primary adjudicator's acceptance, agrees and funds, posts the template's standing delivery until every operator records it, waits for the decision, and writes the file to `keys/<commitment ID>.work`. It prints `{commitmentId, outcome, file, plaintextSha256, transactions}` and exits 0; `otherFile: true` means the seller's key delivered another file than the one shown, and the checks passed it. If `deliverBy` passes with nothing delivered, it reclaims the hold. Add `--stop-after-funding` to fund and stop.
 4. **After a restart:** `node take.mjs resume keys [<commitment ID>]` posts a standing delivery no operator recorded yet, then follows each funded take to its outcome. Running the approve line again after funding does the same.
 
-Exit status: 0 done; 1 refused or failed, with one line on stderr that says why and, once the take is funded, what to run next; 2 usage; 3 stopped for the yes. `notices` in the stop names each adjudicator the operators' discovery does not list: the seller chose it. On a local chain, set `HOLDBACK_OPERATORS` and `HOLDBACK_DEPLOYMENT` as for `buy.mjs`.
+Exit status: 0 done; 1 refused or failed, with one line on stderr that says why and, once the take is funded, what to run next (allow 3 minutes for the first take of a new seller contract); 2 usage; 3 stopped for the yes. `notices` in the stop names each adjudicator the operators' discovery does not list: the seller chose it. On a local chain, set `HOLDBACK_OPERATORS` and `HOLDBACK_DEPLOYMENT` as for `buy.mjs`.
 
 ## What it refuses
 
@@ -30,5 +30,5 @@ The checks prove the code and what the key signed. Who holds the key rests on th
 
 ## Limits
 
-- **A seller contract with no code yet:** the operators refuse its take. Today the seller deploys it first, with one transaction to the deterministic deployer.
+- **A seller contract with no code yet:** the first take makes an operator deploy it. That can fail with `relay_refused` or `internal` for several minutes. Run the approve line again; it needs a new show first, because the offer expires after `offerExpiresInSec` (600 s). If it keeps failing, any account with ETH may send the deployment: one transaction to the deterministic deployer.
 - **Work the seller does for each buyer:** the template has no standing delivery, so the seller delivers after funding and before `deliverBy`; otherwise the command reclaims the hold.
