@@ -11,11 +11,11 @@ The audit-report template with its optional rubric (T-320). Tidewater delivers t
 | Pragmas | settlement=sim · judges=recorded · mode=guaranteed_on_decision · seed=320 |
 | Prefix | none (normal flow: reaches a terminal state, invariants hold) |
 | Settlement | SimChain (T-006) driving @holdback/core `step` |
-| Judgment | @holdback/judgment (checks, screen, panel) · registry config/judges.yaml 0x8aa4…4549 · policy bench-a/p1 0xd136…9300 |
+| Judgment | @holdback/judgment (checks, screen, panel) · registry config/judges.yaml 0x8aa4…4549 · policy bench-a/p1 0x40b5…1e88 |
 | Club | fixtures/clubs/data-services-v1.yaml (loaded) · rulebook 0xd9bc…492d |
 | Buyer | atlas-buyer 0x1594…81eE |
 | Seller | tidewater-seller 0xd82b…A923 |
-| Terms | fixtures/terms/audit-report-rubric.yaml (loaded) · commitment 0x02e1…434e · price 1,500.000000 tUSD · fee 50.000000 tUSD |
+| Terms | fixtures/terms/audit-report-rubric.yaml (loaded) · commitment 0xf0b2…bdbb · price 1,500.000000 tUSD · fee 50.000000 tUSD |
 | Adjudicators | primary bench-a 0x8F95…E41b · fallback bench-b 0x3e1c…BB64 · appeal bench-c 0x23f3…4bAe |
 | Operators | op-1 · op-2 |
 
@@ -47,16 +47,16 @@ The audit-report template with its optional rubric (T-320). Tidewater delivers t
 - **Intake:** plaintext 0xbd9b…f287 · application/json · 5098 bytes (fixtures/data/audit-report/report.json) · hash verified ✓ · normalized
 - **Deterministic checks:** report ✓ · proof ✓ · scope ✓ · coverage ✓ · hidden ✓
 - **Screen:** clean
-- **Panel:** 3 judges from 2 families (policy: 3 seats, at least 2 families) · first-instance template 0xabb5…4dd2 · rubric 0x0fdb…5167 · seed source: commit-reveal (commitment 0x78fa…92a1, seed 0xfdad…9ee4, recomputed: match)
-  - qwen-a · openai-compatible/qwen · placeholder-qwen-a-20260601 · recorded (captured from fake judges) · pass · scores 4/4/4/4/4 · input 0x14f9…6aae
-  - gpt-a · openai-compatible/gpt · placeholder-gpt-a-20260601 · recorded (captured from fake judges) · pass · scores 4/4/4/4/4 · input 0xda08…3afb
-  - gpt-b · openai-compatible/gpt · placeholder-gpt-b-20260601 · recorded (captured from fake judges) · pass · scores 4/4/4/4/4 · input 0x3296…736d
-- **Aggregate:** accept (weighted score 4.00; 3 pass, 0 fail of 3 valid; pass families gpt, qwen). Reasons: 3 of 3 valid verdicts pass, from 2 families, score at or above 3.
+- **Panel:** 3 judges from 3 families (policy: 3 seats, at least 2 families) · first-instance template 0x4d32…629b · rubric 0x0fdb…5167 · seed source: commit-reveal (commitment 0x78fa…92a1, seed 0xfdad…9ee4, recomputed: match)
+  - gpt-a · openai-compatible/gpt · placeholder-gpt-a-20260601 · recorded (captured from fake judges) · pass · scores 4/4/4/4/4 · input 0x54f5…2c7f
+  - claude-b · anthropic/claude · placeholder-claude-b-20260601 · recorded (captured from fake judges) · pass · scores 4/4/4/4/4 · input 0xd994…9675
+  - qwen-a · openai-compatible/qwen · placeholder-qwen-a-20260601 · recorded (captured from fake judges) · pass · scores 4/4/4/4/4 · input 0x0177…c445
+- **Aggregate:** accept (weighted score 4.00; 3 pass, 0 fail of 3 valid; pass families claude, gpt, qwen). Reasons: 3 of 3 valid verdicts pass, from 3 families, score at or above 3.
 - **Signed:** accept.
 
 ## Receipts and log
 
-- Events 0–8. Chain head 0xe605…85a2. Replay of 6 SimChain submissions from genesis matches the settlement state.
+- Events 0–8. Chain head 0xa2b0…c01f. Replay of 6 SimChain submissions from genesis matches the settlement state.
 - Receipts from op-1: 5 (rcpt-0001–rcpt-0005). The runner labels them without signing; the operator API signs real receipts.
 
 ## Invariants
