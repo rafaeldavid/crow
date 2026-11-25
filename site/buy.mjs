@@ -4321,11 +4321,47 @@ function writeNew(path, text) {
 		throw e;
 	}
 }
-/** The record, or a throw once `ms` have passed. */
+/** The folder for one deal's files, made if need be, and the deal's ID; or why nothing can be saved, in fixed words. */
+function ready(d) {
+	const id = d.commitmentId.toLowerCase();
+	if (!/^0x[0-9a-f]{64}$/.test(id)) return { problem: "the commitment ID is not 0x and 64 hex digits" };
+	const folder = folderFor(d.store);
+	try {
+		mkdirSync(folder, {
+			recursive: true,
+			mode: 448
+		});
+		if (!lstatSync(folder).isDirectory()) return { problem: `${folder} is a link or a file, not a folder of its own` };
+	} catch (e) {
+		return { problem: `${folder} cannot be made${code(e)}` };
+	}
+	return {
+		folder,
+		id
+	};
+}
+/** Saves the work, when any was released. It never throws. `format` is the seller's own words: only looked up. */
+function saveWork(d) {
+	if (d.work === null) return { work: null };
+	const no = (problem) => ({
+		work: null,
+		problems: [`the work was not saved: ${problem}`]
+	});
+	try {
+		const at = ready(d);
+		if ("problem" in at) return no(at.problem);
+		const path = join(at.folder, `${at.id}.work.${ENDINGS.get(d.format) ?? "txt"}`);
+		if (writeNew(path, d.work) || lstatSync(path).isFile() && readFileSync(path, "utf8") === d.work) return { work: path };
+		return no(`${path} already holds something else`);
+	} catch (e) {
+		return no(`its file cannot be written${code(e)}`);
+	}
+}
+/** What `read` gives, or LATE once `ms` have passed. The read goes on: only ending the process stops it. */
 async function within(read, ms) {
 	let timer;
-	const late = new Promise((_, reject) => {
-		timer = setTimeout(() => reject(/* @__PURE__ */ new Error(`not read within ${ms / 1e3} s`)), ms);
+	const late = new Promise((resolve) => {
+		timer = setTimeout(() => resolve(LATE), ms);
 	});
 	try {
 		return await Promise.race([read, late]);
@@ -4333,66 +4369,56 @@ async function within(read, ms) {
 		clearTimeout(timer);
 	}
 }
-/** Saves what one finished deal leaves. It never throws: what failed is named in `problems`. */
-async function saveDealFiles(d) {
-	const saved = {
-		work: null,
-		record: null
-	};
-	const problems = [];
-	const done = () => problems.length ? {
-		...saved,
-		problems
-	} : saved;
-	const id = d.commitmentId.toLowerCase();
-	if (!/^0x[0-9a-f]{64}$/.test(id)) {
-		problems.push("nothing was saved: the commitment ID is not 0x and 64 hex digits");
-		return done();
-	}
-	let folder;
+async function saveRecord(d, ms) {
+	const commitmentId = d.commitmentId.toLowerCase();
+	const no = (problem) => ({
+		commitmentId,
+		file: null,
+		problems: [`the record was not saved: ${problem}`]
+	});
+	let record;
+	let text;
 	try {
-		folder = folderFor(d.store);
-		mkdirSync(folder, {
-			recursive: true,
-			mode: 448
-		});
-		if (!lstatSync(folder).isDirectory()) throw new Error(`${folder} is a link or a file, not a folder of its own`);
-	} catch (e) {
-		problems.push(`nothing was saved: ${why(e)}`);
-		return done();
-	}
-	if (d.work !== null) {
-		const path = join(folder, `${id}.work.${ENDINGS.get(d.format) ?? "txt"}`);
-		try {
-			if (writeNew(path, d.work) || lstatSync(path).isFile() && readFileSync(path, "utf8") === d.work) saved.work = path;
-			else problems.push(`the work was not saved: ${path} already holds something else`);
-		} catch (e) {
-			problems.push(`the work was not saved: ${why(e)}`);
-		}
+		const got = await within(d.record(), ms);
+		if (got === LATE) return no(`not read within ${ms / 1e3} s`);
+		record = got;
+		text = `${JSON.stringify(record, null, 2)}\n`;
+	} catch {
+		return no("it could not be built from the operators' answers");
 	}
 	try {
-		const record = await within(d.record(), d.recordWithinMs ?? RECORD_WITHIN_MS);
-		const text = `${JSON.stringify(record, null, 2)}\n`;
-		for (let n = 1; n <= MOST_RECORDS && saved.record === null; n++) {
-			const path = join(folder, `${id}.record${n === 1 ? "" : `-${n}`}.json`);
-			if (writeNew(path, text)) saved.record = path;
-		}
-		if (saved.record === null) problems.push(`the record was not saved: ${folder} holds ${MOST_RECORDS} records of this deal already`);
-		else {
+		const at = ready(d);
+		if ("problem" in at) return no(at.problem);
+		for (let n = 1; n <= MOST_RECORDS; n++) {
+			const path = join(at.folder, `${at.id}.record${n === 1 ? "" : `-${n}`}.json`);
+			if (!writeNew(path, text)) continue;
 			const count = (ok) => (record.checks ?? []).filter((c) => c.ok === ok).length;
-			saved.checks = {
-				passed: count(true),
-				notRun: count(null),
-				failed: count(false)
+			return {
+				commitmentId,
+				file: path,
+				checks: {
+					passed: count(true),
+					notRun: count(null),
+					failed: count(false)
+				},
+				disagreements: (record.disagreements ?? []).map((x) => x.section)
 			};
-			saved.disagreements = (record.disagreements ?? []).map((x) => x.section);
 		}
+		return no(`${at.folder} holds ${MOST_RECORDS} records of this deal already`);
 	} catch (e) {
-		problems.push(`the record was not saved: ${why(e)}`);
+		return no(`its file cannot be written${code(e)}`);
 	}
-	return done();
 }
-var ENDINGS, RECORD_WITHIN_MS, MOST_RECORDS, why;
+/**
+* Saves each finished deal's record, one at a time, so the reads of several deals do not share the operators' rate
+* limits at once, says how each went as `{"record": ...}`, and then ends the process. With no deal, it does nothing.
+*/
+async function saveRecords(deals, say, o = {}) {
+	if (deals.length === 0) return;
+	for (const d of deals) say({ record: await saveRecord(d, o.withinMs ?? RECORD_WITHIN_MS) });
+	(o.end ?? endProcess)();
+}
+var ENDINGS, RECORD_WITHIN_MS, MOST_RECORDS, code, LATE, endProcess;
 var init_deal_files = __esmMin((() => {
 	ENDINGS = /* @__PURE__ */ new Map([
 		["text/csv", "csv"],
@@ -4401,12 +4427,17 @@ var init_deal_files = __esmMin((() => {
 	]);
 	RECORD_WITHIN_MS = 3e4;
 	MOST_RECORDS = 100;
-	why = (e) => String(e?.message ?? e).slice(0, 300);
+	code = (e) => {
+		const c = e?.code;
+		return typeof c === "string" && /^E[A-Z]+$/.test(c) ? ` (${c})` : "";
+	};
+	LATE = Symbol("late");
+	endProcess = () => process.stdout.write("", () => process.stderr.write("", () => process.exit(process.exitCode ?? 0)));
 }));
 
 // examples/buy-with-signer.ts
 var buy_with_signer_exports = /* @__PURE__ */ __exportAll({});
-var args, stop, at, termsFile, dl, deliveryFile, first, store, third, fourth, defaults, options, usage, asked, say, expect, sh, approveOf, finish, testFunds, pay;
+var args, stop, at, termsFile, dl, deliveryFile, first, store, third, fourth, defaults, options, usage, asked, ended, say, expect, sh, approveOf, finish, testFunds, pay;
 var init_buy_with_signer = __esmMin((async () => {
 	init_help();
 	init_deal_files();
@@ -4426,6 +4457,7 @@ var init_buy_with_signer = __esmMin((async () => {
 		process.exit(asked ?? 2);
 	} else if (at >= 0 && (!termsFile || termsFile.startsWith("--"))) throw new Error("--expect-terms takes the path of your terms file");
 	else if (first !== "resume" && !/^[0-9]+$/.test(fourth ?? "")) throw new Error(`the most you pay is base units as a decimal string, the fourth argument\n${usage}`);
+	ended = [];
 	say = (x) => console.error(printable(JSON.stringify(x)));
 	expect = () => ({ expect: JSON.parse(process.env["CROW_EXPECT"] || "{}") });
 	sh = (s) => /^[\w@%+=:,./-]+$/.test(s) ? s : `'${s.replace(/'/g, "'\\''")}'`;
@@ -4443,11 +4475,16 @@ var init_buy_with_signer = __esmMin((async () => {
 			onReport: say,
 			...deliveryFile ? { delivery: JSON.parse(readFileSync(deliveryFile, "utf8")) } : {}
 		});
-		const saved = await saveDealFiles({
+		const deal = {
 			store,
-			commitmentId: s.commitmentId,
+			commitmentId: s.commitmentId
+		}, saved = saveWork({
+			...deal,
 			work: done.work,
-			format: s.shownOffer?.deliverable?.format,
+			format: s.shownOffer?.deliverable?.format
+		});
+		ended.push({
+			...deal,
 			record: () => s.record()
 		});
 		console.log(printable(JSON.stringify({
@@ -4573,6 +4610,7 @@ var init_buy_with_signer = __esmMin((async () => {
 			process.exitCode = 3;
 		}
 	}
+	await saveRecords(ended, say);
 }));
 
 // site/buy-entry.mjs
