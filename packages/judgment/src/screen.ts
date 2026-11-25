@@ -8,11 +8,15 @@
 // deep, and flags for what it says, not for being encoded (screen-1): a decodable run flags when its
 // text holds a signal or reads as running prose. Text still encoded below the second level, and
 // decoded text past MAX_DECODED_CHARS, flag unread (fail closed).
+//
+// screen-2 (ADR-0044, T-577): the NFKC signal counts only characters whose NFKC form holds a letter (fullwidth,
+// mathematical, enclosed and superscript letters, letter ligatures). Ellipses, superscript and fullwidth digits and
+// other folded punctuation no longer flag alone: the judges and the phrase patterns read the folded text either way.
 import type { Judgment, MimeType, ScreenSignalKind } from '@holdback/core';
 import { normalizeText } from './normalize.js';
 import type { UntrustedData } from './untrusted.js';
 
-export const SCREEN_VERSION = 'screen-1';
+export const SCREEN_VERSION = 'screen-2';
 
 export type ScreenResult = Judgment['screen'];
 type Signal = { kind: ScreenSignalKind; detail: string };
@@ -21,7 +25,7 @@ export interface ScreenInput {
   /** Normalized deliverable text. */
   data: UntrustedData;
   hiddenTagText: UntrustedData;
-  removed: { tagChars: number; zeroWidth: number; nfkcChanged?: number };
+  removed: { tagChars: number; zeroWidth: number; nfkcChanged?: number; nfkcLetters?: number };
   /** Enables format-specific signals (CSV formula prefixes). */
   mime?: MimeType;
 }
@@ -361,7 +365,7 @@ function scanDerived(text: string, where: string, out: Signals): void {
   const n = normalizeText(text);
   if (n.tagChars) out.add('unicode_tags', `${n.tagChars} Unicode tag characters in ${where}`);
   if (n.zeroWidth) out.add('zero_width', `${n.zeroWidth} zero-width or invisible characters in ${where}`);
-  if (n.nfkcChanged) out.add('encoded_run', `${n.nfkcChanged} characters changed by NFKC in ${where}`);
+  if (n.nfkcLetters) out.add('encoded_run', `${n.nfkcLetters} letters changed by NFKC in ${where}`);
   scanView(n.hiddenTagText, `hidden characters in ${where}`, out, MAX_DEPTH);
   // The same two levels of decoding as the raw text: MAX_DECODED_CHARS bounds the cost of both views.
   scanView(n.text, where, out, 0);
@@ -403,11 +407,12 @@ export function screen(input: ScreenInput): ScreenResult {
   const text = input.data.reveal();
   const out = new Signals();
   const { tagChars, zeroWidth } = input.removed;
-  const nfkcChanged = input.removed.nfkcChanged ?? 0;
+  // Without the letter count (a caller from before screen-2), the broader count stands in: fail closed.
+  const nfkcLetters = input.removed.nfkcLetters ?? input.removed.nfkcChanged ?? 0;
 
   if (tagChars > 0) out.add('unicode_tags', `${tagChars} Unicode tag characters removed`);
   if (zeroWidth > 0) out.add('zero_width', `${zeroWidth} zero-width or bidi control characters removed`);
-  if (nfkcChanged > 0) out.add('encoded_run', `${nfkcChanged} characters changed by NFKC (fullwidth, compatibility or ligature forms)`);
+  if (nfkcLetters > 0) out.add('encoded_run', `${nfkcLetters} letters changed by NFKC (fullwidth, mathematical, enclosed or ligature forms)`);
 
   scanView(input.hiddenTagText.reveal(), 'Unicode tag or variation-selector characters', out, MAX_DEPTH);
   scanView(text, 'text', out, 0);

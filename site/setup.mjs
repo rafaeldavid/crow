@@ -54427,9 +54427,13 @@ function normalizeText(raw) {
 		return "";
 	});
 	let nfkcChanged = 0;
+	let nfkcLetters = 0;
 	for (const m of stripped.matchAll(NON_ASCII)) {
 		const n = m[0].normalize("NFKC");
-		if (n !== m[0] && n !== " ") nfkcChanged++;
+		if (n !== m[0] && n !== " ") {
+			nfkcChanged++;
+			if (LETTER.test(n)) nfkcLetters++;
+		}
 	}
 	const vsText = vsBytes.length >= 8 ? Buffer.from(vsBytes).toString("latin1") : "";
 	const hiddenTagText = tagText && vsText ? `${tagText}\n${vsText}` : tagText || vsText;
@@ -54439,6 +54443,7 @@ function normalizeText(raw) {
 		zeroWidth,
 		explained,
 		nfkcChanged,
+		nfkcLetters,
 		hiddenTagText
 	};
 }
@@ -55445,7 +55450,8 @@ function decodePlaintext(plaintext, mime) {
 		removed: {
 			tagChars: n.tagChars,
 			zeroWidth: n.zeroWidth,
-			nfkcChanged: n.nfkcChanged
+			nfkcChanged: n.nfkcChanged,
+			nfkcLetters: n.nfkcLetters
 		},
 		mime
 	});
@@ -55595,11 +55601,11 @@ function aggregate(input) {
 }
 
 // packages/judgment/dist/kept/screen-0.js
-const SCREEN_VERSION$1 = "screen-0";
-const MAX_SIGNALS$1 = 20;
-const MAX_DEPTH$2 = 2;
-const MAX_JSON_STRING_CHARS$1 = 10485760;
-const PHRASES$1 = [
+const SCREEN_VERSION$2 = "screen-0";
+const MAX_SIGNALS$2 = 20;
+const MAX_DEPTH$3 = 2;
+const MAX_JSON_STRING_CHARS$2 = 10485760;
+const PHRASES$2 = [
 	["override", /\b(?:ignore|disregard|forget|override|bypass)\b[^\n]{0,40}?\b(?:instructions?|rubric|rules|criteria|prompt|guidelines|above|previous|prior)\b/],
 	["role-reset", /\byou are now\b/],
 	["new-instructions", /\bnew instructions?\b/],
@@ -55613,6 +55619,486 @@ const PHRASES$1 = [
 	["judge-note", /\b(?:judge|evaluator|grader|reviewer|panel|model|assistant|ai|llm)s? (?:note|notice|instruction|message|directive)s?\b/],
 	["verdict-claim", /\b(?:correct|only|right) (?:overall )?verdict\b|\boverall verdict is\b|\b(?:top|full|maximum|perfect) (?:marks|scores?)\b|\bpre ?approved\b|\bcriteria (?:are |were )?(?:all |fully )?(?:met|satisfied)\b/]
 ];
+const CONFUSABLE$2 = {
+	"а": "a",
+	"в": "b",
+	"е": "e",
+	"о": "o",
+	"р": "p",
+	"с": "c",
+	"у": "y",
+	"х": "x",
+	"і": "i",
+	"ј": "j",
+	"ѕ": "s",
+	"ԁ": "d",
+	"һ": "h",
+	"ӏ": "l",
+	"ԛ": "q",
+	"ԝ": "w",
+	"к": "k",
+	"м": "m",
+	"н": "h",
+	"т": "t",
+	"ь": "b",
+	"ї": "i",
+	"ґ": "r",
+	"А": "A",
+	"В": "B",
+	"Е": "E",
+	"К": "K",
+	"М": "M",
+	"Н": "H",
+	"О": "O",
+	"Р": "P",
+	"С": "C",
+	"Т": "T",
+	"Х": "X",
+	"І": "I",
+	"Ј": "J",
+	"Ѕ": "S",
+	"Ү": "Y",
+	"З": "3",
+	"α": "a",
+	"ο": "o",
+	"ρ": "p",
+	"ν": "v",
+	"τ": "t",
+	"ι": "i",
+	"κ": "k",
+	"χ": "x",
+	"υ": "u",
+	"ε": "e",
+	"Α": "A",
+	"Β": "B",
+	"Ε": "E",
+	"Ζ": "Z",
+	"Η": "H",
+	"Ι": "I",
+	"Κ": "K",
+	"Μ": "M",
+	"Ν": "N",
+	"Ο": "O",
+	"Ρ": "P",
+	"Τ": "T",
+	"Υ": "Y",
+	"Χ": "X",
+	"ı": "i",
+	"ℓ": "l"
+};
+const CONFUSABLE_RE$2 = /[\u0391-\u03C9\u0400-\u052F\u0131\u2113]/g;
+const LEET$2 = {
+	"0": "o",
+	"1": "i",
+	"3": "e",
+	"4": "a",
+	"5": "s",
+	"7": "t",
+	"8": "b",
+	"9": "g"
+};
+/** Folds obfuscation so the phrase patterns see plain lowercase words separated by single spaces. */
+function skeleton$2(text) {
+	return text.normalize("NFD").replace(/\p{M}/gu, "").replace(CONFUSABLE_RE$2, (c) => CONFUSABLE$2[c] ?? c).replace(/([a-z])([A-Z])/g, "$1 $2").toLowerCase().replace(/[^a-z0-9<>/]+/g, (m) => /\s\s/.test(m) ? "  " : " ");
+}
+/** Rejoins words written as single letters separated by spaces ("i g n o r e"); gaps are double spaces. */
+function collapseSpaced$2(sk) {
+	return sk.split("  ").map((segment) => {
+		const out = [];
+		let letters = [];
+		const flush = () => {
+			if (letters.length >= 3) out.push(letters.join(""));
+			else out.push(...letters);
+			letters = [];
+		};
+		for (const t of segment.split(" ")) if (t.length === 1 && t >= "a" && t <= "z") letters.push(t);
+		else {
+			flush();
+			out.push(t);
+		}
+		flush();
+		return out.join(" ");
+	}).join(" ");
+}
+const rot13$2 = (s) => s.replace(/[a-z]/g, (c) => String.fromCharCode((c.charCodeAt(0) - 97 + 13) % 26 + 97));
+/** The texts the phrase patterns are matched against. */
+function variants$2(text) {
+	const sk = skeleton$2(text);
+	const collapsed = collapseSpaced$2(sk);
+	const single = sk.replace(/  +/g, " ");
+	const leet = single.replace(/[a-z0-9]+/g, (t) => /[a-z]/.test(t) && /[0-9]/.test(t) ? t.replace(/[0-9]/g, (d) => LEET$2[d] ?? d) : t);
+	return [
+		text.toLowerCase(),
+		single,
+		collapsed,
+		leet,
+		rot13$2(single),
+		[...single].reverse().join("")
+	];
+}
+function phraseIds$2(text) {
+	if (!text) return [];
+	const vs = variants$2(text);
+	return PHRASES$2.filter(([, re]) => vs.some((v) => re.test(v))).map(([id]) => id);
+}
+const PRINTABLE$2 = (b) => b >= 32 && b <= 126 || b === 9 || b === 10 || b === 13;
+/** Text if the bytes are mostly printable ASCII with some letters; random bytes never are. */
+function printableText$2(bytes) {
+	if (bytes.length < 12) return void 0;
+	let printable = 0;
+	let letters = 0;
+	for (const b of bytes) {
+		if (PRINTABLE$2(b)) printable++;
+		if (b >= 65 && b <= 90 || b >= 97 && b <= 122) letters++;
+	}
+	return printable / bytes.length >= .95 && letters >= 6 ? Buffer.from(bytes).toString("latin1") : void 0;
+}
+const B64_TOKEN$2 = /[A-Za-z0-9+/_=-]{16,4096}/g;
+const B64_JOINED$2 = /[A-Za-z0-9+/_=,;| \t-]{24,4096}/g;
+const HEX_RUN$2 = /[0-9a-fA-F]{24,4096}/g;
+const PERCENT_RUN$2 = /[A-Za-z0-9._~!*'()%-]{12,4096}/g;
+const MORSE_RUN$2 = /[.\- /]{15,4096}/g;
+const MORSE$2 = {
+	".-": "a",
+	"-...": "b",
+	"-.-.": "c",
+	"-..": "d",
+	".": "e",
+	"..-.": "f",
+	"--.": "g",
+	"....": "h",
+	"..": "i",
+	".---": "j",
+	"-.-": "k",
+	".-..": "l",
+	"--": "m",
+	"-.": "n",
+	"---": "o",
+	".--.": "p",
+	"--.-": "q",
+	".-.": "r",
+	"...": "s",
+	"-": "t",
+	"..-": "u",
+	"...-": "v",
+	".--": "w",
+	"-..-": "x",
+	"-.--": "y",
+	"--..": "z",
+	"-----": "0",
+	".----": "1",
+	"..---": "2",
+	"...--": "3",
+	"....-": "4",
+	".....": "5",
+	"-....": "6",
+	"--...": "7",
+	"---..": "8",
+	"----.": "9"
+};
+const decodeB64$2 = (run) => printableText$2(new Uint8Array(Buffer.from(run, /[-_]/.test(run) ? "base64url" : "base64")));
+/** Joined chunks: only when every chunk is at least 4 characters, as base64 split into pieces is. */
+function decodeJoined$2(run) {
+	const chunks = run.split(/[,;| \t]+/).filter(Boolean);
+	if (chunks.length < 2 || chunks.some((c) => c.length < 4)) return void 0;
+	return decodeB64$2(chunks.join(""));
+}
+const decodeHex$2 = (run) => printableText$2(new Uint8Array(Buffer.from(run.length % 2 ? run.slice(0, -1) : run, "hex")));
+function decodePercent$2(run) {
+	if ((run.match(/%/g)?.length ?? 0) < 4) return void 0;
+	const bytes = [];
+	for (let i = 0; i < run.length; i++) if (run[i] === "%" && /^[0-9a-fA-F]{2}$/.test(run.slice(i + 1, i + 3))) {
+		bytes.push(Number.parseInt(run.slice(i + 1, i + 3), 16));
+		i += 2;
+	} else bytes.push(run.charCodeAt(i));
+	return printableText$2(new Uint8Array(bytes));
+}
+function decodeMorse$2(run) {
+	const tokens = run.split(/[ /]+/).filter(Boolean);
+	if (tokens.length < 8 || tokens.some((t) => t.length > 7)) return void 0;
+	let unknown = 0;
+	let letters = 0;
+	const words = run.trim().split(/\s*\/\s*|\s\s\s+/).map((w) => w.split(/\s+/).filter(Boolean).map((code) => {
+		const c = MORSE$2[code];
+		if (c === void 0) unknown++;
+		else letters++;
+		return c ?? "?";
+	}).join(""));
+	return letters >= 6 && unknown * 10 <= letters ? words.join(" ") : void 0;
+}
+/** Morse written with middle dots, bullets, underscores, dashes or pipes, mapped to . - and /. */
+const morseView$2 = (text) => text.replace(/[\u00B7\u2022\u2219\u22C5\u2027]/g, ".").replace(/[_\u2212\u2013\u2014\u2012]/g, "-").replace(/\|/g, "/");
+const DECODERS$2 = [
+	[
+		"base64",
+		B64_TOKEN$2,
+		decodeB64$2,
+		(t) => t
+	],
+	[
+		"joined base64",
+		B64_JOINED$2,
+		decodeJoined$2,
+		(t) => t
+	],
+	[
+		"hex",
+		HEX_RUN$2,
+		decodeHex$2,
+		(t) => t
+	],
+	[
+		"percent-encoded",
+		PERCENT_RUN$2,
+		decodePercent$2,
+		(t) => t
+	],
+	[
+		"Morse",
+		MORSE_RUN$2,
+		decodeMorse$2,
+		morseView$2
+	]
+];
+/** Line numbers for increasing indices in one pass over the text (matchAll yields indices in order). */
+function lineCounter$2(text) {
+	let at = 0;
+	let line = 1;
+	return (index) => {
+		for (; at < index; at++) if (text.charCodeAt(at) === 10) line++;
+		return line;
+	};
+}
+var Signals$2 = class {
+	list = [];
+	seen = /* @__PURE__ */ new Set();
+	get full() {
+		return this.list.length >= MAX_SIGNALS$2;
+	}
+	add(kind, detail) {
+		const d = detail.length > 300 ? `${detail.slice(0, 297)}...` : detail;
+		if (this.full || this.seen.has(`${kind}:${d}`)) return;
+		this.seen.add(`${kind}:${d}`);
+		this.list.push({
+			kind,
+			detail: d
+		});
+	}
+};
+function mixedScriptWords$2(text) {
+	let n = 0;
+	for (const m of text.matchAll(/\p{L}{1,256}/gu)) if (/\p{Script=Latin}/u.test(m[0]) && /[\p{Script=Cyrillic}\p{Script=Greek}]/u.test(m[0])) n++;
+	return n;
+}
+/** Runs a screen pass; a pass that throws flags the delivery instead of crashing the pipeline. */
+function guarded$2(out, where, pass) {
+	try {
+		pass();
+	} catch {
+		out.add("encoded_run", `a screen pass could not finish on ${where}`);
+	}
+}
+/** Phrases, mixed-script words and decodable runs in one view of the text. */
+function scanView$2(text, where, out, depth) {
+	guarded$2(out, where, () => scanViewUnguarded$2(text, where, out, depth));
+}
+function scanViewUnguarded$2(text, where, out, depth) {
+	if (!text || out.full) return;
+	const ids = phraseIds$2(text);
+	if (ids.length) out.add("instruction_phrase", `in ${where}: ${ids.join(", ")}`);
+	const mixed = mixedScriptWords$2(text);
+	if (mixed) out.add("encoded_run", `${mixed} mixed-script words (Latin with Cyrillic or Greek) in ${where}`);
+	if (depth >= MAX_DEPTH$3) return;
+	for (const [name, re, decode, view] of DECODERS$2) {
+		const t = view(text);
+		const lineOf = lineCounter$2(t);
+		for (const m of t.matchAll(re)) {
+			if (out.full) return;
+			const decoded = decode(m[0]);
+			if (decoded === void 0) continue;
+			const line = lineOf(m.index);
+			out.add("encoded_run", `decodable ${name} run of ${m[0].length} characters at line ${line} of ${where}`);
+			scanView$2(decoded, `decoded ${name} at line ${line} of ${where}`, out, depth + 1);
+		}
+	}
+}
+/** Screens a view that needs its own normalization (unescaped or parsed text). */
+function scanDerived$2(text, where, out) {
+	const n = normalizeText(text);
+	if (n.tagChars) out.add("unicode_tags", `${n.tagChars} Unicode tag characters in ${where}`);
+	if (n.zeroWidth) out.add("zero_width", `${n.zeroWidth} zero-width or invisible characters in ${where}`);
+	if (n.nfkcChanged) out.add("encoded_run", `${n.nfkcChanged} characters changed by NFKC in ${where}`);
+	scanView$2(n.hiddenTagText, `hidden characters in ${where}`, out, MAX_DEPTH$3);
+	scanView$2(n.text, where, out, 1);
+}
+/** All string keys and values of a parsed JSON document, iteratively (no recursion on hostile depth). */
+function jsonStrings$2(text) {
+	const head = text.trimStart()[0];
+	if (head !== "{" && head !== "[") return void 0;
+	let value;
+	try {
+		value = JSON.parse(text);
+	} catch {
+		return;
+	}
+	const parts = [];
+	let size = 0;
+	const stack = [value];
+	while (stack.length && size < MAX_JSON_STRING_CHARS$2) {
+		const v = stack.pop();
+		if (typeof v === "string") {
+			parts.push(v);
+			size += v.length;
+		} else if (Array.isArray(v)) for (let i = v.length - 1; i >= 0; i--) stack.push(v[i]);
+		else if (v !== null && typeof v === "object") {
+			const entries = Object.entries(v);
+			for (let i = entries.length - 1; i >= 0; i--) stack.push(entries[i][1], entries[i][0]);
+		}
+	}
+	return parts.join("\n");
+}
+const UNICODE_ESCAPE$2 = /\\u([0-9a-fA-F]{4})/g;
+const FORMULA_CELL$2 = /(?:^|,)"?(?:[=@][^,\n]|[+-][=@(A-Za-z])/m;
+function screen$2(input) {
+	const text = input.data.reveal();
+	const out = new Signals$2();
+	const { tagChars, zeroWidth } = input.removed;
+	const nfkcChanged = input.removed.nfkcChanged ?? 0;
+	if (tagChars > 0) out.add("unicode_tags", `${tagChars} Unicode tag characters removed`);
+	if (zeroWidth > 0) out.add("zero_width", `${zeroWidth} zero-width or bidi control characters removed`);
+	if (nfkcChanged > 0) out.add("encoded_run", `${nfkcChanged} characters changed by NFKC (fullwidth, compatibility or ligature forms)`);
+	scanView$2(input.hiddenTagText.reveal(), "Unicode tag or variation-selector characters", out, MAX_DEPTH$3);
+	scanView$2(text, "text", out, 0);
+	if (input.mime === "text/csv" && FORMULA_CELL$2.test(text)) out.add("instruction_phrase", "a CSV cell starts with a spreadsheet formula prefix");
+	guarded$2(out, "decoded escapes", () => {
+		const strings = jsonStrings$2(text);
+		if (strings !== void 0) scanDerived$2(strings, "JSON string values", out);
+		else if (UNICODE_ESCAPE$2.test(text)) {
+			UNICODE_ESCAPE$2.lastIndex = 0;
+			scanDerived$2(text.replace(UNICODE_ESCAPE$2, (_, h) => String.fromCharCode(Number.parseInt(h, 16))), "text with \\u escapes decoded", out);
+		}
+	});
+	return {
+		flagged: out.list.length > 0,
+		signals: out.list
+	};
+}
+/**
+* Screens party-written terms (description, criteria, anchors). They sit in the judges' system
+* prompt, so hidden characters in them are flagged here (validateTerms offers the same check to an agent before it signs).
+*/
+function screenTerms$2(texts) {
+	const out = new Signals$2();
+	for (const t of texts) {
+		const n = normalizeText(t);
+		if (n.tagChars) out.add("unicode_tags", `${n.tagChars} Unicode tag characters in the agreed terms`);
+		if (n.zeroWidth) out.add("zero_width", `${n.zeroWidth} zero-width or invisible characters in the agreed terms`);
+		scanView$2(n.hiddenTagText, "hidden characters in the agreed terms", out, MAX_DEPTH$3);
+		const mixed = mixedScriptWords$2(n.text);
+		if (mixed) out.add("encoded_run", `${mixed} mixed-script words in the agreed terms`);
+	}
+	return out.list;
+}
+
+// packages/judgment/dist/kept/screen-1.js
+const SCREEN_VERSION$1 = "screen-1";
+const MAX_SIGNALS$1 = 20;
+const MAX_DEPTH$2 = 2;
+const MAX_JSON_STRING_CHARS$1 = 10485760;
+/** Decoded text one screen call reads, across all views and levels; past it the screen flags instead. */
+const MAX_DECODED_CHARS$1 = 1048576;
+/** Words in a row that make decoded text running prose. */
+const PROSE_WORDS$1 = 5;
+const PHRASES$1 = [
+	{
+		id: "override",
+		re: /\b(?:ignore|disregard|forget|override|bypass)\b[^\n]{0,40}?\b(?:instructions?|rubric|prompt|guidelines|criteria)\b|\b(?:ignore|disregard|forget)\b[^\n]{0,40}?\b(?:rules|above|previous|prior)\b/
+	},
+	{
+		id: "override",
+		re: /\b(?:override|bypass)\b[^\n]{0,40}?\b(?:rules|above|previous|prior)\b/g,
+		weak: true
+	},
+	{
+		id: "role-reset",
+		re: /\byou are now\b/
+	},
+	{
+		id: "new-instructions",
+		re: /\bnew instructions?\b/
+	},
+	{
+		id: "prompt-probe",
+		re: /\b(?:your|reveal|repeat|print|show|leak|disclose|output|dump)\b[^\n]{0,20}?\b(?:system|developer|hidden) prompt\b/
+	},
+	{
+		id: "prompt-probe",
+		re: /\b(?:system|developer|hidden) prompt\b/g,
+		weak: true
+	},
+	{
+		id: "role-tag",
+		re: /<\/?\s*(?:system|instructions?|assistant|user|data)\s*>/
+	},
+	{
+		id: "verdict-steer",
+		re: /\b(?:respond with|mark (?:this|it) as)\b[^\n]{0,30}?\bpass\b/
+	},
+	{
+		id: "verdict-steer",
+		re: /\b(?:output|return|answer|print)\b[^\n]{0,30}?\bpass\b/g,
+		weak: true
+	},
+	{
+		id: "score-steer",
+		re: /\b(?:score|rate|grade)\s+(?:this|it|every|all|each)\b[^\n]{0,30}?\b(?:4|four|max(?:imum)?|perfect|full)\b/
+	},
+	{
+		id: "schema-field",
+		re: /\binjection ?suspected\b/
+	},
+	{
+		id: "persona",
+		re: /\bas an? (?:ai|language model)\b/
+	},
+	{
+		id: "addressing",
+		re: /\b(?:note|message|instructions?|attention|memo|notice) (?:to|for) (?:the |all |any )?(?:[a-z]+ )?(?:panel|judges?|evaluators?|graders?|models?|assistants?|ai|llms?)\b/
+	},
+	{
+		id: "addressing",
+		re: /\b(?:note|message|instructions?|attention|memo|notice) (?:to|for) (?:the |all |any )?(?:[a-z]+ )?reviewers?\b/g,
+		weak: true
+	},
+	{
+		id: "judge-note",
+		re: /\b(?:judge|evaluator|grader|panel|model|assistant|ai|llm)s? (?:note|notice|instruction|message|directive)s?\b/
+	},
+	{
+		id: "judge-note",
+		re: /\breviewers? (?:note|notice|instruction|message|directive)s?\b/g,
+		weak: true
+	},
+	{
+		id: "judge-steer",
+		re: /\b(?:judges?|panel(?:ists?)?|evaluators?|graders?|adjudicators?)\b[^\n]{0,30}?\b(?:should|must|shall|will|need to|needs to|are to|is to|have to|has to|please)\b[^\n]{0,20}?\b(?:accept|approve|pass|score|rate|grade|mark|return|output|ignore|disregard)\b/
+	},
+	{
+		id: "verdict-claim",
+		re: /\b(?:correct|only|right) (?:overall )?verdict\b|\boverall verdict is\b|\b(?:top|full|maximum|perfect) (?:marks|scores?)\b|\bverdicts?\b[^\n]{0,40}?\b(?:pass(?:es|ed)?|accept(?:ed)?|approved?)\b/
+	},
+	{
+		id: "verdict-claim",
+		re: /\bpre ?approved\b|\bcriteria (?:are |were )?(?:all |fully )?(?:met|satisfied)\b/g,
+		weak: true
+	}
+];
+/**
+* What a weak pattern must sit near to flag: the judges (and the AI addressees the strong patterns name),
+* their rubric, their verdict or a verdict field, a score on every criterion, or an order on the work itself.
+*/
+const TARGET$1 = /\b(?:verdicts?|rubrics?|judges?|judging|panel(?:ists?)?|evaluators?|graders?|adjudicators?|assistants?|ai|llms?|injection ?suspected|overall (?:pass|fail|abstain))\b|"overall"|\b(?:every|each|all) (?:criterion|criteria)\b|\b(?:highest|top|max(?:imum)?|full|perfect) (?:scores?|marks|anchors?)\b|\b(?:accept|approve|pass|reject)\b (?:on |for )?(?:this|the) (?:report|delivery|deliverable|submission|work)\b/;
+const TARGET_WINDOW$1 = 80;
 const CONFUSABLE$1 = {
 	"а": "a",
 	"в": "b",
@@ -55721,19 +56207,40 @@ function variants$1(text) {
 	const collapsed = collapseSpaced$1(sk);
 	const single = sk.replace(/  +/g, " ");
 	const leet = single.replace(/[a-z0-9]+/g, (t) => /[a-z]/.test(t) && /[0-9]/.test(t) ? t.replace(/[0-9]/g, (d) => LEET$1[d] ?? d) : t);
+	const reversed = skeleton$1([...text].reverse().join("")).replace(/  +/g, " ");
 	return [
 		text.toLowerCase(),
 		single,
 		collapsed,
 		leet,
 		rot13$1(single),
-		[...single].reverse().join("")
+		reversed
 	];
 }
+/** True when some match of the weak pattern has a judging target within the window around it. */
+function nearTarget$1(view, re) {
+	for (const m of view.matchAll(re)) {
+		const from = Math.max(0, m.index - TARGET_WINDOW$1);
+		if (TARGET$1.test(view.slice(from, m.index + m[0].length + TARGET_WINDOW$1))) return true;
+	}
+	return false;
+}
+/** Weak patterns that match anywhere in the text, with or without a target (for decoded runs). */
+function weakIds$1(text) {
+	if (!text) return [];
+	const vs = variants$1(text);
+	const ids = [];
+	for (const { id, re, weak } of PHRASES$1) if (weak && !ids.includes(id) && vs.some((v) => v.search(re) >= 0)) ids.push(id);
+	return ids;
+}
+/** True when a judging target appears in some view of the text. */
+const hasTarget$1 = (text) => !!text && variants$1(text).some((v) => TARGET$1.test(v));
 function phraseIds$1(text) {
 	if (!text) return [];
 	const vs = variants$1(text);
-	return PHRASES$1.filter(([, re]) => vs.some((v) => re.test(v))).map(([id]) => id);
+	const ids = [];
+	for (const { id, re, weak } of PHRASES$1) if (!ids.includes(id) && vs.some((v) => weak ? nearTarget$1(v, re) : re.test(v))) ids.push(id);
+	return ids;
 }
 const PRINTABLE$1 = (b) => b >= 32 && b <= 126 || b === 9 || b === 10 || b === 13;
 /** Text if the bytes are mostly printable ASCII with some letters; random bytes never are. */
@@ -55745,7 +56252,8 @@ function printableText$1(bytes) {
 		if (PRINTABLE$1(b)) printable++;
 		if (b >= 65 && b <= 90 || b >= 97 && b <= 122) letters++;
 	}
-	return printable / bytes.length >= .95 && letters >= 6 ? Buffer.from(bytes).toString("latin1") : void 0;
+	const hexText = bytes.length >= 24 && bytes.every((b) => b >= 48 && b <= 57 || b >= 65 && b <= 70 || b >= 97 && b <= 102);
+	return printable / bytes.length >= .95 && letters >= 6 || hexText ? Buffer.from(bytes).toString("latin1") : void 0;
 }
 const B64_TOKEN$1 = /[A-Za-z0-9+/_=-]{16,4096}/g;
 const B64_JOINED$1 = /[A-Za-z0-9+/_=,;| \t-]{24,4096}/g;
@@ -55822,6 +56330,20 @@ function decodeMorse$1(run) {
 }
 /** Morse written with middle dots, bullets, underscores, dashes or pipes, mapped to . - and /. */
 const morseView$1 = (text) => text.replace(/[\u00B7\u2022\u2219\u22C5\u2027]/g, ".").replace(/[_\u2212\u2013\u2014\u2012]/g, "-").replace(/\|/g, "/");
+/** A word of prose: letters (digits allowed, as in leetspeak), with light punctuation around it. */
+const PROSE_WORD$1 = /^["'(\[]?(?=[A-Za-z0-9'-]{0,40}[A-Za-z])[A-Za-z0-9'-]{1,40}[,.;:!?"')\]]{0,3}$/;
+/**
+* Decoded text that reads as running prose: PROSE_WORDS words in a row. A JWT's JSON, a hex-encoded
+* function signature or binary are not; a sentence hidden in base64 is, and the judges can decode it.
+*/
+function isProse$1(text) {
+	let run = 0;
+	for (const token of text.replace(/([a-z])([A-Z])/g, "$1 $2").split(/[\s_-]+/)) {
+		run = PROSE_WORD$1.test(token) ? run + 1 : 0;
+		if (run >= PROSE_WORDS$1) return true;
+	}
+	return false;
+}
 const DECODERS$1 = [
 	[
 		"base64",
@@ -55863,9 +56385,17 @@ function lineCounter$1(text) {
 		return line;
 	};
 }
-var Signals$1 = class {
+var Signals$1 = class Signals$1 {
+	budget;
 	list = [];
 	seen = /* @__PURE__ */ new Set();
+	/** Shared by a screen call and every child: decoded characters read so far. */
+	constructor(budget = { decoded: 0 }) {
+		this.budget = budget;
+	}
+	child() {
+		return new Signals$1(this.budget);
+	}
 	get full() {
 		return this.list.length >= MAX_SIGNALS$1;
 	}
@@ -55902,7 +56432,6 @@ function scanViewUnguarded$1(text, where, out, depth) {
 	if (ids.length) out.add("instruction_phrase", `in ${where}: ${ids.join(", ")}`);
 	const mixed = mixedScriptWords$1(text);
 	if (mixed) out.add("encoded_run", `${mixed} mixed-script words (Latin with Cyrillic or Greek) in ${where}`);
-	if (depth >= MAX_DEPTH$2) return;
 	for (const [name, re, decode, view] of DECODERS$1) {
 		const t = view(text);
 		const lineOf = lineCounter$1(t);
@@ -55911,8 +56440,24 @@ function scanViewUnguarded$1(text, where, out, depth) {
 			const decoded = decode(m[0]);
 			if (decoded === void 0) continue;
 			const line = lineOf(m.index);
+			if (depth >= MAX_DEPTH$2) {
+				out.add("encoded_run", `decodable ${name} run at line ${line} of ${where}, encoded deeper than the screen decodes`);
+				return;
+			}
+			out.budget.decoded += decoded.length;
+			if (out.budget.decoded > 1048576) {
+				out.add("encoded_run", `more than ${MAX_DECODED_CHARS$1} characters of decoded text; the screen read no further in ${where}`);
+				return;
+			}
+			const inner = out.child();
+			const at = `decoded ${name} at line ${line} of ${where}`;
+			scanView$1(decoded, at, inner, depth + 1);
+			if (inner.list.length === 0 && hasTarget$1(decoded)) inner.add("instruction_phrase", `in ${at}: names the judges, the rubric or the verdict`);
+			const weak = inner.list.length === 0 ? weakIds$1(decoded) : [];
+			if (weak.length && hasTarget$1(t.slice(Math.max(0, m.index - TARGET_WINDOW$1), m.index + m[0].length + TARGET_WINDOW$1))) inner.add("instruction_phrase", `in ${at}, next to a judging word in ${where}: ${weak.join(", ")}`);
+			if (inner.list.length === 0 && name !== "Morse" && !isProse$1(decoded)) continue;
 			out.add("encoded_run", `decodable ${name} run of ${m[0].length} characters at line ${line} of ${where}`);
-			scanView$1(decoded, `decoded ${name} at line ${line} of ${where}`, out, depth + 1);
+			for (const s of inner.list) out.add(s.kind, s.detail);
 		}
 	}
 }
@@ -55923,7 +56468,7 @@ function scanDerived$1(text, where, out) {
 	if (n.zeroWidth) out.add("zero_width", `${n.zeroWidth} zero-width or invisible characters in ${where}`);
 	if (n.nfkcChanged) out.add("encoded_run", `${n.nfkcChanged} characters changed by NFKC in ${where}`);
 	scanView$1(n.hiddenTagText, `hidden characters in ${where}`, out, MAX_DEPTH$2);
-	scanView$1(n.text, where, out, 1);
+	scanView$1(n.text, where, out, 0);
 }
 /** All string keys and values of a parsed JSON document, iteratively (no recursion on hostile depth). */
 function jsonStrings$1(text) {
@@ -56297,7 +56842,7 @@ function buildPrompt(input) {
 }
 
 // packages/judgment/dist/screen.js
-const SCREEN_VERSION = "screen-1";
+const SCREEN_VERSION = "screen-2";
 const MAX_SIGNALS = 20;
 const MAX_DEPTH$1 = 2;
 const MAX_JSON_STRING_CHARS = 10485760;
@@ -56762,7 +57307,7 @@ function scanDerived(text, where, out) {
 	const n = normalizeText(text);
 	if (n.tagChars) out.add("unicode_tags", `${n.tagChars} Unicode tag characters in ${where}`);
 	if (n.zeroWidth) out.add("zero_width", `${n.zeroWidth} zero-width or invisible characters in ${where}`);
-	if (n.nfkcChanged) out.add("encoded_run", `${n.nfkcChanged} characters changed by NFKC in ${where}`);
+	if (n.nfkcLetters) out.add("encoded_run", `${n.nfkcLetters} letters changed by NFKC in ${where}`);
 	scanView(n.hiddenTagText, `hidden characters in ${where}`, out, MAX_DEPTH$1);
 	scanView(n.text, where, out, 0);
 }
@@ -56798,10 +57343,10 @@ function screen(input) {
 	const text = input.data.reveal();
 	const out = new Signals();
 	const { tagChars, zeroWidth } = input.removed;
-	const nfkcChanged = input.removed.nfkcChanged ?? 0;
+	const nfkcLetters = input.removed.nfkcLetters ?? input.removed.nfkcChanged ?? 0;
 	if (tagChars > 0) out.add("unicode_tags", `${tagChars} Unicode tag characters removed`);
 	if (zeroWidth > 0) out.add("zero_width", `${zeroWidth} zero-width or bidi control characters removed`);
-	if (nfkcChanged > 0) out.add("encoded_run", `${nfkcChanged} characters changed by NFKC (fullwidth, compatibility or ligature forms)`);
+	if (nfkcLetters > 0) out.add("encoded_run", `${nfkcLetters} letters changed by NFKC (fullwidth, mathematical, enclosed or ligature forms)`);
 	scanView(input.hiddenTagText.reveal(), "Unicode tag or variation-selector characters", out, MAX_DEPTH$1);
 	scanView(text, "text", out, 0);
 	if (input.mime === "text/csv" && FORMULA_CELL.test(text)) out.add("instruction_phrase", "a CSV cell starts with a spreadsheet formula prefix");
@@ -56958,14 +57503,19 @@ function parseVerdict(raw, opts) {
 }
 
 // packages/judgment/dist/kept.js
-const SCREEN_1 = {
+const SCREEN_2 = {
 	screen,
 	screenTerms,
 	stride: strideSample1
 };
-const SCREEN_0 = {
+const SCREEN_1 = {
 	screen: screen$1,
 	screenTerms: screenTerms$1,
+	stride: strideSample1
+};
+const SCREEN_0 = {
+	screen: screen$2,
+	screenTerms: screenTerms$2,
 	stride: strideSample0
 };
 const AGG_3 = {
@@ -56981,7 +57531,11 @@ const AGG_4 = {
 	signedOutcome: signedOutcome$1
 };
 const KEPT = {
-	screens: /* @__PURE__ */ new Map([[SCREEN_VERSION$1, SCREEN_0], [SCREEN_VERSION, SCREEN_1]]),
+	screens: /* @__PURE__ */ new Map([
+		[SCREEN_VERSION$2, SCREEN_0],
+		[SCREEN_VERSION$1, SCREEN_1],
+		[SCREEN_VERSION, SCREEN_2]
+	]),
 	templatePairs: [TEMPLATE_PAIR],
 	aggregations: /* @__PURE__ */ new Map([[AGGREGATION_VERSION, AGG_3], [AGGREGATION_VERSION$1, AGG_4]])
 };

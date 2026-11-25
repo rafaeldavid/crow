@@ -32,6 +32,11 @@ export interface Normalized {
   explained: number;
   /** Code points NFKC changed (fullwidth forms, ligatures, superscripts...), ignoring space variants. */
   nfkcChanged: number;
+  /**
+   * The code points counted in nfkcChanged whose NFKC form holds a letter (fullwidth, mathematical, enclosed and
+   * superscript letters, letter ligatures). screen-2 reads this count (ADR-0044); screen-0 and screen-1 read nfkcChanged.
+   */
+  nfkcLetters: number;
   /** The ASCII spelled by tag characters, then the bytes spelled by variation-selector runs. */
   hiddenTagText: string;
 }
@@ -89,12 +94,16 @@ export function normalizeText(raw: string): Normalized {
     return '';
   });
   let nfkcChanged = 0;
+  let nfkcLetters = 0;
   for (const m of stripped.matchAll(NON_ASCII)) {
     const n = m[0].normalize('NFKC');
-    if (n !== m[0] && n !== ' ') nfkcChanged++;
+    if (n !== m[0] && n !== ' ') {
+      nfkcChanged++;
+      if (LETTER.test(n)) nfkcLetters++;
+    }
   }
   // A variation-selector run carries a message only when it is long.
   const vsText = vsBytes.length >= 8 ? Buffer.from(vsBytes).toString('latin1') : '';
   const hiddenTagText = tagText && vsText ? `${tagText}\n${vsText}` : tagText || vsText;
-  return { text: stripped.normalize('NFKC'), tagChars, zeroWidth, explained, nfkcChanged, hiddenTagText };
+  return { text: stripped.normalize('NFKC'), tagChars, zeroWidth, explained, nfkcChanged, nfkcLetters, hiddenTagText };
 }

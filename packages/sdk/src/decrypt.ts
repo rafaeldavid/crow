@@ -22,6 +22,8 @@ export interface Removed {
   tagChars: number;
   zeroWidth: number;
   nfkcChanged: number;
+  /** The NFKC changes that fold to a letter, which the screen counts (screen-2, ADR-0044). */
+  nfkcLetters: number;
   /** Hidden characters that belong to ordinary writing (emoji sequences, joiners in some scripts). */
   explained: number;
 }
@@ -41,7 +43,7 @@ export async function decryptDeliverable(input: DecryptInput, options: { raw?: b
   const raw = await open(input.ciphertext, key, input.plaintextSha256);
   const text = new TextDecoder('utf-8', { fatal: true, ignoreBOM: false }).decode(raw);
   const n = normalizeText(text);
-  const removed: Removed = { tagChars: n.tagChars, zeroWidth: n.zeroWidth, nfkcChanged: n.nfkcChanged, explained: n.explained };
+  const removed: Removed = { tagChars: n.tagChars, zeroWidth: n.zeroWidth, nfkcChanged: n.nfkcChanged, nfkcLetters: n.nfkcLetters, explained: n.explained };
   const report = screen({
     data: UntrustedData.wrap(n.text),
     hiddenTagText: UntrustedData.wrap(n.hiddenTagText),

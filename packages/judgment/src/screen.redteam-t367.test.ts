@@ -10,7 +10,7 @@ import { UntrustedData } from './untrusted.js';
 
 const run = (raw: string) => {
   const n = normalizeText(raw);
-  return screen({ data: UntrustedData.wrap(n.text), hiddenTagText: UntrustedData.wrap(n.hiddenTagText), removed: { tagChars: n.tagChars, zeroWidth: n.zeroWidth, nfkcChanged: n.nfkcChanged } });
+  return screen({ data: UntrustedData.wrap(n.text), hiddenTagText: UntrustedData.wrap(n.hiddenTagText), removed: { tagChars: n.tagChars, zeroWidth: n.zeroWidth, nfkcChanged: n.nfkcChanged, nfkcLetters: n.nfkcLetters } });
 };
 const REPORT = readFileSync(new URL('../../../fixtures/data/audit-report/report.exploit-code.json', import.meta.url), 'utf8');
 type Report = { findings: Array<{ id: string; pocFiles?: Array<{ path: string; content: string }> }> };
