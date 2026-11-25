@@ -255,7 +255,8 @@ export class Toolbox {
   private async fetchUrl(raw: string, offset: number): Promise<ToolResult> {
     const u = this.allowed(raw);
     const started = Date.now();
-    const alias = this.o.alias && u.origin === this.o.alias.from ? new URL(`${u.pathname}${u.search}`, this.o.alias.to) : null;
+    // Joined as text, never resolved against the alias: a path that starts with "//" must not name another host.
+    const alias = this.o.alias && u.origin === this.o.alias.from ? new URL(`${new URL(this.o.alias.to).origin}${u.pathname}${u.search}`) : null;
     let res: Response;
     try {
       res = await fetch(alias ?? u, { method: 'GET', redirect: 'manual', signal: AbortSignal.timeout(30_000) });
