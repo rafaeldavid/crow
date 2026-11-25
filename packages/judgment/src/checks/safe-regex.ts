@@ -15,6 +15,7 @@
 // refuses the same patterns. The parser simplifies the tree without changing the language it matches,
 // so that each compile step adds NFA states, and MAX_COMPILE_STEPS stops the rest.
 import { err, ok, type Result } from '@holdback/core';
+import { chargeChars, codePoints } from './cost.js';
 
 export const MAX_PATTERN_CHARS = 200;
 export const MAX_REPEAT = 1000;
@@ -37,6 +38,11 @@ type Node =
 /** Matches only the empty string. */
 const EMPTY: Node = { t: 'seq', items: [] };
 const isEmpty = (n: Node) => n.t === 'seq' && n.items.length === 0;
+/** Alternatives as one node: one alternative is itself, and only empty ones are the empty string. */
+function alt(options: Node[]): Node {
+  if (options.length === 1) return options[0]!;
+  return options.every(isEmpty) ? EMPTY : { t: 'alt', options };
+}
 
 /**
  * Work allowance shared by every check on one delivery, in NFA state visits. Linear time per cell
@@ -60,6 +66,8 @@ export interface SafeRegex {
   fullMatch(subject: string, budget?: StepBudget): boolean;
   /** True iff some substring matches, honoring a leading ^ and trailing $ (RegExp.test semantics). */
   search(subject: string, budget?: StepBudget): boolean;
+  /** NFA states the compiled pattern holds, for limits on a set of patterns. */
+  readonly states: number;
 }
 
 class PatternError extends Error {}
@@ -131,10 +139,11 @@ class Parser {
   private i = 0;
   constructor(private readonly cps: number[]) {}
 
-  parse(): Node {
-    const node = this.alternation();
+  /** The pattern's top-level alternatives, which the anchors bind to one by one. */
+  parse(): Node[] {
+    const options = this.alternatives();
     if (this.i < this.cps.length) throw new PatternError(`unexpected ) at ${this.i}`);
-    return node;
+    return options;
   }
 
   private peek(offset = 0): string | undefined {
@@ -142,14 +151,17 @@ class Parser {
     return cp === undefined ? undefined : String.fromCodePoint(cp);
   }
 
-  private alternation(): Node {
+  private alternatives(): Node[] {
     const options = [this.sequence()];
     while (this.peek() === '|') {
       this.i++;
       options.push(this.sequence());
     }
-    if (options.length === 1) return options[0]!;
-    return options.every(isEmpty) ? EMPTY : { t: 'alt', options };
+    return options;
+  }
+
+  private alternation(): Node {
+    return alt(this.alternatives());
   }
 
   /** Nested sequences are flattened (an empty one adds nothing), and a one-item sequence is the item. */
@@ -321,7 +333,7 @@ class Compiler {
   }
 }
 
-function simulate(states: State[], start: number, cps: number[], anchoredStart: boolean, anchoredEnd: boolean, budget?: StepBudget): boolean {
+function simulate(states: State[], start: number, subject: string, anchoredStart: boolean, anchoredEnd: boolean, budget?: StepBudget): boolean {
   const mark = new Int32Array(states.length).fill(-1);
   let gen = 0;
   let current: number[] = [];
@@ -338,7 +350,10 @@ function simulate(states: State[], start: number, cps: number[], anchoredStart: 
   };
   add(current, start);
   const accepts = (list: number[]) => list.some((x) => states[x]!.k === 'match');
-  for (const cp of cps) {
+  // Code points are read one at a time, so a run that stops early reads no further.
+  for (let i = 0; i < subject.length; ) {
+    const cp = subject.codePointAt(i)!;
+    i += cp > 0xffff ? 2 : 1;
     budget?.spend(current.length + 1);
     if (!anchoredEnd && accepts(current)) return true;
     gen++;
@@ -352,6 +367,27 @@ function simulate(states: State[], start: number, cps: number[], anchoredStart: 
     if (current.length === 0 && anchoredStart) return false;
   }
   return accepts(current);
+}
+
+/**
+ * Whether a subject is short enough to match, decided without allocating: at most MAX_SUBJECT_CHARS code points.
+ * Only a subject between one and two times that many UTF-16 units needs counting, and the count is charged.
+ */
+function fits(subject: string, budget?: StepBudget): boolean {
+  if (subject.length <= MAX_SUBJECT_CHARS) return true;
+  if (subject.length > 2 * MAX_SUBJECT_CHARS) return false;
+  chargeChars(budget, subject.length);
+  return codePoints(subject) <= MAX_SUBJECT_CHARS;
+}
+
+interface Nfa {
+  states: State[];
+  start: number;
+}
+function nfa(node: Node): Nfa {
+  const c = new Compiler();
+  const start = c.build(node, 0);
+  return { states: c.states, start };
 }
 
 export function compileSafeRegex(pattern: string): Result<SafeRegex, string> {
@@ -372,16 +408,26 @@ export function compileSafeRegex(pattern: string): Result<SafeRegex, string> {
     }
   }
   try {
-    const ast = new Parser(cps).parse();
-    const c = new Compiler();
-    const start = c.build(ast, 0);
-    const { states } = c;
-    const run = (subject: string, full: boolean, budget?: StepBudget) => {
-      const chars = [...subject];
-      if (chars.length > MAX_SUBJECT_CHARS) return false;
-      return simulate(states, start, chars.map((ch) => ch.codePointAt(0)!), full || anchoredStart, full || anchoredEnd, budget);
-    };
-    return ok({ fullMatch: (s, b) => run(s, true, b), search: (s, b) => run(s, false, b) });
+    const options = new Parser(cps).parse();
+    const whole = nfa(alt(options));
+    // A whole-subject match is anchored at both ends, so where the anchors bind does not matter.
+    const full = (s: string, b?: StepBudget) => fits(s, b) && simulate(whole.states, whole.start, s, true, true, b);
+    // A search binds ^ to the first alternative and $ to the last, as RegExp does: `^a|b` finds the b in "xb".
+    type Part = Nfa & { anchoredStart: boolean; anchoredEnd: boolean };
+    let parts: Part[];
+    if (options.length === 1 || (!anchoredStart && !anchoredEnd)) parts = [{ ...whole, anchoredStart, anchoredEnd }];
+    else {
+      const first = anchoredStart ? options.slice(0, 1) : [];
+      const last = anchoredEnd ? options.slice(-1) : [];
+      const middle = options.slice(first.length, options.length - last.length);
+      parts = [];
+      if (first.length) parts.push({ ...nfa(first[0]!), anchoredStart: true, anchoredEnd: false });
+      if (middle.length) parts.push({ ...nfa(alt(middle)), anchoredStart: false, anchoredEnd: false });
+      if (last.length) parts.push({ ...nfa(last[0]!), anchoredStart: false, anchoredEnd: true });
+    }
+    const search = (s: string, b?: StepBudget) => fits(s, b) && parts.some((p) => simulate(p.states, p.start, s, p.anchoredStart, p.anchoredEnd, b));
+    const states = whole.states.length + (parts.length > 1 ? parts.reduce((n, p) => n + p.states.length, 0) : 0);
+    return ok({ fullMatch: full, search, states });
   } catch (e) {
     if (e instanceof PatternError) return err(e.message);
     throw e;

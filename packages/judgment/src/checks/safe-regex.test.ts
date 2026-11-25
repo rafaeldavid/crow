@@ -149,3 +149,28 @@ describe('safe regex: linear time on catastrophic patterns', () => {
     });
   }
 });
+
+describe('safe regex: anchors beside alternation', () => {
+  it('binds a leading ^ to the first alternative and a trailing $ to the last, as RegExp does (property)', () => {
+    const alt = fc.array(fc.constantFrom('a', 'b', 'ab', 'a*', '(?:b|a)', '[ab]c', ''), { minLength: 1, maxLength: 4 });
+    fc.assert(
+      fc.property(fc.boolean(), alt, fc.boolean(), fc.string({ unit: fc.constantFrom('a', 'b', 'c', 'x'), maxLength: 8 }), (start, options, end, s) => {
+        const p = `${start ? '^' : ''}${options.join('|')}${end ? '$' : ''}`;
+        const m = compile(p);
+        expect(m.search(s), `${p} on ${s}`).toBe(new RegExp(p, 'u').test(s));
+        expect(m.fullMatch(s), `${p} on ${s}`).toBe(new RegExp(`^(?:${p})$`, 'u').test(s));
+      }),
+      { seed: 31, numRuns: 3000 },
+    );
+  });
+});
+
+describe('safe regex: subject length', () => {
+  it('measures the cap in code points, surrogate pairs counted once', () => {
+    const wide = '\u{1F600}';
+    expect(compile('.*').fullMatch(wide.repeat(MAX_SUBJECT_CHARS))).toBe(true);
+    expect(compile('.*').fullMatch(`${wide.repeat(MAX_SUBJECT_CHARS)}a`)).toBe(false);
+    expect(compile('a').search(`${'\uD800'.repeat(MAX_SUBJECT_CHARS)}a`)).toBe(false);
+    expect(compile('a').search(`${'\uD800'.repeat(MAX_SUBJECT_CHARS - 1)}a`)).toBe(true);
+  });
+});
