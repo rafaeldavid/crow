@@ -331,6 +331,22 @@ The maintainers keep the notes on agent sessions and permission prompts privatel
 
 Each entry records one deploy as it ran: the date and time in UTC, the commit, each Worker's new version and its rollback target, and what was measured after it. The deploy scripts print the entry's first line (`pnpm demo-cloud:deploy`, `pnpm site:deploy`, `node apps/test-agents/scripts/deploy.mjs`). The values are true for their date: for what runs now, read "What is live" above and each node's discovery.
 
+### The pattern engine's compile limits and a seller's standing contract (deployed 2026-11-25, 06:35 UTC)
+
+Rafa, 2026-11-25: "Yes, deploy". The operators carry pull request 787 (T-593: tighter compile limits for the pattern engine; the adjudicator compiles a party's patterns, so both nodes run one build) and pull request 783 (N216, T-549: a seller's standing contract is deployed with its first take). It ran from a clean worktree at `b5b8757` after `main`'s own checks passed there [measured]; the Dependabot job that GitHub attaches to that commit failed on a crate that cannot move (`tools/envelope-proof/osv-scanner.toml`), and it is not one of CI's checks.
+
+**Deploy 2026-11-25 06:35 UTC, commit `b5b8757` on a detached HEAD: pass.** holdback-op1 `5f0636e4-3b4b-4154-9220-7adb9d504256` (rollback target `e57d5a02-5e5c-480a-86b8-5833b2b2e021`), holdback-op2 `98814ede-a571-45cf-998d-412f90b143c9` (rollback target `ed891045-8548-42a9-bde8-65e53599686b`). Smoke deal `0x46d298e668ad90ed5fd5baf1922e97787e49917950b9c1345988d18f9ba5328f` Released in 50 s, against commit `b5b8757` (both nodes' discovery named it 677 s after /v1/status answered).
+
+The rollback targets are this morning's build (04:41 UTC), which already carries the API brakes [measured: the record above].
+
+### The demo and the visual walkthrough retired (deployed 2026-11-25, 05:42 UTC)
+
+Rafa, 2026-11-25: "Deploy now". The site deploy carries pull request 778 (T-586): `/demo/` and `/visualdemo/` are retired, their sources kept under `docs/archive/site/`, and every address under them answers 301 to the homepage. It also carries the docs merged since the last site deploy. It ran from a clean worktree at `031bb08` after `main`'s own checks passed there [measured].
+
+**Site deploy 2026-11-25 05:42 UTC, commit `031bb08` on a detached HEAD: pass.** crow-site `707cd21a-99ed-4647-aeb8-de8202360bba` (rollback target `a0145536-2799-4c9f-8549-9677d6539da5`).
+
+After the deploy, `/demo`, `/demo/`, `/visualdemo` and `/visualdemo/` answer 301 to `https://crow.direct/`, the homepage answers 200, and version.json names `031bb08` [measured].
+
 ### The API brakes and screen-2 carried beside screen-1 (deployed 2026-11-25, 04:41 UTC)
 
 Rafa, 2026-11-25: "Yes, deploy". The operators carry pull request 768 (T-581, N222): Crow's adjudicators take at most 3 judged deals per seller and buyer pair a UTC day (`JUDGED_DEALS_PER_PAIR_PER_DAY`), live judges are capped at 100 calls a day (`LIVE_JUDGE_CALLS_PER_DAY`), relayer funding at 200 deals a day, the faucet's per-client count is kept in the World's storage, and the operators answer on their custom hostnames only (`workers_dev: false`). They also carry pull request 773 (T-577, ADR-0044): `screen-2` is kept beside `screen-1`, and the default stays `screen-1`, so no open deal changes screen version. The sign-up Worker carries the sign-up limit (5 writes per 60 s per client) and `workers_dev: false`. Both ran from a clean worktree at `4825e88` after `main`'s own checks passed there [measured]; a first run at `10f1e63` was refused by the script because `main` had moved on, and nothing was uploaded.
