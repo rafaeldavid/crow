@@ -67764,7 +67764,7 @@ async function run(c, state, offerId, given) {
 }
 
 // examples/seller-worker-pin.ts
-const SELLER_WORKER_SHA256 = "cb2cf32a5ba8a07229428e9f171b8ba110d609a90c3b80d97679235d460afa8d";
+const SELLER_WORKER_SHA256 = "bd5a3540ee687376511789989abc1a0a7a859c47917909d56c40e563da153e15";
 
 // examples/setup-cloudflare.ts
 const plain$2 = (s, max = 300) => plain$8(String(s ?? "")).slice(0, max);
@@ -68055,7 +68055,7 @@ async function workerBytes(c) {
 		if (bytes.length > MAX_WORKER_BYTES) throw new Error(`${SELLER_WORKER_URL} is over ${MAX_WORKER_BYTES} bytes`);
 	}
 	const sha = createHash("sha256").update(bytes).digest("hex");
-	if (sha !== "cb2cf32a5ba8a07229428e9f171b8ba110d609a90c3b80d97679235d460afa8d") throw new Error(`the Worker file's SHA-256 is ${sha}, not ${SELLER_WORKER_SHA256}, the one this setup.mjs carries: it is not the Worker this version writes`);
+	if (sha !== "bd5a3540ee687376511789989abc1a0a7a859c47917909d56c40e563da153e15") throw new Error(`the Worker file's SHA-256 is ${sha}, not ${SELLER_WORKER_SHA256}, the one this setup.mjs carries: it is not the Worker this version writes`);
 	return bytes;
 }
 /** The card's quote entry in the card's folder: other offers kept, the draft's marks dropped. */
@@ -68622,7 +68622,7 @@ function otherOriginsOf(text) {
 	if (text === void 0) return [];
 	return text.split(",").map((s) => s.trim()).filter(Boolean).map((s) => {
 		const u = https(s);
-		if (!u || u.pathname !== "/" && u.pathname !== "") throw new Error("--other-origin takes https origins, comma-separated, such as https://reviews.example.workers.dev");
+		if (!u || u.pathname !== "/" && u.pathname !== "") throw new Error("--other-origin takes https origins, comma-separated, such as https://seller.example");
 		return u.origin;
 	});
 }

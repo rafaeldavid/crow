@@ -421,6 +421,10 @@ export async function sellerWorkerBundle() {
     input: fileURLToPath(here('../apps/own-seller/src/entry.ts')),
     platform: 'browser',
     external: [/^node:/, './seller-bundle.txt'],
+    // As in setupBundle: the built files of packages/settlement and packages/testkit run nothing when they load, and the
+    // Worker calls few of them, so the bundler leaves out the ones no code reaches (with them, a local chain's runner
+    // that imports a child process).
+    treeshake: { moduleSideEffects: [{ test: /\/packages\/(settlement|testkit)\/dist\//, sideEffects: false }] },
     resolve: { conditionNames: ['workerd', 'worker', 'browser', 'import', 'default'] },
     tsconfig: fileURLToPath(here('../apps/own-seller/tsconfig.json')),
     logLevel: 'warn',

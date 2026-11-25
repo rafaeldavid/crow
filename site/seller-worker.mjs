@@ -86106,35 +86106,13 @@ var init_evm_settlement = __esmMin((() => {
 	];
 }));
 
-// packages/settlement/dist/evm/accepted-tokens.json
-var accepted_tokens_default = {
-	_about: "The one token Crow's operators accept on each chain (T-383; the refinement plan's section 2c). The deploy script's --check and the operators' start-up check (live.ts) compare three values and refuse when any two differ: this table, the deployment record, and TOKEN() read from the rules contract. A chain with no entry (the local chain) skips this table. Sepolia's entry is one of the deployment record's copies: each deployment creates its own test token, and scripts/record-copies.mjs rewrites it with the record. Ethereum mainnet's entry is data only: every guard that refuses a mainnet chain ID stays. It is Circle's native USDC, from https://developers.circle.com/stablecoins/usdc-contract-addresses and checked against https://etherscan.io/token/0xa0b86991c6218b36c1d19d4a2e9eb0ce3606eb48 (both read on 2026-11-12).",
-	"1": {
-		"address": "0xA0b86991c6218b36c1d19D4a2e9Eb0cE3606eB48",
-		"symbol": "USDC",
-		"decimals": 6
-	},
-	"11155111": {
-		"address": "0xf1A4B68b201e9Eddef8a054FB6a931b849d18504",
-		"symbol": "tUSDC",
-		"decimals": 6
-	}
-};
-
 // packages/settlement/dist/evm/live.js
-var ACCEPTED_TOKENS;
 var init_live = __esmMin((() => {
 	init_dist$3();
-	init_errors();
-	init_guard();
-	ACCEPTED_TOKENS = Object.fromEntries(Object.entries(accepted_tokens_default).filter((e) => /^\d+$/.test(e[0])));
 }));
 
 // packages/settlement/dist/evm/timeouts.js
-var init_timeouts = __esmMin((() => {
-	init_encode();
-	init_errors();
-}));
+var init_timeouts = __esmMin((() => {}));
 
 // packages/settlement/dist/evm/live-entry.js
 var init_live_entry = __esmMin((() => {

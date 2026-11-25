@@ -165,7 +165,7 @@ export function otherOriginsOf(text: string | undefined): string[] {
   if (text === undefined) return [];
   return text.split(',').map((s) => s.trim()).filter(Boolean).map((s) => {
     const u = https(s);
-    if (!u || (u.pathname !== '/' && u.pathname !== '')) throw new Error('--other-origin takes https origins, comma-separated, such as https://reviews.example.workers.dev');
+    if (!u || (u.pathname !== '/' && u.pathname !== '')) throw new Error('--other-origin takes https origins, comma-separated, such as https://seller.example');
     return u.origin;
   });
 }

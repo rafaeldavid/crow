@@ -2,7 +2,8 @@
 // instead of reading thousands of lines. Each bundle site/build.mjs writes has an entry below: its static imports, the
 // require calls it makes, the members of `process` it reads, and every host named in a string. A later edit that adds
 // an import, a require, a host or a process member fails here until the entry is changed on purpose, in review.
-// No bundle may load code at run time: no import(), eval, Function, Worker, child process, vm or worker thread.
+// No bundle may load code at run time: no import(), eval, Function, Worker, child process, vm or worker thread. Two
+// exceptions are named in LOADS below, each with its reason (T-478).
 import { readdirSync, readFileSync } from 'node:fs';
 import { fileURLToPath } from 'node:url';
 import { parseAst } from 'rolldown/parseAst';
@@ -43,7 +44,7 @@ export function contents(code: string): Contents {
         if (member === 'getBuiltinModule') loads.add('getBuiltinModule');
         const callee = name(node['callee']);
         const arg = (node['arguments'] as Node[])[0];
-        const literal = arg?.type === 'Literal' ? JSON.stringify(arg['value']) : '...';
+        const literal = arg?.type === 'Literal' ? JSON.stringify(arg['value'], (_k, v: unknown) => (typeof v === 'bigint' ? `${v}n` : v)) : '...';
         if (callee === 'require' || callee === '__require' || callee === 'createRequire') requires.add(`${callee}(${callee === 'createRequire' ? '...' : literal})`);
         if (callee === 'eval' || callee === 'Function' || callee === 'Worker') loads.add(`${node.type === 'NewExpression' ? 'new ' : ''}${callee}`);
         break;
@@ -90,12 +91,22 @@ const EXPECTED: Record<string, Omit<Contents, 'loads'>> = {
   'preflight.mjs': { imports: ['node:url'], requires: [], process: ['argv', 'env', 'exit', 'versions'], hosts: ['api.crow.direct', 'api2.crow.direct', 'crow.direct'] },
   'buy.mjs': { imports: ['node:fs', 'node:path', 'node:url', 'tweetnacl', 'viem', 'viem/accounts'], requires: [], process: ['argv', 'cwd', 'env', 'exit', 'exitCode', 'stderr', 'stdout'], hosts: ['api.crow.direct', 'api2.crow.direct', 'seller.example', 'sepolia.etherscan.io'] },
   'setup.mjs': {
-    imports: ['node:crypto', 'node:fs', 'node:http', 'node:module', 'node:os', 'node:path', 'node:url'],
+    // T-478: node:dns, node:https and node:net for check --published, which resolves an address and checks it before
+    // it connects; node:child_process for the one pinned Wrangler run (LOADS).
+    imports: ['node:child_process', 'node:crypto', 'node:dns', 'node:fs', 'node:http', 'node:https', 'node:module', 'node:net', 'node:os', 'node:path', 'node:url'],
     requires: ['__require("buffer")', '__require("crypto")', '__require("process")', 'createRequire(...)'],
     process: ['argv', 'cwd', 'env', 'exit', 'exitCode', 'kill', 'pid', 'platform', 'stderr', 'stdout', 'versions'],
     // 127.0.0.1 is the local preview it serves, whose bound address is joined at run time; holdback.dev and json-schema.org
     // are schema IDs; the rest are examples in its help.
     hosts: ['(joined at run time)', '127.0.0.1', 'abitype.dev', 'adapter', 'api.crow.direct', 'api2.crow.direct', 'crow.direct', 'docs.soliditylang.org', 'holdback.dev', 'join.crow.direct', 'json-schema.org', 'sample', 'seller.example', 'sepolia.etherscan.io', 'viem.sh', 'your-site.example'],
+  },
+  // T-478: a seller's own Worker. It runs in Cloudflare's runtime on the party's account, never with Node on a machine.
+  // Its hosts are the demo's, the schema IDs, and the documentation hosts viem and ox name in their messages.
+  'seller-worker.mjs': {
+    imports: ['./seller-bundle.txt', 'node:child_process', 'node:crypto', 'node:fs', 'node:net', 'node:path', 'node:url'],
+    requires: [],
+    process: ['argv', 'cwd', 'env', 'exit', 'stdout'],
+    hosts: ['127.0.0.1', '4byte.sourcify.dev', 'abitype.dev', 'arweave.net', 'crow.direct', 'docs.soliditylang.org', 'holdback.dev', 'ipfs.io', 'json-schema.org', 'oxlib.sh', 'rolldown.rs', 'seller.example', 'sepolia.etherscan.io', 'viem.sh'],
   },
   // T-551: it reads the card at a URL the person gives, so its hosts are the demo's, the schema IDs and viem's docs.
   'take.mjs': {
@@ -105,6 +116,14 @@ const EXPECTED: Record<string, Omit<Contents, 'loads'>> = {
     hosts: ['abitype.dev', 'api.crow.direct', 'api2.crow.direct', 'docs.soliditylang.org', 'holdback.dev', 'json-schema.org', 'seller.example', 'sepolia.etherscan.io', 'viem.sh'],
   },
 };
+
+/**
+ * The only code a bundle may load at run time, by file (T-478). setup.mjs runs one child process, the pinned Wrangler
+ * through npx, for `cloudflare --key` and `leave`: the test below holds it to that one call. seller-worker.mjs carries
+ * the import from a local chain's runner in packages/settlement that it never calls; it runs on Cloudflare, where no
+ * process can be started.
+ */
+const LOADS: Record<string, string[]> = { 'setup.mjs': ['node:child_process'], 'seller-worker.mjs': ['node:child_process'] };
 
 /** Every file in site/ whose opening comment says site/build.mjs generated it: the published bundles. */
 const bundles = () => readdirSync(site('.')).filter((f) => f.endsWith('.mjs') && /^\/\/[^\n]*\n(\/\/[^\n]*\n)*?\/\/[^\n]*Generated by site\/build\.mjs/.test(`${readFileSync(site(f), 'utf8').split('\n').slice(0, 8).join('\n')}\n`)).sort();
@@ -117,10 +136,19 @@ describe('the published bundles (T-496)', () => {
   for (const [file, expected] of Object.entries(EXPECTED)) {
     it(`${file} imports, requires, reads from process and names only what its entry lists, and loads no code at run time`, () => {
       const got = contents(readFileSync(site(file), 'utf8'));
-      expect(got.loads, `${file} loads code at run time`).toEqual([]);
+      expect(got.loads, `${file} loads code at run time`).toEqual(LOADS[file] ?? []);
       expect({ imports: got.imports, requires: got.requires, process: got.process, hosts: got.hosts }, `${file} reaches something its entry in tests/site-bundles.test.ts does not list`).toEqual(expected);
     });
   }
+
+  it('setup.mjs starts one child process: npx with the pinned Wrangler, and the arguments its command gives', () => {
+    const code = readFileSync(site('setup.mjs'), 'utf8');
+    const calls = [...code.matchAll(/\bspawn\(/g)];
+    expect(calls).toHaveLength(1);
+    expect(code).toContain('spawn("npx", [...WRANGLER, ...args],');
+    expect(code).toMatch(/const WRANGLER = \["--yes", `wrangler@\$\{WRANGLER_VERSION\}`\];/);
+    expect(code).toMatch(/const WRANGLER_VERSION = "4\.151\.3";/);
+  });
 
   it('try.mjs says in its banner what this test checks', () => {
     const banner = readFileSync(site('try.mjs'), 'utf8').split('\n').filter((l) => l.startsWith('//')).slice(0, 12).join(' ');
