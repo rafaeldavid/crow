@@ -15,7 +15,15 @@
 //      (setup-work-api.ts): for each deal every operator shows Held, it runs the agreed checks on the deal's work file,
 //      holds a file that fails and names each failing check, and delivers one that passes. It reads the settlement
 //      layer before any delivery, so a second pass delivers nothing twice.
-//   4. One line per deal, then one last line with the deals delivered, still due and declined.
+//   4. The takes of the folder's standing offers (T-552, ADR-0040): every deal each operator lists as Held with the
+//      seller contract as its seller. A take joins only when its seller signature is exactly a take of a template this
+//      folder signed (crow.json's `standing`), and its terms are that template filled for its buyer (core's takeTerms),
+//      under its commitment ID. A take of a template with a standing delivery needs nothing here: the buyer posts it.
+//      Otherwise the take's work file (work/<commitment ID>.<ext>) must pass the agreed checks; then the key signs the
+//      delivery for its contract (the contract's key path), sealed to the three adjudicators and the buyer. A take whose
+//      every operator already records a delivery is not delivered again. The adapter is not used: it signs only for the
+//      key's own address and its deal keys.
+//   5. One line per deal, then one last line with the deals delivered, still due and declined.
 //
 // One operator that fails a read stops no delivery of the journal's deals: its line names it, and the pass goes on.
 // The whole pass ends within PASS_LIMIT_MS, under the schedule's interval, so a hung operator holds the folder's lock
@@ -24,18 +32,20 @@
 // Exit 0: nothing is due. Exit 4: a funded deal still waits for its work, named in its line. Exit 1: a step failed,
 // another run holds the folder, or the pass ran out of time; the next pass tries again.
 import { createHash, randomBytes } from 'node:crypto';
-import { existsSync, readFileSync, rmSync } from 'node:fs';
+import { existsSync, mkdirSync, readFileSync, rmSync } from 'node:fs';
 import { homedir } from 'node:os';
 import { join, resolve } from 'node:path';
+import { decodeStandingSignature, TAKE, encodeStandingSignature, takeTerms, type TakeFill, type Timestamp } from '@holdback/core';
 import { recoverTypedDataAddress, type Hex } from 'viem';
-import type { Agent } from './agent.ts';
+import { Agent } from './agent.ts';
+import { checkDelivery } from './check-delivery.ts';
 import { plain as plainLine } from './plain.ts';
 import { reasonLine } from './seller-refusal.ts';
 import { acceptanceFor, createSellerAdapter, dealKeyOf, loadConfig, pinnedSeller, type Deal, type Journal, type SellerAdapterConfig } from './seller-adapter.ts';
 import { runChecks } from './setup-check.ts';
 import { startWorkApi, WORK_CREDENTIAL_ENV, workFor } from './setup-work-api.ts';
-import { addressOf, FILES, locked, pinnedReader, readKey, readState, realPath, writeWhole, type Call, type J, type Pin, type State } from './setup-seller.ts';
-import { commitmentIdOf, jcs, publicOfferTerms, typedOf } from './verify.ts';
+import { addressOf, FILES, locked, pinnedReader, readKey, readState, realPath, writeWhole, type Call, type J, type Pin, type StandingRecord, type State } from './setup-seller.ts';
+import { commitmentIdOf, jcs, publicOfferTerms, typedOf, verifyPrepared } from './verify.ts';
 
 const plain = (s: unknown, max = 300) => plainLine(String(s ?? '')).slice(0, max);
 /** The exit status of a pass after which a funded deal still waits for its work. */
@@ -53,16 +63,18 @@ const MAX_PAGES = 10;
 const NODE_SETTINGS = ['NODE_OPTIONS', 'NODE_EXTRA_CA_CERTS', 'NODE_USE_ENV_PROXY'];
 
 /**
- * The addresses the folder sells as, each with how its signature over terms is checked. Today one: the standing key's
- * own address. T-552 adds the standing seller contract's address here (ADR-0040), whose signature is ERC-1271, with
- * its own check in `signedBy`.
+ * The addresses the folder sells as, each with how its deals are checked: the key's own address, whose signature over
+ * terms recovers (`signedBy`), and each seller contract a `publish` of this key made (T-552), whose deals are takes
+ * of the folder's own templates (`takeAdmission`).
  */
-export function sellerAddressesOf(key: Hex): Array<{ address: string; kind: 'key' }> {
-  return [{ address: addressOf(key), kind: 'key' }];
+export function sellerAddressesOf(key: Hex, state?: Pick<State, 'standing'>): Array<{ address: string; kind: 'key' | 'standing' }> {
+  const own = addressOf(key);
+  const contracts = [...new Set((state?.standing ?? []).filter((r) => r.key === own).map((r) => r.seller))];
+  return [{ address: own, kind: 'key' }, ...contracts.map((address) => ({ address, kind: 'standing' as const }))];
 }
 
 /** Whether the seller signature in `served` is `seller`'s over `terms`, under the pinned domain. */
-async function signedBy(served: J, terms: J, seller: { address: string; kind: 'key' }, pin: Pin): Promise<boolean> {
+async function signedBy(served: J, terms: J, seller: { address: string }, pin: Pin): Promise<boolean> {
   const signature = served?.signatures?.seller;
   if (typeof signature !== 'string' || !/^0x[0-9a-fA-F]+$/.test(signature)) return false;
   const by = await recoverTypedDataAddress({ ...typedOf('CommitmentTerms', terms, pin.domain), signature: signature as Hex }).catch(() => null);
@@ -115,7 +127,7 @@ interface Offer {
  * Why the listed deal `id` is not exactly the offer this folder makes; '' when it is. Its terms are read from every
  * operator, which must serve the same ones. Throws when they cannot be read.
  */
-async function admission(id: string, x: { reader: Agent; pin: Pin; sellers: Array<{ address: string; kind: 'key' }>; payout: string; offer: () => Promise<Offer> }): Promise<{ why: string; terms: J; seller: string }> {
+async function admission(id: string, x: { reader: Agent; pin: Pin; sellers: Array<{ address: string }>; payout: string; offer: () => Promise<Offer> }): Promise<{ why: string; terms: J; seller: string }> {
   const served = await x.reader.trusted<J>(`/v1/commitments/${id}/terms`);
   const terms = Object.fromEntries(Object.entries(served ?? {}).filter(([k]) => k !== 'id' && k !== 'signatures')) as J;
   const lc = (v: unknown) => String(v ?? '').toLowerCase();
@@ -143,6 +155,72 @@ async function admission(id: string, x: { reader: Agent; pin: Pin; sellers: Arra
   const differ = Object.keys({ ...want, ...terms }).filter((k) => jcs(want[k] ?? null) !== jcs(terms[k] ?? null));
   if (differ.length) return { ...said, why: `its ${differ.slice(0, 4).map((k) => plain(k, 40)).join(', ')} ${differ.length === 1 ? 'differs' : 'differ'} from the offer this folder makes` };
   return { ...said, why: '' };
+}
+
+/**
+ * The template of this folder that the listed take `id` of the contract `seller` fills, or why there is none. Its terms
+ * are read from every operator. A take joins only when its seller signature is the one this folder's template and
+ * signature give for the take's own fill, and its terms are that template filled for its buyer: the take's own rule
+ * (ADR-0040 §1), in place of the per-buyer offer's rebuild. Throws when the terms cannot be read.
+ */
+async function takeAdmission(id: string, x: { reader: Agent; seller: string; records: StandingRecord[] }): Promise<{ why: string; terms: J; record?: StandingRecord }> {
+  const served = await x.reader.trusted<J>(`/v1/commitments/${id}/terms`);
+  const terms = Object.fromEntries(Object.entries(served ?? {}).filter(([k]) => k !== 'id' && k !== 'signatures')) as J;
+  const lc = (v: unknown) => String(v ?? '').toLowerCase();
+  if (commitmentIdOf(terms) !== id || lc(served?.id) !== id) return { terms, why: 'the terms the operators serve are not the ones its commitment ID names' };
+  if (lc(terms.seller) !== x.seller) return { terms, why: `its seller ${plain(lc(terms.seller), 42)} is not this folder's seller contract ${x.seller}` };
+  const signature = String(served?.signatures?.seller ?? '');
+  const blob = /^0x[0-9a-fA-F]+$/.test(signature) ? decodeStandingSignature(signature as Hex) : null;
+  if (!blob || blob.kind !== TAKE) return { terms, why: 'its seller signature is not a take of a standing offer' };
+  const fill: TakeFill = { buyer: lc(terms.buyer) as TakeFill['buyer'], buyerPaymentAddress: lc(terms.buyerPaymentAddress) as TakeFill['buyer'], buyerEncryptionPublicKey: String(terms.buyerEncryptionPublicKey), nonceSeed: lc(blob.fill.nonceSeed) as TakeFill['nonceSeed'], createdAt: String(terms.createdAt) as Timestamp };
+  for (const r of x.records.filter((r) => r.seller === x.seller)) {
+    let mine: string;
+    try {
+      mine = lc(encodeStandingSignature(TAKE, r.template, r.signature, fill));
+    } catch {
+      continue;
+    }
+    if (mine !== lc(signature)) continue;
+    if (commitmentIdOf(takeTerms(r.template, fill, r.seller as TakeFill['buyer'])) !== id) return { terms, why: `its terms are not the template ${plain(r.template.offerId, 80)} filled for its buyer` };
+    return { terms, why: '', record: r };
+  }
+  return { terms, why: 'it is a take of no template this folder signed' };
+}
+
+/** What became of one take this pass. */
+type TakeOutcome = { delivered?: true; due?: true; failed?: true; line: Record<string, unknown> };
+
+/**
+ * One take of the folder's own template, delivered when its work is there and passes the agreed checks. The key signs
+ * the delivery for its contract: the contract's key path approves the key's own signature (ADR-0040 §1, first row).
+ */
+async function deliverTake(c: Call, id: string, terms: J, r: StandingRecord, x: { key: Hex; pin: Pin; reader: Agent; format: string }): Promise<TakeOutcome> {
+  const line = { step: 'deliver', commitmentId: id, take: true, seller: r.seller, offerId: plain(r.template.offerId, 80) };
+  const deliverBy = plain(terms?.timing?.deliverBy, 40);
+  if (r.template.delivery) return { line: { ...line, ok: true, state: 'Held', standing: true, detail: "This take's template carries the finished work: its buyer posts the standing delivery (take.mjs), and nothing is due here." } };
+  // Every operator's own record: a take whose delivery one operator already shows is not delivered twice.
+  const states = await Promise.all(x.reader.sources().map((op) => x.reader.call('GET', `/v1/commitments/${id}`, undefined, op).then((s: J) => String(s.escrowState))));
+  const recorded = await Promise.all(x.reader.sources().map((op) => x.reader.call('GET', `/v1/commitments/${id}/events?limit=200`, undefined, op).then((e: J) => Array.isArray(e?.items) && e.items.some((i: J) => i?.type === 'delivery.submitted'), () => false)));
+  if (recorded.some(Boolean)) return { line: { ...line, ok: true, state: plain(states[0], 40), detail: 'An operator already records a delivery for this take: nothing is delivered again.' } };
+  if (!states.every((s) => s === 'Held')) return { failed: true, line: { ...line, ok: false, state: states.map((s) => plain(s, 40)).join(' / '), detail: 'The operators do not all show this take Held: nothing was delivered. The next pass reads it again.' } };
+  const file = workFor(c.folder, id, x.format);
+  const held = { ...line, state: 'Held', due: true, deliverBy, workPath: file.path };
+  if (file.problem) return { due: true, line: { ...held, ok: false, detail: `The work cannot be delivered as it is: ${plain(file.problem, 400)}. Correct it before ${deliverBy}.` } };
+  if (!file.bytes) return { due: true, line: { ...held, ok: true, detail: `Funded and waiting for the work: put it at ${file.path} before ${deliverBy}. After the deadline the buyer may take its money back.` } };
+  // The take's own agreed checks, on the file, before anything is sealed or signed.
+  const termsFile = join(c.folder, 'sample', `take-${id.slice(2, 18)}.terms.json`);
+  mkdirSync(join(c.folder, 'sample'), { recursive: true });
+  writeWhole(termsFile, `${JSON.stringify({ deliverable: terms.deliverable, acceptance: terms.acceptance }, null, 2)}\n`);
+  const checked = checkDelivery({ terms: termsFile, file: file.from ?? file.path });
+  rmSync(termsFile, { force: true });
+  if (checked.exitCode !== 0) return { due: true, line: { ...held, ok: false, failed: checked.lines.filter((l) => /^ {2}(FAIL|OPEN)/.test(l)).map((l) => plain(l, 300)), detail: `The work at ${plain(file.from ?? file.path, 300)} was not delivered: ${plain(checked.lines[0], 300)}. Correct the file before ${deliverBy}; the next pass checks it again.` } };
+  const agent = new Agent(c.operators, x.key, new Uint8Array(32), x.pin.domain, x.pin.chain);
+  const { prepared, intent } = await agent.prepareDelivery(terms, file.bytes);
+  const v = verifyPrepared(prepared, intent, r.seller, x.pin.domain, await agent.settlementNow());
+  if (v.toSign.length !== 1 || v.toSign[0]!.slot !== 'signature') throw new Error(`the prepared delivery asks the seller contract for ${v.toSign.length} signatures, not the delivery's one`);
+  v.body.signature = await agent.account.signTypedData(v.toSign[0]!.typed);
+  const out: J = await agent.call('POST', v.path, v.body);
+  return { delivered: true, line: { ...line, ok: true, state: plain(out?.escrowState ?? 'Delivered', 40), detail: `Delivered ${file.bytes.length} bytes from ${plain(file.from ?? file.path, 300)}, signed by the key for its seller contract. The agreed checks and the adjudicator decide.` } };
 }
 
 /** A shell word: the text in single quotes, each single quote in it closed, escaped and opened again. */
@@ -254,8 +332,9 @@ async function pass(c: Call, state: State): Promise<number> {
   // 2. The deals: the journal's open ones, and the funded ones the operators list for the folder's addresses.
   const journal: Journal = loadJournal() ?? { deals: {}, quotes: {} };
   const open = new Set(Object.values(journal.deals).filter((d) => OPEN_STAGES.includes(d.stage)).map((d) => d.id as string));
-  const sellers = sellerAddressesOf(key);
+  const sellers = sellerAddressesOf(key, state);
   const found = new Map<string, string>(); // commitment ID -> the seller address it was found under
+  const takes = new Map<string, string>(); // commitment ID -> the seller contract it was listed under (T-552)
   const due: string[] = [], declined: string[] = [];
   let failed = false;
   for (const s of sellers) {
@@ -268,7 +347,7 @@ async function pass(c: Call, state: State): Promise<number> {
       failed = true;
       c.say({ step: 'deliver', ok: false, seller: s.address, detail: `An operator lists more than ${MAX_PAGES * 200} funded deals for ${s.address}; this pass read the first ${MAX_PAGES * 200}.` });
     }
-    for (const id of listed.ids) if (!Object.hasOwn(journal.deals, id)) found.set(id, s.address);
+    for (const id of listed.ids) if (!Object.hasOwn(journal.deals, id)) (s.kind === 'standing' ? takes : found).set(id, s.address);
   }
   let offer: Promise<Offer> | undefined;
   const offerOf = () =>
@@ -280,7 +359,7 @@ async function pass(c: Call, state: State): Promise<number> {
     })());
   for (const [id, address] of found) {
     try {
-      const { why, terms, seller } = await admission(id, { reader, pin, sellers, payout, offer: offerOf });
+      const { why, terms, seller } = await admission(id, { reader, pin, sellers: sellers.filter((s) => s.kind === 'key'), payout, offer: offerOf });
       if (why) {
         // Listed under the folder's address and not exactly this folder's offer: declined, with its deadline.
         declined.push(id);
@@ -295,7 +374,27 @@ async function pass(c: Call, state: State): Promise<number> {
       c.say({ step: 'deliver', ok: false, commitmentId: id, found: true, seller: address, detail: `Its terms could not be read from every operator: ${plain((e as Error).message, 300)}. Nothing was delivered for it; the next pass tries again.` });
     }
   }
-  if (open.size === 0) return summary(c, [], due, declined, failed);
+  // 4. The takes of the folder's standing offers: each one this folder's own template fills is delivered here.
+  const delivered: string[] = [];
+  for (const [id, seller] of takes) {
+    try {
+      const { why, terms, record } = await takeAdmission(id, { reader, seller, records: state.standing ?? [] });
+      if (why || !record) {
+        declined.push(id);
+        c.say({ step: 'deliver', ok: false, commitmentId: id, take: true, seller, declined: true, deliverBy: plain(terms?.timing?.deliverBy, 40), detail: `Not a take of this folder's standing offer: ${plain(why, 400)}. Nothing was delivered for it; once deliverBy passes, its buyer may take its money back.` });
+        continue;
+      }
+      const t = await deliverTake(c, id, terms, record, { key, pin, reader, format: work.format });
+      if (t.delivered) delivered.push(id);
+      if (t.due) due.push(id);
+      if (t.failed) failed = true;
+      c.say(t.line);
+    } catch (e) {
+      failed = true;
+      c.say({ step: 'deliver', ok: false, commitmentId: id, take: true, seller, detail: `This take could not be delivered this pass: ${plain((e as Error).message, 300)}. The next pass tries again.` });
+    }
+  }
+  if (open.size === 0) return summary(c, delivered, due, declined, failed);
   saveJournal(journal);
   for (const d of Object.values(journal.deals)) if (open.has(d.id) && /^0x[0-9a-f]{64}$/.test(String(d.terms?.nonce))) c.hide(dealKeyOf(key, d.terms.nonce as Hex));
 
@@ -324,8 +423,7 @@ async function pass(c: Call, state: State): Promise<number> {
     await api.close();
   }
 
-  // 4. One line per deal that was open.
-  const delivered: string[] = [];
+  // 5. One line per deal that was open.
   for (const d of after) {
     const id = d.id as string;
     if (!open.has(id)) continue;

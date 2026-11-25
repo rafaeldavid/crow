@@ -24,6 +24,7 @@ import { createHash, randomBytes } from 'node:crypto';
 import { chmodSync, existsSync, lstatSync, mkdirSync, readdirSync, readFileSync, realpathSync, renameSync, rmSync, statSync, writeFileSync } from 'node:fs';
 import { homedir } from 'node:os';
 import { basename, dirname, isAbsolute, join, relative, resolve, sep } from 'node:path';
+import type { StandingOffer } from '@holdback/core';
 import { getAddress, type Hex } from 'viem';
 import { generatePrivateKey, privateKeyToAccount } from 'viem/accounts';
 import { Agent } from './agent.ts';
@@ -102,6 +103,27 @@ export interface State {
   listing?: Listing;
   /** The last `list` that the receiver refused or did not answer, with a reason from a fixed list and no word of the answer. It counts as neither a listing nor a skip. */
   listingFailed?: { website: string; to: string; at: string; status: number | null; reason: string };
+  /** The standing offers `publish` signed (T-552), newest last: each template with its signature. No secret. */
+  standing?: StandingRecord[];
+}
+
+/** One standing offer `publish` signed: the card's entry, and what became of it here. */
+export interface StandingRecord {
+  offerId: string;
+  chainId: number;
+  /** The seller contract: the CREATE2 address of the pinned code with `key`, at `salt`. */
+  seller: StandingOffer['rules'];
+  key: StandingOffer['rules'];
+  salt: `0x${string}`;
+  template: StandingOffer;
+  signature: Hex;
+  publishedAt: string;
+  /** The end of the contract's mandate as the operators listed it when `publish` last asked. */
+  mandateUntil?: string;
+  /** A later `publish --replace` signed another template for the same offer. This one stays takeable until it expires. */
+  replacedAt?: string;
+  /** `publish --revoke` signed its revocation. It takes effect once someone sends it. */
+  revokeSignedAt?: string;
 }
 
 /** The listing step's record: a website sent to the list, or a skip. */
