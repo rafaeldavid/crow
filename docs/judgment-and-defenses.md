@@ -72,7 +72,7 @@ A flag on a deal with a rubric escalates the case, and a flagged case needs a un
 | Judge timeout | 60 s, then abstain | 90 s |
 | Retries | 1, on transport error only, same inputs | same |
 | Temperature | Lowest supported | same |
-| Rationale cap | 600 characters, no URLs | same |
+| Rationale cap | 600 characters, no URLs; from `agg-5`, a longer rationale is cut to the cap and the cut recorded (ADR-0049) | same |
 
 **Commit-reveal selection.**
 1. Before funding, the primary adjudicator signs an acceptance carrying `seedCommitment = keccak256(seed)` (ADR-0016). The seed commitment sits outside the commitment ID, so the ID is not circular.
@@ -117,6 +117,8 @@ otherwise                                             -> ESCALATE   (ties escala
 
 **No decision rests on one model family after a judge fault** (ADR-0043; T-570). A seat faults when it returns no valid verdict: a timeout, an HTTP error, a filter abstention or a schema-valid abstain. When the valid verdicts come from one family, the case escalates. After a fault, a reject needs fail verdicts from two families, as an accept always needs passes from two. Neither rule changes a decision where every seat returned a valid verdict on a panel of two or more families: two fails from one family still outvote one pass from another, as before. This is aggregation version `agg-4`. The build carries it beside `agg-3`, and deals bind `agg-3` until the default moves in a second deploy. `aggregate.test.ts` pins each kept version to digests of its decision table.
 
+**Free text over its cap is cut, and the verdict counts** (ADR-0049; T-618). From `agg-5` the verdict filter cuts a criterion's evidence or the injection evidence over 300 code points, and a rationale over 600 or the policy's lower cap, to the cap, ending with `[cut]`. The scores, ids, booleans and `overall` stay as the judge wrote them. The record adds one reason per seat with a cut, which is not an escalation reason. The canary scan reads the whole output before the cut; the URL step reads the kept text. Every other schema fault is still an abstention. `agg-3` and `agg-4` keep the filter without the cut.
+
 Thresholds are exact fractions compared by cross-multiplication, never by division or floats (ADR-0022). A policy must satisfy `2 × numerator > denominator`, so accept and reject can never both hold. The record carries `passCount`, `failCount` and `validCount`, not shares.
 
 Unit-test this function exhaustively with table-driven cases.
@@ -140,7 +142,7 @@ Unit-test this function exhaustively with table-driven cases.
 | T12 | Replay or forged messages | Reuse of a signed offer | EIP-712 with nonce, expiry, chainId and verifying contract; rulebook hash; scope check | `error.replay`, `error.scope-exceeded` |
 | T13 | Agent key compromise | A stolen key signs large commitments | The payment address's balance and the principal's own wallet bound the loss: money leaves only on the payment address's signatures for one deal. On a chain the contracts read no mandate (ADR-0038, D69). The cap per commitment and the mandate's expiry bind only through the operators that relay a deal and a counterparty that checks. The daily cap binds only through each operator's own count. A principal cannot revoke a mandate today. On a live commitment the loss is bounded by the holds already funded, and the protocol offers no recourse; recourse lies between the principal and its agent provider (residual 12, D22) | none yet: `error.revoked-agent` waits for revocation (ADR-0038) |
 | T14 | Adjudicator insolvency | Bond too small for open exposure | Not in phase one: no adjudicator posts a bond, and a default refunds the buyer. On SimChain under the full protocol, a coverage-ratio gate on assignment, and defaults compensated from the bond | `error.coverage-exceeded` (SimChain only) |
-| T15 | Exfiltration through judge output | A judge is induced to write secrets or URLs | Judges hold no secrets; schema-limited output; URL and length filter | `attack.exfil-attempt` |
+| T15 | Exfiltration through judge output | A judge is induced to write secrets or URLs | Judges hold no secrets; schema-limited output; URL and length filter (from `agg-5` overlong text is cut to the cap, the tail discarded, ADR-0049) | `attack.exfil-attempt` |
 | T16 | Operator tampering | An operator drops or alters messages | Signed messages; escape hatch; hash-chained log; receipts | `neutrality.operator-refuses` |
 | T18 | Adjudicator self-dealing | An adjudicator accepts every case for sellers it controls in guaranteed mode | In phase one: the parties' choice of all three adjudicators, commit-reveal and beacon panels, and the signed record (D26); no on-chain defense beyond those. On SimChain under the full protocol, 100% bond coverage per guaranteed commitment open to appeal, appeals to a different adjudicator, and encumbered bond never counted twice | `attack.adjudicator-self-dealing` (SimChain only) |
 | T19 | Wrong or missing key release | The decision pays the seller but releases a key that does not decrypt the committed plaintext | Buyer verifies against the plaintext hash and holds the signed decision as evidence (D26); on SimChain only, "missing or wrong key" is a bonded appeal ground, and an appeal decision may carry the key | `appeal-bad-key-release` (planned; SimChain only) |
