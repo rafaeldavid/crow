@@ -7,6 +7,8 @@
 //   node tools/duet/approvals.ts plan [--runs <list>] [--budget-usd <n>]       the runs, the caps and the budget; sends nothing
 //   node tools/duet/approvals.ts run --runs claude:buy,deepseek:sell --budget-usd 2 [--out <dir>]
 //   node tools/duet/approvals.ts run --runs scripted:sell                       the seller's path with a script: no key, no model
+//   ... run --runs claude:sell --front-page <file>                              a draft front page (P-15): the file answers
+//     crow.direct/llms.txt for the agent's web reads; every other page comes from the live site, and nothing is published
 //
 // A run is <model>:<direction>. buy (N215): the agent starts from crow.direct with the usage line of each command once in its brief, never --help, so it must read buy.txt to know the steps; it buys a security review from a seller that the duet's scripted seller
 // plays on this machine against the live operators, so no run uses the test seller's rate-limited quote route. sell:
@@ -20,7 +22,10 @@
 // the whole reservation when the turn fails. Not counted: a request the vendor billed and the client retried (the
 // providers retry on network errors, 429 and 5xx), guessed to be rare. Keys: HOLDBACK_AGENT_ANTHROPIC_API_KEY for claude (and, for a key scoped to a workspace, HOLDBACK_AGENT_ANTHROPIC_WORKSPACE_ID: an ID, sent as `anthropic-workspace-id`); HOLDBACK_AGENT_OPENAI_COMPATIBLE_API_KEY
 // and HOLDBACK_AGENT_OPENAI_COMPATIBLE_BASE_URL (https) for deepseek. They are scrubbed from everything written.
+import { createHash } from 'node:crypto';
 import { appendFileSync, mkdirSync, readFileSync, realpathSync, writeFileSync } from 'node:fs';
+import { createServer } from 'node:http';
+import type { AddressInfo } from 'node:net';
 import { join, resolve } from 'node:path';
 import { masterPrompt, runAgent, type Caps } from './loop.ts';
 import { inputPrice, priceOf } from './measures.ts';
@@ -154,19 +159,37 @@ export function sellScript(): ScriptStep[] {
   ];
 }
 
-async function sellRun(dir: string, provider: Provider, secrets: Secrets): Promise<Event[]> {
+/** A draft front page (P-15): a local server that answers /llms.txt with `text` and passes every other GET to the live site. */
+export async function frontPage(text: string, upstream: string = CROW_SITE): Promise<{ url: string; close(): Promise<void> }> {
+  const server = createServer((req, res) => {
+    void (async () => {
+      if (req.method !== 'GET') return void res.writeHead(405, { 'content-type': 'text/plain' }).end('GET only');
+      const u = new URL(`http://front.invalid${req.url ?? '/'}`);
+      if (u.pathname === '/llms.txt') return void res.writeHead(200, { 'content-type': 'text/plain; charset=utf-8', 'cache-control': 'no-store' }).end(text);
+      // Joined as text: a path that starts with "//" stays a path on the upstream host.
+      const up = await fetch(`${upstream}${u.pathname}${u.search}`, { redirect: 'manual', signal: AbortSignal.timeout(25_000) });
+      const location = up.headers.get('location');
+      res.writeHead(up.status, { 'content-type': up.headers.get('content-type') ?? 'application/octet-stream', ...(location ? { location } : {}) }).end(Buffer.from(await up.arrayBuffer()));
+    })().catch(() => { if (!res.headersSent) res.writeHead(502, { 'content-type': 'text/plain' }); res.end('the live site did not answer'); });
+  });
+  await new Promise<void>((ok, fail) => { server.once('error', fail); server.listen(0, '127.0.0.1', () => ok()); });
+  return { url: `http://127.0.0.1:${(server.address() as AddressInfo).port}`, close: () => new Promise<void>((r) => { server.closeAllConnections(); server.close(() => r()); }) };
+}
+
+async function sellRun(dir: string, provider: Provider, secrets: Secrets, front?: string): Promise<Event[]> {
   const work = join(dir, 'seller', 'work'), owner = join(dir, 'seller', 'company');
   for (const p of [work, owner, join(work, 'data')]) mkdirSync(p, { recursive: true, mode: 0o700 });
   writeFileSync(join(work, 'data', 'readings.csv'), DATA);
   const rec = new Recorder(join(dir, 'record.jsonl'), secrets);
-  rec.add('runner', 'run.start', { task: 'T-571', direction: 'sell', seller: { vendor: provider.vendor, model: provider.model }, caps: CAPS, world: 'running', operators: OPERATORS, counterparty: `${CROW_SITE}/agents/test-buyer`, brief: 'direct' });
+  rec.add('runner', 'run.start', { task: 'T-571', direction: 'sell', seller: { vendor: provider.vendor, model: provider.model }, caps: CAPS, world: 'running', operators: OPERATORS, counterparty: `${CROW_SITE}/agents/test-buyer`, brief: 'direct', ...(front !== undefined ? { frontPage: { sha256: createHash('sha256').update(front).digest('hex'), bytes: Buffer.byteLength(front), note: 'a draft crow.direct/llms.txt served from this machine; every other page from the live site' } } : {}) });
   const allow: Allow[] = [...OPERATORS.map((u) => ({ origin: new URL(u).origin })), { origin: CROW_SITE }];
   const stop = new AbortController();
   const whole = setTimeout(() => stop.abort('the run limit of 1,800 s'), 1_800_000);
-  const tools = new Toolbox({ signal: stop.signal, role: 'seller', work: realpathSync(work), owner: realpathSync(owner), repo: REPO, operators: OPERATORS, allow, secrets, rec, installed: trySell(), timeoutMs: { short: 180_000, long: 900_000 } });
+  const draft = front === undefined ? null : await frontPage(front);
+  const tools = new Toolbox({ signal: stop.signal, role: 'seller', work: realpathSync(work), owner: realpathSync(owner), repo: REPO, operators: OPERATORS, allow, secrets, rec, installed: trySell(), timeoutMs: { short: 180_000, long: 900_000 }, ...(draft ? { alias: { from: CROW_SITE, to: draft.url } } : {}) });
   try {
     await runAgent({ role: 'seller', provider, brief: sellBrief(), system: masterPrompt('seller', 'Enterprise Sales Agent'), tools, caps: CAPS, rec, signal: stop.signal });
-  } finally { clearTimeout(whole); stop.abort('the run ended'); await tools.close(); }
+  } finally { clearTimeout(whole); stop.abort('the run ended'); await tools.close(); await draft?.close(); }
   // The deals are those the sell command itself called the operators about (the fetch hook's record of the command's
   // own HTTP calls, which the agent cannot write), kept only when their terms name Crow's test buyer.
   const ids = dealIds(rec.events);
@@ -207,10 +230,13 @@ export interface Result {
   model: string; vendor: string; direction: Direction; approvals: number; approvals_by_step: Array<{ turn: number; tool: string; what: string }>;
   policy_approvals: { granted: number; refused: number }; turns: number; tokens_in: number; tokens_out: number; cache_read: number; cost_usd: number; seconds: number | null;
   help_probes: number; guide_reads: string[];
+  /** Web reads of https://crow.direct, and the approvals if one approval allowed them all (P-15, N214). */
+  site_reads: number; approvals_reads_once: number;
   final_state: string | null; final_state_op2: string | null; commitment_id: string | null; agent_end: string; refusals: number; failed_calls: number; date: string; run: string;
 }
 
 const short = (v: unknown) => JSON.stringify(v).slice(0, 160);
+const originOf = (u: unknown) => { try { return new URL(String(u)).origin; } catch { return ''; } };
 
 /** The measures of one run, from its record alone. `role` is the outside agent's side. */
 export function measureRun(events: readonly Event[], role: 'buyer' | 'seller', direction: Direction, run: string): Result {
@@ -225,12 +251,14 @@ export function measureRun(events: readonly Event[], role: 'buyer' | 'seller', d
   const rank = (s: unknown) => (['Released', 'Refunded'].includes(String(s)) ? 3 : s === 'Held' ? 2 : s ? 1 : 0);
   const id = [...new Set(states.map((s) => String(s['commitmentId'])))].sort((a, b) => Math.max(...states.filter((s) => s['commitmentId'] === b).map((s) => rank(s['escrowState']))) - Math.max(...states.filter((s) => s['commitmentId'] === a).map((s) => rank(s['escrowState']))))[0] ?? null;
   const stateAt = (op: string) => (states.find((s) => s['commitmentId'] === id && String(s['operator']).startsWith(op))?.['escrowState'] as string | undefined) ?? null;
+  const siteReads = asks.filter((e) => e['name'] === 'fetch_url' && originOf((e['input'] as J)?.url) === CROW_SITE).length;
   const first = Date.parse(String(mine.find((e) => e.kind === 'agent.start')?.at ?? ''));
   const finalEvent = events.filter((e) => e.kind === 'chain.event' && e['commitmentId'] === id && /releas|refund/i.test(String(e['type']))).map((e) => Date.parse(String(e['at']))).filter(Number.isFinite).sort((a, b) => b - a)[0];
   const end = mine.find((e) => e.kind === 'agent.end');
   return {
     model, vendor: String(mine.find((e) => e.kind === 'agent.start')?.['vendor'] ?? 'unknown'), direction,
     approvals: asks.length,
+    site_reads: siteReads, approvals_reads_once: asks.length - Math.max(0, siteReads - 1),
     approvals_by_step: asks.map((e) => ({ turn: Number(e['turn']), tool: String(e['name']), what: short(e['input']) })),
     policy_approvals: { granted: events.filter((e) => e.kind === 'approval' && e['granted'] === true).length, refused: events.filter((e) => e.kind === 'approval' && e['granted'] !== true).length },
     turns: turns.length,
@@ -258,13 +286,16 @@ async function main(): Promise<void> {
   const flag = (n: string, d?: string) => { const i = argv.indexOf(`--${n}`); return i >= 0 ? argv[i + 1] : d; };
   const fail = (line: string): never => { console.error(`approvals: ${line}`); process.exit(2); };
   const cmd = argv[0];
-  if (cmd !== 'plan' && cmd !== 'run') fail('usage: approvals.ts plan|run --runs <model>:<buy|sell>,... --budget-usd <n> [--out <dir>]');
+  if (cmd !== 'plan' && cmd !== 'run') fail('usage: approvals.ts plan|run --runs <model>:<buy|sell>,... --budget-usd <n> [--front-page <file>] [--out <dir>]');
   let runs: RunSpec[] = [];
   try { runs = parseRuns(flag('runs', 'claude:buy,deepseek:buy,claude:sell,deepseek:sell')!); } catch (e) { fail((e as Error).message); }
   const budgetUsd = Number(flag('budget-usd', '0'));
   const live = runs.some((r) => r.model !== 'scripted');
   if (cmd === 'run' && live && !(budgetUsd > 0 && budgetUsd <= 20)) fail('a live run needs --budget-usd between 0 and 20');
   const budget = new Budget(Math.round(budgetUsd * 1_000_000));
+  const frontFile = flag('front-page');
+  if (argv.includes('--front-page') && (!frontFile || runs.some((r) => r.direction !== 'sell'))) fail('--front-page takes a file, and only sell runs');
+  const front = frontFile === undefined ? undefined : readFileSync(resolve(frontFile), 'utf8');
   console.log(`T-571, approvals per deal: ${runs.length} run(s) on Sepolia against ${OPERATORS.join(', ')}; test tokens only.`);
   for (const r of runs) console.log(`  ${r.model}:${r.direction}  caps ${CAPS.turns} turns, ${CAPS.tokens.toLocaleString('en')} tokens; at most USD ${usd(ceilingOf(r.model))} at its caps`);
   for (const line of LIKE_FOR_LIKE) console.log(`  ${line}`);
@@ -295,7 +326,7 @@ async function main(): Promise<void> {
     let events: readonly Event[];
     if (r.direction === 'sell') {
       const p = r.model === 'scripted' ? scripted(sellScript()) : budget.guard(providers[r.model]!);
-      events = await sellRun(dir, p, secrets);
+      events = await sellRun(dir, p, secrets, front);
     } else {
       const buyer = r.model === 'scripted' ? 'scripted' as const : budget.guard(providers[r.model]!);
       const done = await runDuet({ scenario: 'paid', buyer, seller: 'scripted', brief: 'direct', coldBuyer: true, world: OPERATORS, out: dir, caps: CAPS, timeoutSec: 1800, secrets: modelSecrets, log: (l) => console.log(`  ${l}`) });
@@ -305,7 +336,7 @@ async function main(): Promise<void> {
     writeFileSync(join(dir, 'approvals.json'), `${JSON.stringify(m, null, 2)}\n`);
     appendFileSync(join(out, 'results.jsonl'), `${JSON.stringify(m)}\n`);
     results.push(m);
-    console.log(`  approvals ${m.approvals}, turns ${m.turns}, tokens ${m.tokens_in}/${m.tokens_out}, USD ${m.cost_usd.toFixed(2)}, ${m.seconds ?? '-'} s, ${m.final_state ?? 'no deal'} / ${m.final_state_op2 ?? 'no deal'}; spent so far USD ${usd(budget.spent)}`);
+    console.log(`  approvals ${m.approvals} (${m.approvals_reads_once} with reads of crow.direct allowed once; ${m.site_reads} such reads), turns ${m.turns}, tokens ${m.tokens_in}/${m.tokens_out}, USD ${m.cost_usd.toFixed(2)}, ${m.seconds ?? '-'} s, ${m.final_state ?? 'no deal'} / ${m.final_state_op2 ?? 'no deal'}; spent so far USD ${usd(budget.spent)}`);
   }
   console.log(`\nDone: ${results.length} run(s), USD ${usd(budget.spent)} of USD ${budgetUsd.toFixed(2)}. Results: ${join(out, 'results.jsonl')}`);
 }
