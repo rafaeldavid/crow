@@ -8,7 +8,7 @@ import { keccak256 } from 'viem';
 import { describe, expect, it } from 'vitest';
 import { DOMAIN, makeCommitment, party, TestSettlement, tusd } from './_sim.js';
 import { defaultPolicy, policyHashOf } from './policy.js';
-import { Adjudicator } from './service.js';
+import { Adjudicator, type JudgedStore, type KeptDraft, type KeptJudgment } from './service.js';
 
 const entry = (id: string, family: string, provider: 'anthropic' | 'openai-compatible') => ({ id, provider, family, model: `${id}-20260601`, status: 'active' as const });
 const REGISTRY: RegistryDoc = {
@@ -36,8 +36,9 @@ const TREND_OPTIONAL = { ...TREND, id: 'trend-b', required: false };
 
 const NINE = ['csv_columns_exact', 'row_count_range', 'unique_key', 'null_rate_max', 'regex_match_rate_min', 'iso8601_date_column', 'json_schema', 'reference_row_match_min', 'hidden_characters_max'];
 
-function bench(p: typeof A, name: string, s: TestSettlement) {
+function bench(p: typeof A, name: string, s: TestSettlement, extra: { judgedStore?: JudgedStore } = {}) {
   const adj = new Adjudicator({
+    ...extra,
     address: p.address,
     name,
     signingKey: p.key,
@@ -132,9 +133,9 @@ describe('the primary and a check kind it does not run (ADR-0045 §10)', () => {
 
 describe('a turn on a funded deal whose terms name a kind the adjudicator does not run (D92)', () => {
   /** A funded, delivered deal whose terms name a kind; its build then lacks the kind the terms name. */
-  async function funded() {
+  async function funded(store?: JudgedStore) {
     const s = new TestSettlement();
-    const a = bench(A, 'bench-a', s);
+    const a = bench(A, 'bench-a', s, store ? { judgedStore: store } : {});
     const b = bench(B, 'bench-b', s);
     bench(C, 'bench-c', s);
     const acceptance = { deterministicChecks: [ORDER, TREND], rubric: { criteria: [], passThreshold: 0 } } as unknown as Commitment['acceptance'];
@@ -187,5 +188,41 @@ describe('a turn on a funded deal whose terms name a kind the adjudicator does n
       c.state = r.value;
     }
     expect(s.state(deal.id)).toMatchObject({ kind: 'Refunded', via: { kind: 'default_outcome', from: 'FallbackJudging' } });
+  });
+
+  it('a turn whose result was kept before a restart still completes on a build that lost the kind (D92, ADR-0036 section 2)', async () => {
+    // Red team of PR 795: the exemption read only the in-memory map, which is empty after a restart, so the kept result
+    // was refused and the deal ran on to the fallback with a published record of this turn already out.
+    const rows = new Map<string, KeptJudgment | KeptDraft>();
+    const store: JudgedStore = { get: async (k) => structuredClone(rows.get(k)), put: async (k, v) => void rows.set(k, structuredClone(v)) };
+    const { s, deal } = await funded(store);
+    const kinds = CHECK_TYPES as Set<string>;
+    // The build that ran the kind judges and keeps its result; its decision does not land.
+    kinds.add('monotonic_column');
+    try {
+      const first = bench(A, 'bench-a', s, { judgedStore: store });
+      s.failNextDecisions = 1;
+      await first.runOnce();
+      expect(s.decisions(deal.id)).toEqual([]);
+      expect(rows.size).toBe(1);
+    } finally {
+      kinds.delete('monotonic_column');
+    }
+    // After a restart onto a build without the kind, the kept decision is signed, and no new judgment is made.
+    const restarted = bench(A, 'bench-a', s, { judgedStore: store });
+    const [task] = await s.tasks(A.address);
+    const r = await restarted.decideTask(task!);
+    expect(r.ok ? null : r.error.detail).toBeNull();
+    expect(r.ok && r.value.record.recordHash).toBe(([...rows.values()][0] as KeptJudgment).record.recordHash);
+  });
+
+  it('a turn with no kept result is still refused after a restart', async () => {
+    const rows = new Map<string, KeptJudgment | KeptDraft>();
+    const store: JudgedStore = { get: async (k) => structuredClone(rows.get(k)), put: async (k, v) => void rows.set(k, structuredClone(v)) };
+    const { s, a, deal } = await funded(store);
+    const [task] = await s.tasks(A.address);
+    const r = await a.decideTask(task!);
+    expect(!r.ok && r.error.detail).toMatch(/as primary adjudicator it signs no decision/);
+    expect([rows.size, s.decisions(deal.id).length, s.records.size]).toEqual([0, 0, 0]);
   });
 });

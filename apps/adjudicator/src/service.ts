@@ -911,6 +911,19 @@ export class Adjudicator {
     return ok(held);
   }
 
+  /** True when a judged result for `key` is held in memory or in `judgedStore` (D92: such a turn still completes). */
+  async #hasKept(key: string): Promise<Result<boolean, Problem>> {
+    if (this.#judged.has(key)) return ok(true);
+    const store = this.#cfg.judgedStore;
+    if (!store) return ok(false);
+    try {
+      const kept = await this.#read('the store of judged results', () => store.get(key));
+      return ok(!!kept && 'record' in kept);
+    } catch (e) {
+      return err(problem('adjudicator_unavailable', `the store of judged results did not answer (${errorClass(e)}); not judged, retrying (no record)`));
+    }
+  }
+
   async #restore(key: string, pre: Preflight): Promise<Result<Judged | null, Problem>> {
     const store = this.#cfg.judgedStore;
     if (!store) return ok(null);
@@ -951,9 +964,14 @@ export class Adjudicator {
     const id = commitment.id;
     const mismatch = this.#termsMismatch(commitment);
     if (mismatch) return err(mismatch);
-    // D92: no decision on a check kind this build does not run, at any role. A turn whose result is already kept still completes (ADR-0036 section 2).
-    const unrunKind = this.#judged.has(judgedKey(task)) ? null : this.#checkKindProblem(commitment, role);
-    if (unrunKind) return err(unrunKind);
+    // D92: no decision on a check kind this build does not run, at any role. A turn whose result is already kept, in
+    // memory or in judgedStore from before a restart, still completes (ADR-0036 section 2): that stage 1 ran the kind.
+    const unrunKind = this.#checkKindProblem(commitment, role);
+    if (unrunKind) {
+      const kept = await this.#hasKept(judgedKey(task));
+      if (!kept.ok) return kept;
+      if (!kept.value) return err(unrunKind);
+    }
     // The wrong-key re-release runs no panel (#judge).
     const rerelease = role === 'appeal' && task.appealGround === 'missing-or-wrong-key' && task.firstOutcome === 'accept';
     // Before any judge is called (T-211); the fallback's cover is read again before it signs.
