@@ -92,9 +92,20 @@ interface WorldOptions {
   judgedStore?: JudgedStore;
   /** The terms' acceptance, when a case needs other checks than the example's. */
   acceptance?: Commitment['acceptance'];
-  /** The aggregation every adjudicator's policy names (default: the build's default, kept-policies.json). */
+  /** The aggregation every adjudicator's policy names (default: agg-3, with T570_VERSIONS). */
   aggregationVersion?: string;
 }
+
+/**
+ * The versions these cases were written under (the build default before ADR-0049's default moved). The policy hash
+ * fixes the commitment ID and so the seed, and the cases below need a seed that seats two families, one twice.
+ */
+const T570_VERSIONS = {
+  screenVersion: 'screen-1',
+  promptTemplateHash: '0xabb5ec9b33cf9a936e140bf8530c217f6629fdf1e08a46fbdf6bd7363ce84dd2',
+  appealPromptTemplateHash: '0xa0bb1a5d8fa8ac53294a41556df71c098f73220d24efd9522e922f9004248659',
+  aggregationVersion: 'agg-3',
+} as const;
 
 async function world(o: WorldOptions = {}) {
   const cast = simCast('t570-faults');
@@ -140,7 +151,7 @@ async function world(o: WorldOptions = {}) {
       signingKey: actor.key,
       encryptionSecretKey: enc.secretKey,
       seedSecret: keccak256(actor.key),
-      policy: defaultPolicy(`${actor.name}/p1`, o.aggregationVersion ? { aggregationVersion: o.aggregationVersion } : {}),
+      policy: defaultPolicy(`${actor.name}/p1`, { ...T570_VERSIONS, ...(o.aggregationVersion ? { aggregationVersion: o.aggregationVersion } : {}) }),
       registry,
       registryUri: 'file:///config/judges.yaml',
       fee: { min: tusd('25000000') },

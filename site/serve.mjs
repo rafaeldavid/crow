@@ -54062,12 +54062,12 @@ var import_dist = require_dist();
 const PLACEHOLDER_SIGNATURE = `0x${"11".repeat(65)}`;
 
 // packages/judgment/dist/aggregate.js
-const AGGREGATION_VERSION$1 = "agg-4";
+const AGGREGATION_VERSION$2 = "agg-5";
 /** Cross-family agreement required for accept (threat T8). Fixed by the rule, not by policy. */
-const MIN_PASS_FAMILIES$1 = 2;
+const MIN_PASS_FAMILIES$2 = 2;
 /** Families the valid verdicts behind any accept or reject must come from (T-570). Fixed by the rule, not by policy. */
-const MIN_DECISION_FAMILIES = 2;
-const SCREEN_FLAGGED_REASON$1 = "screen flagged; see screen.signals";
+const MIN_DECISION_FAMILIES$1 = 2;
+const SCREEN_FLAGGED_REASON$2 = "screen flagged; see screen.signals";
 /**
 * What a role may sign for the panel's decision (the adjudicator service and the snap runner both call this).
 * The primary and fallback sign what aggregation decided, escalation included. At the appeal there is no
@@ -54075,13 +54075,13 @@ const SCREEN_FLAGGED_REASON$1 = "screen flagged; see screen.signals";
 * (`firstOutcome`), and signs nothing after an escalation (null: the default outcome applies). A flag alone
 * no longer makes the appeal panel escalate (L3-1); `aggregate` with `appeal: true` decides it.
 */
-function signedOutcome$1(decision, role) {
+function signedOutcome$2(decision, role) {
 	if (role.appeal && decision === "escalate") return role.firstOutcome ?? null;
 	return decision;
 }
-const cap$2 = (s) => s.length > 200 ? `${s.slice(0, 197)}...` : s;
+const cap$3 = (s) => s.length > 200 ? `${s.slice(0, 197)}...` : s;
 /** The short circuits: whether the panel runs at all. */
-function preDecision$1(checks, rubric, inconclusive = []) {
+function preDecision$2(checks, rubric, inconclusive = []) {
 	const open = new Set(inconclusive);
 	if (checks.some((c) => c.required && !c.passed && !open.has(c.checkId))) return "reject";
 	if (open.size > 0) return "escalate";
@@ -54089,30 +54089,38 @@ function preDecision$1(checks, rubric, inconclusive = []) {
 	return "panel";
 }
 /** sum over the rubric of weight x score for one verdict (missing criteria score 0). */
-function weightedSum$1(v, rubric) {
+function weightedSum$2(v, rubric) {
 	return rubric.criteria.reduce((s, c) => s + c.weight * (v.criteria.find((k) => k.id === c.id)?.score ?? 0), 0);
 }
-const meets$1 = (count, f, total) => count * f.denominator >= f.numerator * total;
-function aggregate$1(input) {
+const meets$2 = (count, f, total) => count * f.denominator >= f.numerator * total;
+function aggregate$2(input) {
+	const decided = decide(input);
+	return input.cuts?.length ? {
+		...decided,
+		reasons: [...decided.reasons, ...input.cuts.map(cap$3)]
+	} : decided;
+}
+/** agg-4's rule, unchanged. */
+function decide(input) {
 	const { checks, rubric, thresholds } = input;
 	const inconclusive = input.inconclusive ?? [];
-	const pre = preDecision$1(checks, rubric, inconclusive);
+	const pre = preDecision$2(checks, rubric, inconclusive);
 	if (pre === "reject") {
 		const failed = checks.filter((c) => c.required && !c.passed && !inconclusive.includes(c.checkId)).map((c) => c.checkId);
 		return {
 			decision: "reject",
 			weightedScore: null,
-			reasons: [cap$2(`required deterministic check failed: ${failed.join(", ")}`)]
+			reasons: [cap$3(`required deterministic check failed: ${failed.join(", ")}`)]
 		};
 	}
 	if (pre === "escalate") return {
 		decision: "escalate",
 		weightedScore: null,
-		reasons: [cap$2(`check work budget ran out: ${inconclusive.join(", ")}`)]
+		reasons: [cap$3(`check work budget ran out: ${inconclusive.join(", ")}`)]
 	};
 	if (pre === "accept") {
 		const reasons = ["all deterministic checks passed and the rubric is empty"];
-		if (input.screenFlagged) reasons.push(SCREEN_FLAGGED_REASON$1);
+		if (input.screenFlagged) reasons.push(SCREEN_FLAGGED_REASON$2);
 		return {
 			decision: "accept",
 			weightedScore: null,
@@ -54125,7 +54133,7 @@ function aggregate$1(input) {
 	const fail = valid.filter((v) => v.verdict.overall === "fail");
 	const passFamilies = [...new Set(pass.map((v) => v.family))].sort();
 	const totalWeight = rubric.criteria.reduce((s, c) => s + c.weight, 0);
-	const sumWS = valid.reduce((s, v) => s + weightedSum$1(v.verdict, rubric), 0);
+	const sumWS = valid.reduce((s, v) => s + weightedSum$2(v.verdict, rubric), 0);
 	const n = valid.length;
 	const stats = {
 		weightedScore: rubric.criteria.length && n ? Math.floor(sumWS * 100 / (totalWeight * n)) : null,
@@ -54140,7 +54148,7 @@ function aggregate$1(input) {
 	const sampled = (input.escalate?.length ?? 0) > filtered;
 	if (input.appeal === "escalated" && (input.screenFlagged || injection || filtered > 0 || sampled)) {
 		const flags = [
-			...input.screenFlagged ? [SCREEN_FLAGGED_REASON$1] : [],
+			...input.screenFlagged ? [SCREEN_FLAGGED_REASON$2] : [],
 			...injection ? ["a judge suspected injection"] : [],
 			...filtered > 0 ? [`${filtered} judge output${filtered === 1 ? "" : "s"} rejected by a filter`] : [],
 			...sampled ? ["the judges saw a sample of the deliverable, not all of it"] : []
@@ -54159,12 +54167,12 @@ function aggregate$1(input) {
 		if (missing.length === 0) return {
 			decision: "accept",
 			...stats,
-			reasons: [cap$2(`flagged appeal: ${pass.length} of ${seats} seats pass, from ${passFamilies.length} families, no injection suspected`), ...flags]
+			reasons: [cap$3(`flagged appeal: ${pass.length} of ${seats} seats pass, from ${passFamilies.length} families, no injection suspected`), ...flags]
 		};
 		return {
 			decision: "reject",
 			...stats,
-			reasons: [cap$2(`flagged appeal: rejected, a flagged case is accepted only unanimously (${missing.join("; ")})`), ...flags]
+			reasons: [cap$3(`flagged appeal: rejected, a flagged case is accepted only unanimously (${missing.join("; ")})`), ...flags]
 		};
 	}
 	if (input.screenFlagged) return {
@@ -54180,7 +54188,7 @@ function aggregate$1(input) {
 	if (input.escalate?.length) return {
 		decision: "escalate",
 		...stats,
-		reasons: input.escalate.slice(0, 5).map(cap$2)
+		reasons: input.escalate.slice(0, 5).map(cap$3)
 	};
 	if (n < thresholds.minValid || n === 0) return {
 		decision: "escalate",
@@ -54193,25 +54201,25 @@ function aggregate$1(input) {
 		...stats,
 		reasons: [`${n} valid verdicts from ${validFamilies} model family; a decision needs verdicts from ${2}`]
 	};
-	const acceptShare = meets$1(pass.length, thresholds.acceptSupermajority, n) && pass.length > fail.length;
+	const acceptShare = meets$2(pass.length, thresholds.acceptSupermajority, n) && pass.length > fail.length;
 	if (acceptShare && passFamilies.length >= 2 && scoreOk) return {
 		decision: "accept",
 		...stats,
-		reasons: [cap$2(`${pass.length} of ${n} valid verdicts pass, from ${passFamilies.length} families, score at or above ${rubric.passThreshold / 100}`)]
+		reasons: [cap$3(`${pass.length} of ${n} valid verdicts pass, from ${passFamilies.length} families, score at or above ${rubric.passThreshold / 100}`)]
 	};
 	const faulted = n < input.verdicts.length;
 	const failFamilies = new Set(fail.map((v) => v.family)).size;
-	const rejectShare = meets$1(fail.length, thresholds.rejectSupermajority, n) && fail.length > pass.length;
+	const rejectShare = meets$2(fail.length, thresholds.rejectSupermajority, n) && fail.length > pass.length;
 	if (rejectShare && (!faulted || failFamilies >= 2)) return {
 		decision: "reject",
 		...stats,
-		reasons: [cap$2(`${fail.length} of ${n} valid verdicts fail`)]
+		reasons: [cap$3(`${fail.length} of ${n} valid verdicts fail`)]
 	};
 	const why = rejectShare ? `after a fault, fail verdicts from ${failFamilies} family` : !acceptShare ? "no supermajority" : passFamilies.length < 2 ? `pass verdicts from ${passFamilies.length} family` : "score below the pass threshold";
 	return {
 		decision: "escalate",
 		...stats,
-		reasons: [cap$2(`${pass.length} pass, ${fail.length} fail of ${n} valid: ${why}`)]
+		reasons: [cap$3(`${pass.length} pass, ${fail.length} fail of ${n} valid: ${why}`)]
 	};
 }
 
@@ -54556,7 +54564,7 @@ const SPACE_SET = /* @__PURE__ */ new Set([
 	12288,
 	65279
 ]);
-const SPACE$1 = (cp) => SPACE_SET.has(cp) || cp >= 8192 && cp <= 8202;
+const SPACE$2 = (cp) => SPACE_SET.has(cp) || cp >= 8192 && cp <= 8202;
 const LINE_TERMINATORS = /* @__PURE__ */ new Set([
 	10,
 	13,
@@ -54578,8 +54586,8 @@ const CLASS_ESCAPES = {
 	D: not(DIGIT),
 	w: WORD,
 	W: not(WORD),
-	s: SPACE$1,
-	S: not(SPACE$1)
+	s: SPACE$2,
+	S: not(SPACE$2)
 };
 const MAX_CODE_POINT = 1114111;
 function merge(ranges) {
@@ -56577,7 +56585,7 @@ const DETAIL_MAX = 300;
 * a JSON key), and half a pair left at the cut made the judgment record's RFC 8785 hash throw (T-570, red team of
 * PR 722). runPipeline's well-forming pass stays as the net under this.
 */
-function cap$1(s) {
+function cap$2(s) {
 	if (s.length <= DETAIL_MAX) return s;
 	let end = 297;
 	const last = s.charCodeAt(end - 1);
@@ -56903,7 +56911,7 @@ function runChecks(checks, input, budget = new StepBudget(CHECK_BUDGET)) {
 				required: check.required,
 				passed: o.passed
 			};
-			if (o.detail !== void 0) out.detail = cap$1(o.detail);
+			if (o.detail !== void 0) out.detail = cap$2(o.detail);
 			return out;
 		}),
 		inconclusive
@@ -56997,9 +57005,154 @@ function decodePlaintext(plaintext, mime) {
 }
 
 // packages/judgment/dist/kept/agg-3.js
-const AGGREGATION_VERSION = "agg-3";
+const AGGREGATION_VERSION$1 = "agg-3";
+/** Cross-family agreement required for accept (threat T8). Fixed by the rule, not by policy. */
+const MIN_PASS_FAMILIES$1 = 2;
+const SCREEN_FLAGGED_REASON$1 = "screen flagged; see screen.signals";
+/**
+* What a role may sign for the panel's decision (the adjudicator service and the snap runner both call this).
+* The primary and fallback sign what aggregation decided, escalation included. At the appeal there is no
+* instance after it: an appeal panel that cannot decide leaves a party appeal's first decision standing
+* (`firstOutcome`), and signs nothing after an escalation (null: the default outcome applies). A flag alone
+* no longer makes the appeal panel escalate (L3-1); `aggregate` with `appeal: true` decides it.
+*/
+function signedOutcome$1(decision, role) {
+	if (role.appeal && decision === "escalate") return role.firstOutcome ?? null;
+	return decision;
+}
+const cap$1 = (s) => s.length > 200 ? `${s.slice(0, 197)}...` : s;
+/** The short circuits: whether the panel runs at all. */
+function preDecision$1(checks, rubric, inconclusive = []) {
+	const open = new Set(inconclusive);
+	if (checks.some((c) => c.required && !c.passed && !open.has(c.checkId))) return "reject";
+	if (open.size > 0) return "escalate";
+	if (checks.every((c) => c.passed) && rubric.criteria.length === 0) return "accept";
+	return "panel";
+}
+/** sum over the rubric of weight x score for one verdict (missing criteria score 0). */
+function weightedSum$1(v, rubric) {
+	return rubric.criteria.reduce((s, c) => s + c.weight * (v.criteria.find((k) => k.id === c.id)?.score ?? 0), 0);
+}
+const meets$1 = (count, f, total) => count * f.denominator >= f.numerator * total;
+function aggregate$1(input) {
+	const { checks, rubric, thresholds } = input;
+	const inconclusive = input.inconclusive ?? [];
+	const pre = preDecision$1(checks, rubric, inconclusive);
+	if (pre === "reject") {
+		const failed = checks.filter((c) => c.required && !c.passed && !inconclusive.includes(c.checkId)).map((c) => c.checkId);
+		return {
+			decision: "reject",
+			weightedScore: null,
+			reasons: [cap$1(`required deterministic check failed: ${failed.join(", ")}`)]
+		};
+	}
+	if (pre === "escalate") return {
+		decision: "escalate",
+		weightedScore: null,
+		reasons: [cap$1(`check work budget ran out: ${inconclusive.join(", ")}`)]
+	};
+	if (pre === "accept") {
+		const reasons = ["all deterministic checks passed and the rubric is empty"];
+		if (input.screenFlagged) reasons.push(SCREEN_FLAGGED_REASON$1);
+		return {
+			decision: "accept",
+			weightedScore: null,
+			reasons
+		};
+	}
+	const parsed = input.verdicts.filter((v) => v.verdict !== null);
+	const valid = parsed.filter((v) => v.verdict.overall !== "abstain");
+	const pass = valid.filter((v) => v.verdict.overall === "pass");
+	const fail = valid.filter((v) => v.verdict.overall === "fail");
+	const passFamilies = [...new Set(pass.map((v) => v.family))].sort();
+	const totalWeight = rubric.criteria.reduce((s, c) => s + c.weight, 0);
+	const sumWS = valid.reduce((s, v) => s + weightedSum$1(v.verdict, rubric), 0);
+	const n = valid.length;
+	const stats = {
+		weightedScore: rubric.criteria.length && n ? Math.floor(sumWS * 100 / (totalWeight * n)) : null,
+		passCount: pass.length,
+		failCount: fail.length,
+		validCount: n,
+		passFamilies
+	};
+	const injection = parsed.some((v) => v.verdict.injectionSuspected);
+	const filtered = input.filterAbstentions ?? 0;
+	const scoreOk = rubric.criteria.length === 0 || sumWS * 100 >= rubric.passThreshold * totalWeight * n;
+	const sampled = (input.escalate?.length ?? 0) > filtered;
+	if (input.appeal === "escalated" && (input.screenFlagged || injection || filtered > 0 || sampled)) {
+		const flags = [
+			...input.screenFlagged ? [SCREEN_FLAGGED_REASON$1] : [],
+			...injection ? ["a judge suspected injection"] : [],
+			...filtered > 0 ? [`${filtered} judge output${filtered === 1 ? "" : "s"} rejected by a filter`] : [],
+			...sampled ? ["the judges saw a sample of the deliverable, not all of it"] : []
+		];
+		const seats = input.verdicts.length;
+		const needFamilies = Math.max(2, input.appealFamilies ?? 2);
+		const missing = [
+			...seats === 0 ? ["no seat returned a verdict"] : [],
+			...n < seats ? [`${seats - n} of ${seats} seats returned no valid verdict`] : [],
+			...fail.length > 0 ? [`${fail.length} failed`] : [],
+			...passFamilies.length < needFamilies ? [`passes span ${passFamilies.length} of the ${needFamilies} families required`] : [],
+			...injection ? ["a judge suspected injection"] : [],
+			...!scoreOk ? ["score below the pass threshold"] : [],
+			...sampled ? ["the judges saw a sample, not all of the delivery"] : []
+		];
+		if (missing.length === 0) return {
+			decision: "accept",
+			...stats,
+			reasons: [cap$1(`flagged appeal: ${pass.length} of ${seats} seats pass, from ${passFamilies.length} families, no injection suspected`), ...flags]
+		};
+		return {
+			decision: "reject",
+			...stats,
+			reasons: [cap$1(`flagged appeal: rejected, a flagged case is accepted only unanimously (${missing.join("; ")})`), ...flags]
+		};
+	}
+	if (input.screenFlagged) return {
+		decision: "escalate",
+		...stats,
+		reasons: ["the screen flagged the delivery"]
+	};
+	if (injection) return {
+		decision: "escalate",
+		...stats,
+		reasons: ["a judge suspected injection"]
+	};
+	if (input.escalate?.length) return {
+		decision: "escalate",
+		...stats,
+		reasons: input.escalate.slice(0, 5).map(cap$1)
+	};
+	if (n < thresholds.minValid || n === 0) return {
+		decision: "escalate",
+		...stats,
+		reasons: [`${n} valid verdicts; the policy needs ${Math.max(1, thresholds.minValid)}`]
+	};
+	const acceptShare = meets$1(pass.length, thresholds.acceptSupermajority, n) && pass.length > fail.length;
+	if (acceptShare && passFamilies.length >= 2 && scoreOk) return {
+		decision: "accept",
+		...stats,
+		reasons: [cap$1(`${pass.length} of ${n} valid verdicts pass, from ${passFamilies.length} families, score at or above ${rubric.passThreshold / 100}`)]
+	};
+	if (meets$1(fail.length, thresholds.rejectSupermajority, n) && fail.length > pass.length) return {
+		decision: "reject",
+		...stats,
+		reasons: [cap$1(`${fail.length} of ${n} valid verdicts fail`)]
+	};
+	const why = !acceptShare ? "no supermajority" : passFamilies.length < 2 ? `pass verdicts from ${passFamilies.length} family` : "score below the pass threshold";
+	return {
+		decision: "escalate",
+		...stats,
+		reasons: [cap$1(`${pass.length} pass, ${fail.length} fail of ${n} valid: ${why}`)]
+	};
+}
+
+// packages/judgment/dist/kept/agg-4.js
+const AGGREGATION_VERSION = "agg-4";
 /** Cross-family agreement required for accept (threat T8). Fixed by the rule, not by policy. */
 const MIN_PASS_FAMILIES = 2;
+/** Families the valid verdicts behind any accept or reject must come from (T-570). Fixed by the rule, not by policy. */
+const MIN_DECISION_FAMILIES = 2;
 const SCREEN_FLAGGED_REASON = "screen flagged; see screen.signals";
 /**
 * What a role may sign for the panel's decision (the adjudicator service and the snap runner both call this).
@@ -57120,18 +57273,27 @@ function aggregate(input) {
 		...stats,
 		reasons: [`${n} valid verdicts; the policy needs ${Math.max(1, thresholds.minValid)}`]
 	};
+	const validFamilies = new Set(valid.map((v) => v.family)).size;
+	if (validFamilies < 2) return {
+		decision: "escalate",
+		...stats,
+		reasons: [`${n} valid verdicts from ${validFamilies} model family; a decision needs verdicts from ${2}`]
+	};
 	const acceptShare = meets(pass.length, thresholds.acceptSupermajority, n) && pass.length > fail.length;
 	if (acceptShare && passFamilies.length >= 2 && scoreOk) return {
 		decision: "accept",
 		...stats,
 		reasons: [cap(`${pass.length} of ${n} valid verdicts pass, from ${passFamilies.length} families, score at or above ${rubric.passThreshold / 100}`)]
 	};
-	if (meets(fail.length, thresholds.rejectSupermajority, n) && fail.length > pass.length) return {
+	const faulted = n < input.verdicts.length;
+	const failFamilies = new Set(fail.map((v) => v.family)).size;
+	const rejectShare = meets(fail.length, thresholds.rejectSupermajority, n) && fail.length > pass.length;
+	if (rejectShare && (!faulted || failFamilies >= 2)) return {
 		decision: "reject",
 		...stats,
 		reasons: [cap(`${fail.length} of ${n} valid verdicts fail`)]
 	};
-	const why = !acceptShare ? "no supermajority" : passFamilies.length < 2 ? `pass verdicts from ${passFamilies.length} family` : "score below the pass threshold";
+	const why = rejectShare ? `after a fault, fail verdicts from ${failFamilies} family` : !acceptShare ? "no supermajority" : passFamilies.length < 2 ? `pass verdicts from ${passFamilies.length} family` : "score below the pass threshold";
 	return {
 		decision: "escalate",
 		...stats,
@@ -58104,6 +58266,198 @@ const strideSample0 = (all, max) => {
 	};
 };
 
+// packages/judgment/dist/kept/verdict-0.js
+const MAX_OUTPUT_CHARS$1 = 65536;
+const URL_REDACTION$1 = "[link removed]";
+const SPACE$1 = /\s/;
+const DEFANGED_DOT$1 = /\[\.\]|\(\.\)|\{\.\}|\[dot\]|\(dot\)/iy;
+const WIDE_DOT$1 = /[\u3002\uFF0E\uFF61]/;
+const isSpace$1 = (s, i) => SPACE$1.test(s.charAt(i));
+/** The first index at or after i that holds no whitespace. */
+function spacesEnd$1(s, i) {
+	while (isSpace$1(s, i)) i++;
+	return i;
+}
+/** The length of the defanged dot that starts at index i, or 0. */
+function defangedDotAt$1(s, i) {
+	DEFANGED_DOT$1.lastIndex = i;
+	return DEFANGED_DOT$1.exec(s)?.[0].length ?? 0;
+}
+/**
+* Refang's dot step, in one scan whose time grows with the string's length. It replaces exactly what the regex
+* /\s*(?:\[\.\]|\(\.\)|\{\.\}|\[dot\]|\(dot\))\s*|\s+\.\s+|[\u3002\uFF0E\uFF61]/gi replaced. That regex restarted
+* its leading \s* at every whitespace character of a run, so its time grew with the square of the run's length
+* (CodeQL js/polynomial-redos).
+*/
+function undot$1(s) {
+	let out = "";
+	let kept = 0;
+	let i = 0;
+	while (i < s.length) {
+		const j = spacesEnd$1(s, i);
+		const dot = defangedDotAt$1(s, j);
+		const end = dot > 0 ? spacesEnd$1(s, j + dot) : j > i && s[j] === "." && isSpace$1(s, j + 1) ? spacesEnd$1(s, j + 1) : -1;
+		if (end >= 0) {
+			out += `${s.slice(kept, i)}.`;
+			i = kept = end;
+			continue;
+		}
+		if (WIDE_DOT$1.test(s.charAt(j))) {
+			out += `${s.slice(kept, j)}.`;
+			kept = j + 1;
+		}
+		i = j + 1;
+	}
+	return out + s.slice(kept);
+}
+/** Undo common URL defanging: [.] (.) {.} " . " ideographic and fullwidth dots, hxxp, [:]. */
+function refang$1(s) {
+	return undot$1(s).replace(/hxxp/gi, "http").replace(/\[:\]/g, ":");
+}
+const URL_TEST$1 = /\b[a-z][a-z0-9+.-]{1,20}:\/\/|\bmailto:\S|\bdata:[a-z]+\/|\bjavascript:|\bwww\.[a-z0-9-]|\b\d{1,3}\.\d{1,3}\.\d{1,3}\.\d{1,3}\b|\b[a-z0-9-][a-z0-9.-]{0,252}\.[a-z]{2,24}\//i;
+const URL_ALL$1 = /\b[a-z][a-z0-9+.-]{1,20}:\/\/\S*|\bmailto:\S+|\bdata:[a-z]+\/\S*|\bjavascript:\S*|\bwww\.[a-z0-9-]\S*|\b\d{1,3}\.\d{1,3}\.\d{1,3}\.\d{1,3}\b\S*|\b[a-z0-9-][a-z0-9.-]{0,252}\.[a-z]{2,24}\/\S*/gi;
+const hasUrl$1 = (s) => URL_TEST$1.test(refang$1(s));
+const abstain$1 = (reason, detail) => ({
+	status: "abstain",
+	reason,
+	detail
+});
+const squash$1 = (s) => s.toLowerCase().replace(/[^0-9a-z]/g, "");
+/** Free-text string values in document order (everything except ids and enum fields), iteratively. */
+function freeText$1(value) {
+	const out = [];
+	const stack = [[value, ""]];
+	while (stack.length) {
+		const [v, key] = stack.pop();
+		if (typeof v === "string") {
+			if (key !== "id" && key !== "overall") out.push(v);
+		} else if (Array.isArray(v)) for (let i = v.length - 1; i >= 0; i--) stack.push([v[i], key]);
+		else if (v !== null && typeof v === "object") {
+			const entries = Object.entries(v);
+			for (let i = entries.length - 1; i >= 0; i--) stack.push([entries[i][1], entries[i][0]]);
+		}
+	}
+	return out;
+}
+/** The canary in any case, with any separators, split across fields, or base64-encoded. */
+function echoesCanary$1(raw, parsed, canary) {
+	const c = squash$1(canary);
+	if (!c) return false;
+	if (squash$1(raw).includes(c)) return true;
+	const texts = parsed === void 0 ? [] : freeText$1(parsed);
+	if (squash$1(texts.join("")).includes(c)) return true;
+	for (const t of [raw, ...texts]) for (const m of t.matchAll(/[A-Za-z0-9+/_=-]{16,4096}/g)) if (squash$1(Buffer.from(m[0], /[-_]/.test(m[0]) ? "base64url" : "base64").toString("latin1")).includes(c)) return true;
+	return false;
+}
+/**
+* Which verdict-schema rule an output broke, as metadata only: a field path built from the schema's own names and
+* array indices, the limit, and the actual length, count or JSON type. Never a value, a key or text from the output:
+* a judge's text quotes the delivery, which is untrusted and private to the deal. Lengths count code points, as the
+* schema's maxLength does. The pipeline puts this detail in the judgment record, so a filter abstention names its rule.
+*/
+function schemaFault$1(json) {
+	const typeOf = (v) => v === null ? "null" : Array.isArray(v) ? "array" : typeof v === "number" && !Number.isFinite(v) ? "non-finite number" : typeof v;
+	const isObject = (v) => typeOf(v) === "object";
+	const extra = (o, allowed) => Object.keys(o).filter((k) => !allowed.includes(k)).length;
+	const length = (n, max) => n > 2 * max ? `more than ${2 * max}` : String(n);
+	const keys = (n) => n === 1 ? "1 unexpected key" : `${n > 9 ? "more than 9" : n} unexpected keys`;
+	const text = (v, path, max) => {
+		if (typeof v !== "string") return `${path}: ${typeOf(v)}, not a string`;
+		const n = [...v].length;
+		return n > max ? `${path}: ${length(n, max)} > ${max}` : void 0;
+	};
+	if (!isObject(json)) return `the output is a JSON ${typeOf(json)}, not an object`;
+	const top = [
+		"criteria",
+		"overall",
+		"injectionSuspected",
+		"injectionEvidence",
+		"rationale"
+	];
+	for (const k of [
+		"criteria",
+		"overall",
+		"injectionSuspected",
+		"rationale"
+	]) if (!Object.hasOwn(json, k)) return `${k}: missing`;
+	const unexpected = extra(json, top);
+	if (unexpected) return `top level: ${keys(unexpected)}`;
+	const cs = json["criteria"];
+	if (!Array.isArray(cs)) return `criteria: ${typeOf(cs)}, not an array`;
+	if (cs.length > 12) return `criteria: ${cs.length > 24 ? "more than 24" : cs.length} items > 12`;
+	for (const [i, c] of cs.entries()) {
+		const at = `criteria[${i}]`;
+		if (!isObject(c)) return `${at}: ${typeOf(c)}, not an object`;
+		for (const k of [
+			"id",
+			"score",
+			"evidence"
+		]) if (!Object.hasOwn(c, k)) return `${at}.${k}: missing`;
+		const more = extra(c, [
+			"id",
+			"score",
+			"evidence"
+		]);
+		if (more) return `${at}: ${keys(more)}`;
+		if (typeof c["id"] !== "string" || !/^[a-z0-9_-]{1,40}$/.test(c["id"])) return `${at}.id: not a criterion id`;
+		const score = c["score"];
+		if (typeof score !== "number" || !Number.isFinite(score)) return `${at}.score: ${typeOf(score)}, not an integer`;
+		if (!Number.isInteger(score)) return `${at}.score: not an integer`;
+		if (score < 0 || score > 4) return `${at}.score: outside 0 to 4`;
+		const e = text(c["evidence"], `${at}.evidence`, 300);
+		if (e) return e;
+	}
+	if (![
+		"pass",
+		"fail",
+		"abstain"
+	].includes(json["overall"])) return `overall: not pass, fail or abstain`;
+	if (typeof json["injectionSuspected"] !== "boolean") return `injectionSuspected: ${typeOf(json["injectionSuspected"])}, not a boolean`;
+	if (Object.hasOwn(json, "injectionEvidence")) {
+		const e = text(json["injectionEvidence"], "injectionEvidence", 300);
+		if (e) return e;
+	}
+	return text(json["rationale"], "rationale", 600) ?? "another schema rule";
+}
+function parseVerdict$1(raw, opts) {
+	if (raw.length > 65536) return abstain$1("too_long", `output is ${raw.length} characters`);
+	let json;
+	let jsonOk = true;
+	try {
+		json = JSON.parse(raw);
+	} catch {
+		jsonOk = false;
+	}
+	if (echoesCanary$1(raw, jsonOk ? json : void 0, opts.canary)) return abstain$1("canary_echo", "output contains the canary");
+	if (!jsonOk) return abstain$1("not_json", `output is not a single JSON value${/^\s*```/.test(raw) ? " (it starts with a code fence)" : ""}`);
+	let parsed;
+	try {
+		parsed = parseJudgeVerdict(json);
+	} catch {
+		return abstain$1("schema", "output could not be validated");
+	}
+	if (!parsed.ok) return abstain$1("schema", schemaFault$1(json));
+	const verdict = parsed.value;
+	if (verdict.rationale.length > opts.rationaleMaxChars) return abstain$1("schema", `rationale: ${verdict.rationale.length > 1200 ? "more than 1200" : verdict.rationale.length} > ${opts.rationaleMaxChars} (the policy cap, in UTF-16 units)`);
+	const want = new Set(opts.criterionIds);
+	const got = verdict.criteria.map((c) => c.id);
+	if (got.length !== want.size || new Set(got).size !== got.length || !got.every((id) => want.has(id))) return abstain$1("criteria_mismatch", "criterion ids differ from the rubric");
+	if (hasUrl$1(verdict.rationale) || hasUrl$1(verdict.injectionEvidence ?? "")) return abstain$1("url", "rationale or injectionEvidence contains a URL");
+	let redactedUrls = 0;
+	for (const c of verdict.criteria) {
+		if (!hasUrl$1(c.evidence)) continue;
+		c.evidence = refang$1(c.evidence).replace(URL_ALL$1, () => {
+			redactedUrls++;
+			return URL_REDACTION$1;
+		}).slice(0, 300);
+	}
+	return {
+		status: "ok",
+		verdict,
+		redactedUrls
+	};
+}
+
 // packages/judgment/dist/prompt.js
 const USER_SPLIT = "\n<<<USER MESSAGE>>>\n";
 /** The fixed first-instance template. Its SHA-256 is what the adjudicator's policy binds. */
@@ -58778,6 +59132,12 @@ function screenTerms(texts) {
 // packages/judgment/dist/verdict.js
 const MAX_OUTPUT_CHARS = 65536;
 const URL_REDACTION = "[link removed]";
+/** The mark a cut field ends with. A judge can write it too: the record of a cut is the aggregate's reason line. */
+const CUT_MARK = "[cut]";
+/** The schema's caps on free text, in code points (judge-verdict.schema.json maxLength). */
+const EVIDENCE_MAX = 300;
+const INJECTION_EVIDENCE_MAX = 300;
+const RATIONALE_MAX = 600;
 const SPACE = /\s/;
 const DEFANGED_DOT = /\[\.\]|\(\.\)|\{\.\}|\[dot\]|\(dot\)/iy;
 const WIDE_DOT = /[\u3002\uFF0E\uFF61]/;
@@ -58848,6 +59208,23 @@ function freeText(value) {
 	}
 	return out;
 }
+/**
+* Each base64 or base64url text in a string, decoded, for the canary scan (agg-5; red team M1 and L1 of T-618). A
+* run is decoded whole, at each of the four offsets from the base64 grid, and split at `=` padding, where Node's
+* decoder stops; runs broken by whitespace (MIME lines) are joined and decoded too. The output is capped at
+* MAX_OUTPUT_CHARS, so the work grows linearly with it. agg-4's filter decoded windows of at most 4,096 characters
+* from the start of each run, which a canary across a window boundary, off the grid or after padding escaped; inside
+* agg-4's caps no such run fit a field, but agg-5 cuts the field and counts the seat.
+*/
+function* decodedBase64(t) {
+	for (const text of [t, t.replace(/\s+/g, "")]) for (const m of text.matchAll(/[A-Za-z0-9+/_=-]{16,65536}/g)) {
+		const encoding = /[-_]/.test(m[0]) ? "base64url" : "base64";
+		for (const piece of m[0].split(/=+/)) {
+			if (piece.length < 16) continue;
+			for (let o = 0; o < 4; o++) yield Buffer.from(piece.slice(o), encoding).toString("latin1");
+		}
+	}
+}
 /** The canary in any case, with any separators, split across fields, or base64-encoded. */
 function echoesCanary(raw, parsed, canary) {
 	const c = squash(canary);
@@ -58855,9 +59232,73 @@ function echoesCanary(raw, parsed, canary) {
 	if (squash(raw).includes(c)) return true;
 	const texts = parsed === void 0 ? [] : freeText(parsed);
 	if (squash(texts.join("")).includes(c)) return true;
-	for (const t of [raw, ...texts]) for (const m of t.matchAll(/[A-Za-z0-9+/_=-]{16,4096}/g)) if (squash(Buffer.from(m[0], /[-_]/.test(m[0]) ? "base64url" : "base64").toString("latin1")).includes(c)) return true;
+	for (const t of [raw, ...texts]) for (const decoded of decodedBase64(t)) if (squash(decoded).includes(c)) return true;
 	return false;
 }
+/**
+* The UTF-16 index just after the first n code points of s, or -1 when s holds n code points or fewer. It reads at most
+* n code points, so a long string costs no more than the cap. A surrogate pair is one code point and a lone surrogate
+* is one, as Ajv's ucs2length counts them.
+*/
+function afterCodePoints(s, n) {
+	let i = 0;
+	for (let k = 0; k < n; k++) {
+		if (i >= s.length) return -1;
+		const hi = s.charCodeAt(i);
+		i += hi >= 55296 && hi <= 56319 && i + 1 < s.length && (s.charCodeAt(i + 1) & 64512) === 56320 ? 2 : 1;
+	}
+	return i < s.length ? i : -1;
+}
+/**
+* s cut to `cap` code points, ending with the mark, or undefined when s fits. A cap too small to hold the mark keeps
+* its first `cap` code points without one; the reason line still records the cut.
+*/
+function cutToCap(s, cap) {
+	if (afterCodePoints(s, cap) < 0) return void 0;
+	if (cap < 5) return s.slice(0, Math.max(0, afterCodePoints(s, cap)));
+	return `${s.slice(0, afterCodePoints(s, cap - 5))}${CUT_MARK}`;
+}
+/** s with the mark at its end, within `cap` code points: its first cap - 5 code points and the mark. */
+function withMark(s, cap) {
+	const end = afterCodePoints(s, cap - 5);
+	return `${end < 0 ? s : s.slice(0, end)}${CUT_MARK}`;
+}
+const isRecord$3 = (v) => v !== null && typeof v === "object" && !Array.isArray(v);
+/**
+* Cuts the three free-text paths of a parsed output in place, each only where it holds a string, and says which it cut.
+* Nothing else is read or changed: a score, an id, a boolean, overall, a key or a value of another type stays as the
+* judge wrote it, for the schema to accept or refuse.
+*/
+function cutFreeText(json, rationaleCap) {
+	const cut = {
+		rationale: false,
+		injectionEvidence: false,
+		evidence: 0
+	};
+	const evidenceCut = /* @__PURE__ */ new Set();
+	if (!isRecord$3(json)) return {
+		cut,
+		evidenceCut
+	};
+	const field = (o, k, cap) => {
+		const v = Object.hasOwn(o, k) ? o[k] : void 0;
+		if (typeof v !== "string") return false;
+		const c = cutToCap(v, cap);
+		if (c === void 0) return false;
+		o[k] = c;
+		return true;
+	};
+	const cs = Object.hasOwn(json, "criteria") ? json["criteria"] : void 0;
+	if (Array.isArray(cs)) cs.forEach((c, i) => isRecord$3(c) && field(c, "evidence", 300) && evidenceCut.add(i));
+	cut.evidence = evidenceCut.size;
+	cut.injectionEvidence = field(json, "injectionEvidence", 300);
+	cut.rationale = field(json, "rationale", rationaleCap);
+	return {
+		cut,
+		evidenceCut
+	};
+}
+const anyCut = (c) => c.rationale || c.injectionEvidence || c.evidence > 0;
 /**
 * Which verdict-schema rule an output broke, as metadata only: a field path built from the schema's own names and
 * array indices, the limit, and the actual length, count or JSON type. Never a value, a key or text from the output:
@@ -58939,6 +59380,7 @@ function parseVerdict(raw, opts) {
 	}
 	if (echoesCanary(raw, jsonOk ? json : void 0, opts.canary)) return abstain("canary_echo", "output contains the canary");
 	if (!jsonOk) return abstain("not_json", `output is not a single JSON value${/^\s*```/.test(raw) ? " (it starts with a code fence)" : ""}`);
+	const { cut, evidenceCut } = cutFreeText(json, Math.max(0, Math.min(600, opts.rationaleMaxChars)));
 	let parsed;
 	try {
 		parsed = parseJudgeVerdict(json);
@@ -58947,20 +59389,31 @@ function parseVerdict(raw, opts) {
 	}
 	if (!parsed.ok) return abstain("schema", schemaFault(json));
 	const verdict = parsed.value;
-	if (verdict.rationale.length > opts.rationaleMaxChars) return abstain("schema", `rationale: ${verdict.rationale.length > 1200 ? "more than 1200" : verdict.rationale.length} > ${opts.rationaleMaxChars} (the policy cap, in UTF-16 units)`);
 	const want = new Set(opts.criterionIds);
 	const got = verdict.criteria.map((c) => c.id);
 	if (got.length !== want.size || new Set(got).size !== got.length || !got.every((id) => want.has(id))) return abstain("criteria_mismatch", "criterion ids differ from the rubric");
 	if (hasUrl(verdict.rationale) || hasUrl(verdict.injectionEvidence ?? "")) return abstain("url", "rationale or injectionEvidence contains a URL");
 	let redactedUrls = 0;
-	for (const c of verdict.criteria) {
+	for (const [i, c] of verdict.criteria.entries()) {
 		if (!hasUrl(c.evidence)) continue;
-		c.evidence = refang(c.evidence).replace(URL_ALL, () => {
+		let kept = refang(c.evidence).replace(URL_ALL, () => {
 			redactedUrls++;
 			return URL_REDACTION;
-		}).slice(0, 300);
+		});
+		const recut = cutToCap(kept, 300);
+		if (recut !== void 0) evidenceCut.add(i);
+		else if (evidenceCut.has(i) && !kept.endsWith("[cut]")) kept = withMark(kept, 300);
+		kept = recut ?? kept;
+		if (hasUrl(kept)) kept = URL_REDACTION;
+		c.evidence = kept;
 	}
-	return {
+	cut.evidence = evidenceCut.size;
+	return anyCut(cut) ? {
+		status: "ok",
+		verdict,
+		redactedUrls,
+		cut
+	} : {
 		status: "ok",
 		verdict,
 		redactedUrls
@@ -58984,16 +59437,22 @@ const SCREEN_0 = {
 	stride: strideSample0
 };
 const AGG_3 = {
-	parseVerdict,
+	parseVerdict: parseVerdict$1,
+	preDecision: preDecision$1,
+	aggregate: aggregate$1,
+	signedOutcome: signedOutcome$1
+};
+const AGG_4 = {
+	parseVerdict: parseVerdict$1,
 	preDecision,
 	aggregate,
 	signedOutcome
 };
-const AGG_4 = {
+const AGG_5 = {
 	parseVerdict,
-	preDecision: preDecision$1,
-	aggregate: aggregate$1,
-	signedOutcome: signedOutcome$1
+	preDecision: preDecision$2,
+	aggregate: aggregate$2,
+	signedOutcome: signedOutcome$2
 };
 const KEPT = {
 	screens: /* @__PURE__ */ new Map([
@@ -59002,7 +59461,11 @@ const KEPT = {
 		[SCREEN_VERSION, SCREEN_2]
 	]),
 	templatePairs: [TEMPLATE_PAIR, TEMPLATE_PAIR_2],
-	aggregations: /* @__PURE__ */ new Map([[AGGREGATION_VERSION, AGG_3], [AGGREGATION_VERSION$1, AGG_4]])
+	aggregations: /* @__PURE__ */ new Map([
+		[AGGREGATION_VERSION$1, AGG_3],
+		[AGGREGATION_VERSION, AGG_4],
+		[AGGREGATION_VERSION$2, AGG_5]
+	])
 };
 /**
 * The newest version of each: what a new build offers as its default unless its kept-policies file says otherwise. The
@@ -59012,7 +59475,7 @@ const NEWEST_VERSIONS = {
 	screenVersion: SCREEN_VERSION,
 	promptTemplateHash: TEMPLATE_PAIR.firstHash,
 	appealPromptTemplateHash: TEMPLATE_PAIR.appealHash,
-	aggregationVersion: AGGREGATION_VERSION$1
+	aggregationVersion: AGGREGATION_VERSION$2
 };
 
 // packages/judgment/dist/pipeline.js
@@ -59021,7 +59484,7 @@ const NEWEST_VERSIONS = {
 * they give without a panel. runPipeline calls this, and so does a seller's preflight (preflight.ts, T-316),
 * so both run the same code on the same text.
 */
-function stageOne(intake, acceptance, references, aggregation = { preDecision: preDecision$1 }) {
+function stageOne(intake, acceptance, references, aggregation = { preDecision: preDecision$2 }) {
 	const { outcomes: deterministic, inconclusive } = runChecks(acceptance.deterministicChecks, {
 		data: intake.raw,
 		mime: intake.mime,

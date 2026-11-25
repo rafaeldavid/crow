@@ -20,18 +20,21 @@
 //             and, when any seat gave no valid verdict, fails from >= 2 families   (agg-4, T-570)
 //   otherwise                                             -> ESCALATE
 //
+// agg-5 (ADR-0049): agg-4's rule, then one reason per judge whose free text the verdict filter cut to its cap. A cut
+// verdict is a valid verdict; the reason is a note for the record, never an escalation reason.
+//
 // All arithmetic is on integers (D18): thresholds are fractions compared by cross-multiplication,
 // weights are integers 1..10000, scores and passThreshold are hundredths of a point (0..400).
 import type { JudgeVerdict } from '@holdback/core';
 import type { CheckOutcome } from './checks/index.js';
 import type { Fraction, JudgmentRubric } from './terms.js';
 
-// agg-4: agg-3 (the flagged-appeal rule, L3-1, D27a) plus two rules for judge faults and abstentions (T-570, ADR-0043):
-// when they leave valid verdicts from one family only, the case escalates instead of being decided on them; and after
-// a fault, a reject needs fail verdicts from two families, as an accept always needs passes from two. agg-3 is kept, frozen, in kept/agg-3.ts for the deals bound to it (ADR-0036). The policy hash binds this
-// string; aggregate.test.ts pins a digest of the decision table to it, so a change of semantics without a new
-// version fails the tests.
-export const AGGREGATION_VERSION = 'agg-4';
+// agg-5: agg-4's decision rule (T-570, ADR-0043: no one-family decision; after a fault, a reject needs fails from two
+// families) with the filter's cuts recorded in the reasons (ADR-0049). agg-5 also names the verdict filter in
+// verdict.ts, which cuts overlong free text instead of abstaining. agg-3 and agg-4 are kept, frozen, in kept/ for the
+// deals bound to them (ADR-0036). The policy hash binds this string; aggregate.test.ts pins a digest of the decision
+// table to it, so a change of semantics without a new version fails the tests.
+export const AGGREGATION_VERSION = 'agg-5';
 /** Cross-family agreement required for accept (threat T8). Fixed by the rule, not by policy. */
 export const MIN_PASS_FAMILIES = 2;
 /** Families the valid verdicts behind any accept or reject must come from (T-570). Fixed by the rule, not by policy. */
@@ -74,6 +77,11 @@ export interface AggregateInput {
   thresholds: Thresholds;
   /** Reasons that force escalation once the panel ran: filter abstentions, sampled data. */
   escalate?: readonly string[];
+  /**
+   * agg-5: one line per judge whose free text the verdict filter cut (ADR-0049). Appended after the decision's own
+   * reasons; never an escalation reason, and never read by the decision.
+   */
+  cuts?: readonly string[];
 }
 
 /** judgment.schema.json `aggregate`, v0.5 shape (D18): counts instead of shares, integer score. */
@@ -123,6 +131,12 @@ function weightedSum(v: JudgeVerdict, rubric: JudgmentRubric): number {
 const meets = (count: number, f: Fraction, total: number) => count * f.denominator >= f.numerator * total;
 
 export function aggregate(input: AggregateInput): Aggregate {
+  const decided = decide(input);
+  return input.cuts?.length ? { ...decided, reasons: [...decided.reasons, ...input.cuts.map(cap)] } : decided;
+}
+
+/** agg-4's rule, unchanged. */
+function decide(input: AggregateInput): Aggregate {
   const { checks, rubric, thresholds } = input;
   const inconclusive = input.inconclusive ?? [];
   const pre = preDecision(checks, rubric, inconclusive);

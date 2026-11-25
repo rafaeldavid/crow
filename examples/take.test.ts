@@ -6,7 +6,7 @@
 // principal's yes, then posts, is accepted, funds, posts the standing delivery and writes the file the primary's
 // accept releases. The anvil part is skipped, saying why, without anvil and contracts/out.
 import { spawn } from 'node:child_process';
-import { existsSync, mkdtempSync, readFileSync, rmSync } from 'node:fs';
+import { existsSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
 import { createServer, type Server } from 'node:http';
 import type { AddressInfo } from 'node:net';
 import { tmpdir } from 'node:os';
@@ -17,10 +17,10 @@ import Ajv2020 from 'ajv/dist/2020.js';
 import { concat, createPublicClient, createWalletClient, encodeAbiParameters, http, type Hex } from 'viem';
 import { generatePrivateKey, mnemonicToAccount, privateKeyToAccount } from 'viem/accounts';
 import { foundry } from 'viem/chains';
-import { afterAll, beforeAll, describe, expect, it } from 'vitest';
+import { afterAll, beforeAll, describe, expect, it, vi } from 'vitest';
 import { ANVIL_SKIP, anvilReady, anvilWorld, root, type AnvilWorld } from './e2e-world.ts';
 import { STANDING_SELLER_CREATION_CODE } from './standing-seller-code.ts';
-import { BLOCK_BACK_SEC, cardFrom, checkEntry, DETERMINISTIC_DEPLOYER, entryOf, sellerAddressOf, takeOf, type StandingEntry } from './take.ts';
+import { BLOCK_BACK_SEC, cardFrom, checkEntry, DETERMINISTIC_DEPLOYER, entryOf, main, sellerAddressOf, takeOf, type StandingEntry } from './take.ts';
 import { pinOf, publicOfferTerms, Refusal, type Pin } from './verify.ts';
 
 type J = any; // eslint-disable-line @typescript-eslint/no-explicit-any
@@ -69,6 +69,41 @@ describe('take.ts: what it refuses from a card (T-551)', () => {
     const block = `<script type="application/json" id="crow-agent">${JSON.stringify(card)}</script>`;
     expect(() => cardFrom(`<!-- ${block} -->${block}`)).toThrow(/2 crow-agent blocks/);
     expect(() => cardFrom(`<script type="text/plain" data-id="crow-agent">${JSON.stringify(card)}</script>`)).toThrow(/no crow-agent card/);
+  });
+
+  // Triage 2026-11-25, item 3: approve checked CROW_SELLER only in show, so a take shown for one seller was funded with
+  // CROW_SELLER naming another. The store here holds the shown take and no key file: a refusal that came after the
+  // key was read, or after signing, would fail on the missing file instead.
+  it('D101: approve refuses a take whose seller is not CROW_SELLER, before it reads the key or signs', async () => {
+    const e = await entry();
+    const store = mkdtempSync(join(tmpdir(), 'take-approve-'));
+    const id = `0x${'5'.repeat(64)}` as Hex32;
+    const buyer = A('3');
+    writeFileSync(join(store, `${buyer}.take.json`), JSON.stringify({ version: 1, address: buyer, card: { url: 'http://127.0.0.1/', origin: 'http://127.0.0.1', offerId: 'csv-1' }, entry: e, fill: {}, commitmentId: id, shown: {} }));
+    const errors: string[] = [];
+    const spy = vi.spyOn(console, 'error').mockImplementation((m: unknown) => void errors.push(String(m)));
+    const before = process.env['CROW_SELLER'];
+    try {
+      const other = A('6');
+      process.env['CROW_SELLER'] = other;
+      expect(await main(['approve', store, id, '100000000'])).toBe(1);
+      expect(errors.join('\n')).toContain(`seller is ${e.seller}, not the expected "${other}" (CROW_SELLER)`);
+      expect(errors.join('\n')).not.toMatch(/ENOENT|no such file/);
+      errors.length = 0;
+      process.env['CROW_SELLER'] = 'not-an-address';
+      expect(await main(['approve', store, id, '100000000'])).toBe(1);
+      expect(errors.join('\n')).toContain('CROW_SELLER is not an address');
+      // The named seller passes this check, so the run goes on to the key file, which this store does not hold.
+      errors.length = 0;
+      process.env['CROW_SELLER'] = e.seller;
+      expect(await main(['approve', store, id, '100000000'])).toBe(1);
+      expect(errors.join('\n')).toMatch(/ENOENT|no such file/);
+    } finally {
+      if (before === undefined) delete process.env['CROW_SELLER'];
+      else process.env['CROW_SELLER'] = before;
+      spy.mockRestore();
+      rmSync(store, { recursive: true, force: true });
+    }
   });
 
   it('refuses any chain but Sepolia or a local chain, and a standing file it could not open as text', async () => {
