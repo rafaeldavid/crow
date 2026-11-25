@@ -6,6 +6,7 @@
 import type { Delivery, Hex32 } from '@holdback/core';
 import type { Abi, Address, Hex, Log, PublicClient } from 'viem';
 import type { Submission } from '../src/interface.js';
+import type { CheckCall } from './signer-reads.js';
 
 export interface Deployment {
   token: Address;
@@ -101,15 +102,26 @@ export interface EvmChain {
   readonly beaconMarginSec: number;
   /** The token's EIP-712 domain name and version, which ERC-3009 authorizations are signed under. */
   readonly tokenDomain: { name: string; version: string };
-  /** eth_call from `from`; throws the RPC error on a revert. `at` (scenario clock): the pending block's second. */
-  simulate(tx: { from: Address; to: Address; data: Hex }, at?: number): Promise<void>;
-  /** Anvil's scenario clock only: eth_call on the pending block at second `at`, returning the call's data; throws the RPC error on a revert. */
-  callAt?(tx: { to: Address; data: Hex }, at: number): Promise<Hex>;
+  /**
+   * eth_call from `from` at a gas price above 0, as the relay would pay (T-549 red team, M2); throws the RPC error on a
+   * revert. `at` (scenario clock): the pending block's second. `overrides`: code to run at an address that has none yet
+   * (a standing seller's contract before its deployment, ADR-0040 §4).
+   */
+  simulate(tx: { from: Address; to: Address; data: Hex; overrides?: ReadonlyArray<{ address: Address; code: Hex }> }, at?: number): Promise<void>;
+  /**
+   * Anvil's scenario clock only: eth_call on the pending block at second `at`, with the call's sender, gas, gas price
+   * and state overrides, returning the call's data; throws the RPC error on a revert.
+   */
+  callAt?(tx: CheckCall, at: number): Promise<Hex>;
+  /** A gas price above 0 that a transaction sent now would pay at least: what a simulation and a signer check run at (T-549 red team, M2). */
+  gasPrice?(): Promise<bigint>;
   /**
    * Sends and waits for the receipt. `key` absent: `senderFor(lane)`. `at` (scenario clock): the block's second.
    * `note` (a live chain with a lane store): kept in the lane's in-flight row until the receipt is applied (T-219).
+   * `gasCap`: the most gas this one transaction may be sent with, in place of the relayer's cap (a standing seller's
+   * deployment, ADR-0040 §4, which takes about 18 million gas on Sepolia).
    */
-  send(tx: { key?: Hex; lane?: string; to: Address; data: Hex; value?: bigint; note?: RelayNote }, at?: number): Promise<Mined>;
+  send(tx: { key?: Hex; lane?: string; to: Address; data: Hex; value?: bigint; note?: RelayNote; gasCap?: bigint }, at?: number): Promise<Mined>;
   /** T-219, a live chain only. The rows no caller waits on: left open by a restart, or by an RPC error after the broadcast. */
   inFlight?(): readonly LaneRow[];
   /** The open row that sent `hash`, if any. */

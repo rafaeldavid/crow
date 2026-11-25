@@ -84,6 +84,19 @@ describe('takes of a standing offer on SimChain (T-549)', () => {
     await w.ok(t.offer());
   });
 
+  it('the seller contract is asked again at funding, as the rules contract asks it: a template that expires after the offer funds nothing (T-549 PR 4, red team L1 of PR 736)', async () => {
+    const w = await world({ template: (t) => ({ ...t, expiresAt: plus(START, 4) }) });
+    const t = w.take('expires-before-funding');
+    await w.ok(t.offer());
+    await w.ok(t.deal.accept());
+    w.chain.advance(5);
+    const r = await w.submit(t.deal.agreeAndFund());
+    expect(r.ok ? 'ok' : `${r.problem.type}: ${r.problem.detail}`).toMatch(/^invalid_signature: the seller's signature on these terms no longer holds at funding/);
+    // Its offer window is still open: only the template's expiry refuses it, and nothing was held.
+    expect(Date.parse(w.chain.now())).toBeLessThan(Date.parse(t.terms.timing.offerExpiresAt));
+    expect((await w.chain.state(commitmentId(t.terms)))!.escrowState).toBe('AcceptedByAdjudicator');
+  });
+
   it('attack.take-replayed: one take funds once; a second offer of the same take is refused', async () => {
     const w = await world();
     const t = w.take('replayed');

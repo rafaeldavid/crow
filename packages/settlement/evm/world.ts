@@ -15,6 +15,7 @@ import { privateKeyToAccount } from 'viem/accounts';
 import { foundry } from 'viem/chains';
 import type { Abis, Deployment, EvmChain, Mined } from './chain.js';
 import { assertLocalRpc, assertSafeChain } from './guard.js';
+import { rawCheckCall, type CheckCall } from './signer-reads.js';
 
 export type { Abis, Deployment } from './chain.js';
 
@@ -167,15 +168,22 @@ export class EvmWorld implements EvmChain {
     return this.relayer;
   }
 
-  /** Simulates on the pending block, mined at the scenario second `at`. */
-  async simulate(tx: { from: Address; to: Address; data: Hex }, at?: number): Promise<void> {
+  /** Simulates on the pending block, mined at the scenario second `at`, at the gas price a send pays (T-549 red team, M2). */
+  async simulate(tx: { from: Address; to: Address; data: Hex; overrides?: ReadonlyArray<{ address: Address; code: Hex }> }, at?: number): Promise<void> {
     if (at !== undefined) await this.rpc('evm_setNextBlockTimestamp', [at]);
-    await this.rpc('eth_call', [{ ...tx, gas: toHex(TX_GAS) }, 'pending']);
+    const call = { from: tx.from, to: tx.to, data: tx.data, gas: toHex(TX_GAS), gasPrice: toHex(await this.gasPrice()) };
+    await this.rpc('eth_call', tx.overrides?.length ? [call, 'pending', Object.fromEntries(tx.overrides.map((o) => [o.address, { code: o.code }]))] : [call, 'pending']);
   }
 
-  async callAt(tx: { to: Address; data: Hex }, at: number): Promise<Hex> {
+  async callAt(tx: CheckCall, at: number): Promise<Hex> {
     await this.rpc('evm_setNextBlockTimestamp', [at]);
-    return (await this.rpc('eth_call', [{ ...tx, gas: toHex(TX_GAS) }, 'pending'])) as Hex;
+    const [call, overrides] = rawCheckCall(tx);
+    return (await this.rpc('eth_call', [call, 'pending', overrides])) as Hex;
+  }
+
+  /** Twice the node's gas price: above the pending block's base fee, as a send's fee is. */
+  async gasPrice(): Promise<bigint> {
+    return 2n * (await this.publicClient.getGasPrice());
   }
 
   /** Mines the transaction at the scenario second `at`, from `key` or the deployer. */

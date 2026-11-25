@@ -401,9 +401,22 @@ export class LiveChain implements EvmChain {
   }
 
   /** eth_estimateGas: a revert throws with its data, as eth_call would; the estimate is kept for the send. */
-  async simulate(tx: { from: Address; to: Address; data: Hex }): Promise<void> {
+  async simulate(tx: { from: Address; to: Address; data: Hex; overrides?: ReadonlyArray<{ address: Address; code: Hex }> }): Promise<void> {
+    // At the fees the send pays (T-549 red team, M2): a contract party that answers yes only at gas price 0 is refused
+    // here, not after the relayer paid for a revert. A relayer short of test ETH for them declines (D27).
+    const fee = await this.feesNow();
     // At the newest block this node knows of: a node a block behind still shows the deal before this node's last relay.
-    const gas = await this.pinned((blockNumber) => this.publicClient.estimateGas({ account: tx.from, to: tx.to, data: tx.data, blockNumber }), askAgain, 'now');
+    const estimate = (blockNumber: bigint) =>
+      this.publicClient.estimateGas({ account: tx.from, to: tx.to, data: tx.data, blockNumber, maxFeePerGas: fee.max, maxPriorityFeePerGas: fee.tip, ...(tx.overrides?.length ? { stateOverride: tx.overrides.map((o) => ({ address: o.address, code: o.code })) } : {}) });
+    let gas: bigint;
+    try {
+      gas = await this.pinned(estimate, (e) => askAgain(e) && !/insufficient funds/i.test(String((e as Error | undefined)?.message ?? e)), 'now');
+    } catch (e) {
+      if (/insufficient funds/i.test(String((e as Error | undefined)?.message ?? e))) throw new RelayRefused(`relayer ${tx.from} has too little test ETH for this transaction's gas`);
+      throw e;
+    }
+    // A call simulated with code that is not there yet (a deployment goes first) is sent after it, estimated again.
+    if (tx.overrides?.length) return;
     // Dry runs never send, so their estimates are dropped wholesale now and then rather than one by one.
     if (this.estimates.size > 256) this.estimates.clear();
     this.estimates.set(`${lc(tx.from)}|${lc(tx.to)}|${tx.data}`, gas);
@@ -413,12 +426,12 @@ export class LiveChain implements EvmChain {
    * Sends on the key's own lane, or the named lane, after the lane's previous transaction is mined and any row a restart
    * left on that lane is resolved. A deal lane with a store writes the transaction's row, with `note`, before the broadcast.
    */
-  send(tx: { key?: Hex; lane?: string; to: Address; data: Hex; value?: bigint; note?: RelayNote }): Promise<Mined> {
+  send(tx: { key?: Hex; lane?: string; to: Address; data: Hex; value?: bigint; note?: RelayNote; gasCap?: bigint }): Promise<Mined> {
     const account = tx.key ? privateKeyToAccount(tx.key) : this.account(tx.lane);
     const lane = tx.key || tx.lane === undefined || tx.lane === FUNDING_LANE ? null : 1 + laneOf(tx.lane);
     return this.serialized(account.address, async () => {
       for (const r of this.inFlight()) if (lc(r.from) === lc(account.address)) await this.resolve(r);
-      return this.sendNow(account, tx.to, tx.data, tx.value ?? 0n, lane, tx.note);
+      return this.sendNow(account, tx.to, tx.data, tx.value ?? 0n, lane, tx.note, tx.gasCap ?? GAS_CAP);
     });
   }
 
@@ -589,7 +602,7 @@ export class LiveChain implements EvmChain {
     return next;
   }
 
-  private async sendNow(account: PrivateKeyAccount, to: Address, data: Hex, value: bigint, lane: number | null, note?: RelayNote): Promise<Mined> {
+  private async sendNow(account: PrivateKeyAccount, to: Address, data: Hex, value: bigint, lane: number | null, note: RelayNote | undefined, cap: bigint): Promise<Mined> {
     await this.verify();
     const from = account.address;
     const k = `${lc(from)}|${lc(to)}|${data}`;
@@ -598,7 +611,7 @@ export class LiveChain implements EvmChain {
     const estimate = this.estimates.get(k) ?? (await this.pinned((blockNumber) => this.publicClient.estimateGas({ account: from, to, data, value, blockNumber }), askAgain, 'now'));
     this.estimates.delete(k);
     // Sent with less gas than it needs, a call would run out on chain and spend the gas for nothing.
-    if ((estimate * 5n) / 4n > GAS_CAP) throw new RelayRefused(`the call needs about ${estimate} gas, above this node's cap of ${GAS_CAP}`);
+    if ((estimate * 5n) / 4n > cap) throw new RelayRefused(`the call needs about ${estimate} gas, above this node's cap of ${cap}`);
     const gas = (estimate * 5n) / 4n;
     const nonce = this.nonces.get(lc(from)) ?? (await this.nextNonce(from));
     const fee = await this.feesNow();
@@ -713,6 +726,17 @@ export class LiveChain implements EvmChain {
       if (/already known/i.test(text)) return keccak256(raw);
       this.nonces.delete(lc(from));
       if (/insufficient funds/i.test(text)) throw new RelayRefused(`relayer ${from} has too little test ETH for this transaction's gas`);
+      throw e;
+    }
+  }
+
+  /** The fee cap a send pays now (`feesNow`): what a signer check runs at (T-549 red team, M2). */
+  async gasPrice(): Promise<bigint> {
+    try {
+      return (await this.feesNow()).max;
+    } catch (e) {
+      // Above this node's cap a relay is declined, but a check still reads, at the cap.
+      if (e instanceof RelayRefused) return this.maxFee;
       throw e;
     }
   }
