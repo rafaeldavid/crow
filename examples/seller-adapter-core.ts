@@ -122,11 +122,12 @@ export interface SellerAdapterConfig {
    */
   redelivery?: { refetchEverySec?: number; readyAuth?: { kind: 'bearer'; env: string } };
   /**
-   * T-625: when the adapter hands the deal's buyer the signed delivery at GET /deals/<commitmentId>/delivery, which a
-   * buyer's early accept needs (ADR-0051, "A held reject"). It carries the buyer's own envelope, so the buyer can read
-   * the work before it pays: handing it over is your choice (D32). `"held-reject"`, the default: only while the deal
-   * is Delivered and its primary adjudicator's published reject is not yet signed, when a refund is the alternative.
-   * `"delivered"`: whenever the deal is Delivered. `"never"`: not at all. The buyer signs each request with its key.
+   * T-625, D110: when the adapter tells the deal's buyer, at GET /deals/<commitmentId>/delivery, the hashes of the
+   * delivery it signed, for the buyer's early accept (ADR-0051, "A held reject"). No envelope is shared: the accept
+   * names the delivery hash, and the relaying operator carries the buyer's envelope on chain from the delivery it
+   * holds, so the buyer gets the key only with its payment. `"held-reject"`, the default: only while the deal is
+   * Delivered and its primary adjudicator's published reject is held. `"delivered"`: whenever the deal is Delivered.
+   * `"never"`: not at all. The buyer signs each request with its key.
    */
   shareDelivery?: 'held-reject' | 'delivered' | 'never';
   /** The fields a scope must have, and no others. */
@@ -1994,7 +1995,7 @@ export async function createSellerAdapter(c: SellerAdapterConfig, env: Readonly<
   }
   /**
    * GET /deals/<commitmentId>/delivery?at=<unix seconds>&nonce=<16 to 64 hex digits>&signature=<0x...> (T-625): the signed
-   * delivery, to the deal's buyer only, when `shareDelivery` allows it now (mayShare). The buyer signs
+   * delivery's hashes, never an envelope (D110), to the deal's buyer only, when `shareDelivery` allows it now (mayShare). The buyer signs
    * `crow.delivery:<commitmentId>:<at>:<nonce>`
    * (EIP-191) with the key the terms name as buyer, at most DELIVERY_REQUEST_MAX_AGE_SEC before this clock; each signed
    * request is answered once. The signature is recovered before the journal is read, and anyone else, any deal this
@@ -2023,8 +2024,21 @@ export async function createSellerAdapter(c: SellerAdapterConfig, env: Readonly<
     recent.push(Date.now());
     shareRequests.set(id, recent);
     if (!(await mayShare(deal, mode))) return none();
-    log(`${id} handed its signed delivery to the buyer ${deal.terms.buyer} (${mode}).`);
-    return send(200, { commitmentId: id, delivery: deal.signedDelivery.body, submitPath: deal.signedDelivery.path });
+    // D110: the hashes of the delivery the seller signed, and no envelope. The buyer's early accept names the delivery
+    // hash and nothing more; the relaying operator carries the buyer's envelope on chain from the delivery it holds, so
+    // the buyer gets the content key only with its payment.
+    const b = deal.signedDelivery.body;
+    log(`${id} told the buyer ${deal.terms.buyer} its delivery's hashes, no envelope (${mode}).`);
+    return send(200, {
+      commitmentId: id,
+      deliveryHash: deliveryHashOf(b),
+      attempt: b.attempt,
+      plaintextSha256: b.plaintextSha256,
+      ...(b.plaintextMime === undefined ? {} : { plaintextMime: b.plaintextMime }),
+      ciphertext: b.ciphertext,
+      envelopes: Array.isArray(b.encryptedKeys) ? b.encryptedKeys.length : 0,
+      note: 'the seller signed a delivery with these hashes; its envelopes are withheld, and the buyer gets its key with its accept',
+    });
   }
 
   /** T-503: a stored refund is answered again while it has at least this long left, in ms of settlement-layer time. */

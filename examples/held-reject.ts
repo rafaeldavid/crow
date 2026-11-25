@@ -6,15 +6,20 @@
 //
 //   node examples/held-reject.ts <commitmentId>                       says whether a reject is held, until when, and why
 //   node examples/held-reject.ts <commitmentId> --accept <delivery.json | seller adapter URL>  accepts the posted
-//                                                                     delivery at the agreed price: the signed delivery the
-//                                                                     seller handed you, or fetched from its adapter (T-625)
+//                                                                     delivery at the agreed price. With the signed delivery
+//                                                                     the seller handed you, it opens your envelope first;
+//                                                                     with its adapter's URL, it names the posted delivery
+//                                                                     the adapter vouches for (D110)
 //   node examples/held-reject.ts <commitmentId> --settle <toSellerBps>  prints the settlement with the buyer's signature,
 //                                                                     for the seller to countersign
 //   node examples/held-reject.ts <commitmentId> --submit <file>       posts a settlement both parties signed
 //
-// No operator read serves the seller's signed delivery, so an accept needs the copy the seller hands over (D32). A seller
-// on Crow's adapter hands it to the deal's buyer at GET <adapter>/deals/<id>/delivery while a reject is held (T-625):
-// give --accept the adapter's address (the quote URL without /quote) and this command signs the request with your key.
+// An accept names the posted delivery's hash; the relaying operator carries your envelope on chain, and you get the key
+// with the payment. With the seller's signed delivery (D32) this command first opens your envelope, so you know the key
+// you pay for opens. A seller on Crow's adapter shares no envelope (D110): GET <adapter>/deals/<id>/delivery, while a
+// reject is held, answers the hashes of the delivery it signed. Give --accept the adapter's address (the quote URL
+// without /quote): this command signs the request, checks the adapter's hash is the one both operators posted, and
+// accepts naming it. It cannot check your envelope opens before you pay; the adapter that sealed it is the seller's.
 // Env: HOLDBACK_KEY (the buyer's signing key, 0x and 64 hex digits), HOLDBACK_ENCRYPTION_KEY (its encryption secret
 // key, base64url; for --accept only), HOLDBACK_OPERATORS (comma-separated; default Crow's two nodes), and
 // HOLDBACK_CHAIN_ID with HOLDBACK_VERIFYING_CONTRACT for the EIP-712 domain, as for the other examples.
@@ -85,8 +90,8 @@ export async function deliveryFrom(agent: Agent, adapter: string, id: string): P
   if (res.status === 404) throw new Refusal(`refusing: the seller's adapter does not share this delivery with you now (404); ask the seller for its signed delivery, or settle (--settle)`);
   if (!res.ok) throw new Refusal(`refusing: the seller's adapter answered ${res.status}; try again, or ask the seller for its signed delivery`);
   const body = (await res.json()) as J;
-  if (String(body?.delivery?.commitmentId).toLowerCase() !== id) throw new Refusal('refusing: the seller\'s adapter answered a delivery for another deal');
-  return body.delivery;
+  if (String(body?.commitmentId).toLowerCase() !== id || !/^0x[0-9a-f]{64}$/.test(String(body?.deliveryHash))) throw new Refusal('refusing: the seller\'s adapter answered no delivery hash for this deal');
+  return body;
 }
 
 export async function main(args: readonly string[], env: Record<string, string | undefined> = process.env): Promise<number> {
@@ -121,13 +126,26 @@ export async function main(args: readonly string[], env: Record<string, string |
     if (!view.held) throw new Refusal(`refusing: no reject is held on ${id_} (it is ${view.escrowState})`);
     if (flag === '--accept') {
       if (view.escrowState !== 'Delivered') throw new Refusal('refusing: after an escalation the buyer alone cannot accept; settle with the seller instead (--settle)');
-      if (!env['HOLDBACK_ENCRYPTION_KEY']) throw new Refusal('refusing: --accept opens your own envelope first, so it needs HOLDBACK_ENCRYPTION_KEY');
       const terms = await agent.call('GET', `/v1/commitments/${id_}/terms`);
-      const delivery = /^https?:\/\//.test(value!) ? await deliveryFrom(agent, value!, id_) : JSON.parse(readFileSync(value!, 'utf8'));
+      if (/^https?:\/\//.test(value!)) {
+        // D110: the adapter vouches for the hashes; both operators must have posted the same delivery hash.
+        const vouched = await deliveryFrom(agent, value!, id_);
+        const posted = await agent.trusted(`/v1/commitments/${id_}/events?limit=200`, (x) => x.items.filter((e: J) => e.type === 'delivery.submitted').at(-1)?.payload ?? null);
+        if (!posted || String(posted.deliveryHash).toLowerCase() !== String(vouched.deliveryHash).toLowerCase() || Number(posted.attempt) !== Number(vouched.attempt)) {
+          throw new Refusal('refusing: the delivery hash the seller\'s adapter names is not the one both operators posted');
+        }
+        const nonce = freshNonce();
+        const prepared = await agent.call('POST', '/v1/prepare/early-accept', { commitmentId: id_, nonce });
+        const state = await agent.signAndSubmit(prepared, { kind: 'early-accept', terms, nonce, deliveryHash: String(posted.deliveryHash).toLowerCase() as `0x${string}` });
+        console.log(JSON.stringify({ escrowState: state.escrowState, envelopeChecked: false }));
+        return 0;
+      }
+      if (!env['HOLDBACK_ENCRYPTION_KEY']) throw new Refusal('refusing: --accept <delivery.json> opens your own envelope first, so it needs HOLDBACK_ENCRYPTION_KEY');
+      const delivery = JSON.parse(readFileSync(value!, 'utf8'));
       // The early accept checks the handed delivery against the posted one, opens this buyer's envelope in it and
       // checks the work's hash before it signs (examples/verify.ts, openOwnEnvelope).
       const state = await agent.earlyAccept(terms, delivery);
-      console.log(JSON.stringify({ escrowState: state.escrowState }));
+      console.log(JSON.stringify({ escrowState: state.escrowState, envelopeChecked: true }));
       return 0;
     }
     // --settle: the settlement must land before the reject is signed, so it expires at the hold's end when an operator says it.

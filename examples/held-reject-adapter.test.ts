@@ -1,6 +1,7 @@
 // T-625 (ADR-0051, the partner C rehearsal of 2026-11-25): a seller on Crow's adapter, with its own key, keeps the
-// delivery it signs and hands it to the deal's buyer while the primary's reject is held, so the buyer's lone accept can
-// run (examples/held-reject.ts --accept <adapter>). Nobody else gets it, and a seller may share it never.
+// delivery it signs and tells the deal's buyer its hashes, never an envelope (D110), while the primary's reject is held,
+// so the buyer's lone accept can run (examples/held-reject.ts --accept <adapter>). Nobody else gets them, and a seller
+// may share them never.
 import { mkdtempSync, rmSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
@@ -81,10 +82,24 @@ describe('the adapter hands the held deal\'s buyer its signed delivery (T-625)',
     const old = Math.floor(Date.now() / 1000) - 3_600;
     const stale = await buyer.account.signMessage({ message: `crow.delivery:${id}:${old}:${'0'.repeat(16)}` });
     expect((await fetch(`${running.url}/deals/${id}/delivery?at=${old}&nonce=${'0'.repeat(16)}&signature=${stale}`)).status).toBe(404);
-    // The buyer's own request gets it, and the accept runs from the adapter's address, the quote URL accepted too.
-    expect((await deliveryFrom(buyer, `${running.url}/quote`, id)).commitmentId).toBe(id);
-    expect(await main([id, '--accept', running.url], env('buyer-1'))).toBe(0);
+    // D110: the buyer's own request gets the hashes of the delivery the seller signed, and no envelope: not the buyer's
+    // and no other. The quote URL is accepted too.
+    const shared = await deliveryFrom(buyer, `${running.url}/quote`, id);
+    expect(shared).toMatchObject({ commitmentId: id, attempt: 1, envelopes: kept.signedDelivery!.body.encryptedKeys.length });
+    expect(shared.encryptedKeys).toBeUndefined();
+    const text = JSON.stringify(shared);
+    for (const k of kept.signedDelivery!.body.encryptedKeys) expect(text).not.toContain(k.ciphertext);
+    const posted = (await buyer.call('GET', `/v1/commitments/${id}/events?limit=200`)).items.find((e: J) => e.type === 'delivery.submitted').payload;
+    expect(shared.deliveryHash).toBe(posted.deliveryHash);
+    // The accept names that hash, with no envelope in hand and no encryption key in the environment; the operator
+    // carries the buyer's envelope on chain, and the buyer's key is released with the payment.
+    const noKey = { ...env('buyer-1') } as Record<string, string | undefined>;
+    delete noKey['HOLDBACK_ENCRYPTION_KEY'];
+    expect(await main([id, '--accept', running.url], noKey)).toBe(0);
     expect((await buyer.waitFor(id, ['Released'])).escrowState).toBe('Released');
+    const released = (await buyer.call('GET', `/v1/commitments/${id}/key?recipient=${buyer.address}`)) as J;
+    expect(released.items.length).toBeGreaterThan(0);
+    expect(await buyer.openDelivery(id)).toContain('FAIL-ME');
     // Once the deal is closed the adapter shares nothing.
     await expect(deliveryFrom(buyer, running.url, id)).rejects.toThrow(/404/);
   }, 90_000);

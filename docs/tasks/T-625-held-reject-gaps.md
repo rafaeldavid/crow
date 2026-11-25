@@ -25,7 +25,7 @@ Fix four of the gaps: the buyer's accept against an adapter seller; a held recor
 - [ ] Gap 4: deferred to the v0.15 schema bump (PR 835); see Handoff.
 - [x] Gap 5: a seller's named windows stay on rubric offers (`examples/seller-adapter-terms.test.ts`).
 - [x] An Opus red team on gaps 1 and 3, findings fixed (Evidence).
-- [ ] For Rafa: the sharing default, `"held-reject"` or `"never"` (D35's minimal disclosure; the red team's design note).
+- [x] The sharing default (D110, the coordinator's call for Rafa's review): `"held-reject"` shares the delivery's hashes and no envelope, since the accept does not need the buyer's envelope from the buyer.
 
 ## Evidence
 
@@ -35,14 +35,14 @@ All measured on the branch after merging `origin/main` (D108, T-624), 2026-11-26
 - `pnpm snap`: 73 passed. Typecheck and lint pass. `node site/build.mjs && node site/check.mjs` pass; first-deal paths 4,995 and 4,994 of 5,000 tokens (estimate).
 - New tests: `examples/held-reject-adapter.test.ts` (2) and `examples/held-reject-adapter.attack.test.ts` (6, the red team's, turned to assert the fixes), the held case in `examples/deal-record.test.ts`, the named-windows case in `examples/seller-adapter-terms.test.ts`, the `/judgments` case in `apps/demo-cloud/src/world.test.ts`, and the contract test's call of `listJudgments`.
 - **Red team (Opus):** H1 (one stale or lying operator made the adapter share a refunded deal's work) fixed: every operator must agree, and the record must be the primary's signed reject of this delivery with its hold not ended. M1 (shared rejects that were not held) fixed with ADR-0051's rule. M2 (each request cost two reads, no limit) fixed: one decision in flight per deal, a refusal reused 10 s, 10 decisions a minute, then 429. M3 (a re-sent delivery recorded other bytes) fixed: a kept delivery is re-sent with no new fetch. L1 (a signed URL worked as a bearer link) fixed: a nonce, each request answered once, no future times. L2 (a timing oracle) fixed: the signature is recovered before the journal is read. L4 (a deal in flight at the deploy lost the primary's record) fixed in `publishRecord`, not covered by a test. L6 (a superseded record passed) fixed. L3 (contract-wallet buyers cannot sign the request) and L5 (which record decided) documented.
-- **Bundles that move:** `setup.mjs` `7f19918f39b8aa56c4e5dbf5235d322daff3f4eed5a454e9acb012f0a2cebda2`, `serve.mjs` `711cf5cc550b095ad490988f8100ec6e413d129634d9b1b0f7fef050854fbc4b`, `seller-worker.mjs` `32d22a5dc2da8af9998801daccd1e8ec06786b5498e96348586162199dd1a0d3`, `buy.mjs` `94e1b860cd631e9500b587c231059ae37212f0bf100606a0696e387bc44176fd` and `take.mjs` `34df35dcd2805b56da832cd129281ac2cb0e31fb27a57b97959f82ba8ef1e644` (both carry `deal-record.ts`). `try.mjs` is unchanged.
+- **Bundles that move:** `setup.mjs` `e87e061796fefeb1a6cd0a0ebecbb27429a48f391d846208fa1114e951e020a9`, `serve.mjs` `160a995868f2138a5b61516393ba3fa6113d664dc36b75095ee681ecd9242849`, `seller-worker.mjs` `4a2b5493964f63aa0c8b761996508313511c7887f6187a2cdcef0df648b20a3b`, `buy.mjs` `94e1b860cd631e9500b587c231059ae37212f0bf100606a0696e387bc44176fd` and `take.mjs` `34df35dcd2805b56da832cd129281ac2cb0e31fb27a57b97959f82ba8ef1e644` (both carry `deal-record.ts`). `try.mjs` is unchanged.
 
 ## Decisions
 
-- **The adapter shares the delivery only with the buyer, and by default only during a held reject.** The body carries the buyer's envelope, so a buyer that gets it can read the work before paying. During a held reject the alternative is a refund, in which the seller keeps the work; the default shares it then only, and a seller may choose `"delivered"` or `"never"` (D32).
+- **The adapter shares the delivery's hashes only, with the buyer only, and by default only during a held reject (D110).** The accept does not need the buyer's envelope from the buyer: the operator carries it on chain. So no envelope is shared, and the buyer gets the key only with its payment.
 - **`/judgments`, not a query on `/judgment`:** the route was already planned in `spec/openapi/paths.json` with that meaning; it now leaves the planned list (OpenAPI revision 0.4).
 - **Gap 4 waits:** `judgment.schema.json`'s member entry is closed, and PR 835 moves the same schema to v0.15.
 
 ## Handoff
 
-Done: gaps 1, 2, 3 and 5, the docs and the records. Open: gap 4, to add `detail` to the member entry within PR 835's v0.15 (or a v0.16 after it); Rafa's choice of the sharing default. The deploys are Rafa's.
+Done: gaps 1, 2, 3 and 5, the docs and the records. Open: gap 4, to add `detail` to the member entry within PR 835's v0.15 (or a v0.16 after it); Rafa's review of D110. The deploys are Rafa's.

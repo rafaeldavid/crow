@@ -79056,7 +79056,7 @@ async function createSellerAdapter(c, env, io) {
 	}
 	/**
 	* GET /deals/<commitmentId>/delivery?at=<unix seconds>&nonce=<16 to 64 hex digits>&signature=<0x...> (T-625): the signed
-	* delivery, to the deal's buyer only, when `shareDelivery` allows it now (mayShare). The buyer signs
+	* delivery's hashes, never an envelope (D110), to the deal's buyer only, when `shareDelivery` allows it now (mayShare). The buyer signs
 	* `crow.delivery:<commitmentId>:<at>:<nonce>`
 	* (EIP-191) with the key the terms name as buyer, at most DELIVERY_REQUEST_MAX_AGE_SEC before this clock; each signed
 	* request is answered once. The signature is recovered before the journal is read, and anyone else, any deal this
@@ -79097,11 +79097,17 @@ async function createSellerAdapter(c, env, io) {
 		recent.push(Date.now());
 		shareRequests.set(id, recent);
 		if (!await mayShare(deal, mode)) return none();
-		log(`${id} handed its signed delivery to the buyer ${deal.terms.buyer} (${mode}).`);
+		const b = deal.signedDelivery.body;
+		log(`${id} told the buyer ${deal.terms.buyer} its delivery's hashes, no envelope (${mode}).`);
 		return send(200, {
 			commitmentId: id,
-			delivery: deal.signedDelivery.body,
-			submitPath: deal.signedDelivery.path
+			deliveryHash: deliveryHashOf(b),
+			attempt: b.attempt,
+			plaintextSha256: b.plaintextSha256,
+			...b.plaintextMime === void 0 ? {} : { plaintextMime: b.plaintextMime },
+			ciphertext: b.ciphertext,
+			envelopes: Array.isArray(b.encryptedKeys) ? b.encryptedKeys.length : 0,
+			note: "the seller signed a delivery with these hashes; its envelopes are withheld, and the buyer gets its key with its accept"
 		});
 	}
 	/** T-503: a stored refund is answered again while it has at least this long left, in ms of settlement-layer time. */

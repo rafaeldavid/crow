@@ -68297,7 +68297,7 @@ async function createSellerAdapter(c, env, io) {
 	}
 	/**
 	* GET /deals/<commitmentId>/delivery?at=<unix seconds>&nonce=<16 to 64 hex digits>&signature=<0x...> (T-625): the signed
-	* delivery, to the deal's buyer only, when `shareDelivery` allows it now (mayShare). The buyer signs
+	* delivery's hashes, never an envelope (D110), to the deal's buyer only, when `shareDelivery` allows it now (mayShare). The buyer signs
 	* `crow.delivery:<commitmentId>:<at>:<nonce>`
 	* (EIP-191) with the key the terms name as buyer, at most DELIVERY_REQUEST_MAX_AGE_SEC before this clock; each signed
 	* request is answered once. The signature is recovered before the journal is read, and anyone else, any deal this
@@ -68338,11 +68338,17 @@ async function createSellerAdapter(c, env, io) {
 		recent.push(Date.now());
 		shareRequests.set(id, recent);
 		if (!await mayShare(deal, mode)) return none();
-		log(`${id} handed its signed delivery to the buyer ${deal.terms.buyer} (${mode}).`);
+		const b = deal.signedDelivery.body;
+		log(`${id} told the buyer ${deal.terms.buyer} its delivery's hashes, no envelope (${mode}).`);
 		return send(200, {
 			commitmentId: id,
-			delivery: deal.signedDelivery.body,
-			submitPath: deal.signedDelivery.path
+			deliveryHash: deliveryHashOf(b),
+			attempt: b.attempt,
+			plaintextSha256: b.plaintextSha256,
+			...b.plaintextMime === void 0 ? {} : { plaintextMime: b.plaintextMime },
+			ciphertext: b.ciphertext,
+			envelopes: Array.isArray(b.encryptedKeys) ? b.encryptedKeys.length : 0,
+			note: "the seller signed a delivery with these hashes; its envelopes are withheld, and the buyer gets its key with its accept"
 		});
 	}
 	/** T-503: a stored refund is answered again while it has at least this long left, in ms of settlement-layer time. */
@@ -71809,7 +71815,7 @@ async function run(c, state, offerId, given) {
 }
 
 // examples/seller-worker-pin.ts
-const SELLER_WORKER_SHA256 = "32d22a5dc2da8af9998801daccd1e8ec06786b5498e96348586162199dd1a0d3";
+const SELLER_WORKER_SHA256 = "4a2b5493964f63aa0c8b761996508313511c7887f6187a2cdcef0df648b20a3b";
 
 // examples/setup-cloudflare.ts
 const plain$2 = (s, max = 300) => plain$8(String(s ?? "")).slice(0, max);
@@ -72173,7 +72179,7 @@ async function workerBytes(c) {
 		if (bytes.length > MAX_WORKER_BYTES) throw new Error(`${SELLER_WORKER_URL} is over ${MAX_WORKER_BYTES} bytes`);
 	}
 	const sha = createHash("sha256").update(bytes).digest("hex");
-	if (sha !== "32d22a5dc2da8af9998801daccd1e8ec06786b5498e96348586162199dd1a0d3") throw new Error(`the Worker file's SHA-256 is ${sha}, not ${SELLER_WORKER_SHA256}, the one this setup.mjs carries: it is not the Worker this version writes`);
+	if (sha !== "4a2b5493964f63aa0c8b761996508313511c7887f6187a2cdcef0df648b20a3b") throw new Error(`the Worker file's SHA-256 is ${sha}, not ${SELLER_WORKER_SHA256}, the one this setup.mjs carries: it is not the Worker this version writes`);
 	return bytes;
 }
 /** The card's quote entry in the card's folder: other offers kept, the draft's marks dropped. */
