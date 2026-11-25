@@ -156,11 +156,12 @@ describe('the measures of a run', () => {
 describe("the buyer's run (N215): the usage line once, no probe, the guide read", () => {
   const facts = { docs: { guide: 'http://x/llms.txt', sell: 'http://x/sell.txt', buy: 'http://x/buy.txt' }, sellerPage: 'http://x/sellers/a/', jobApi: { quote: 'http://j/q', start: 'http://j/s', result: 'http://j/r' }, adapterPort: 4567, keyStore: '/k', token: 'tUSD', local: true };
 
-  it("gives each command's usage line once in the brief, and names no guide", () => {
+  it("gives each command's usage line once in the brief, and points only at the front door", () => {
     const b = buyerBriefCold(scenario('paid'), facts);
     for (const [c, u] of Object.entries(BUYER_USAGE)) expect(b).toContain(`- ${c} ${u}`);
     expect(b.match(/- buy-with-signer /g)).toHaveLength(1);
-    expect(b).not.toMatch(/llms\.txt|buy\.txt|guide/i);
+    expect(b).toContain('https://crow.direct/llms.txt');
+    expect(b).not.toMatch(/buy\.txt/);
   });
 
   it('refuses --help and an empty call with the usage line, and runs a call with arguments', async () => {

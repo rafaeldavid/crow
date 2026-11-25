@@ -47,4 +47,6 @@ node --env-file=/Users/rafa/Documents/escrow/.env tools/duet/approvals.ts run --
 
 For a key scoped to a workspace, add `HOLDBACK_AGENT_ANTHROPIC_WORKSPACE_ID=<id>` to that file. `plan` with the same `--runs` shows the caps and sends nothing. Each run writes `approvals.json` with `approvals`, `guide_reads` (a buyer that read no `/buy.txt` measured the harness again) and `help_probes` (expected 0). Then record the results under `case-studies/approvals-2026-11-19/` in the private repository and close N215's `doneWhen`.
 
+First live run, 2026-11-24 (Rafa, USD 0.15) [measured from `results.jsonl`]: Claude 5 approvals, DeepSeek 10, both Released on both operators, probes 0 and 1 (the refusal worked), but `guide_reads` empty on both: the brief named no docs, and the usage lines plus the seller's page were enough, so they still measured the harness. Fix in this PR: the cold brief now points at `https://crow.direct/llms.txt` (not at `buy.txt`) and says the buyer page's install step is done. Run the same command again; the new run is not yet measured.
+
 Guess: the buyer still needs 1 approval per web read and per command, so the count will stay above 1 until N214.

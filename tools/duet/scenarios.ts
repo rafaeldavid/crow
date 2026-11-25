@@ -165,14 +165,16 @@ export const BUYER_USAGE: Record<string, string> = {
 
 /**
  * The direct brief for the approvals runner's buyer (N215): the same intent, and the usage line of each command
- * once. It names no guide: the agent finds the buyer's page from crow.direct, and must read it to learn the steps,
- * the answers to expect and the errors, which the usage lines do not give.
+ * once. It points at the front door, https://crow.direct/llms.txt, and no deeper: the agent finds the buyer's page
+ * from there, and must read it to learn the steps, the answers to expect and the errors, which the usage lines do not
+ * give. (The first live run, 2026-11-24, with no pointer: both buyers skipped the guide, so it measured the harness.)
  */
 export function buyerBriefCold(s: Scenario, f: BriefFacts): string {
   const lines = Object.entries(BUYER_USAGE).map(([c, u]) => `- ${c} ${u}`);
   return [
     buyerBriefDirect(s, f),
-    `Our company installed these commands for you and already set up their environment. Their arguments, once, and nothing more:\n${lines.join('\n')}`,
+    "Work from Crow's own docs: they start at https://crow.direct/llms.txt, and its page for buyers says what to do, in what order, and what each answer means. Do not guess from the command names.",
+    `Our company installed these commands for you and already set up their environment (the buyer page's step for installing them is done). Their arguments, once, and nothing more:\n${lines.join('\n')}`,
   ].join('\n\n');
 }
 
