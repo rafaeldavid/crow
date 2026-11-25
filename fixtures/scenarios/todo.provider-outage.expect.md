@@ -11,11 +11,11 @@ The scenario index's neutrality.provider-outage row, recorded as a known gap. Th
 | Pragmas | settlement=sim · judges=recorded · mode=guaranteed_on_decision · seed=59 |
 | Prefix | todo. (known gap: records current behavior) |
 | Settlement | SimChain (T-006) driving @holdback/core `step` |
-| Judgment | @holdback/judgment (checks, screen, panel) · registry config/judges.yaml 0x8aa4…4549 · policy bench-a/p1 0xd136…9300 |
+| Judgment | @holdback/judgment (checks, screen, panel) · registry config/judges.yaml 0x8aa4…4549 · policy bench-a/p1 0x40b5…1e88 |
 | Club | fixtures/clubs/data-services-v1.yaml (loaded) · rulebook 0xd9bc…492d |
 | Buyer | atlas-buyer 0x90F9…53dC |
 | Seller | tidewater-seller 0xA884…b13B |
-| Terms | fixtures/terms/clean-customers-2000.yaml (loaded) · commitment 0x97ce…ec49 · price 2,000.000000 tUSD · fee 50.000000 tUSD |
+| Terms | fixtures/terms/clean-customers-2000.yaml (loaded) · commitment 0x701e…0479 · price 2,000.000000 tUSD · fee 50.000000 tUSD |
 | Adjudicators | primary bench-a 0xe321…af56 · fallback bench-b 0x6A72…54B9 · appeal bench-c 0xc843…9512 |
 | Operators | op-1 · op-2 |
 
@@ -44,16 +44,16 @@ The scenario index's neutrality.provider-outage row, recorded as a known gap. Th
 - **Intake:** plaintext 0x1939…87e5 · text/csv · 511912 bytes (fixtures/data/dataset-cleaning/customers.clean.csv) · hash verified ✓ · normalized
 - **Deterministic checks:** cols ✓ · rows ✓ · uniq ✓ · dates ✓ · id_nulls ✓ · name_nulls ✓ · email_nulls ✓ · emails (optional) ✓ · hidden ✓
 - **Screen:** clean
-- **Panel:** 3 judges from 2 families (policy: 3 seats, at least 2 families) · first-instance template 0xabb5…4dd2 · rubric 0x4201…7925 · seed source: commit-reveal (commitment 0xf23c…182c, seed 0x7178…7261, recomputed: match)
-  - qwen-a · openai-compatible/qwen · placeholder-qwen-a-20260601 · recorded (captured from fake judges) · pass · scores 4/4/4 · input 0x3be4…e353
-  - gpt-a · openai-compatible/gpt · placeholder-gpt-a-20260601 · recorded (authored) · abstain · input 0x7875…a63c
-  - gpt-b · openai-compatible/gpt · placeholder-gpt-b-20260601 · recorded (authored) · abstain · input 0xef3f…7eb8
-- **Aggregate:** escalate (weighted score 4.00; 1 pass, 0 fail of 1 valid; pass families qwen). Reasons: 1 valid verdicts; the policy needs 2.
+- **Panel:** 3 judges from 2 families (policy: 3 seats, at least 2 families) · first-instance template 0x4d32…629b · rubric 0x4201…7925 · seed source: commit-reveal (commitment 0xf23c…182c, seed 0x7178…7261, recomputed: match)
+  - claude-b · anthropic/claude · placeholder-claude-b-20260601 · recorded (authored) · abstain · input 0x0385…fb64
+  - gpt-b · openai-compatible/gpt · placeholder-gpt-b-20260601 · recorded (authored) · abstain · input 0x0d02…c9c9
+  - claude-a · anthropic/claude · placeholder-claude-a-20260601 · recorded (captured from fake judges) · pass · scores 4/4/4 · input 0x67ee…ce1e
+- **Aggregate:** escalate (weighted score 4.00; 1 pass, 0 fail of 1 valid; pass families claude). Reasons: 1 valid verdicts; the policy needs 2.
 - **Signed:** escalate.
 
 ## Receipts and log
 
-- Events 0–7. Chain head 0xd4c7…9f4a. Replay of 6 SimChain submissions from genesis matches the settlement state.
+- Events 0–7. Chain head 0xd742…96a8. Replay of 6 SimChain submissions from genesis matches the settlement state.
 - Receipts from op-1: 5 (rcpt-0001–rcpt-0005). The runner labels them without signing; the operator API signs real receipts.
 
 ## Invariants

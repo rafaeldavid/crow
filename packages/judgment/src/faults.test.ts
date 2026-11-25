@@ -168,12 +168,34 @@ describe('T-570: no seat\'s output aborts the panel (red team H1)', () => {
   it.each([
     ['a lone surrogate the judge wrote in its rationale', () => verdictText('pass', { rationale: 'r \ud800' })],
     ['URL redaction that cuts an emoji in half', () => JSON.stringify({ criteria: RUBRIC.criteria.map((c) => ({ id: c.id, score: 4, evidence: `www.ab ${'a'.repeat(284)}\u{1F600}` })), overall: 'pass', injectionSuspected: false, rationale: 'r' })],
-  ])('%s: the verdict stays a vote, and the draft canonicalizes', async (_name, text) => {
+  ])('%s: the verdict stays a vote, and the draft canonicalizes (agg-4)', async (_name, text) => {
     const provider: JudgeProvider = { complete: async (req) => (req.judgeId === 'gpt-a' ? { kind: 'ok', text: text() } : answer('pass')) };
-    const draft = await run(provider);
+    // agg-4's filter cuts redacted evidence at 300 UTF-16 units; agg-5 cuts on a code point (the next test).
+    const draft = await run(provider, { versions: { ...NEWEST_VERSIONS, aggregationVersion: 'agg-4' } });
     const gpt = draft.panel.members.find((m) => m.judgeId === 'gpt-a')!;
     expect(gpt.status).toBe('ok');
     expect(JSON.stringify(gpt.verdict)).toContain('\uFFFD');
+    expect(draft.aggregate.passCount).toBe(3);
+    expect(() => canonicalJson(draft)).not.toThrow();
+  });
+
+  // agg-5 counts code points: the same evidence is 300 code points after redaction and stays whole; ten more letters
+  // put it over, and the cut keeps 295 code points and the mark.
+  it.each([
+    [284, false],
+    [294, true],
+  ])('agg-5: URL redaction with %i letters and an emoji never leaves half an emoji (cut: %s)', async (letters, cut) => {
+    const text = JSON.stringify({ criteria: RUBRIC.criteria.map((c) => ({ id: c.id, score: 4, evidence: `www.ab ${'a'.repeat(letters)}\u{1F600}` })), overall: 'pass', injectionSuspected: false, rationale: 'r' });
+    const provider: JudgeProvider = { complete: async (req) => (req.judgeId === 'gpt-a' ? { kind: 'ok', text } : answer('pass')) };
+    const draft = await run(provider);
+    const gpt = draft.panel.members.find((m) => m.judgeId === 'gpt-a')!;
+    expect(gpt.status).toBe('ok');
+    expect(JSON.stringify(gpt.verdict)).not.toMatch(/\uFFFD|\p{Cs}/u);
+    for (const c of gpt.verdict!.criteria) {
+      expect([...c.evidence]).toHaveLength(300);
+      expect(c.evidence.endsWith(cut ? '[cut]' : '\u{1F600}')).toBe(true);
+    }
+    expect(draft.aggregate.reasons.some((r) => r === `judge gpt-a free text cut to its cap (evidence of ${RUBRIC.criteria.length} criteria)`)).toBe(cut);
     expect(draft.aggregate.passCount).toBe(3);
     expect(() => canonicalJson(draft)).not.toThrow();
   });

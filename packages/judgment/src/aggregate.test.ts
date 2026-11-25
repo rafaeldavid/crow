@@ -192,6 +192,8 @@ describe('aggregate: the decision table is pinned to AGGREGATION_VERSION', () =>
     'agg-3': '4cbc921977c5e5ad282d4eb1b66f197222b5fd6a04b25d3de17b913db6e50f25',
     // T-570, ADR-0043: agg-3 plus two rules for judge faults (valid verdicts from two families; after a fault, fails from two).
     'agg-4': 'ce2941a18e78b435a7c7b5011562b7e79f098db8ea6925a5702c878846b7de52',
+    // ADR-0049: agg-4's decisions; agg-5 adds the cut reasons and the cut filter, which the next test and cut.test.ts pin.
+    'agg-5': 'ce2941a18e78b435a7c7b5011562b7e79f098db8ea6925a5702c878846b7de52',
   };
   // Built inside each test: the arbitraries are declared further down this file.
   const corpus = () => fc.sample(arbInputPublic, { seed: 2718, numRuns: 3000 }).map(buildPublic);
@@ -213,6 +215,7 @@ describe('aggregate: the decision table is pinned to AGGREGATION_VERSION', () =>
   const PANEL_PINNED: Readonly<Record<string, string>> = {
     'agg-3': '54149ef79b20c9a607bcad0f694be045ae556effc4ab0d10915e8f1f7e488b21',
     'agg-4': '164860c833455d206e1cf3910fc5e6a5467105e77d026d36b8990a844a028e6d',
+    'agg-5': '164860c833455d206e1cf3910fc5e6a5467105e77d026d36b8990a844a028e6d',
   };
   const panelCorpus = unflaggedPanelCorpus;
   const panelDigestOf = (impl: { aggregate: typeof aggregate }) => createHash('sha256').update(panelCorpus().map((i) => impl.aggregate(i).decision).join(',')).digest('hex');
@@ -222,6 +225,18 @@ describe('aggregate: the decision table is pinned to AGGREGATION_VERSION', () =>
   });
   it('agg-3 and agg-4 decide differently on that corpus, so the digest pins the new rules', () => {
     expect(PANEL_PINNED['agg-3']).not.toBe(PANEL_PINNED['agg-4']);
+  });
+  // ADR-0049 section 7: agg-5's rule is agg-4's with the cut reasons appended after the decision's own reasons.
+  it('agg-5 returns what agg-4 returns, and with cut lines it appends them and nothing else', () => {
+    const agg4 = KEPT.aggregations.get('agg-4')!;
+    const agg5 = KEPT.aggregations.get('agg-5')!;
+    const cuts = ['judge claude-a free text cut to its cap (rationale)', `judge ${'x'.repeat(300)} free text cut`];
+    for (const input of [...corpus(), ...panelCorpus()]) {
+      const four = agg4.aggregate(input);
+      expect(agg5.aggregate(input)).toEqual(four);
+      const five = agg5.aggregate({ ...input, cuts });
+      expect(five).toEqual({ ...four, reasons: [...four.reasons, cuts[0], `${cuts[1]!.slice(0, 197)}...`] });
+    }
   });
   // ADR-0036: every kept version keeps its pinned digest, so a version bound by open deals never changes under its label.
   it.each([...KEPT.aggregations.keys()])('kept %s keeps its pinned digest', (version) => {

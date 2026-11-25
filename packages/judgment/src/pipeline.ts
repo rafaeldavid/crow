@@ -11,6 +11,7 @@ import type { Intaken } from './intake.js';
 import { implementationsFor, KEPT, NEWEST_VERSIONS, type AggregationImpl, type KeptTable, type PolicyVersions } from './kept.js';
 import { buildPrompt, type Nonces, type PromptTemplateKind } from './prompt.js';
 import { validateTermsText, type ScreenResult } from './screen.js';
+import type { VerdictCuts } from './verdict.js';
 import { validatePolicy, validateRubric, type JudgmentAcceptance, type JudgmentCriterion, type JudgmentPolicy } from './terms.js';
 import type { Judgment } from '@holdback/core';
 
@@ -163,6 +164,13 @@ function wellFormed<T>(value: T): T {
   return value;
 }
 
+/** The record's line for a judge whose free text the verdict filter cut (agg-5, ADR-0049 section 4). */
+export function cutReason(judgeId: string, cut: VerdictCuts): string {
+  const n = cut.evidence;
+  const parts = [...(cut.rationale ? ['rationale'] : []), ...(cut.injectionEvidence ? ['injectionEvidence'] : []), ...(n ? [`evidence of ${n} ${n === 1 ? 'criterion' : 'criteria'}`] : [])];
+  return `judge ${judgeId} free text cut to its cap (${parts.join('; ')})`.slice(0, 200);
+}
+
 async function call(provider: JudgeProvider, req: JudgeRequest): Promise<JudgeResponse> {
   const once = async (): Promise<JudgeResponse> => {
     try {
@@ -257,7 +265,7 @@ export async function runPipeline(input: PipelineInput): Promise<Result<Judgment
   const rubricIds = acceptance.rubric.criteria.map((c) => c.id);
   const sameIds = (cs: readonly JudgmentCriterion[]) => cs.length === rubricIds.length && cs.every((c) => rubricIds.includes(c.id)) && new Set(cs.map((c) => c.id)).size === cs.length;
 
-  type SeatResult = { member: PanelMember; verdict: PanelVerdict; canaryEcho: boolean; filtered?: string; filterDetail?: string; strided: boolean };
+  type SeatResult = { member: PanelMember; verdict: PanelVerdict; canaryEcho: boolean; filtered?: string; filterDetail?: string; cut?: VerdictCuts; strided: boolean };
   // Every seat's prompt is built before any judge is called, so a refusal (a bad criteria order, a prompt that cannot
   // be built) never follows a judge call, and a retry of the turn never calls the same judges again for nothing.
   const prompts: Array<{ seat: PanelSeat; family: string; p: Exclude<ReturnType<typeof buildPrompt>, { ok: false }>['value'] }> = [];
@@ -315,7 +323,7 @@ export async function runPipeline(input: PipelineInput): Promise<Result<Judgment
         return { member: { ...member, status: 'abstain' }, verdict: none, canaryEcho: parsed.reason === 'canary_echo', filtered: parsed.reason, filterDetail: parsed.detail, strided: p.sampling === 'stride' };
       }
       const status = parsed.verdict.overall === 'abstain' ? 'abstain' : 'ok';
-      return { member: { ...member, status, verdict: parsed.verdict }, verdict: { family, verdict: parsed.verdict }, canaryEcho: false, strided: p.sampling === 'stride' };
+      return { member: { ...member, status, verdict: parsed.verdict }, verdict: { family, verdict: parsed.verdict }, canaryEcho: false, ...(parsed.cut ? { cut: parsed.cut } : {}), strided: p.sampling === 'stride' };
     }),
   );
 
@@ -326,6 +334,9 @@ export async function runPipeline(input: PipelineInput): Promise<Result<Judgment
   const filterReason = (r: SeatResult) =>
     `judge ${r.member.judgeId} output rejected by a filter (${r.filtered}${r.filtered === 'schema' && r.filterDetail ? `: ${r.filterDetail}` : ''})`.slice(0, 200);
   const escalate = rs.filter((r) => r.filtered).map(filterReason);
+  // agg-5 (ADR-0049): a judge whose free text the filter cut keeps its verdict, and the record says so in one line with
+  // its id and the fields, never its text. Only agg-5's filter cuts, so no kept version's record moves.
+  const cuts = rs.filter((r) => r.cut).map((r) => cutReason(r.member.judgeId, r.cut!));
   // A seeded sample is recomputable and unpredictable to the seller; only the even-stride fallback escalates.
   if (rs.some((r) => r.strided)) escalate.push('the judges saw a sample of the deliverable, not all of it');
   const agg = aggregation.aggregate({
@@ -338,6 +349,7 @@ export async function runPipeline(input: PipelineInput): Promise<Result<Judgment
     verdicts: rs.map((r) => r.verdict),
     thresholds,
     escalate,
+    ...(cuts.length ? { cuts } : {}),
   });
   // Every filter abstention names its judge and rule in the record, on every path the aggregation takes (the appeal after
   // an escalation lists only a count), so the next one can be measured. Decisions and statuses do not change.

@@ -15,7 +15,8 @@ import { KEPT, NEWEST_VERSIONS } from './kept.js';
 import { runPipeline, type JudgeProvider, type JudgeRequest, type PanelSeat } from './pipeline.js';
 import { APPEAL_PROMPT_TEMPLATE, APPEAL_PROMPT_TEMPLATE_2, APPEAL_PROMPT_TEMPLATE_2_HASH, APPEAL_PROMPT_TEMPLATE_HASH, buildPrompt, PROMPT_TEMPLATE, PROMPT_TEMPLATE_2, TEMPLATE_PAIR, TEMPLATE_PAIR_2 } from './prompt.js';
 import { UntrustedData } from './untrusted.js';
-import { MAX_OUTPUT_CHARS, parseVerdict } from './verdict.js';
+import { parseVerdict } from './kept/verdict-0.js';
+import { MAX_OUTPUT_CHARS } from './verdict.js';
 import type { JudgmentRubric } from './terms.js';
 
 const IDS = ['fit', 'coherent', 'distinct', 'usable'];
@@ -28,7 +29,8 @@ const verdictOf = (evidence: string, over: Record<string, unknown> = {}) => ({
   ...over,
 });
 
-describe('the filter stays: output that fails the verdict schema abstains (hard rule), and names its rule', () => {
+// agg-3 and agg-4 keep this filter (kept/verdict-0.ts). agg-5 cuts overlong free text instead (ADR-0049, cut.test.ts).
+describe('agg-3 and agg-4: output that fails the verdict schema abstains, and names its rule', () => {
   const opts = { criterionIds: IDS, canary: NONCES.canary, rationaleMaxChars: 600 };
   const third = (evidence: string) => verdictOf('ok', { criteria: IDS.map((id, i) => ({ id, score: 4, evidence: i === 2 ? evidence : 'ok' })) });
   it('evidence of 300 characters passes', () => expect(parseVerdict(JSON.stringify(third(long(300))), opts).status).toBe('ok'));
@@ -184,8 +186,22 @@ describe("partner C's appeal, replayed on the pipeline", () => {
     for (const reason of d.aggregate.reasons) expect(reason.length).toBeLessThanOrEqual(200);
   });
 
-  it('on the first-instance template the record names the seat and its rule once, and escalates as before', async () => {
-    const { d } = await appeal((id) => (id === 'deepseek-flash' ? long(312) : long(200)), NEWEST_VERSIONS, 'first-instance');
+  it('agg-5 accepts it: the three overlong seats are cut to the cap, count, and the record names each cut (ADR-0049)', async () => {
+    const { d } = await appeal(overClaude);
+    expect(d.aggregate.decision).toBe('accept');
+    expect(d.aggregate.passCount).toBe(5);
+    expect(d.panel.members.map((m) => m.status)).toEqual(['ok', 'ok', 'ok', 'ok', 'ok']);
+    for (const id of ['claude-sonnet-5', 'claude-sonnet-5-5', 'claude-opus-5-5']) {
+      expect(d.aggregate.reasons).toContain(`judge ${id} free text cut to its cap (evidence of 4 criteria)`);
+      const m = d.panel.members.find((x) => x.judgeId === id)!;
+      for (const c of m.verdict!.criteria) expect([...c.evidence]).toHaveLength(300);
+    }
+    expect(d.aggregate.reasons.filter((r) => r.includes('deepseek'))).toEqual([]);
+    expect(d.aggregate.reasons.some((r) => r.includes('rejected by a filter'))).toBe(false);
+  });
+
+  it('on the first-instance template under agg-4 the record names the seat and its rule once, and escalates as before', async () => {
+    const { d } = await appeal((id) => (id === 'deepseek-flash' ? long(312) : long(200)), { ...NEWEST_VERSIONS, aggregationVersion: 'agg-4' }, 'first-instance');
     expect(d.aggregate.decision).toBe('escalate');
     expect(d.aggregate.reasons.filter((r) => r.startsWith('judge deepseek-flash'))).toEqual(['judge deepseek-flash output rejected by a filter (schema: criteria[0].evidence: 312 > 300)']);
   });
@@ -199,10 +215,11 @@ describe("partner C's appeal, replayed on the pipeline", () => {
   // A model of the hypothesis, not a measurement: judges that write to the target they are told, and past the cap when
   // told only `string<=300`. Live judges decide whether pair 2 helps; this shows the words reach every seat.
   it('under template pair 2 every judge reads the limits in words, and the record names pair 2', async () => {
-    const versions = { ...NEWEST_VERSIONS, promptTemplateHash: TEMPLATE_PAIR_2.firstHash, appealPromptTemplateHash: APPEAL_PROMPT_TEMPLATE_2_HASH };
+    const agg4 = { ...NEWEST_VERSIONS, aggregationVersion: 'agg-4' };
+    const versions = { ...agg4, promptTemplateHash: TEMPLATE_PAIR_2.firstHash, appealPromptTemplateHash: APPEAL_PROMPT_TEMPLATE_2_HASH };
     const told = (system: string) => (system.includes('aim for 200') ? long(180) : long(340));
     const two = await appealTold(told, versions);
-    const one = await appealTold(told, NEWEST_VERSIONS);
+    const one = await appealTold(told, agg4);
     expect([one.d.aggregate.decision, two.d.aggregate.decision]).toEqual(['reject', 'accept']);
     expect(two.calls).toHaveLength(5);
     for (const c of two.calls) expect(c.system).toContain('aim for 200');
