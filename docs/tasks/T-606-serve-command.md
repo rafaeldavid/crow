@@ -5,7 +5,7 @@
 - **Depends on:** T-331, T-472
 - **Paths this task may touch:** `examples/serve.ts`, `examples/serve.test.ts`, `site/serve-entry.mjs`, `site/serve.mjs`, `site/ref/serve.txt`, `site/build.mjs`, `site/check.mjs`, `site/llms.txt` (the Reference list), `site/ref/seller-adapter.txt` (one pointer), `tests/site-bundles.test.ts`, `examples/seller-adapter.ts` and `examples/seller-adapter.test.ts` (the follow-up below), `tests/cut-feature-alignment.known.json` (one line for the new bundle), `eslint.config.js` (the ignore list); this file.
 - **Human gate:** no. The site deploy waits for Rafa.
-- **Status:** done (merged in pull requests 803 and 813, 2026-11-25)
+- **Status:** done (merged in pull requests 803, 813 and 817, 2026-11-25)
 - **Agent/session:** p17-seller-config, 2026-11-25; branch `t-606-serve-command`
 - **Roadmap row:** N167
 - **Change kind:** 4 (a published client command and its guide); the local checks named by the brief, and one reviewer
@@ -67,8 +67,9 @@ All measured on 2026-11-25 on main at `91430b55` (PR 795 merged) plus this branc
 - **After:** the same script: SIGTERM 300 of 300 and SIGINT 100 of 100 ran the graceful stop, exit code 0; the paused case 5 of 5 for each signal.
 - **Tests:** two new ones in `examples/serve.test.ts`, for both signals: at the ready line with the child paused there, and during a start that waits on a silent operator. Both failed before the fix. A failed exit check now names the signal.
 - **The repo adapter had the same order** (`examples/seller-adapter.ts`, its own command line). Both commands now call one function there, `stopOnSignals`, before the start. The same script, before and after, on the adapter: SIGTERM 269 of 300 killed, then 0; SIGINT 92 of 100 killed, then 0; paused, 5 of 5 killed for each signal, then 0. On the rebuilt `serve.mjs` after the change: 0 killed in the same 410 runs. Two tests of the same two cases are in `examples/seller-adapter.test.ts`; both failed before the fix.
-- **Hash:** `site/serve.mjs` is `0b9687dbbeb14b9c0c1bc6a29f3597a70c66d3569d8001b3d94b35f94ff25f96` with the repo adapter's fix (`772c81b5...` with PR 813 alone). It is the only pinned file this follow-up changes: `setup.mjs`, which carries `seller-adapter.ts`, is byte for byte main's, since it never calls the new function.
-- **Checks:** `pnpm typecheck` and `pnpm lint` exit 0; `node site/build.mjs && node site/check.mjs` PASS; the adapter, signer, setup, audit-deal and bundle test files: 418 passed, 4 skipped. The signal and command-line tests of both files passed 20 runs in a row. The full suite did not run here; CI is the gate.
+- **Merged with main at `423ffcd9`** (pull requests 812, 815, 816 and 818), then rebuilt with `pnpm build && node site/build.mjs`; the rebuild changed no file against git's merge. `site/serve.mjs` is `cfbde88ab4c4a6f4a08da51b7c30f6205f63d1c7b46d6d119c78ca18267e209c` (main's was `4bc92987...`). It is the only pinned file this follow-up changes. `setup.mjs` (`fa1db8ee...`), which carries `seller-adapter.ts`, and `take.mjs` (`27bc44db...`) are byte for byte main's.
+- **On the merged tree:** the same script on the adapter and on `serve.mjs`, 410 runs each: SIGTERM 300, SIGINT 100, and the paused case 5 for each signal. None was killed.
+- **Checks on the merged tree:** `pnpm typecheck` and `pnpm lint` exit 0; the site check PASS, after a plain build and after a publish build; the adapter, signer, setup, audit-deal, guide and bundle test files: 423 passed, 4 skipped. Before the merge, the signal and command-line tests of both files passed 20 runs in a row. The full suite did not run here; CI is the gate.
 - **Live:** during this fix, on 2026-11-25, https://crow.direct/serve.mjs served the first build (`faf1df13`), which has the race, until the next site deploy.
 
 ## Out of scope
