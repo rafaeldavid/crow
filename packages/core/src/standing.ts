@@ -8,7 +8,25 @@
 // - the same decision for SimChain, which runs no EVM: its blob is the template in JSON, decided by these functions.
 // The types and the pins are those of packages/core/src/eip712.vectors.test.ts and StandingOfferVectors.t.sol; the
 // differential test on anvil pins takeTerms to the contract's termsOf. The pinned bundles never import this module.
-import { concat, decodeAbiParameters, encodeAbiParameters, fromHex, getAddress, hashStruct, hashTypedData, keccak256, stringToBytes, toHex, type Hex, type TypedData } from 'viem';
+import {
+  compactSignatureToSignature,
+  concat,
+  decodeAbiParameters,
+  domainSeparator,
+  encodeAbiParameters,
+  fromHex,
+  getAddress,
+  hashStruct,
+  hashTypedData,
+  keccak256,
+  parseCompactSignature,
+  recoverAddress,
+  serializeSignature,
+  stringToBytes,
+  toHex,
+  type Hex,
+  type TypedData,
+} from 'viem';
 import { bodyHashes, commitmentId, eip712Types, messageDigest, termsDigest, typedDataOf, typedTermsOf, type HoldbackDomain } from './eip712.js';
 import { recoversFrom } from './signer.js';
 import { toTimestamp } from './timing.js';
@@ -413,6 +431,94 @@ export function isTakeSignature(signature: Hex): boolean {
     return Number(kind) === TAKE;
   } catch {
     return false;
+  }
+}
+
+/** A chain blob as the seller contract decodes it: the kind, the template's ABI struct, the key's signature and the fill. */
+export interface StandingBlob {
+  kind: number;
+  offer: ReturnType<typeof standingOfferView>;
+  keySignature: Hex;
+  fill: ReturnType<typeof fillView>;
+}
+
+/** A chain blob of kind TAKE or STANDING_DELIVERY, decoded as the seller contract decodes it; null for anything else. Never throws. */
+export function decodeStandingSignature(signature: Hex): StandingBlob | null {
+  try {
+    const [kind, offer, keySignature, fill] = decodeAbiParameters([{ type: 'uint8' }, STANDING_OFFER_ABI, { type: 'bytes' }, FILL_ABI], signature);
+    if (kind !== TAKE && kind !== STANDING_DELIVERY) return null;
+    return { kind, offer: offer as StandingBlob['offer'], keySignature, fill: fill as StandingBlob['fill'] };
+  } catch {
+    return null;
+  }
+}
+
+// The seller contract's own type strings (HoldbackStandingSeller.sol, HoldbackTypes.sol), for its `templateHash` over the ABI struct.
+const TYPE = {
+  tokenAmount: 'TokenAmount(string token,uint256 amount)',
+  keyUnlock: 'KeyUnlock(string kind,uint64 round)',
+  encryptedKey: 'EncryptedKey(address recipient,string scheme,string ciphertext,KeyUnlock unlock)',
+  adjudication: 'Adjudication(address adjudicator,address fallbackAdjudicator,address appealAdjudicator,string policyId,TokenAmount fee,bytes32 registryHash,bytes32 policyHash)',
+  timingOffsets:
+    'TimingOffsets(uint64 offerExpiresAt,uint64 fundBy,uint64 deliverBy,uint64 judgeBy,uint64 fallbackBy,uint64 appealWindowSec,uint64 appealDecideSec,uint8 maxSubmissions,uint64 disputeBy,uint64 disputeJudgeSec,uint64 disputeFallbackSec)',
+  ciphertext: 'Ciphertext(string uri,string sha256,uint64 bytes,string cipher)',
+  standingDelivery: 'StandingDelivery(Ciphertext ciphertext,string plaintextSha256,string plaintextMime,EncryptedKey[] encryptedKeys,uint64 submittedAt)',
+  standingOffer:
+    'StandingOffer(address rules,uint64 expiresAt,string offerId,string schemaVersion,string clubId,bytes32 rulebookHash,address sellerPayoutAddress,bytes32 deliverableHash,bytes32 acceptanceHash,TokenAmount price,Adjudication adjudication,TimingOffsets timing,Remedy remedy,StandingDelivery[] delivery)',
+} as const;
+const typeHash = (...parts: string[]) => keccak256(stringToBytes(parts.join('')));
+const enc = (types: string[], values: unknown[]) => encodeAbiParameters(types.map((type) => ({ type })), values as never);
+
+/**
+ * The template's hash from its ABI struct, as the seller contract's `templateHash` computes it: what a node reads from a
+ * chain blob, where the template's strings travel only as hashes. Equal to `templateHash` of the template it came from
+ * (standing.test.ts; on anvil, the contract's own answer).
+ */
+export function templateHashOfView(o: StandingBlob['offer']): Hex32 {
+  if (o.delivery.length > 1) throw new RangeError('a template carries at most one standing delivery');
+  const tokenHash = keccak256(stringToBytes(o.token.toLowerCase()));
+  const amount = (v: bigint) => keccak256(enc(['bytes32', 'bytes32', 'uint256'], [typeHash(TYPE.tokenAmount), tokenHash, v]));
+  const adjudication = keccak256(
+    enc(['bytes32', 'address', 'address', 'address', 'bytes32', 'bytes32', 'bytes32', 'bytes32'], [typeHash(TYPE.adjudication, TYPE.tokenAmount), o.adjudicator, o.fallbackAdjudicator, o.appealAdjudicator, o.policyIdHash, amount(o.fee), o.registryHash, o.policyHash]),
+  );
+  const t = o.timing;
+  const timing = keccak256(
+    enc(
+      ['bytes32', 'uint64', 'uint64', 'uint64', 'uint64', 'uint64', 'uint64', 'uint64', 'uint8', 'uint64', 'uint64', 'uint64'],
+      [typeHash(TYPE.timingOffsets), t.offerExpiresAt, t.fundBy, t.deliverBy, t.judgeBy, t.fallbackBy, t.appealWindowSec, t.appealDecideSec, t.maxSubmissions, t.disputeBy, t.disputeJudgeSec, t.disputeFallbackSec],
+    ),
+  );
+  const d = o.delivery[0];
+  const deliveries = d
+    ? keccak256(keccak256(enc(['bytes32', 'bytes32', 'bytes32', 'bytes32', 'bytes32', 'uint64'], [typeHash(TYPE.standingDelivery, TYPE.ciphertext, TYPE.encryptedKey, TYPE.keyUnlock), d.ciphertextHash, d.plaintextSha256Hash, d.plaintextMimeHash, d.encryptedKeysHash, d.submittedAt])))
+    : keccak256('0x');
+  const offerType = typeHash(TYPE.standingOffer, TYPE.adjudication, TYPE.ciphertext, TYPE.encryptedKey, TYPE.keyUnlock, 'Remedy(string onReject)', TYPE.standingDelivery, TYPE.timingOffsets, TYPE.tokenAmount);
+  return keccak256(
+    enc(
+      ['bytes32', 'address', 'uint64', 'bytes32', 'bytes32', 'bytes32', 'bytes32', 'address', 'bytes32', 'bytes32', 'bytes32', 'bytes32', 'bytes32', 'bytes32', 'bytes32'],
+      [offerType, o.rules, o.expiresAt, o.offerIdHash, o.schemaVersionHash, o.clubIdHash, o.rulebookHash, o.sellerPayoutAddress, o.deliverableHash, o.acceptanceHash, amount(o.price), adjudication, timing, o.remedyHash, deliveries],
+    ),
+  );
+}
+
+/**
+ * The key that signed a chain blob's template for `sellerContract` (ADR-0040 §4): the address a node checks the CREATE2
+ * address against before the contract is deployed. Recovered as Solady's ECDSA does: 64 bytes, or 65 with v 27 or 28.
+ * Null when the blob does not decode or the signature recovers nothing. It proves who signed, not that the template is
+ * live: the contract's own answer, simulated, decides that. Never throws.
+ */
+export async function standingKeyOf(signature: Hex, sellerContract: Address, chainId: number): Promise<Address | null> {
+  const b = decodeStandingSignature(signature);
+  if (!b) return null;
+  try {
+    const digest = keccak256(concat(['0x1901', domainSeparator({ domain: { ...STANDING_SELLER_DOMAIN, chainId, verifyingContract: getAddress(sellerContract) } }), templateHashOfView(b.offer)]));
+    const n = (b.keySignature.length - 2) / 2;
+    const v = n === 65 ? parseInt(b.keySignature.slice(130, 132), 16) : 27;
+    if ((n !== 64 && n !== 65) || (v !== 27 && v !== 28)) return null;
+    const full = n === 64 ? serializeSignature(compactSignatureToSignature(parseCompactSignature(b.keySignature))) : b.keySignature;
+    return await recoverAddress({ hash: digest, signature: full });
+  } catch {
+    return null;
   }
 }
 

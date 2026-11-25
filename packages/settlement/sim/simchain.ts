@@ -548,6 +548,22 @@ export class SimChain implements Settlement {
 
   // Signatures
 
+  /**
+   * The seller's signature on the terms, checked again at funding, as the rules contract checks it inside agreeAndFund
+   * (T-549 red team of PR 736, L1): a contract seller's answer can change between the offer and the funding (a template
+   * expired, revoked or retired), and a key's cannot, so only a contract seller is asked again. The signature is the
+   * one the offer's event recorded.
+   */
+  private async sellerAtFunding(id: Hex32, party: SignerCheck): Promise<void> {
+    const rec = this.w.recs.get(id);
+    if (!rec || !this.contracts.has(lc(rec.state.terms.seller))) return;
+    const offered = this.w.log.find((e) => e.type === 'commitment.offered' && e.commitmentId === id);
+    const signature = offered?.payload['sellerSignature'];
+    if (typeof signature !== 'string' || !(await verifyTerms(this.domain, rec.state.terms, signature as Parameters<typeof verifyTerms>[2], rec.state.terms.seller, party))) {
+      refuse('invalid_signature', "the seller's signature on these terms no longer holds at funding: its contract no longer approves them (a template expired, revoked or retired)");
+    }
+  }
+
   private async verifySignatures(s: Submission, dryRun: boolean): Promise<'verified' | 'skipped' | 'none'> {
     if (s.kind === 'trigger') return 'none';
     const unsignedParty = dryRun && PARTY_KINDS.has(s.kind) && this.missingSignature(s);
@@ -573,11 +589,13 @@ export class SimChain implements Settlement {
         break;
       case 'fund':
         await check(s.message, s.message.from, 'FundingAuthorization');
+        await this.sellerAtFunding(s.message.commitmentId, party);
         break;
       case 'agree_and_fund':
         await check(s.agree, s.agree.buyer, 'Agree', true);
         await check(s.funding, s.funding.from, 'FundingAuthorization');
         if (s.operatorFee) await check(s.operatorFee, s.operatorFee.from, 'TransferAuthorization');
+        await this.sellerAtFunding(s.agree.commitmentId, party);
         break;
       case 'deliver':
         await check({ ...s.delivery, type: 'Delivery' }, terms(s.delivery.commitmentId).seller, 'Delivery', true);

@@ -6,7 +6,7 @@
 // `anvil` on PATH and `forge build` output in contracts/out; skipped without.
 import { existsSync } from 'node:fs';
 import { join } from 'node:path';
-import { commitmentId, encodeStandingSignature, fillView, STANDING_DELIVERY, standingDeliveryFor, type StandingDeliveryBody, holdbackDomain, signMessage, standingOfferView, TAKE, takeTerms, templateDigest, templateFrom, templateHash, type Club, type StandingOffer, type TakeFill, type Timestamp, type CommitmentTerms, type Hex32, type Mandate, type TokenAmount, type UnsignedMessage } from '@holdback/core';
+import { commitmentId, encodeStandingSignature, fillView, STANDING_DELIVERY, standingDeliveryFor, type StandingDeliveryBody, holdbackDomain, signMessage, standingOfferView, TAKE, takeTerms, templateDigest, templateFrom, templateHash, templateHashOfView, type Club, type StandingOffer, type TakeFill, type Timestamp, type CommitmentTerms, type Hex32, type Mandate, type TokenAmount, type UnsignedMessage } from '@holdback/core';
 import { concat, encodeFunctionData, getContractAddress, keccak256, stringToBytes, type Abi, type Hex } from 'viem';
 import { privateKeyToAccount } from 'viem/accounts';
 import { foundry } from 'viem/chains';
@@ -106,6 +106,8 @@ describe.skipIf(!ready)(`contract signers on anvil (T-549)${ready ? '' : ' (SKIP
     // The differential check of ADR-0040 §5: the contract's template hash and its own terms for the take equal core's.
     const read = <T>(functionName: string, args: unknown[]) => world.publicClient.readContract({ address: SELLER_CONTRACT, abi: x.sellerAbi, functionName, args }) as Promise<T>;
     expect(await read<Hex32>('templateHash', [standingOfferView(template)])).toBe(templateHash(template));
+    // The hash a node reads from a chain blob before the contract exists (T-549 PR 4) is the contract's too.
+    expect(templateHashOfView(standingOfferView(template))).toBe(templateHash(template));
     expect(await read<Hex32>('commitmentId', [await read('termsOf', [standingOfferView(template), fillView(fill)])])).toBe(commitmentId(terms));
     const keySignature = await privateKeyToAccount(x.cast.seller.key).sign({ hash: templateDigest(template, SELLER_CONTRACT, world.chainId) });
     return { deal, blob: encodeStandingSignature(TAKE, template, keySignature, fill), terms, template, fill, keySignature };
@@ -294,6 +296,7 @@ describe.skipIf(!ready)(`contract signers on anvil (T-549)${ready ? '' : ' (SKIP
       expect(terms.timing.disputeBy).toBe(iso(at + later * 1000 + 5_400_000));
       const read = <T>(functionName: string, args: unknown[]) => world.publicClient.readContract({ address: SELLER_CONTRACT, abi: x.sellerAbi, functionName, args }) as Promise<T>;
       expect(await read<Hex32>('templateHash', [standingOfferView(template)])).toBe(templateHash(template));
+      expect(templateHashOfView(standingOfferView(template))).toBe(templateHash(template));
       expect(await read<Hex32>('commitmentId', [await read('termsOf', [standingOfferView(template), fillView(fill)])])).toBe(commitmentId(terms));
     }
   }, 120_000);
