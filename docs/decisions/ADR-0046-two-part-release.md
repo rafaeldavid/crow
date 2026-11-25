@@ -142,6 +142,7 @@ At intake, before any check or judge runs, a decider:
 
 - **Each adjudicator's record gains `proofKinds`,** beside the `checkKinds` of ADR-0045 and outside `policy`, so no `policyHash` moves.
 - **The primary posts no acceptance** for an offer under a rule or a verifier it does not run. The offer expires unfunded.
+- **A decider that lacks a `proofKinds` entry signs nothing at any role** (D92, the rule of `checkKinds`); the deal runs to the next decider or its default.
 - **The parties' tools read `proofKinds` for all three named adjudicators** before they sign (D32). An operator may warn and never refuses (D31).
 - **A conformance file ships with the reference page:** a content key, a commitment ID, a buyer key and the sealed key they give, made in two languages.
 

@@ -17,6 +17,7 @@ import type { UntrustedData } from '../untrusted.js';
 import { isIso8601 } from './iso8601.js';
 import { compileJsonSchema } from './json-schema.js';
 import { BudgetExhausted, compileSafeRegex, StepBudget } from './safe-regex.js';
+import { evaluateSignatureValid, validateSignatureCheck } from './signature-valid.js';
 import { cellText, isNonScalar, toTable, type Cell, type Table } from './table.js';
 
 export type CheckType = JudgmentCheck['type'];
@@ -53,6 +54,7 @@ const REGISTRY = {
   json_schema: true,
   reference_row_match_min: true,
   hidden_characters_max: true,
+  signature_valid: true,
 } as const satisfies Record<CheckType, true>;
 export const CHECK_TYPES: ReadonlySet<CheckType> = new Set(Object.keys(REGISTRY) as CheckType[]);
 
@@ -129,6 +131,8 @@ export function validateCheck(check: JudgmentCheck): string | undefined {
       const r = compileJsonSchema(check.schema);
       return r.ok ? undefined : `schema refused: ${r.error}`;
     }
+    case 'signature_valid':
+      return validateSignatureCheck(check);
     default:
       return undefined;
   }
@@ -157,6 +161,7 @@ function evaluate(check: JudgmentCheck, input: CheckInput, table: () => ReturnTy
     const e = v.ok ? v.value(value, budget) : v.error;
     return e === undefined ? pass() : fail(`schema: ${e}`);
   }
+  if (check.type === 'signature_valid') return evaluateSignatureValid(check, input.data.reveal(), budget);
   if (check.type === 'hidden_characters_max') {
     // Counted on the text as delivered, every occurrence, legitimate or not (D17).
     const counts: HiddenCounts = countHidden(input.data.reveal());

@@ -1,6 +1,6 @@
 # ADR-0045: A check verifies a signature by a key the terms pin
 
-- **Status:** Proposed, 2026-11-25 (D90). A decision Rafa can overrule. Design only: no code and no schema file changes with this record.
+- **Status:** Proposed, 2026-11-25 (D90). Amended 2026-11-25 by D92: an adjudicator signs no decision on a kind it does not run, at any role. A decision Rafa can overrule. Design only: no code and no schema file changes with this record.
 - **Date:** 2026-11-25
 - **Raised by:** T-585, roadmap row N225. The research note `docs/research/2026-11-24-delivery-proofs.md` (T-582) recommends new check kinds over a proof field on the delivery, and `signature_valid` first.
 - **Builds on:** ADR-0001 (neutrality), ADR-0006 (deterministic checks run first), ADR-0021 (checks read the bytes as delivered), ADR-0022 (no float in a hashed body), ADR-0031 (phase one: the first decision is final), ADR-0036 (a deal is judged under the policy it bound); D26, D28, D31, D32, D35.
@@ -17,7 +17,7 @@ Labels: **measured** (read at `origin/main` `9342f4f4` on 2026-11-25, with the s
 5. **Built-in code only.** The evaluator uses `@noble/curves` at the exact version the adjudicator app already pins [measured, `apps/adjudicator/package.json`]. Nothing from the delivery or the terms is executed, fetched or loaded.
 6. **A malformed input or a bad signature fails the check; a required failed check refunds the buyer, as today.** The work budget is the only time limit, so two adjudicators reach the same result.
 7. **Schema v0.13 adds the kind and a `checkKinds` list on each adjudicator's record.** No signed type changes, no contract changes, and the EIP-712 domain version stays [inferred].
-8. **An adjudicator declines an offer that names a kind it does not run.** The offer then expires unfunded. The seller's and the buyer's own tools read the three named adjudicators' lists before they sign.
+8. **An adjudicator signs no decision on terms that name a kind it does not run (D92).** As primary it declines the offer. At a later turn, as fallback, appeal adjudicator or a primary whose build lost the kind, it refuses before stage 1 and the deal passes to the next adjudicator or its default. The offer then expires unfunded. The seller's and the buyer's own tools read the three named adjudicators' lists before they sign.
 
 ## Context
 
@@ -157,13 +157,13 @@ Published with the reference page, in one JSON file the build places under `spec
 ### 10. Neutrality
 
 - **The verifier is built-in code in each adjudicator,** so the kind adds no new party that can stop a deal [inferred].
-- **Fail closed stays the default at judging time.** An adjudicator that meets a kind it does not run fails the check and never accepts. Paying for work whose agreed proof nobody checked would break the buyer's terms (D28).
+- **At judging time an adjudicator that meets a kind it does not run signs nothing (D92, amending the first text).** It refuses the turn before stage 1, so it never accepts and never rejects on a check it did not run. Stage 1 still fails an unknown kind closed, as the last guard. Paying for work whose agreed proof nobody checked would break the buyer's terms (D28), and a reject would pay the fee for a check never run.
 - **The real protection is before anyone signs.**
   - *The primary declines.* It posts no `AdjudicatorAcceptance` for an offer with a kind outside its `checkKinds`, or with a check `validateCheck` refuses, and says why in the offer's `notices`, as it does today for a reference file it cannot fetch [measured, `docs/api.md`, "Reference files"]. The offer expires unfunded. No hold exists.
   - *The parties read three lists.* The fallback and the appeal adjudicator sign nothing before the hold is funded [inferred]. So the seller's preflight and the buyer's check before agreeing read `checkKinds` for all three named adjudicators, from two operators, and refuse to sign when one lacks a kind in the terms. That is a check a party runs before signing (D32). The protocol adds no step for a party that skips it.
   - *An operator may warn, never refuse* (D31).
-- **What a party loses if it skips the check** [inferred]: the primary goes offline, the fallback lacks the kind, and good work is rejected. The buyer is refunded and never receives the key. The seller loses the sale and its time, not money. The loss is bounded (D26).
-- **Fixtures the build adds:** `neutrality.adjudicator-lacks-check-kind` (the primary declines; the offer expires unfunded; no funds move), and the research note's `neutrality.proof-check-primary-offline` and `neutrality.proof-check-both-offline`. A fourth runs the kind twice on one delivery and compares the judgment records byte for byte.
+- **What a party loses if it skips the check** [inferred]: the primary goes offline, the fallback lacks the kind and signs nothing (D92), and the deal defaults. The buyer gets price and fee back and never receives the key. The seller loses the sale and its time, not money. The adjudicator that lacked the kind earns no fee. The loss is bounded (D26).
+- **Fixtures the build adds:** `neutrality.adjudicator-lacks-check-kind` (the primary declines; the offer expires unfunded; no funds move; built in T-590, replaced in T-597 by the unit tests in `apps/adjudicator/src/check-kinds.test.ts` and by `neutrality.fallback-lacks-check-kind`), and the research note's `neutrality.proof-check-primary-offline` and `neutrality.proof-check-both-offline`. A fourth runs the kind twice on one delivery and compares the judgment records byte for byte.
 
 ### 11. Privacy
 
@@ -206,7 +206,7 @@ N226 still needs its own field on the delivery and a contract change, as the res
 | **A general ASN.1 or X.509 reader, or a certificate chain** | A large parser on untrusted bytes, and a chain needs a clock and outside data. A hardware-held key's certificate stays outside the check |
 | **More algorithms now** (RSA, secp256k1, P-384) | No deal asks for one. The list is closed and grows by ADR |
 | **A wall-clock limit per check** | Two adjudicators could differ on one delivery |
-| **An adjudicator that lacks the kind signs nothing, in place of failing the check** | It needs a new stage-1 outcome. In phase one an undecided deal also refunds the buyer, so the money moves the same way [measured, D87, litmus line] |
+| **An adjudicator that lacks the kind fails the check and signs the reject** | Amended by D92, 2026-11-25: the money does not move the same way. A reject pays the fee to the adjudicator that decided and returns the price; a default returns price and fee. The service can refuse the turn before stage 1 runs, so no new outcome is needed. An adjudicator now signs nothing on a kind it does not run |
 | **`checkKinds` inside `policy`** | It changes `policyHash`, so every adjudicator registers again and every bound policy moves, for a list a party can read without it |
 | **A `json_schema` option that parses a string as JSON** | It changes a shipped kind's meaning. `jsonEquals` leaves the nine kinds as they are |
 | **A typed proof field on the delivery now** | The research note's option B: a signed type and a contract change. It waits for N226 |

@@ -26,7 +26,7 @@ On a checks-only deal the checks are the whole deal. Write each as if the seller
 - `minBps` and `maxBps` are basis points: 10000 is 100%.
 - Checks cannot say that values are plausible or real.
 
-The check types: `csv_columns_exact` (`columns`), `row_count_range` (`min`, `max`, counting data rows; the header line does not count), `unique_key` (`columns`), `null_rate_max` (`column`, `maxBps`), `regex_match_rate_min` (`column`, `pattern`, `minBps`), `iso8601_date_column` (`column`), `json_schema` (`schema`), `hidden_characters_max` (`max` per class: `tag`, `bidi`, `variationSelector`, `otherIgnorable`, `total`), `reference_row_match_min` (`reference`, `keyColumn`, `minBps`). Each takes an `id` and `required`; a failed required check refunds the buyer.
+The check types: `csv_columns_exact` (`columns`), `row_count_range` (`min`, `max`, counting data rows; the header line does not count), `unique_key` (`columns`), `null_rate_max` (`column`, `maxBps`), `regex_match_rate_min` (`column`, `pattern`, `minBps`), `iso8601_date_column` (`column`), `json_schema` (`schema`), `hidden_characters_max` (`max` per class: `tag`, `bidi`, `variationSelector`, `otherIgnorable`, `total`), `reference_row_match_min` (`reference`, `keyColumn`, `minBps`), `signature_valid` (`alg`, `publicKey`, `message`, `signature`). Each takes an `id` and `required`; a failed required check refunds the buyer.
 
 - **`unique_key` with several columns** treats them together as one key: `"columns": ["t_ms", "joint"]` fails only when a row repeats the same pair, so `t_ms` may repeat across joints. For columns that must each be unique, write one `unique_key` per column.
 - **`hidden_characters_max`** counts these code points in the delivered text, before any normalization, and fails when a class's count is over its `max`; name at least one class, and `total` bounds their sum. `tag`: U+E0000 to U+E007F. `bidi`: U+061C, U+200E, U+200F, U+202A to U+202E, U+2066 to U+2069. `variationSelector`: U+FE00 to U+FE0F, U+E0100 to U+E01EF, U+180B to U+180D, U+180F. `otherIgnorable` (zero-width and other invisible characters): U+00AD, U+034F, U+115F, U+1160, U+17B4, U+17B5, U+180E, U+200B to U+200D, U+2060 to U+2064, U+206A to U+206F, U+3164, U+FEFF, U+FFA0, U+1D173 to U+1D17A. `"max": {"total": 0}` fails on any of them.
@@ -97,6 +97,26 @@ Four recipes for an audit report with a `commit`, a `filesReviewed` list and a `
 
 A complete commitment with these checks, the full report schema and an optional five-criterion rubric is `spec/examples/commitment.audit-report.example.json` in [the repository](https://github.com/rafaeldavid/crow/blob/main/spec/examples/commitment.audit-report.example.json).
 
+## Checking a signature
+
+`signature_valid` passes when the exact bytes at one place in a JSON delivery carry a valid signature by the key whose fingerprint the terms pin. It proves that the key's holder signed those bytes, and nothing more: not that the bytes are true, and not that the key sits in a device. The delivery must be a JSON document. Every parameter is a string.
+
+```json
+{ "id": "manifest-signature", "type": "signature_valid", "required": true, "alg": "ecdsa-p256-sha256",
+  "publicKey": { "pointer": "/pubkey_pem", "format": "spki-pem", "spkiSha256": "sha256:<64 hex>" },
+  "message": { "pointer": "/manifest_text", "encoding": "utf8", "jsonEquals": "/manifest" },
+  "signature": { "pointer": "/manifest_sig", "encoding": "base64", "format": "der" } }
+```
+
+- **Algorithms:** `ecdsa-p256-sha256` (signature `der` or `raw`) and `ed25519` (`raw` only). The list is closed.
+- **The key** travels in the delivery, as a PEM block labelled `PUBLIC KEY` or as plain base64 of the DER `SubjectPublicKeyInfo`. The terms pin its SHA-256, which `openssl pkey -pubin -outform DER | sha256sum` prints. A different key fails the check before any signature work.
+- **The signed bytes are exact.** Nothing is canonicalised. `message.pointer` names a string: with `utf8` the signed bytes are its UTF-8 encoding, with `base64` they are the decoded string. Decimals in the signed text are fine.
+- **`jsonEquals` ties the signed text to an object.** The signed bytes must parse as JSON to the value at the pointer it names, so your `json_schema` checks read fields the key signed. Without it, nothing says the object and the signed text agree.
+- **Base64 has one spelling:** standard alphabet, padding required, no whitespace, no non-zero trailing bits.
+- **Limits:** the key string at most 1,024 characters, the signature string at most 256, a pointer at most 512. The work is bounded by the delivery's shared check budget, with no timer, so every adjudicator gives the same result.
+- **A failed check names the step, never the bytes:** for example `signature does not verify` or `publicKey: fingerprint differs from the terms`. A required failed check refunds the buyer.
+- **Before you sign,** read `checkKinds` on all three named adjudicators. One that does not list `signature_valid` declines the offer, or fails the check at judging. `node spec/test-vectors/signature-valid/verify.mjs --check check.json delivery.json` runs one document against one check.
+
 ## Writing checks for a robot episode
 
 A robot run sold as one JSON document is checked with `json_schema` too. The sell command's `--sample robot-episode` sells one arm episode in Hugging Face's LeRobot v3 layout: `meta.info` holds `meta/info.json` field for field, `data` holds the frame table one array per column, and `provenance` holds the arm's serial hash, the order's nonce and waypoints, the measured pose at each waypoint, the recording's hash and a device signature. Its ten checks are in `examples/robot-episode.ts`.
@@ -104,7 +124,7 @@ A robot run sold as one JSON document is checked with `json_schema` too. The sel
 - **Bounds are whole numbers.** The terms are hashed and signed, so every bound in a check is an integer. The data need not be: keep joint values in degrees with decimals, as the controller reports them, and the arm's limits are whole numbers in degrees (-360 to 360 for a joint position, 223 degrees per second for a joint speed).
 - **One bound per vector.** The subset has no `prefixItems`, so `items` holds all six values of a joint vector to one bound. Use the widest joint's limit; a joint with a tighter limit is not held to it.
 - **List every section.** `additionalProperties: false` at the top refuses any section it does not name: list `data` and `provenance` as well as `meta`.
-- **Freshness comes from the order.** A `const` on the nonce and the waypoints, and a `minimum` and `maximum` within 1 degree of each waypoint, hold the delivery to a run made after the order, when the buyer draws them. The sample's seller draws its own, because the test buyer issues no orders yet. The check cannot verify the signature itself; it pins the public key and the signed message's format.
+- **Freshness comes from the order.** A `const` on the nonce and the waypoints, and a `minimum` and `maximum` within 1 degree of each waypoint, hold the delivery to a run made after the order, when the buyer draws them. The sample's seller draws its own, because the test buyer issues no orders yet. `signature_valid` verifies the signature (next section); a `json_schema` check alone only pins the signed message's format.
 
 ```json
 { "id": "joint-positions", "type": "json_schema", "required": true, "schema": { "type": "object", "required": ["data"], "properties": { "data": { "type": "object", "required": ["observation.state"], "properties": { "observation.state": {

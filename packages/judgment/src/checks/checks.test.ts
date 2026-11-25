@@ -17,9 +17,9 @@ const one = (check: DeterministicCheck, input = csv(GOOD_CSV), references?: Read
 const base = { id: 'c', required: true } as const;
 
 describe('check registry', () => {
-  it('is a closed union of exactly the nine v0.5 check types', () => {
+  it('is a closed union of exactly the ten check types of schema v0.13', () => {
     expect([...CHECK_TYPES].sort()).toEqual(
-      ['csv_columns_exact', 'hidden_characters_max', 'iso8601_date_column', 'json_schema', 'null_rate_max', 'reference_row_match_min', 'regex_match_rate_min', 'row_count_range', 'unique_key'].sort(),
+      ['csv_columns_exact', 'hidden_characters_max', 'iso8601_date_column', 'json_schema', 'null_rate_max', 'reference_row_match_min', 'regex_match_rate_min', 'row_count_range', 'signature_valid', 'unique_key'].sort(),
     );
   });
 

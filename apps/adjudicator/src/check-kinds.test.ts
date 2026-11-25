@@ -2,7 +2,7 @@
 // offer that names any other, before a hold can form. Stage 1 still fails such a check at judging time
 // (packages/judgment/src/checks/checks.test.ts, "fails closed on an unknown check type").
 import { readFileSync } from 'node:fs';
-import { parseAdjudicator, policyHash, type Commitment } from '@holdback/core';
+import { parseAdjudicator, policyHash, step, type Commitment } from '@holdback/core';
 import { CHECK_TYPES, fakeProvider, loadRegistry, type RegistryDoc } from '@holdback/judgment';
 import { keccak256 } from 'viem';
 import { describe, expect, it } from 'vitest';
@@ -29,6 +29,10 @@ const SELLER = party(5);
 
 /** The three checks of the signature_valid example: a json_schema check, then one signature_valid check per algorithm. */
 const [ORDER, ECDSA, ED25519] = (JSON.parse(readFileSync(new URL('../../../spec/examples/commitment.signature-valid.example.json', import.meta.url), 'utf8')) as Commitment).acceptance.deterministicChecks;
+
+/** A kind a later schema may add and this build does not run (ADR-0045 §8): the decline rule must still hold for it. */
+const TREND = { id: 'trend', type: 'monotonic_column', required: true, column: 'ts' };
+const TREND_OPTIONAL = { ...TREND, id: 'trend-b', required: false };
 
 const NINE = ['csv_columns_exact', 'row_count_range', 'unique_key', 'null_rate_max', 'regex_match_rate_min', 'iso8601_date_column', 'json_schema', 'reference_row_match_min', 'hidden_characters_max'];
 
@@ -64,12 +68,11 @@ async function offered(checks: readonly unknown[]) {
 }
 
 describe("an adjudicator's checkKinds (ADR-0045 §8)", () => {
-  it('lists exactly the kinds stage 1 runs: the nine of schema v0.12, and not signature_valid', () => {
+  it('lists exactly the kinds stage 1 runs: the nine of schema v0.12 and signature_valid (ADR-0045)', () => {
     const adj = bench(A, 'bench-a', new TestSettlement());
     const listed = adj.registration().checkKinds!;
     expect(listed).toEqual([...CHECK_TYPES]);
-    expect([...listed].sort()).toEqual([...NINE].sort());
-    expect(listed).not.toContain('signature_valid');
+    expect([...listed].sort()).toEqual([...NINE, 'signature_valid'].sort());
   });
 
   it('makes a record the adjudicator schema accepts, and leaves policyHash a hash of the policy alone', () => {
@@ -85,18 +88,26 @@ describe("an adjudicator's checkKinds (ADR-0045 §8)", () => {
 
 describe('the primary and a check kind it does not run (ADR-0045 §10)', () => {
   it.each([
-    ['a required signature_valid check', [ORDER, ECDSA], 'manifest-signature'],
-    ['an optional one, which the panel could otherwise pass over', [ORDER, { ...ED25519, required: false }], 'receipt-signature'],
-    ['two of them, naming the first', [ORDER, ED25519, ECDSA], 'receipt-signature'],
+    ['a required check of a kind it does not run', [ORDER, TREND], 'trend'],
+    ['an optional one, which the panel could otherwise pass over', [ORDER, TREND_OPTIONAL], 'trend-b'],
+    ['two of them, naming the first', [ORDER, TREND_OPTIONAL, TREND], 'trend-b'],
   ])('declines an offer with %s, signs no acceptance and says why', async (_, checks, id) => {
     const { s, a, deal, report } = await offered(checks);
-    const why = `bench-a does not run the check kind signature_valid, which check ${id} names, so it declines the offer; checkKinds on its adjudicator record lists the kinds it runs`;
+    const why = `bench-a does not run the check kind monotonic_column, which check ${id} names, so it declines the offer; checkKinds on its adjudicator record lists the kinds it runs`;
     expect(report.accepted).toEqual([]);
     expect(report.declined).toEqual([{ commitmentId: deal.id, reason: why }]);
     expect(report.refused).toEqual([]);
     expect(s.state(deal.id).kind).toBe('Offered');
     // The operator's read for its notices (`declines`) answers the same.
     expect(await a.declines(deal, 'primary')).toMatchObject({ type: 'adjudicator_unavailable', detail: why });
+  });
+
+  it('accepts an offer with signature_valid checks of both algorithms, which this build runs', async () => {
+    const { s, a, deal, report } = await offered([ORDER, ECDSA, ED25519]);
+    expect(report.accepted).toEqual([deal.id]);
+    expect(report.declined).toEqual([]);
+    expect(s.state(deal.id).kind).toBe('AcceptedByAdjudicator');
+    expect(await a.declines(deal, 'primary')).toBeNull();
   });
 
   it('accepts the same offer without that check', async () => {
@@ -106,9 +117,75 @@ describe('the primary and a check kind it does not run (ADR-0045 §10)', () => {
     expect(await a.declines(deal, 'primary')).toBeNull();
   });
 
-  it('is a rule of the primary alone: the fallback and the appeal answer as they did, and stage 1 fails the check at judging', async () => {
-    const { b, c, deal } = await offered([ORDER, ECDSA]);
-    expect(await b.declines(deal, 'fallback')).toBeNull();
-    expect(await c.declines(deal, 'appeal')).toBeNull();
+  it('answers the fallback and the appeal role the same way: they sign no decision on a kind they do not run (D92)', async () => {
+    const { b, c, deal } = await offered([ORDER, TREND]);
+    const why = (role: string) =>
+      `bench-${role === 'fallback' ? 'b' : 'c'} does not run the check kind monotonic_column, which check trend names, so as ${role} adjudicator it signs no decision; the deal passes to the next adjudicator or its default outcome, which returns the price and the fee`;
+    expect(await b.declines(deal, 'fallback')).toMatchObject({ type: 'adjudicator_unavailable', detail: why('fallback') });
+    expect(await c.declines(deal, 'appeal')).toMatchObject({ type: 'adjudicator_unavailable', detail: why('appeal') });
+    // Without that kind they answer as before.
+    const plain = await offered([ORDER]);
+    expect(await plain.b.declines(plain.deal, 'fallback')).toBeNull();
+    expect(await plain.c.declines(plain.deal, 'appeal')).toBeNull();
+  });
+});
+
+describe('a turn on a funded deal whose terms name a kind the adjudicator does not run (D92)', () => {
+  /** A funded, delivered deal whose terms name a kind; its build then lacks the kind the terms name. */
+  async function funded() {
+    const s = new TestSettlement();
+    const a = bench(A, 'bench-a', s);
+    const b = bench(B, 'bench-b', s);
+    bench(C, 'bench-c', s);
+    const acceptance = { deterministicChecks: [ORDER, TREND], rubric: { criteria: [], passThreshold: 0 } } as unknown as Commitment['acceptance'];
+    const deal = makeCommitment({ primary: A.address, fallback: B.address, appeal: C.address, policyHash: policyHashOf(a.policy), registryHash: reg.hash, buyer: BUYER, seller: SELLER, acceptance });
+    s.offer(deal);
+    // The primary's acceptance models a build that ran the kind then (an outside primary, or one rolled back since).
+    const kinds = CHECK_TYPES as Set<string>;
+    kinds.add('monotonic_column');
+    try {
+      expect((await a.runOnce()).accepted).toEqual([deal.id]);
+    } finally {
+      kinds.delete('monotonic_column');
+    }
+    s.fund(deal.id);
+    s.at('2026-11-01T09:59:00Z');
+    await s.deliver(deal.id, '{"manifest":{}}', [A, B, C, BUYER].map((p) => ({ recipient: p.address, publicKey: p.enc.publicKey })));
+    return { s, a, b, deal };
+  }
+
+  it('the primary signs nothing on its own turn, and nothing is published', async () => {
+    const { s, a, deal } = await funded();
+    const [task] = await s.tasks(A.address);
+    const r = await a.decideTask(task!);
+    expect(!r.ok && r.error.type).toBe('adjudicator_unavailable');
+    expect(!r.ok && r.error.detail).toMatch(/as primary adjudicator it signs no decision/);
+    expect(s.decisions(deal.id)).toEqual([]);
+    expect(s.records.size).toBe(0);
+  });
+
+  it('the fallback triggers no takeover, signs nothing when someone else triggers one, and the deal defaults', async () => {
+    const { s, b, deal } = await funded();
+    s.at('2026-11-01T10:02:00Z'); // judgeBy: the primary is silent
+    const report = await b.runOnce();
+    expect(report.triggered).toEqual([]);
+    expect(report.refused).toEqual([{ commitmentId: deal.id, problem: expect.objectContaining({ type: 'adjudicator_unavailable' }) }]);
+    expect((await s.triggerFallback(deal.id)).ok).toBe(true);
+    const again = await b.runOnce();
+    expect(again.decided).toEqual([]);
+    const [task] = await s.tasks(B.address);
+    const direct = await b.decideTask(task!);
+    expect(!direct.ok && direct.error.type).toBe('adjudicator_unavailable');
+    expect(s.decisions(deal.id)).toEqual([]);
+    expect(s.records.size).toBe(0);
+    // fallbackBy passes with no decision: the default outcome returns the buyer's price and fee.
+    s.at(s.cases.get(deal.id)!.commitment.timing.fallbackBy);
+    const c = s.cases.get(deal.id)!;
+    for (const e of [{ type: 'trigger_default' as const, at: s.now() }, { type: 'apply_default_outcome' as const, at: s.now() }]) {
+      const r = step(c.state, e);
+      if (!r.ok) throw new Error(r.error.detail);
+      c.state = r.value;
+    }
+    expect(s.state(deal.id)).toMatchObject({ kind: 'Refunded', via: { kind: 'default_outcome', from: 'FallbackJudging' } });
   });
 });

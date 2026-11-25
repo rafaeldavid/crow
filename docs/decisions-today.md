@@ -1730,7 +1730,7 @@ The build is not started; it opens as its own task on Rafa's word.
 - **Built-in code only,** on `@noble/curves` at the exact version the adjudicator app pins. No network, no clock, no code from the delivery. The work budget is the only time limit.
 - **A bad or malformed signature fails the check;** a required failed check refunds the buyer, as today. Budget exhaustion escalates.
 - **Schema v0.13** adds the kind and a `checkKinds` list on each adjudicator's record, beside `policy`. No signed type and no contract changes (inferred).
-- **An adjudicator declines an offer with a kind it does not run,** so the offer expires unfunded. The parties' tools read the three named adjudicators' lists before signing (D32). At judging time an unknown kind still fails closed.
+- **An adjudicator declines an offer with a kind it does not run,** so the offer expires unfunded. The parties' tools read the three named adjudicators' lists before signing (D32). At a later turn it signs nothing (D92); stage 1 still fails an unknown kind closed as the last guard.
 
 **Open for Rafa:** whether `jsonEquals` stays in the first version, and whether the laboratory's export will write the signed text beside its manifest object.
 
@@ -1767,3 +1767,19 @@ The build is not started; it opens as its own task on Rafa's word.
 **Dropped:** a signed flag from the decider; a bare hash-locked content key, which would publish the work; a zero-knowledge proof checked on chain; the commitment as a top-level delivery field; the in-place amendment in the same version; and a release in two amounts, which the row does not ask for and no deal has asked for (research note section 13).
 
 **Litmus tests.** Neutrality: holds; the verifier is built-in code in every decider, the contract's check is a hash comparison, and six fixtures show a deal under the rule ending by its terms when the primary, both first deciders, every operator, the seller or the buyer is gone, or an adjudicator lacks the kind. The hold: no stage or timeout changes, and nothing new is stored. Defended judgment: strengthened; the key check is one more deterministic check before the panel, and a decider's wrong seal can no longer pay the seller.
+
+## D92. An adjudicator signs no decision on a check kind it does not run (ADR-0045 amended, T-597)
+
+**Status:** needs Rafa, 2026-11-25. Rafa may overrule.
+
+**Adopted** by the coordinator from a Fable research note of 2026-11-25 (`reports/crow-private/roadmap/triage/2026-11-25-fallback-unrun-kind.md`), built with the evaluator in T-597.
+
+**Why.** ADR-0045 had a fallback that lacks a kind fail the check and sign a final reject, on the reading that the money moves the same way as an undecided deal. It does not: a reject pays the fee to the adjudicator that decided, and a default returns price and fee to the buyer. The reference fallback already signs nothing for a policy, registry, panel, reference file or envelope it cannot run (ADR-0036 section 3, D81, D21: no judgment, no fee).
+
+**Rule.** An adjudicator signs no decision on a deal whose terms name a check kind outside its `checkKinds`, in a required or an optional check, at any role. As primary it declines the offer. A fallback triggers no takeover and signs nothing if someone else triggers one. An appeal adjudicator signs nothing on an escalation. So does a primary whose build lost the kind. The deal runs to the next adjudicator or to its default outcome. The refusal comes before stage 1, and a turn whose result is already kept still completes (ADR-0036 section 2).
+
+**Built:** `apps/adjudicator/src/service.ts` (the check in `#runnable` and `#preflight`), the scenario runner, the fixture `neutrality.fallback-lacks-check-kind` (SimChain only, bonds), tests in `apps/adjudicator/src/check-kinds.test.ts`, and an operator notice (D31: warn, never refuse) for each named adjudicator whose registered `checkKinds` lacks a kind the terms name (`apps/operator/src/prepare.ts`, `checkKindNotices`). The seller's own offline preflight, which reads no adjudicator records, is not changed: it would alter the pinned `buy.mjs` and `try.mjs`.
+
+**Amended:** ADR-0045 (Summary point 8, section 10, the rejected-alternatives row). D90's last proposed bullet reads as this rule.
+
+**Litmus tests.** Neutrality: holds; a refused turn is a case the default already covers. The hold: unchanged. Defended judgment: strengthened; no decision rests on a check that did not run.
