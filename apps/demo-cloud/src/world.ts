@@ -72,7 +72,7 @@ import { panelConfig, unconfiguredReason, type JudgeProvider, type PanelConfig }
 import { StorageLanes } from './lanes.js';
 import { JudgedDealsPerPair, capOf, DailyCaps, DEFAULT_JUDGED_DEALS_PER_PAIR, secondsToUtcMidnight, MAX_BODY_BYTES, routedUrl, DEFAULT_DAILY_CAPS, DEFAULT_RATE, FLOOD_CEILING, problemResponse, wholeNumberVar } from './limits.js';
 import type { WorldStorage } from './storage.js';
-import { dealFacts, Telemetry, type DayFacts, type TelemetryOptions } from './telemetry.js';
+import { dealFacts, Telemetry, type DayFacts, type HeldRejectEvent, type TelemetryOptions } from './telemetry.js';
 
 export interface PublicWorldOptions {
   storage: WorldStorage;
@@ -568,6 +568,39 @@ function waitingNotice(s: EscrowState | null, w: WaitingTurn): string | null {
   return `The ${w.role} adjudicator cannot ${what} yet: ${w.detail}. It tries again on each pass.`;
 }
 
+/**
+ * ADR-0051: a reject one of this world's adjudicators judged and published, and holds until `until` so the parties can
+ * act first. Kept in memory and under `hr:<commitmentId>`, so the notice and the counts survive a restart; the
+ * adjudicator's own kept record fixes the time, so a lost row changes nothing but this view.
+ */
+export interface HeldReject {
+  role: 'primary' | 'appeal';
+  /** The adjudicator that holds it, lowercase. */
+  by: string;
+  /** When it signs the reject, RFC 3339. */
+  until: Timestamp;
+  /** The state the hold leaves the deal in. */
+  kind: 'Delivered' | 'Escalated';
+}
+
+/** What the state read says while a reject is held (ADR-0051); null once the deal left the state or the hold ended. */
+export function heldRejectNotice(s: EscrowState | null, h: HeldReject, now: number): string | null {
+  if (!s || s.kind !== h.kind || !(now < Date.parse(h.until))) return null;
+  const moves =
+    h.kind === 'Delivered'
+      ? `Until then the buyer may accept the delivery (POST /v1/commitments/${s.id}/accept), or both parties may settle (POST /v1/commitments/${s.id}/settlements).`
+      : `Until then both parties may settle (POST /v1/commitments/${s.id}/settlements); after an escalation the buyer alone cannot accept.`;
+  return `The ${h.role} adjudicator's panel rejected this delivery (GET /v1/commitments/${s.id}/judgment). It signs the reject at ${h.until}, and the deal stays ${h.kind} until then. ${moves}`;
+}
+
+/** How a held reject ended (ADR-0051), or null while the deal is still in the state the hold left it in. */
+export function heldRejectEnd(s: EscrowState | null, h: HeldReject): Exclude<HeldRejectEvent, 'held'> | null {
+  if (!s || s.kind === h.kind) return null;
+  if (s.kind === 'Settled' || (s.kind === 'Released' && s.via.kind === 'early_accept')) return 'rescued';
+  if (s.kind === 'Refunded' && (s.via.kind === 'first_instance' || s.via.kind === 'escalation') && lc(s.via.decision.adjudicator) === h.by && s.via.decision.outcome === 'reject') return 'signed';
+  return 'missed';
+}
+
 /** How long after its round is published an adjudicator is woken: the round reaches the relays, then the next block. */
 export const ROUND_WAKE_MS = 1_500;
 
@@ -685,13 +718,15 @@ export async function cannotJudgeNotice(
  * one sooner. A decided deal on a chain is final at once, whether core writes its appeal as `none` with appealBy at the
  * decision or as `expired`: either way no adjudicator acts on it again.
  */
-export function workAt(s: EscrowState, ours: (address: string) => boolean, now: number, marginSec = 0): number[] | null {
+export function workAt(s: EscrowState, ours: (address: string) => boolean, now: number, marginSec = 0, held?: HeldReject): number[] | null {
   const { adjudicator, fallbackAdjudicator, appealAdjudicator } = s.terms.adjudication;
   // ADR-0032 §3.5 (T-378 part 6): a fallback or appeal panel waits for its beacon round, which a rules contract with a
   // margin publishes that long after the last choice. Its adjudicator is woken to decide when the round is public.
   const roundReady = (role: 'fallback' | 'appeal', from: number) => Math.max(from, roundPublicAt(s, role, marginSec) ?? from);
   const { offerExpiresAt, deliverBy, judgeBy, fallbackBy } = s.terms.timing;
   const passed = (deadline: Timestamp) => now >= Date.parse(deadline);
+  // ADR-0051: a held reject wakes its adjudicator once, at the hold's end, not on every pass of the cadence.
+  const heldTill = (kind: HeldReject['kind'], at: number) => (held?.kind === kind && Date.parse(held.until) > now ? Date.parse(held.until) : at);
   switch (s.kind) {
     case 'Offered':
       return passed(offerExpiresAt) ? null : ours(adjudicator) ? [now] : [];
@@ -703,7 +738,7 @@ export function workAt(s: EscrowState, ours: (address: string) => boolean, now: 
     case 'Delivered':
     case 'FallbackJudging': {
       if (passed(fallbackBy)) return null;
-      const at = s.kind === 'Delivered' && ours(adjudicator) && !passed(judgeBy) ? [now] : [];
+      const at = s.kind === 'Delivered' && ours(adjudicator) && !passed(judgeBy) ? [heldTill('Delivered', now)] : [];
       // Kept even while the primary can act now: the takeover must not wait on a slow cadence (T-057 review).
       // The takeover (triggerFallback) needs no round and is its own transaction, so it goes at judgeBy; the decision
       // that follows in FallbackJudging waits for the round (PR 427 review M1: both after the round would cost a block).
@@ -711,7 +746,7 @@ export function workAt(s: EscrowState, ours: (address: string) => boolean, now: 
       return at;
     }
     case 'Escalated':
-      return passed(s.escalation.appealDecideBy) ? null : ours(appealAdjudicator) ? [roundReady('appeal', now)] : [];
+      return passed(s.escalation.appealDecideBy) ? null : ours(appealAdjudicator) ? [heldTill('Escalated', roundReady('appeal', now))] : [];
     case 'Released':
     case 'Refunded': {
       if (s.via.kind !== 'first_instance') return null;
@@ -763,6 +798,8 @@ export class PublicWorld {
     private readonly turnsDeclined: Map<Hex32, DeclinedTurn>,
     /** T-372: deals this world's adjudicators cannot act on yet for a reason off the terms, for the same notices; in memory too. */
     private readonly waiting: Map<Hex32, WaitingTurn>,
+    /** ADR-0051: rejects this world's adjudicators hold, for the notice, the wake and the counts; kept under `hr:`. */
+    private readonly held: Map<Hex32, HeldReject>,
     persisted: number,
     /** Each node's public address (OPERATOR_URLS), when configured. */
     private readonly publicUrls: readonly string[] = [],
@@ -939,6 +976,7 @@ export class PublicWorld {
     const declined = new Map<Hex32, string>();
     const turnsDeclined = new Map<Hex32, DeclinedTurn>();
     const waiting = new Map<Hex32, WaitingTurn>();
+    const held = new Map<Hex32, HeldReject>(Array.from(await storage.list<HeldReject>({ prefix: 'hr:' }), ([k, v]) => [k.slice(3) as Hex32, v]));
     const operators: Operator[] = [];
     const publicUrls = String(o.env?.OPERATOR_URLS ?? '').split(',').map((u) => trimTrailingSlashes(u.trim())).filter((u) => /^https:\/\//.test(u));
     // D39: the one discovery document carries what GET / used to list. T-066 adds the facts Crow Control reads by
@@ -1044,6 +1082,10 @@ export class PublicWorld {
         const wait = waiting.get(about.commitmentId);
         const waits = wait ? waitingNotice(state, wait) : null;
         if (waits) return [waits];
+        // ADR-0051, after why an adjudicator cannot act (red team L2): a reject held for the parties to act first: when it is signed, and what each party may do until then.
+        const hold = held.get(about.commitmentId);
+        const holds = hold ? heldRejectNotice(state, hold, Date.parse(chain.now())) : null;
+        if (holds) return [holds];
         // T-218: a deal the chain moved past this node's book (a direct delivery not yet posted, a forwarded call).
         const behind = live?.evm.lag(about.commitmentId);
         if (behind) return [behind];
@@ -1160,7 +1202,7 @@ export class PublicWorld {
     if (registrations.policiesKept() > 0) telemetry.rows('ph', registrations.policiesKept());
     const keys = [principal, key('demo-club-operator'), ...adjKeys.map((a) => a.keys), key('demo-operator-1'), key('demo-operator-2')];
     ourAddresses = new Set(Object.values(adjudicators).map((x) => lc(x.address)));
-    const world = new PublicWorld(o, telemetry, secret, chain, keys, operators, adjudicators, panel, declined, turnsDeclined, waiting, journalLength, publicUrls, live);
+    const world = new PublicWorld(o, telemetry, secret, chain, keys, operators, adjudicators, panel, declined, turnsDeclined, waiting, held, journalLength, publicUrls, live);
     reservedJudgeCalls = () => world.reservedJudgeCalls();
     world.caps = new DailyCaps(storage, now, secret, capLimits);
     world.deployedAt = deployedAt;
@@ -1264,7 +1306,7 @@ export class PublicWorld {
     this.wake = null;
     for (const id of this.commitments) {
       const s = this.chain.escrowState(id);
-      const at = s ? workAt(s, (a) => ours.has(lc(a)), now, this.chain.beaconMarginSec ?? 0) : null;
+      const at = s ? workAt(s, (a) => ours.has(lc(a)), now, this.chain.beaconMarginSec ?? 0, this.held.get(id)) : null;
       if (at === null) {
         this.commitments.delete(id);
         continue;
@@ -1401,6 +1443,8 @@ export class PublicWorld {
       const s = this.chain.escrowState(id);
       if (!s || !needsPanel(s.terms as Parameters<typeof needsPanel>[0])) continue;
       const { adjudicator, fallbackAdjudicator, appealAdjudicator } = s.terms.adjudication;
+      // ADR-0051: a held reject's panel has run and its result is kept, so it needs no judge call again.
+      if (this.held.get(id)?.kind === s.kind) continue;
       if ((s.kind === 'Held' || s.kind === 'Delivered') && ours('primary', adjudicator)) n += 2 * policy('primary').panelSize;
       else if (s.kind === 'FallbackJudging' && ours('fallback', fallbackAdjudicator)) n += 2 * policy('fallback').panelSize;
       else if (s.kind === 'Escalated' && ours('appeal', appealAdjudicator)) n += 2 * policy('appeal').appealPanelSize;
@@ -1464,6 +1508,7 @@ export class PublicWorld {
         // T-372: a decline the primary reverses leaves the state read.
         for (const id of r.accepted) this.declined.delete(id);
         this.noteWaiting(a.address, r);
+        await this.noteHeld(a.address, r);
         // A fallback or appeal turn declined on the deal's own terms stays declined; the state read says why (T-221).
         for (const x of r.refused) {
           const s = DECLINED_ON_TERMS.has(x.problem.type) ? this.chain.escrowState(x.commitmentId) : null;
@@ -1479,6 +1524,7 @@ export class PublicWorld {
     await panel.budget.flush();
     // After the adjudicators, so their own steps go first: the demo fallback's takeover.
     const closed = this.live ? await this.closeDue() : false;
+    await this.endHeld();
     await this.persist();
     // A timeout for a deal behind the chain logs no event, so it counts as settlement moving too.
     if ((await this.look()) || closed) this.stir();
@@ -1517,6 +1563,36 @@ export class PublicWorld {
     for (const u of r.unavailable) if (!this.listsDown.has(`${by}|${u.step}`)) this.o.onError?.(new Error(`adjudicator ${by}: ${u.problem.detail.slice(0, WAITING_DETAIL_MAX)}`));
     for (const k of this.listsDown) if (k.startsWith(`${by}|`) && !lists.has(k)) this.listsDown.delete(k);
     for (const k of lists) this.listsDown.add(k);
+  }
+
+  /** ADR-0051: keeps each reject `address` holds, counted once as held, for the notice, the wake and the judge-call count. */
+  private async noteHeld(address: string, r: RunReport): Promise<void> {
+    const by = lc(address);
+    for (const h of r.held) {
+      const s = this.chain.escrowState(h.commitmentId);
+      if (!s || h.role === 'fallback' || (s.kind !== 'Delivered' && s.kind !== 'Escalated')) continue;
+      const next: HeldReject = { role: h.role, by, until: h.until, kind: s.kind };
+      const before = this.held.get(h.commitmentId);
+      if (before && before.until === next.until && before.kind === next.kind && before.by === by) continue;
+      if (!before) this.telemetry.heldReject('held');
+      this.held.set(h.commitmentId, next);
+      await this.telemetry.storage.put({ [`hr:${h.commitmentId}`]: next });
+    }
+  }
+
+  /** ADR-0051: counts how each held reject ended (rescued, signed or missed) and drops it. A failed write is reported. */
+  private async endHeld(): Promise<void> {
+    for (const [id, h] of this.held) {
+      const end = heldRejectEnd(this.chain.escrowState(id), h);
+      if (!end) continue;
+      this.telemetry.heldReject(end);
+      this.held.delete(id);
+      try {
+        await this.telemetry.storage.delete([`hr:${id}`]);
+      } catch (e) {
+        this.o.onError?.(e as Error);
+      }
+    }
   }
 
   private async closeDue(): Promise<boolean> {

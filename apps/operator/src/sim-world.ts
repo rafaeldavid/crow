@@ -11,7 +11,7 @@ import { createServer, type IncomingMessage, type Server, type ServerResponse } 
 import type { AddressInfo } from 'node:net';
 import { canonicalKeccak, holdbackDomain, parseAdjudicator, wholeSecond, type AdjudicatorRegistration, type AdjudicatorRole, type Address, type Hex32, type Judgment, type Timestamp } from '@holdback/core';
 import { MemoryCiphertextStore } from '@holdback/core/store';
-import { declinesOf, FAIL_MARKER, testAdjudicator, type TestAdjudicator } from '@holdback/adjudicator';
+import { declinesOf, FAIL_MARKER, testAdjudicator, type JudgedStore, type TestAdjudicator } from '@holdback/adjudicator';
 import type { FakeScript } from '@holdback/judgment';
 import { mandateFor, SIM_CHAIN_ID, SIM_RULEBOOK, simClub, SimChain, TOKEN, wideScope, type Genesis } from '@holdback/settlement/sim';
 import { testAccount, type TestAccount } from './accounts.js';
@@ -297,6 +297,9 @@ export async function startSimWorld(options: SimWorldOptions = {}): Promise<SimW
       acceptSealedUnread: true,
       // The world's three adjudicators trust each other as fallback and appeal adjudicators, and nobody else (T-212).
       trustedAdjudicators: adjKeys.map((k) => k.keys.address),
+      // ADR-0051: the judged results this world keeps, so its adjudicators hold a rubric deal's reject as the public demo's
+      // do. The world, its chain included, lives in this process, so memory outlives every restart the world has.
+      judgedStore: ((m = new Map<string, Parameters<JudgedStore['put']>[1]>()) => ({ get: async (k: string) => m.get(k), put: async (k: string, v: Parameters<JudgedStore['put']>[1]) => void m.set(k, v) }))(),
     });
     // Each signs its registration with its own key and registers through the route's own checks (ADR-0030 §3), so
     // every registration the world serves is signed.

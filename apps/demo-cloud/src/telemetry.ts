@@ -58,7 +58,15 @@ interface Usage extends Record<Quota, number> {
   rows?: Record<string, number>;
   /** Timeouts the operators sent on their own today, by kind (T-231). */
   timeouts?: Record<string, number>;
+  /** ADR-0051: rejects Crow's adjudicators held today, and how held ones ended, by what happened (`HeldRejectEvent`). */
+  heldRejects?: Partial<Record<HeldRejectEvent, number>>;
 }
+
+/**
+ * ADR-0051: a reject held (judged and published, not yet signed); rescued (the buyer accepted or both settled during the
+ * hold); signed (the held reject landed); missed (the turn ended some other way: the fallback took over, or the default).
+ */
+export type HeldRejectEvent = 'held' | 'rescued' | 'signed' | 'missed';
 
 interface Hour {
   hour: string;
@@ -204,6 +212,13 @@ export class Telemetry {
     this.changed = true;
   }
 
+  /** One step of a held reject (ADR-0051): the usage view counts them by event as `heldRejects`. */
+  heldReject(event: HeldRejectEvent): void {
+    const u = this.day();
+    u.heldRejects = { ...(u.heldRejects ?? {}), [event]: (u.heldRejects?.[event] ?? 0) + 1 };
+    this.changed = true;
+  }
+
   /** Marks a cold start; call the returned function when storage has been replayed. */
   wake(): () => void {
     const rows = this.day().rowsRead;
@@ -300,7 +315,7 @@ export class Telemetry {
 
   private usageView(u: Usage): Record<string, unknown> {
     const quotas = Object.fromEntries(QUOTAS.map((q) => [q, { used: u[q], limit: this.limits[q], percent: Math.floor((u[q] * 100) / this.limits[q]) }]));
-    return { ...quotas, wakes: u.wakes, replayRowsRead: u.replayRowsRead, replayMs: u.replayMs, ...(u.rows ? { rows: { ...u.rows } } : {}), ...(u.timeouts ? { operatorTimeouts: { ...u.timeouts } } : {}) };
+    return { ...quotas, wakes: u.wakes, replayRowsRead: u.replayRowsRead, replayMs: u.replayMs, ...(u.rows ? { rows: { ...u.rows } } : {}), ...(u.timeouts ? { operatorTimeouts: { ...u.timeouts } } : {}), ...(u.heldRejects ? { heldRejects: { ...u.heldRejects } } : {}) };
   }
 }
 
