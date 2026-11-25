@@ -64174,6 +64174,23 @@ function freeText(value) {
 	}
 	return out;
 }
+/**
+* Each base64 or base64url text in a string, decoded, for the canary scan (agg-5; red team M1 and L1 of T-618). A
+* run is decoded whole, at each of the four offsets from the base64 grid, and split at `=` padding, where Node's
+* decoder stops; runs broken by whitespace (MIME lines) are joined and decoded too. The output is capped at
+* MAX_OUTPUT_CHARS, so the work grows linearly with it. agg-4's filter decoded windows of at most 4,096 characters
+* from the start of each run, which a canary across a window boundary, off the grid or after padding escaped; inside
+* agg-4's caps no such run fit a field, but agg-5 cuts the field and counts the seat.
+*/
+function* decodedBase64(t) {
+	for (const text of [t, t.replace(/\s+/g, "")]) for (const m of text.matchAll(/[A-Za-z0-9+/_=-]{16,65536}/g)) {
+		const encoding = /[-_]/.test(m[0]) ? "base64url" : "base64";
+		for (const piece of m[0].split(/=+/)) {
+			if (piece.length < 16) continue;
+			for (let o = 0; o < 4; o++) yield Buffer.from(piece.slice(o), encoding).toString("latin1");
+		}
+	}
+}
 /** The canary in any case, with any separators, split across fields, or base64-encoded. */
 function echoesCanary(raw, parsed, canary) {
 	const c = squash(canary);
@@ -64181,7 +64198,7 @@ function echoesCanary(raw, parsed, canary) {
 	if (squash(raw).includes(c)) return true;
 	const texts = parsed === void 0 ? [] : freeText(parsed);
 	if (squash(texts.join("")).includes(c)) return true;
-	for (const t of [raw, ...texts]) for (const m of t.matchAll(/[A-Za-z0-9+/_=-]{16,4096}/g)) if (squash(Buffer.from(m[0], /[-_]/.test(m[0]) ? "base64url" : "base64").toString("latin1")).includes(c)) return true;
+	for (const t of [raw, ...texts]) for (const decoded of decodedBase64(t)) if (squash(decoded).includes(c)) return true;
 	return false;
 }
 /**
@@ -64206,6 +64223,11 @@ function cutToCap(s, cap) {
 	if (afterCodePoints(s, cap) < 0) return void 0;
 	if (cap < 5) return s.slice(0, Math.max(0, afterCodePoints(s, cap)));
 	return `${s.slice(0, afterCodePoints(s, cap - 5))}${CUT_MARK}`;
+}
+/** s with the mark at its end, within `cap` code points: its first cap - 5 code points and the mark. */
+function withMark(s, cap) {
+	const end = afterCodePoints(s, cap - 5);
+	return `${end < 0 ? s : s.slice(0, end)}${CUT_MARK}`;
 }
 const isRecord$4 = (v) => v !== null && typeof v === "object" && !Array.isArray(v);
 /**
@@ -64340,13 +64362,16 @@ function parseVerdict(raw, opts) {
 	let redactedUrls = 0;
 	for (const [i, c] of verdict.criteria.entries()) {
 		if (!hasUrl(c.evidence)) continue;
-		const redacted = refang(c.evidence).replace(URL_ALL, () => {
+		let kept = refang(c.evidence).replace(URL_ALL, () => {
 			redactedUrls++;
 			return URL_REDACTION;
 		});
-		const recut = cutToCap(redacted, 300);
+		const recut = cutToCap(kept, 300);
 		if (recut !== void 0) evidenceCut.add(i);
-		c.evidence = recut ?? redacted;
+		else if (evidenceCut.has(i) && !kept.endsWith("[cut]")) kept = withMark(kept, 300);
+		kept = recut ?? kept;
+		if (hasUrl(kept)) kept = URL_REDACTION;
+		c.evidence = kept;
 	}
 	cut.evidence = evidenceCut.size;
 	return anyCut(cut) ? {
