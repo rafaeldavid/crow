@@ -9349,7 +9349,7 @@ function holdbackDomain(chainId, verifyingContract = SIMCHAIN_VERIFYING_CONTRACT
 		verifyingContract
 	};
 }
-function seconds(ts) {
+function seconds$1(ts) {
 	const ms = instant(ts);
 	if (ms === void 0) throw new RangeError(`cannot encode timestamp ${ts}: need RFC 3339 in whole seconds`);
 	return BigInt(ms / 1e3);
@@ -9406,15 +9406,15 @@ function typedTermsOf(t) {
 			fee: amount(t.adjudication.fee)
 		},
 		timing: {
-			offerExpiresAt: seconds(t.timing.offerExpiresAt),
-			fundBy: seconds(t.timing.fundBy),
-			deliverBy: seconds(t.timing.deliverBy),
-			judgeBy: seconds(t.timing.judgeBy),
-			fallbackBy: seconds(t.timing.fallbackBy),
+			offerExpiresAt: seconds$1(t.timing.offerExpiresAt),
+			fundBy: seconds$1(t.timing.fundBy),
+			deliverBy: seconds$1(t.timing.deliverBy),
+			judgeBy: seconds$1(t.timing.judgeBy),
+			fallbackBy: seconds$1(t.timing.fallbackBy),
 			appealWindowSec: BigInt(t.timing.appealWindowSec),
 			appealDecideSec: BigInt(t.timing.appealDecideSec),
 			maxSubmissions: t.timing.maxSubmissions,
-			disputeBy: t.timing.disputeBy === void 0 ? 0n : seconds(t.timing.disputeBy),
+			disputeBy: t.timing.disputeBy === void 0 ? 0n : seconds$1(t.timing.disputeBy),
 			disputeJudgeSec: BigInt(t.timing.disputeJudgeSec ?? 0),
 			disputeFallbackSec: BigInt(t.timing.disputeFallbackSec ?? 0)
 		},
@@ -9423,7 +9423,7 @@ function typedTermsOf(t) {
 		disclosure: t.disclosure,
 		buyerEncryptionPublicKey: t.buyerEncryptionPublicKey,
 		nonce: t.nonce,
-		createdAt: seconds(t.createdAt)
+		createdAt: seconds$1(t.createdAt)
 	};
 }
 /** A message as EIP-712 typed values; the primary type is its `type`. Throws RangeError on unencodable values. */
@@ -9461,8 +9461,8 @@ function encodeMessage(m) {
 			from: m.from,
 			value: BigInt(m.value),
 			token: m.token,
-			validAfter: seconds(m.validAfter),
-			validBefore: seconds(m.validBefore),
+			validAfter: seconds$1(m.validAfter),
+			validBefore: seconds$1(m.validBefore),
 			...expiry(m)
 		};
 		case "TransferAuthorization": return {
@@ -9473,8 +9473,8 @@ function encodeMessage(m) {
 			to: m.to,
 			value: BigInt(m.value),
 			token: m.token,
-			validAfter: seconds(m.validAfter),
-			validBefore: seconds(m.validBefore),
+			validAfter: seconds$1(m.validAfter),
+			validBefore: seconds$1(m.validBefore),
 			...expiry(m)
 		};
 		case "EarlyAccept": return {
@@ -9523,7 +9523,7 @@ function encodeMessage(m) {
 			clubId: m.clubId,
 			member: m.member,
 			operator: m.operator,
-			validUntil: seconds(m.validUntil),
+			validUntil: seconds$1(m.validUntil),
 			...expiry(m)
 		};
 		case "MemberRevocation": return {
@@ -9578,7 +9578,7 @@ function encodeMessage(m) {
 			fee: amount(m.fee),
 			poolTermsHash: m.poolTermsHash,
 			bodyHash: m.bodyHash,
-			issuedAt: seconds(m.issuedAt),
+			issuedAt: seconds$1(m.issuedAt),
 			...expiry(m)
 		};
 		case "MutualSettlement": return {
@@ -9609,7 +9609,7 @@ function encodeMessage(m) {
 			plaintextSha256: m.plaintextSha256,
 			plaintextMime: m.plaintextMime,
 			encryptedKeys: m.encryptedKeys.map(key$1),
-			submittedAt: seconds(m.submittedAt)
+			submittedAt: seconds$1(m.submittedAt)
 		};
 		case "Appeal": return {
 			commitmentId: m.commitmentId,
@@ -9617,7 +9617,7 @@ function encodeMessage(m) {
 			appellantAddress: m.appellantAddress,
 			grounds: m.grounds,
 			bond: amount(m.bond),
-			filedAt: seconds(m.filedAt)
+			filedAt: seconds$1(m.filedAt)
 		};
 		case "Mandate": return {
 			principal: m.principal,
@@ -9625,7 +9625,7 @@ function encodeMessage(m) {
 			clubId: m.clubId,
 			scope: scope(m.scope),
 			nonce: m.nonce,
-			issuedAt: seconds(m.issuedAt)
+			issuedAt: seconds$1(m.issuedAt)
 		};
 	}
 }
@@ -10012,12 +10012,12 @@ var init_eip712 = __esmMin((() => {
 		maxDaily: amount(s.maxDaily),
 		hasCategories: s.categories !== void 0,
 		categories: s.categories ?? [],
-		expiresAt: seconds(s.expiresAt)
+		expiresAt: seconds$1(s.expiresAt)
 	});
 	isSealed = (t) => t.privateTerms !== void 0;
 	expiry = (m) => ({
 		nonce: m.nonce,
-		expiresAt: seconds(m.expiresAt)
+		expiresAt: seconds$1(m.expiresAt)
 	});
 	typed = (domain, primaryType, message) => ({
 		domain,
@@ -55813,13 +55813,17 @@ function buildPrompt(input) {
 	if (terms.includes(boundary)) return err("agreed terms contain the boundary; draw new nonces");
 	const appeal = input.template === "appeal";
 	const pair = input.templates ?? TEMPLATE_PAIR;
+	const cap = input.rationaleMaxChars ?? 600;
+	const rationaleMax = Number.isSafeInteger(cap) ? Math.min(600, Math.max(1, cap)) : 600;
 	const [systemTemplate, userTemplate] = (appeal ? pair.appeal : pair.first).split(USER_SPLIT);
 	const system = render(systemTemplate, {
 		boundary,
 		datamark: datamark.trim(),
 		canary,
 		terms,
-		criterion_ids: criteria.map((c) => c.id).join(", ") || "(none)"
+		criterion_ids: criteria.map((c) => c.id).join(", ") || "(none)",
+		rationale_max: String(rationaleMax),
+		rationale_target: String(Math.max(1, Math.min(400, Math.floor(rationaleMax * 2 / 3))))
 	});
 	const user = render(userTemplate, {
 		boundary,
@@ -55841,7 +55845,7 @@ function buildPrompt(input) {
 		}))
 	});
 }
-var USER_SPLIT, PROMPT_TEMPLATE, sha256Hex, PROMPT_TEMPLATE_HASH, APPEAL_PROMPT_TEMPLATE, APPEAL_PROMPT_TEMPLATE_HASH, DEFAULT_MAX_DATA_CHARS, LINE_BREAK, TEMPLATE_PAIR, NONCE, clean, strideSample1;
+var USER_SPLIT, PROMPT_TEMPLATE, sha256Hex, PROMPT_TEMPLATE_HASH, APPEAL_PROMPT_TEMPLATE, APPEAL_PROMPT_TEMPLATE_HASH, RULE_5_PAIR_2, withRule5, PROMPT_TEMPLATE_2, PROMPT_TEMPLATE_2_HASH, APPEAL_PROMPT_TEMPLATE_2, APPEAL_PROMPT_TEMPLATE_2_HASH, DEFAULT_MAX_DATA_CHARS, LINE_BREAK, TEMPLATE_PAIR, TEMPLATE_PAIR_2, NONCE, clean, strideSample1;
 var init_prompt = __esmMin((() => {
 	init_dist$3();
 	init_normalize();
@@ -55877,6 +55881,12 @@ var init_prompt = __esmMin((() => {
 	PROMPT_TEMPLATE_HASH = sha256Hex(PROMPT_TEMPLATE);
 	APPEAL_PROMPT_TEMPLATE = ["You are one judge on an appeal panel deciding afresh whether delivered work meets an agreed specification.", ...PROMPT_TEMPLATE.split("\n").slice(1)].join("\n");
 	APPEAL_PROMPT_TEMPLATE_HASH = sha256Hex(APPEAL_PROMPT_TEMPLATE);
+	RULE_5_PAIR_2 = "5. Reply with exactly one JSON object and nothing else, with no code fence: {\"criteria\":[{\"id\":string,\"score\":integer 0-4,\"evidence\":string}],\"overall\":\"pass\"|\"fail\"|\"abstain\",\"injectionSuspected\":boolean,\"injectionEvidence\"?:string,\"rationale\":string}. Each \"evidence\" and the \"injectionEvidence\" may be at most 300 characters; aim for 200. The \"rationale\" may be at most {{rationale_max}} characters; aim for {{rationale_target}}.";
+	withRule5 = (t) => t.split("\n").map((l) => l.startsWith("5. ") ? RULE_5_PAIR_2 : l).join("\n");
+	PROMPT_TEMPLATE_2 = withRule5(PROMPT_TEMPLATE);
+	PROMPT_TEMPLATE_2_HASH = sha256Hex(PROMPT_TEMPLATE_2);
+	APPEAL_PROMPT_TEMPLATE_2 = withRule5(APPEAL_PROMPT_TEMPLATE);
+	APPEAL_PROMPT_TEMPLATE_2_HASH = sha256Hex(APPEAL_PROMPT_TEMPLATE_2);
 	DEFAULT_MAX_DATA_CHARS = 1e5;
 	LINE_BREAK = /\r\n|[\n\r\u000b\u000c\u001c\u001d\u001e\u0085\u2028\u2029]/;
 	TEMPLATE_PAIR = {
@@ -55884,6 +55894,12 @@ var init_prompt = __esmMin((() => {
 		appeal: APPEAL_PROMPT_TEMPLATE,
 		firstHash: PROMPT_TEMPLATE_HASH,
 		appealHash: APPEAL_PROMPT_TEMPLATE_HASH
+	};
+	TEMPLATE_PAIR_2 = {
+		first: PROMPT_TEMPLATE_2,
+		appeal: APPEAL_PROMPT_TEMPLATE_2,
+		firstHash: PROMPT_TEMPLATE_2_HASH,
+		appealHash: APPEAL_PROMPT_TEMPLATE_2_HASH
 	};
 	NONCE = /^[0-9a-f]{32,64}$/;
 	clean = (s) => normalizeText(s).text;
@@ -56507,6 +56523,76 @@ function echoesCanary(raw, parsed, canary) {
 	for (const t of [raw, ...texts]) for (const m of t.matchAll(/[A-Za-z0-9+/_=-]{16,4096}/g)) if (squash(Buffer.from(m[0], /[-_]/.test(m[0]) ? "base64url" : "base64").toString("latin1")).includes(c)) return true;
 	return false;
 }
+/**
+* Which verdict-schema rule an output broke, as metadata only: a field path built from the schema's own names and
+* array indices, the limit, and the actual length, count or JSON type. Never a value, a key or text from the output:
+* a judge's text quotes the delivery, which is untrusted and private to the deal. Lengths count code points, as the
+* schema's maxLength does. The pipeline puts this detail in the judgment record, so a filter abstention names its rule.
+*/
+function schemaFault(json) {
+	const typeOf = (v) => v === null ? "null" : Array.isArray(v) ? "array" : typeof v === "number" && !Number.isFinite(v) ? "non-finite number" : typeof v;
+	const isObject = (v) => typeOf(v) === "object";
+	const extra = (o, allowed) => Object.keys(o).filter((k) => !allowed.includes(k)).length;
+	const length = (n, max) => n > 2 * max ? `more than ${2 * max}` : String(n);
+	const keys = (n) => n === 1 ? "1 unexpected key" : `${n > 9 ? "more than 9" : n} unexpected keys`;
+	const text = (v, path, max) => {
+		if (typeof v !== "string") return `${path}: ${typeOf(v)}, not a string`;
+		const n = [...v].length;
+		return n > max ? `${path}: ${length(n, max)} > ${max}` : void 0;
+	};
+	if (!isObject(json)) return `the output is a JSON ${typeOf(json)}, not an object`;
+	const top = [
+		"criteria",
+		"overall",
+		"injectionSuspected",
+		"injectionEvidence",
+		"rationale"
+	];
+	for (const k of [
+		"criteria",
+		"overall",
+		"injectionSuspected",
+		"rationale"
+	]) if (!Object.hasOwn(json, k)) return `${k}: missing`;
+	const unexpected = extra(json, top);
+	if (unexpected) return `top level: ${keys(unexpected)}`;
+	const cs = json["criteria"];
+	if (!Array.isArray(cs)) return `criteria: ${typeOf(cs)}, not an array`;
+	if (cs.length > 12) return `criteria: ${cs.length > 24 ? "more than 24" : cs.length} items > 12`;
+	for (const [i, c] of cs.entries()) {
+		const at = `criteria[${i}]`;
+		if (!isObject(c)) return `${at}: ${typeOf(c)}, not an object`;
+		for (const k of [
+			"id",
+			"score",
+			"evidence"
+		]) if (!Object.hasOwn(c, k)) return `${at}.${k}: missing`;
+		const more = extra(c, [
+			"id",
+			"score",
+			"evidence"
+		]);
+		if (more) return `${at}: ${keys(more)}`;
+		if (typeof c["id"] !== "string" || !/^[a-z0-9_-]{1,40}$/.test(c["id"])) return `${at}.id: not a criterion id`;
+		const score = c["score"];
+		if (typeof score !== "number" || !Number.isFinite(score)) return `${at}.score: ${typeOf(score)}, not an integer`;
+		if (!Number.isInteger(score)) return `${at}.score: not an integer`;
+		if (score < 0 || score > 4) return `${at}.score: outside 0 to 4`;
+		const e = text(c["evidence"], `${at}.evidence`, 300);
+		if (e) return e;
+	}
+	if (![
+		"pass",
+		"fail",
+		"abstain"
+	].includes(json["overall"])) return `overall: not pass, fail or abstain`;
+	if (typeof json["injectionSuspected"] !== "boolean") return `injectionSuspected: ${typeOf(json["injectionSuspected"])}, not a boolean`;
+	if (Object.hasOwn(json, "injectionEvidence")) {
+		const e = text(json["injectionEvidence"], "injectionEvidence", 300);
+		if (e) return e;
+	}
+	return text(json["rationale"], "rationale", 600) ?? "another schema rule";
+}
 function parseVerdict(raw, opts) {
 	if (raw.length > 65536) return abstain("too_long", `output is ${raw.length} characters`);
 	let json;
@@ -56517,16 +56603,16 @@ function parseVerdict(raw, opts) {
 		jsonOk = false;
 	}
 	if (echoesCanary(raw, jsonOk ? json : void 0, opts.canary)) return abstain("canary_echo", "output contains the canary");
-	if (!jsonOk) return abstain("not_json", "output is not a single JSON value");
+	if (!jsonOk) return abstain("not_json", `output is not a single JSON value${/^\s*```/.test(raw) ? " (it starts with a code fence)" : ""}`);
 	let parsed;
 	try {
 		parsed = parseJudgeVerdict(json);
 	} catch {
 		return abstain("schema", "output could not be validated");
 	}
-	if (!parsed.ok) return abstain("schema", parsed.error.detail.slice(0, 200));
+	if (!parsed.ok) return abstain("schema", schemaFault(json));
 	const verdict = parsed.value;
-	if (verdict.rationale.length > opts.rationaleMaxChars) return abstain("schema", `rationale exceeds the policy cap of ${opts.rationaleMaxChars}`);
+	if (verdict.rationale.length > opts.rationaleMaxChars) return abstain("schema", `rationale: ${verdict.rationale.length > 1200 ? "more than 1200" : verdict.rationale.length} > ${opts.rationaleMaxChars} (the policy cap, in UTF-16 units)`);
 	const want = new Set(opts.criterionIds);
 	const got = verdict.criteria.map((c) => c.id);
 	if (got.length !== want.size || new Set(got).size !== got.length || !got.every((id) => want.has(id))) return abstain("criteria_mismatch", "criterion ids differ from the rubric");
@@ -56633,7 +56719,7 @@ var init_kept = __esmMin((() => {
 			[SCREEN_VERSION$1, SCREEN_1],
 			[SCREEN_VERSION, SCREEN_2]
 		]),
-		templatePairs: [TEMPLATE_PAIR],
+		templatePairs: [TEMPLATE_PAIR, TEMPLATE_PAIR_2],
 		aggregations: /* @__PURE__ */ new Map([[AGGREGATION_VERSION, AGG_3], [AGGREGATION_VERSION$1, AGG_4]])
 	};
 	NEWEST_VERSIONS = {
@@ -56838,6 +56924,7 @@ async function runPipeline(input) {
 			...input.template ? { template: input.template } : {},
 			templates,
 			stride: screener.stride,
+			rationaleMaxChars: policy.rationaleMaxChars,
 			...input.maxDataChars !== void 0 ? { maxDataChars: input.maxDataChars } : {},
 			...input.sampleSeed ? { sample: {
 				seed: input.sampleSeed(seat, i),
@@ -56912,6 +56999,7 @@ async function runPipeline(input) {
 			verdict: none,
 			canaryEcho: parsed.reason === "canary_echo",
 			filtered: parsed.reason,
+			filterDetail: parsed.detail,
 			strided: p.sampling === "stride"
 		};
 		const status = parsed.verdict.overall === "abstain" ? "abstain" : "ok";
@@ -56937,7 +57025,8 @@ async function runPipeline(input) {
 		flagged: baseScreen.flagged || canarySignals.length > 0,
 		signals: [...baseScreen.signals, ...canarySignals]
 	};
-	const escalate = rs.filter((r) => r.filtered).map((r) => `judge ${r.member.judgeId} output rejected by a filter (${r.filtered})`);
+	const filterReason = (r) => `judge ${r.member.judgeId} output rejected by a filter (${r.filtered}${r.filtered === "schema" && r.filterDetail ? `: ${r.filterDetail}` : ""})`.slice(0, 200);
+	const escalate = rs.filter((r) => r.filtered).map(filterReason);
 	if (rs.some((r) => r.strided)) escalate.push("the judges saw a sample of the deliverable, not all of it");
 	const agg = aggregation.aggregate({
 		checks: deterministic,
@@ -56950,6 +57039,11 @@ async function runPipeline(input) {
 		thresholds,
 		escalate
 	});
+	const named = escalate.slice(0, rs.filter((r) => r.filtered).length).filter((reason) => !agg.reasons.includes(reason));
+	const aggregate = named.length ? {
+		...agg,
+		reasons: [...agg.reasons, ...named]
+	} : agg;
 	return ok(wellFormed({
 		...base,
 		screen: finalScreen,
@@ -56957,7 +57051,7 @@ async function runPipeline(input) {
 			ran: true,
 			members: rs.map((r) => r.member)
 		},
-		aggregate: agg
+		aggregate
 	}));
 }
 var MODEL_ID, ALIAS_WORD, VERSION_STAMP, normFamily, LONE_SURROGATE, termsTexts;
@@ -57234,6 +57328,41 @@ var init_references = __esmMin((() => {
 	};
 }));
 
+// packages/judgment/dist/hold.js
+/** True when the terms carry a rubric with at least one criterion, so a panel scores the work (ADR-0051). */
+function hasRubric(c) {
+	return (c.acceptance?.rubric?.criteria?.length ?? 0) > 0;
+}
+/**
+* When this adjudicator signs `outcome` on `task`, whose record was decided at `decidedAt`: a whole-second timestamp, or
+* null to sign at once. A time already passed means sign now. Malformed times hold nothing.
+*/
+function holdUntil(task, outcome, decidedAt) {
+	if (outcome !== "reject" || !hasRubric(task.commitment)) return null;
+	const t = task.commitment.timing;
+	let window;
+	let deadline = seconds(task.deadline);
+	if (task.role === "primary") {
+		window = seconds(t.judgeBy) - seconds(t.deliverBy);
+		deadline = Math.min(deadline, seconds(t.judgeBy));
+	} else if (task.role === "appeal" && task.firstOutcome === void 0) window = t.appealDecideSec;
+	else return null;
+	const from = seconds(decidedAt);
+	if (![
+		window,
+		deadline,
+		from
+	].every(Number.isSafeInteger)) return null;
+	const until = Math.min(from + window - 600, deadline - 600);
+	return until > from ? toTimestamp(until * 1e3) : null;
+}
+var HOLD_MARGIN_SEC, seconds;
+var init_hold = __esmMin((() => {
+	init_dist$3();
+	HOLD_MARGIN_SEC = 600;
+	seconds = (ts) => Math.floor(Date.parse(ts) / 1e3);
+}));
+
 // packages/judgment/dist/index.js
 var init_dist$2 = __esmMin((() => {
 	init_aggregate();
@@ -57255,6 +57384,7 @@ var init_dist$2 = __esmMin((() => {
 	init_untrusted$1();
 	init_verdict();
 	init_kept();
+	init_hold();
 }));
 
 // examples/plain.ts
@@ -72801,6 +72931,8 @@ var init_stub_settlement = __esmMin((() => {
 		current = 1;
 		/** One judgment per commitment|role|attempt: a panel is never re-rolled. */
 		judged = /* @__PURE__ */ new Map();
+		/** ADR-0051: the sim time each judgment was first made (the record's decidedAt), by commitment|role|attempt. */
+		judgedAt = /* @__PURE__ */ new Map();
 		/** The same judgments keyed by commitment number, role and attempt, which do not depend on the backend. */
 		judgedBySlot = /* @__PURE__ */ new Map();
 		/** Registries by file, loaded on first use. */
@@ -73698,6 +73830,18 @@ var init_stub_settlement = __esmMin((() => {
 			}
 			const outcome = view.outcome;
 			if (outcome === null) return this.row(name, `${call}: none`, "direct", "no decision: the appeal panel was inconclusive, so the default outcome applies");
+			if (!this.judgedAt.has(key)) this.judgedAt.set(key, this.ctx.clock.now());
+			const st = c.state;
+			const heldUntil = holdUntil({
+				commitment: c.terms,
+				role,
+				deadline: this.decisionDeadline(st, role),
+				...role === "appeal" && (st.kind === "Released" || st.kind === "Refunded") && st.via.kind === "first_instance" ? { firstOutcome: st.kind === "Released" ? "accept" : "reject" } : {}
+			}, outcome, this.judgedAt.get(key));
+			if (heldUntil && Date.parse(this.ctx.clock.now()) < Date.parse(heldUntil)) {
+				const moves = st.kind === "Delivered" ? "the buyer may accept, or both parties may settle" : "both parties may settle";
+				return this.row(name, `${call}: ${outcome} held until ${heldUntil}`, "direct", `held (ADR-0051): nothing signed; the deal stays ${st.kind}, and until then ${moves}`);
+			}
 			const envelope = (recipient) => ({
 				scheme: "x25519-xsalsa20poly1305",
 				ciphertext: b64url(canonicalKeccak({
@@ -76252,6 +76396,10 @@ const DEFAULTS = {
 		appealWindowSec: 0,
 		appealDecideSec: 300
 	},
+	rubricTiming: {
+		judgeWithinSec: 87e3,
+		appealDecideSec: 87e3
+	},
 	journal: "seller-adapter.journal.json",
 	pollMs: 5e3,
 	redelivery: { refetchEverySec: 600 }
@@ -76273,6 +76421,7 @@ const FILE_KEYS = [
 	"signingKey",
 	"events",
 	"timing",
+	"rubricTiming",
 	"journal",
 	"pollMs",
 	"quoteAuth",
@@ -76350,11 +76499,12 @@ function configFrom(f, file, files) {
 	};
 	const own = f.template !== void 0;
 	if (own && f.scope === void 0) throw new Error(`${file}: scope is required with your own template: the fields a buyer's scope must have`);
-	if (f.timing !== void 0) {
-		if (!isRecord$1(f.timing)) throw new Error(`${file}: timing must be an object of windows`);
-		for (const [k, v] of Object.entries(f.timing)) {
-			if (!WINDOWS.includes(k)) throw new Error(`${file}: timing has a window the offer does not take: ${plain$1(k).slice(0, 60)}`);
-			if (!wholeAtLeast(v, 0)) throw new Error(`${file}: timing.${k} must be a whole number of seconds, 0 or more`);
+	for (const field of ["timing", "rubricTiming"]) {
+		if (f[field] === void 0) continue;
+		if (!isRecord$1(f[field])) throw new Error(`${file}: ${field} must be an object of windows`);
+		for (const [k, v] of Object.entries(f[field])) {
+			if (!WINDOWS.includes(k)) throw new Error(`${file}: ${field} has a window the offer does not take: ${plain$1(k).slice(0, 60)}`);
+			if (!wholeAtLeast(v, 0)) throw new Error(`${file}: ${field}.${k} must be a whole number of seconds, 0 or more`);
 		}
 	}
 	if (f.port !== void 0 && !(wholeAtLeast(f.port, 0) && f.port <= 65535)) throw new Error(`${file}: port must be a whole number from 0 to 65535`);
@@ -76400,6 +76550,7 @@ function configFrom(f, file, files) {
 			...DEFAULTS.timing,
 			...f.timing ?? {}
 		},
+		rubricTiming: { ...f.rubricTiming ?? DEFAULTS.rubricTiming },
 		journal: f.journal ?? DEFAULTS.journal,
 		...f.events === void 0 ? {} : { events: f.events },
 		pollMs: f.pollMs ?? DEFAULTS.pollMs,
@@ -76634,6 +76785,8 @@ function holds(w, scope, options) {
 	if ("equals" in w) return v === w.equals;
 	return typeof v === "number" && (w.atLeast === void 0 || v >= w.atLeast) && (w.atMost === void 0 || v <= w.atMost);
 }
+/** True when a rubric has at least one criterion, so a panel scores the work (ADR-0051). */
+const hasCriteria = (rubric) => isRecord$1(rubric) && Array.isArray(rubric.criteria) && rubric.criteria.length > 0;
 /**
 * The offer's deliverable, checks, rubric and windows for one quote: the template and `timing`, your API's window,
 * then each rule whose conditions hold, in order. A refusing rule throws 400 naming its fields.
@@ -76646,11 +76799,12 @@ function termsFor(c, template, scope, options, deliverWithinSec) {
 		...c.timing,
 		...deliverWithinSec === void 0 ? {} : { deliverWithinSec }
 	};
+	const ruled = {};
 	let rubric = filled.rubric;
 	for (const r of c.termsRules ?? []) {
 		if (!r.when.every((w) => holds(w, scope, options))) continue;
 		if (r.refuse !== void 0) throw new Refused(400, "invalid_request", `${r.when.map((w) => w.field).join(" and ")}: ${r.refuse}`);
-		Object.assign(timing, r.timing);
+		Object.assign(ruled, r.timing);
 		if (r.dropChecks) checks = checks.filter((k) => !r.dropChecks.includes(k.id));
 		for (const k of fill(r.checks ?? [], scope)) {
 			const at = checks.findIndex((x) => x.id === k.id);
@@ -76659,6 +76813,8 @@ function termsFor(c, template, scope, options, deliverWithinSec) {
 		if (r.describe) deliverable.description = `${deliverable.description} ${fill(r.describe, scope)}`;
 		if (r.rubric !== void 0) rubric = r.rubric ? filled.optionalRubric : void 0;
 	}
+	if (hasCriteria(rubric)) Object.assign(timing, c.rubricTiming ?? {});
+	Object.assign(timing, ruled);
 	return {
 		deliverable,
 		checks,
@@ -77211,7 +77367,11 @@ async function createSellerAdapter(c, env, io) {
 		checks: template.checks,
 		...template.rubric === void 0 ? {} : { rubric: template.rubric },
 		...template.optionalRubric === void 0 ? {} : { optionalRubric: template.optionalRubric },
-		timing: c.timing,
+		timing: hasCriteria(template.rubric) ? {
+			...c.timing,
+			...c.rubricTiming ?? {}
+		} : c.timing,
+		...c.rubricTiming && Object.keys(c.rubricTiming).length ? { rubricTiming: c.rubricTiming } : {},
 		...template.fee === void 0 ? {} : { fee: template.fee },
 		scope: c.scope,
 		options: c.options ?? {}
