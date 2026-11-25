@@ -5,14 +5,14 @@
 // did not before.
 import { readdirSync } from 'node:fs';
 import { join } from 'node:path';
-import { NEWEST_VERSIONS, TEMPLATE_PAIR_3 } from '@holdback/judgment';
+import { APPEAL_PROMPT_TEMPLATE_3_HASH, NEWEST_VERSIONS, TEMPLATE_PAIR_3 } from '@holdback/judgment';
 import { describe, expect, it } from 'vitest';
 import { CodedFromRecorded } from './recorded.js';
 import { runScenario } from './runner.js';
 
 const ROOT = join(import.meta.dirname, '../../..');
 const RECORDED = readdirSync(join(ROOT, 'fixtures/recordings')).filter((n) => n.startsWith('attack.'));
-const CODED = { ...NEWEST_VERSIONS, screenVersion: 'screen-1', promptTemplateHash: TEMPLATE_PAIR_3.firstHash, appealPromptTemplateHash: TEMPLATE_PAIR_3.appealHash, aggregationVersion: 'agg-6' };
+const CODED = { ...NEWEST_VERSIONS, screenVersion: 'screen-1', promptTemplateHash: TEMPLATE_PAIR_3.firstHash, appealPromptTemplateHash: APPEAL_PROMPT_TEMPLATE_3_HASH, aggregationVersion: 'agg-6' };
 
 describe('attack.coded-no-recorded-attack-accepts: the recorded attacks under template pair 3 and agg-6', () => {
   it('replays at least the five attacks with recorded judges', () => expect(RECORDED.length).toBeGreaterThanOrEqual(5));
@@ -26,6 +26,6 @@ describe('attack.coded-no-recorded-attack-accepts: the recorded attacks under te
     if (prose.summary.finalState !== 'Released') expect(coded.summary.finalState).not.toBe('Released');
     const panels = [...coded.judgments.values()].filter((j) => j.panel.ran);
     expect(panels.length).toBeGreaterThan(0);
-    for (const j of panels) expect(j.panel.promptTemplateHash === TEMPLATE_PAIR_3.firstHash || j.panel.promptTemplateHash === TEMPLATE_PAIR_3.appealHash).toBe(true);
+    for (const j of panels) expect(j.panel.promptTemplateHash === TEMPLATE_PAIR_3.firstHash || j.panel.promptTemplateHash === APPEAL_PROMPT_TEMPLATE_3_HASH).toBe(true);
   });
 });

@@ -8,15 +8,15 @@ import { describe, expect, it } from 'vitest';
 import { ADJUDICATOR, criterion, delivery, fakeUnwrap, NONCES, POLICY, seal, utf8 } from './_helpers.js';
 import { INJECTION_KINDS, REASON_CODES } from './coded.js';
 import { intake } from './intake.js';
-import { implementationsFor, KEPT, NEWEST_VERSIONS, type PolicyVersions } from './kept.js';
+import { implementationsFor, KEPT, keptLabels, NEWEST_VERSIONS, type PolicyVersions } from './kept.js';
 import { runPipeline, type JudgeProvider, type JudgeRequest, type JudgmentDraft, type PanelSeat } from './pipeline.js';
-import { APPEAL_PROMPT_TEMPLATE_3, APPEAL_PROMPT_TEMPLATE_3_HASH, buildPrompt, PROMPT_TEMPLATE, PROMPT_TEMPLATE_3, PROMPT_TEMPLATE_3_HASH, TEMPLATE_PAIR, TEMPLATE_PAIR_2, TEMPLATE_PAIR_3 } from './prompt.js';
+import { APPEAL_PROMPT_TEMPLATE_2_HASH, APPEAL_PROMPT_TEMPLATE_3, APPEAL_PROMPT_TEMPLATE_3_HASH, buildPrompt, PROMPT_TEMPLATE, PROMPT_TEMPLATE_3, PROMPT_TEMPLATE_3_HASH, TEMPLATE_PAIR, TEMPLATE_PAIR_2, TEMPLATE_PAIR_3 } from './prompt.js';
 import { anchorIndex } from './refs.js';
 import type { JudgmentRubric } from './terms.js';
 import { UntrustedData } from './untrusted.js';
 
-const CODED: PolicyVersions = { ...NEWEST_VERSIONS, promptTemplateHash: TEMPLATE_PAIR_3.firstHash, appealPromptTemplateHash: TEMPLATE_PAIR_3.appealHash, aggregationVersion: 'agg-6' };
-const PROSE_5: PolicyVersions = { ...NEWEST_VERSIONS, promptTemplateHash: TEMPLATE_PAIR_2.firstHash, appealPromptTemplateHash: TEMPLATE_PAIR_2.appealHash, aggregationVersion: 'agg-5' };
+const CODED: PolicyVersions = { ...NEWEST_VERSIONS, promptTemplateHash: TEMPLATE_PAIR_3.firstHash, appealPromptTemplateHash: APPEAL_PROMPT_TEMPLATE_3_HASH, aggregationVersion: 'agg-6' };
+const PROSE_5: PolicyVersions = { ...NEWEST_VERSIONS, promptTemplateHash: TEMPLATE_PAIR_2.firstHash, appealPromptTemplateHash: APPEAL_PROMPT_TEMPLATE_2_HASH, aggregationVersion: 'agg-5' };
 
 const IDS = ['fit', 'coherent', 'distinct', 'usable'];
 const RUBRIC: JudgmentRubric = { criteria: IDS.map((id, i) => criterion(id, i < 2 ? 30 : 20)), passThreshold: 300 };
@@ -87,7 +87,7 @@ describe('a policy names one verdict format', () => {
   });
   it('pair 3 with agg-6, and every prose pair with agg-3 to agg-5, is carried', () => {
     expect(implementationsFor(CODED).ok).toBe(true);
-    for (const pair of [TEMPLATE_PAIR, TEMPLATE_PAIR_2]) for (const a of ['agg-3', 'agg-4', 'agg-5']) expect(implementationsFor({ ...NEWEST_VERSIONS, promptTemplateHash: pair.firstHash, appealPromptTemplateHash: pair.appealHash, aggregationVersion: a }).ok).toBe(true);
+    for (const pair of keptLabels().templatePairs.slice(0, 2)) for (const a of ['agg-3', 'agg-4', 'agg-5']) expect(implementationsFor({ ...NEWEST_VERSIONS, ...pair, aggregationVersion: a }).ok).toBe(true);
     expect(KEPT.templatePairs.map((p) => p.format ?? 'prose-1')).toEqual(['prose-1', 'prose-1', 'coded-1']);
     expect([...KEPT.aggregations].map(([k, a]) => `${k}:${a.format}`)).toEqual(['agg-3:prose-1', 'agg-4:prose-1', 'agg-5:prose-1', 'agg-6:coded-1']);
   });
@@ -105,7 +105,8 @@ describe('template pair 3', () => {
     expect(one.filter((l) => !three.includes(l)).map((l) => l.slice(0, 3))).toEqual(['3. ', '5. ']);
     expect(APPEAL_PROMPT_TEMPLATE_3.split('\n').slice(1)).toEqual(three.slice(1));
     expect(APPEAL_PROMPT_TEMPLATE_3.split('\n')[0]).toMatch(/^You are one judge on an appeal panel deciding afresh/);
-    expect(TEMPLATE_PAIR_3).toMatchObject({ firstHash: PROMPT_TEMPLATE_3_HASH, appealHash: APPEAL_PROMPT_TEMPLATE_3_HASH, format: 'coded-1' });
+    expect(TEMPLATE_PAIR_3).toMatchObject({ firstHash: PROMPT_TEMPLATE_3_HASH, format: 'coded-1' });
+    expect(keptLabels().templatePairs[2]).toEqual({ promptTemplateHash: PROMPT_TEMPLATE_3_HASH, appealPromptTemplateHash: APPEAL_PROMPT_TEMPLATE_3_HASH });
   });
   it('states the closed lists, at most three of each, no other keys and no prose, and the reference format, in words', () => {
     for (const code of [...REASON_CODES, ...INJECTION_KINDS]) expect(PROMPT_TEMPLATE_3).toContain(code);

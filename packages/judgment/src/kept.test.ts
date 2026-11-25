@@ -6,7 +6,7 @@ import { ADJUDICATOR, delivery, fakeUnwrap, NONCES, POLICY, RUBRIC, seal, utf8 }
 import { intake, type Intaken } from './intake.js';
 import { implementationsFor, KEPT, keptLabels, NEWEST_VERSIONS, type PolicyVersions } from './kept.js';
 import { runPipeline, type JudgeProvider, type JudgeRequest, type PanelSeat } from './pipeline.js';
-import { buildPrompt, TEMPLATE_PAIR_3 } from './prompt.js';
+import { APPEAL_PROMPT_TEMPLATE_3_HASH, buildPrompt, TEMPLATE_PAIR_3 } from './prompt.js';
 import { UntrustedData } from './untrusted.js';
 
 const SEATS: PanelSeat[] = [
@@ -114,7 +114,7 @@ describe('selection by the bound policy (ADR-0036 section 6)', () => {
       templatePairs: [
         { promptTemplateHash: NEWEST_VERSIONS.promptTemplateHash, appealPromptTemplateHash: NEWEST_VERSIONS.appealPromptTemplateHash },
         { promptTemplateHash: '0x4d328a15ef96b9aa0f4166efc720a320f82e9c677fdd8beaff431ecefcc9629b', appealPromptTemplateHash: '0xfc6d93d5441808bbfa690c0402a0ee185eab48c508025f59cf3c4f9f5d8332f1' },
-        { promptTemplateHash: TEMPLATE_PAIR_3.firstHash, appealPromptTemplateHash: TEMPLATE_PAIR_3.appealHash },
+        { promptTemplateHash: TEMPLATE_PAIR_3.firstHash, appealPromptTemplateHash: APPEAL_PROMPT_TEMPLATE_3_HASH },
       ],
       aggregations: ['agg-3', 'agg-4', 'agg-5', 'agg-6'],
     });

@@ -2,7 +2,7 @@
 // build is an adjudicator configured with the earlier default; the deploy is a new Adjudicator for the same address on
 // another default, registered again (the store keeps the earlier policy by hash, ADR-0030 §6).
 import { type Hex32 } from '@holdback/core';
-import { fakeProvider, KEPT, loadRegistry, TEMPLATE_PAIR_3, type JudgeProvider, type LoadedRegistry, type RegistryDoc } from '@holdback/judgment';
+import { APPEAL_PROMPT_TEMPLATE_3_HASH, fakeProvider, KEPT, loadRegistry, TEMPLATE_PAIR_3, type JudgeProvider, type LoadedRegistry, type RegistryDoc } from '@holdback/judgment';
 import { keccak256 } from 'viem';
 import { describe, expect, it } from 'vitest';
 import { demoCsv, DOMAIN, makeCommitment, party, TestSettlement, tusd, type Party } from './_sim.js';
@@ -303,10 +303,10 @@ describe('the kept-policies data file and the code agree (the static check, ADR-
   // pairs a template and an aggregation of different formats is declined before any judge is called.
   it('carries template pair 3 and agg-6, keeps the prose default, and declines a policy that mixes the formats', () => {
     const pair3 = KEPT_POLICIES.templatePairs.find((p) => p.promptTemplateHash === TEMPLATE_PAIR_3.firstHash);
-    expect(pair3).toMatchObject({ appealPromptTemplateHash: TEMPLATE_PAIR_3.appealHash, status: 'kept' });
+    expect(pair3).toMatchObject({ appealPromptTemplateHash: APPEAL_PROMPT_TEMPLATE_3_HASH, status: 'kept' });
     expect(KEPT_POLICIES.aggregations.find((a) => a.version === 'agg-6')?.status).toBe('kept');
     expect(KEPT_POLICIES.default).toEqual({ screenVersion: 'screen-1', promptTemplateHash: '0x4d328a15ef96b9aa0f4166efc720a320f82e9c677fdd8beaff431ecefcc9629b', appealPromptTemplateHash: '0xfc6d93d5441808bbfa690c0402a0ee185eab48c508025f59cf3c4f9f5d8332f1', aggregationVersion: 'agg-5' });
-    const coded = defaultPolicy('t616/p1', { promptTemplateHash: TEMPLATE_PAIR_3.firstHash, appealPromptTemplateHash: TEMPLATE_PAIR_3.appealHash, aggregationVersion: 'agg-6' });
+    const coded = defaultPolicy('t616/p1', { promptTemplateHash: TEMPLATE_PAIR_3.firstHash, appealPromptTemplateHash: APPEAL_PROMPT_TEMPLATE_3_HASH, aggregationVersion: 'agg-6' });
     expect(checkPolicyBinding(coded, policyHashOf(coded)).ok).toBe(true);
     for (const mixed of [{ ...coded, aggregationVersion: 'agg-5' }, defaultPolicy('t616/p2', { aggregationVersion: 'agg-6' })]) {
       const r = checkPolicyBinding(mixed, policyHashOf(mixed));
