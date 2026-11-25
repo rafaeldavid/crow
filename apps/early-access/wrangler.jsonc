@@ -1,15 +1,18 @@
 // crow-early-access: early-access email sign-ups for the ’crow site, at join.crow.direct; join.escrow.stream forwards
 // to it (worker.js, T-312). One KV namespace for both hostnames.
+// T-581: workers_dev is false, so the Worker answers on its two custom hostnames only. SIGNUP_LIMIT allows 5 writes per
+// 60 s per client (an address); worker.js answers 429 over it.
 {
   "name": "crow-early-access",
   "main": "worker.js",
   "compatibility_date": "2025-09-15",
-  "workers_dev": true,
+  "workers_dev": false,
   "routes": [
     { "pattern": "join.crow.direct", "custom_domain": true },
     { "pattern": "join.escrow.stream", "custom_domain": true }
   ],
   "preview_urls": false,
+  "ratelimits": [{ "name": "SIGNUP_LIMIT", "namespace_id": "5811", "simple": { "limit": 5, "period": 60 } }],
   "version_metadata": { "binding": "CF_VERSION_METADATA" },
   "kv_namespaces": [{ "binding": "EMAILS", "id": "4a4fac785319439b9be951fee28bec3a" }],
   "observability": { "enabled": false }

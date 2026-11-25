@@ -1,10 +1,10 @@
-# ADR-0044: A check verifies a signature by a key the terms pin
+# ADR-0045: A check verifies a signature by a key the terms pin
 
-- **Status:** Proposed, 2026-11-25 (D89). A decision Rafa can overrule. Design only: no code and no schema file changes with this record.
+- **Status:** Proposed, 2026-11-25 (D90). A decision Rafa can overrule. Design only: no code and no schema file changes with this record.
 - **Date:** 2026-11-25
 - **Raised by:** T-585, roadmap row N225. The research note `docs/research/2026-11-24-delivery-proofs.md` (T-582) recommends new check kinds over a proof field on the delivery, and `signature_valid` first.
 - **Builds on:** ADR-0001 (neutrality), ADR-0006 (deterministic checks run first), ADR-0021 (checks read the bytes as delivered), ADR-0022 (no float in a hashed body), ADR-0031 (phase one: the first decision is final), ADR-0036 (a deal is judged under the policy it bound); D26, D28, D31, D32, D35.
-- **Changes at acceptance:** this record, D89 and the task file. The build is its own task (kind 5 and kind 6 in `docs/team.md`, Change recipes): schema v0.13, one evaluator in `packages/judgment/src/checks/`, the vectors, `site/ref/checks.txt`.
+- **Changes at acceptance:** this record, D90 and the task file. The build is its own task (kind 5 and kind 6 in `docs/team.md`, Change recipes): schema v0.13, one evaluator in `packages/judgment/src/checks/`, the vectors, `site/ref/checks.txt`.
 
 Labels: **measured** (read at `origin/main` `9342f4f4` on 2026-11-25, with the source), **reported** (the laboratory's description of its kit; Crow has not run it against the live service), **recalled** (from the model's knowledge, not opened that day), **inferred**, **guessed**. Nothing was run for this record: no signature was checked.
 

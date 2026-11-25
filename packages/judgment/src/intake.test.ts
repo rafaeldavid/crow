@@ -30,7 +30,7 @@ describe('normalizeText', () => {
 
   it('leaves clean text unchanged', () => {
     const n = normalizeText(GOOD_CSV);
-    expect(n).toEqual({ text: GOOD_CSV, tagChars: 0, zeroWidth: 0, explained: 0, nfkcChanged: 0, hiddenTagText: '' });
+    expect(n).toEqual({ text: GOOD_CSV, tagChars: 0, zeroWidth: 0, explained: 0, nfkcChanged: 0, nfkcLetters: 0, hiddenTagText: '' });
   });
 });
 
@@ -46,7 +46,7 @@ describe('intake', () => {
 
   it('reports what normalization removed', async () => {
     const r = await run(utf8('a\u200B,b\u{E0041}'));
-    expect(r.ok && r.value.removed).toEqual({ tagChars: 1, zeroWidth: 1, nfkcChanged: 0 });
+    expect(r.ok && r.value.removed).toEqual({ tagChars: 1, zeroWidth: 1, nfkcChanged: 0, nfkcLetters: 0 });
     expect(r.ok && r.value.hiddenTagText.reveal()).toBe('A');
   });
 

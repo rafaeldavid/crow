@@ -3,7 +3,7 @@
 - **Lane:** research
 - **Kind:** 10, research and decisions (`docs/team.md`, Change recipes)
 - **Depends on:** T-582 (the research note)
-- **Paths this task may touch:** `docs/decisions/ADR-0044-signature-valid-check.md`, `docs/decisions-today.md` (D89 only), this file
+- **Paths this task may touch:** `docs/decisions/ADR-0045-signature-valid-check.md`, `docs/decisions-today.md` (D90 only), this file
 - **Human gate:** no
 - **Status:** review
 - **Agent/session:** n225-adr, 2026-11-25
@@ -21,8 +21,8 @@ Decide, in one ADR, everything the build of `signature_valid` needs: its paramet
 
 ## Acceptance criteria
 
-- [x] ADR-0044 decides each point above, with rejected alternatives and the tests the build must add.
-- [x] D89 records it in `docs/decisions-today.md` as proposed, waiting for Rafa.
+- [x] ADR-0045 decides each point above, with rejected alternatives and the tests the build must add.
+- [x] D90 records it in `docs/decisions-today.md` as proposed, waiting for Rafa.
 - [x] No file under `spec/schemas/` and no code changes.
 - [x] No partner or customer name is in a public file.
 - [x] Every claim carries a label.
@@ -44,11 +44,11 @@ Decide, in one ADR, everything the build of `signature_valid` needs: its paramet
 - **Exact bytes, not RFC 8785.** The worked example's signer prints decimals as Python does, which no ECMAScript canonicaliser reproduces (ADR-0022).
 - **`message.jsonEquals` is added to the research note's sketch,** so the existing `json_schema` checks read signed fields. It is an open question for Rafa.
 - **`checkKinds` sits on the adjudicator's record beside `policy`,** so `policyHash` does not move.
-- **The status line in D89 reads "needs Rafa".** The decisions' status test allows no "proposed" state; the entry's text says proposed.
+- **The status line in D90 reads "needs Rafa".** The decisions' status test allows no "proposed" state; the entry's text says proposed.
 
 ## Handoff
 
-- **Done:** ADR-0044, D89, this file. Pull request open; not merged.
+- **Done:** ADR-0045, D90, this file. Pull request open; not merged.
 - **Not done:** the build. It needs a task of its own (kinds 5 and 6): schema v0.13, the evaluator, the vectors, the fixtures, `site/ref/checks.txt`.
-- **To resume:** read ADR-0044's "Open questions". Two wait for Rafa: whether `jsonEquals` stays, and whether the laboratory's export will write the signed text beside the manifest object.
+- **To resume:** read ADR-0045's "Open questions". Two wait for Rafa: whether `jsonEquals` stays, and whether the laboratory's export will write the signed text beside the manifest object.
 - **For the triage list:** a check kind that hashes one field and compares it with another (the telemetry against the hash in the signed manifest). The ADR's worked example names the gap.

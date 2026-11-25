@@ -282,10 +282,10 @@ describe('DailyCaps', () => {
   it('opens again at 00:00 UTC and deletes the rows of past days', async () => {
     const storage = new MemoryStorage();
     let now = Date.parse('2026-11-14T23:59:00Z');
-    const caps = new DailyCaps(storage, () => now, 'secret', { fundedDeals: 1, ciphertextBytes: 10 });
+    const caps = new DailyCaps(storage, () => now, 'secret', { fundedDeals: 1, ciphertextBytes: 10, fundedDealsAll: 100 });
     expect((await caps.takeFunding(0, '198.51.100.7', 'fp-1')).ok).toBe(true);
     const refused = await caps.takeFunding(0, '198.51.100.7', 'fp-2');
-    expect(refused).toEqual({ ok: false, retryAfterSec: 60 });
+    expect(refused).toEqual({ ok: false, retryAfterSec: 60, reason: 'client' });
     // A replay of the accepted one is no new funding.
     expect((await caps.takeFunding(0, '198.51.100.7', 'fp-1')).ok).toBe(true);
     now = Date.parse('2026-11-15T00:00:01Z');
@@ -297,7 +297,7 @@ describe('DailyCaps', () => {
   });
 
   it('gives a funding back when the relay refused it', async () => {
-    const caps = new DailyCaps(new MemoryStorage(), () => Date.parse('2026-11-14T12:00:00Z'), 'secret', { fundedDeals: 1, ciphertextBytes: 10 });
+    const caps = new DailyCaps(new MemoryStorage(), () => Date.parse('2026-11-14T12:00:00Z'), 'secret', { fundedDeals: 1, ciphertextBytes: 10, fundedDealsAll: 100 });
     const t = await caps.takeFunding(1, 'c', 'fp-1');
     expect(t.ok).toBe(true);
     await caps.settleFunding(1, 'c', 'fp-1', false);

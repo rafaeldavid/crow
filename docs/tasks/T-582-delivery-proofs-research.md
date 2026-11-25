@@ -4,7 +4,7 @@
 - **Kind:** 10, research and decisions (`docs/team.md`, Change recipes)
 - **Paths this task may touch:** `docs/research/2026-11-24-delivery-proofs.md`, this file
 - **Human gate:** no
-- **Status:** review
+- **Status:** done (merged in PR 767, 2026-11-24)
 - **Agent/session:** n225-research, 2026-11-24
 - **Roadmap row:** N225
 

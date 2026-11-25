@@ -20,7 +20,31 @@ The standing runbook comes first and points to the source of each value: the dep
 
 All on Rafa's Cloudflare account (its ID is the 1Password item that `config/secrets/cloudflare.refs` names for `CLOUDFLARE_ACCOUNT_ID`). The domains `escrow.stream` and `crow.direct` (Rafa, 2026-11-10) were bought on Cloudflare; crow.direct is the canonical home since T-312's deploy, and Crow Control lives at control.crow.direct since 2026-11-11 (below).
 
-**Demo settings** (vars in `apps/demo-cloud/wrangler.op1.jsonc`): the minimum window (`MIN_WINDOW_SEC`) and the operator fee (`OPERATOR_FEE_BPS`, `OPERATOR_FEE_MIN`, `OPERATOR_FEE_GAS`, optional `OPERATOR_FEE_MAX`; D33, ADR-0023). For the first pilots all three are 0, and Crow's relayer pays the gas (T-389). Read the live values in discovery (`demo.minWindowSec`, `fees.operator`). Live judges: Anthropic and DeepSeek, pinned in `config/judges-live.yaml`, capped at 30 calls a day (`LIVE_JUDGE_CALLS_PER_DAY`); past the cap, Crow's adjudicators decline new judged deals until the next UTC day, and a deal already being judged gets no stand-in verdict (pull request 741; Rafa, 2026-11-20); without keys, panels are scripted and every verdict says so.
+**Demo settings** (vars in `apps/demo-cloud/wrangler.op1.jsonc`): the minimum window (`MIN_WINDOW_SEC`) and the operator fee (`OPERATOR_FEE_BPS`, `OPERATOR_FEE_MIN`, `OPERATOR_FEE_GAS`, optional `OPERATOR_FEE_MAX`; D33, ADR-0023). For the first pilots all three are 0, and Crow's relayer pays the gas (T-389). Read the live values in discovery (`demo.minWindowSec`, `fees.operator`). Live judges: Anthropic and DeepSeek, pinned in `config/judges-live.yaml`, capped at 100 calls a day across both nodes (`LIVE_JUDGE_CALLS_PER_DAY`; 30 before Rafa's decision of 2026-11-24); past the cap, Crow's adjudicators decline new judged deals until the next UTC day, and a deal already being judged gets no stand-in verdict (pull request 741; Rafa, 2026-11-20); without keys, panels are scripted and every verdict says so.
+
+**Abuse limits and quick stops** (T-581, N222). The World object reads its limits from holdback-op1's variables, for both nodes; each is an operator's configuration with a default, never a protocol rule (D31). A refused request changes nothing about the deal: the caller can retry the next UTC day, use another operator, or submit to the rules contract itself.
+
+| Variable | Default | What it limits |
+| --- | --- | --- |
+| `LIVE_JUDGE_CALLS_PER_DAY` | 100 | Live judge calls a UTC day across the demo, one budget for both nodes |
+| `JUDGED_DEALS_PER_PAIR_PER_DAY` | 3 | Deals that can need a panel that Crow's adjudicators take per seller and buyer pair a day, while live judges run |
+| `FUNDED_DEALS_PER_CLIENT_PER_DAY` | 100 | Deals the relayer funds per client per node a day |
+| `FUNDED_DEALS_PER_DAY` | 200 | Deals the relayer funds a day across every client and both nodes |
+
+A client is an IPv4 address or an IPv6 /64. The faucet's per-client count (50 grants an hour) is kept in the World's storage, so a restart no longer resets it. The sign-up Worker allows 5 writes per 60 s per client (binding `SIGNUP_LIMIT` in `apps/early-access/wrangler.jsonc`). The operators and the sign-up Worker answer on their custom hostnames only (`workers_dev: false`).
+
+To stop spending fast, set one of these to `0` on holdback-op1: `LIVE_JUDGE_CALLS_PER_DAY=0` stops live judging (Crow declines new judged deals), `FUNDED_DEALS_PER_DAY=0` stops every relayer-funded deal, and `JUDGED_DEALS_PER_PAIR_PER_DAY=0` makes Crow's adjudicators decline every judged deal, leaving the budget unspent. `FUNDED_DEALS_PER_CLIENT_PER_DAY=0` also stops relayer funding for every client. Saving a variable in the Cloudflare dashboard makes a new version of the Worker; the World object reads its limits when it starts, so the value applies once the World restarts on that version [inferred]. The next deploy writes the values in `apps/demo-cloud/wrangler.op1.jsonc` and drops the dashboard's, so put the value in that file too. A malformed value of any of these variables stops the World from starting.
+
+**The judged-deal limit sits with Crow's adjudicators, not the operators** (Rafa, 2026-11-24). Crow counts the judged deals it takes per seller and buyer pair (from the signed terms) and UTC day, in the World's storage.
+
+- **As primary,** it counts at acceptance and declines the fourth offer before anyone can agree or fund it. The count holds however the offer reached the settlement layer, through the operators or straight to the rules contract.
+- **As fallback or appeal** for an outside primary, it counts the turn before convening a panel. Over the limit, no panel runs and the deal ends by its own deadlines.
+- **A declined offer** stays unaccepted and expires by its terms with nothing held, and no relayer gas is spent on it (D29; fixture `neutrality.adjudicator-never-accepts`). The parties can name another adjudicator.
+- **Why per pair, not per buyer:** the seller alone signs an offer, so counting per buyer let a stranger's offers lock a buyer out (Opus red team, 2026-11-25). Per pair, a stranger's offers spend only the stranger's own count.
+
+What the limits do not stop [inferred]: addresses cost nothing on a test network, so the per-pair limit only slows a stranger. A judged deal reserves 6 calls once funded, but one that escalates to the appeal panel spends 8, and retries can double that. So 3 deals from one pair can spend up to 48 of the 100 calls a day, and about 3 pairs can hold the whole budget. The hard ceiling is the budget itself: 100 calls a day, one budget for both nodes [measured from the code: the World builds one panel budget (`panelConfig` in `world.ts`), and holdback-op2 serves the same World object]. `LIVE_JUDGE_CALLS_PER_DAY=0` is the stop.
+
+The budget of 100 raises the most a day of live judging can cost about threefold over the 30 before [inferred: spend scales with calls, at most 8,192 output tokens a call]. A provider-side spend limit, item 1 of Rafa's checklist in the security review of 2026-11-21, is the only cap that holds if this code is wrong; with this budget it matters more.
 
 **Schema and domain:** main and the live demo share one schema version and one EIP-712 domain, the domain of the contracts in `contracts/deployments/sepolia.json`. Read the live values in `/v1/status` (`schemaVersion`, `domain`); the build's are in `packages/core/src/eip712.ts` and `spec/schemas/`.
 
