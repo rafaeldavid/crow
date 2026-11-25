@@ -2,7 +2,7 @@
 
 - **Lane:** judgment
 - **Kind:** 5, settlement and judgment code (`docs/team.md`, Change recipes): tests follow the code they test. No judgment code changes
-- **Depends on:** the design in ADR-0045 (T-585, pull request 775, read at `31195a89`); the files stand without its merge
+- **Depends on:** ADR-0045 (T-585, merged to `main` at `4825e88b`; status Proposed)
 - **Paths this task may touch:** `spec/test-vectors/signature-valid/`, `tests/signature-vectors.test.ts`, this file, and `package.json` with `pnpm-lock.yaml` (one exact root development dependency)
 - **Human gate:** no
 - **Status:** review
@@ -21,7 +21,7 @@ Give the evaluator's builder, and any seller, documents signed in Python with kn
 ## Acceptance criteria
 
 - [x] A document signed in Python verifies in a standalone Node script, with P-256 and with Ed25519.
-- [ ] A float in the signed part fails. **Not met as worded:** ADR-0045, section 2, allows decimals in the signed bytes. The vectors follow the ADR. They fail a number respelled after signing and a number in the readable object that differs from the signed one, and they refuse a number in the check. The folder's README, open question 1, holds the question.
+- [x] Floats follow ADR-0045, section 2: decimals in the signed bytes pass. A number respelled after signing fails, a number in the readable object that differs from the signed one fails, and a number in the check is refused. This replaces the task's first wording, "a float in the signed part fails", which came before the record (the coordinating session, 2026-11-25).
 - [x] For both algorithms: vectors for a good signature, a wrong key, a flipped byte, random signature bytes, floats, oversized input and an unknown algorithm, each with its expected result.
 - [x] A test runs the Node verifier over every vector in CI.
 - [x] No private key is committed.
@@ -39,19 +39,21 @@ All measured on 2026-11-25.
 - **Secrets and names:** `gitleaks dir` found no leak in the new files. A whole-word scan of the new files and the manifest changes against the private deny list found no term.
 - **Verifier:** `node spec/test-vectors/signature-valid/verify.mjs` gave every vector its expected result and exited 0.
 - **Test:** `pnpm vitest run tests/signature-vectors.test.ts` passed.
-- **Do the vectors catch a broken verifier?** A scratch script broke `verify.mjs` one way at a time. The vectors caught: the lenient `zip215` default; a required low s; the DER check removed; the fingerprint not compared; a stripped byte order mark; no surrogate check; lenient base64; no `jsonEquals`; no length limits; no signature check; no refusal of a malformed check. They did not catch one: the library's `format` option left out while the DER check stays. Only a 64-byte signature that also reads as DER would show it, and random signing does not produce one (inferred).
+- **Do the vectors catch a broken verifier?** A scratch script broke `verify.mjs` one way at a time, and each broken copy exited with an error: the lenient `zip215` default, with and without an added small-order key check; a required low s; `format` left out; the DER check removed, alone and with `format`; an empty DER integer accepted; the fingerprint not compared; a stripped byte order mark; no surrogate check; lenient base64; no `jsonEquals`; no length limits; no signature check; no check id pattern; no refusal of a malformed check.
+- **Review:** one `reviewer` pass on the first commit returned ISSUES: no wrong expected result, one false claim about the `lowS` default, one float vector that tested an extra property, two strictness gaps and five minor points. This change fixes all of them. No second review ran on the fixes.
 - **Python beside Node:** `cryptography` 50.0.2 accepts the signature in `ed25519/small-order-key`; the verifier refuses it.
 - **Dependency:** `@noble/curves` 1.9.1 was already in the lockfile. The change adds one root importer entry and no new package.
 - **Python packages:** the pins in `requirements.txt` were published on 2026-09-30, 2026-08-03 and 2026-10-22 (PyPI), and PyPI listed no advisory for them.
 
 ## Decisions
 
-- **The ADR wins over the task's float line.** The task named the ADR as the design source.
+- **The ADR wins over the task's first float line.** The coordinating session confirmed it on 2026-11-25.
+- **The verifier reads the DER form at step 7,** as ADR-0045, section 4, orders it.
 - **The root takes `@noble/curves` at the exact version,** so the script in `spec/` resolves it. The evaluator's build adds its own entry in `packages/judgment` (ADR-0045, section 7).
 - **New keys on each run,** because ADR-0045 commits no private key. A regenerated file therefore differs in every signature.
 
 ## Handoff
 
 - **Done:** the vectors, the generator, the verifier, the README, the test, this file. The pull request is open and not merged.
-- **To resume:** read the README's open questions. Question 1 needs an answer before the evaluator's brief, which repeats the float line.
+- **To resume:** read the README's open questions. Each needs an answer in the ADR or the evaluator's build.
 - **For the evaluator's build:** run `vectors.json` through the evaluator; read the README's section "For the evaluator's builder".

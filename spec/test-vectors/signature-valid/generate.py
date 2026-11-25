@@ -82,6 +82,16 @@ class TestKey:
             serialization.Encoding.PEM, serialization.PublicFormat.SubjectPublicKeyInfo
         ).decode("ascii")
 
+    def ed25519_scalar(self):
+        """The secret scalar of RFC 8032, section 5.1.5. It stays in memory."""
+        seed = self._private.private_bytes(
+            serialization.Encoding.Raw, serialization.PrivateFormat.Raw, serialization.NoEncryption()
+        )
+        clamped = bytearray(hashlib.sha512(seed).digest()[:32])
+        clamped[0] &= 248
+        clamped[31] = (clamped[31] & 127) | 64
+        return int.from_bytes(clamped, "little")
+
     def sign(self, message, fmt=None, high_s=False):
         """A signature over `message`. P-256: `der` or `raw`, low s unless `high_s`. Ed25519: 64 raw bytes."""
         if self.alg == ED:
@@ -173,6 +183,28 @@ class Family:
                 "expect": expect,
             }
         )
+
+
+def sixty_four_byte_der(message):
+    """A valid DER signature that is exactly 64 bytes long, with the public key (DER) it verifies under.
+
+    Random signing does not produce one, so this builds it: pick the nonce k, pick a short s, then solve for the
+    private key d = (s*k - hash) / r. All of it is throwaway.
+    """
+    digest = int.from_bytes(hashlib.sha256(message).digest(), "big")
+    k = 1 + int.from_bytes(os.urandom(32), "big") % (P256_N - 1)
+    r = ec.derive_private_key(k, ec.SECP256R1()).public_key().public_numbers().x % P256_N
+    r_length = r.bit_length() // 8 + 1  # the DER INTEGER, with its 00 when the top bit is set
+    s_length = 64 - 6 - r_length
+    first = 1 + os.urandom(1)[0] % 127
+    s = int.from_bytes(bytes([first]) + os.urandom(s_length - 1), "big")
+    d = (s * k - digest) * pow(r, -1, P256_N) % P256_N
+    public = ec.derive_private_key(d, ec.SECP256R1()).public_key()
+    signature = encode_dss_signature(r, s)
+    assert len(signature) == 64, "the DER signature is not 64 bytes"
+    public.verify(signature, message, ec.ECDSA(hashes.SHA256()))
+    der = public.public_bytes(serialization.Encoding.DER, serialization.PublicFormat.SubjectPublicKeyInfo)
+    return signature, der
 
 
 def shared_cases(f):
@@ -313,11 +345,11 @@ def shared_cases(f):
         document=f.document(manifest=one, text=signed_text(one_point_oh)),
     )
     float_check = f.check()
-    float_check["tolerance"] = 0.5
+    float_check["message"]["jsonEquals"] = 0.5
     f.add(
         "float-in-check-parameters",
         "float",
-        "A float in the check itself. The terms are hashed and signed, so no number enters them (ADR-0022).",
+        "A float in place of a pointer. The check is part of the hashed terms, so no number enters it (ADR-0022).",
         REFUSED,
         check=float_check,
     )
@@ -390,7 +422,7 @@ def p256_cases(f):
     f.add(
         "good-high-s",
         "good",
-        "A high s is accepted. A verifier left on a low-s default fails this vector.",
+        "A high s is accepted. A verifier that requires a low s fails this vector.",
         PASS,
         document=f.document(signature=f.key.sign(message, "der", high_s=True)),
     )
@@ -425,6 +457,31 @@ def p256_cases(f):
         fail("signature: wrong length"),
         check=raw_check,
         document=f.document(signature=der),
+    )
+    short, short_key = sixty_four_byte_der(message)
+    short_document = f.document(signature=short, key_text=pem(short_key))
+    f.add(
+        "good-64-byte-der",
+        "good",
+        "A valid DER signature of exactly 64 bytes, under a key built for it. The control for the next vector.",
+        PASS,
+        check=f.check(der=short_key),
+        document=short_document,
+    )
+    f.add(
+        "64-byte-der-in-raw-check",
+        "strictness",
+        "The same signature in a `raw` check is r then s, and does not verify. A verifier that names no format passes it.",
+        no_verify,
+        check=f.check(sig_format="raw", der=short_key),
+        document=short_document,
+    )
+    f.add(
+        "der-empty-integers",
+        "strictness",
+        "A DER SEQUENCE of two empty INTEGERs. DER has no empty INTEGER.",
+        fail("signature: not valid DER"),
+        document=f.document(signature=bytes.fromhex("300402000200")),
     )
     f.add(
         "der-trailing-byte",
@@ -477,7 +534,6 @@ def p256_cases(f):
 def hostile_cases(f, text, raw):
     """Malformed documents and encodings. The code is the same for both algorithms, so P-256 alone carries them."""
     message = text.encode()
-    sig = b64(f.key.sign(message, "der"))
 
     f.add(
         "delivery-not-json",
@@ -523,6 +579,9 @@ def hostile_cases(f, text, raw):
     extra = f.check()
     extra["publicKey"]["key"] = "x"
     f.add("extra-property", "hostile", "The check's objects are closed.", REFUSED, check=extra)
+    bad_id = f.check()
+    bad_id["id"] = "Manifest Signature"
+    f.add("check-id-outside-the-pattern", "hostile", "A check id follows the schema's pattern.", REFUSED, check=bad_id)
 
     for name, why, key_text in [
         ("pem-second-block", "Two PEM blocks.", f.key.pem + f.other_key.pem),
@@ -545,8 +604,11 @@ def hostile_cases(f, text, raw):
     last = canonical[-3]
     trailing_bits = canonical[:-3] + alphabet[alphabet.index(last) | 1] + "=="
     assert trailing_bits != canonical and base64.b64decode(trailing_bits) == raw
-    # 64 bytes of 0xfb always need '+' or '/', so the URL form differs from the standard form.
-    url_alphabet = base64.urlsafe_b64encode(b"\xfb" * 64).decode()
+    # A real signature whose base64 uses '+' or '/', so the URL form is the same bytes in another alphabet.
+    spelled = canonical
+    while "+" not in spelled and "/" not in spelled:
+        spelled = b64(f.key.sign(message, "raw"))
+    url_alphabet = spelled.replace("+", "-").replace("/", "_")
     for name, why, value in [
         ("signature-base64-whitespace", "Base64 with a space.", canonical[:10] + " " + canonical[10:]),
         ("signature-base64-no-padding", "Base64 without padding.", canonical.rstrip("=")),
@@ -572,10 +634,10 @@ def hostile_cases(f, text, raw):
     f.add(
         "message-lone-surrogate",
         "hostile",
-        "A lone surrogate has no UTF-8 encoding.",
+        "A lone surrogate has no UTF-8 encoding. The signature covers U+FFFD, which a lenient encoder puts in its place.",
         fail("message: not well-formed text"),
         check=f.check(json_equals=None),
-        document=f.document(text="a\ud800b", signature_text=sig),
+        document=f.document(text="a\ud800b", signature=f.key.sign("a\ufffdb".encode(), "der")),
     )
     f.add(
         "signed-bytes-not-json",
@@ -588,7 +650,7 @@ def hostile_cases(f, text, raw):
     f.add(
         "signed-bytes-with-a-byte-order-mark",
         "hostile",
-        "A good signature over JSON after a byte order mark, with jsonEquals. See README, open question 3.",
+        "A good signature over JSON after a byte order mark, with jsonEquals. See README, open questions.",
         fail("message: not JSON"),
         document=f.document(text=with_bom, signature=f.key.sign(with_bom.encode(), "der")),
     )
@@ -596,7 +658,7 @@ def hostile_cases(f, text, raw):
     f.add(
         "jsonequals-pointer-to-nothing",
         "hostile",
-        "Nothing sits at the jsonEquals pointer. See README, open question 4.",
+        "Nothing sits at the jsonEquals pointer. See README, open questions.",
         fail("message: differs from the value at jsonEquals"),
         check=nowhere,
     )
@@ -628,6 +690,20 @@ def ed25519_cases(f):
         no_verify,
         check=check,
         document=f.document(signature=identity + bytes(32), key_text=pem(weak)),
+    )
+    # R is the identity, spelled y = p + 1. With S = k*a, the lenient rule accepts it under an ordinary key: it
+    # re-encodes R before it hashes, so k is computed over the canonical spelling.
+    message = text.encode()
+    k = int.from_bytes(hashlib.sha512(identity + f.key.der[len(ED25519_PREFIX) :] + message).digest(), "little")
+    noncanonical = (2**255 - 19 + 1).to_bytes(32, "little")
+    f.add(
+        "non-canonical-r",
+        "strictness",
+        "An ordinary key and an R that is not canonically encoded. The lenient zip215 rule accepts it.",
+        no_verify,
+        document=f.document(
+            signature=noncanonical + (k * f.key.ed25519_scalar() % ED25519_L).to_bytes(32, "little")
+        ),
     )
     f.add(
         "short-signature",

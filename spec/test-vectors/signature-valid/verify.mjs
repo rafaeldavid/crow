@@ -50,7 +50,7 @@ const isPointer = (p) => typeof p === 'string' && p.length <= MAX.pointer && /^(
 function wellFormed(check) {
   if (!hasShape(check, ['id', 'type', 'required', 'alg', 'publicKey', 'message', 'signature'])) return false;
   const { id, type, required, alg, publicKey, message, signature } = check;
-  if (typeof id !== 'string' || type !== 'signature_valid' || typeof required !== 'boolean') return false;
+  if (typeof id !== 'string' || !/^[a-z0-9_-]{1,40}$/.test(id) || type !== 'signature_valid' || typeof required !== 'boolean') return false;
   if (typeof alg !== 'string' || !Object.hasOwn(ALGORITHMS, alg)) return false;
   if (!hasShape(publicKey, ['pointer', 'format', 'spkiSha256'])) return false;
   if (!hasShape(message, ['pointer', 'encoding'], ['jsonEquals'])) return false;
@@ -112,7 +112,7 @@ function jsonEqual(left, right) {
   return true;
 }
 
-/** The library call (section 4, step 7). Both strictness options are named, so a library default cannot change them. */
+/** The library call (section 4, step 7). Every strictness option is named, so a library default cannot change it. */
 function signatureVerifies(alg, spki, message, signature, format) {
   const key = spki.subarray(ALGORITHMS[alg].prefix.length);
   try {
@@ -133,10 +133,11 @@ function isP256Point(bytes) {
   }
 }
 
+/** DER read strictly. The library reads an empty INTEGER as 0 (and refuses DER's own 0), so a 0 here is an empty one. */
 function isDer(signature) {
   try {
-    DER.toSig(signature);
-    return true;
+    const { r, s } = DER.toSig(signature);
+    return r !== 0n && s !== 0n;
   } catch {
     return false;
   }
@@ -178,7 +179,6 @@ function evaluate(check, delivered) {
   if (!signature) return fail('signature: not valid base64');
   const { format } = check.signature;
   if (format === 'der' ? signature.length > MAX.derBytes : signature.length !== MAX.rawBytes) return fail('signature: wrong length');
-  if (format === 'der' && !isDer(signature)) return fail('signature: not valid DER');
 
   let message;
   if (check.message.encoding === 'utf8') {
@@ -189,12 +189,13 @@ function evaluate(check, delivered) {
     if (!message) return fail('message: not valid base64');
   }
 
+  if (format === 'der' && !isDer(signature)) return fail('signature: not valid DER');
   if (!signatureVerifies(check.alg, spki, message, signature, format)) return fail('signature does not verify');
 
   if (Object.hasOwn(check.message, 'jsonEquals')) {
     let signed;
     try {
-      // A byte order mark stays in the text, so JSON.parse refuses it (README, open question 3).
+      // A byte order mark stays in the text, so JSON.parse refuses it (README, open questions).
       signed = JSON.parse(new TextDecoder('utf-8', { fatal: true, ignoreBOM: true }).decode(message));
     } catch {
       return fail('message: not JSON');

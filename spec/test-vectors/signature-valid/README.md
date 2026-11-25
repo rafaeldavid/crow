@@ -2,9 +2,9 @@
 
 Documents signed in Python, each with the result the `signature_valid` check must give. A standalone Node script verifies them.
 
-**State:** the check kind is proposed, not built. ADR-0045 (`docs/decisions/ADR-0045-signature-valid-check.md`) decides its rules. These vectors follow that record as pull request 775 had it at commit `31195a89`. The vectors are not part of the API contract in `spec/schemas/`.
+**State:** the check kind is not built. [ADR-0045](../../../docs/decisions/ADR-0045-signature-valid-check.md) decides its rules. Its status is Proposed, and Rafa can overrule it. These vectors follow it. They are not part of the API contract in `spec/schemas/`.
 
-**A float in the signed bytes passes.** ADR-0045, section 2, allows decimals there, because the check hashes the delivered bytes and never prints a number. The task asked that a float in the signed part fail. That rule belonged to an earlier design, which re-serialized the signed part. Open question 1 tracks it.
+**A float in the signed bytes passes** (ADR-0045, section 2). The check hashes the delivered bytes and never prints a number, so a signed part may hold decimals. The integers-only rule (ADR-0022) covers the terms, which are hashed. It does not cover the delivered document. An earlier plan line said a float in the signed part must fail; it came before the record.
 
 | What holds a float | Result | Vector (under `p256/` and `ed25519/`) |
 | --- | --- | --- |
@@ -12,7 +12,7 @@ Documents signed in Python, each with the result the `signature_valid` check mus
 | The signed text, where someone respelled a number after signing (`1.0` to `1`, or `3` to `3.0`) | fail: the signature does not verify | `float-respelled-after-signing`, `float-introduced-after-signing` |
 | The readable object, where it differs from the signed number | fail: differs at `jsonEquals` | `float-in-object-signed-integer` |
 | The readable object, spelling the signed number another way | pass | `float-spelling-equal-under-jsonequals` |
-| The check itself, which the parties' signatures cover | refused | `float-in-check-parameters` |
+| The check, which sits in the hashed terms (here, a float in place of a pointer) | refused | `float-in-check-parameters` |
 
 ## Files
 
@@ -82,11 +82,12 @@ The cases that do not depend on the algorithm (broken JSON, pointers, PEM and ba
 
 ## For the evaluator's builder
 
-These facts come from `@noble/curves` 1.9.1.
+These facts come from `@noble/curves` 1.9.1. "Broken copy" means a copy of `verify.mjs` with that one change, run over the vectors.
 
-- **Name `zip215: false` for Ed25519.** The library's default is `true`, the lenient rule. `ed25519/small-order-key` fails a verifier that keeps the default (measured: the run with `true` failed that vector).
-- **Name `lowS: false` for P-256.** The default requires a low s. `p256/good-high-s` and `p256/good-raw-high-s` fail a verifier that keeps it (measured the same way).
-- **Check the DER form, and name `format`.** With no `format`, the library tries DER and then the raw form, so it accepts a raw signature in a `der` check (read in the source). `p256/raw-signature-in-der-check` covers this.
+- **Name `zip215: false` for Ed25519.** The library's default is `true`, the lenient rule. `ed25519/small-order-key` and `ed25519/non-canonical-r` fail a copy that uses `true` (measured, broken copy). A small-order key test added to the lenient rule is not enough: `non-canonical-r` still fails it (measured, broken copy).
+- **Name `lowS: false` for P-256.** This version's `p256` already defaults to `false` (measured, `p256.CURVE.lowS`), while the library's generic curve code defaults to `true` (read in the source). ADR-0045, section 7, names the option so a changed default cannot change a result. `p256/good-high-s` and `p256/good-raw-high-s` fail a copy that requires a low s (measured, broken copy).
+- **Name `format`, and check the DER form.** With no `format`, the library tries DER and then the raw form (read in the source). `p256/64-byte-der-in-raw-check` catches a missing `format`. `p256/raw-signature-in-der-check` catches the other direction when both the DER check and `format` are missing (measured, broken copies).
+- **Refuse an empty DER integer.** The library reads one as zero (measured), so the verifier treats a zero from its reader as badly formed DER: `p256/der-empty-integers`.
 - **Python can disagree on a hostile key.** Python's `cryptography` accepts the signature in `ed25519/small-order-key`, and the strict rule refuses it (measured, `cryptography` 50.0.2). A seller's preflight in Python can differ from the adjudicator on such a key.
 - **Another library can differ on hostile signatures.** Under `zip215: false`, the library still clears the cofactor in its final equation (read in the source). A library that does not clear it can differ on a crafted signature (inferred). Keep one library in every adjudicator.
 
@@ -94,16 +95,16 @@ These facts come from `@noble/curves` 1.9.1.
 
 ## Open questions for ADR-0045
 
-Where the record says nothing or allows two readings, these vectors take the narrower one. Each needs an answer before the check ships.
+Where the record says nothing or allows two readings, these vectors take the narrower one or follow the numbered steps. Each needs an answer before the check ships.
 
 | # | Question | What the vectors do |
 | --- | --- | --- |
-| 1 | The task and the plan say a float in the signed part fails. The record says a signed part may hold decimals. Which holds? | Follow the record |
-| 2 | Do the length limits count UTF-16 code units or Unicode code points? | The vectors use ASCII only. The verifier counts code units, the stricter of the two |
-| 3 | May the signed bytes start with a byte order mark under `jsonEquals`? A text decoder strips it by default, so two verifiers can differ | `message: not JSON` |
-| 4 | Which detail line applies when nothing sits at the `jsonEquals` pointer? | `message: differs from the value at jsonEquals` |
-| 5 | Which line applies to a key with the right prefix and length whose point is not on P-256? | `publicKey: not a P-256 key` |
-| 6 | Which line applies when r or s is zero or not below the curve order? In DER, the library's reader refuses the standard encoding of zero as badly formed (read in the source) | `signature does not verify`, tested in the raw form only |
-| 7 | A malformed check has no detail line. What does a node say when it refuses one? | `refused`, with no line |
-| 8 | Does `spki-pem` set a line width? | The vectors use 64 characters, as Python writes. The verifier accepts any width, and no vector tests it |
-| 9 | When two things are wrong, which line wins among the three pointers? | Each vector breaks one thing. The verifier reads `publicKey`, then `message`, then `signature` |
+| 1 | Do the length limits count UTF-16 code units or Unicode code points? | The vectors use ASCII only. The verifier counts code units, the stricter of the two |
+| 2 | May the signed bytes start with a byte order mark under `jsonEquals`? A text decoder strips it by default, so two verifiers can differ | `message: not JSON` |
+| 3 | Which detail line applies when nothing sits at the `jsonEquals` pointer? | `message: differs from the value at jsonEquals` |
+| 4 | Which line applies to a key with the right prefix and length whose point is not on P-256? | `publicKey: not a P-256 key` |
+| 5 | Which line applies when r or s is zero or not below the curve order? In DER, the library's reader refuses the standard encoding of zero as badly formed (read in the source) | `signature does not verify`, tested in the raw form only |
+| 6 | A malformed check has no detail line. What does a node say when it refuses one? | `refused`, with no line |
+| 7 | Does `spki-pem` set a line width? | The vectors use 64 characters, as Python writes. The verifier accepts any width, and no vector tests it |
+| 8 | When two things are wrong, which line wins among the three pointers? | Each vector breaks one thing. The verifier reads `publicKey`, then `message`, then `signature` |
+| 9 | Section 4 reads the DER form at step 7, after the message bytes. Section 5 lists the DER line before the message lines. Which order holds? | The verifier follows section 4. No vector breaks both |
