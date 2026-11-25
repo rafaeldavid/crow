@@ -434,7 +434,6 @@ class Refused extends Error {
 
 const BASE_UNITS = /^(0|[1-9][0-9]{0,77})$/;
 /** `{{name}}` or `{{name.length}}`; with a backslash before it, `\{{name}}`, it is the text `{{name}}`. */
-const PLACEHOLDER = /(\\?)\{\{([A-Za-z][A-Za-z0-9]*)(\.length)?\}\}/g;
 const WHOLE_PLACEHOLDER = /^\{\{([A-Za-z][A-Za-z0-9]*)(\.length)?\}\}$/;
 const BEFORE_HOLD = ['Offered', 'AcceptedByAdjudicator', 'Agreed'];
 const MAX_BODY_BYTES = 65_536;
@@ -474,9 +473,11 @@ export function fill(node: J, scope: J): J {
   if (typeof node === 'string') {
     const whole = WHOLE_PLACEHOLDER.exec(node);
     if (whole) return structuredClone(value(whole[1]!, whole[2])); // the value itself: a string, a number or a list
-    return node.replace(PLACEHOLDER, (m: string, escaped: string, name: string, length?: string) => {
-      if (escaped) return m.slice(1); // `\{{name}}` is the text `{{name}}`
-      const v = value(name, length);
+    return node.replace(ANY_PLACEHOLDER, (m: string, escaped: string, inner: string) => {
+      if (escaped) return m.slice(1); // `\{{name}}` is the text `{{name}}`, whatever the name
+      const shape = /^([A-Za-z][A-Za-z0-9]*)(\.length)?$/.exec(inner);
+      if (!shape) return m; // the load check refuses these before any offer
+      const v = value(shape[1]!, shape[2]);
       return Array.isArray(v) ? v.join(', ') : String(v);
     });
   }
@@ -485,17 +486,31 @@ export function fill(node: J, scope: J): J {
   return node;
 }
 
-/** Throws unless every placeholder in `node` names a scope field (and `.length` a list). `where` names the file or rule. */
-function checkPlaceholders(where: string, node: J, scope: Record<string, ScopeRule>): void {
+/** Any `{{...}}` run, with its backslash if any: the filler reads only the shape `PLACEHOLDER` names, and leaves the rest. */
+const ANY_PLACEHOLDER = /(\\?)\{\{([^{}]*)\}\}/g;
+
+/**
+ * Throws unless every placeholder in `node` names a scope field (and `.length` a list). A `{{...}}` the filler cannot
+ * read, such as `{{order_text}}`, is refused too: it would stay in the offered terms. `where` names the file or rule;
+ * `path` is the place inside it, as `deliverable.description`.
+ */
+export function checkPlaceholders(where: string, node: J, scope: Record<string, ScopeRule>, path = ''): void {
   if (typeof node === 'string') {
-    for (const [, escaped, name, length] of node.matchAll(PLACEHOLDER)) {
+    for (const [, escaped, inner] of node.matchAll(ANY_PLACEHOLDER)) {
       if (escaped) continue;
+      const shape = /^([A-Za-z][A-Za-z0-9]*)(\.length)?$/.exec(inner!);
+      const at = path ? ` at ${path}` : '';
+      const fields = Object.keys(scope).join(', ');
+      if (!shape) throw new Error(`${where}: {{${plain(inner!).slice(0, 60)}}}${at} is not a placeholder the filler can read: a name of letters and digits, with or without .length (scope fields: ${fields})`);
+      const [, name, length] = shape;
       const rule = scope[name!];
-      if (!rule) throw new Error(`${where} uses {{${name}}}, which the scope rules do not define`);
-      if (length && rule.type !== 'strings') throw new Error(`${where} uses {{${name}.length}}, and ${name} is not a list`);
+      if (!rule) throw new Error(`${where}: {{${name}}}${at} is not a field the scope gives (scope fields: ${fields})`);
+      if (length && rule.type !== 'strings') throw new Error(`${where}: {{${name}.length}}${at} needs a list, and ${name} is not a list`);
     }
+  } else if (Array.isArray(node)) {
+    node.forEach((v, i) => checkPlaceholders(where, v, scope, `${path}[${i}]`));
   } else if (node && typeof node === 'object') {
-    for (const v of Object.values(node)) checkPlaceholders(where, v, scope);
+    for (const [k, v] of Object.entries(node)) checkPlaceholders(where, v, scope, path ? `${path}.${k}` : k);
   }
 }
 
