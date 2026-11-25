@@ -91,7 +91,9 @@ export async function anvilWorld(env: FeeEnv = ENV): Promise<AnvilWorld> {
   // costs less to run than its calldata floor, and anvil 1.0.0 cannot estimate it (Sepolia's nodes can).
   const shim = await estimateShim(anvil.rpcUrl);
   const chain = new live.LiveChain({ deployment, rpcUrls: [shim.url], relayerKey, pollMs: 200, rebroadcastMs: 10_000, mintBatchMs: 200 });
-  const world = await PublicWorld.open({ storage: new MemoryStorage(), env, ...WORLD, live: { chain } });
+  // N222: a chain world without model keys fails closed by default. This local round runs scenario 1's rubric deal on
+  // the scripted judges, marked as such, so it says so (red team of PR 797, M1).
+  const world = await PublicWorld.open({ storage: new MemoryStorage(), env, ...WORLD, live: { chain }, requireLiveJudges: false });
   const served = await serve(world, 200);
   for (const end = Date.now() + 90_000; !world.ready() && Date.now() < end; ) await new Promise((r) => setTimeout(r, 250));
   return {
