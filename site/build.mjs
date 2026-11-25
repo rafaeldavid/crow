@@ -1109,7 +1109,7 @@ export const CARD_SCHEMA = 'card.schema.json';
 /**
  * HoldbackStandingSeller's creation code as its own file (T-605), so a client that implements ref/standing.txt itself
  * gets the bytes over HTTP: the string examples/standing-seller-code.ts pins, which setup.mjs and take.mjs carry. The
- * page pins its keccak256 (tests/standing-reference.test.ts).
+ * page pins its keccak256 (examples/standing-reference.test.ts).
  */
 export const STANDING_CODE_FILE = 'standing-seller.hex';
 export function standingCodeText(source = readFileSync(here('../examples/standing-seller-code.ts'), 'utf8')) {

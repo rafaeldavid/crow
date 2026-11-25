@@ -35,10 +35,14 @@ describe('ref/standing.txt against the code (T-605)', () => {
 
   it("states the contract's EIP-712 types, and names every one signing.txt must supply", () => {
     const types = JSON.parse(block('json', '### Types and hash')) as Record<string, unknown>;
-    const { Revoke, ...own } = types;
+    const { Revoke, Retire, ...own } = types;
     const all = standingTypes() as Record<string, unknown>;
     for (const [name, fields] of Object.entries(own)) expect(fields, name).toEqual(all[name]);
     expect(Revoke).toEqual([{ name: 'templateHash', type: 'bytes32' }]);
+    const contract = read('../contracts/src/HoldbackStandingSeller.sol');
+    expect(contract).toContain('keccak256("Revoke(bytes32 templateHash)")');
+    expect(Retire).toEqual([]);
+    expect(contract).toContain('keccak256("Retire()")');
     const signing = read('../site/ref/signing.txt');
     const shared = JSON.parse(/## EIP-712 types[\s\S]*?```json\n([\s\S]*?)\n```/.exec(signing)![1]!) as Record<string, unknown>;
     for (const name of Object.keys(all).filter((n) => !(n in own))) expect(shared[name], `${name} must come from ref/signing.txt`).toEqual(all[name]);
