@@ -5,8 +5,8 @@
 //       a stand-in seller API (examples/seller-adapter-job-stub.ts) behind a small logger on 127.0.0.1:<port>, for a
 //       tunnel to reach from Cloudflare. It writes adapter.json and template.json for `setup.mjs cloudflare --config`
 //       into reports/rehearsal/ once it is told the tunnel's https address (--public <URL>). For each request it
-//       prints the method, the path and whether it carried a CF-Worker header, and that header's value: the
-//       measurement of what Cloudflare tells the hosts a Worker calls. It prints the stand-in API's key once, for the
+//       prints the method, the path, the CF-Worker header and the CF-Connecting-IP header: the measurement of what
+//       Cloudflare tells the hosts a Worker calls, and of the address the operators would count a faucet grant by. It prints the stand-in API's key once, for the
 //       person to type at Wrangler's prompt; it is a throwaway key of this stand-in, not a secret of anyone's.
 //   node apps/own-seller/scripts/rehearse.ts deal --at https://<the Worker's address>/
 //       one deal with Crow's test buyer: reads its card, asks the Worker for a quote naming the buyer (an open quote
@@ -35,7 +35,7 @@ async function api(): Promise<void> {
   const inner = new URL(stub.base);
   createServer((req, res) => {
     const worker = req.headers['cf-worker'];
-    console.log(JSON.stringify({ at: new Date().toISOString(), method: req.method, path: req.url, cfWorker: worker ?? null }));
+    console.log(JSON.stringify({ at: new Date().toISOString(), method: req.method, path: req.url, cfWorker: worker ?? null, cfConnectingIp: req.headers['cf-connecting-ip'] ?? null }));
     const fwd = httpRequest({ host: inner.hostname, port: inner.port, path: `${inner.pathname.replace(/\/$/, '')}${req.url}`, method: req.method, headers: { ...req.headers, host: inner.host } }, (r) => {
       res.writeHead(r.statusCode ?? 502, r.headers);
       r.pipe(res);
