@@ -1693,3 +1693,28 @@ The build is not started; it opens as its own task on Rafa's word.
 **Dropped:** changing SimChain to refund in one step. It leaves the bond payout difference (4 of the 9 lines), and it removes a state from `spec/schemas/commitment-state.schema.json`, which takes an ADR and a version bump. Also dropped: a list of fixture names without lines, which would hide a new difference in a listed fixture; and a rule that ignores default payouts, which would hide a balance difference.
 
 **Litmus tests.** Neutrality: strengthened; a fixture that tells a different story on the contract now fails, and the two store fixtures keep running on the contract. The hold: unchanged. Defended judgment: unchanged.
+
+## D89. A check verifies a signature by a key the terms pin (ADR-0044, T-585)
+
+**Status:** needs Rafa, 2026-11-25.
+
+**Proposed** by the session for roadmap row N225, after the research note of 2026-11-24 (`docs/research/2026-11-24-delivery-proofs.md`). A decision Rafa can overrule. Design only: no code and no schema file changed with it.
+
+**Why now.** A seller can put a device signature in its delivery, but no check verifies one, so release cannot depend on it. A delivery with 64 random bytes in place of the signature passes today (inferred in the research note).
+
+**Proposed:**
+
+- **A new deterministic check kind, `signature_valid`.** It passes when the exact bytes at one JSON pointer in the delivered document carry a valid signature by the key whose fingerprint the terms pin. It proves who signed, not that the bytes are true.
+- **Exact bytes, no canonical form.** The message is a string in the document, read as UTF-8 or decoded from base64. A signed part may hold decimals. RFC 8785 is not used, because a Python signer and an ECMAScript verifier print decimals differently (ADR-0022).
+- **`message.jsonEquals`, optional,** makes the signed bytes parse to the same value as an object the other checks read. It is the one addition to the research note's sketch.
+- **Two algorithms, a closed list:** ECDSA P-256 with SHA-256, and Ed25519. The key travels in the delivery as PEM or base64; the terms pin the SHA-256 of its DER `SubjectPublicKeyInfo`.
+- **Built-in code only,** on `@noble/curves` at the exact version the adjudicator app pins. No network, no clock, no code from the delivery. The work budget is the only time limit.
+- **A bad or malformed signature fails the check;** a required failed check refunds the buyer, as today. Budget exhaustion escalates.
+- **Schema v0.13** adds the kind and a `checkKinds` list on each adjudicator's record, beside `policy`. No signed type and no contract changes (inferred).
+- **An adjudicator declines an offer with a kind it does not run,** so the offer expires unfunded. The parties' tools read the three named adjudicators' lists before signing (D32). At judging time an unknown kind still fails closed.
+
+**Open for Rafa:** whether `jsonEquals` stays in the first version, and whether the laboratory's export will write the signed text beside its manifest object.
+
+**Dropped:** RFC 8785 over the signed value, with or without decimals; the whole key in the terms; WebCrypto; a certificate chain; a wall-clock limit; `checkKinds` inside `policy`; a proof field on the delivery now (it waits for N226).
+
+**Litmus tests.** Neutrality: holds; the verifier is built-in code in every adjudicator, and three fixtures show a deal with the check still ends by its terms when an adjudicator declines or goes offline. The hold: unchanged. Defended judgment: strengthened; a deterministic check can now verify a proof the seller attaches.
