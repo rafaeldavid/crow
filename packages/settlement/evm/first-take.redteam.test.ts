@@ -1,17 +1,19 @@
 // Red team of T-549 pull request 4 (ADR-0040 §4, §9; red team M2 of PR 715), on a local anvil (chain id 31337,
-// 127.0.0.1 only). Each `it` asserts the defended outcome, so a failure is a finding's proof. Measured on commit
-// 9a86a5bf (2026-11-25): all three fail.
+// 127.0.0.1 only). Each `it` asserts the defended outcome. On commit 9a86a5bf (2026-11-25) the first three failed;
+// the review fixes of the same pull request close them.
 // - attack.deployment-gas-drain-budget-race: two first takes of two seller contracts reach the budget check together;
 //   at a budget of 1 a day, only one may deploy.
-// - attack.deployment-collision-burns-gas: a deployment that loses a race costs no more gas than one that wins
-//   (ADR-0040 §4: "at most one failed deployment").
+// - attack.deployment-collision-burns-gas: a deployment that loses a race costs the node one deployment's gas, and
+//   the funding still goes (ADR-0040 §4: "at most one failed deployment").
 // - neutrality.buyer-gets-honest-seller-struck: a buyer whose funding reverts after a passing simulation must not stop
 //   this node relaying the honest standing seller's other deals.
+// - attack.wallet-yes-only-in-simulation: a contract buyer that answers yes in the simulation and no at the block its
+//   funding lands in spends the relayer's gas once; this node then relays no funding naming it for an hour.
 // Needs `anvil` on PATH and `forge build` output in contracts/out; skipped without.
 import { existsSync } from 'node:fs';
 import { join } from 'node:path';
 import { commitmentId, encodeStandingSignature, holdbackDomain, signMessage, TAKE, takeTerms, templateDigest, templateFrom, type Club, type Commitment, type Mandate, type StandingOffer, type TakeFill, type Timestamp, type TokenAmount, type UnsignedMessage } from '@holdback/core';
-import { concat, keccak256, size, stringToBytes, toHex, type Address, type Hex } from 'viem';
+import { concat, getContractAddress, keccak256, size, stringToBytes, toHex, type Address, type Hex } from 'viem';
 import { privateKeyToAccount } from 'viem/accounts';
 import { foundry } from 'viem/chains';
 import { afterAll, beforeAll, describe, expect, it } from 'vitest';
@@ -39,8 +41,8 @@ interface Setup {
 interface Inside {
   books: Map<string, unknown>;
   deployedOn: Map<string, number>;
-  /** Present on 9a86a5bf; the working tree's edit of 2026-11-25 removes it. */
-  struck?: Set<string>;
+  /** The parties struck after a funding reverted, and until when (ms). */
+  struck?: Map<string, number>;
   wall?: () => number;
   deployFor(id: Hex, book: unknown, s: { seller: Address; key: Address }, options: { via?: string; sender?: Hex }, time?: number): Promise<void>;
 }
@@ -55,7 +57,7 @@ describe.skipIf(!ready)(`red team of T-549 PR 4: first takes on anvil${ready ? '
     await world?.stop();
   });
 
-  async function setup(nOthers = 1): Promise<Setup> {
+  async function setup(nOthers = 1, extra: Address[] = []): Promise<Setup> {
     const cast = evmCast();
     const token = world.deployment.token.toLowerCase();
     const { genesis, club } = await evmGenesis({ cast, token, chainId: world.chainId, rules: world.deployment.rules, start: START, buyer: 100_000_000_000n });
@@ -67,7 +69,7 @@ describe.skipIf(!ready)(`red team of T-549 PR 4: first takes on anvil${ready ? '
       return { key, seller: standingSellerAddress(key.address) };
     });
     const mandates: Mandate[] = [];
-    for (const [i, agent] of [seller, ...others.map((o) => o.seller)].entries()) {
+    for (const [i, agent] of [seller, ...others.map((o) => o.seller), ...extra].entries()) {
       const principal = testActor(`redteam-principal-${i}`);
       const body = { principal: principal.address, agent, clubId: club.id, scope: { roles: ['buyer', 'seller'], maxPerCommitment: big, maxDaily: big, expiresAt: '2027-01-01T00:00:00Z' }, nonce: keccak256(stringToBytes(`redteam/${i}`)), issuedAt: START } as Omit<Mandate, 'signature'>;
       mandates.push({ ...body, signature: await signMessage(principal.key, domain, { ...body, type: 'Mandate' } as UnsignedMessage) } as Mandate);
@@ -165,9 +167,12 @@ describe.skipIf(!ready)(`red team of T-549 PR 4: first takes on anvil${ready ? '
       console.log('[redteam] collision: winner gasUsed', winner.toString(), 'node deployment', sent.map((m) => [m.status, m.gasUsed.toString()]));
       expect(sent).toHaveLength(1);
       expect(sent[0]!.status).toBe('reverted');
-      // A CREATE2 collision burns all the gas forwarded to it (EIP-684): measured 2,956,975 against the winner's
-      // 2,548,720 on anvil; on a live chain the node forwards its estimate plus a quarter (live.ts `sendNow`).
-      expect(sent[0]!.gasUsed).toBeLessThanOrEqual(winner);
+      // A CREATE2 collision burns all the gas forwarded to it (EIP-684): on anvil every transaction goes with 3,000,000
+      // gas (world.ts), measured 2,956,975 burned against the winner's 2,548,720; on a live chain the node sends a
+      // deployment with its estimate plus 5% (evm-settlement.ts `sendDeployment`), so a lost race costs about that.
+      expect(winner).toBeGreaterThan(0n);
+      expect(sent[0]!.gasUsed).toBeLessThanOrEqual(3_000_000n);
+      expect((await x.chain.stage(t.deal.id)).stage).toBe('Held');
     } finally {
       world.send = send;
     }
@@ -195,7 +200,8 @@ describe.skipIf(!ready)(`red team of T-549 PR 4: first takes on anvil${ready ? '
         fronted = true;
         expect(await drainBuyer(x)).toBe('success');
         // The node runs on a live chain's path from here (wall clock), where a revert strikes instead of throwing.
-        n.wall = () => Date.parse(x.chain.now());
+        const frozen = Date.parse(x.chain.now());
+        n.wall = () => frozen;
       }
       return send(tx, s);
     };
@@ -215,5 +221,55 @@ describe.skipIf(!ready)(`red team of T-549 PR 4: first takes on anvil${ready ? '
     const d = await submit(x, await honest.deal.deliver());
     console.log('[redteam] honest delivery after the revert:', d.ok ? 'ok' : [d.problem.type, d.problem.detail]);
     expect(d.ok ? 'ok' : [d.problem.type, d.problem.detail]).toBe('ok');
+  }, 180_000);
+
+  it('attack.wallet-yes-only-in-simulation: a contract buyer whose answer flips between the simulation and the block is struck for its fundings only', async () => {
+    // A wallet that says yes in every block but one, K: the block its funding lands in. The node checks and simulates
+    // it before K, a block passes, and the funding reverts at the relayer's gas. Every settlement starts from the same
+    // snapshot, so the head after setup() is the same each time, and K follows from it.
+    const tail: Hex = '0x631626ba7e0260e01b60005260206000f3';
+    const initOf = (runtime: Hex): Hex => concat([`0x60${size(runtime).toString(16).padStart(2, '0')}80600b6000396000f3`, runtime]);
+    const salt = `0x${'00'.repeat(32)}` as Hex;
+    await setup(1);
+    const head = await world.publicClient.getBlockNumber();
+    // The wallet's deployment lands at head + 1, its funding is checked there and simulated at head + 2, and the
+    // block the test mines in between pushes the funding to head + 3.
+    const k = head + 3n;
+    const runtime = concat([`0x63${k.toString(16).padStart(8, '0')}431415` as Hex, tail]);
+    const wallet = getContractAddress({ opcode: 'CREATE2', from: CREATE2_DEPLOYER, salt, bytecode: initOf(runtime) });
+    const x = await setup(1, [wallet]);
+    expect(await world.publicClient.getBlockNumber()).toBe(head);
+    expect(await direct(x, x.cast.stranger, CREATE2_DEPLOYER, concat([salt, initOf(runtime)]))).toBe('success');
+    const deal = (tag: string) => new EvmDeal(x.chain, x.cast, x.club, tag, undefined, undefined, { payment: x.cast.buyer, payout: x.cast.seller.address }, { buyer: wallet });
+    const [a, b] = [deal('flip-a'), deal('flip-b')];
+    for (const d of [a, b]) {
+      await must(x.chain, x.cast, d.offer());
+      await must(x.chain, x.cast, d.accept());
+    }
+    const nIn = inside(x.chain);
+    const send = world.send.bind(world);
+    world.send = async (tx, s) => {
+      // A block passes between the node's simulation and its send, as on a live chain.
+      if (tx.to.toLowerCase() === world.deployment.rules.toLowerCase()) await world.rpc('evm_mine', []);
+      return send(tx, s);
+    };
+    // The node runs on a live chain's path (wall clock), where a revert after a passing simulation is answered, not thrown.
+    const frozen = Date.parse(x.chain.now());
+    nIn.wall = () => frozen;
+    let first: Awaited<ReturnType<typeof submit>>;
+    let second: Awaited<ReturnType<typeof submit>>;
+    try {
+      first = await submit(x, await a.agreeAndFund());
+      // Past K the wallet says yes again: its next agreement passes the check, and only the strike refuses the funding.
+      await world.rpc('evm_mine', []);
+      second = await submit(x, await b.agreeAndFund());
+    } finally {
+      world.send = send;
+      delete nIn.wall;
+    }
+    expect(first.ok ? 'ok' : first.problem.type).toBe('invalid_state');
+    // Only the wallet is struck: the seller's own signature holds at that block.
+    expect([...(nIn.struck?.keys() ?? [])]).toEqual([wallet.toLowerCase()]);
+    expect(second.ok ? 'ok' : [second.problem.type, second.problem.detail]).toEqual(['relay_refused', expect.stringContaining(`a funding this operator relayed for ${wallet}`)]);
   }, 180_000);
 });

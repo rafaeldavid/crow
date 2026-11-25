@@ -203,8 +203,9 @@ export interface DeployBudget {
 
 /**
  * The default budget: 20 deployments a UTC day, each estimated at 25,000,000 gas or less. Sepolia's own RPC estimated
- * one deployment at 18,295,444 gas on 2026-11-25, about 7 times anvil's 2,585,057 [measured, `cast estimate`]; the
- * relayer sends it with a quarter more, within the cap this budget sets for that one transaction.
+ * one deployment at 18,295,444 gas on 2026-11-25, about 7 times anvil's 2,585,057 [measured, `cast estimate`]. The
+ * relayer sends it with 5% more gas than the estimate, not the quarter it adds to other calls: a deployment that loses
+ * a race to its address burns all the gas it was sent with (EIP-684).
  */
 export const DEFAULT_DEPLOY_BUDGET: DeployBudget = { perDay: 20, maxGas: 25_000_000n };
 
@@ -444,6 +445,13 @@ export class EvmSettlement implements Settlement {
   private readonly deploying = new Map<string, Promise<void>>();
   /** A standing seller's runtime per key, from a simulated creation (the planned code of ADR-0040 §4). */
   private readonly runtimes = new Map<string, Promise<Hex>>();
+  /**
+   * Contract parties whose signature on a funding this node relayed passed the simulation and failed at the block it
+   * landed in (T-549 red team, M2): until the time each holds (ms), this node relays no funding naming them, so a
+   * wallet that answers yes only in a simulation spends the relayer's gas once an hour at most. Only the party whose
+   * own signature fails at that block, and only new fundings: its funded deals go on. Kept in memory.
+   */
+  private readonly struck = new Map<string, number>();
 
   private constructor(
     readonly world: EvmChain,
@@ -1553,7 +1561,7 @@ export class EvmSettlement implements Settlement {
     if (gas > maxGas) refuse('relay_refused', `the seller contract's deployment needs about ${gas} gas, above this operator's budget of ${maxGas} gas for one; ${elsewhere}`);
     let mined: Mined;
     try {
-      mined = await this.world.send({ ...(options.sender ? { key: options.sender } : { lane: id }), ...dep, gasCap: (maxGas * 5n) / 4n }, this.wall ? undefined : time);
+      mined = await this.world.send({ ...(options.sender ? { key: options.sender } : { lane: id }), ...dep, gasCap: (maxGas * 105n) / 100n, gasMarginPct: 5 }, this.wall ? undefined : time);
     } catch (e) {
       // Declined before the broadcast (out of test ETH, gas above the cap): nothing went out.
       if (e instanceof RelayRefused) refuse('relay_refused', `this operator cannot deploy the seller contract now: ${e.message}; ${elsewhere}`);
@@ -1670,6 +1678,26 @@ export class EvmSettlement implements Settlement {
     await this.send(id, fn, this.world.deployment.rules, data, mirror, options, dryRun, actor, ctx);
   }
 
+  /**
+   * After a funding reverted on chain: the contract parties whose own signature fails at the block it landed in are
+   * struck for an hour (M2). A key's signature, which cannot change, and a read that fails strike nobody.
+   */
+  private async strikeFunding(book: Book, block: bigint): Promise<void> {
+    const t = book.state.terms;
+    const check = this.signerCheck(block);
+    const fails = async (signer: Address, holds: (c: SignerCheck) => Promise<boolean>) => {
+      try {
+        const code = (await this.world.publicClient.getCode({ address: signer, blockNumber: block })) ?? '0x';
+        return code !== '0x' && !(await holds(check));
+      } catch {
+        return false;
+      }
+    };
+    const until = Date.parse(this.now()) + 3_600_000;
+    if (await fails(t.seller, (c) => verifyTerms(this.domain, t, book.sellerSignature, t.seller, c))) this.struck.set(lc(t.seller), until);
+    if (book.agree && (await fails(t.buyer, (c) => verifyMessage(this.domain, { ...book.agree!, type: 'Agree' }, t.buyer, c)))) this.struck.set(lc(t.buyer), until);
+  }
+
   /** Steps the core mirror through what the contract accepted; a refusal there is a divergence, never a refusal. */
   private mirrored(state: EscrowState, events: readonly EscrowEvent[], fn: string): EscrowState {
     let next = state;
@@ -1692,6 +1720,11 @@ export class EvmSettlement implements Settlement {
     // signed message, and the contract checks it against dealOf and the terms' deadlines in the simulation below, so it
     // is still relayed and a party with no gas can close the deal (T-228). Signed steps wait for T-227.
     if (book.behind && !TIMEOUTS.has(fn)) refuse('invalid_state', this.lag(id)!);
+    if (fn === 'agreeAndFund') {
+      const t = book.state.terms;
+      const struck = [t.buyer, t.seller].find((a) => (this.struck.get(lc(a)) ?? 0) > Date.parse(this.now()));
+      if (struck) refuse('relay_refused', `a funding this operator relayed for ${struck} passed its simulation and reverted on chain because ${struck}'s signature failed at that block, so this operator relays no funding naming it until ${toTimestamp(this.struck.get(lc(struck))!)}; submit it through another operator or directly to the settlement layer`);
+    }
     const key = options.sender;
     const from = key ? privateKeyToAccount(key).address : this.world.senderFor(id);
     const at = this.now();
@@ -1734,6 +1767,7 @@ export class EvmSettlement implements Settlement {
     if (mined.status !== 'success') {
       if (!this.wall) throw new Error(`${fn} reverted on chain after a passing simulation: ${mined.hash}`);
       this.done(mined.hash, options);
+      if (fn === 'agreeAndFund') await this.strikeFunding(book, mined.blockNumber);
       // On a live chain the state or a deadline can move between the simulation and the block; only gas was spent.
       throw new Reverted(problem('invalid_state', `${fn} reverted on chain in ${mined.hash} after a passing simulation (the state or a deadline moved in between); nothing changed`), mined.blockNumber, mined.timestamp);
     }

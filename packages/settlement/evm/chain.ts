@@ -119,9 +119,10 @@ export interface EvmChain {
    * Sends and waits for the receipt. `key` absent: `senderFor(lane)`. `at` (scenario clock): the block's second.
    * `note` (a live chain with a lane store): kept in the lane's in-flight row until the receipt is applied (T-219).
    * `gasCap`: the most gas this one transaction may be sent with, in place of the relayer's cap (a standing seller's
-   * deployment, ADR-0040 §4, which takes about 18 million gas on Sepolia).
+   * deployment, ADR-0040 §4, which takes about 18 million gas on Sepolia). `gasMarginPct`: the gas sent above the
+   * estimate, in percent (25 by default); a deployment that loses a race to its address burns all of it (EIP-684).
    */
-  send(tx: { key?: Hex; lane?: string; to: Address; data: Hex; value?: bigint; note?: RelayNote; gasCap?: bigint }, at?: number): Promise<Mined>;
+  send(tx: { key?: Hex; lane?: string; to: Address; data: Hex; value?: bigint; note?: RelayNote; gasCap?: bigint; gasMarginPct?: number }, at?: number): Promise<Mined>;
   /** T-219, a live chain only. The rows no caller waits on: left open by a restart, or by an RPC error after the broadcast. */
   inFlight?(): readonly LaneRow[];
   /** The open row that sent `hash`, if any. */

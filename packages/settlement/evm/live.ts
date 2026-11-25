@@ -426,12 +426,12 @@ export class LiveChain implements EvmChain {
    * Sends on the key's own lane, or the named lane, after the lane's previous transaction is mined and any row a restart
    * left on that lane is resolved. A deal lane with a store writes the transaction's row, with `note`, before the broadcast.
    */
-  send(tx: { key?: Hex; lane?: string; to: Address; data: Hex; value?: bigint; note?: RelayNote; gasCap?: bigint }): Promise<Mined> {
+  send(tx: { key?: Hex; lane?: string; to: Address; data: Hex; value?: bigint; note?: RelayNote; gasCap?: bigint; gasMarginPct?: number }): Promise<Mined> {
     const account = tx.key ? privateKeyToAccount(tx.key) : this.account(tx.lane);
     const lane = tx.key || tx.lane === undefined || tx.lane === FUNDING_LANE ? null : 1 + laneOf(tx.lane);
     return this.serialized(account.address, async () => {
       for (const r of this.inFlight()) if (lc(r.from) === lc(account.address)) await this.resolve(r);
-      return this.sendNow(account, tx.to, tx.data, tx.value ?? 0n, lane, tx.note, tx.gasCap ?? GAS_CAP);
+      return this.sendNow(account, tx.to, tx.data, tx.value ?? 0n, lane, tx.note, tx.gasCap ?? GAS_CAP, tx.gasMarginPct ?? 25);
     });
   }
 
@@ -602,7 +602,7 @@ export class LiveChain implements EvmChain {
     return next;
   }
 
-  private async sendNow(account: PrivateKeyAccount, to: Address, data: Hex, value: bigint, lane: number | null, note: RelayNote | undefined, cap: bigint): Promise<Mined> {
+  private async sendNow(account: PrivateKeyAccount, to: Address, data: Hex, value: bigint, lane: number | null, note: RelayNote | undefined, cap: bigint, marginPct: number): Promise<Mined> {
     await this.verify();
     const from = account.address;
     const k = `${lc(from)}|${lc(to)}|${data}`;
@@ -611,8 +611,8 @@ export class LiveChain implements EvmChain {
     const estimate = this.estimates.get(k) ?? (await this.pinned((blockNumber) => this.publicClient.estimateGas({ account: from, to, data, value, blockNumber }), askAgain, 'now'));
     this.estimates.delete(k);
     // Sent with less gas than it needs, a call would run out on chain and spend the gas for nothing.
-    if ((estimate * 5n) / 4n > cap) throw new RelayRefused(`the call needs about ${estimate} gas, above this node's cap of ${cap}`);
-    const gas = (estimate * 5n) / 4n;
+    const gas = (estimate * (100n + BigInt(marginPct))) / 100n;
+    if (gas > cap) throw new RelayRefused(`the call needs about ${estimate} gas, above this node's cap of ${cap} gas`);
     const nonce = this.nonces.get(lc(from)) ?? (await this.nextNonce(from));
     const fee = await this.feesNow();
     const f: Flight = { from, nonce, to, data, value, gas, fee, raw: '0x', hashes: [], start: 0, checkpoint: 0, deadline: 0, row: null };
