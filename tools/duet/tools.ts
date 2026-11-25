@@ -84,6 +84,12 @@ export interface ToolboxOptions {
    * environment is still built from nothing (`env()`), with `env` added: no model key reaches it unless put here.
    */
   installed?: Installed;
+  /**
+   * One line of usage for each of the agent's commands, given to the agent once, in its brief (N215). A call with no
+   * arguments, or with only --help or -h, is refused and points back to that line, so no run probes a command to learn
+   * how to use it: what the agent must learn it learns from the guide.
+   */
+  usage?: Record<string, string>;
 }
 
 /** A command from outside this checkout, with its own argument fence. */
@@ -321,6 +327,8 @@ export class Toolbox {
     if (!commands.includes(command)) throw new Refused(`${JSON.stringify(command).slice(0, 80)} is not one of your company's installed commands: ${commands.join(', ')}`);
     if (args.length > 12 || args.some((a) => a.length > 20_000)) throw new Refused('at most 12 arguments of at most 20,000 characters each');
     if (args.some((a) => a.includes('\0'))) throw new Refused('an argument with a NUL character is refused');
+    const line = this.o.usage && Object.hasOwn(this.o.usage, command) ? this.o.usage[command] : undefined;
+    if (line && (args.length === 0 || (args.length === 1 && ['--help', '-h'].includes(args[0]!)))) throw new Refused(`${command} does not answer --help or an empty call here: its usage is ${line}, as your company's brief gave it`);
     // An installed command's check sees every call, a usage question included: nothing reaches its script unchecked.
     const extra = this.installedCommand(command);
     if (extra) {
