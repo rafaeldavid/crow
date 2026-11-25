@@ -105,4 +105,22 @@ describe('a chain world with an incomplete live configuration fails closed (N222
     expect(lines[0]).toMatch(/HOLDBACK_OPENAI_COMPATIBLE_API_KEY/);
     expect(lines[0]).not.toContain('secret-value');
   });
+
+  // Red team of PR 797 (L1): all three variables set, but the base URL is not https, so the live provider refuses. The
+  // world failed closed with `missing: []`: discovery, the decline reason and the warn line named no variable to fix.
+  it('names the base URL when all three are set but it is not an https URL, and logs neither value', () => {
+    const lines: string[] = [];
+    const orig = console.warn;
+    console.warn = (...a: unknown[]) => void lines.push(a.join(' '));
+    let cfg: ReturnType<typeof closed>;
+    try {
+      cfg = closed({ HOLDBACK_ANTHROPIC_API_KEY: 'secret-a', HOLDBACK_OPENAI_COMPATIBLE_API_KEY: 'secret-b', HOLDBACK_OPENAI_COMPATIBLE_BASE_URL: 'http://judges.example' });
+    } finally {
+      console.warn = orig;
+    }
+    expect(cfg).toMatchObject({ live: false, closed: true, missing: ['HOLDBACK_OPENAI_COMPATIBLE_BASE_URL'] });
+    expect(lines).toHaveLength(1);
+    expect(lines[0]).toMatch(/HOLDBACK_OPENAI_COMPATIBLE_BASE_URL/);
+    for (const v of ['secret-a', 'secret-b', 'judges.example']) expect(lines[0]).not.toContain(v);
+  });
 });

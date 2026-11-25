@@ -14,7 +14,7 @@
 // T-574: a panel is live or abstaining as a whole, chosen once when it starts (`PanelConfig.panel`). Before, each call
 // chose, so a live seat's retry after an HTTP 503 could go to the scripted judge once the budget ran out, and that
 // scripted pass counted as the second model family (T-570's red team, H2).
-import { liveJudges, liveRegistry, LIVE_REGISTRY_URI, markedFake, markerFake, missingLiveEnv, placeholderRegistry, type JudgeUsage, type KeptRegistry, type TestAdjudicatorOptions } from '@holdback/adjudicator';
+import { liveJudges, liveRegistry, LIVE_REGISTRY_URI, markedFake, markerFake, missingLiveEnv, OPENAI_COMPATIBLE_BASE_URL_ENV, placeholderRegistry, type JudgeUsage, type KeptRegistry, type TestAdjudicatorOptions } from '@holdback/adjudicator';
 import { wholeNumberVar } from './limits.js';
 import type { WorldStorage } from './storage.js';
 
@@ -196,7 +196,9 @@ export function panelConfig(o: PanelOptions): PanelConfig {
   const scripted = markedFake(markerFake());
   const live = o.judgeProvider ? { ok: true as const, value: o.judgeProvider } : liveJudges(o.env, { onUsage: (u) => budget.usage(u) });
   if (!live.ok && o.failClosed) {
-    const missing = missingLiveEnv(o.env);
+    // All three set, yet refused: the base URL is not https (liveProvider), so name it rather than nothing (red team of PR 797, L1).
+    const unset = missingLiveEnv(o.env);
+    const missing = unset.length ? unset : [OPENAI_COMPATIBLE_BASE_URL_ENV];
     // One line at start, names only: never a value (N222).
     console.warn(`judges fail closed: the live judge variables are incomplete (missing: ${missing.join(', ')}); Crow's adjudicators decline new judged deals and any judgment under way abstains`);
     const closed: JudgeProvider = { complete: async () => ({ kind: 'error', transport: false, detail: UNCONFIGURED_DETAIL }) };
