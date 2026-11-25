@@ -6,7 +6,8 @@
 // asked, so the provider throws instead of replaying it (docs/testing.md, Recorded judges).
 import { existsSync, mkdirSync, readdirSync, readFileSync, statSync, unlinkSync, writeFileSync } from 'node:fs';
 import { dirname, join } from 'node:path';
-import { parseJudgeVerdict, type Hex32, type JudgeVerdict } from '@holdback/core';
+import { parseJudgeVerdict, type CodedJudgeVerdict, type Hex32, type JudgeVerdict } from '@holdback/core';
+import { TEMPLATE_PAIR_3 } from '@holdback/judgment';
 import { KEPT } from '@holdback/judgment';
 
 export const RECORDING_FORMAT = 'holdback.recording/v1';
@@ -47,7 +48,8 @@ export interface Recording extends JudgeRequest {
 
 export interface JudgeResult {
   status: 'ok' | 'recorded';
-  verdict: JudgeVerdict;
+  /** A prose verdict, or under template pair 3 a coded one (ADR-0050); recordings hold prose verdicts only. */
+  verdict: JudgeVerdict | CodedJudgeVerdict;
   capturedFrom?: CapturedFrom;
 }
 
@@ -269,6 +271,11 @@ export class FakeJudges implements JudgeProvider {
 
   judge(request: JudgeRequest): JudgeResult {
     assertPinned(request.model);
+    // ADR-0050: template pair 3 asks for a coded verdict, so the fake answers in codes there.
+    if (request.promptTemplateHash === TEMPLATE_PAIR_3.firstHash || request.promptTemplateHash === TEMPLATE_PAIR_3.appealHash) {
+      const coded: CodedJudgeVerdict = { criteria: this.criteria.map((id) => ({ id, refs: [], reasons: ['meets_terms'], score: 4 })), overall: 'pass', injectionSuspected: false, injectionKinds: [], injectionRefs: [] };
+      return { status: 'ok', verdict: coded };
+    }
     return {
       status: 'ok',
       verdict: {
@@ -305,7 +312,9 @@ export class RecordingJudges implements JudgeProvider {
       }
     }
     const result = this.inner.judge(request);
-    writeRecording(this.dir, toRecording(request, result.verdict, 'fake'));
+    // The recording format holds prose verdicts (judge-verdict.schema.json $defs/ProseVerdict) only.
+    if ('reasons' in (result.verdict.criteria[0] ?? {}) || !('rationale' in result.verdict)) throw new RangeError(`recordings hold prose verdicts only; a coded panel (template pair 3, ADR-0050) runs with --judges fake and no --record`);
+    writeRecording(this.dir, toRecording(request, result.verdict as JudgeVerdict, 'fake'));
     return result;
   }
 }

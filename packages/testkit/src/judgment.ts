@@ -79,6 +79,11 @@ export interface PanelMemberView {
   scores: number[];
   injectionSuspected: boolean;
   inputHash: Hex32;
+  /**
+   * A coded seat only (ADR-0050): keccak256 of the seat's coded record verdict, so the replay holds its codes, anchors
+   * and dropped counts too. Absent for a prose seat, so no prose record moves.
+   */
+  verdictHash?: Hex32;
 }
 
 export interface CheckView {
@@ -302,6 +307,7 @@ export async function runJudgment(input: RunJudgmentInput, judges: JudgeProvider
       inputHash: m.inputHash,
     };
     if (src.capturedFrom) view.capturedFrom = src.capturedFrom;
+    if (v && 'format' in v) view.verdictHash = canonicalKeccak(v);
     return view;
   });
 
