@@ -47,7 +47,7 @@ import {
 } from '@holdback/core';
 import { commitmentIdOf, operationOf, previewSubmission, submissionKeys, submissionsOf, type Operation } from '@holdback/sdk';
 import type { PolicyContext, RelayPolicy } from './policy.js';
-import { MAX_PARTY_SIGNATURE_BYTES, type DryRunSubmission, type Settlement, type SubmitResult } from '@holdback/settlement';
+import { MAX_PARTY_SIGNATURE_BYTES, NothingSent, type DryRunSubmission, type Settlement, type SubmitResult } from '@holdback/settlement';
 import { privateKeyToAccount } from 'viem/accounts';
 import type { Sha256, Signature, Timestamp, TokenAmount } from '@holdback/core';
 import { CryptoError, sha256 } from '@holdback/core/crypto';
@@ -60,6 +60,7 @@ import { amountText, bondNotices, fallbackBondRefusal, operatorFeeText, prepare,
 import { firstStored, hasBond, MAX_REGISTRATION_BYTES, register, RegistrationError, type Bond, type StoredRegistration } from './registrations.js';
 import { IdempotencyStore, fingerprint, type StoredResponse } from './idempotency.js';
 import { readerOf, type Reader } from './read-auth.js';
+import { describeCause } from './describe-cause.js';
 import { llmsTxt, openApiDocument, plannedRoute, routeOf } from './openapi/index.js';
 import { fieldOf, problemBody, problemHeaders, statusOf, type ApiProblem, type ApiProblemType, type ProblemMembers } from './problems.js';
 import type { Registry } from './registry.js';
@@ -132,6 +133,19 @@ export interface LogEntry {
   traceparent?: string;
 }
 
+/** What `onInternal` is told: the request by its Request-Id and route template, never its path or body. */
+export interface InternalFailure {
+  requestId: string;
+  method: string;
+  route: string;
+  /** True when this attempt sent no transaction for the request, which the answer then says. */
+  nothingSent: boolean;
+  cause: string;
+}
+
+/** What an `internal` that sent nothing asks the caller to wait: about the bound of one pinned read on Sepolia. */
+const RETRY_UNSENT_SEC = 5;
+
 export interface OperatorOptions {
   settlement: Settlement;
   registry: Registry;
@@ -142,6 +156,8 @@ export interface OperatorOptions {
   env: Readonly<Record<string, string | undefined>>;
   rateLimit?: RateLimit;
   log?: (entry: LogEntry) => void;
+  /** Each 500 `internal`, with its cause as one line safe to log (describe-cause.ts; T-609). The request log has no cause. */
+  onInternal?: (failure: InternalFailure) => void;
   /**
    * A relay policy: returns a problem to refuse an operation. Any operator may refuse anything; the
    * neutrality tests and demo beat 7 use it to show that a refusal never stops a valid commitment
@@ -441,6 +457,8 @@ interface Ctx {
   segments: string[];
   req: IncomingMessage;
   res: ServerResponse;
+  /** T-609: set while this attempt at a signed write has sent nothing: from its parse to its first submission. */
+  unsent?: boolean;
   /** The problem type answered, for the log line. */
   problem?: ApiProblemType;
 }
@@ -601,10 +619,39 @@ export class Operator {
     this.route(ctx).catch((e: unknown) => {
       if (res.headersSent) return void res.end();
       if (e instanceof HttpProblem) return this.sendProblem(ctx, e.problem, e.headers);
-      // Never the cause: it may name internals. The Request-Id ties the answer to this node's log line.
-      this.sendProblem(ctx, { type: 'internal', detail: 'the operator could not process this request; retry, or use another operator' });
+      this.sendProblem(ctx, this.internalProblem(ctx, e));
     });
   };
+
+  /**
+   * The answer to a failure that is no refusal. It never names the cause, which may name internals: the cause goes to
+   * this node's log under the Request-Id (T-609). When this attempt at a signed write sent nothing, because the failure
+   * came before the relay or the settlement layer says so (`NothingSent`), the answer says that and how to send it again.
+   * It speaks for this attempt only: an earlier one with the same key may have left a transaction out.
+   */
+  private internalProblem(ctx: Ctx, e: unknown): ApiProblem {
+    const nothingSent = e instanceof NothingSent || ctx.unsent === true;
+    try {
+      this.o.onInternal?.({
+        requestId: ctx.requestId,
+        method: ctx.method,
+        route: routeOf(ctx.method, ctx.url.pathname),
+        nothingSent,
+        cause: describeCause(e instanceof NothingSent ? e.cause : e),
+      });
+    } catch {
+      // A log that fails must not take the answer with it.
+    }
+    if (!nothingSent) return { type: 'internal', detail: 'the operator could not process this request; retry, or use another operator' };
+    return {
+      type: 'internal',
+      detail:
+        `this attempt failed before the operator sent any transaction for this request, so nothing was sent to the settlement layer. ` +
+        `Send the same request again with the same Idempotency-Key in ${RETRY_UNSENT_SEC} seconds, or send it to another operator. ` +
+        `If an earlier attempt of it was answered without retryAfterSec, read the commitment's state first: that attempt's transaction may still be mined`,
+      retryAfterSec: RETRY_UNSENT_SEC,
+    };
+  }
 
   private send(ctx: Ctx, r: StoredResponse): void {
     if (ctx.res.writableEnded) return;
@@ -757,6 +804,8 @@ export class Operator {
     const parsedOp = operationOf(s, raw);
     if (!parsedOp.ok) refusal(parsedOp.error);
     const op = (parsedOp as Extract<typeof parsedOp, { ok: true }>).value;
+    // T-609: from here to the relay, a failure leaves nothing sent; from the relay on, only the settlement layer knows.
+    ctx.unsent = true;
     if ((op.kind === 'offer' || op.kind === 'hold') && (op.commitment as { id?: unknown }).id === undefined) fail('invalid_terms', MISSING_ID, { field: 'id' });
     checkShape(dryRun ? placeholderSigned(op) : op);
     if (op.kind === 'settle' && op.delivery) await this.lateDeliveryRule(op.message, op.delivery);
@@ -786,7 +835,8 @@ export class Operator {
       await this.refuseUnstoredDelivery(op);
       await this.refuseUnpayableFallback(op);
       await this.chargeFee(op);
-      const r = await this.relay(ctx, op, await this.bondNoticesFor(op));
+      const notices = await this.bondNoticesFor(op);
+      const r = await this.relay(ctx, op, notices);
       if (r.status < 300 && signerBucket) this.transfer(client, signerBucket);
       return r;
     });
@@ -832,6 +882,11 @@ export class Operator {
    * T-221 review: and for each of this node's own adjudicators that would decline its role on these terms.
    */
   private async bondNoticesFor(op: Operation): Promise<string[]> {
+    // T-609: advice never fails a write. At agree it reads the deal's state, balances included, from the chain.
+    return this.advisoryNotices(op).catch(() => []);
+  }
+
+  private async advisoryNotices(op: Operation): Promise<string[]> {
     const ctx = this.prepareContext();
     if (op.kind === 'offer' || op.kind === 'hold') return [...(await bondNotices(ctx, op.commitment)), ...(await turnNotices(ctx, op.commitment))];
     if (op.kind !== 'agree') return [];
@@ -1108,6 +1163,7 @@ export class Operator {
     const keys = submissionKeys(key, subs.length);
     let last: Extract<SubmitResult, { ok: true }> | undefined;
     for (const [i, sub] of subs.entries()) {
+      ctx.unsent = false;
       const r = await this.o.settlement.submit(sub, { idempotencyKey: keys[i]!, via: this.o.operatorId });
       if (!r.ok) return this.problemResponse(ctx, await this.refusalOf(op, r.problem));
       last = r;

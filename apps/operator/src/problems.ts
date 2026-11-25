@@ -67,7 +67,7 @@ export interface ProblemMembers {
   needs?: string[];
   /** payment_required: what to pay, to whom, in base units. */
   fee?: { to: Address; token: string; amount: string };
-  /** rate_limited: whole seconds to wait, as in Retry-After. */
+  /** rate_limited, and an `internal` that sent nothing (T-609): whole seconds to wait, as in Retry-After. */
   retryAfterSec?: number;
   /** payload_too_large: the largest body this route takes, in bytes. */
   maxBytes?: number;
@@ -87,7 +87,7 @@ export function problemBody(p: ApiProblem, requestId: string, status = statusOf(
   return { type, title: PROBLEMS[type].title, status, detail, instance: `urn:holdback:request:${requestId}`, ...typed };
 }
 
-/** The headers of a problem: its type page as an RFC 6903 "type" link, and Retry-After on a 429. */
+/** The headers of a problem: its type page as an RFC 6903 "type" link, and Retry-After when it names a wait. */
 export function problemHeaders(p: ApiProblem): Record<string, string> {
   return {
     'content-type': 'application/problem+json',

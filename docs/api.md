@@ -37,7 +37,8 @@ Any operator node serves this API. It adds speed and convenience, never authorit
   - `invalid_terms` (400): `field`, the input at fault, a dotted path into the JSON body (`price.amount`, `timing.fundWithinSec`, `fund.nonce`) or a query parameter or header name (`limit`, `Idempotency-Key`);
   - `payment_required` (402): `fee` `{to, token, amount}`;
   - `payload_too_large` (413): `maxBytes`, the largest body the route takes, in bytes;
-  - `rate_limited` (429): `retryAfterSec`.
+  - `rate_limited` (429): `retryAfterSec`;
+  - `internal` (500): `retryAfterSec` only when this attempt at a signed write failed before the operator sent any transaction for it: send the same request again with the same `Idempotency-Key` after that wait, or send it to another operator. It speaks for that attempt only. Without it, or when an earlier attempt of the request was answered without it, a transaction may be out: read the commitment's state, then retry with the same key.
 
   The types:
   - signatures and terms: `invalid_signature`, `scope_exceeded`, `mandate_expired`, `nonce_reused`, `rulebook_unknown`, `invalid_terms`, `deadline_passed`;
@@ -49,7 +50,7 @@ Any operator node serves this API. It adds speed and convenience, never authorit
   - requests: `idempotency_conflict`, `rate_limited`, `not_found`, `invalid_cursor` (a cursor this operator did not issue);
   - operator policy: `relay_refused` (403): this operator's own relay policy declines the call (D27). The signed message is still valid at another operator or directly at the settlement layer (ADR-0005). An operator-only type: no settlement layer returns it;
   - operator fee: `payment_required` (402): this operator relays a funded agreement only with its published fee (ADR-0023). The signed agreement is still valid elsewhere, and direct submission is free. Operator-only;
-  - the operator itself: `internal` (500), the operator failed (retry with the same key, or use another operator; quote the `Request-Id`), and `not_implemented` (501), a planned route ("Endpoints" rows marked planned), with `Link: <source>; rel="describedby"`. Operator-only.
+  - the operator itself: `internal` (500), the operator failed (retry with the same key, or use another operator; quote the `Request-Id`; its `retryAfterSec` is described above), and `not_implemented` (501), a planned route ("Endpoints" rows marked planned), with `Link: <source>; rel="describedby"`. Operator-only.
 
   The table of types, statuses, titles and next steps is `apps/operator/src/problems.ts`; the OpenAPI document's enum and the site's problem pages are generated from it.
 - **Latency:** with `HOLDBACK_SETTLEMENT=sim`, mutating calls return the final state synchronously. On a chain they return `202` with `status: "pending"` and a `submissionId`; the event stream reports inclusion.
