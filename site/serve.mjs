@@ -64913,6 +64913,24 @@ async function startSellerAdapter(c, env = process.env) {
 		}
 	};
 }
+/**
+* A command line's stop on SIGTERM or SIGINT: this file's and serve.ts's. Call it before startSellerAdapter, with a
+* way to read the adapter, and assign what the start returns straight from its await. The start prints its ready line
+* before it returns, so a handler installed after it left a signal sent on that line to the operating system, which
+* killed the process (a failed CI run). From that line to that assignment only synchronous code and microtasks run,
+* and Node runs a signal's handler between turns of its event loop: after the ready line, the handler finds the adapter.
+*/
+function stopOnSignals(started) {
+	for (const signal of ["SIGTERM", "SIGINT"]) process.once(signal, () => {
+		const adapter = started();
+		if (adapter === void 0) {
+			console.log(`${(/* @__PURE__ */ new Date()).toISOString()} ${signal}: the adapter stops before it serves; the journal keeps every open deal.`);
+			process.exit(0);
+		}
+		console.log(`${(/* @__PURE__ */ new Date()).toISOString()} ${signal}: the adapter stops after the step in progress; the journal keeps every open deal.`);
+		adapter.close().then(() => process.exit(0));
+	});
+}
 
 // examples/serve.ts
 /** Sepolia and a local chain (SimChain's domain carries the same ID): the chains this file signs under. */
@@ -64941,15 +64959,7 @@ async function main(argv) {
 		return 2;
 	}
 	let adapter;
-	for (const signal of ["SIGTERM", "SIGINT"]) process.once(signal, () => {
-		const running = adapter;
-		if (running === void 0) {
-			console.log(`${(/* @__PURE__ */ new Date()).toISOString()} ${signal}: the adapter stops before it serves; the journal keeps every open deal.`);
-			process.exit(0);
-		}
-		console.log(`${(/* @__PURE__ */ new Date()).toISOString()} ${signal}: the adapter stops after the step in progress; the journal keeps every open deal.`);
-		running.close().then(() => process.exit(0));
-	});
+	stopOnSignals(() => adapter);
 	try {
 		const settings = loadConfig(file);
 		if (!Object.hasOwn(JSON.parse(readFileSync(file, "utf8")), "template")) throw new Error(`${file}: template is required: serve.mjs carries no deal template, so name your own, with its scope`);

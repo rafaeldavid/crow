@@ -13,7 +13,7 @@ import nacl from 'tweetnacl';
 import { generatePrivateKey, privateKeyToAccount } from 'viem/accounts';
 import { afterAll, afterEach, beforeAll, describe, expect, it } from 'vitest';
 import { Agent } from './agent.ts';
-import { makeKeys } from './buyer-signer.ts';
+import { loadKeys, makeKeys, sellerOf } from './buyer-signer.ts';
 import { serveTwoOrigins, type TwoOrigins } from './two-origins.ts';
 import { checkPaymentFile, Refusal, SIMCHAIN_DOMAIN } from './verify.ts';
 
@@ -453,4 +453,84 @@ describe('a wallet outside the signer pays, on operators whose fee is 0 (the fir
       await zero.close();
     }
   }, 60_000);
+});
+
+/**
+ * D101 (T-611): terms are public once offered, so anyone can copy an offer, sign the copy with their own key and
+ * name the same buyer. The copier here offers the same deal, at its own payout address.
+ */
+describe('a copy of an offer signed by another key (D101)', () => {
+  let copier: Agent, adjudicators: J, clubId: string;
+  beforeAll(async () => {
+    copier = new Agent(demo.urls, generatePrivateKey(), nacl.randomBytes(32));
+    await copier.call('POST', '/v1/faucet', { address: copier.address });
+    const found = await copier.trusted('/.well-known/holdback.json', (x) => ({ clubId: x.demo.clubId, adjudicators: x.demo.adjudicators }));
+    const role = (r: string): string => found.adjudicators.find((a: J) => a.role === r).address;
+    adjudicators = { primary: role('primary'), fallback: role('fallback'), appeal: role('appeal') };
+    clubId = found.clubId;
+  });
+  /** The copier's offer of the same deal to `buyer`, signed by the copier's key and paid to it. */
+  const copyFor = async (buyer: { address: string; encryptionPublicKey: string }) =>
+    (await copier.offerDirect({ template: 'checks-only', clubId, seller: copier.address, sellerPayoutAddress: copier.address, buyer, adjudicators, price: PRICE, deliverable: DELIVERABLE, checks: CHECKS, timing: TIMING })).id;
+
+  it('readOffer refuses the copy, naming seller, for a buyer that named the seller; the real offer still passes checkOffer', async () => {
+    seller.set({});
+    const signer = await makeKeys(store(), { operators: demo.urls, seller: seller.address.toUpperCase().replace('0X', '0x'), log: () => {} });
+    expect(signer.expectedSeller).toBe(seller.address);
+    const quote = await signer.quote(seller.quoteUrl, 'rows');
+    const copy = await copyFor({ address: signer.address, encryptionPublicKey: signer.encryptionPublicKey });
+    const e = await refusal(signer.readOffer(copy));
+    expect(e).toBeInstanceOf(Refusal);
+    expect(e!.message).toBe(`refusing to sign: seller is "${copier.address}", not the expected "${seller.address}": another key signed this offer. The address you expect is the one the seller gave you by its own channel; an offer signed by any other key is a copy`);
+    const offer = await signer.readOffer(quote.commitmentId);
+    await expect(signer.checkOffer(quote.commitmentId, offer)).resolves.toMatchObject({ seller: seller.address });
+  }, 60_000);
+
+  it('an offer the buyer did not ask for: refused without a named seller, refused when another key signed it, and passes when its signer is the one named', async () => {
+    // No seller named and no quote: the buyer found the offer (GET /v1/commitments?party=<buyer>&role=buyer).
+    const open = await makeKeys(store(), { operators: demo.urls, log: () => {} });
+    const found = await copyFor({ address: open.address, encryptionPublicKey: open.encryptionPublicKey });
+    const offer = await open.readOffer(found);
+    const e = await refusal(open.checkOffer(found, offer));
+    expect(e).toBeInstanceOf(Refusal);
+    expect(e!.message).toMatch(new RegExp(`^refusing to sign: seller: this key did not ask for ${found} with quote, so nothing shows that ${copier.address} is the seller you mean`));
+    // Named, but another key signed it: refused before it is shown.
+    const pinned = await makeKeys(store(), { operators: demo.urls, seller: seller.address, log: () => {} });
+    const copy = await copyFor({ address: pinned.address, encryptionPublicKey: pinned.encryptionPublicKey });
+    expect((await refusal(pinned.readOffer(copy)))!.message).toMatch(/^refusing to sign: seller is /);
+    // Named, and its signer is the one named: it passes.
+    const right = await makeKeys(store(), { operators: demo.urls, seller: copier.address, log: () => {} });
+    const id = await copyFor({ address: right.address, encryptionPublicKey: right.encryptionPublicKey });
+    await expect(right.checkOffer(id, await right.readOffer(id))).resolves.toMatchObject({ seller: copier.address });
+  }, 60_000);
+
+  it('the named seller is saved in the key file and read again by loadKeys; an approval naming another seller is refused', async () => {
+    seller.set({});
+    const dir = store();
+    const signer = await makeKeys(dir, { operators: demo.urls, seller: seller.address, log: () => {} });
+    expect(JSON.parse(readFileSync(join(dir, `${signer.address}.json`), 'utf8')).seller).toBe(seller.address);
+    const quote = await signer.quote(seller.quoteUrl, 'rows');
+    const offer = await signer.readOffer(quote.commitmentId);
+    const again = await loadKeys(dir, quote.commitmentId, { operators: demo.urls, log: () => {} });
+    expect(again.expectedSeller).toBe(seller.address);
+    const e = await refusal(again.checkOffer(quote.commitmentId, { ...offer, seller: copier.address }));
+    expect(e!.message).toBe(`refusing to sign: seller is "${seller.address}", not the approved "${copier.address}"`);
+    await expect(makeKeys(store(), { seller: 'seller.example' })).rejects.toThrow(/seller must be the seller's address/);
+  }, 60_000);
+
+  it('quote takes https, or http on this machine only: the quote URL\'s origin stands for the seller when none is named', async () => {
+    const signer = await makeKeys(store(), { operators: demo.urls, log: () => {} });
+    await expect(signer.quote('http://seller.example/quote', 'rows')).rejects.toThrow('the quote URL must be https (or http on this machine), not http://seller.example');
+  });
+
+  it('sellerOf reads CROW_SELLER and the terms file, the same address if both', () => {
+    const a = fresh(), b = fresh();
+    expect(sellerOf(undefined, undefined)).toBeUndefined();
+    expect(sellerOf(a.toUpperCase().replace('0X', '0x'), undefined)).toBe(a);
+    expect(sellerOf(undefined, a)).toBe(a);
+    expect(sellerOf(a, a)).toBe(a);
+    expect(() => sellerOf(a, b)).toThrow(`CROW_SELLER is ${a} and the terms file's seller is ${b}: name one seller`);
+    expect(() => sellerOf('0x12', undefined)).toThrow(/CROW_SELLER is not an address/);
+    expect(() => sellerOf(undefined, 42)).toThrow(/the terms file's seller is not an address/);
+  });
 });

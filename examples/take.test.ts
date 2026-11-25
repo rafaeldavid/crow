@@ -248,6 +248,17 @@ describe.skipIf(!anvilReady)(`site/take.mjs on anvil, against a deployed seller 
     for (const op of a.urls) expect((await call(op, 'GET', `/v1/commitments/${offer.commitmentId}`)).escrowState).toBe('Released');
   }, 300_000);
 
+  it('D101: with CROW_SELLER, refuses a standing offer at another seller address, naming seller, and shows the one named', async () => {
+    const other = privateKeyToAccount(generatePrivateKey()).address.toLowerCase();
+    const copy = await run([cardUrl, 'customers-2', store, '100000000'], { ...env, CROW_SELLER: other });
+    expect(copy.code, copy.err).toBe(1);
+    expect(copy.err).toContain(`seller is ${seller}, not the expected "${other}" (CROW_SELLER): another key signed this standing offer`);
+    expect(copy.out).toBe('');
+    const named = await run([cardUrl, 'customers-2', store, '100000000'], { ...env, CROW_SELLER: seller.toUpperCase().replace('0X', '0x') });
+    expect(named.code, named.err).toBe(3);
+    expect(JSON.parse(named.out)).toMatchObject({ seller });
+  }, 120_000);
+
   it('attack.standing-ciphertext-missing: refuses a standing delivery whose file no operator serves, before it shows anything', async () => {
     const shown = await run([cardUrl, 'lost-file', store, '100000000'], env);
     expect(shown.code, shown.err).toBe(1);

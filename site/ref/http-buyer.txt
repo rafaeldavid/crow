@@ -4,7 +4,7 @@ The buyer's side of a deal over HTTP alone, after `ref/http.txt` and with `ref/s
 
 ## Check the offer, agree and fund
 
-The offer is a claim until you check it against the signed body the seller sent you; if you found the offer yourself (`GET /v1/commitments?party=<you>&role=buyer`), compare the two operators with each other and read `seller` from the terms. Compare addresses ignoring case.
+The offer is a claim until you check it against the signed body the seller sent you. `seller` must be the address the seller gave you (its card at its origin, or a message), never the offer's: anyone can copy and re-sign an offer. If you found the offer yourself (`GET /v1/commitments?party=<you>&role=buyer`), compare the two operators. Compare addresses ignoring case.
 
 - `GET /v1/commitments/<id>/terms` from `$OP1` and `$OP2` returns the seller's signed body, the terms with `id` and `"signatures": {"seller": "0x<...>"}`: both must equal the body you were sent, and `signatures.seller` must recover to `seller` over the `CommitmentTerms` typed data under your pinned domain.
 - Recompute the commitment ID (`ref/signing.txt`, "Encodings"): it must equal `id`.
@@ -12,7 +12,7 @@ The offer is a claim until you check it against the signed body the seller sent 
 - `buyer` and `buyerEncryptionPublicKey` are yours, `price` is exactly the price you negotiated (not just under a budget), `adjudication.fee` is one you accept (you pay it on top of the price), the adjudicators are the ones you chose, and the deliverable, the time windows and the checks are what you expect. On a checks-only deal the checks are the whole deal: work that passes them is accepted.
 - The adjudicator has taken the deal: `GET /v1/commitments/<id>` reads `"AcceptedByAdjudicator"` on both operators.
 
-Approve here, before anything is signed: the price and both fees, the deliverable, the checks, the deadlines and the adjudicators are what you pay for and bind to.
+Approve all of this before you sign anything: it binds you.
 
 **The operator fee.** Read `fees.operator` from both operators' discovery; both must be equal. It is `{to, token, bps, min, max, appliesAt: "agree-and-fund", refundable: false}`, set by the operator, so read it for each deal. The fee in base units is `max(min, ceil(price * bps / 10000))`, then at most `max` unless `max` is null. A fee above 0 goes to `to` as its own transfer in the funding's transaction, never into the hold, and is never refunded. For the first pilots these nodes publish `bps` 0 and `min` "0": the fee is 0, they pay the gas, and prepare asks for no fee signature. Reads, prepare, the faucet and deliveries are free.
 

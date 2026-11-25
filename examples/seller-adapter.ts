@@ -217,6 +217,30 @@ export async function startSellerAdapter(c: SellerAdapterConfig, env: Readonly<R
   };
 }
 
+/**
+ * A command line's stop on SIGTERM or SIGINT: this file's and serve.ts's. Call it before startSellerAdapter, with a
+ * way to read the adapter, and assign what the start returns straight from its await. The start prints its ready line
+ * before it returns, so a handler installed after it left a signal sent on that line to the operating system, which
+ * killed the process (a failed CI run). From that line to that assignment only synchronous code and microtasks run,
+ * and Node runs a signal's handler between turns of its event loop: after the ready line, the handler finds the adapter.
+ */
+export function stopOnSignals(started: () => RunningAdapter | undefined): void {
+  for (const signal of ['SIGTERM', 'SIGINT'] as const) {
+    process.once(signal, () => {
+      const adapter = started();
+      // Still starting, perhaps waiting on an operator that never answers: no quote is served and no pass has run.
+      if (adapter === undefined) {
+        console.log(`${new Date().toISOString()} ${signal}: the adapter stops before it serves; the journal keeps every open deal.`);
+        process.exit(0);
+      }
+      // A service manager stops the adapter with SIGTERM: it stops taking quotes, lets the step in progress finish and
+      // record itself in the journal, then exits. The next start resumes every open deal from the journal.
+      console.log(`${new Date().toISOString()} ${signal}: the adapter stops after the step in progress; the journal keeps every open deal.`);
+      void adapter.close().then(() => process.exit(0));
+    });
+  }
+}
+
 if (process.argv[1] && import.meta.url === pathToFileURL(process.argv[1]).href) {
   const args = process.argv.slice(2);
   const sim = args.includes('--sim');
@@ -230,7 +254,8 @@ if (process.argv[1] && import.meta.url === pathToFileURL(process.argv[1]).href) 
     console.error(help('seller-adapter', import.meta.url));
     process.exit(2);
   }
-  let adapter: RunningAdapter;
+  let adapter: RunningAdapter | undefined;
+  stopOnSignals(() => adapter);
   try {
     const settings = loadConfig(files[0]!);
     let env: Readonly<Record<string, string | undefined>> = process.env;
@@ -245,13 +270,5 @@ if (process.argv[1] && import.meta.url === pathToFileURL(process.argv[1]).href) 
   } catch (e) {
     console.error(`seller-adapter: ${plain((e as Error).message)}`);
     process.exit(2);
-  }
-  // A service manager stops the adapter with SIGTERM: it stops taking quotes, lets the step in progress finish and
-  // record itself in the journal, then exits. The next start resumes every open deal from the journal.
-  for (const signal of ['SIGTERM', 'SIGINT'] as const) {
-    process.once(signal, () => {
-      console.log(`${new Date().toISOString()} ${signal}: the adapter stops after the step in progress; the journal keeps every open deal.`);
-      void adapter.close().then(() => process.exit(0));
-    });
   }
 }

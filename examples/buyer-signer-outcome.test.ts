@@ -107,7 +107,7 @@ async function funded(w: SimWorld, work: string | null, operators: string[] = [.
   const store = mkdtempSync(join(tmpdir(), 'buyer-signer-outcome-'));
   stores.push(store);
   const address = String(b.address).toLowerCase();
-  writeFileSync(join(store, `${address}.json`), JSON.stringify({ version: 1, address, privateKey: b.privateKey, encryptionSecretKey: b.encryptionSecretKey, createdAt: new Date().toISOString() }), { mode: 0o600 });
+  writeFileSync(join(store, `${address}.json`), JSON.stringify({ version: 1, address, privateKey: b.privateKey, encryptionSecretKey: b.encryptionSecretKey, createdAt: new Date().toISOString(), seller: seller.address.toLowerCase() }), { mode: 0o600 });
   const signer = await loadKeys(store, address, { operators });
   const a = w.info.adjudicators;
   const offer = await seller.offer({
