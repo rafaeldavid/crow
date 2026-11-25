@@ -52,8 +52,22 @@ async function funded(price: string, description = `customers, deal ${++n}`) {
   await buyer.waitFor(offer.id, ['Held']);
   return { offer, seller, buyer };
 }
+/**
+ * Waits until every operator serves the deal as settled for good. `finalAt` alone is not enough: the settlement layer
+ * derives it from the clock, so it is set the second the (zero-length) appeal window closes, while `appealState` moves
+ * from `none` to `expired` only when the primary adjudicator's next pass applies the expiry. A record read in between
+ * finds the two operators answering at different sides of that move, and rightly reports that they differ.
+ */
 const final = async (buyer: Agent, id: Hex) => {
-  for (let i = 0; i < 100 && !(await buyer.call('GET', `/v1/commitments/${id}`)).finalAt; i++) await new Promise((r) => setTimeout(r, 100));
+  const done = async () => {
+    for (const api of world.info.operators) {
+      const s = await buyer.call('GET', `/v1/commitments/${id}`, undefined, api);
+      const decided = s.escrowState === 'Released' || s.escrowState === 'Refunded';
+      if (!s.finalAt || (decided && s.appealState !== 'expired')) return false;
+    }
+    return true;
+  };
+  for (let i = 0; i < 100 && !(await done()); i++) await new Promise((r) => setTimeout(r, 100));
 };
 async function decided(price: string, work: string, description?: string) {
   const { offer, seller, buyer } = await funded(price, description);
