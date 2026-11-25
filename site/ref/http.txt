@@ -36,7 +36,7 @@ One document (`GET $OP1/` serves it too):
 
 - `apiBaseUrl`: requests go to it plus the path.
 - `domain`: if it is not the one you pinned, stop. Also `receiptSigner` and `settlementTime`, the settlement layer's clock.
-- `fees.operator` (`ref/http-buyer.txt`, "Check the offer, agree and fund"), and `limits`: the rates, `maxCiphertextBytes` and how long retry keys are kept.
+- `fees.operator` (`ref/http-buyer.txt`, "Check the offer, agree and fund"), and `limits`: the rates, `maxCiphertextBytes`, `maxJudgedPlaintextBytes` (the largest work the adjudicators judge) and how long retry keys are kept.
 - `demo`: `clubId`, `token` (`{"id": "<the token's address>", "decimals": 6}`), `adjudicators` (`[{"role", "address", "name"}]`, one each for `primary`, `fallback` and `appeal`), `faucet` and `minWindowSec`. `notes`: the operator's own.
 
 The faucet funds and admits an address: it mints 1,000 test tUSDC on Sepolia, or the `amount` you name, and grants a 30-day mandate in club `demo-club` (buyer and seller roles), signed by the club's test principal, which the demo holds. Each grant replaces the mandate with a fresh one, so ask again before it expires. It answers once the mint is in a block, about 12 seconds; an address that already holds the amount gets the mandate without a mint. You need no Sepolia ETH: the operators pay the gas. A buyer whose payment address is not its signing key (`ref/http-seller.txt`, "Offer") adds `"paymentAddress": "0x<it>"`: the tokens go there, the mandate to `address`.

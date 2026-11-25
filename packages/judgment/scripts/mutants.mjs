@@ -93,7 +93,7 @@ const MUTANTS = [
   ["transport", "no retry", "pipeline.ts", "return first.kind === 'error' && first.transport ? once() : first;", "return first;"],
   ["transport", "retry on any error", "pipeline.ts", "return first.kind === 'error' && first.transport ? once() : first;", "return first.kind === 'error' ? once() : first;"],
   ["intake", "plaintext hash not verified", "intake.ts", "if (sha256(plaintext) !== delivery.plaintextSha256)", "if (false)"],
-  ["intake", "size cap off by one", "intake.ts", "if (plaintext.length > MAX_PLAINTEXT_BYTES)", "if (plaintext.length > MAX_PLAINTEXT_BYTES + 1)"],
+  ["intake", "size cap off by one", "intake.ts", "return plaintext.length > JUDGED_MAX_PLAINTEXT_BYTES", "return plaintext.length > JUDGED_MAX_PLAINTEXT_BYTES + 1"],
   ["intake", "MIME allowlist off", "intake.ts", "if (!ALLOWED_MIME.includes(mime))", "if (false)"],
   ["intake", "agreed format not bound at intake", "intake.ts", "if (input.format !== undefined && mime !== input.format) return fail", "if (false) return fail"],
   ["intake", "agreed format not bound in the pipeline", "pipeline.ts", "if (input.deliverable.format !== undefined && input.deliverable.format !== input.intake.mime)", "if (false)"],

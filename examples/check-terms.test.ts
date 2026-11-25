@@ -5,7 +5,7 @@ import { mkdtempSync, readdirSync, readFileSync, rmSync, writeFileSync } from 'n
 import { tmpdir } from 'node:os';
 import { join, relative } from 'node:path';
 import { fileURLToPath } from 'node:url';
-import { compileSafeRegex, SubjectTooLong } from '@holdback/judgment';
+import { compileSafeRegex, JUDGED_MAX_PLAINTEXT_BYTES, SubjectTooLong } from '@holdback/judgment';
 import { afterAll, describe, expect, it } from 'vitest';
 import { BASE_UNITS, checkTerms, line, LONGEST_MATCHED_CHARS, LONGEST_PATTERN_CHARS } from './check-terms.ts';
 import { fill } from './seller-adapter-core.ts';
@@ -185,6 +185,34 @@ describe('check-terms', () => {
       if (!any.ok) throw new Error(any.error);
       expect(any.value.search('a'.repeat(LONGEST_MATCHED_CHARS))).toBe(true);
       expect(() => any.value.search('a'.repeat(LONGEST_MATCHED_CHARS + 1))).toThrow(SubjectTooLong);
+    });
+  });
+
+  describe('a size the judged-intake limit cannot take (D108)', () => {
+    const terms = (...checks: J[]): J => ({ price: { token: 'tUSD', amount: '1' }, acceptance: { deterministicChecks: checks } });
+    const rows = (min: number, max: number): J => ({ id: 'rows', type: 'row_count_range', required: true, min, max });
+    const cols = (n: number): J => ({ id: 'cols', type: 'csv_columns_exact', required: true, columns: Array.from({ length: n }, (_, i) => `c${i}`) });
+
+    it("is 1 MiB, the engine's own number", () => {
+      expect(JUDGED_MAX_PLAINTEXT_BYTES).toBe(1_048_576);
+    });
+
+    it('warns when the fewest rows the check accepts cannot fit, counting a byte per column', () => {
+      const w = checkTerms(terms(cols(4), rows(300_000, 400_000)));
+      expect(w.map((x) => `${x.kind} ${x.path}`)).toEqual(['size acceptance.deterministicChecks[1].min']);
+      expect(line(w[0]!)).toBe(
+        "warning: acceptance.deterministicChecks[1].min: at least 300000 rows. Why it may matter: a row of 4 columns takes at least 4 bytes, so every delivery the check accepts is over the 1,048,576 bytes Crow's adjudicators judge (limits.maxJudgedPlaintextBytes), and a larger delivery is rejected before any check runs.",
+      );
+    });
+
+    it('warns when the most rows it accepts may not fit', () => {
+      expect(kinds(terms(rows(1, 5_000_000)))).toEqual(['size acceptance.deterministicChecks[0].max']);
+      expect(kinds(terms(cols(2), rows(1, 600_000)))).toEqual(['size acceptance.deterministicChecks[1].max']);
+    });
+
+    it('is silent at the limit and below it', () => {
+      expect(kinds(terms(rows(1, JUDGED_MAX_PLAINTEXT_BYTES)))).toEqual([]);
+      expect(kinds(terms(cols(2), rows(1, JUDGED_MAX_PLAINTEXT_BYTES / 2)))).toEqual([]);
     });
   });
 

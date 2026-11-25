@@ -372,7 +372,8 @@ describe('pipeline: red-team round fixes', () => {
   });
 
   it('escalates without the panel when the check budget runs out', async () => {
-    const rows = Array.from({ length: 300 }, () => 'a'.repeat(9000)).join('\n');
+    // 100 cells of 9,000 characters: 900 kB, inside the judged-intake limit (D108).
+    const rows = Array.from({ length: 100 }, () => 'a'.repeat(9000)).join('\n');
     const f = allPass();
     const { result } = await run({
       provider: f.provider,

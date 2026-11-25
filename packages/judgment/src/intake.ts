@@ -1,15 +1,23 @@
 // Stage 0, intake (docs/judgment-and-defenses.md): unwrap the escrowed content key, check the
-// ciphertext hash, decrypt, verify the plaintext hash, enforce the MIME allowlist and the 10 MB cap,
-// decode strict UTF-8 and normalize. Nothing here interprets the content.
+// ciphertext hash, decrypt, verify the plaintext hash, enforce the MIME allowlist and the judged-intake limit
+// (1 MiB, D108), decode strict UTF-8 and normalize. Nothing here interprets the content.
 import type { Address, Delivery, Judgment, MimeType } from '@holdback/core';
 import { err, ok, type Result } from '@holdback/core';
 import { sha256 } from '@holdback/core/crypto';
 import { normalizeText } from './normalize.js';
 import { UntrustedData } from './untrusted.js';
 
+/** The most plaintext a content store keeps: the 10 MiB store cap, for storage. Judgment reads less (below). */
 export const MAX_PLAINTEXT_BYTES = 10 * 1024 * 1024;
 /** AES-256-GCM adds a 12-byte IV and a 16-byte tag in the content layout (core crypto/content.ts). */
 export const MAX_CIPHERTEXT_BYTES = MAX_PLAINTEXT_BYTES + 28;
+/**
+ * D108: the most plaintext judgment reads, a delivery or a reference: 1 MiB. At this size stage 1 and every kept screen
+ * fit a 64 MB heap, half a Durable Object's 128 MB (heap.test.ts; measured, T-624), so a small host and a large one judge
+ * it alike. A larger delivery is refused here as payload_too_large, a seller's fault (reject without a panel), before any
+ * check or screen reads it. A bound, raised when a measured need appears; the store cap above stays 10 MiB.
+ */
+export const JUDGED_MAX_PLAINTEXT_BYTES = 1024 * 1024;
 export const ALLOWED_MIME: readonly MimeType[] = ['text/csv', 'application/json', 'text/plain', 'text/markdown'];
 
 export type Envelope = Delivery['encryptedKeys'][number];
@@ -83,9 +91,11 @@ export function refuseMime(mime: MimeType, format?: MimeType): IntakeError | und
   return undefined;
 }
 
-/** The size cap on the plaintext. Returns the refusal, if any. */
+/** The judged-intake limit on the plaintext (D108). Returns the refusal, if any. */
 export function refuseSize(plaintext: Uint8Array): IntakeError | undefined {
-  return plaintext.length > MAX_PLAINTEXT_BYTES ? { code: 'payload_too_large', detail: `plaintext is ${plaintext.length} bytes; the cap is ${MAX_PLAINTEXT_BYTES}` } : undefined;
+  return plaintext.length > JUDGED_MAX_PLAINTEXT_BYTES
+    ? { code: 'payload_too_large', detail: `plaintext is ${plaintext.length} bytes; judgment reads at most ${JUDGED_MAX_PLAINTEXT_BYTES} (the judged-intake limit)` }
+    : undefined;
 }
 
 /** What intake reads from a plaintext: everything in Intaken but the record, which only intake() can write. */

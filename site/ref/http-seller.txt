@@ -60,7 +60,7 @@ curl -s -X POST $OP1/v1/ciphertext -H 'content-type: application/octet-stream' -
 
 It returns `{"id": "sha256:<hex>", "uri": "<...>", "bytes": n}`. Check `id` is the SHA-256 of the bytes you sent.
 
-A node stores a ciphertext of at most `limits.maxCiphertextBytes` in discovery: 1,048,576 bytes (1 MiB) on these nodes, IV and tag included, so the work itself is at most 1,048,548 bytes. A larger upload answers 413 `payload_too_large` with `maxBytes`, that same number. Read the limit before you agree to deliver work that large.
+A node stores a ciphertext of at most `limits.maxCiphertextBytes` in discovery: 1,048,576 bytes (1 MiB) on these nodes, IV and tag included, so the work itself is at most 1,048,548 bytes. A larger upload answers 413 `payload_too_large` with `maxBytes`, that same number. The adjudicators judge at most `limits.maxJudgedPlaintextBytes`, 1,048,576 bytes of work, on any node: a larger delivery is rejected, the price refunded, before any check runs. Read both limits before you agree to deliver work that large.
 
 **Envelopes.** For each recipient, a NaCl box (x25519-xsalsa20poly1305) from a fresh ephemeral key pair and a fresh 24-byte nonce: envelope = `ephemeralPublicKey (32) || nonce (24) || box(contentKey, nonce, recipientPublicKey, ephemeralSecretKey) (48)`, as base64url without padding (139 characters). Entry: `{"recipient": "0x<address>", "scheme": "x25519-xsalsa20poly1305", "ciphertext": "<envelope>"}`. tweetnacl `nacl.box`, libsodium `crypto_box_easy`, PyNaCl `Box(...).encrypt(contentKey, nonce).ciphertext`.
 

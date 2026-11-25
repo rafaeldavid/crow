@@ -15,6 +15,7 @@ import { MemoryFeedbackStore, SIM_MAX_CIPHERTEXT_BYTES, signRegistration, testAc
 import { MemoryStorage, PublicWorld, type PublicWorldOptions } from './index.js';
 import { checkExchange } from '../../../tests/contract/openapi-check.ts';
 import { JudgeBudget } from './judges.js';
+import { JUDGED_MAX_PLAINTEXT_BYTES } from '../../../packages/judgment/src/intake.ts';
 import { DEMO_FAUCET_MAX_GRANT, DEMO_MAX_CIPHERTEXT_BYTES, TimeoutBudgetRows, buildCommit, relayerFacts, requiresLiveJudges } from './world.js';
 
 type J = any; // eslint-disable-line @typescript-eslint/no-explicit-any
@@ -240,7 +241,7 @@ describe('public mode', () => {
       expect(notes).toMatch(/one shared simulated settlement layer/i);
       expect(notes).toMatch(/POST \/v1\/faucet/);
       expect(notes).toMatch(/scripted/i);
-      expect(d.limits).toEqual({ reads: { limit: 1200, windowSec: 60, per: 'client' }, writes: { limit: 120, windowSec: 60, per: 'signer' }, maxCiphertextBytes: 1_048_576, idempotency: { replays: 'success-only', retention: 'process' } });
+      expect(d.limits).toEqual({ reads: { limit: 1200, windowSec: 60, per: 'client' }, writes: { limit: 120, windowSec: 60, per: 'signer' }, maxCiphertextBytes: 1_048_576, maxJudgedPlaintextBytes: 1_048_576, idempotency: { replays: 'success-only', retention: 'process' } });
       expect(d.demo).toMatchObject({ clubId: 'demo-club', operators: urls, token: { id: 'tUSD', decimals: 6 }, minWindowSec: 2, faucet: { path: '/v1/faucet', grant: { token: 'tUSD', amount: '1000000000' }, perAddressEverySec: 3600, perClientPerWindow: 50 } });
       expect(d.demo.adjudicators.map((a: J) => a.role)).toEqual(['primary', 'fallback', 'appeal']);
       const root = (await (await fetch(`${u}/`)).json()) as J;
@@ -279,6 +280,18 @@ describe('public mode', () => {
       const text = readFileSync(new URL(`../../../${file}`, import.meta.url), 'utf8');
       expect(text.split('\n').some((line) => line.includes('maxCiphertextBytes') && line.includes(bytes)), `${file} states ${bytes} beside limits.maxCiphertextBytes`).toBe(true);
       expect(text.split('\n').filter((line) => /ciphertext/i.test(line) && /at most 10 MiB|ciphertext 10 MiB/.test(line)), `${file} no longer says a node stores 10 MiB`).toEqual([]);
+    }
+  });
+
+  it('publishes the judged-intake limit, the Durable Object store holds no more, and the docs state the same (D108, T-624)', async () => {
+    const { urls } = await serve();
+    // Every delivery the World's store keeps is one its adjudicators judge: 1,048,576 ciphertext bytes hold less plaintext.
+    expect(JUDGED_MAX_PLAINTEXT_BYTES).toBe(DEMO_MAX_CIPHERTEXT_BYTES);
+    for (const u of urls) expect(((await (await fetch(`${u}/.well-known/holdback.json`)).json()) as J).limits.maxJudgedPlaintextBytes).toBe(JUDGED_MAX_PLAINTEXT_BYTES);
+    const bytes = `${JUDGED_MAX_PLAINTEXT_BYTES.toLocaleString('en-US')} bytes`;
+    for (const file of ['site/ref/limits.txt', 'site/ref/http-seller.txt', 'docs/api.md', 'spec/openapi/paths.json']) {
+      const text = readFileSync(new URL(`../../../${file}`, import.meta.url), 'utf8');
+      expect(text.split('\n').some((line) => line.includes('maxJudgedPlaintextBytes') && line.includes(bytes)), `${file} states ${bytes} beside limits.maxJudgedPlaintextBytes`).toBe(true);
     }
   });
 
