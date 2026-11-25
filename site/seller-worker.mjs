@@ -9168,7 +9168,7 @@ var init_beacon = __esmMin((() => {
 
 // packages/core/dist/canonical.js
 function str$4(s) {
-	if (LONE_SURROGATE$3.test(s)) throw new TypeError("canonical JSON: lone surrogate in string");
+	if (LONE_SURROGATE$4.test(s)) throw new TypeError("canonical JSON: lone surrogate in string");
 	return JSON.stringify(s);
 }
 /** Canonical JSON per RFC 8785. Throws TypeError on values JSON cannot represent. */
@@ -9191,10 +9191,10 @@ function canonicalJson(value) {
 function canonicalKeccak(value) {
 	return keccak256(stringToBytes(canonicalJson(value)));
 }
-var LONE_SURROGATE$3, policyHash, rulebookHash;
+var LONE_SURROGATE$4, policyHash, rulebookHash;
 var init_canonical = __esmMin((() => {
 	init__esm();
-	LONE_SURROGATE$3 = /\p{Cs}/u;
+	LONE_SURROGATE$4 = /\p{Cs}/u;
 	policyHash = (policy) => canonicalKeccak(policy);
 	rulebookHash = (rulebook) => canonicalKeccak(rulebook);
 }));
@@ -54814,7 +54814,7 @@ function codePoints$1(s) {
 }
 function str$3(s, budget) {
 	chargeChars(budget, s.length);
-	if (LONE_SURROGATE$2.test(s)) throw new TypeError("canonical JSON: lone surrogate in string");
+	if (LONE_SURROGATE$3.test(s)) throw new TypeError("canonical JSON: lone surrogate in string");
 	return JSON.stringify(s);
 }
 /** A scalar's canonical form, or undefined for an array or object. */
@@ -54889,11 +54889,11 @@ function canonical(v, budget) {
 	}
 	return parts.join("");
 }
-var CHARS_PER_UNIT, MAX_CANONICAL_DEPTH, LONE_SURROGATE$2, TooDeep;
+var CHARS_PER_UNIT, MAX_CANONICAL_DEPTH, LONE_SURROGATE$3, TooDeep;
 var init_cost = __esmMin((() => {
 	CHARS_PER_UNIT = 16;
 	MAX_CANONICAL_DEPTH = 1e3;
-	LONE_SURROGATE$2 = /\p{Cs}/u;
+	LONE_SURROGATE$3 = /\p{Cs}/u;
 	TooDeep = class extends TypeError {
 		constructor() {
 			super(`canonical JSON: nested deeper than ${MAX_CANONICAL_DEPTH}`);
@@ -56459,7 +56459,7 @@ function evaluateSignatureValid(check, delivered, budget) {
 	if (check.message.encoding === "utf8") {
 		prepaid = strings.message.length;
 		budget.spend(prepaid);
-		if (LONE_SURROGATE$1.test(strings.message)) return fail$4("message: not well-formed text");
+		if (LONE_SURROGATE$2.test(strings.message)) return fail$4("message: not well-formed text");
 		message = new TextEncoder().encode(strings.message);
 	} else {
 		budget.spend(strings.message.length / 4 * 3);
@@ -56485,7 +56485,7 @@ function evaluateSignatureValid(check, delivered, budget) {
 	}
 	return { passed: true };
 }
-var SIGNATURE_WORK, isObject$1, codePoints, isPointer, LONE_SURROGATE$1, fail$4;
+var SIGNATURE_WORK, isObject$1, codePoints, isPointer, LONE_SURROGATE$2, fail$4;
 var init_signature_valid = __esmMin((() => {
 	init_safe_regex();
 	init_signature();
@@ -56507,7 +56507,7 @@ var init_signature_valid = __esmMin((() => {
 		return n;
 	};
 	isPointer = (p) => typeof p === "string" && p.length <= 2 * SIGNATURE_LIMITS.pointer && codePoints(p) <= SIGNATURE_LIMITS.pointer && /^(\/([^~/]|~[01])*)*$/.test(p);
-	LONE_SURROGATE$1 = /[\uD800-\uDBFF](?![\uDC00-\uDFFF])|(?<![\uD800-\uDBFF])[\uDC00-\uDFFF]/;
+	LONE_SURROGATE$2 = /[\uD800-\uDBFF](?![\uDC00-\uDFFF])|(?<![\uD800-\uDBFF])[\uDC00-\uDFFF]/;
 	fail$4 = (detail) => ({
 		passed: false,
 		detail
@@ -57382,6 +57382,54 @@ var init_checks = __esmMin((() => {
 	});
 }));
 
+// packages/judgment/dist/json-keys.js
+/**
+* Calls `onRepeat` with the path of each object that holds a key twice, and the key (once per repeat). Stops early when
+* it returns true.
+*/
+function repeatedKeys(text, onRepeat) {
+	const stack = [];
+	const pathOf = () => stack.slice(0, -1).map((f) => f.kind === "obj" ? f.key : f.index);
+	for (let i = 0; i < text.length; i++) {
+		const c = text.charCodeAt(i);
+		if (c === 34) {
+			let j = i + 1;
+			while (j < text.length && text.charCodeAt(j) !== 34) j += text.charCodeAt(j) === 92 ? 2 : 1;
+			const top = stack[stack.length - 1];
+			if (top?.kind === "obj" && top.awaitKey) {
+				const key = JSON.parse(text.slice(i, j + 1));
+				if (top.keys.has(key) && onRepeat(pathOf(), key) === true) return;
+				top.keys.add(key);
+				top.key = key;
+				top.awaitKey = false;
+			}
+			i = j;
+		} else if (c === 123) stack.push({
+			kind: "obj",
+			keys: /* @__PURE__ */ new Set(),
+			awaitKey: true,
+			key: ""
+		});
+		else if (c === 91) stack.push({
+			kind: "arr",
+			index: 0
+		});
+		else if (c === 125 || c === 93) stack.pop();
+		else if (c === 44) {
+			const top = stack[stack.length - 1];
+			if (top?.kind === "obj") top.awaitKey = true;
+			else if (top) top.index++;
+		}
+	}
+}
+/** True when any object in the text holds a key twice. */
+function hasRepeatedKey(text) {
+	let found = false;
+	repeatedKeys(text, () => found = true);
+	return found;
+}
+var init_json_keys = __esmMin((() => {}));
+
 // packages/judgment/dist/sample.js
 /**
 * The i-th draw of a seeded stream, in [0, range): keccak256(seed || label || uint64 i) mod range.
@@ -57726,24 +57774,34 @@ var init_prompt = __esmMin((() => {
 }));
 
 // packages/judgment/dist/refs.js
-/** The work a coded verdict's references resolve against, once per panel. */
-function workView(intake) {
-	if (intake.mime === "application/json") try {
-		return {
-			kind: "json",
-			document: JSON.parse(intake.raw.reveal())
-		};
+/** The judged JSON parsed, or undefined when it does not parse or holds a key twice. */
+function judgedJson(text) {
+	let document;
+	try {
+		document = JSON.parse(text);
 	} catch {
-		return NO_REFS;
+		return;
+	}
+	return hasRepeatedKey(text) ? void 0 : { document };
+}
+/** The work a coded verdict's references resolve against, once per panel: the text the judges read. */
+function workView(intake) {
+	const text = intake.data.reveal();
+	if (intake.mime === "application/json") {
+		const j = judgedJson(text);
+		return j ? {
+			kind: "json",
+			document: j.document
+		} : NO_REFS;
 	}
 	return {
 		kind: "lines",
-		count: intake.data.reveal().split(LINE_BREAK).length
+		count: text.split(LINE_BREAK).length
 	};
 }
 /** True when `locator` is a string that points at a node or a line of the work. */
 function resolves(work, locator) {
-	if (typeof locator !== "string") return false;
+	if (typeof locator !== "string" || LONE_SURROGATE$1.test(locator)) return false;
 	if (work.kind === "json") return isPointer(locator) && resolve$1(work.document, locator) !== void 0;
 	if (work.kind === "lines") {
 		const m = LINE_REF.exec(locator);
@@ -57771,13 +57829,15 @@ function plaintextBytes(intake) {
 	out.set(text, BOM$1.length);
 	return out;
 }
-var ANCHOR_TAG, NO_REFS, LINE_REF, BOM$1;
+var ANCHOR_TAG, NO_REFS, LINE_REF, LONE_SURROGATE$1, BOM$1;
 var init_refs = __esmMin((() => {
 	init_signature_valid();
+	init_json_keys();
 	init_prompt();
 	ANCHOR_TAG = "holdback/judgment/anchor/v1";
 	NO_REFS = { kind: "none" };
 	LINE_REF = /^L([1-9][0-9]{0,9})$/;
+	LONE_SURROGATE$1 = /\p{Cs}/u;
 	BOM$1 = new Uint8Array([
 		239,
 		187,
@@ -58079,20 +58139,40 @@ var init_verdict = __esmMin((() => {
 }));
 
 // packages/judgment/dist/coded.js
-/** Every key and every string of a parsed output, in document order, iteratively. */
+/** Every key and every string of a parsed output, in document order, iteratively: all of them, the keys, the values. */
 function allText(value) {
-	const out = [];
-	const stack = [value];
+	const all = [];
+	const keys = [];
+	const values = [];
+	const stack = [{
+		v: value,
+		key: false
+	}];
 	while (stack.length) {
-		const v = stack.pop();
-		if (typeof v === "string") out.push(v);
-		else if (Array.isArray(v)) for (let i = v.length - 1; i >= 0; i--) stack.push(v[i]);
+		const { v, key } = stack.pop();
+		if (typeof v === "string") {
+			all.push(v);
+			(key ? keys : values).push(v);
+		} else if (Array.isArray(v)) for (let i = v.length - 1; i >= 0; i--) stack.push({
+			v: v[i],
+			key: false
+		});
 		else if (isRecord$4(v)) {
 			const entries = Object.entries(v);
-			for (let i = entries.length - 1; i >= 0; i--) stack.push(entries[i][1], entries[i][0]);
+			for (let i = entries.length - 1; i >= 0; i--) stack.push({
+				v: entries[i][1],
+				key: false
+			}, {
+				v: entries[i][0],
+				key: true
+			});
 		}
 	}
-	return out;
+	return {
+		all,
+		keys,
+		values
+	};
 }
 /**
 * Each base64 or base64url text in a string, decoded, for the canary scan: agg-5's decoder (verdict.ts, red team M1
@@ -58108,14 +58188,27 @@ function* decodedBase64(t) {
 		}
 	}
 }
-/** The canary in any case, with any separators, in a key or a value, split across them, or base64-encoded. */
-function echoesCanary$1(raw, parsed, canary) {
+/**
+* The canary in any case, folded by NFKC, with any separators, in a key or a value, split across two of them in one of
+* the three joins, or base64-encoded. `schemaWords` are the words the schema itself puts between evidence fields.
+*/
+function echoesCanary$1(raw, parsed, canary, schemaWords) {
 	const c = squash$1(canary);
 	if (!c) return false;
 	if (squash$1(raw).includes(c)) return true;
-	const texts = parsed === void 0 ? [] : allText(parsed);
-	if (squash$1(texts.join("")).includes(c)) return true;
-	for (const t of [raw, ...texts]) for (const decoded of decodedBase64(t)) if (squash$1(decoded).includes(c)) return true;
+	if (parsed === void 0) {
+		for (const decoded of decodedBase64(raw)) if (squash$1(decoded).includes(c)) return true;
+		return false;
+	}
+	const t = allText(parsed);
+	const values = t.values.filter((s) => !schemaWords.has(s));
+	const keys = t.keys.filter((s) => !SCHEMA_KEYS.has(s));
+	for (const join of [
+		t.all,
+		values,
+		keys
+	]) if (squash$1(join.join("")).includes(c)) return true;
+	for (const s of [raw, ...t.all]) for (const decoded of decodedBase64(s)) if (squash$1(decoded).includes(c)) return true;
 	return false;
 }
 /** Code points, as the schema's maxLength counts them; stops counting past `max`. */
@@ -58173,6 +58266,20 @@ function keepList(v, accept, drop) {
 	else drop();
 	return kept;
 }
+/** Where a repeated key is a decision key: the top level's criteria, overall and flag, a criterion's id and score. */
+function repeatedDecisionKey(raw) {
+	let fault;
+	repeatedKeys(raw, (path, key) => {
+		if (path.length === 0 && [
+			"criteria",
+			"overall",
+			"injectionSuspected"
+		].includes(key)) fault = "top level: a decision key written twice";
+		else if (path.length === 2 && path[0] === "criteria" && typeof path[1] === "number" && (key === "id" || key === "score")) fault = `criteria[${path[1]}]: a decision key written twice`;
+		return fault !== void 0;
+	});
+	return fault;
+}
 function parseCodedVerdict(raw, opts) {
 	if (raw.length > 65536) return abstain$1("too_long", `output is ${raw.length} characters`);
 	let json;
@@ -58182,9 +58289,10 @@ function parseCodedVerdict(raw, opts) {
 	} catch {
 		jsonOk = false;
 	}
-	if (echoesCanary$1(raw, jsonOk ? json : void 0, opts.canary)) return abstain$1("canary_echo", "output contains the canary");
+	const schemaWords = /* @__PURE__ */ new Set([...LIST_WORDS, ...opts.criterionIds]);
+	if (echoesCanary$1(raw, jsonOk ? json : void 0, opts.canary, schemaWords)) return abstain$1("canary_echo", "output contains the canary");
 	if (!jsonOk) return abstain$1("not_json", `output is not a single JSON value${/^\s*```/.test(raw) ? " (it starts with a code fence)" : ""}`);
-	const fault = decisionFault(json);
+	const fault = decisionFault(json) ?? repeatedDecisionKey(raw);
 	if (fault) return abstain$1("schema", fault);
 	const top = json;
 	const cs = top["criteria"];
@@ -58195,10 +58303,10 @@ function parseCodedVerdict(raw, opts) {
 	const isRef = (x) => typeof x === "string" && !codePointsOver(x, MAX_LOCATOR) && resolves(opts.work, x);
 	const unknownKeys = (o, allowed) => dropped.add("keys", Object.keys(o).filter((k) => !allowed.includes(k)).length);
 	unknownKeys(top, TOP_KEYS);
-	const criteria = cs.map((c) => {
+	const read = cs.map((c) => {
 		unknownKeys(c, CRITERION_KEYS);
 		const refs = keepList(Object.hasOwn(c, "refs") ? c["refs"] : void 0, isRef, () => dropped.add("refs"));
-		const reasons = keepList(Object.hasOwn(c, "reasons") ? c["reasons"] : void 0, isReason, () => dropped.add("reasons"));
+		const reasons = inListOrder(keepList(Object.hasOwn(c, "reasons") ? c["reasons"] : void 0, isReason, () => dropped.add("reasons")), REASON_CODES);
 		return {
 			id: c["id"],
 			refs,
@@ -58206,10 +58314,11 @@ function parseCodedVerdict(raw, opts) {
 			score: c["score"]
 		};
 	});
+	const criteria = opts.criterionIds.map((id) => read.find((c) => c.id === id));
 	const injectionSuspected = top["injectionSuspected"];
 	const kindsIn = Object.hasOwn(top, "injectionKinds") ? top["injectionKinds"] : void 0;
 	const refsIn = Object.hasOwn(top, "injectionRefs") ? top["injectionRefs"] : void 0;
-	const injectionKinds = keepList(kindsIn, (x) => injectionSuspected && isKind(x), () => dropped.add("reasons"));
+	const injectionKinds = inListOrder(keepList(kindsIn, (x) => injectionSuspected && isKind(x), () => dropped.add("reasons")), INJECTION_KINDS);
 	const injectionRefs = keepList(refsIn, (x) => injectionSuspected && isRef(x), () => dropped.add("refs"));
 	const verdict = {
 		criteria,
@@ -58239,9 +58348,10 @@ function parseCodedVerdict(raw, opts) {
 		}
 	};
 }
-var CODED_FORMAT, REASON_CODES, INJECTION_KINDS, MAX_ITEMS, DROP_CAP, MAX_LOCATOR, abstain$1, squash$1, isRecord$4, typeOf, Dropped, CRITERION_KEYS, TOP_KEYS, isReason, isKind;
+var CODED_FORMAT, REASON_CODES, INJECTION_KINDS, MAX_ITEMS, DROP_CAP, MAX_LOCATOR, abstain$1, squash$1, isRecord$4, typeOf, Dropped, CRITERION_KEYS, TOP_KEYS, SCHEMA_KEYS, LIST_WORDS, inListOrder, isReason, isKind;
 var init_coded = __esmMin((() => {
 	init_dist$3();
+	init_json_keys();
 	init_refs();
 	init_verdict();
 	CODED_FORMAT = "coded-1";
@@ -58279,7 +58389,7 @@ var init_coded = __esmMin((() => {
 		reason,
 		detail
 	});
-	squash$1 = (s) => s.toLowerCase().replace(/[^0-9a-z]/g, "");
+	squash$1 = (s) => s.normalize("NFKC").toLowerCase().replace(/[^0-9a-z]/g, "");
 	isRecord$4 = (v) => v !== null && typeof v === "object" && !Array.isArray(v);
 	typeOf = (v) => v === null ? "null" : Array.isArray(v) ? "array" : typeof v === "number" && !Number.isFinite(v) ? "non-finite number" : typeof v;
 	Dropped = class {
@@ -58310,6 +58420,15 @@ var init_coded = __esmMin((() => {
 		"injectionKinds",
 		"injectionRefs"
 	];
+	SCHEMA_KEYS = /* @__PURE__ */ new Set([...TOP_KEYS, ...CRITERION_KEYS]);
+	LIST_WORDS = [
+		...REASON_CODES,
+		...INJECTION_KINDS,
+		"pass",
+		"fail",
+		"abstain"
+	];
+	inListOrder = (kept, list) => list.filter((x) => kept.includes(x));
 	isReason = (x) => typeof x === "string" && REASON_CODES.includes(x);
 	isKind = (x) => typeof x === "string" && INJECTION_KINDS.includes(x);
 }));

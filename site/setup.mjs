@@ -12870,9 +12870,9 @@ const DRAND_QUICKNET_CHAIN_HASH = "0x52db9ba70e0cc0f6eaf7803dd07447a1f5477735fd3
 
 // packages/core/dist/canonical.js
 init_keccak256(), init_toBytes();
-const LONE_SURROGATE$2 = /\p{Cs}/u;
+const LONE_SURROGATE$3 = /\p{Cs}/u;
 function str$2(s) {
-	if (LONE_SURROGATE$2.test(s)) throw new TypeError("canonical JSON: lone surrogate in string");
+	if (LONE_SURROGATE$3.test(s)) throw new TypeError("canonical JSON: lone surrogate in string");
 	return JSON.stringify(s);
 }
 /** Canonical JSON per RFC 8785. Throws TypeError on values JSON cannot represent. */
@@ -62166,10 +62166,10 @@ function codePoints$1(s) {
 	}
 	return n;
 }
-const LONE_SURROGATE$1 = /\p{Cs}/u;
+const LONE_SURROGATE$2 = /\p{Cs}/u;
 function str(s, budget) {
 	chargeChars(budget, s.length);
-	if (LONE_SURROGATE$1.test(s)) throw new TypeError("canonical JSON: lone surrogate in string");
+	if (LONE_SURROGATE$2.test(s)) throw new TypeError("canonical JSON: lone surrogate in string");
 	return JSON.stringify(s);
 }
 /** A scalar's canonical form, or undefined for an array or object. */
@@ -63806,7 +63806,7 @@ function parseDelivery(text) {
 		return { ok: false };
 	}
 }
-const LONE_SURROGATE = /[\uD800-\uDBFF](?![\uDC00-\uDFFF])|(?<![\uD800-\uDBFF])[\uDC00-\uDFFF]/;
+const LONE_SURROGATE$1 = /[\uD800-\uDBFF](?![\uDC00-\uDFFF])|(?<![\uD800-\uDBFF])[\uDC00-\uDFFF]/;
 const fail$2 = (detail) => ({
 	passed: false,
 	detail
@@ -63847,7 +63847,7 @@ function evaluateSignatureValid(check, delivered, budget) {
 	if (check.message.encoding === "utf8") {
 		prepaid = strings.message.length;
 		budget.spend(prepaid);
-		if (LONE_SURROGATE.test(strings.message)) return fail$2("message: not well-formed text");
+		if (LONE_SURROGATE$1.test(strings.message)) return fail$2("message: not well-formed text");
 		message = new TextEncoder().encode(strings.message);
 	} else {
 		budget.spend(strings.message.length / 4 * 3);
@@ -64715,6 +64715,47 @@ function runChecks$1(checks, input, budget = new StepBudget(CHECK_BUDGET)) {
 	};
 }
 
+// packages/judgment/dist/json-keys.js
+/**
+* Calls `onRepeat` with the path of each object that holds a key twice, and the key (once per repeat). Stops early when
+* it returns true.
+*/
+function repeatedKeys(text, onRepeat) {
+	const stack = [];
+	const pathOf = () => stack.slice(0, -1).map((f) => f.kind === "obj" ? f.key : f.index);
+	for (let i = 0; i < text.length; i++) {
+		const c = text.charCodeAt(i);
+		if (c === 34) {
+			let j = i + 1;
+			while (j < text.length && text.charCodeAt(j) !== 34) j += text.charCodeAt(j) === 92 ? 2 : 1;
+			const top = stack[stack.length - 1];
+			if (top?.kind === "obj" && top.awaitKey) {
+				const key = JSON.parse(text.slice(i, j + 1));
+				if (top.keys.has(key) && onRepeat(pathOf(), key) === true) return;
+				top.keys.add(key);
+				top.key = key;
+				top.awaitKey = false;
+			}
+			i = j;
+		} else if (c === 123) stack.push({
+			kind: "obj",
+			keys: /* @__PURE__ */ new Set(),
+			awaitKey: true,
+			key: ""
+		});
+		else if (c === 91) stack.push({
+			kind: "arr",
+			index: 0
+		});
+		else if (c === 125 || c === 93) stack.pop();
+		else if (c === 44) {
+			const top = stack[stack.length - 1];
+			if (top?.kind === "obj") top.awaitKey = true;
+			else if (top) top.index++;
+		}
+	}
+}
+
 // packages/judgment/dist/sample.js
 init_fromBytes(), /* @__PURE__ */ init_concat(), init_keccak256(), init_toBytes();
 const SAMPLE_VERSION = "sample-1";
@@ -65081,9 +65122,10 @@ function buildPrompt(input) {
 
 // packages/judgment/dist/refs.js
 const LINE_REF = /^L([1-9][0-9]{0,9})$/;
+const LONE_SURROGATE = /\p{Cs}/u;
 /** True when `locator` is a string that points at a node or a line of the work. */
 function resolves(work, locator) {
-	if (typeof locator !== "string") return false;
+	if (typeof locator !== "string" || LONE_SURROGATE.test(locator)) return false;
 	if (work.kind === "json") return isPointer(locator) && resolve$2(work.document, locator) !== void 0;
 	if (work.kind === "lines") {
 		const m = LINE_REF.exec(locator);
@@ -65431,23 +65473,43 @@ const abstain$1 = (reason, detail) => ({
 	reason,
 	detail
 });
-const squash$1 = (s) => s.toLowerCase().replace(/[^0-9a-z]/g, "");
+const squash$1 = (s) => s.normalize("NFKC").toLowerCase().replace(/[^0-9a-z]/g, "");
 const isRecord$4 = (v) => v !== null && typeof v === "object" && !Array.isArray(v);
 const typeOf = (v) => v === null ? "null" : Array.isArray(v) ? "array" : typeof v === "number" && !Number.isFinite(v) ? "non-finite number" : typeof v;
-/** Every key and every string of a parsed output, in document order, iteratively. */
+/** Every key and every string of a parsed output, in document order, iteratively: all of them, the keys, the values. */
 function allText(value) {
-	const out = [];
-	const stack = [value];
+	const all = [];
+	const keys = [];
+	const values = [];
+	const stack = [{
+		v: value,
+		key: false
+	}];
 	while (stack.length) {
-		const v = stack.pop();
-		if (typeof v === "string") out.push(v);
-		else if (Array.isArray(v)) for (let i = v.length - 1; i >= 0; i--) stack.push(v[i]);
+		const { v, key } = stack.pop();
+		if (typeof v === "string") {
+			all.push(v);
+			(key ? keys : values).push(v);
+		} else if (Array.isArray(v)) for (let i = v.length - 1; i >= 0; i--) stack.push({
+			v: v[i],
+			key: false
+		});
 		else if (isRecord$4(v)) {
 			const entries = Object.entries(v);
-			for (let i = entries.length - 1; i >= 0; i--) stack.push(entries[i][1], entries[i][0]);
+			for (let i = entries.length - 1; i >= 0; i--) stack.push({
+				v: entries[i][1],
+				key: false
+			}, {
+				v: entries[i][0],
+				key: true
+			});
 		}
 	}
-	return out;
+	return {
+		all,
+		keys,
+		values
+	};
 }
 /**
 * Each base64 or base64url text in a string, decoded, for the canary scan: agg-5's decoder (verdict.ts, red team M1
@@ -65463,14 +65525,27 @@ function* decodedBase64(t) {
 		}
 	}
 }
-/** The canary in any case, with any separators, in a key or a value, split across them, or base64-encoded. */
-function echoesCanary$1(raw, parsed, canary) {
+/**
+* The canary in any case, folded by NFKC, with any separators, in a key or a value, split across two of them in one of
+* the three joins, or base64-encoded. `schemaWords` are the words the schema itself puts between evidence fields.
+*/
+function echoesCanary$1(raw, parsed, canary, schemaWords) {
 	const c = squash$1(canary);
 	if (!c) return false;
 	if (squash$1(raw).includes(c)) return true;
-	const texts = parsed === void 0 ? [] : allText(parsed);
-	if (squash$1(texts.join("")).includes(c)) return true;
-	for (const t of [raw, ...texts]) for (const decoded of decodedBase64(t)) if (squash$1(decoded).includes(c)) return true;
+	if (parsed === void 0) {
+		for (const decoded of decodedBase64(raw)) if (squash$1(decoded).includes(c)) return true;
+		return false;
+	}
+	const t = allText(parsed);
+	const values = t.values.filter((s) => !schemaWords.has(s));
+	const keys = t.keys.filter((s) => !SCHEMA_KEYS.has(s));
+	for (const join of [
+		t.all,
+		values,
+		keys
+	]) if (squash$1(join.join("")).includes(c)) return true;
+	for (const s of [raw, ...t.all]) for (const decoded of decodedBase64(s)) if (squash$1(decoded).includes(c)) return true;
 	return false;
 }
 /** Code points, as the schema's maxLength counts them; stops counting past `max`. */
@@ -65557,6 +65632,30 @@ const TOP_KEYS = [
 	"injectionKinds",
 	"injectionRefs"
 ];
+const SCHEMA_KEYS = /* @__PURE__ */ new Set([...TOP_KEYS, ...CRITERION_KEYS]);
+const LIST_WORDS = [
+	...REASON_CODES,
+	...INJECTION_KINDS,
+	"pass",
+	"fail",
+	"abstain"
+];
+/** The items in the closed list's own order: a judge chooses which, never their order (red team M2). */
+const inListOrder = (kept, list) => list.filter((x) => kept.includes(x));
+/** Where a repeated key is a decision key: the top level's criteria, overall and flag, a criterion's id and score. */
+function repeatedDecisionKey(raw) {
+	let fault;
+	repeatedKeys(raw, (path, key) => {
+		if (path.length === 0 && [
+			"criteria",
+			"overall",
+			"injectionSuspected"
+		].includes(key)) fault = "top level: a decision key written twice";
+		else if (path.length === 2 && path[0] === "criteria" && typeof path[1] === "number" && (key === "id" || key === "score")) fault = `criteria[${path[1]}]: a decision key written twice`;
+		return fault !== void 0;
+	});
+	return fault;
+}
 const isReason = (x) => typeof x === "string" && REASON_CODES.includes(x);
 const isKind = (x) => typeof x === "string" && INJECTION_KINDS.includes(x);
 function parseCodedVerdict(raw, opts) {
@@ -65568,9 +65667,10 @@ function parseCodedVerdict(raw, opts) {
 	} catch {
 		jsonOk = false;
 	}
-	if (echoesCanary$1(raw, jsonOk ? json : void 0, opts.canary)) return abstain$1("canary_echo", "output contains the canary");
+	const schemaWords = /* @__PURE__ */ new Set([...LIST_WORDS, ...opts.criterionIds]);
+	if (echoesCanary$1(raw, jsonOk ? json : void 0, opts.canary, schemaWords)) return abstain$1("canary_echo", "output contains the canary");
 	if (!jsonOk) return abstain$1("not_json", `output is not a single JSON value${/^\s*```/.test(raw) ? " (it starts with a code fence)" : ""}`);
-	const fault = decisionFault(json);
+	const fault = decisionFault(json) ?? repeatedDecisionKey(raw);
 	if (fault) return abstain$1("schema", fault);
 	const top = json;
 	const cs = top["criteria"];
@@ -65581,10 +65681,10 @@ function parseCodedVerdict(raw, opts) {
 	const isRef = (x) => typeof x === "string" && !codePointsOver(x, MAX_LOCATOR) && resolves(opts.work, x);
 	const unknownKeys = (o, allowed) => dropped.add("keys", Object.keys(o).filter((k) => !allowed.includes(k)).length);
 	unknownKeys(top, TOP_KEYS);
-	const criteria = cs.map((c) => {
+	const read = cs.map((c) => {
 		unknownKeys(c, CRITERION_KEYS);
 		const refs = keepList(Object.hasOwn(c, "refs") ? c["refs"] : void 0, isRef, () => dropped.add("refs"));
-		const reasons = keepList(Object.hasOwn(c, "reasons") ? c["reasons"] : void 0, isReason, () => dropped.add("reasons"));
+		const reasons = inListOrder(keepList(Object.hasOwn(c, "reasons") ? c["reasons"] : void 0, isReason, () => dropped.add("reasons")), REASON_CODES);
 		return {
 			id: c["id"],
 			refs,
@@ -65592,10 +65692,11 @@ function parseCodedVerdict(raw, opts) {
 			score: c["score"]
 		};
 	});
+	const criteria = opts.criterionIds.map((id) => read.find((c) => c.id === id));
 	const injectionSuspected = top["injectionSuspected"];
 	const kindsIn = Object.hasOwn(top, "injectionKinds") ? top["injectionKinds"] : void 0;
 	const refsIn = Object.hasOwn(top, "injectionRefs") ? top["injectionRefs"] : void 0;
-	const injectionKinds = keepList(kindsIn, (x) => injectionSuspected && isKind(x), () => dropped.add("reasons"));
+	const injectionKinds = inListOrder(keepList(kindsIn, (x) => injectionSuspected && isKind(x), () => dropped.add("reasons")), INJECTION_KINDS);
 	const injectionRefs = keepList(refsIn, (x) => injectionSuspected && isRef(x), () => dropped.add("refs"));
 	const verdict = {
 		criteria,
@@ -74898,7 +74999,7 @@ async function run(c, state, offerId, given) {
 }
 
 // examples/seller-worker-pin.ts
-const SELLER_WORKER_SHA256 = "f594e1afed0aaaf6926f57047d0ce0a43723bccce15a1a2517566d2bc2c5b66f";
+const SELLER_WORKER_SHA256 = "cb95ff32331f962c2aa4d38b44f0e32d4bc4cb51e13bf4fbc322f56d89c3184e";
 
 // examples/setup-cloudflare.ts
 const plain$2 = (s, max = 300) => plain$8(String(s ?? "")).slice(0, max);
@@ -75262,7 +75363,7 @@ async function workerBytes(c) {
 		if (bytes.length > MAX_WORKER_BYTES) throw new Error(`${SELLER_WORKER_URL} is over ${MAX_WORKER_BYTES} bytes`);
 	}
 	const sha = createHash("sha256").update(bytes).digest("hex");
-	if (sha !== "f594e1afed0aaaf6926f57047d0ce0a43723bccce15a1a2517566d2bc2c5b66f") throw new Error(`the Worker file's SHA-256 is ${sha}, not ${SELLER_WORKER_SHA256}, the one this setup.mjs carries: it is not the Worker this version writes`);
+	if (sha !== "cb95ff32331f962c2aa4d38b44f0e32d4bc4cb51e13bf4fbc322f56d89c3184e") throw new Error(`the Worker file's SHA-256 is ${sha}, not ${SELLER_WORKER_SHA256}, the one this setup.mjs carries: it is not the Worker this version writes`);
 	return bytes;
 }
 /** The card's quote entry in the card's folder: other offers kept, the draft's marks dropped. */
