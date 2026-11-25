@@ -1,18 +1,20 @@
 // T-571: the approvals runner's own parts, with no key and no network: the hard budget, the sell command's fence,
 // and the count of approvals from a record.
-import { mkdirSync, mkdtempSync, realpathSync, rmSync, writeFileSync } from 'node:fs';
+import { spawnSync } from 'node:child_process';
+import { mkdirSync, mkdtempSync, realpathSync, rmSync, symlinkSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { afterAll, describe, expect, it } from 'vitest';
 import { createServer } from 'node:http';
 import { runAgent } from './loop.ts';
-import { buyerBriefCold, BUYER_USAGE, scenario, START_AT_DOCS } from './scenarios.ts';
-import { runDuet } from './run.ts';
-import { anthropic, KEY_ENV, liveProvider, scripted, WORKSPACE_ENV, type ScriptStep } from './providers.ts';
+import { BUDGET, buyerBriefCold, BUYER_USAGE, scenario, SCOPE, START_AT_DOCS } from './scenarios.ts';
+import { REPO, runDuet } from './run.ts';
+import { saveWork } from '../../examples/deal-files.ts';
+import { anthropic, KEY_ENV, liveProvider, scripted, WORKSPACE_ENV, type ScriptContext, type ScriptStep } from './providers.ts';
 import { Recorder, Secrets } from './record.ts';
 import { Toolbox } from './tools.ts';
 import { readFileSync } from 'node:fs';
-import { Budget, BUDGET_STOP, dealIds, frontPage, measureRun, parseRuns, sellBrief, trySell } from './approvals.ts';
+import { Budget, BUDGET_STOP, dealIds, draftPages, frontPage, measureRun, parseRuns, sellBrief, trySell } from './approvals.ts';
 import type { Provider } from './providers.ts';
 import type { Event } from './record.ts';
 import type { Fence } from './tools.ts';
@@ -385,4 +387,164 @@ describe("the buyer's NAME=value settings before a command (P-16, T-611's CROW_S
     expect(m.seller_named).toBe(SELLER);
     expect(measureRun(events.filter((e) => e.kind !== 'command'), 'buyer', 'buy', 'x').seller_named).toBeNull();
   });
+});
+
+describe('the files the buying command saves beside the key store (T-617, T-623)', () => {
+  const ID = `0x${'ab'.repeat(32)}`;
+  /** A buyer's company as a run lays it out, with the two files the shipped saver writes for one finished deal. */
+  async function company(role: 'buyer' | 'seller' = 'buyer') {
+    const base = realpathSync(mkdtempSync(join(tmpdir(), 't623-')));
+    made.push(base);
+    const [work, owner] = ['work', 'company'].map((n) => { const p = join(base, n); mkdirSync(p, { mode: 0o700 }); return p; }) as [string, string];
+    const keyStore = join(owner, 'keys');
+    mkdirSync(keyStore, { mode: 0o700 });
+    const keyFile = join(keyStore, `0x${'12'.repeat(20)}.json`);
+    writeFileSync(keyFile, '{"privateKey":"the buyer\'s key"}', { mode: 0o600 });
+    writeFileSync(join(owner, 'policy.json'), 'the company\'s own file');
+    const saved = (await saveWork({ store: keyStore, commitmentId: ID, work: 'n,square\n1,1\n', format: 'text/csv' })).work!;
+    const rec = new Recorder(join(base, 'record.jsonl'), new Secrets());
+    const tools = new Toolbox({ role, work, owner, repo: REPO, operators: ['http://127.0.0.1:1'], allow: [], secrets: new Secrets(), rec, ...(role === 'buyer' ? { keyStore, usage: BUYER_USAGE } : {}) });
+    const files = `${keyStore}-files`;
+    const read = (path: string) => tools.call('read_file', { path });
+    return { base, work, owner, keyStore, keyFile, files, saved, tools, rec, read };
+  }
+
+  it('lets the buyer read and list them, by the path the command names', async () => {
+    const c = await company();
+    expect(c.saved).toBe(join(c.files, `${ID}.work.csv`));
+    expect((await c.read(c.saved)).content).toContain('n,square');
+    expect((await c.tools.call('list_files', { path: c.files })).content).toBe(`${ID}.work.csv`);
+    expect(c.rec.events.filter((e) => e.kind === 'file').at(-1)).toMatchObject({ op: 'read', saved: true });
+  });
+
+  it('keeps the key store and everything else of the company out of reach', async () => {
+    const c = await company();
+    for (const path of [c.keyFile, c.keyStore, c.owner, join(c.owner, 'policy.json'), `${c.files}/../keys/0x${'12'.repeat(20)}.json`, `${c.files}/../policy.json`, `${c.files}-other/x`, `${c.keyStore.toUpperCase()}-FILES`, '../company/keys']) {
+      for (const tool of ['read_file', 'list_files']) {
+        const r = await c.tools.call(tool, { path });
+        expect(r.isError, `${tool} ${path}`).toBe(true);
+        expect(r.content).not.toContain("the buyer's key");
+        expect(r.content).not.toContain("the company's own file");
+      }
+    }
+  });
+
+  it('follows no link out of the saved files, planted in the folder or standing in its place', async () => {
+    const c = await company();
+    symlinkSync(c.keyFile, join(c.files, 'a-key'));
+    symlinkSync(c.keyStore, join(c.files, 'a-store'));
+    for (const path of [join(c.files, 'a-key'), join(c.files, 'a-store', `0x${'12'.repeat(20)}.json`)]) {
+      const r = await c.read(path);
+      expect(r.content, path).toMatch(/symbolic link/);
+      expect(r.content).not.toContain("the buyer's key");
+    }
+    rmSync(c.files, { recursive: true, force: true });
+    symlinkSync(c.keyStore, c.files);
+    for (const r of [await c.read(join(c.files, `0x${'12'.repeat(20)}.json`)), await c.tools.call('list_files', { path: c.files })]) {
+      expect(r.content).toMatch(/symbolic link/);
+      expect(r.content).not.toContain("the buyer's key");
+    }
+  });
+
+  it('is read-only: the buyer writes nothing there, with a tool or through a command', async () => {
+    const c = await company();
+    expect((await c.tools.call('write_file', { path: c.saved, content: 'other work' })).content).toMatch(/outside your folder/);
+    expect((await c.tools.call('write_file', { path: join(c.files, 'new.txt'), content: 'x' })).content).toMatch(/outside your folder/);
+    expect((await c.tools.call('run_command', { command: 'deal-record', args: [ID, '--as', 'buyer', '--out', join(c.files, 'out.json')] })).content).toMatch(/outside your folder/);
+    expect(readFileSync(c.saved, 'utf8')).toBe('n,square\n1,1\n');
+  });
+
+  it('hands a saved file to a command that reads one, and still refuses the key file there', async () => {
+    const c = await company();
+    writeFileSync(join(c.work, 'terms.json'), '{}');
+    const ran = await c.tools.call('run_command', { command: 'check-delivery', args: ['terms.json', c.saved] });
+    expect(ran.content).toMatch(/^exit /); // the command ran: it was given the saved file
+    expect((await c.tools.call('run_command', { command: 'check-delivery', args: ['terms.json', c.keyFile] })).content).toMatch(/^Refused: /);
+  });
+
+  it('says so in the buyer\'s tools, and gives a seller no such reach', async () => {
+    const buyer = await company();
+    const seller = await company('seller');
+    const said = (t: Toolbox, name: string) => t.specs.find((s) => s.name === name)!.description;
+    for (const name of ['read_file', 'list_files']) {
+      expect(said(buyer.tools, name)).toMatch(/saved/);
+      expect(said(seller.tools, name)).not.toMatch(/saved/);
+    }
+    expect((await seller.read(seller.saved)).content).toMatch(/outside your folder/);
+  });
+});
+
+describe('a draft buy.txt (T-623)', () => {
+  it('answers /buy.txt with the draft and passes the front page and the rest to the upstream', async () => {
+    const seen: string[] = [];
+    const upstream = createServer((q, s) => { seen.push(q.url ?? ''); s.writeHead(200, { 'content-type': 'text/plain' }).end('the live page'); });
+    await new Promise<void>((ok) => upstream.listen(0, '127.0.0.1', ok));
+    const draft = await draftPages({ '/buy.txt': 'a draft buyer page' }, `http://127.0.0.1:${(upstream.address() as { port: number }).port}`);
+    try {
+      expect(await (await fetch(`${draft.url}/buy.txt`)).text()).toBe('a draft buyer page');
+      expect(await (await fetch(`${draft.url}/buy.txt?x=1`)).text()).toBe('a draft buyer page');
+      expect(await (await fetch(`${draft.url}/llms.txt`)).text()).toBe('the live page');
+      expect(await (await fetch(`${draft.url}/agents/test-seller`)).text()).toBe('the live page');
+      expect(seen).toEqual(['/llms.txt', '/agents/test-seller']);
+    } finally { await draft.close(); upstream.close(); }
+  });
+
+  it('is taken only with buy runs from the test seller, and needs a file', () => {
+    const run = (...args: string[]) => spawnSync(process.execPath, [join(REPO, 'tools', 'duet', 'approvals.ts'), 'plan', ...args], { encoding: 'utf8' });
+    expect(run('--runs', 'claude:buy', '--test-seller', '--buy-page', join(REPO, 'site', 'buy.txt')).status).toBe(0);
+    for (const args of [['--runs', 'claude:buy', '--buy-page', 'x'], ['--runs', 'claude:sell', '--buy-page', 'x'], ['--runs', 'claude:buy', '--test-seller', '--buy-page']]) {
+      const r = run(...args);
+      expect(r.status, args.join(' ')).toBe(2);
+      expect(r.stderr).toMatch(/--buy-page takes a file, and only buy runs with --test-seller/);
+    }
+  });
+});
+
+describe("what a run did with the record and with files (T-623's pass rule)", () => {
+  it('counts the record command, and names the files the agent wrote and the saved files it read', () => {
+    const at = '2026-11-26T00:00:00Z';
+    const tool = (name: string, input: Record<string, unknown>) => ({ at, role: 'buyer', kind: 'tool', name, turn: 1, input, result: 'ok' });
+    const events = [
+      { at, role: 'buyer', kind: 'agent.start', model: 'scripted', vendor: 'scripted' },
+      tool('run_command', { command: 'deal-record', args: [] }), tool('run_command', { command: 'buy-with-signer', args: [] }),
+      tool('write_file', { path: 'squares.csv', content: 'x' }), { ...tool('write_file', { path: 'no.txt', content: 'x' }), isError: true },
+      { at, role: 'buyer', kind: 'file', op: 'read', path: '../company/keys-files/a.work.csv', saved: true },
+      { at, role: 'buyer', kind: 'file', op: 'read', path: 'notes.txt' },
+    ] as unknown as Event[];
+    expect(measureRun(events, 'buyer', 'buy', 'x')).toMatchObject({ record_calls: 1, files_written: ['squares.csv'], saved_files_read: ['../company/keys-files/a.work.csv'] });
+  });
+});
+
+describe('a whole local deal with the shipped buy command (T-623)', () => {
+  it('saves the work and the record beside the key store, and the agent reads both by the paths the command prints', async () => {
+    const out = realpathSync(mkdtempSync(join(tmpdir(), 't623-run-')));
+    made.push(out);
+    let store = '';
+    let quote = '';
+    let id = '';
+    const read: string[] = [];
+    const call = (name: string, input: Record<string, unknown>) => ({ calls: [{ name, input }] });
+    const last = (c: ScriptContext) => c.results().at(-1) ?? '';
+    const steps: ScriptStep[] = [
+      (c) => {
+        const brief = String((c.history[0] as { text: string }).text);
+        store = /Your key store is (\S+):/.exec(brief)![1]!;
+        return call('fetch_url', { url: /A seller we found: (\S+?)\.\n/.exec(brief)![1]! });
+      },
+      (c) => { quote = /"quote":\s*"([^"]+)"/.exec(last(c))![1]!; return call('run_command', { command: 'buy-with-signer', args: [quote, store, JSON.stringify(SCOPE), BUDGET] }); },
+      (c) => { id = /"commitmentId":\s*"(0x[0-9a-f]{64})"/.exec(last(c))![1]!; return call('run_command', { command: 'buy-with-signer', args: ['approve', store, id, BUDGET] }); },
+      (c) => call('read_file', { path: /"saved":\{"work":"([^"]+)"\}/.exec(last(c))![1]! }),
+      (c) => { read.push(last(c)); const ran = c.results().at(-2)!; return call('read_file', { path: /\{"record":\{"commitmentId":"0x[0-9a-f]{64}","file":"([^"]+)"/.exec(ran)![1]! }); },
+      (c) => { read.push(last(c)); return call('finish', { outcome: 'read both', report: id }); },
+    ];
+    const done = await runDuet({ scenario: 'paid', buyer: scripted(steps), seller: 'scripted', brief: 'direct', coldBuyer: true, out, caps: { turns: 40, tokens: 2_000_000 }, timeoutSec: 300, graceSec: 5 });
+    expect(done.ends.find((e) => e.role === 'buyer')).toMatchObject({ status: 'finished', outcome: 'read both' });
+    expect(read[0]).toContain('"findings"');
+    expect(read[1]).toContain('"holdback-deal-record/1"');
+    const events = readFileSync(done.record, 'utf8').split('\n').filter(Boolean).map((l) => JSON.parse(l) as Event);
+    const m = measureRun(events, 'buyer', 'buy', out);
+    expect(m).toMatchObject({ record_calls: 0, files_written: [] });
+    expect(m.saved_files_read.map((p) => p.replace(/^.*keys-files\//, '').replace(/^0x[0-9a-f]{64}\./, ''))).toEqual(['work.json', 'record.json']);
+    for (const text of read) expect(done.leaks(text)).toBe(false);
+  }, 180_000);
 });

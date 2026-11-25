@@ -7,7 +7,8 @@
 //                store only by its one path. The child gets a minimal environment built here; no model key is in it.
 //                A buyer may put NAME=value settings before buy-with-signer, as the docs do: only CROW_SELLER (an
 //                address) reaches the command, and HOLDBACK_OPERATORS only when it names what is already set.
-//   read_file, write_file, list_files   inside the agent's own folder, never through a symbolic link.
+//   read_file, write_file, list_files   inside the agent's own folder, never through a symbolic link. A buyer may
+//                also read, never write, the files the buying command saves beside its key store (T-617, T-623).
 //   wait, finish
 // Keys live in files and environments the agent never reads: the buyer's key store sits outside its folder, the
 // seller's key is the child's HOLDBACK_KEY. Every tool result passes through the run's secret list before a model or
@@ -171,7 +172,7 @@ export class Toolbox {
     if (o.installed) checkInstalled(o.installed, o.role as 'buyer' | 'seller', o.work);
     // A secret the company hands a command in its environment is scrubbed like every other.
     for (const v of Object.values(o.installed?.secretEnv ?? {})) o.secrets.add(v);
-    this.specs = specs(o.role, Object.entries(o.installed?.commands ?? {}), this.repositoryCommands);
+    this.specs = specs(o.role, Object.entries(o.installed?.commands ?? {}), this.repositoryCommands, this.savedFiles !== undefined);
   }
 
   /** The installed command of that name, an own key only; undefined for every other name. */
@@ -292,14 +293,45 @@ export class Toolbox {
     return full;
   }
 
+  /** The folder the buying command saves a finished deal's files in (examples/deal-files.ts, T-617): beside the buyer's key store, never in it. */
+  private get savedFiles(): string | undefined {
+    return this.o.role === 'buyer' && this.o.keyStore ? `${resolve(this.o.keyStore)}-files` : undefined;
+  }
+
+  /** Whether a path is the saved-files folder or inside it. */
+  private isSaved(full: string): boolean {
+    const files = this.savedFiles;
+    return files !== undefined && (full === files || full.startsWith(files + sep));
+  }
+
+  /**
+   * A path the agent may read: inside its folder, or one of the saved files. For those the walk starts at their folder
+   * itself and takes no link, a dangling one included, so nothing there leads to the key store beside it.
+   */
+  private readable(p: string, o: { mustExist?: boolean } = {}): string {
+    const full = resolve(this.o.work, p);
+    if (p.includes('\0') || !this.isSaved(full)) return this.inside(p, o);
+    const files = this.savedFiles!;
+    let at = files;
+    let there = true;
+    for (const part of ['', ...relative(files, full).split(sep).filter(Boolean)]) {
+      if (part) at = join(at, part);
+      let link: boolean;
+      try { link = lstatSync(at).isSymbolicLink(); } catch { there = false; break; }
+      if (link) throw new Refused(`${JSON.stringify(p).slice(0, 200)} goes through a symbolic link: your tools do not follow links`);
+    }
+    if (o.mustExist && !there) throw new Refused(`${JSON.stringify(p).slice(0, 200)} does not exist`);
+    return full;
+  }
+
   private readFile(p: string, offset: number): ToolResult {
-    const f = this.inside(p, { mustExist: true });
+    const f = this.readable(p, { mustExist: true });
     if (!lstatSync(f).isFile()) throw new Refused(`${p} is not a file`);
     if (lstatSync(f).size > 4_000_000) throw new Refused(`${p} is larger than 4 MB`);
     const text = readFileSync(f, 'utf8');
     const from = Number.isSafeInteger(offset) && offset > 0 ? offset : 0;
     const slice = text.slice(from, from + 60_000);
-    this.o.rec.add(this.o.role, 'file', { op: 'read', path: relative(this.o.work, f), bytes: Buffer.byteLength(text) });
+    this.o.rec.add(this.o.role, 'file', { op: 'read', path: relative(this.o.work, f), bytes: Buffer.byteLength(text), ...(this.isSaved(f) ? { saved: true } : {}) });
     return { content: `${slice}${from + 60_000 < text.length ? `\n[… more: read again with offset ${from + 60_000}]` : ''}`, isError: false };
   }
 
@@ -317,7 +349,7 @@ export class Toolbox {
   }
 
   private listFiles(p: string): ToolResult {
-    const d = this.inside(p, { mustExist: true });
+    const d = this.readable(p, { mustExist: true });
     if (!lstatSync(d).isDirectory()) throw new Refused(`${p} is not a folder`);
     const items = readdirSync(d, { withFileTypes: true }).map((e) => `${e.name}${e.isDirectory() ? '/' : e.isSymbolicLink() ? ' (link)' : ''}`);
     return { content: items.length ? items.join('\n') : '(empty)', isError: false };
@@ -385,7 +417,8 @@ export class Toolbox {
     const file = (a: string | undefined, what: string, mustExist = true) => {
       if (!a) throw new Refused(`${command} needs ${what}`);
       if (a.startsWith('-')) throw new Refused(`${what} is a file name, and a file name here does not start with "-": rename it`);
-      this.inside(a, { mustExist });
+      if (mustExist) this.readable(a, { mustExist });
+      else this.inside(a, { mustExist });
       return a;
     };
     const once = (list: string[], names: string[]) => { for (const n of names) if (list.filter((a) => a === n).length > 1) throw new Refused(`${command} takes ${n} once`); };
@@ -751,7 +784,9 @@ function checkInstalled(i: Installed, role: 'buyer' | 'seller', work: string): v
 }
 
 /** The tools as each model is told about them. The run tool's list is the company's installed commands. */
-function specs(role: 'buyer' | 'seller', installed: Array<[string, InstalledCommand]> = [], repository: string[] = COMMANDS[role]): ToolSpec[] {
+function specs(role: 'buyer' | 'seller', installed: Array<[string, InstalledCommand]> = [], repository: string[] = COMMANDS[role], savedFiles = false): ToolSpec[] {
+  // What a buyer is told it may read besides its folder: the files a command says it saved, as in a buyer's own folder.
+  const also = savedFiles ? ', or a file a command says it saved for you, by the path it names' : '';
   const commands = [...repository, ...installed.map(([n]) => n)];
   const said = (c: string) => installed.find(([n]) => n === c)?.[1].describe;
   const from = installed.length === 0
@@ -760,9 +795,9 @@ function specs(role: 'buyer' | 'seller', installed: Array<[string, InstalledComm
   return [
     { name: 'fetch_url', description: 'GET a URL and read the answer: status, content type and body (up to 60,000 characters; pass offset to read further). Only URLs on your company\'s allowlist; redirects are not followed. GET only: anything that changes state goes through your company\'s commands.', input: { type: 'object', properties: { url: { type: 'string' }, offset: { type: 'integer', minimum: 0 } }, required: ['url'] } },
     { name: 'run_command', description: `Run one of the client commands your company installed ${from}, from your folder, and read its exit code, stdout and stderr. Installed: ${commands.map((c) => (said(c) ? `${c} (${said(c)})` : c === 'adapter-log' ? 'adapter-log (the new lines the background seller adapter has logged)' : c === 'seller-adapter' ? 'seller-adapter (starts in the background)' : c)).join(', ')}. Pass the arguments as the docs give them, one per array item, with no shell quoting.${role === 'buyer' ? ' If the docs put a NAME=value setting before a command, pass it as its own item before the arguments; a setting your company does not allow is refused.' : ''} Your company has set the environment these commands need (HOLDBACK_OPERATORS${role === 'seller' ? ', and HOLDBACK_KEY with your signing key' : ''}); you never see a key.`, input: { type: 'object', properties: { command: { type: 'string', enum: commands }, args: { type: 'array', items: { type: 'string' } } }, required: ['command', 'args'] } },
-    { name: 'read_file', description: 'Read a text file in your folder (up to 60,000 characters; pass offset to read further).', input: { type: 'object', properties: { path: { type: 'string' }, offset: { type: 'integer', minimum: 0 } }, required: ['path'] } },
+    { name: 'read_file', description: `Read a text file in your folder${also} (up to 60,000 characters; pass offset to read further).`, input: { type: 'object', properties: { path: { type: 'string' }, offset: { type: 'integer', minimum: 0 } }, required: ['path'] } },
     { name: 'write_file', description: 'Write a text file in your folder (at most 1 MB), making folders as needed.', input: { type: 'object', properties: { path: { type: 'string' }, content: { type: 'string' } }, required: ['path', 'content'] } },
-    { name: 'list_files', description: 'List a folder inside your folder.', input: { type: 'object', properties: { path: { type: 'string' } } } },
+    { name: 'list_files', description: `List a folder inside your folder${savedFiles ? ', or a folder a command says it saved files for you in' : ''}.`, input: { type: 'object', properties: { path: { type: 'string' } } } },
     { name: 'wait', description: 'Wait 1 to 30 seconds, for example while the other side acts.', input: { type: 'object', properties: { seconds: { type: 'integer', minimum: 1, maximum: 30 } }, required: ['seconds'] } },
     { name: 'finish', description: 'End your work and report to your company: the outcome in a few words, and a short report.', input: { type: 'object', properties: { outcome: { type: 'string' }, report: { type: 'string' } }, required: ['outcome', 'report'] } },
   ];

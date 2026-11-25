@@ -9,11 +9,17 @@
 //   node tools/duet/approvals.ts run --runs scripted:sell                       the seller's path with a script: no key, no model
 //   ... run --runs claude:sell --front-page <file>                              a draft front page (P-15): the file answers
 //     crow.direct/llms.txt for the agent's web reads; every other page comes from the live site, and nothing is published
+//   ... run --test-seller --runs claude:buy,deepseek:buy [--buy-page <file>]     buy from Crow's live test seller (P-16,
+//     T-623) instead; --buy-page: a draft crow.direct/buy.txt, served the same way. That seller takes 3 quotes an hour
+//     and 10 a day from one IP address
 //
 // A run is <model>:<direction>. buy (N215): the agent starts from crow.direct with the usage line of each command once in its brief, never --help, so it must read buy.txt to know the steps; it buys a security review from a seller that the duet's scripted seller
 // plays on this machine against the live operators, so no run uses the test seller's rate-limited quote route. sell:
 // the agent sells its company's own data file to Crow's test buyer through the front door's sell command, run as
 // `node examples/try-sell.ts`, with --work and --terms only.
+//
+// With --test-seller a buy run takes the same cold brief for the product Crow's test seller sells by quote. The agent
+// may read, never write, the files the buying command saves beside its key store (T-617).
 //
 // The budget is hard and covers every run of one invocation. Before each model turn the runner reserves an estimate of
 // the most that turn can cost, with a margin: the whole request at two characters a token plus 1,000 tokens for the
@@ -160,12 +166,15 @@ export function sellScript(): ScriptStep[] {
 }
 
 /** A draft front page (P-15): a local server that answers /llms.txt with `text` and passes every other GET to the live site. */
-export async function frontPage(text: string, upstream: string = CROW_SITE): Promise<{ url: string; close(): Promise<void> }> {
+export const frontPage = (text: string, upstream: string = CROW_SITE) => draftPages({ '/llms.txt': text }, upstream);
+
+/** Draft pages, by path (P-15, T-623): a local server that answers those and passes every other GET to the live site. */
+export async function draftPages(pages: Readonly<Record<string, string>>, upstream: string = CROW_SITE): Promise<{ url: string; close(): Promise<void> }> {
   const server = createServer((req, res) => {
     void (async () => {
       if (req.method !== 'GET') return void res.writeHead(405, { 'content-type': 'text/plain' }).end('GET only');
       const u = new URL(`http://front.invalid${req.url ?? '/'}`);
-      if (u.pathname === '/llms.txt') return void res.writeHead(200, { 'content-type': 'text/plain; charset=utf-8', 'cache-control': 'no-store' }).end(text);
+      if (Object.hasOwn(pages, u.pathname)) return void res.writeHead(200, { 'content-type': 'text/plain; charset=utf-8', 'cache-control': 'no-store' }).end(pages[u.pathname]);
       // Joined as text: a path that starts with "//" stays a path on the upstream host.
       const up = await fetch(`${upstream}${u.pathname}${u.search}`, { redirect: 'manual', signal: AbortSignal.timeout(25_000) });
       const location = up.headers.get('location');
@@ -244,21 +253,22 @@ export function testSellerScript(keyStore: string): ScriptStep[] {
   ];
 }
 
-async function testSellerRun(dir: string, providerOf: (keyStore: string) => Provider, secrets: Secrets): Promise<Event[]> {
+async function testSellerRun(dir: string, providerOf: (keyStore: string) => Provider, secrets: Secrets, buyPage?: string): Promise<Event[]> {
   const work = join(dir, 'buyer', 'work'), owner = join(dir, 'buyer', 'company');
   for (const p of [work, owner]) mkdirSync(p, { recursive: true, mode: 0o700 });
   const keyStore = join(realpathSync(owner), 'keys');
   const provider = providerOf(keyStore);
   const policy = squaresPolicy();
   const rec = new Recorder(join(dir, 'record.jsonl'), secrets);
-  rec.add('runner', 'run.start', { task: 'P-16', direction: 'buy', buyer: { vendor: provider.vendor, model: provider.model }, caps: CAPS, world: 'running', operators: OPERATORS, counterparty: TEST_SELLER, brief: 'direct', coldBuyer: true, policy });
+  rec.add('runner', 'run.start', { task: 'P-16', direction: 'buy', buyer: { vendor: provider.vendor, model: provider.model }, caps: CAPS, world: 'running', operators: OPERATORS, counterparty: TEST_SELLER, brief: 'direct', coldBuyer: true, policy, ...(buyPage !== undefined ? { buyPage: { sha256: createHash('sha256').update(buyPage).digest('hex'), bytes: Buffer.byteLength(buyPage), note: 'a draft crow.direct/buy.txt served from this machine; every other page from the live site' } } : {}) });
   const allow: Allow[] = [...OPERATORS.map((u) => ({ origin: new URL(u).origin })), { origin: CROW_SITE }];
   const stop = new AbortController();
   const whole = setTimeout(() => stop.abort('the run limit of 1,800 s'), 1_800_000);
-  const tools = new Toolbox({ signal: stop.signal, role: 'buyer', work: realpathSync(work), owner: realpathSync(owner), repo: REPO, operators: OPERATORS, allow, secrets, rec, keyStore, policy, usage: BUYER_USAGE, timeoutMs: { short: 180_000, long: 1_200_000 } });
+  const draft = buyPage === undefined ? null : await draftPages({ '/buy.txt': buyPage });
+  const tools = new Toolbox({ signal: stop.signal, role: 'buyer', work: realpathSync(work), owner: realpathSync(owner), repo: REPO, operators: OPERATORS, allow, secrets, rec, keyStore, policy, usage: BUYER_USAGE, timeoutMs: { short: 180_000, long: 1_200_000 }, ...(draft ? { alias: { from: CROW_SITE, to: draft.url } } : {}) });
   try {
     await runAgent({ role: 'buyer', provider, brief: testSellerBrief(keyStore), system: masterPrompt('buyer', 'Enterprise Procurement Agent'), tools, caps: CAPS, rec, signal: stop.signal });
-  } finally { clearTimeout(whole); stop.abort('the run ended'); await tools.close(); }
+  } finally { clearTimeout(whole); stop.abort('the run ended'); await tools.close(); await draft?.close(); }
   // A deal counts only when its terms name a key in this run's key store, which only the buyer's commands write.
   const ids = new Set(dealIds(rec.events));
   const buyers = new Set<string>();
@@ -300,6 +310,8 @@ export interface Result {
   help_probes: number; guide_reads: string[];
   /** The seller's address the agent gave the buy command as CROW_SELLER (T-611), or null. */
   seller_named: string | null;
+  /** Calls of the deal record command, the files the agent wrote itself, and the saved files it read (T-623). */
+  record_calls: number; files_written: string[]; saved_files_read: string[];
   /** Web reads of https://crow.direct, and the approvals if one approval allowed them all (P-15, N214). */
   site_reads: number; approvals_reads_once: number;
   final_state: string | null; final_state_op2: string | null; commitment_id: string | null; agent_end: string; refusals: number; failed_calls: number; date: string; run: string;
@@ -339,6 +351,9 @@ export function measureRun(events: readonly Event[], role: 'buyer' | 'seller', d
     seconds: Number.isFinite(first) && finalEvent !== undefined ? Math.round((finalEvent - first) / 1000) : null,
     // Calls that asked a command how to use it (no arguments, or --help or -h alone), and the Crow guide pages read.
     help_probes: tools.filter((e) => e['name'] === 'run_command' && ((e['input'] as J)?.args?.length ?? 0) <= 1 && (((e['input'] as J)?.args ?? []).length === 0 || ['--help', '-h'].includes(String((e['input'] as J).args[0])))).length,
+    record_calls: tools.filter((e) => e['name'] === 'run_command' && (e['input'] as J)?.command === 'deal-record').length,
+    files_written: tools.filter((e) => e['name'] === 'write_file' && !e['isError']).map((e) => String((e['input'] as J)?.path)),
+    saved_files_read: mine.filter((e) => e.kind === 'file' && e['saved'] === true).map((e) => String(e['path'])),
     seller_named: (mine.find((e) => e.kind === 'command' && (e['settings'] as J)?.CROW_SELLER)?.['settings'] as J)?.CROW_SELLER ?? null,
     guide_reads: [...new Set(tools.filter((e) => e['name'] === 'fetch_url').map((e) => { try { const u = new URL(String((e['input'] as J)?.url)); return u.origin === CROW_SITE ? u.pathname : ''; } catch { return ''; } }).filter((p) => /\.txt$|^\/ref\//.test(p)))],
     final_state: stateAt(OPERATORS[0]!), final_state_op2: stateAt(OPERATORS[1]!), commitment_id: id,
@@ -357,7 +372,7 @@ async function main(): Promise<void> {
   const flag = (n: string, d?: string) => { const i = argv.indexOf(`--${n}`); return i >= 0 ? argv[i + 1] : d; };
   const fail = (line: string): never => { console.error(`approvals: ${line}`); process.exit(2); };
   const cmd = argv[0];
-  if (cmd !== 'plan' && cmd !== 'run') fail('usage: approvals.ts plan|run --runs <model>:<buy|sell>,... --budget-usd <n> [--front-page <file>] [--test-seller] [--out <dir>]');
+  if (cmd !== 'plan' && cmd !== 'run') fail('usage: approvals.ts plan|run --runs <model>:<buy|sell>,... --budget-usd <n> [--front-page <file>] [--test-seller [--buy-page <file>]] [--out <dir>]');
   let runs: RunSpec[] = [];
   try { runs = parseRuns(flag('runs', 'claude:buy,deepseek:buy,claude:sell,deepseek:sell')!); } catch (e) { fail((e as Error).message); }
   const budgetUsd = Number(flag('budget-usd', '0'));
@@ -369,6 +384,9 @@ async function main(): Promise<void> {
   const front = frontFile === undefined ? undefined : readFileSync(resolve(frontFile), 'utf8');
   const liveSeller = argv.includes('--test-seller');
   if (liveSeller && runs.some((r) => r.direction !== 'buy')) fail('--test-seller takes only buy runs');
+  const buyFile = flag('buy-page');
+  if (argv.includes('--buy-page') && (!buyFile || !liveSeller)) fail('--buy-page takes a file, and only buy runs with --test-seller');
+  const buyPage = buyFile === undefined ? undefined : readFileSync(resolve(buyFile), 'utf8');
   console.log(`T-571, approvals per deal: ${runs.length} run(s) on Sepolia against ${OPERATORS.join(', ')}; test tokens only.`);
   for (const r of runs) console.log(`  ${r.model}:${r.direction}  caps ${CAPS.turns} turns, ${CAPS.tokens.toLocaleString('en')} tokens; at most USD ${usd(ceilingOf(r.model))} at its caps`);
   for (const line of LIKE_FOR_LIKE) console.log(`  ${line}`);
@@ -401,7 +419,7 @@ async function main(): Promise<void> {
       const p = r.model === 'scripted' ? scripted(sellScript()) : budget.guard(providers[r.model]!);
       events = await sellRun(dir, p, secrets, front);
     } else if (liveSeller) {
-      events = await testSellerRun(dir, (store) => (r.model === 'scripted' ? scripted(testSellerScript(store)) : budget.guard(providers[r.model]!)), secrets);
+      events = await testSellerRun(dir, (store) => (r.model === 'scripted' ? scripted(testSellerScript(store)) : budget.guard(providers[r.model]!)), secrets, buyPage);
     } else {
       const buyer = r.model === 'scripted' ? 'scripted' as const : budget.guard(providers[r.model]!);
       const done = await runDuet({ scenario: 'paid', buyer, seller: 'scripted', brief: 'direct', coldBuyer: true, world: OPERATORS, out: dir, caps: CAPS, timeoutSec: 1800, secrets: modelSecrets, log: (l) => console.log(`  ${l}`) });
