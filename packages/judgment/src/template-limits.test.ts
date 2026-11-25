@@ -13,7 +13,7 @@ import { ADJUDICATOR, criterion, delivery, fakeUnwrap, NONCES, POLICY, seal, utf
 import { intake } from './intake.js';
 import { KEPT, NEWEST_VERSIONS } from './kept.js';
 import { runPipeline, type JudgeProvider, type JudgeRequest, type PanelSeat } from './pipeline.js';
-import { APPEAL_PROMPT_TEMPLATE, APPEAL_PROMPT_TEMPLATE_2, buildPrompt, PROMPT_TEMPLATE, PROMPT_TEMPLATE_2, TEMPLATE_PAIR, TEMPLATE_PAIR_2 } from './prompt.js';
+import { APPEAL_PROMPT_TEMPLATE, APPEAL_PROMPT_TEMPLATE_2, APPEAL_PROMPT_TEMPLATE_2_HASH, APPEAL_PROMPT_TEMPLATE_HASH, buildPrompt, PROMPT_TEMPLATE, PROMPT_TEMPLATE_2, TEMPLATE_PAIR, TEMPLATE_PAIR_2 } from './prompt.js';
 import { UntrustedData } from './untrusted.js';
 import { MAX_OUTPUT_CHARS, parseVerdict } from './verdict.js';
 import type { JudgmentRubric } from './terms.js';
@@ -114,13 +114,13 @@ describe('template pair 2 states the verdict limits in words, under the schema c
   });
 
   it('keeps pair 1 frozen under its hashes, and gives pair 2 its own', () => {
-    expect([TEMPLATE_PAIR.firstHash, TEMPLATE_PAIR.appealHash]).toEqual([
+    expect([TEMPLATE_PAIR.firstHash, APPEAL_PROMPT_TEMPLATE_HASH]).toEqual([
       '0xabb5ec9b33cf9a936e140bf8530c217f6629fdf1e08a46fbdf6bd7363ce84dd2',
       '0xa0bb1a5d8fa8ac53294a41556df71c098f73220d24efd9522e922f9004248659',
     ]);
     expect(TEMPLATE_PAIR_2.firstHash).not.toBe(TEMPLATE_PAIR.firstHash);
-    expect(TEMPLATE_PAIR_2.appealHash).not.toBe(TEMPLATE_PAIR.appealHash);
-    expect(TEMPLATE_PAIR_2.appealHash).not.toBe(TEMPLATE_PAIR_2.firstHash);
+    expect(APPEAL_PROMPT_TEMPLATE_2_HASH).not.toBe(APPEAL_PROMPT_TEMPLATE_HASH);
+    expect(APPEAL_PROMPT_TEMPLATE_2_HASH).not.toBe(TEMPLATE_PAIR_2.firstHash);
   });
 
   it('is a pair this build keeps, beside pair 1', () => {
@@ -199,13 +199,13 @@ describe("partner C's appeal, replayed on the pipeline", () => {
   // A model of the hypothesis, not a measurement: judges that write to the target they are told, and past the cap when
   // told only `string<=300`. Live judges decide whether pair 2 helps; this shows the words reach every seat.
   it('under template pair 2 every judge reads the limits in words, and the record names pair 2', async () => {
-    const versions = { ...NEWEST_VERSIONS, promptTemplateHash: TEMPLATE_PAIR_2.firstHash, appealPromptTemplateHash: TEMPLATE_PAIR_2.appealHash };
+    const versions = { ...NEWEST_VERSIONS, promptTemplateHash: TEMPLATE_PAIR_2.firstHash, appealPromptTemplateHash: APPEAL_PROMPT_TEMPLATE_2_HASH };
     const told = (system: string) => (system.includes('aim for 200') ? long(180) : long(340));
     const two = await appealTold(told, versions);
     const one = await appealTold(told, NEWEST_VERSIONS);
     expect([one.d.aggregate.decision, two.d.aggregate.decision]).toEqual(['reject', 'accept']);
     expect(two.calls).toHaveLength(5);
     for (const c of two.calls) expect(c.system).toContain('aim for 200');
-    expect(new Set(two.d.panel.members.map((m) => m.promptTemplateHash))).toEqual(new Set([TEMPLATE_PAIR_2.appealHash]));
+    expect(new Set(two.d.panel.members.map((m) => m.promptTemplateHash))).toEqual(new Set([APPEAL_PROMPT_TEMPLATE_2_HASH]));
   });
 });

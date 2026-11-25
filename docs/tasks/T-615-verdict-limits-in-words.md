@@ -64,6 +64,7 @@ Judges keep their verdicts inside the schema's caps more often, without loosenin
   - `pnpm snap`: 63 passed. `pnpm validate:spec`: ok. `node site/build.mjs && node site/check.mjs`: PASS.
 - Snapshot diffs: `attack.injection-filter-abstain-appeal-default`: the aggregate gains the reason `judge qwen-a output rejected by a filter (url)`, so the record hash and the chain head change; the decision stays reject.
 - Measured, after rule 5 dropped its consequence clause: pair 2's hashes are `0x4d328a15…` / `0xfc6d93d5…`; its 48 replay records were recorded again, and pair 1's 48 did not move; the judgment, testkit and adjudicator suites pass 1580; `pnpm snap` 63 passed; the site check passes; typecheck and lint exit 0.
+- Measured: CI's `cut-feature-alignment` found `appealHash` (the template pair's field, flagged as the cut appeal feature) in `template-limits.test.ts`; the test now uses the `APPEAL_PROMPT_TEMPLATE_HASH` constants instead, and the known list is unchanged. Full `pnpm test` after that: 6104 passed, 321 skipped, 0 failed.
 - Bundles: `site/setup.mjs` sha256 `b59bc721…` to `1cb79b43…`; `site/serve.mjs` sha256 `541ff38b…` to `e1f7a4a0…`.
 
 ## Decisions
