@@ -72,6 +72,7 @@ import { fileURLToPath } from 'node:url';
 import { OG_IMAGE } from './footer.ts';
 import { trustFacts } from './trust.mjs';
 import { ICON_FILES } from './brand/kit.mjs';
+import { sellerWorkerBundle, sellerWorkerPin, sellerWorkerSha256 } from './build.mjs';
 import { GOALS, goalBundle, goalCommand, goalSha256, goalUrl, NODE_MIN, NODE_PERMISSION, PREFLIGHT, preflightCommand, REFERENCE_PATH, referenceText, SETUP_MJS_URL, setupBundle, setupCommand, setupSha256, TAKE_COMMANDS, TAKE_MJS_URL, takeBundle, takeInstall, takeSha256 } from './build.mjs';
 import { ASSETS, BASE, BUY_COMMANDS, CARD_SCHEMA, HOME_CSS, HOME_JS, notFoundPage, BUY_MJS_URL, BUY_URL, buyBundle, buyInstall, buySha256, filled, page, pins, problemPages, publishedGuides, SELL_URL, SITE_URL, sourceCommitOf, strip, TEST_SELLER_URL, tryBundle, tryCommand, trySha256, TRY_URL } from './build.mjs';
 import { STATUS_PATH } from '../apps/site/status.js';
@@ -356,7 +357,7 @@ const roles = sectionOf(md, 'Read one page for your role');
 expect(roles.includes(BUY_URL) && roles.includes(SELL_URL), `llms.txt has a "Read one page for your role" section that links ${BUY_URL} and ${SELL_URL}`);
 
 // 11. The guides together (T-393).
-const published = new Set(['index.html', '404.html', 'home.css', 'home.js', 'try.mjs', 'buy.mjs', 'setup.mjs', 'take.mjs', `${PREFLIGHT.name}.mjs`, ...Object.keys(GOALS).map((n) => `${n}.mjs`), REFERENCE_PATH, 'version.json', CARD_SCHEMA, ...ASSETS]);
+const published = new Set(['index.html', '404.html', 'home.css', 'home.js', 'try.mjs', 'buy.mjs', 'setup.mjs', 'take.mjs', 'seller-worker.mjs', `${PREFLIGHT.name}.mjs`, ...Object.keys(GOALS).map((n) => `${n}.mjs`), REFERENCE_PATH, 'version.json', CARD_SCHEMA, ...ASSETS]);
 const scripts = JSON.parse(read('../package.json')).scripts;
 const refs = referenceFiles();
 // T-469: the front door's "Reference" points to the one reference file and names every part it holds, by the ref
@@ -655,6 +656,10 @@ expect(typeof trust.SECURITY_CONTACT === 'string' && read('../SECURITY.md').incl
 }
 
 // 20. The setup (T-472).
+// T-478: site/seller-worker.mjs is the current bundle of apps/own-seller/src/entry.ts, and setup.mjs carries its sha256.
+const sellerWorkerFile = read('seller-worker.mjs');
+expect(sellerWorkerFile === (await sellerWorkerBundle()), 'site/seller-worker.mjs is stale against apps/own-seller: run node site/build.mjs');
+expect(read('../examples/seller-worker-pin.ts') === sellerWorkerPin(sellerWorkerSha256()), 'examples/seller-worker-pin.ts does not carry the sha256 of site/seller-worker.mjs: run node site/build.mjs');
 const setupFile = read('setup.mjs');
 expect(setupFile === (await setupBundle()), 'site/setup.mjs is stale against examples/: run node site/build.mjs');
 const setupImports = [...new Set([...setupFile.matchAll(/^import .* from "([^"]+)";$/gm)].map((m) => m[1]))];
