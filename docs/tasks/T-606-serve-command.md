@@ -68,7 +68,21 @@ Branch `t-606-signal-before-ready`, 2026-11-25. All items measured, unless label
 - **Tests:** two new ones in `examples/serve.test.ts`, for both signals: at the ready line with the child paused there, and during a start that waits on a silent operator. Both failed before the fix. A failed exit check now names the signal.
 - **Checks:** `pnpm typecheck` and `pnpm lint` exit 0; `node site/build.mjs && node site/check.mjs` PASS; 81 tests in the six files that read these files pass; `examples/serve.test.ts` passed 20 of 20 runs in a row. The full suite did not run here; CI is the gate. `serve.mjs` is the only pinned file this fix changes; its hash is in the published `ref/serve.txt`, which the build fills.
 - **Live:** during this fix, on 2026-11-25, https://crow.direct/serve.mjs served the first build (`faf1df13`), which has the race, until the next site deploy.
-- **The repo adapter has the same order** (`examples/seller-adapter.ts`, its own command line): the same script killed 77 of 100 runs. Not changed here. Its test sends the signal after a quote, so it has not failed on this.
+- **The repo adapter has the same order** (`examples/seller-adapter.ts`, its own command line): the same script killed 77 of 100 runs. Not changed here (follow-up 2 below fixes it). Its test sends the signal after a quote, so it has not failed on this.
+
+## Follow-up 2: the adapter's own command line had the same race
+
+Branch `t-606-adapter-signal-block`, 2026-11-25. The coordinating session gave this fix to this session, which adds `examples/seller-adapter.ts` (its command-line block only) and `examples/seller-adapter.test.ts` to the paths. All items measured, unless labeled otherwise, on main at `423ffcd9`.
+
+- **Intent:** a person or a service manager may stop `node examples/seller-adapter.ts` at any moment after it starts. The command exits with status 0. Once the adapter serves, the command also lets the step in progress finish first.
+- **Reproduced** on main's adapter, with a script outside the commit, signalling as soon as the ready line arrived (1-minute load average 26 to 50): SIGTERM killed 225 of 300 runs, and SIGINT killed 75 of 100. With the child paused 300 ms at that line, 5 of 5 died for each signal.
+- **Fix:** as in `serve.ts`. The handlers go in before the start. During a start they print one line, which says that nothing was served, and exit with status 0. After the ready line they stop the adapter gracefully, as before. The change stays inside the command-line block, so `serve.ts` keeps its own copy of the handlers.
+- **After:** the same script ran the graceful stop and got exit status 0 in 300 of 300 SIGTERM runs and 100 of 100 SIGINT runs, and in 5 of 5 paused runs for each signal.
+- **Tests:** four new ones in `examples/seller-adapter.test.ts`, for each signal: at the ready line with the child paused there, and during a start that waits on a silent operator. All four failed before the fix, with the child killed by the signal, and passed after it. On the earlier base `b02ccd8a` they passed in 20 of 20 repeat runs (1-minute load average 109 at the end).
+- **Pinned files:** this change moves no pinned checksum. `node site/build.mjs` changed no tracked file, so every pinned bundle, `serve.mjs`, `setup.mjs` and `take.mjs` included, is byte for byte main's. The setup and serve bundles leave this command-line block out.
+- **Main moved two of them before this change:** since `b02ccd8a`, PR 818 (T-613) moved `serve.mjs` from `772c81b5...` to `4bc92987...` and `setup.mjs` from `620cd827...` to `fa1db8ee...`. `take.mjs` did not move. A page that pins an earlier `serve.mjs` hash needs the new one after a site deploy from main (inferred; no live file was read).
+- **Checks:** `pnpm typecheck` and `pnpm lint` exit 0; `node site/build.mjs && node site/check.mjs` PASS; `pnpm exec vitest run examples tests/design-map.test.ts tests/site-bundles.test.ts tests/site-guides.test.ts tests/guide-budget.test.ts tests/cut-feature-alignment.test.ts` exits 0: 927 tests passed and 32 were skipped (73 files passed, 1 skipped). The full suite did not run here; CI is the gate.
+- **Another version:** PR 817, from the session that found this race, shares one function between both command lines. That moves `serve.mjs`'s hash, so this change does not use it.
 
 ## Out of scope
 

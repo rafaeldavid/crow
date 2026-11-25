@@ -5,7 +5,7 @@ import { createHash, createHmac } from 'node:crypto';
 import { mkdtempSync, readFileSync, writeFileSync } from 'node:fs';
 import { createServer as createHttpsServer, request as httpsRequest } from 'node:https';
 import { createServer as createHttpServer, request as httpRequest } from 'node:http';
-import type { AddressInfo } from 'node:net';
+import { createServer as createTcpServer, type AddressInfo, type Socket } from 'node:net';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { fileURLToPath } from 'node:url';
@@ -350,6 +350,74 @@ describe('seller adapter: one configuration file (T-331)', () => {
     }
     expect(await exited).toBe(0);
     expect(out + err).not.toContain(acct('seller-1').privateKey.slice(2));
+  }, 30_000);
+
+  /** The command line on `file`, in the file's folder. `exited` is the exit status, or the name of the signal that killed it. */
+  function commandLine(file: string, operators: readonly string[], nodeArgs: string[] = []) {
+    const child = spawn(process.execPath, [...nodeArgs, here('./seller-adapter.ts'), file], { cwd: join(file, '..'), env: { ...process.env, HOLDBACK_KEY: acct('seller-1').privateKey, HOLDBACK_OPERATORS: operators.join(',') } });
+    let out = '', err = '';
+    child.stdout.on('data', (d: Buffer) => (out += d.toString()));
+    child.stderr.on('data', (d: Buffer) => (err += d.toString()));
+    const exited = new Promise<number | NodeJS.Signals>((resolve) => child.on('close', (code, signal) => resolve(code ?? signal!)));
+    return { child, exited, out: () => out, err: () => err };
+  }
+
+  it.each(['SIGTERM', 'SIGINT'] as const)('its command line stops gracefully on %s sent as soon as it says it serves (T-606)', async (signal) => {
+    stub = await startStubSellerApi({ port: 0 });
+    const dir = mkdtempSync(join(tmpdir(), 't606-'));
+    const file = join(dir, 'seller.json');
+    writeFileSync(file, JSON.stringify({ port: 0, sellerApi: stub.api }));
+    // Loaded before the adapter: the process stops 500 ms right after it writes its ready line, as a busy machine's
+    // scheduler may, so a signal sent on that line always arrives before the command line runs its next statement.
+    const pause = join(dir, 'pause.mjs');
+    writeFileSync(
+      pause,
+      `const write = process.stdout.write.bind(process.stdout);
+process.stdout.write = (chunk, ...rest) => {
+  const sent = write(chunk, ...rest);
+  if (String(chunk).includes('serves POST')) Atomics.wait(new Int32Array(new SharedArrayBuffer(4)), 0, 0, 500);
+  return sent;
+};
+`,
+    );
+    const run = commandLine(file, world.info.operators, ['--import', pause]);
+    let sent = false;
+    run.child.stdout.on('data', () => {
+      if (sent || !run.out().includes('serves POST')) return;
+      sent = true;
+      run.child.kill(signal);
+    });
+    try {
+      expect(await run.exited, run.out() + run.err()).toBe(0);
+      expect(sent).toBe(true);
+      expect(run.out()).toContain(`${signal}: the adapter stops after the step in progress; the journal keeps every open deal.`);
+    } finally {
+      run.child.kill('SIGKILL');
+    }
+  }, 30_000);
+
+  it.each(['SIGTERM', 'SIGINT'] as const)('its command line exits 0 on %s while its start still waits, and says it served nothing (T-606)', async (signal) => {
+    const dir = mkdtempSync(join(tmpdir(), 't606-'));
+    const file = join(dir, 'seller.json');
+    const none = 'http://127.0.0.1:1/';
+    writeFileSync(file, JSON.stringify({ port: 0, sellerApi: { quote: `${none}quote`, start: `${none}jobs`, result: `${none}jobs/{jobId}/result` } }));
+    const silent = createTcpServer(() => {}); // takes each connection and never answers
+    const held: Socket[] = [];
+    const asked = new Promise<'asked'>((resolve) => silent.on('connection', (socket) => (held.push(socket), resolve('asked'))));
+    await new Promise<void>((resolve) => silent.listen(0, '127.0.0.1', resolve));
+    const port = (silent.address() as AddressInfo).port;
+    const run = commandLine(file, [`http://127.0.0.1:${port}`, `http://localhost:${port}`]);
+    try {
+      // The start is under way once it asks an operator. A child that exits first says why in the failure.
+      expect(await Promise.race([asked, run.exited]), run.out() + run.err()).toBe('asked');
+      run.child.kill(signal);
+      expect(await run.exited, run.out() + run.err()).toBe(0);
+      expect(run.out().replace(/^\S+Z /, '')).toBe(`${signal}: the adapter stops before it serves; the journal keeps every open deal.\n`);
+    } finally {
+      run.child.kill('SIGKILL');
+      for (const socket of held) socket.destroy();
+      silent.close();
+    }
   }, 30_000);
 
   it('stops with the usage when no file is named, and names a file it cannot read', () => {
