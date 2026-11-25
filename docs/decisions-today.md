@@ -1865,3 +1865,25 @@ The build is not started; it opens as its own task on Rafa's word.
 **Dropped:** a schema rule (a change needs an ADR and a version bump); matching by position inside `aggregate` (a new aggregation version).
 
 **Litmus tests.** Neutrality: unchanged. The hold: unchanged. Defended judgment: unchanged.
+
+## D101. The buyer's tools refuse an offer whose seller is not the one the buyer named (T-611)
+
+**Status:** adopted, 2026-11-25.
+
+**Who decided.** The session for T-611, under the in-repository autonomy rule, after a research pass. Rafa decided the same day that binding a seller's key to its published identity waits until after the case studies (roadmap row N228). Rafa may overrule any line.
+
+**Why.** Terms are public once offered. Anyone can copy an offer, sign the copy with their own key and name the same buyer. Settlement binds a deal to the key that signed it and accepts a delivery only from that key (`contracts/src/HoldbackRules.sol`, `_acceptDelivery`), so the copier, not the seller the buyer meant, delivers and is paid. The buyer's tools checked that the signature recovers to `seller`, never that `seller` is the company the buyer meant. Only the buyer can know that, from the seller's own channel (D32).
+
+**Decided:**
+
+- **The address comes from the seller's own channel.** The seller's card at its own origin, or a message from it: never the offer, an operator or the quote answer's own claim. The buyer names it to `makeKeys` (`{seller}`), to `buy-with-signer.ts` and `own-buyer.ts` as `CROW_SELLER` or the terms file's `seller` (the same address if both), and to `take.ts` as `CROW_SELLER`. The key file keeps it, so the approve run checks it again.
+- **A named seller binds.** `readOffer` refuses an offer another key signed before it shows it, and `checkOffer` refuses it again, naming `seller`. `take.ts` refuses a standing offer at another seller address before it shows it.
+- **An offer the buyer did not ask for needs a name.** `checkOffer` refuses an offer this key did not ask for with `quote` unless `makeKeys` was given the seller. The approval's own `seller` does not count: an approval built from the shown offer carries the offer's seller.
+- **An offer the buyer asked for needs none.** `quote` binds the key to the commitment ID the seller's own quote route answered, at the URL the buyer chose, so a copy cannot take its place there. Naming the seller stays the buyer's option.
+- **Effect** (measured): the tests show a copy signed by another key refused, naming `seller`, and the real offer passing. Existing callers that quote first see no change. A library caller that reads an offer it found, with no seller named, is now refused.
+
+**Dropped:** refusing every offer without a named seller (it breaks the quoted path for no gain, D31); a warning only (an unattended agent does not read warnings); comparing the quote answer's claim (the commitment ID already binds it); any schema, signed type, route or contract change.
+
+**Later (N228).** How a buyer learns that a key belongs to the party that published the offer, for every public or standing offer: the research's options are in the task file (`docs/tasks/T-611-buyer-pins-the-seller.md`, Handoff).
+
+**Litmus tests.** Neutrality: unchanged; the check runs on the buyer's machine and stops no valid commitment. The hold: unchanged. Defended judgment: unchanged.
