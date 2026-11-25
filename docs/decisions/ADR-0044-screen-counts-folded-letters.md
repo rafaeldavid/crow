@@ -48,11 +48,15 @@ Characters that fold to a letter and a symbol, such as `℃` (to `°C`) or `㎏`
 
 ## What the change costs in catches, accepted
 
-Four cases `screen-1` catches and `screen-2` does not, each because the only signal was the NFKC count:
+The cases `screen-1` catches and `screen-2` does not, each because the only signal was the NFKC count:
 
 1. **An ellipsis or a fullwidth full stop splitting the words of a phrase** ("ig…nore"). Its plain-ASCII twin ("ig...nore") passes `screen-1` too. A reader that rejoins words across punctuation is a phrase-pattern change, for both forms at once; it goes to triage.
 2. **Superscript digits as decimal character codes.** The screen decodes no decimal codes, so the plain digits pass `screen-1` too.
 3. **Fullwidth digits in a request with no phrase.** The request reads the same with ASCII digits, which pass both versions.
+
+4. **Halfwidth symbols that fold to letter-shaped symbols** (red team on Opus, measured): U+FFEE folds to `○`, U+FFE6 to `₩` and U+FFE5 to `¥`, so "Ign" with U+FFEE reaches the judges as "Ign○re". The folded text, delivered as it is, passes `screen-1` too, and neither version's leetspeak view maps these symbols. A sweep of every code point found no other non-letter that folds to a letter-like output [measured, red team].
+
+For a delivery written in `\u` escapes, the twin argument holds after the escapes are decoded: the twin of an escaped ellipsis splitting a word is the decoded "ig...nore", which passes both versions [measured, red team].
 
 Accepted because each attack is open today in plain ASCII, so `screen-2` opens no text the judges could read that `screen-1` closes [inferred]. The panel remains the second line: judges read the data inside a marked section with injection-hardened templates, from two families.
 

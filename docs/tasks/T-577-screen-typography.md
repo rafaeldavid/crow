@@ -53,9 +53,9 @@ The reports cannot be committed (third-party text). The repository keeps their t
 
 ## Handoff
 
-**Resumed and built on 2026-11-25.** Open: the red team on Opus and the review, then the coordinator's merge. Deploys: two, both the coordinator's on Rafa's word. First the build that carries `screen-2` with the default unchanged; then the build whose default is `screen-2` (`apps/adjudicator/src/kept-policies.json`, "about"). The second deploy changes `site/setup.mjs`'s bundle again only if the judgment package changes.
+**Resumed and built on 2026-11-25.** The review (Sonnet) passed after one fix. The red team (Opus) found no way through that its plain-ASCII twin does not also open in `screen-1`, and two low notes, now in ADR-0044. Open: the coordinator's merge. Deploys: two, both the coordinator's on Rafa's word. First the build that carries `screen-2` with the default unchanged; then the build whose default is `screen-2` (`apps/adjudicator/src/kept-policies.json`, "about"). The second deploy changes `site/setup.mjs`'s bundle again only if the judgment package changes.
 
-For triage: a phrase reader that rejoins words split by punctuation ("ig...nore") would close accepted miss 1 for ASCII and compatibility forms at once.
+For triage: the leetspeak view could map `○`, `₩` and `¥` to `o`, `w` and `y` (red team on Opus, low; open in both versions). A phrase reader that rejoins words split by punctuation ("ig...nore") would close accepted miss 1 for ASCII and compatibility forms at once.
 
 **Earlier status: paused on 2026-11-20 to save tokens, at Rafa's word.** Nothing is pushed. The branch `t-577-screen-typography` holds one local WIP commit.
 
