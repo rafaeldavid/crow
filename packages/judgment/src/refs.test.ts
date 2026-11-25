@@ -24,15 +24,15 @@ describe('a reference resolves in the work, or it is dropped', () => {
   });
   it('a sampled read or a delivery that is not JSON carries no references', () => {
     for (const r of ['', 'L1', '/kit']) expect(resolves(NO_REFS, r)).toBe(false);
-    expect(workView({ raw: UntrustedData.wrap('{not json'), data: UntrustedData.wrap('{not json'), mime: 'application/json' })).toEqual(NO_REFS);
+    expect(workView({ data: UntrustedData.wrap('{not json'), mime: 'application/json' })).toEqual(NO_REFS);
   });
-  it('a JSON delivery resolves against the delivered text; any other delivery counts the lines the judges read, under every Unicode line break', () => {
-    const view = workView({ raw: UntrustedData.wrap('{"a":[1,2]}'), data: UntrustedData.wrap('{"a":[1,2]}'), mime: 'application/json' });
+  it('a JSON delivery resolves against the JSON the judges read; any other delivery counts the lines they read, under every Unicode line break', () => {
+    const view = workView({ data: UntrustedData.wrap('{"a":[1,2]}'), mime: 'application/json' });
     expect(view.kind).toBe('json');
     expect(resolves(view, '/a/1')).toBe(true);
     const text = 'one\ntwo\r\nthree four\u0085five';
-    expect(workView({ raw: UntrustedData.wrap(text), data: UntrustedData.wrap(text), mime: 'text/plain' })).toEqual({ kind: 'lines', count: 5 });
-    expect(workView({ raw: UntrustedData.wrap('a,b\n1,2\n'), data: UntrustedData.wrap('a,b\n1,2\n'), mime: 'text/csv' })).toEqual({ kind: 'lines', count: 3 });
+    expect(workView({ data: UntrustedData.wrap(text), mime: 'text/plain' })).toEqual({ kind: 'lines', count: 5 });
+    expect(workView({ data: UntrustedData.wrap('a,b\n1,2\n'), mime: 'text/csv' })).toEqual({ kind: 'lines', count: 3 });
   });
 });
 
