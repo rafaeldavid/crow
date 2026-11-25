@@ -72,6 +72,11 @@
       "version": "agg-4",
       "status": "kept",
       "since": "T-570, 2026-11-19: carried beside agg-3; the default moves in a second deploy"
+    },
+    {
+      "version": "agg-5",
+      "status": "kept",
+      "since": "ADR-0049, D105, 2026-11-25: agg-4's rule with free text over its cap cut and recorded instead of abstaining"
     }
   ],
   "registries": [

@@ -61,6 +61,8 @@ const SCREEN_0: ScreenImpl = { screen: screen0.screen, screenTerms: screen0.scre
 // agg-3 and agg-4 read verdicts through the filter they were released with (kept/verdict-0.ts, ADR-0049 section 7).
 const AGG_3: AggregationImpl = { parseVerdict: verdict0.parseVerdict, preDecision: agg3.preDecision, aggregate: agg3.aggregate, signedOutcome: agg3.signedOutcome };
 const AGG_4: AggregationImpl = { parseVerdict: verdict0.parseVerdict, preDecision: agg4.preDecision, aggregate: agg4.aggregate, signedOutcome: agg4.signedOutcome };
+// agg-5: agg-4's rule with the cut filter (ADR-0049).
+const AGG_5: AggregationImpl = { parseVerdict, preDecision, aggregate, signedOutcome };
 
 export const KEPT: KeptTable = {
   screens: new Map([
@@ -72,6 +74,7 @@ export const KEPT: KeptTable = {
   aggregations: new Map([
     [agg3.AGGREGATION_VERSION, AGG_3],
     [agg4.AGGREGATION_VERSION, AGG_4],
+    [AGGREGATION_VERSION, AGG_5],
   ]),
 };
 
