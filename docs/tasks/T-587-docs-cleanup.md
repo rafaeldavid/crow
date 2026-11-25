@@ -48,13 +48,15 @@ On the branch, over `main` at `10f1e638`, 2026-11-25:
 
 - **Passed [measured]:** `pnpm install --frozen-lockfile`, `pnpm build`, `pnpm typecheck`, `pnpm lint`, `node site/build.mjs && node site/check.mjs` (the build left no change in `site/`), and one run of the 18 test files that read docs (489 tests passed, 2 skipped).
 - **Full `pnpm test` [measured]:** 5445 passed, 11 failed, 288 skipped, on a Mac whose load average read 206 on 8 cores just after the run, with other sessions working. The failures were in `examples/seller-invoice.test.ts` (9), `examples/e2e-chain.test.ts` (1) and `packages/judgment/src/preflight.test.ts` (1). Run again on their own, the first two files passed. `preflight` passed its other tests and timed out at 30 s in one, and did the same on unchanged `main` at a load of 301. The change touches no code or test file. That machine load is the cause is inferred. CI is the gate.
+- **After the review fixes and a merge of `main` at `4825e88b` [measured]:** the same 18 files passed (491 tests passed, 2 skipped), and the site build and check passed.
+- **Review:** one pass by the `reviewer` subagent returned one false sentence in `docs/testing.md` and smaller points in three other docs. All are fixed.
 - **No test reads the moved file [measured by `git grep`].**
 - **No broken relative Markdown link or heading anchor** outside task files and records, before and after [measured by script].
 
 ## Decisions
 
 - **One file archived,** `docs/feature-map.md`: no live page led to it, and it repeated the scenario index in `docs/plan.md`. One proposed check in `docs/team.md` named it.
-- **Edited only statements the code or the repository contradicts:** commands, CI jobs, fixture names, formats and behaviour that a later change replaced. Statements where the code may be the thing to change, such as defenses the judging doc lists and the code lacks, stay as written and go to Rafa.
+- **Edited only statements the code or the repository contradicts:** commands, CI jobs, fixture names, formats and behaviour that a later change replaced. Where a doc and the code disagree and the code may be the thing to change, in the judging doc above all, the text stays as written and goes to Rafa.
 - **No record edited.** The research index (`docs/research/README.md`) is a live index, not a record; it gained the four notes it lacked.
 
 ## Handoff
