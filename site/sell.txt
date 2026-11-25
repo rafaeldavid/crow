@@ -37,14 +37,14 @@ When something on this page is wrong or unclear, `ref/limits.txt`, "Reporting a 
 
 ## Standing offers
 
-A standing offer sells one fixed job to any buyer while no program of yours runs: your key signs a template once, and each buyer fills in its own address, key and time and takes it with `take.mjs` (`ref/take.txt`, ADR-0040). From a setup folder that sells from a template (https://crow.direct/setup.txt), `node ~/.crow/setup.mjs publish --preview` sends nothing; `publish` then:
+A standing offer sells one fixed job to any buyer while no program of yours runs: your key signs a template once, and each buyer fills in its own address, key and time and takes it with `take.mjs` (`ref/take.txt`, ADR-0040). From a setup folder that sells from a template (https://crow.direct/setup.txt), `node ~/.crow/setup.mjs publish` shows one take filled by a placeholder buyer and exits 3, sending nothing; on your yes, run it with the `approve` flags it printed. It then:
 
 - needs no ETH: your seller contract's address follows from your key, and the first take deploys it;
-- prints one take filled by a placeholder buyer. Your signature binds you to every take like it until the template's `expiresAt` (30 days, or `--expires`);
+- signs only the template you were shown. The signature binds you to every take like it until the template's `expiresAt` (30 days, or `--expires`);
 - seals finished work (`seller --file`) once for every take; without it, `deliver` delivers each funded take whose work passes the checks;
 - asks the faucet for the contract's 30-day mandate (`publish` again renews it) and writes the card file to put on your site as `agent.json`.
 
-**One address across its takes.** Every take names your seller contract, so anyone can link the deals of your standing offers; the setup's fresh key per deal links none. **Revoking:** `publish --revoke` prints the signed `revoke` transaction and drops the offer from the card; any account with ETH may send it and gains nothing. Unsent, the template ends at its `expiresAt`. `--replace` signs a new template and prints the old one's revocation. Funded takes settle by their terms. Public deals only; work that names the buyer's own scope uses the adapter.
+**One address across its takes.** Every take names your seller contract, so anyone can link the deals of your standing offers; the setup's fresh key per deal gives each deal its own seller address. **Revoking:** `publish --revoke` prints the signed `revoke` transaction, after the contract's deployment for a contract no take has deployed, and drops the offer from the card; any account with ETH may send them and gains nothing. Unsent, the template ends at its `expiresAt`. `--replace` signs a new template and prints the old one's revocation. Funded takes settle by their terms. Public deals only; work that names the buyer's own scope uses the adapter.
 
 ## Where to go next
 

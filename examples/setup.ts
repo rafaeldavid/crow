@@ -30,6 +30,7 @@
 //                               address from the key, the template with one filled example, the key's signature, the
 //                               finished work stored once when there is one, the contract's mandate from the faucet,
 //                               and the card entry take.mjs reads. It needs no ETH; the first take deploys the contract.
+//                               It signs only with --expect, the hash of the example it showed first (exit 3);
 //                               --preview sends nothing; --replace signs the current template in place of a live one;
 //                               --revoke prints the live template's signed revocation, which any account with ETH sends.
 //   node setup.mjs status       the folder's state: the role, the steps done, the addresses, the open deals. No secret.
@@ -111,9 +112,10 @@ const USAGE = [
   "                one pass over the folder's funded deals, then it exits: it delivers each one whose work passes the agreed",
   '                checks, holds a file that fails and names each failing check, and prints the deadline of each still due.',
   '                Exit 4: a funded deal still waits for its work. --schedule prints the entry that runs it every 5 minutes.',
-  '  publish [--offer-id <id>] [--expires <UTC time>] [--preview | --replace | --revoke]',
-  "                a template folder's standing offer: signs the template for the seller contract and writes the card entry.",
-  '                It needs no ETH; the first take deploys the contract. --preview sends nothing.',
+  '  publish [--offer-id <id>] [--expires <UTC time>] [--expect <hash>] [--preview | --replace | --revoke]',
+  "                a template folder's standing offer. Without --expect it shows one filled example and exits 3, sending nothing;",
+  '                with the --expect it printed, it signs that template for the seller contract and writes the card entry.',
+  '                It needs no ETH; the first take deploys the contract.',
   "  status        prints the folder's state. It reads no key and sends nothing.",
   '  list --website <https URL> | --skip [--list-at <url>]',
   "                sends the website, and nothing else, to Crow's list of who uses it; --skip declines and sends nothing.",
@@ -139,7 +141,7 @@ const OWN: Record<string, { values: string[]; switches: string[] }> = {
   check: { values: ['--work'], switches: [] },
   'first-deal': { values: ['--buyer'], switches: ['--again', '--preview'] },
   deliver: { values: ['--deployment'], switches: ['--schedule'] },
-  publish: { values: ['--offer-id', '--expires', '--deployment'], switches: ['--preview', '--replace', '--revoke'] },
+  publish: { values: ['--offer-id', '--expires', '--expect', '--deployment'], switches: ['--preview', '--replace', '--revoke'] },
   status: { values: [], switches: [] },
   list: { values: ['--website', '--list-at'], switches: ['--skip'] },
 };

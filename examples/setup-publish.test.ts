@@ -81,6 +81,16 @@ describe.skipIf(!anvilReady)(`publish on anvil: from no ETH to a first take that
   const chain = () => createPublicClient({ chain: { ...foundry, id: a.deployment.chainId }, transport: http(a.rpcUrl) });
   const setup = (args: string[], folder: string) => node('site/setup.mjs', [...args, '--folder', folder, '--test-world', '--operators', a.urls.join(','), ...(['publish', 'deliver'].includes(args[0]!) ? ['--deployment', join(dir, 'deployment.json')] : [])]);
   const take = (args: string[]) => node('site/take.mjs', args, takeEnv);
+  /** publish as the person approves it: shown first (exit 3, nothing sent), then signed with the --expect it printed. */
+  const publishApproved = async (folder: string, args: string[]) => {
+    const quiet = world.length;
+    const shown = await setup(['publish', ...args], folder);
+    expect(shown.code, shown.out + shown.err).toBe(3);
+    expect(world.slice(quiet), 'nothing is sent before the yes').toEqual([]);
+    const approve = String(lines(shown.out).at(-1).approve);
+    expect(approve).toMatch(/--expect 0x[0-9a-f]{64}/);
+    return { shown: lines(shown.out).at(-1), done: await setup(['publish', ...approve.split(' ')], folder) };
+  };
   const make = async (name: string, file: boolean) => {
     const folder = join(dir, name);
     writeFileSync(join(dir, `${name}.template.json`), JSON.stringify(TEMPLATE));
@@ -131,7 +141,12 @@ describe.skipIf(!anvilReady)(`publish on anvil: from no ETH to a first take that
     expect(existsSync(join(folder, 'first-deal.started')), 'the preview writes no marker').toBe(false);
 
     // publish: the ciphertext once, the faucet's mandate for the contract, and nothing on chain.
-    const published = await setup(['publish', '--offer-id', 'customers-2'], folder);
+    // A template other than the one shown is never signed.
+    const wrong = await setup(['publish', '--offer-id', 'customers-2', '--expect', `0x${'00'.repeat(32)}`], folder);
+    expect(wrong.code, wrong.out).toBe(1);
+    expect(lines(wrong.out).at(-1).detail).toMatch(/not the one shown/);
+    expect(world.slice(before)).toEqual([]);
+    const { shown: approval, done: published } = await publishApproved(folder, ['--offer-id', 'customers-2']);
     expect(published.code, published.out + published.err).toBe(0);
     const out = lines(published.out);
     expect(world.slice(before).map((r) => r.replace(/\?.*$/, ''))).toEqual(['POST /v1/ciphertext', 'POST /v1/faucet']);
@@ -140,6 +155,9 @@ describe.skipIf(!anvilReady)(`publish on anvil: from no ETH to a first take that
     expect(lines(published.err).find((l) => l.step === 'marker')).toBeDefined();
     const shown = out.find((l) => l.step === 'template');
     expect(shown).toMatchObject({ ok: true, offerId: 'customers-2', seller, key, delivery: { plaintextMime: 'text/csv' } });
+    // The signed take is the one the person was shown, field for field but the buyer-free placeholders.
+    // (Their nonces differ: the shown template is hashed before the finished work is sealed into it.)
+    expect({ ...shown.example, createdAt: 0, timing: 0, nonce: 0 }).toEqual({ ...approval.example, createdAt: 0, timing: 0, nonce: 0 });
     expect(out.at(-1)).toMatchObject({ step: 'publish', ok: true, seller, offerId: 'customers-2', kept: false });
     expect(await chain().getCode({ address: seller }), 'publish deploys nothing').toBeUndefined();
     for (const addr of [key, sellerAddressOf(key)]) expect(await chain().getBalance({ address: addr })).toBe(0n);
@@ -179,7 +197,7 @@ describe.skipIf(!anvilReady)(`publish on anvil: from no ETH to a first take that
     expect([String(onChain.seller).toLowerCase(), String(onChain.buyer).toLowerCase(), String(onChain.sellerPayoutAddress).toLowerCase()]).toEqual([seller, EXAMPLE_BUYER, key]);
 
     // Replace: a new template for the offer; the card lists the offer once, and a buyer can take the new one.
-    const replaced = await setup(['publish', '--replace', '--offer-id', 'customers-2'], folder);
+    const { done: replaced } = await publishApproved(folder, ['--replace', '--offer-id', 'customers-2']);
     expect(replaced.code, replaced.out + replaced.err).toBe(0);
     expect(lines(replaced.out).find((l) => l.step === 'revoke')).toMatchObject({ ok: true, templateHash: shown.templateHash });
     const listed = JSON.parse(readFileSync(join(dir, 'fixed-card', 'agent.json'), 'utf8')).offers.filter((o: J) => o.id === 'customers-2');
@@ -204,7 +222,7 @@ describe.skipIf(!anvilReady)(`publish on anvil: from no ETH to a first take that
     const folder = await make('work', false);
     const key = JSON.parse(readFileSync(join(folder, 'crow.json'), 'utf8')).address as Address;
     const seller = sellerAddressOf(key);
-    const published = await setup(['publish', '--offer-id', 'work-1'], folder);
+    const { done: published } = await publishApproved(folder, ['--offer-id', 'work-1']);
     expect(published.code, published.out + published.err).toBe(0);
     expect(lines(published.out).find((l) => l.step === 'template')).toMatchObject({ delivery: 'work done after funding: deliver delivers each take' });
 
@@ -237,4 +255,27 @@ describe.skipIf(!anvilReady)(`publish on anvil: from no ETH to a first take that
     expect(readFileSync(result.file, 'utf8')).toBe(CSV);
     expect(await chain().getBalance({ address: key })).toBe(0n);
   }, 600_000);
+
+  it('attack.revoke-before-deployment-noop: a revocation before any take prints the deployment first, and the two end the template', async () => {
+    const folder = await make('early', false);
+    const key = JSON.parse(readFileSync(join(folder, 'crow.json'), 'utf8')).address as Address;
+    const seller = sellerAddressOf(key);
+    expect((await publishApproved(folder, ['--offer-id', 'early-1'])).done.code).toBe(0);
+    const revoked = await setup(['publish', '--revoke', '--offer-id', 'early-1'], folder);
+    expect(revoked.code, revoked.out).toBe(0);
+    const [deploy, rev] = [lines(revoked.out).find((l) => l.step === 'deploy'), lines(revoked.out).find((l) => l.step === 'revoke')];
+    expect(deploy).toMatchObject({ ok: true, seller });
+    expect(await chain().getCode({ address: seller })).toBeUndefined();
+    const wallet = createWalletClient({ account: mnemonicToAccount(ANVIL_MNEMONIC, { addressIndex: 7 }), chain: { ...foundry, id: a.deployment.chainId }, transport: http(a.rpcUrl) });
+    const deployed = await wallet.sendTransaction({ to: deploy.to as Address, data: deploy.data as Hex, gas: 3_000_000n });
+    expect((await chain().waitForTransactionReceipt({ hash: deployed })).status).toBe('success');
+    expect(await chain().getCode({ address: seller }), 'the deploy line deploys the contract publish named').not.toBeUndefined();
+    const sent = await wallet.sendTransaction({ to: rev.to as Address, data: rev.data as Hex });
+    expect((await chain().waitForTransactionReceipt({ hash: sent })).status).toBe('success');
+    const abi = JSON.parse(readFileSync(join(root, 'contracts/out/HoldbackStandingSeller.sol/HoldbackStandingSeller.json'), 'utf8')).abi;
+    expect(await chain().readContract({ address: seller, abi, functionName: 'revoked', args: [rev.templateHash] })).toBe(true);
+    // Printed again on request: the revocation is not lost with one output.
+    const again = await setup(['publish', '--revoke', '--offer-id', 'early-1'], folder);
+    expect(lines(again.out).find((l) => l.step === 'revoke')?.data).toBe(rev.data);
+  }, 300_000);
 });

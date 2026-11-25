@@ -12,23 +12,28 @@
 //      key is kept nowhere: the primary wraps it to each buyer on its accept.
 //   5. One filled example, from a placeholder buyer, as the contract's `termsOf` builds it (core's takeTerms; on anvil,
 //      setup-publish.test.ts compares it with the deployed contract's own answer).
-//   6. The key signs the template's EIP-712 digest under the contract's domain. The command checks its own result:
+//   6. Only on the person's yes: `publish` without --expect prints the example and the hash of the template it would sign,
+//      and exits 3 having sent nothing. Run with `--expect <that hash>`, it builds the template again and signs only an
+//      equal one, so terms the operators serve differently in between are never signed (red team, T-552). The key signs
+//      the template's EIP-712 digest under the contract's domain. The command checks its own result:
 //      the signature recovers to the key, and the example take and its standing delivery pass the API's schemas.
 //   7. The mandate: the operators admit a seller by mandate, so the faucet grants one to the contract's address, as it
 //      grants one to each deal key with its quote (D73). The request names the contract and the folder's one holding
 //      address, which every per-deal grant already names. It lasts 30 days; `publish` run again renews it.
 //   8. The card entry site/take.mjs reads (`offers[].standing`), in the card's folder, and the record in crow.json.
 //
-// `--preview` prints what `publish` sends and to whom, and the example, and sends nothing. `--replace` publishes the
-// folder's current template in place of a live one, and prints the old one's revocation. `--revoke` prints the signed
-// revocation of the live template, which any account with ETH sends; the sender gains nothing.
+// `--preview` prints the same and exits 0. `--replace` publishes the folder's current template in place of a live
+// one, and prints the old one's revocation. `--revoke` prints the signed revocation of each unexpired template of the
+// offer, after the contract's deployment for a contract no take deployed yet; any account with ETH sends them, and the
+// sender gains nothing. Templates are live by this machine's clock, which must agree with the operators' within 10
+// minutes before anything is signed.
 // Work that depends on the buyer's input (ADR-0040 §3) has no template here: the folder sells fixed work only.
 import { createHash } from 'node:crypto';
 import { existsSync, mkdirSync, readFileSync } from 'node:fs';
 import { join } from 'node:path';
 import { seal, wrapKeyForRecipients } from '@holdback/core/crypto';
 import { commitmentId, encodeStandingSignature, parseCommitment, parseDelivery, recoversFrom, STANDING_DELIVERY, STANDING_SELLER_DOMAIN, standingDeliveryFor, TAKE, takeTerms, templateDigest, templateFrom, templateHash, type Address, type CommitmentTerms, type Hex32, type StandingDeliveryBody, type StandingOffer, type TakeFill, type Timestamp } from '@holdback/core';
-import { concat, encodeAbiParameters, encodeFunctionData, getContractAddress, type Hex } from 'viem';
+import { concat, encodeAbiParameters, encodeFunctionData, getContractAddress, keccak256, stringToBytes, type Hex } from 'viem';
 import { privateKeyToAccount } from 'viem/accounts';
 import { plain as plainLine } from './plain.ts';
 import { acceptanceFor, loadConfig, pinnedSeller } from './seller-adapter.ts';
@@ -43,6 +48,8 @@ const lc = (s: unknown) => String(s ?? '').toLowerCase();
 /** The public deterministic deployment proxy (ADR-0040 §4), as site/take.mjs pins it. */
 export const DETERMINISTIC_DEPLOYER: Address = '0x4e59b44847b379578588920ca78fbf26c0b4956c';
 export const ZERO_SALT: Hex32 = `0x${'00'.repeat(32)}`;
+/** The most the operators' time and this machine's may differ before publish signs: 10 minutes. */
+export const CLOCK_SKEW_MS = 600_000;
 /** How long the faucet's mandate lasts, and so the template's default expiry: 30 days. */
 export const MANDATE_DAYS = 30;
 /** The placeholder buyer of the filled example: nobody's address and an all-zero encryption key. */
@@ -80,10 +87,16 @@ export async function revocationOf(key: Hex, r: StandingRecord): Promise<{ templ
   return { templateHash: th, to: r.seller, data };
 }
 
+/** The deployment of the seller contract through the deterministic deployer: for a revocation before any take. */
+const deployLine = (key: Address, seller: Address) => ({
+  step: 'deploy', ok: true, to: DETERMINISTIC_DEPLOYER, data: concat([ZERO_SALT, STANDING_SELLER_CREATION_CODE, encodeAbiParameters([{ type: 'address' }], [key])]), seller,
+  detail: `A revocation sent to ${seller} before it has code changes nothing, and its receipt still says success. Only when cast code ${seller} prints 0x, send this transaction first, alone, from any account with ETH: it deploys the contract with your key and gives its sender no power. Never send it when the address has code: a second deployment fails and burns its gas.`,
+});
+
 /** One line for a revocation: the transaction, who may send it, and what it does. */
 const revokeLine = (rev: { templateHash: Hex32; to: Address; data: Hex }, r: StandingRecord) => ({
   step: 'revoke', ok: true, offerId: r.template.offerId, templateHash: rev.templateHash, chainId: r.chainId, to: rev.to, data: rev.data,
-  detail: `Send this transaction from any account with ETH on chain ${r.chainId}, for example with cast send ${rev.to} ${rev.data.slice(0, 10)}...: the key signed it, so the sender gains nothing. The contract must be deployed first, which the first take does. Until it is sent, the template can be taken until ${r.template.expiresAt}; a funded take still settles by its terms.`,
+  detail: `Send this transaction from any account with ETH on chain ${r.chainId}, for example with cast send ${rev.to} ${rev.data.slice(0, 10)}...: the key signed it, so the sender gains nothing. It works once the contract has code: the first take deploys it, or the deploy line does. Until it is sent, the template can be taken until ${r.template.expiresAt}; a funded take still settles by its terms.`,
 });
 
 /** The card in the card's folder with `records` as its standing offers: other offers kept, `status` and the draft's marks dropped. */
@@ -205,20 +218,28 @@ async function run(c: Call, state: State, offerId: string, given: string | undef
   const holding = holdingAddressOf(key);
   const chainId = pin.domain.chainId;
   const now = await reader.settlementNow();
-  const live = liveRecords(state, now).filter((r) => r.template.offerId === offerId);
+  // This machine's clock bounds the template's life, not the operators' word: a template is live by local time, its
+  // default expiry counts from local time, and a signature waits while the two disagree by more than CLOCK_SKEW_MS.
+  const local = Date.now();
+  const rules = lc(pin.domain.verifyingContract) as Address;
+  const mine = (r: StandingRecord) => r.template.offerId === offerId && r.chainId === chainId && r.key === keyAddress && lc(r.template.rules) === rules;
+  const live = liveRecords(state, local).filter(mine);
 
-  // --revoke: the live template's signed revocation; the card no longer lists it.
+  // --revoke: each unexpired template's signed revocation, again when one was printed before; the card no longer
+  // lists the offer. The deployment comes first, for a contract no take has deployed yet.
   if (c.flags.has('--revoke')) {
-    if (live.length === 0) {
+    const unexpired = (state.standing ?? []).filter((r) => mine(r) && local < Date.parse(r.template.expiresAt));
+    if (unexpired.length === 0) {
       c.say({ step: 'publish', ok: false, offerId, detail: `No live template of the offer ${offerId} is in ${FILES.state}: nothing to revoke. Nothing was sent.` });
       return 1;
     }
-    for (const r of live) {
+    c.say(deployLine(keyAddress, seller));
+    for (const r of unexpired) {
       c.say(revokeLine(await revocationOf(key, r), r));
-      r.revokeSignedAt = iso(Date.now());
+      r.revokeSignedAt ??= iso(Date.now());
     }
     writeState(c.folder, state);
-    const card = writeCard(state, listedRecords(state, now), [offerId]);
+    const card = writeCard(state, listedRecords(state, local), [offerId]);
     c.say({ step: 'publish', ok: true, offerId, revoked: 'signed, not sent', card, detail: `The card no longer lists the offer ${offerId}: publish it again on your site. Nothing was sent.` });
     return 0;
   }
@@ -233,7 +254,6 @@ async function run(c: Call, state: State, offerId: string, given: string | undef
   const createdAt = iso(Math.floor(now / 1000) * 1000);
   const built = acceptanceFor(config, JSON.parse(readFileSync(join(c.folder, FILES.template), 'utf8')), {}, undefined);
   const terms = publicOfferTerms({ template: 'checks-only', clubId, seller, buyer: { address: EXAMPLE_BUYER, encryptionPublicKey: EXAMPLE_KEY }, sellerPayoutAddress: state.payout!.address, adjudicators, price: { token: pin.token.id, amount: state.work!.price }, deliverable: built.deliverable, checks: built.acceptance.deterministicChecks, timing: config.timing }, registration, rulebookHash, createdAt, ZERO_SALT) as CommitmentTerms;
-  const rules = lc(pin.domain.verifyingContract) as Address;
   const ready = readyPath(c.folder, state.work!.format);
   const file = existsSync(ready) ? readWorkFile(ready, false) : undefined;
   if (file && !file.bytes) throw new Error(`${ready} ${file.problem ?? 'cannot be read'}. ${nothing}`);
@@ -244,13 +264,20 @@ async function run(c: Call, state: State, offerId: string, given: string | undef
   const fileSha = file?.bytes ? `sha256:${createHash('sha256').update(file.bytes).digest('hex')}` : undefined;
   const drifted = keep !== undefined && (jcs({ rules, terms: templateFrom(terms, { rules, expiresAt: keep.template.expiresAt, offerId }).terms }) !== jcs({ rules: lc(keep.template.rules), terms: keep.template.terms }) || fileSha !== keep.template.delivery?.plaintextSha256);
   const driftAdvice = drifted ? { advice: `This folder's terms or finished work changed since the live template ${templateHash(keep!.template)} was signed, and it is kept as it was. Run publish --replace to sign the folder's current template.` } : {};
-  const expiresAt = (given ?? iso(Math.floor(now / 1000) * 1000 + MANDATE_DAYS * 86_400_000)) as Timestamp;
-  if (!keep && !(Date.parse(expiresAt) > now)) throw new Error(`--expires ${expiresAt} is not after the operators' time ${iso(now)}: no buyer could take the template. ${nothing}`);
-  if (preview) {
-    const shownTemplate = keep?.template ?? templateFrom(terms, { rules, expiresAt, offerId });
-    c.say({ ...previewLine(c, seller, holding, !keep && !!file), offerId, seller, key: keyAddress, expiresAt: shownTemplate.expiresAt, ...(keep ? { kept: templateHash(keep.template), ...driftAdvice } : {}), ...(file ? { file: { path: ready, bytes: file.bytes!.length } } : { delivery: 'work done after funding: deliver delivers each take' }), example: exampleOf(shownTemplate, seller, createdAt).terms, sent: 'nothing: this is the preview only. Run publish without --preview to send it.' });
-    return 0;
+  const expiresAt = (given ?? iso(Math.floor(local / 1000) * 1000 + MANDATE_DAYS * 86_400_000)) as Timestamp;
+  if (!keep && !(Date.parse(expiresAt) > local)) throw new Error(`--expires ${expiresAt} is not after this machine's time ${iso(local)}: no buyer could take the template. ${nothing}`);
+  if (!preview && Math.abs(now - local) > CLOCK_SKEW_MS) throw new Error(`the operators' time ${iso(now)} and this machine's ${iso(local)} differ by more than ${CLOCK_SKEW_MS / 60_000} minutes: a template's dates count from them. Set this machine's clock, or name other operators. ${nothing}`);
+  // What the key will sign, shown first: the approval names it by a hash, so a template that differs from the one shown
+  // (another adjudicator, club, fee or policy the operators serve, or a changed folder) is never signed.
+  const shownTemplate = keep?.template ?? templateFrom(terms, { rules, expiresAt, offerId });
+  const shownHash = keccak256(stringToBytes(jcs({ chainId, rules, seller, key: keyAddress, offerId, expiresAt: shownTemplate.expiresAt, terms: shownTemplate.terms, file: keep ? (keep.template.delivery?.plaintextSha256 ?? null) : (fileSha ?? null) })));
+  const expect = c.flags.get('--expect');
+  if (preview || (!keep && expect === undefined)) {
+    const approve = ['--offer-id', offerId, '--expires', shownTemplate.expiresAt, '--expect', shownHash, ...(c.flags.has('--replace') ? ['--replace'] : [])].join(' ');
+    c.say({ ...previewLine(c, seller, holding, !keep && !!file), offerId, seller, key: keyAddress, expiresAt: shownTemplate.expiresAt, ...(keep ? { kept: templateHash(keep.template), ...driftAdvice } : { approve, next: `Show the person the example: every take is these terms with the buyer's own fields, binding until ${shownTemplate.expiresAt}. On their yes, run publish again with: ${approve}` }), ...(file ? { file: { path: ready, bytes: file.bytes!.length } } : { delivery: 'work done after funding: deliver delivers each take' }), example: exampleOf(shownTemplate, seller, createdAt).terms, sent: 'nothing: nothing is signed or sent before the person approves the example.' });
+    return preview ? 0 : 3;
   }
+  if (!keep && expect !== shownHash) throw new Error(`the template is not the one shown (--expect ${plain(expect, 80)}; it is ${shownHash} now): the operators' answers or this folder changed since. Run publish without --expect to see it again. ${nothing}`);
   let record: StandingRecord;
   if (keep) {
     record = keep;
@@ -292,7 +319,7 @@ async function run(c: Call, state: State, offerId: string, given: string | undef
   }
 
   // 7. The mandate, then 8. the card. The card is written before the mandate, so a refused grant leaves the published entry.
-  const card = writeCard(state, listedRecords(state, now));
+  const card = writeCard(state, listedRecords(state, local));
   if (keep) marker(c);
   let until: number;
   try {
