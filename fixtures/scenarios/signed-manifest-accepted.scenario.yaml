@@ -1,0 +1,36 @@
+# @settlement sim @judges recorded @mode guaranteed_on_decision @seed 71
+name: signed-manifest-accepted
+description: >-
+  ADR-0045. Tidewater delivers one recorded run as a JSON document: a manifest, the exact text a recorder signed, the
+  signature and the recorder's public key. The terms pin the key's fingerprint and ask for the signature_valid check with
+  jsonEquals, so the manifest object that the json_schema check reads is the signed one. The signature verifies under the
+  pinned key, no panel sits, and $1,500 releases to Tidewater with the key to Atlas.
+club: fixtures/clubs/data-services-v1.yaml
+terms: fixtures/terms/signed-manifest.yaml
+parties:
+  buyer: atlas-buyer
+  seller: tidewater-seller
+adjudicators:
+  primary: bench-a
+  fallback: bench-b
+  appeal: bench-c
+operators: [op-1, op-2]
+faucet:
+  atlas-buyer: "10000000000"
+  bench-a: "25000000000"
+  bench-b: "25000000000"
+  bench-c: "25000000000"
+steps:
+  - offer:              { by: seller, via: op-1 }
+  - adjudicator_accept: { via: op-1 }
+  - agree_and_fund:     { by: buyer, via: op-1 }
+  - deliver:            { by: seller, via: op-1, file: data/signed-manifest/episode.json }
+  - judge:              { adjudicator: bench-a }
+  - verify_key_release: { by: buyer, via: op-2 }
+expect:
+  terminal: Released
+  balances:
+    atlas-buyer: "8450000000"
+    tidewater-seller: "1500000000"
+    bench-a: "25050000000"
+    escrow: "0"
