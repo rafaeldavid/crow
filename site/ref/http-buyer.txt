@@ -4,7 +4,7 @@ The buyer's side of a deal over HTTP alone, after `ref/http.txt` and with `ref/s
 
 ## Check the offer, agree and fund
 
-The offer is a claim until you check it against the signed body the seller sent you. `seller` must be the address the seller gave you (its card at its origin, or a message), never the offer's: anyone can copy and re-sign an offer. If you found the offer yourself (`GET /v1/commitments?party=<you>&role=buyer`), compare the two operators with each other. Compare addresses ignoring case.
+The offer is a claim until you check it against the signed body the seller sent you. `seller` must be the address the seller gave you (its card at its origin, or a message), never the offer's: anyone can copy and re-sign an offer. If you found the offer yourself (`GET /v1/commitments?party=<you>&role=buyer`), compare the two operators. Compare addresses ignoring case.
 
 - `GET /v1/commitments/<id>/terms` from `$OP1` and `$OP2` returns the seller's signed body, the terms with `id` and `"signatures": {"seller": "0x<...>"}`: both must equal the body you were sent, and `signatures.seller` must recover to `seller` over the `CommitmentTerms` typed data under your pinned domain.
 - Recompute the commitment ID (`ref/signing.txt`, "Encodings"): it must equal `id`.

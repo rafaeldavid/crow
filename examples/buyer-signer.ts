@@ -697,6 +697,9 @@ export class BuyerSigner {
    */
   async quote(quoteUrl: string, scope: unknown, options?: unknown): Promise<Quote> {
     if (this.#saved.commitmentId) throw new Error(`this key already serves ${this.#saved.commitmentId}: one key, one deal. Call makeKeys for another deal`);
+    // D101: with no seller named, the quote URL's origin is who the seller is, so it must be one nobody on the way can answer for.
+    const u = new URL(quoteUrl);
+    if (u.protocol !== 'https:' && !(u.protocol === 'http:' && ['127.0.0.1', 'localhost', '[::1]'].includes(u.hostname))) throw new Error(`the quote URL must be https (or http on this machine), not ${u.protocol}//${u.hostname}`);
     const name = this.#quoteCredentialEnv;
     const credential = name === undefined ? undefined : process.env[name];
     // The variable's name in the error, never its value.

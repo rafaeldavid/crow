@@ -518,6 +518,11 @@ describe('a copy of an offer signed by another key (D101)', () => {
     await expect(makeKeys(store(), { seller: 'seller.example' })).rejects.toThrow(/seller must be the seller's address/);
   }, 60_000);
 
+  it('quote takes https, or http on this machine only: the quote URL\'s origin stands for the seller when none is named', async () => {
+    const signer = await makeKeys(store(), { operators: demo.urls, log: () => {} });
+    await expect(signer.quote('http://seller.example/quote', 'rows')).rejects.toThrow('the quote URL must be https (or http on this machine), not http://seller.example');
+  });
+
   it('sellerOf reads CROW_SELLER and the terms file, the same address if both', () => {
     const a = fresh(), b = fresh();
     expect(sellerOf(undefined, undefined)).toBeUndefined();

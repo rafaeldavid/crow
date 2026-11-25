@@ -3316,6 +3316,12 @@ var init_buyer_signer = __esmMin((() => {
 		*/
 		async quote(quoteUrl, scope, options) {
 			if (this.#saved.commitmentId) throw new Error(`this key already serves ${this.#saved.commitmentId}: one key, one deal. Call makeKeys for another deal`);
+			const u = new URL(quoteUrl);
+			if (u.protocol !== "https:" && !(u.protocol === "http:" && [
+				"127.0.0.1",
+				"localhost",
+				"[::1]"
+			].includes(u.hostname))) throw new Error(`the quote URL must be https (or http on this machine), not ${u.protocol}//${u.hostname}`);
 			const name = this.#quoteCredentialEnv;
 			const credential = name === void 0 ? void 0 : process.env[name];
 			if (name !== void 0 && !credential) throw new Error(`quoteCredentialEnv names ${name}, which is not set: set it to the seller's quote credential`);
