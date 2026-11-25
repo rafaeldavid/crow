@@ -11,11 +11,11 @@ ADR-0045, section 12. Tidewater delivers the document of signed-manifest-accepte
 | Pragmas | settlement=sim · judges=recorded · mode=guaranteed_on_decision · seed=72 |
 | Prefix | attack. (adversarial input: must not auto-accept) |
 | Settlement | SimChain (T-006) driving @holdback/core `step` |
-| Judgment | @holdback/judgment (checks, screen, panel) · registry config/judges.yaml 0x8aa4…4549 · policy bench-a/p1 0xd136…9300 |
+| Judgment | @holdback/judgment (checks, screen, panel) · registry config/judges.yaml 0x8aa4…4549 · policy bench-a/p1 0x40b5…1e88 |
 | Club | fixtures/clubs/data-services-v1.yaml (loaded) · rulebook 0xd9bc…492d |
 | Buyer | atlas-buyer 0x9354…2775 |
 | Seller | tidewater-seller 0x4E06…5Fd9 |
-| Terms | fixtures/terms/signed-manifest.yaml (loaded) · commitment 0x9e8c…b8bf · price 1,500.000000 tUSD · fee 50.000000 tUSD |
+| Terms | fixtures/terms/signed-manifest.yaml (loaded) · commitment 0xd7d0…af9c · price 1,500.000000 tUSD · fee 50.000000 tUSD |
 | Adjudicators | primary bench-a 0x2195…3143 · fallback bench-b 0xD708…6643 · appeal bench-c 0xC4D1…9ad9 |
 | Operators | op-1 · op-2 |
 
@@ -46,13 +46,13 @@ ADR-0045, section 12. Tidewater delivers the document of signed-manifest-accepte
 - **Intake:** plaintext 0xdf6e…0f62 · application/json · 707 bytes (fixtures/data/signed-manifest/episode.tampered.json) · hash verified ✓ · normalized
 - **Deterministic checks:** order ✓ · manifest-signature ✗ (signature does not verify)
 - **Screen:** clean
-- **Panel:** not run · first-instance template 0xabb5…4dd2 · rubric 0x551e…5e6a · seed source: commit-reveal (commitment 0x6bc5…2d8f, seed 0xb39f…f229, recomputed: match)
+- **Panel:** not run · first-instance template 0x4d32…629b · rubric 0x551e…5e6a · seed source: commit-reveal (commitment 0x6bc5…2d8f, seed 0xb39f…f229, recomputed: match)
 - **Aggregate:** reject. Reasons: required deterministic check failed: manifest-signature.
 - **Signed:** reject.
 
 ## Receipts and log
 
-- Events 0–7. Chain head 0x9fb5…a48e. Replay of 6 SimChain submissions from genesis matches the settlement state.
+- Events 0–7. Chain head 0xb6f3…d070. Replay of 6 SimChain submissions from genesis matches the settlement state.
 - Receipts from op-1: 5 (rcpt-0001–rcpt-0005). The runner labels them without signing; the operator API signs real receipts.
 
 ## Invariants

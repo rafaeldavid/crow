@@ -6,8 +6,8 @@
   "provider": "openai-compatible",
   "family": "qwen",
   "model": "placeholder-qwen-a-20260601",
-  "promptTemplateHash": "0xa0bb1a5d8fa8ac53294a41556df71c098f73220d24efd9522e922f9004248659",
-  "inputHash": "0x46faa50d280c06fa258659e92b1e978244c2fed2880d20247cf665a218c21232",
+  "promptTemplateHash": "0xfc6d93d5441808bbfa690c0402a0ee185eab48c508025f59cf3c4f9f5d8332f1",
+  "inputHash": "0x59ebd0d4d0471de489dfaaab109eb60995e2ccaeb6c53742018a613e3adbb7d8",
   "rubricHash": "0x4201c2a950347823c494fcfc89f88fab1ca670b2086f66ed726aa9c7b0ec7925",
   "capturedFrom": "authored",
   "verdict": {

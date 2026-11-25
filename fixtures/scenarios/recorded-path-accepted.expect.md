@@ -11,11 +11,11 @@ ADR-0047. Tidewater delivers one recorded run of a two-joint arm as a JSON docum
 | Pragmas | settlement=sim · judges=recorded · mode=guaranteed_on_decision · seed=81 |
 | Prefix | none (normal flow: reaches a terminal state, invariants hold) |
 | Settlement | SimChain (T-006) driving @holdback/core `step` |
-| Judgment | @holdback/judgment (checks, screen, panel) · registry config/judges.yaml 0x8aa4…4549 · policy bench-a/p1 0xd136…9300 |
+| Judgment | @holdback/judgment (checks, screen, panel) · registry config/judges.yaml 0x8aa4…4549 · policy bench-a/p1 0x40b5…1e88 |
 | Club | fixtures/clubs/data-services-v1.yaml (loaded) · rulebook 0xd9bc…492d |
 | Buyer | atlas-buyer 0x09C1…eE28 |
 | Seller | tidewater-seller 0x81D7…cb20 |
-| Terms | fixtures/terms/recorded-path.yaml (loaded) · commitment 0x2d5c…974e · price 1,500.000000 tUSD · fee 50.000000 tUSD |
+| Terms | fixtures/terms/recorded-path.yaml (loaded) · commitment 0xc467…b2ca · price 1,500.000000 tUSD · fee 50.000000 tUSD |
 | Adjudicators | primary bench-a 0x767b…45D1 · fallback bench-b 0x4F12…71cC · appeal bench-c 0x28c1…f64D |
 | Operators | op-1 · op-2 |
 
@@ -46,13 +46,13 @@ ADR-0047. Tidewater delivers one recorded run of a two-joint arm as a JSON docum
 - **Intake:** plaintext 0x59e3…5e0f · application/json · 865 bytes (fixtures/data/recorded-path/run.json) · hash verified ✓ · normalized
 - **Deterministic checks:** time ✓ · lengths ✓ · waypoints ✓
 - **Screen:** clean
-- **Panel:** not run · first-instance template 0xabb5…4dd2 · rubric 0x551e…5e6a · seed source: commit-reveal (commitment 0xe6dc…6e1c, seed 0x278f…eb48, recomputed: match)
+- **Panel:** not run · first-instance template 0x4d32…629b · rubric 0x551e…5e6a · seed source: commit-reveal (commitment 0xe6dc…6e1c, seed 0x278f…eb48, recomputed: match)
 - **Aggregate:** accept. Reasons: all deterministic checks passed and the rubric is empty.
 - **Signed:** accept.
 
 ## Receipts and log
 
-- Events 0–8. Chain head 0x771e…8f75. Replay of 6 SimChain submissions from genesis matches the settlement state.
+- Events 0–8. Chain head 0xbd5e…0f43. Replay of 6 SimChain submissions from genesis matches the settlement state.
 - Receipts from op-1: 5 (rcpt-0001–rcpt-0005). The runner labels them without signing; the operator API signs real receipts.
 - Receipts from op-2: 1 (rcpt-0006–rcpt-0006). The runner labels them without signing; the operator API signs real receipts.
 

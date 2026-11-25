@@ -11,11 +11,11 @@ T-614, D103. Atlas's terms say the handover note holds no email address and no T
 | Pragmas | settlement=sim · judges=recorded · mode=guaranteed_on_decision · seed=614 |
 | Prefix | attack. (adversarial input: must not auto-accept) |
 | Settlement | SimChain (T-006) driving @holdback/core `step` |
-| Judgment | @holdback/judgment (checks, screen, panel) · registry config/judges.yaml 0x8aa4…4549 · policy bench-a/p1 0xd136…9300 |
+| Judgment | @holdback/judgment (checks, screen, panel) · registry config/judges.yaml 0x8aa4…4549 · policy bench-a/p1 0x40b5…1e88 |
 | Club | fixtures/clubs/data-services-v1.yaml (loaded) · rulebook 0xd9bc…492d |
 | Buyer | atlas-buyer 0xd990…Fe54 |
 | Seller | tidewater-seller 0xC50d…D4C6 |
-| Terms | fixtures/terms/handover-note.yaml (loaded) · commitment 0xca70…a69f · price 1,500.000000 tUSD · fee 50.000000 tUSD |
+| Terms | fixtures/terms/handover-note.yaml (loaded) · commitment 0xe613…622f · price 1,500.000000 tUSD · fee 50.000000 tUSD |
 | Adjudicators | primary bench-a 0x45aB…bCBF · fallback bench-b 0x81CD…817a · appeal bench-c 0xdfbC…D26C |
 | Operators | op-1 · op-2 |
 
@@ -46,13 +46,13 @@ T-614, D103. Atlas's terms say the handover note holds no email address and no T
 - **Intake:** plaintext 0x2770…8cb1 · application/json · 10028 bytes (fixtures/data/handover-note/padded.json) · hash verified ✓ · normalized
 - **Deterministic checks:** no-address ✗ (a pattern met a string over 10000 code points) · finished ✗ (a pattern met a string over 10000 code points) · one-form ✗ (a pattern met a string over 10000 code points)
 - **Screen:** clean
-- **Panel:** not run · first-instance template 0xabb5…4dd2 · rubric 0x551e…5e6a · seed source: commit-reveal (commitment 0x8bc2…f836, seed 0xb89b…db72, recomputed: match)
+- **Panel:** not run · first-instance template 0x4d32…629b · rubric 0x551e…5e6a · seed source: commit-reveal (commitment 0x8bc2…f836, seed 0xb89b…db72, recomputed: match)
 - **Aggregate:** reject. Reasons: required deterministic check failed: no-address, finished, one-form.
 - **Signed:** reject.
 
 ## Receipts and log
 
-- Events 0–7. Chain head 0x42fb…ac36. Replay of 6 SimChain submissions from genesis matches the settlement state.
+- Events 0–7. Chain head 0xf16f…400d. Replay of 6 SimChain submissions from genesis matches the settlement state.
 - Receipts from op-1: 5 (rcpt-0001–rcpt-0005). The runner labels them without signing; the operator API signs real receipts.
 
 ## Invariants
