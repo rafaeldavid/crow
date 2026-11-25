@@ -30,6 +30,6 @@ describe('checkKindNotices', () => {
   it('skips a role this node already warned about, and terms with no readable checks', async () => {
     const ctx = registry({ [A]: {}, [B]: {}, [C]: {} });
     expect(await checkKindNotices(ctx, terms(['signature_valid']), { primary: 'x', fallback: 'y' })).toHaveLength(1);
-    expect(await checkKindNotices(ctx, { adjudication: terms([]).adjudication } as never)).toEqual([]);
+    expect(await checkKindNotices(ctx, { adjudication: { adjudicator: A, fallbackAdjudicator: B, appealAdjudicator: C } } as never)).toEqual([]);
   });
 });

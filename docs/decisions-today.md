@@ -1770,9 +1770,9 @@ The build is not started; it opens as its own task on Rafa's word.
 
 ## D92. An adjudicator signs no decision on a check kind it does not run (ADR-0045 amended, T-597)
 
-**Status:** needs Rafa, 2026-11-25. Rafa may overrule.
+**Status:** needs Rafa, 2026-11-25.
 
-**Adopted** by the coordinator from a Fable research note of 2026-11-25 (`reports/crow-private/roadmap/triage/2026-11-25-fallback-unrun-kind.md`), built with the evaluator in T-597.
+**Adopted** (Rafa may overrule) by the coordinator from a Fable research note of 2026-11-25 (`reports/crow-private/roadmap/triage/2026-11-25-fallback-unrun-kind.md`), built with the evaluator in T-597.
 
 **Why.** ADR-0045 had a fallback that lacks a kind fail the check and sign a final reject, on the reading that the money moves the same way as an undecided deal. It does not: a reject pays the fee to the adjudicator that decided, and a default returns price and fee to the buyer. The reference fallback already signs nothing for a policy, registry, panel, reference file or envelope it cannot run (ADR-0036 section 3, D81, D21: no judgment, no fee).
 
