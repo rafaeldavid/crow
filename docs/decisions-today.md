@@ -1887,3 +1887,22 @@ The build is not started; it opens as its own task on Rafa's word.
 **Dropped:** a schema rule (a change needs an ADR and a version bump); matching by position inside `aggregate` (a new aggregation version).
 
 **Litmus tests.** Neutrality: unchanged. The hold: unchanged. Defended judgment: unchanged.
+
+## D102. The nesting cap is a count, not the stack (T-613)
+
+**Status:** adopted, 2026-11-25.
+
+**Who decided.** The session `column-depth-cap`, under the in-repository autonomy rule. Rafa may overrule any line.
+
+**Why.** D96 capped canonical forms at `MAX_CANONICAL_DEPTH` (1,000 levels), but `canonical` still walked a value by recursion, one call per level. A JSON-table cell under the cap could exhaust a small stack first: at `--stack-size=100` a cell 500 levels deep failed, while Node's default stack passed it (measured, T-613). The primary and the fallback adjudicator may run with different stacks, so they could disagree on one delivery, which the neutrality test forbids. Found by PR 809's red team (T-610).
+
+**Decided:**
+
+- **Walk without recursion.** `canonical` keeps its own stack of open arrays and objects, so its stack use does not grow with depth. It writes the same text and charges the same units in the same order as before (a property test checks both against the recursive walk). This covers every caller: a JSON-table cell, `enum`, `const` and `uniqueItems`.
+- **Keep 1,000 levels.** A value nested exactly 1,000 levels passes; one more is refused, at every stack size (a test runs the checks at `--stack-size=100` and `--stack-size=4000` and gets the same outcomes).
+- **Name the failure.** A JSON-table cell past the cap fails with `JSON row <n> has a cell nested deeper than 1000 levels` (`reference: ` before it for a reference table), not the generic `deliverable could not be read as a table`. The line names the row, never the column or the value (T-610). `enum`, `const` and `uniqueItems` on a value past the cap fail with `a value is nested deeper than 1000 levels`.
+- **Effect** (measured): no snapshot or other test result changes.
+
+**Dropped:** converting only the columns a check reads. It would still recurse on a column a check reads, and leaves `enum`, `const` and `uniqueItems` as they were.
+
+**Litmus tests.** Neutrality: stronger; two adjudicators reach the same result on a deeply nested delivery whatever their stack size. The hold: unchanged. Defended judgment: unchanged, apart from the detail line.

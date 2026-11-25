@@ -14,7 +14,7 @@ import { countHidden, decodeJsonEscapes, type HiddenCounts } from '../hidden.js'
 import { hasUnexplainedTagChars } from '../normalize.js';
 import type { JudgmentCheck } from '../terms.js';
 import type { UntrustedData } from '../untrusted.js';
-import { chargeChars, codePoints, SET_UNITS } from './cost.js';
+import { chargeChars, codePoints, MAX_CANONICAL_DEPTH, SET_UNITS, TooDeep } from './cost.js';
 import { isIso8601 } from './iso8601.js';
 import { compileJsonSchema, type Validator } from './json-schema.js';
 import { BudgetExhausted, compileSafeRegex, StepBudget, type SafeRegex } from './safe-regex.js';
@@ -468,6 +468,9 @@ export function runChecks(checks: readonly JudgmentCheck[], input: CheckInput, b
       if (e instanceof BudgetExhausted) {
         inconclusive.push(id);
         o = fail('inconclusive: the check work budget for this delivery ran out');
+      } else if (e instanceof TooDeep) {
+        // D102: enum, const and uniqueItems refuse a delivered value past the cap, at a fixed count.
+        o = fail(`a value is nested deeper than ${MAX_CANONICAL_DEPTH} levels`);
       } else {
         // Hostile shapes (for example JSON nested deep enough to exhaust the stack) fail the check, never the pipeline.
         o = fail('check could not be evaluated on this input');
