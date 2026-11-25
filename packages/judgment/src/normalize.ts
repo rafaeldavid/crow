@@ -56,6 +56,13 @@ function prevBase(s: string, i: number): string {
 }
 const nextChar = (s: string, i: number): string => (i < s.length ? String.fromCodePoint(s.codePointAt(i)!) : '');
 
+const TAG_CHAR = /[\u{E0000}-\u{E007F}]/u;
+
+/** Whether normalizeText(raw) would count a tag character (tagChars above 0), without the rest of its work. */
+export function hasUnexplainedTagChars(raw: string): boolean {
+  return TAG_CHAR.test(raw.replace(EMOJI_TAG_SEQUENCE, '\u{1F3F4}'));
+}
+
 export function normalizeText(raw: string): Normalized {
   let explained = 0;
   let tagText = '';

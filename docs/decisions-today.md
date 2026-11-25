@@ -1803,3 +1803,27 @@ The build is not started; it opens as its own task on Rafa's word.
 **Dropped:** a compile-time bound on how deep optional groups nest, alone or with counting. It refuses before signing, but it would refuse patterns the tests use and still miss shapes that cost as much without nesting (measured). A larger or smaller budget: the size is not the defect.
 
 **Litmus tests.** Neutrality: unchanged. The hold: unchanged. Defended judgment: strengthened; stage 1's work bound now holds for every pattern a party can write.
+
+## D96. Every judgment step is charged to the check budget (T-607)
+
+**Status:** adopted, 2026-11-25.
+
+**Who decided.** The session for T-607, under the in-repository autonomy rule. Rafa may overrule any line.
+
+**Why.** Stage 1 bounds the work of a delivery's checks by one count, 50,000,000 units (`CHECK_BUDGET`). D93 made one unit stand for about the same work on every pattern. Outside the pattern engine, several steps did work on a party's delivery or terms that the budget did not count, so a delivery could take far longer to judge, or hold far more memory, than its size and its terms suggest (measured in the task).
+
+**Decided:**
+
+- **Charge every step.** The column checks charge one unit per cell they read, the JSON Schema keywords one per name they look up, and every scan one per 16 characters. Building a set entry costs `SET_UNITS`. `enum`, `const` and `uniqueItems` charge the canonical form of the value they compare. Building the table charges its length and its cells. The cost model is in `packages/judgment/src/checks/cost.ts`.
+- **Do repeated work once.** A run builds the table, counts hidden characters and reads each reference once, and every check that needs them shares the result. A reference is kept only until the last check that names it, and the JSON table reads the run's one JSON parse (T-597), which stays uncharged because `signature_valid`'s charges are part of its kind. Terms constants (`enum`, `const`, `type`, `required`) are prepared when the schema compiles, and each check compiles once per run.
+- **A fixed depth for canonical forms.** `enum`, `const`, `uniqueItems` and a JSON table cell refuse a value nested deeper than `MAX_CANONICAL_DEPTH` (1,000), as they refuse other values canonical form cannot write. Before, the limit was the engine's stack, which depends on the moment, so two adjudicators could disagree.
+- **Bound compiled patterns before signing.** A JSON schema's patterns together hold at most `MAX_SCHEMA_STATES` (20,000) NFA states; `validateCheck` refuses a schema over it, as it refuses one over `MAX_SCHEMA_NODES`.
+- **Bind the anchors as RegExp does.** In a `json_schema` `pattern`, a leading `^` binds to the first top-level alternative and a trailing `$` to the last: `^a|b` finds the `b` in "xb". Whole-cell matches (`regex_match_rate_min`) do not change.
+- **Counts, not timers,** so the primary and the fallback adjudicator on one build reach the same result.
+- **Effect** (measured): no check result changes on any check and delivery the tests and snapshots use, and none in 20,000 random checks on random deliveries run against the old code. The largest conclusive run in the tests spends 2.1% of the budget (1.4% before). The table of a delivery takes one array instead of one per row.
+- **Cost.** A check near the budget may now run out and escalate where it passed or failed before. A schema whose patterns exceed 20,000 states is refused at offer time, and an already signed one fails as invalid. A `pattern` with an anchor beside top-level alternation may now pass where it failed. A value nested deeper than 1,000 now fails those checks every time. No shipped template or fixture meets any of these cases.
+- **Version.** The checks are not a kept version (`packages/judgment/src/kept/`), so the primary and the fallback adjudicator deploy from one build, as for D93.
+
+**Dropped:** caps on the size of `enum`, `const`, `type` and `required` in the terms (D31: parametrize, don't restrict); charging the cost once it is known, by time; refusing an anchor beside top-level alternation, which `RegExp` accepts; charging the run's one JSON parse, which would change `signature_valid`'s pinned charges.
+
+**Litmus tests.** Neutrality: strengthened; no party can make a judging pass much slower than the budget allows. The hold: unchanged. Defended judgment: strengthened; stage 1's work bound now holds for every check a party can write.
