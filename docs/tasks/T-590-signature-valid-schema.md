@@ -3,7 +3,7 @@
 - **Lane:** spec
 - **Kind:** 6, schema and API contract, then 5 for the acceptance change (`docs/team.md`, Change recipes)
 - **Depends on:** T-585 (ADR-0045)
-- **Paths this task may touch:** `spec/schemas/`, `spec/examples/`, `spec/README.md`, the generated `spec/openapi.json` and `spec/openapi/paths.json` (the version), `tests/spec.test.ts`, `packages/core/src/validators.generated.ts` and `packages/core/src/types.ts`, the schema version in `apps/operator/src/server.ts` and its tests, `examples/mandate.test.ts`, `docs/api.md` and `site/ref/` (the version they name), `site/setup.mjs` (it embeds the schemas; the coordinator's yes, 2026-11-25), `apps/adjudicator/` and `fixtures/` (scope widened by the coordinator, 2026-11-25), `packages/testkit/src/stub-settlement.ts` (one rule the fixture needs; see Decisions), this file
+- **Paths this task may touch:** `spec/schemas/`, `spec/examples/`, `spec/README.md`, the generated `spec/openapi.json` and `spec/openapi/paths.json` (the version), `tests/spec.test.ts`, `packages/core/src/validators.generated.ts` and `packages/core/src/types.ts`, the schema version in `apps/operator/src/server.ts` and its tests, `examples/mandate.test.ts`, `docs/api.md` and `site/ref/` (the version they name), `site/setup.mjs` and `site/take.mjs` (they embed the schemas; the coordinator's yes to each, 2026-11-25), `apps/adjudicator/` and `fixtures/` (scope widened by the coordinator, 2026-11-25), `packages/testkit/src/stub-settlement.ts` (one rule the fixture needs; see Decisions), this file
 - **Human gate:** no. A deploy of the operators or the site waits for Rafa.
 - **Status:** review
 - **Agent/session:** p01-schema-bump, 2026-11-25
@@ -42,9 +42,13 @@ Put ADR-0045's two schema changes into the API contract as version 0.13, with ex
 All measured on 2026-11-25 on one Mac that other sessions were loading, unless labelled.
 
 - **Contract:** `pnpm validate:spec` passes: 37 of 37 examples, and `spec/openapi.json` is fresh.
-- **Vectors:** the `check` objects of PR 780's 95 vectors (commit `f64b8940`) agree with both validators, Ajv over `spec/schemas` and the compiled core parsers. 11 of them expect a refusal.
+- **Vectors:** the `check` objects of the 95 vectors in `spec/test-vectors/signature-valid/vectors.json` (T-589, merged into this branch from `main`) agree with both validators, Ajv over `spec/schemas` and the compiled core parsers. 11 of them expect a refusal.
 - **Over HTTP, on the SimChain operator:** `GET /v1/adjudicators/{address}` serves the nine kinds. Preparing an offer with the operator's default primary answers 400 with the decline's reason. With the primary named, the prepare and post answers carry the reason in `notices`, and the offer stays `Offered`.
-- **Bundles:** `site/setup.mjs` changes, SHA-256 `3ade73373ab3868ac9c983367a248ecef95b5cc8ba39893c6c992e673aa79ea6` to `3051e2436186816ee54d2fb3e952a3332183df82de5df2498b0b5c3db4a559c2`. `try.mjs`, `buy.mjs`, `try-sell.mjs`, `try-judged.mjs`, `try-reclaim.mjs` and `preflight.mjs` rebuild byte for byte.
+- **Bundles,** SHA-256 on `main` to SHA-256 here. Two change, because they embed the schemas:
+  - `site/setup.mjs`: `e422f778de7de70e20bec1d97bcd400a3cbbf30b10ef9b64b2ca58995c09d630` to `7cb29b1c3fa10515163d94aefd93f177a7a8a2dcf165ad43981de3f0abdb31b4`.
+  - `site/take.mjs`: `01a171a2166c63378b15c0df220607bd380a24ea7ba8ca3e64fbafb497d25984` to `e374077946d239c0645f6c1a8768139a0f964d389e145a168c9bed26bcbce15a`.
+  - `buy.mjs`, `try.mjs`, `try-sell.mjs`, `try-judged.mjs`, `try-reclaim.mjs` and `preflight.mjs` match `main` byte for byte.
+  - PR 787 also changes `setup.mjs`. Whichever merges second merges `main` and runs `node site/build.mjs`; a bundle conflict is never resolved by hand.
 - **Checks on the merged tree:** `pnpm install --frozen-lockfile`, `pnpm build`, `pnpm typecheck`, `pnpm lint`, `pnpm validate:spec` and `node site/build.mjs && node site/check.mjs` pass.
 - **Full suite, final tree:** `pnpm test` passes: 301 files passed and 2 skipped, 5,848 tests passed and 7 skipped. `pnpm snap`: 53 of 53.
 - **Local chain:** `neutrality.adjudicator-lacks-check-kind` and `neutrality.adjudicator-never-accepts` pass against the contracts on anvil, with 0 transactions and a transcript identical to SimChain's.
@@ -76,7 +80,7 @@ One further finding concerns code older than this change. It went to the coordin
 
 ## Handoff
 
-- **Done:** the schema, the examples, the version, the rebuilt `site/setup.mjs`, the published `checkKinds`, the primary's decline and its fixture. Pull request open; not merged.
+- **Done:** the schema, the examples, the version, the rebuilt `site/setup.mjs` and `site/take.mjs`, the published `checkKinds`, the primary's decline and its fixture. Pull request open; not merged.
 - **For P-03 (the evaluator):**
   - Add `signature_valid` to `DeterministicCheck` and to stage 1's registry. The record's `checkKinds` and the decline then follow on their own.
   - `neutrality.adjudicator-lacks-check-kind`, `apps/adjudicator/src/check-kinds.test.ts` and the "not `signature_valid`" assertion will fail then, as they should. The fixture needs another way to give a primary fewer kinds.
@@ -85,6 +89,6 @@ One further finding concerns code older than this change. It went to the coordin
 - **Deploy notes** (a deploy waits for Rafa):
   - The operators' next deploy from `main` serves schema 0.13. Until both nodes run it, `preflight.mjs` reports that their schemas differ and tells the agent not to sign.
   - The demo adjudicators' records gain `checkKinds`, so the world registers them again with a later `issuedAt` (inferred from `registerOwn`). `policyHash` does not move. No signed type, contract or domain changes.
-  - A client that holds its own 0.12 copy of the adjudicator schema refuses the new records. No bundle Crow publishes checks them against the schema (inferred from a search of `site/setup.mjs`, `buy.mjs` and `try.mjs`).
+  - A client that holds its own 0.12 copy of the adjudicator schema refuses the new records. No bundle Crow publishes checks them against the schema (inferred from a search of `setup.mjs`, `buy.mjs`, `try.mjs` and `take.mjs`: `take` compares selected fields of a record across the operators).
   - A rollback restores a primary without the decline. An offer on the new kind that is still `Offered` could then be accepted.
 - **For Rafa or the coordinator:** the Medium finding above, before D90 is settled. ADR-0045's two open questions stay open.
