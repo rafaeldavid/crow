@@ -363,11 +363,14 @@ const published = new Set(['index.html', '404.html', 'home.css', 'home.js', 'try
 const scripts = JSON.parse(read('../package.json')).scripts;
 const refs = referenceFiles();
 // T-469: the front door's "Reference" points to the one reference file and names every part it holds, by the ref
-// file's name; it links no single ref/ file, so an agent fetches once, not once per file.
+// file's name; it links no single ref/ file, so an agent fetches once, not once per file. One exception (N214, the
+// approvals runs of 2026-11-25): the sell line links ref/intake.txt. A seller's own work needs only that part, and
+// agents sent to the whole reference read it in two or three paged reads.
 const referenceSection = sectionOf(md, 'Reference');
 const unnamed = refs.filter((r) => !new RegExp(`\\b${r.slice(4, -4)}\\b`).test(referenceSection));
 expect(refs.length > 0 && referenceSection.includes(`${SITE_URL}${REFERENCE_PATH}`) && unnamed.length === 0, `the front door's "Reference" must link ${SITE_URL}${REFERENCE_PATH} and name every part it holds (it leaves out ${unnamed.join(', ') || 'none'})`);
-expect(!/crow\.direct\/ref\//.test(md), 'llms.txt links a single ref/ file: point to reference.txt, which holds them all');
+const OWN_WORK_LINK = `your own work: ${SITE_URL}ref/intake.txt.`;
+expect(!/crow\.direct\/ref\//.test(md.replace(OWN_WORK_LINK, '')), `llms.txt links a single ref/ file other than the sell line's "${OWN_WORK_LINK}": point to reference.txt, which holds them all`);
 for (const [p, text] of guides) {
   for (const r of namedReferences(text)) expect(refs.includes(r), `${p} names ${r}, which is not in site/ref/`);
   for (const { file, title } of citedSections(text)) expect(guides.has(file) && hasSection(guides.get(file), title), `${p} cites "${title}" in ${file}, which has no such section`);
