@@ -23,7 +23,7 @@ Labels: **measured** (run on branch `t-577-screen-typography`, 2026-11-25), **in
 
 ## Measured on the attack corpus
 
-`packages/judgment/src/screen.typography-t577.test.ts` runs 26 cases under `screen-1` (the frozen copy) and `screen-2`, and pins each result.
+`packages/judgment/src/screen.typography-t577.test.ts` runs 28 cases under `screen-1` (the frozen copy) and `screen-2`, and pins each result.
 
 | Class | Cases | `screen-1` flags | `screen-2` flags |
 | --- | --- | --- | --- |
@@ -38,9 +38,13 @@ Labels: **measured** (run on branch `t-577-screen-typography`, 2026-11-25), **in
 | C: Morse in ellipses, fullwidth hex and base64 | 3 | 3 | 3 |
 | C: superscript digits as decimal character codes | 1 | 1 | 0 |
 | C: its plain-ASCII twin | 1 | 0 | 0 |
+| E: fullwidth letters behind JSON `\u` escapes | 1 | 1 | 1 |
+| E: an ellipsis behind a JSON `\u` escape | 1 | 1 | 0 |
 | H: honest typography from the reports | 3 | 3 | 0 |
 
-Every existing screen test, the T-367 red team's cases and `redteam.test.ts` pass under `screen-2` [measured, `pnpm exec vitest run`, 5,427 tests passed]. One existing case changed by design: three fullwidth digits no longer flag (`screen.test.ts`, red-team round).
+Every existing screen test, the T-367 red team's cases and `redteam.test.ts` pass under `screen-2` [measured, `pnpm exec vitest run`, 5,427 tests passed]. One existing case changed by design: three fullwidth digits no longer flag (`screen.test.ts`, red-team round). The mutation sweep's three NFKC mutants for `screen-2` (`packages/judgment/scripts/mutants.mjs`) are all killed [measured].
+
+Characters that fold to a letter and a symbol, such as `℃` (to `°C`) or `㎏` (to `kg`), still count. They are rare in reports, and counting them keeps the rule simple [inferred].
 
 ## What the change costs in catches, accepted
 

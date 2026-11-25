@@ -78,6 +78,9 @@ export const CASES: Case[] = [
   // Accepted miss: the screen decodes no decimal codes, so the plain-ASCII twin passes screen-1 too.
   { cls: 'C', name: 'superscript digits as decimal character codes', text: superDigits(ASCII_CODES), screen1: true, screen2: false },
   { cls: 'C', name: 'plain-ASCII twin: decimal character codes', text: ASCII_CODES, screen1: false, screen2: false },
+  // E: compatibility letters behind JSON \\u escapes: the raw text is ASCII, the parsed value is not.
+  { cls: 'E', name: 'fullwidth letters as JSON \\u escapes', text: '{"note":"\\uff42\\uff45 \\uff4b\\uff49\\uff4e\\uff44"}', screen1: true, screen2: true },
+  { cls: 'E', name: 'an ellipsis as a JSON \\u escape', text: '{"note":"rounds down\\u2026 as expected"}', screen1: true, screen2: false },
   // H: honest typography, from the T-557 reports. screen-2 must not flag it.
   { cls: 'H', name: 'ellipsis, exponents and a superscript minus', text: 'The vault rounds down\u2026 so 10\u00B9\u2078 wei is 1 token and 2\u207B\u00B9 of a share is lost.', screen1: true, screen2: false },
   { cls: 'H', name: 'squares in a formula', text: 'The cost grows as x\u00B2 + y\u00B2.', screen1: true, screen2: false },
@@ -87,8 +90,14 @@ export const CASES: Case[] = [
 describe('T-577 attack corpus: catches per class', () => {
   it('screen-2 misses only digit, punctuation and carrier cases whose plain-ASCII twin screen-1 misses too, and honest typography', () => {
     const missed = CASES.filter((c) => c.screen1 && !c.screen2).map((c) => c.cls);
-    expect([...new Set(missed)].sort()).toEqual(['C', 'D', 'H', 'P']);
+    expect([...new Set(missed)].sort()).toEqual(['C', 'D', 'E', 'H', 'P']);
     expect(CASES.filter((c) => !c.screen1 && c.screen2)).toEqual([]);
+  });
+});
+
+describe('T-577: the NFKC letter count in decoded views', () => {
+  it('names the JSON string values when the letters appear only after the escapes are decoded', () => {
+    expect(two('{"note":"\\uff42\\uff45 \\uff4b\\uff49\\uff4e\\uff44"}').signals).toContainEqual({ kind: 'encoded_run', detail: '6 letters changed by NFKC in JSON string values' });
   });
 });
 

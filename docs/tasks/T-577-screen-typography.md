@@ -45,7 +45,9 @@ The reports cannot be committed (third-party text). The repository keeps their t
 
 **(b) Every existing screen attack still flagged.** `pnpm exec vitest run`: 5,427 tests passed, 0 failed, 286 skipped. That covers `screen.test.ts`, `screen.redteam-t367.test.ts` and `redteam.test.ts`, which run the newest screen, now `screen-2`. One case changed by design: three fullwidth digits no longer flag.
 
-**(c) The new attack corpus,** `packages/judgment/src/screen.typography-t577.test.ts`, 26 cases, per class in ADR-0044. `screen-1` flags 23 and `screen-2` flags 16. Of the 7 differences, 3 are honest typography and 4 are accepted misses whose plain-ASCII twins `screen-1` also misses. No case flags under `screen-2` and not under `screen-1`.
+**(c) The new attack corpus,** `packages/judgment/src/screen.typography-t577.test.ts`, 28 cases, per class in ADR-0044. `screen-1` flags 25 and `screen-2` flags 17. Of the 8 differences, 4 are honest typography and 4 are accepted misses whose plain-ASCII twins `screen-1` also misses. No case flags under `screen-2` and not under `screen-1`.
+
+**Mutation sweep.** `node packages/judgment/scripts/mutants.mjs NFKC`: 4 mutants, 4 killed. The review found the old NFKC mutant no longer matched `screen.ts`; it now targets `screen-2`'s lines, with two more for the decoded views and the fail-closed fallback.
 
 **Versions.** The replay keeps every earlier record and adds 18: `screen-2` on 7 read paths under 2 aggregations, and the new typography path for `screen-0` and `screen-1`. `screen-1`'s pinned digest is unchanged and is now checked against the frozen copy.
 

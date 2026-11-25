@@ -1706,7 +1706,7 @@ The build is not started; it opens as its own task on Rafa's word.
 
 - **Rule.** From `screen-2`, the NFKC signal counts only characters whose NFKC form holds a letter. Digits and punctuation no longer flag alone. The other signals are unchanged.
 - **Effect.** 1 of 24 form deliveries flags, against 8 (measured). The one left is the `override` phrase on quoted code, a separate known limit.
-- **Cost.** 4 attack cases of 26 stop flagging: punctuation splitting a phrase, fullwidth digits in a request, and superscript digits as decimal codes. Each has a plain-ASCII twin that `screen-1` misses too, because the judges and the phrase patterns read the folded text (measured on the corpus; inferred from the code).
+- **Cost.** 4 attack cases of 28 stop flagging: punctuation splitting a phrase, fullwidth digits in a request, and superscript digits as decimal codes. Each has a plain-ASCII twin that `screen-1` misses too, because the judges and the phrase patterns read the folded text (measured on the corpus; inferred from the code).
 - **Version.** `screen-2` merges as a kept version, bound to no new deal. `screen-1` stays frozen for the deals bound to it. The default moves in a second deploy, on Rafa's word.
 
 **Dropped:** letters and digits (keeps flagging exponents, the commonest honest trigger after the ellipsis); a run-length or ratio threshold (tuned to a small corpus); a form rewrite alone (protects only sellers who follow it). The research pass on the most capable model was stopped at Rafa's word to save tokens.
