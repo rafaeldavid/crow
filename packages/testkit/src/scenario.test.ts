@@ -34,6 +34,15 @@ describe('scenario parser', () => {
     expect(() => parseScenario(minimal('steps:\n  - offer: { by: buyer }\n'), 't')).toThrow(/by/);
   });
 
+  // ADR-0036: a fixture pins the versions it tests, so a later default flip does not change what it judges under.
+  it('reads a build pin, and refuses an unknown field, a malformed hash and half a template pair', () => {
+    const pair = 'build:\n  prompt_template: "0x' + 'ab'.repeat(32) + '"\n  appeal_prompt_template: "0x' + 'cd'.repeat(32) + '"\n  aggregation: agg-5\nsteps: []\n';
+    expect(parseScenario(minimal(pair), 't').build).toEqual({ promptTemplateHash: `0x${'ab'.repeat(32)}`, appealPromptTemplateHash: `0x${'cd'.repeat(32)}`, aggregationVersion: 'agg-5' });
+    expect(() => parseScenario(minimal('build: { colour: red }\nsteps: []\n'), 't')).toThrow(/build.colour/);
+    expect(() => parseScenario(minimal('build: { prompt_template: "0x12", appeal_prompt_template: "0x34" }\nsteps: []\n'), 't')).toThrow(/template hash/);
+    expect(() => parseScenario(minimal('build:\n  prompt_template: "0x' + 'ab'.repeat(32) + '"\nsteps: []\n'), 't')).toThrow(/both or neither/);
+  });
+
   it('rejects money written as a YAML number', () => {
     expect(() => parseScenario(minimal('faucet: { b: 10000 }\nsteps: []\n'), 't')).toThrow(/decimal string/);
     expect(() => parseScenario(minimal('faucet: { b: "1.5" }\nsteps: []\n'), 't')).toThrow(/decimal string/);

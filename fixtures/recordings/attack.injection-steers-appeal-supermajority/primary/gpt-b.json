@@ -6,8 +6,8 @@
   "provider": "openai-compatible",
   "family": "gpt",
   "model": "placeholder-gpt-b-20260601",
-  "promptTemplateHash": "0x4d328a15ef96b9aa0f4166efc720a320f82e9c677fdd8beaff431ecefcc9629b",
-  "inputHash": "0xc2c07185778b5055b3cae8159f79481e471d5110c835b7966365c2cd25c31bd7",
+  "promptTemplateHash": "0xabb5ec9b33cf9a936e140bf8530c217f6629fdf1e08a46fbdf6bd7363ce84dd2",
+  "inputHash": "0x2511a9874341b4b9228de936606aca832247d05fe6caf91bf45d25ccdae9e65f",
   "rubricHash": "0x4201c2a950347823c494fcfc89f88fab1ca670b2086f66ed726aa9c7b0ec7925",
   "capturedFrom": "fake",
   "verdict": {

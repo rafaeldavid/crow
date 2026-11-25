@@ -66492,6 +66492,25 @@ function parseScenario(source, fileName) {
 		}
 		scenario.lacksCheckKinds = lacks;
 	}
+	if (top.build !== void 0) {
+		const raw = top.build;
+		if (!isObj(raw)) fail$1("build", "must be {screen?, prompt_template?, appeal_prompt_template?, aggregation?}");
+		const keys = {
+			screen: "screenVersion",
+			prompt_template: "promptTemplateHash",
+			appeal_prompt_template: "appealPromptTemplateHash",
+			aggregation: "aggregationVersion"
+		};
+		const build = {};
+		for (const [k, v] of Object.entries(raw)) {
+			if (!(k in keys)) fail$1(`build.${k}`, `not a build field (${Object.keys(keys).join(", ")})`);
+			const value = str$2(v, `build.${k}`);
+			if (k.endsWith("template") && !/^0x[0-9a-f]{64}$/.test(value)) fail$1(`build.${k}`, "must be a template hash, 0x and 64 lowercase hex digits");
+			build[keys[k]] = value;
+		}
+		if (build.promptTemplateHash === void 0 !== (build.appealPromptTemplateHash === void 0)) fail$1("build", "prompt_template and appeal_prompt_template name one template pair: give both or neither");
+		scenario.build = build;
+	}
 	if (top.description !== void 0) scenario.description = str$2(top.description, "description");
 	if (top.club !== void 0) scenario.club = str$2(top.club, "club");
 	if (top.terms !== void 0) scenario.terms = str$2(top.terms, "terms");
@@ -66607,6 +66626,7 @@ var init_scenario = __esmMin((() => {
 		"outside",
 		"adjudicators",
 		"lacks_check_kinds",
+		"build",
 		"operators",
 		"faucet",
 		"steps",
@@ -73465,7 +73485,10 @@ var init_stub_settlement = __esmMin((() => {
 		buildState = null;
 		get build() {
 			this.buildState ??= {
-				versions: buildDefaultVersions(this.root),
+				versions: {
+					...buildDefaultVersions(this.root),
+					...this.scenario.build ?? {}
+				},
 				registryFile: REGISTRY_FILE
 			};
 			return this.buildState;

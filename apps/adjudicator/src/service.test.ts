@@ -3,13 +3,14 @@ import { readFileSync } from 'node:fs';
 import { canonicalKeccak, commitmentId, deliveryHash, DRAND_QUICKNET, signMessage, step, termsOf, type AdjudicatorPolicy, type Address, type AppealGround, type Commitment, type Decision, type Hex32, type Timing, type TokenAmount } from '@holdback/core';
 import { open, unwrapKey, unwrapKeyFor, encodePublicKey } from '@holdback/core/crypto';
 import {
+  APPEAL_PROMPT_TEMPLATE_HASH,
   buildPrompt,
   criteriaOrder,
   fakeProvider,
   honestVerdict,
   judgeNonces,
-  KEPT,
   loadRegistry,
+  PROMPT_TEMPLATE_HASH,
   sampleSeedFor,
   selectPanel,
   UntrustedData,
@@ -24,10 +25,6 @@ import { describe, expect, it } from 'vitest';
 import { demoCsv, DOMAIN, fakeRelays, makeCommitment, party, TestSettlement, tusd, type Party } from './_sim.js';
 import { drandQuicknet } from './drand.js';
 import { defaultPolicy, policyHashOf } from './policy.js';
-// The template pair this build's default policy names (kept-policies.json), which a new deal binds.
-const DEFAULT_PAIR = KEPT.templatePairs.find((p) => p.firstHash === defaultPolicy('pair').promptTemplateHash)!;
-const PROMPT_TEMPLATE_HASH = DEFAULT_PAIR.firstHash;
-const APPEAL_PROMPT_TEMPLATE_HASH = defaultPolicy('pair').appealPromptTemplateHash;
 import { panelSeed, simRoundAt, type RandomnessSource } from './randomness.js';
 import { Adjudicator, DEFAULT_APPEAL_LIMITS, recordHashOf, type AdjudicatorConfig, type JudgedStore, type KeptDraft, type KeptJudgment } from './service.js';
 
@@ -323,7 +320,6 @@ describe('primary decision on the demo CSV (about 0.5 MB)', () => {
         data,
         nonces: judgeNonces(d.seed, id, m.judgeId),
         sample: { seed: sampleSeedFor(d.seed, id, m.judgeId), mime: 'text/csv' },
-        templates: DEFAULT_PAIR,
       });
       expect(p.ok && p.value.inputHash).toBe(m.inputHash);
     }
@@ -1088,7 +1084,7 @@ describe('review item 4: rules the mutation sweep found untested', () => {
       delivery: {} as never,
       deadline: '2026-11-01T10:02:00Z',
     });
-    expect(!r.ok && r.error.detail).toMatch(new RegExp(`this build does not carry the template pair ${PROMPT_TEMPLATE_HASH.slice(0, 10)}\\.\\.\\. / 0xabababab`));
+    expect(!r.ok && r.error.detail).toMatch(/this build does not carry the template pair 0xabb5ec9b\.\.\. \/ 0xabababab/);
   });
 
   it('decision nonces differ by role, so a primary and a fallback decision never share one', async () => {

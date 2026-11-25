@@ -11,11 +11,11 @@ ADR-0047. Tidewater delivers a path drawn joint by joint: q1 reaches 10000 while
 | Pragmas | settlement=sim · judges=recorded · mode=guaranteed_on_decision · seed=83 |
 | Prefix | attack. (adversarial input: must not auto-accept) |
 | Settlement | SimChain (T-006) driving @holdback/core `step` |
-| Judgment | @holdback/judgment (checks, screen, panel) · registry config/judges.yaml 0x8aa4…4549 · policy bench-a/p1 0x40b5…1e88 |
+| Judgment | @holdback/judgment (checks, screen, panel) · registry config/judges.yaml 0x8aa4…4549 · policy bench-a/p1 0xd136…9300 |
 | Club | fixtures/clubs/data-services-v1.yaml (loaded) · rulebook 0xd9bc…492d |
 | Buyer | atlas-buyer 0x0ECF…C423 |
 | Seller | tidewater-seller 0xf642…E0c4 |
-| Terms | fixtures/terms/recorded-path.yaml (loaded) · commitment 0xd9b4…3bcc · price 1,500.000000 tUSD · fee 50.000000 tUSD |
+| Terms | fixtures/terms/recorded-path.yaml (loaded) · commitment 0xe9b5…1247 · price 1,500.000000 tUSD · fee 50.000000 tUSD |
 | Adjudicators | primary bench-a 0x8886…141e · fallback bench-b 0xc57C…9376 · appeal bench-c 0x0138…591B |
 | Operators | op-1 · op-2 |
 
@@ -46,13 +46,13 @@ ADR-0047. Tidewater delivers a path drawn joint by joint: q1 reaches 10000 while
 - **Intake:** plaintext 0xc768…97a5 · application/json · 876 bytes (fixtures/data/recorded-path/run.invented.json) · hash verified ✓ · normalized
 - **Deterministic checks:** time ✓ · lengths ✓ · waypoints ✗ (reached 0 of 2 waypoints in order; waypoint 1 is not within tolerance in any row)
 - **Screen:** clean
-- **Panel:** not run · first-instance template 0x4d32…629b · rubric 0x551e…5e6a · seed source: commit-reveal (commitment 0x9849…a066, seed 0x0618…9a50, recomputed: match)
+- **Panel:** not run · first-instance template 0xabb5…4dd2 · rubric 0x551e…5e6a · seed source: commit-reveal (commitment 0x9849…a066, seed 0x0618…9a50, recomputed: match)
 - **Aggregate:** reject. Reasons: required deterministic check failed: waypoints.
 - **Signed:** reject.
 
 ## Receipts and log
 
-- Events 0–7. Chain head 0x83d4…8aa8. Replay of 6 SimChain submissions from genesis matches the settlement state.
+- Events 0–7. Chain head 0xad8a…7009. Replay of 6 SimChain submissions from genesis matches the settlement state.
 - Receipts from op-1: 5 (rcpt-0001–rcpt-0005). The runner labels them without signing; the operator API signs real receipts.
 
 ## Invariants

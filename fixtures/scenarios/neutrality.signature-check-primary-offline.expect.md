@@ -11,11 +11,11 @@ ADR-0045, section 10. The terms of signed-manifest-accepted, and the same delive
 | Pragmas | settlement=sim · judges=recorded · mode=guaranteed_on_decision · seed=73 |
 | Prefix | neutrality. (an actor fails: terms-compliant terminal state anyway) |
 | Settlement | SimChain (T-006) driving @holdback/core `step` |
-| Judgment | @holdback/judgment (checks, screen, panel) · registry config/judges.yaml 0x8aa4…4549 · policy bench-a/p1 0x40b5…1e88 |
+| Judgment | @holdback/judgment (checks, screen, panel) · registry config/judges.yaml 0x8aa4…4549 · policy bench-a/p1 0xd136…9300 |
 | Club | fixtures/clubs/data-services-v1.yaml (loaded) · rulebook 0xd9bc…492d |
 | Buyer | atlas-buyer 0x42B0…99C6 |
 | Seller | tidewater-seller 0x90D8…7d98 |
-| Terms | fixtures/terms/signed-manifest.yaml (loaded) · commitment 0x3fa2…49ea · price 1,500.000000 tUSD · fee 50.000000 tUSD |
+| Terms | fixtures/terms/signed-manifest.yaml (loaded) · commitment 0x9ca9…77e8 · price 1,500.000000 tUSD · fee 50.000000 tUSD |
 | Adjudicators | primary bench-a 0x12d0…fb36 · fallback bench-b 0x8CA4…8cbB · appeal bench-c 0x19db…1580 |
 | Operators | op-1 · op-2 |
 
@@ -54,13 +54,13 @@ Outages:
 - **Intake:** plaintext 0x54aa…9330 · application/json · 707 bytes (fixtures/data/signed-manifest/episode.json) · hash verified ✓ · normalized
 - **Deterministic checks:** order ✓ · manifest-signature ✓
 - **Screen:** clean
-- **Panel:** not run · first-instance template 0x4d32…629b · rubric 0x551e…5e6a · seed source: beacon round 1767830520 (seed 0xa117…09c9)
+- **Panel:** not run · first-instance template 0xabb5…4dd2 · rubric 0x551e…5e6a · seed source: beacon round 1767830520 (seed 0x11d9…9b9e)
 - **Aggregate:** accept. Reasons: all deterministic checks passed and the rubric is empty.
 - **Signed:** accept.
 
 ## Receipts and log
 
-- Events 0–10. Chain head 0x27d3…578d. Replay of 7 SimChain submissions from genesis matches the settlement state.
+- Events 0–10. Chain head 0xfd90…2206. Replay of 7 SimChain submissions from genesis matches the settlement state.
 - Receipts from op-1: 5 (rcpt-0001–rcpt-0005). The runner labels them without signing; the operator API signs real receipts.
 - Receipts from op-2: 2 (rcpt-0006–rcpt-0007). The runner labels them without signing; the operator API signs real receipts.
 
