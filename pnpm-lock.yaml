@@ -322,6 +322,9 @@ importers:
 
   examples:
     dependencies:
+      '@holdback/core':
+        specifier: workspace:*
+        version: link:../packages/core
       '@holdback/judgment':
         specifier: workspace:*
         version: link:../packages/judgment
