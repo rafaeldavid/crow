@@ -331,6 +331,16 @@ The maintainers keep the notes on agent sessions and permission prompts privatel
 
 Each entry records one deploy as it ran: the date and time in UTC, the commit, each Worker's new version and its rollback target, and what was measured after it. The deploy scripts print the entry's first line (`pnpm demo-cloud:deploy`, `pnpm site:deploy`, `node apps/test-agents/scripts/deploy.mjs`). The values are true for their date: for what runs now, read "What is live" above and each node's discovery.
 
+### The API brakes and screen-2 carried beside screen-1 (deployed 2026-11-25, 04:41 UTC)
+
+Rafa, 2026-11-25: "Yes, deploy". The operators carry pull request 768 (T-581, N222): Crow's adjudicators take at most 3 judged deals per seller and buyer pair a UTC day (`JUDGED_DEALS_PER_PAIR_PER_DAY`), live judges are capped at 100 calls a day (`LIVE_JUDGE_CALLS_PER_DAY`), relayer funding at 200 deals a day, the faucet's per-client count is kept in the World's storage, and the operators answer on their custom hostnames only (`workers_dev: false`). They also carry pull request 773 (T-577, ADR-0044): `screen-2` is kept beside `screen-1`, and the default stays `screen-1`, so no open deal changes screen version. The sign-up Worker carries the sign-up limit (5 writes per 60 s per client) and `workers_dev: false`. Both ran from a clean worktree at `4825e88` after `main`'s own checks passed there [measured]; a first run at `10f1e63` was refused by the script because `main` had moved on, and nothing was uploaded.
+
+**Deploy 2026-11-25 04:41 UTC, commit `4825e88` on a detached HEAD: pass.** holdback-op1 `e57d5a02-5e5c-480a-86b8-5833b2b2e021` (rollback target `1f856e81-7f5a-428b-af22-6733a847a140`), holdback-op2 `ed891045-8548-42a9-bde8-65e53599686b` (rollback target `092d7ac7-a91c-47e4-9e70-681f25926749`). Smoke deal `0xa68cb32a6b7dcb351e77d2297fb364553e8e10c7024039949b9567a67fcf7e48` Released in 45 s, against commit `4825e88` (both nodes' discovery named it 0 s after /v1/status answered).
+
+**Early access deploy 2026-11-25 04:43 UTC, commit `4825e88` on a detached HEAD: pass.** crow-early-access `669f0f85-3ce3-488a-9cb7-8e7fea70d4e8` (rollback target `d42c03c9-66e1-4bc2-8634-9fb2c8aefdb9`).
+
+After the deploys, both operators' `/v1/status` answer 200 and join.crow.direct/version.json names `4825e88` [measured]. Each Worker's deploy output lists only its custom domains as triggers, with no `workers.dev` route [measured from the output]; the `workers.dev` hostnames themselves were not probed. The new limits are not in discovery yet (T-581, Handoff, follow-up).
+
 ### The demo's opening conversation and the drifting use cases (deployed 2026-11-24, 11:27 UTC)
 
 Rafa, 2026-11-24: "Yes, deploy". The site deploy carries pull request 764: the homepage demo opens with an earlier conversation already in place (single sign-on and a new payment flow, tagged v0.4.2, then "let's get it audited"), the roles row under the window's title is removed, and the use-case line becomes one row of about three to four items drifting right to left with faded edges (a CSS animation; still under reduced motion). It ran from a clean worktree at `dc4fea4` after `main`'s own checks passed there [measured].
