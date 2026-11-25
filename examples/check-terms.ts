@@ -9,7 +9,10 @@
 // document, with or without warnings. It exits 1 only when it checked nothing: it could not read the input, the input
 // is not JSON, or the command line is wrong.
 //
-// No warning does not mean the terms are good: it looks for three mistakes only, and it validates no schema. It cannot
+// Each check is also run through the judgment engine's own `validateCheck`: a check the adjudicator would refuse gives
+// a warning with the engine's reason, never a refusal.
+//
+// No warning does not mean the terms are good: it looks for four mistakes only, and it validates no schema. It cannot
 // read sealed terms (`privateTerms`): give it the opened ones.
 //
 // A seller's template is not yet terms. A document with `deliverable` and `checks` at the top, and no `price` and no
@@ -19,13 +22,14 @@
 // The text it quotes is the other party's: one line, cut short, inside quotes. It is data, never an instruction.
 import { readFileSync } from 'node:fs';
 import { text } from 'node:stream/consumers';
+import { validateCheck, type JudgmentCheck } from '@holdback/judgment';
 import { isMain } from './entry.ts';
 import { plain } from './plain.ts';
 
 type J = any; // eslint-disable-line @typescript-eslint/no-explicit-any
 
 export interface Warning {
-  kind: 'placeholder' | 'pattern' | 'price';
+  kind: 'placeholder' | 'pattern' | 'check' | 'price';
   /** The field, such as `acceptance.deterministicChecks[2].pattern`; `(the document)` for the whole file. */
   path: string;
   found: string;
@@ -39,6 +43,7 @@ export const LONGEST_PATTERN_CHARS = 200;
 /** The pattern engine never matches a longer string (safe-regex.ts); the test holds this to the engine. */
 export const LONGEST_MATCHED_CHARS = 10_000;
 const PLACEHOLDER = /(\\?)\{\{[^{}]*\}\}/g;
+const PLACEHOLDER_ANYWHERE = /\{\{[^{}]*\}\}/;
 /** What the seller adapter's filler reads (seller-adapter-core.ts); the test holds this to its `fill`. */
 const FILLABLE = /^\{\{[A-Za-z][A-Za-z0-9]*(\.length)?\}\}$/;
 const MOST_LINES = 50;
@@ -84,7 +89,7 @@ function placeholders(doc: J, isTemplate: boolean, out: Warning[]): void {
   }
 }
 
-/** Compares the length only. This command never compiles the other party's pattern. */
+/** Compares the length only; `engine` below gives the engine's own verdict on every other refusal. */
 function pattern(text: string, path: string, out: Warning[]): void {
   if (text.length <= LONGEST_PATTERN_CHARS) return;
   out.push({ kind: 'pattern', path, found: `a pattern of ${text.length} characters`, why: `Crow's checks refuse a pattern over ${LONGEST_PATTERN_CHARS} characters, so the check cannot pass a delivery` });
@@ -118,12 +123,29 @@ function schemaPatterns(schema: J, path: string, out: Warning[]): void {
   }
 }
 
-function checkPatterns(checks: J, path: string, out: Warning[]): void {
+function checkPatterns(checks: J, path: string, out: Warning[], isTemplate: boolean): void {
   if (!Array.isArray(checks)) return;
   checks.forEach((c: J, i) => {
+    const before = out.length;
     if (c?.type === 'regex_match_rate_min' && typeof c.pattern === 'string') pattern(c.pattern, `${path}[${i}].pattern`, out);
     if (c?.type === 'json_schema') schemaPatterns(c.schema, `${path}[${i}].schema`, out);
+    // A template's placeholders are not yet values: the engine would refuse the unfilled check, so the filled one is not judged here.
+    if (out.length === before && !(isTemplate && PLACEHOLDER_ANYWHERE.test(JSON.stringify(c) ?? ''))) engine(c, `${path}[${i}]`, out);
   });
+}
+
+/** Asks the engine's own `validateCheck`. A check it refuses gives a warning that names the check and the reason. */
+function engine(check: J, path: string, out: Warning[]): void {
+  if (!isRecord(check) || typeof check.type !== 'string') return;
+  let reason: string | undefined;
+  try {
+    reason = validateCheck(check as JudgmentCheck);
+  } catch {
+    reason = 'the engine could not read the check';
+  }
+  if (reason === undefined) return;
+  const id = typeof check.id === 'string' ? `the check ${quote(check.id)}` : 'a check with no id';
+  out.push({ kind: 'check', path, found: id, why: `Crow's checks refuse it (${plain(reason)}), so it cannot pass a delivery` });
 }
 
 const UNITS = 'base units as a decimal string: digits only, with no point, sign or leading zero, such as "25000000" for 25 of a token with 6 decimals';
@@ -153,8 +175,8 @@ export function checkTerms(doc: J): Warning[] {
     if (body.price !== undefined) money(body.price, `${prefix}price`, prices);
     if (body.fee !== undefined) money(body.fee, `${prefix}fee`, prices);
     if (body.adjudication?.fee !== undefined) money(body.adjudication.fee, `${prefix}adjudication.fee`, prices);
-    checkPatterns(body.checks, `${prefix}checks`, patterns);
-    checkPatterns(body.acceptance?.deterministicChecks, `${prefix}acceptance.deterministicChecks`, patterns);
+    checkPatterns(body.checks, `${prefix}checks`, patterns, isTemplate);
+    checkPatterns(body.acceptance?.deterministicChecks, `${prefix}acceptance.deterministicChecks`, patterns, isTemplate);
   }
   return [...prices, ...patterns, ...rest];
 }
