@@ -10,7 +10,7 @@ import { afterAll, beforeAll, describe, expect, it, vi } from 'vitest';
 import { authorizationExpiry, type Genesis } from '../sim/simchain.js';
 import type { Submission } from '../src/interface.js';
 import { RelayRefused, type LaneRow } from './chain.js';
-import { EvmSettlement, PHASE_ONE_NO_APPEAL, type Book } from './evm-settlement.js';
+import { EvmSettlement, outPostings, PHASE_ONE_NO_APPEAL, type Book } from './evm-settlement.js';
 import { measurePath, must, newSettlement, PATHS } from './gas.js';
 import { LiveChain, type DeploymentFile, type LaneStore } from './live.js';
 import { evmCast, evmGenesis, EvmDeal } from './testing.js';
@@ -25,6 +25,27 @@ const eventSchemaErrors = (log: readonly SettlementEvent[]): string[] =>
     const r = parseEvent(e);
     return r.ok ? [] : [`#${e.seq} ${e.type}: ${r.error.detail}`];
   });
+
+describe('outPostings: where a chain\'s settled event lists no postings (T-621)', () => {
+  const id = `0x${'11'.repeat(32)}` as Hex32;
+  const at = (n: string) => `0x${n.repeat(40)}`;
+  const terms = { price: { token: at('a'), amount: '100' }, buyer: at('b'), seller: at('c'), buyerPaymentAddress: at('d'), sellerPayoutAddress: at('e') } as unknown as Parameters<typeof outPostings>[2];
+  const log = (eventName: string, args: Record<string, unknown>) => ({ address: at('7'), eventName, args }) as Parameters<typeof outPostings>[3][number];
+  const accept = (adjudicator: string) => [log('PaymentReleased', { jobId: id, amount: 100n }), log('FeePaid', { id, adjudicator, amount: 5n })];
+
+  it('lists the payee and the paid adjudicator when each address has one role', () => {
+    expect(outPostings('decide', id, terms, accept(at('f')), 'primary').map((p) => [p.to, p.amount])).toEqual([[at('e'), 100n], [at('f'), 5n]]);
+  });
+
+  // The deal record's checks (examples/deal-record.ts) tell who was paid by address. Where one address stands on two
+  // sides, a correct payment would read as a wrong one, so the event lists nothing and the record says "not run".
+  it('lists nothing when the two money addresses are one, or the paid adjudicator is one of a party\'s addresses', () => {
+    const oneAddress = { ...terms, sellerPayoutAddress: terms.buyerPaymentAddress };
+    expect(outPostings('decide', id, oneAddress, accept(at('f')), 'primary')).toEqual([]);
+    expect(outPostings('reclaim', id, oneAddress, [log('Refunded', { jobId: id, amount: 105n })], undefined)).toEqual([]);
+    for (const party of ['b', 'c', 'd', 'e']) expect(outPostings('decide', id, terms, accept(at(party)), 'primary'), party).toEqual([]);
+  });
+});
 
 describe.skipIf(!ready)(`EvmSettlement on anvil${ready ? '' : ' (SKIPPED: needs anvil on PATH and forge build output in contracts/out)'}`, () => {
   let world: EvmWorld;
@@ -67,6 +88,47 @@ describe.skipIf(!ready)(`EvmSettlement on anvil${ready ? '' : ' (SKIPPED: needs 
     expect(chain.transactions().map((t) => t.call)).toEqual(['agreeAndFund', 'decide']);
     expect(await chain.replayCheck()).toMatchObject({ ok: true });
   }, 60_000);
+
+  // T-621: a deal record names who was paid from a settled event's postings, so a decision and a reclaim write them as
+  // SimChain does, from the rules contract's own logs. Each list is held to what the token says each address received.
+  it('a decision and a reclaim write the settled event\'s postings, equal to what each address received (T-621)', async () => {
+    const SETTLED = /^settlement\./;
+    type Who = 'seller' | 'buyer' | 'primary' | 'fallback' | 'appeal';
+    const price = 2_000_000_000n, fee = 50_000_000n;
+    const cases: Array<[path: string, type: string, postings: Array<[Who, bigint, string]>]> = [
+      ['happy path (decision carries the delivery)', 'settlement.released', [['seller', price, 'price to the seller'], ['primary', fee, 'fee to the primary adjudicator, whose decision settles']]],
+      ['reject (fee-only capture + void)', 'settlement.refunded', [['buyer', price, 'price back to the buyer'], ['primary', fee, 'fee to the primary adjudicator, whose decision settles']]],
+      ['fallback (primary silent, fallback accepts)', 'settlement.released', [['seller', price, 'price to the seller'], ['fallback', fee, 'fee to the fallback adjudicator, whose decision settles']]],
+      ['escalation, then the appeal adjudicator decides', 'settlement.released', [['seller', price, 'price to the seller'], ['appeal', fee, 'fee to the appeal adjudicator, whose decision settles']]],
+      ['reclaim (nothing delivered)', 'settlement.reclaimed', [['buyer', price + fee, 'price + fee back to the buyer: nothing delivered']]],
+    ];
+    for (const [path, type, expected] of cases) {
+      const { chain, cast, club } = await newSettlement(world);
+      const who: Who[] = ['seller', 'buyer', 'primary', 'fallback', 'appeal'];
+      const before = new Map(await Promise.all(who.map(async (w) => [w, await chain.tokenBalance(cast[w].address)] as const)));
+      const id = await PATHS[path]!(chain, cast, club);
+      const settled = chain.log().filter((e) => e.commitmentId === id && SETTLED.test(e.type));
+      expect(settled.map((e) => e.type), path).toEqual([type]);
+      expect(settled[0]!.payload['postings'], path).toEqual(expected.map(([w, amount, why]) => ({ from: `escrow:${id}`, to: cast[w].address.toLowerCase(), amount: { token: chain.token, amount: amount.toString() }, why })));
+      for (const w of who) {
+        const got = expected.filter(([to]) => to === w).reduce((n, [, amount]) => n + amount, 0n);
+        // The buyer paid the whole hold in, so its balance moves by what came back less the hold.
+        expect((await chain.tokenBalance(cast[w].address)) - before.get(w)!, `${path}: ${w}`).toBe(w === 'buyer' ? got - (price + fee) : got);
+      }
+      expect(eventSchemaErrors(chain.log()), path).toEqual([]);
+    }
+    // Two settlements keep their events as they were: the deal record's checks (examples/deal-record.ts) fail an early
+    // accept's and a default outcome's postings in SimChain's shape, so those stay "not run" on a chain. And a mutual
+    // settlement's event takes exactly its payouts (event.schema.json).
+    for (const path of ['early accept (delivery carried)', 'default (primary and fallback silent)', 'mutual settlement (70/30, before delivery)']) {
+      const { chain, cast, club } = await newSettlement(world);
+      const id = await PATHS[path]!(chain, cast, club);
+      const closing = chain.log().filter((e) => e.commitmentId === id && (SETTLED.test(e.type) || e.type === 'commitment.settled'));
+      expect(closing, path).toHaveLength(1);
+      expect(closing[0]!.payload['postings'], path).toBeUndefined();
+      expect(eventSchemaErrors(chain.log()), path).toEqual([]);
+    }
+  }, 600_000);
 
   it('the funding and fee typed data an operator prepares hash to the digests the token checks (ADR-0025)', async () => {
     const { chain, cast, club } = await newSettlement(world);

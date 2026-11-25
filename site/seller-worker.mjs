@@ -69899,6 +69899,40 @@ function eventTypesFor(call, logs) {
 	}
 	return out;
 }
+/**
+* The postings out of escrow that a decision or a reclaim made, as SimChain writes them on the settled event, so a
+* deal record names who was paid (T-621). They come from one deal's logs of the rules contract: the caller passes only
+* those. The amounts and the paid adjudicator are the logs'. The two money addresses are the terms', which the
+* contract pays (ADR-0033): `PaymentReleased` and `Refunded` name the signing addresses, not where the money went.
+* A zero amount is no posting. None for an early accept or a default outcome: the deal record's checks refuse their
+* postings in SimChain's shape (examples/deal-record.ts, "postings follow the outcome"), and none for a mutual
+* settlement, whose event takes its payouts only (event.schema.json). None for a decision on a price of 0, which the
+* same check refuses. None where one address stands on two sides, the two money addresses being one or the paid
+* adjudicator being an address of a party: the record tells who was paid by address, so it would read a correct
+* payment as a wrong one.
+*/
+function outPostings(fn, id, terms, rulesLogs, role) {
+	if (fn !== "reclaim" && !(fn === "decide" && BigInt(terms.price.amount) > 0n)) return [];
+	const parties = [
+		terms.buyer,
+		terms.seller,
+		terms.buyerPaymentAddress,
+		terms.sellerPayoutAddress
+	].map(lc);
+	if (lc(terms.buyerPaymentAddress) === lc(terms.sellerPayoutAddress) || rulesLogs.some((l) => l.eventName === "FeePaid" && parties.includes(lc(String(l.args["adjudicator"]))))) return [];
+	const line = (to, amount, why) => ({
+		from: `escrow:${id}`,
+		to: lc(to),
+		amount: BigInt(amount),
+		why
+	});
+	return rulesLogs.flatMap((l) => {
+		if (l.eventName === "PaymentReleased") return [line(terms.sellerPayoutAddress, l.args["amount"], "price to the seller")];
+		if (l.eventName === "Refunded") return [line(terms.buyerPaymentAddress, l.args["amount"], fn === "reclaim" ? "price + fee back to the buyer: nothing delivered" : "price back to the buyer")];
+		if (l.eventName === "FeePaid") return [line(String(l.args["adjudicator"]), l.args["amount"], `fee to the ${role} adjudicator, whose decision settles`)];
+		return [];
+	}).filter((p) => p.amount > 0n);
+}
 function erc3009Typed(primaryType, domain, message) {
 	const typedData = {
 		domain,
@@ -71768,6 +71802,11 @@ var init_evm_settlement = __esmMin((() => {
 				...ctx.operatorFee,
 				...tx
 			}, true, blockAt);
+			const own = logs.filter((l) => lc(l.address) === lc(this.world.deployment.rules) && lc(String(l.args["jobId"] ?? l.args["id"])) === lc(id));
+			const postings = outPostings(fn, id, before.terms, own, ctx.decision?.role).map((p) => ({
+				...p,
+				amount: this.amount(p.amount)
+			}));
 			for (const { type, log } of eventTypesFor(fn, logs)) {
 				if (type === "key.released" && log) {
 					const a = log.args;
@@ -71786,6 +71825,7 @@ var init_evm_settlement = __esmMin((() => {
 					}, true, blockAt);
 				} else this.emit(type, id, actor, via, {
 					...this.payloadOf(type, before, after, ctx, log),
+					...type.startsWith("settlement.") && postings.length ? { postings } : {},
 					...tx
 				}, true, blockAt);
 				if (type === "delivery.submitted" && ctx.delivery) this.landDelivery(book, ctx.delivery, id, actor, via, blockAt);
@@ -71823,7 +71863,7 @@ var init_evm_settlement = __esmMin((() => {
 				path
 			}, false, at);
 		}
-		/** A chain event's payload as SimChain writes it for the same step (without postings). */
+		/** A chain event's payload as SimChain writes it for the same step, postings aside (`outPostings`). */
 		payloadOf(type, before, after, c, log) {
 			switch (type) {
 				case "hold.funded": return { amount: "hold" in after ? after.hold.amount : null };

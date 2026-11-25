@@ -256,6 +256,105 @@ describe.skipIf(!anvilReady)(`publish on anvil: from no ETH to a first take that
     expect(await chain().getBalance({ address: key })).toBe(0n);
   }, 600_000);
 
+  it('an approve that differs from the one shown names the missing or changed flag and prints the command that works; the operators and the folder are blamed only when they differ (T-621)', async () => {
+    const folder = await make('mismatch', false);
+    const state = () => JSON.parse(readFileSync(join(folder, 'crow.json'), 'utf8'));
+    const shown = await setup(['publish', '--offer-id', 'miss-1'], folder);
+    expect(shown.code, shown.out + shown.err).toBe(3);
+    const { approve, expiresAt } = lines(shown.out).at(-1);
+    const expect_ = / --expect (0x[0-9a-f]{64})/.exec(String(approve))![1]!;
+    const quiet = world.length;
+    /** One refused approve: exit 1, nothing sent, its last line. */
+    const refused = async (args: string[]) => {
+      const r = await setup(['publish', ...args], folder);
+      expect(r.code, r.out + r.err).toBe(1);
+      expect(world.slice(quiet), 'a refused approve sends nothing').toEqual([]);
+      return lines(r.out).at(-1) as J;
+    };
+    const blamed = /operators' answers or this folder changed/;
+    // The default expiry counts from the run's own second: a later second gives another template, as a person's run does.
+    await new Promise((r) => setTimeout(r, 1_100));
+
+    // The measured defect: the approve line without the --expires it printed.
+    const noExpires = await refused(['--offer-id', 'miss-1', '--expect', expect_]);
+    expect(noExpires.detail).toMatch(/not the one shown/);
+    expect(noExpires.detail).toContain(`--expires is missing: the preview printed --expires ${expiresAt}`);
+    expect(noExpires.detail).not.toMatch(blamed);
+    expect(noExpires.run).toMatch(/^node .*setup\.mjs/);
+    expect(noExpires.run).toContain(` --folder ${folder} `);
+    expect(noExpires.run).toContain(`--offer-id miss-1 --expires ${expiresAt} --expect ${expect_}`);
+    // The command signs, so the line says the person's yes still comes first.
+    expect(noExpires.detail).toMatch(/only on the person's yes/);
+
+    const otherExpires = await refused(['--offer-id', 'miss-1', '--expires', '2099-01-01T00:00:00Z', '--expect', expect_]);
+    expect(otherExpires.detail).toContain(`--expires is 2099-01-01T00:00:00Z, and the preview printed --expires ${expiresAt}`);
+    expect(otherExpires.run).toBe(noExpires.run);
+
+    const noOfferId = await refused(['--expires', expiresAt, '--expect', expect_]);
+    expect(noOfferId.detail).toContain('--offer-id is missing: the preview printed --offer-id miss-1');
+    expect(noOfferId.detail).not.toContain('--expires is');
+    expect(noOfferId.run).toBe(noExpires.run);
+
+    // A hash no preview in this folder printed: said so, with the command that shows the template again.
+    const unknown = await refused(['--offer-id', 'miss-1', '--expect', `0x${'00'.repeat(32)}`]);
+    expect(unknown.detail).toMatch(/not the one shown/);
+    expect(unknown.detail).toMatch(/no preview in this folder printed that --expect/);
+    expect(unknown.detail).toContain('--expires is missing');
+    expect(unknown.run).toMatch(/setup\.mjs publish .*--offer-id miss-1$/);
+
+    // A kept line whose expiry has passed names that, not the operators. One with no offer ID counts as no line.
+    const kept = join(folder, 'publish-shown.json');
+    const printed = readFileSync(kept, 'utf8');
+    writeFileSync(kept, JSON.stringify([{ hash: `0x${'11'.repeat(32)}`, offerId: 'miss-1', expiresAt: '2020-01-01T00:00:00Z', replace: false }, { hash: `0x${'22'.repeat(32)}`, expiresAt, replace: false }]));
+    const expired = await refused(['--offer-id', 'miss-1', '--expect', `0x${'11'.repeat(32)}`]);
+    expect(expired.detail).toContain('the printed --expires 2020-01-01T00:00:00Z has passed');
+    expect(expired.detail).not.toMatch(blamed);
+    expect(expired.run).not.toContain('--expect');
+    const unread = await refused(['--offer-id', 'miss-1', '--expect', `0x${'22'.repeat(32)}`]);
+    expect(unread.detail).toMatch(/no preview in this folder printed that --expect/);
+    expect(`${unread.detail} ${unread.run}`).not.toContain('undefined');
+    writeFileSync(kept, printed);
+
+    // Every flag as shown, and the folder changed since: now the folder or the operators are the cause.
+    const file = join(folder, 'template.json');
+    const was = readFileSync(file, 'utf8');
+    writeFileSync(file, was.replace('Two customers as CSV', 'Two customers, as a CSV file'));
+    const changed = await refused(String(approve).split(' '));
+    expect(changed.detail).toMatch(blamed);
+    expect(changed.run).not.toContain('--expect');
+    // Both at once: the missing flag is named, and no command that would fail again is offered.
+    const both = await refused(['--offer-id', 'miss-1', '--expect', expect_]);
+    expect(both.detail).toContain('--expires is missing');
+    expect(both.detail).toMatch(blamed);
+    expect(both.run).not.toContain('--expect');
+    writeFileSync(file, was);
+    expect(state().standing ?? []).toHaveLength(0);
+
+    // The printed command, run as printed by a shell, publishes the template that was shown.
+    const ran = await new Promise<{ code: number | null; out: string; err: string }>((resolve) => {
+      const p = spawn('/bin/sh', ['-c', noExpires.run], { cwd: root, env: { PATH: `${dirname(process.execPath)}:${process.env['PATH'] ?? ''}`, HOME: process.env['HOME'] ?? '' } });
+      let out = '', err = '';
+      p.stdout.on('data', (d) => (out += d));
+      p.stderr.on('data', (d) => (err += d));
+      p.on('close', (code) => resolve({ code, out, err }));
+    });
+    expect(ran.code, ran.out + ran.err).toBe(0);
+    expect(lines(ran.out).at(-1)).toMatchObject({ step: 'publish', ok: true, offerId: 'miss-1', kept: false, expiresAt });
+
+    // A --replace approval without --replace: refused by name, not answered "kept" as if it had been published.
+    writeFileSync(file, was.replace('Two customers as CSV', 'Two customers, as a CSV file'));
+    const again = await setup(['publish', '--replace', '--offer-id', 'miss-1'], folder);
+    expect(again.code, again.out + again.err).toBe(3);
+    const replace = lines(again.out).at(-1);
+    const sentBefore = world.length;
+    const dropped = await setup(['publish', ...String(replace.approve).replace(' --replace', '').split(' ')], folder);
+    expect(dropped.code, dropped.out + dropped.err).toBe(1);
+    expect(lines(dropped.out).at(-1).detail).toContain('--replace is missing');
+    expect(lines(dropped.out).at(-1).run).toMatch(/--expect 0x[0-9a-f]{64} --replace$/);
+    expect(world.slice(sentBefore)).toEqual([]);
+    expect(state().standing).toHaveLength(1);
+  }, 300_000);
+
   it('attack.revoke-before-deployment-noop: a revocation before any take prints the deployment first, and the two end the template', async () => {
     const folder = await make('early', false);
     const key = JSON.parse(readFileSync(join(folder, 'crow.json'), 'utf8')).address as Address;
