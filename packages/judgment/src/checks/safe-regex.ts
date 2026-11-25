@@ -45,8 +45,9 @@ function alt(options: Node[]): Node {
 }
 
 /**
- * Work allowance shared by every check on one delivery, in NFA state visits. Linear time per cell
- * is not enough on its own: states x subject length x cells can still be large.
+ * Work allowance shared by every check on one delivery, in NFA state visits, empty moves included, so
+ * that one unit stands for about the same work on every pattern. Linear time per cell is not enough on
+ * its own: states x subject length x cells can still be large.
  */
 export class StepBudget {
   constructor(public remaining: number) {}
@@ -333,21 +334,37 @@ class Compiler {
   }
 }
 
+// Visit marks shared by every simulation: a run never starts inside another, and no NFA exceeds MAX_STATES. A
+// generation counter tells runs apart, so a call allocates nothing of the pattern's size and a compiled pattern
+// holds no marks of its own.
+const MARK = new Int32Array(MAX_STATES).fill(-1);
+let gen = 0;
+
 function simulate(states: State[], start: number, subject: string, anchoredStart: boolean, anchoredEnd: boolean, budget?: StepBudget): boolean {
-  const mark = new Int32Array(states.length).fill(-1);
-  let gen = 0;
-  let current: number[] = [];
+  // Clear the marks long before the generation counter could leave the Int32 range.
+  if (gen > 0x3fff_0000) {
+    MARK.fill(-1);
+    gen = 0;
+  }
+  // Every engine step is charged: one unit per state in the current set and per code point (below), and one
+  // unit per empty move, a split state visited while following empty moves.
   const add = (list: number[], s: number) => {
+    let moves = 0;
     const stack = [s];
     while (stack.length) {
       const x = stack.pop()!;
-      if (mark[x] === gen) continue;
-      mark[x] = gen;
+      if (MARK[x] === gen) continue;
+      MARK[x] = gen;
       const st = states[x]!;
-      if (st.k === 'split') stack.push(st.b, st.a);
-      else list.push(x);
+      if (st.k === 'split') {
+        moves++;
+        stack.push(st.b, st.a);
+      } else list.push(x);
     }
+    if (moves > 0) budget?.spend(moves);
   };
+  gen++;
+  let current: number[] = [];
   add(current, start);
   const accepts = (list: number[]) => list.some((x) => states[x]!.k === 'match');
   // Code points are read one at a time, so a run that stops early reads no further.

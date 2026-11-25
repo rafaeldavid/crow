@@ -17,7 +17,7 @@ const COMMA = 0x2c;
 const LF = 0x0a;
 const CR = 0x0d;
 
-/** Parses `text`, charging the budget for its length and one unit per field. */
+/** Parses `text`, charging the budget for its length, one unit per field and one per doubled quote. */
 export function parseCsv(text: string, budget?: StepBudget): Result<Csv, string> {
   chargeChars(budget, text.length);
   const n = text.length;
@@ -51,20 +51,20 @@ export function parseCsv(text: string, budget?: StepBudget): Result<Csv, string>
   while (i < n) {
     let value: string;
     if (text.charCodeAt(i) === QUOTE) {
-      value = '';
-      let from = i + 1;
+      // Find the closing quote, past any doubled quotes, then take the field in one slice.
+      let q = i;
+      let doubled = false;
       for (;;) {
-        const q = text.indexOf('"', from);
+        q = text.indexOf('"', q + 1);
         if (q < 0) return err('unterminated quoted field');
-        if (text.charCodeAt(q + 1) === QUOTE) {
-          value += text.slice(from, q + 1);
-          from = q + 2;
-          continue;
-        }
-        value += text.slice(from, q);
-        i = q + 1;
-        break;
+        if (text.charCodeAt(q + 1) !== QUOTE) break;
+        budget?.spend(1);
+        doubled = true;
+        q++;
       }
+      value = text.slice(i + 1, q);
+      if (doubled) value = value.replaceAll('""', '"');
+      i = q + 1;
       const c = text.charCodeAt(i);
       if (i < n && c !== COMMA && c !== LF && c !== CR) return err(`line ${records + 1}: text after closing quote`);
     } else {

@@ -1,6 +1,6 @@
 import fc from 'fast-check';
 import { describe, expect, it } from 'vitest';
-import { compileSafeRegex, MAX_SUBJECT_CHARS } from './safe-regex.js';
+import { BudgetExhausted, compileSafeRegex, MAX_SUBJECT_CHARS, StepBudget } from './safe-regex.js';
 
 const compile = (p: string) => {
   const r = compileSafeRegex(p);
@@ -135,6 +135,44 @@ describe('safe regex: refusals', () => {
   it('does not match subjects longer than the cap', () => {
     expect(compile('a*').fullMatch('a'.repeat(MAX_SUBJECT_CHARS + 1))).toBe(false);
     expect(compile('a*').fullMatch('a'.repeat(MAX_SUBJECT_CHARS))).toBe(true);
+  });
+});
+
+describe('safe regex: the match budget counts every engine step', () => {
+  const spent = (p: string, s: string, mode: 'fullMatch' | 'search' = 'fullMatch') => {
+    const b = new StepBudget(1_000_000);
+    compile(p)[mode](s, b);
+    return 1_000_000 - b.remaining;
+  };
+
+  it('charges one unit per code point and per state in the current set', () => {
+    // abc: one state in the set at each of three code points, and no empty move.
+    expect(spent('abc', 'abc')).toBe(6);
+  });
+
+  it('charges one unit per empty move', () => {
+    // a?: the split state is one empty move before the first code point.
+    expect(spent('a?', '')).toBe(1);
+    expect(spent('a?', 'a')).toBe(4);
+    // Each optional part adds its empty move.
+    expect(spent('(?:a?){20}', 'b') - spent('(?:a?){10}', 'b')).toBeGreaterThanOrEqual(10);
+    expect(spent('(?:a?){20}', '', 'search')).toBeGreaterThanOrEqual(20);
+  });
+
+  it('runs out of budget on an empty subject too', () => {
+    expect(() => compile('(?:a?){50}').fullMatch('', new StepBudget(10))).toThrow(BudgetExhausted);
+  });
+
+  it('gives the same answers when one compiled pattern runs many times (property)', () => {
+    const patterns = ['(a|b)*c', 'a?b?c?', '(ab|a)+', '[ab]{1,3}c?', '(a*)*b', '(a?b?)*'];
+    const compiled = new Map(patterns.map((p) => [p, compile(p)]));
+    fc.assert(
+      fc.property(fc.constantFrom(...patterns), fc.string({ unit: fc.constantFrom('a', 'b', 'c'), maxLength: 12 }), (p, s) => {
+        expect(compiled.get(p)!.fullMatch(s)).toBe(new RegExp(`^(?:${p})$`, 'u').test(s));
+        expect(compiled.get(p)!.search(s, new StepBudget(1_000_000))).toBe(new RegExp(p, 'u').test(s));
+      }),
+      { seed: 11, numRuns: 1000 },
+    );
   });
 });
 

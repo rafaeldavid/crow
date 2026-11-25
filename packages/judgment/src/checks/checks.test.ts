@@ -19,9 +19,9 @@ const one = (check: DeterministicCheck, input = csv(GOOD_CSV), references?: Read
 const base = { id: 'c', required: true } as const;
 
 describe('check registry', () => {
-  it('is a closed union of exactly the nine v0.5 check types', () => {
+  it('is a closed union of exactly the ten check types of schema v0.13', () => {
     expect([...CHECK_TYPES].sort()).toEqual(
-      ['csv_columns_exact', 'hidden_characters_max', 'iso8601_date_column', 'json_schema', 'null_rate_max', 'reference_row_match_min', 'regex_match_rate_min', 'row_count_range', 'unique_key'].sort(),
+      ['csv_columns_exact', 'hidden_characters_max', 'iso8601_date_column', 'json_schema', 'null_rate_max', 'reference_row_match_min', 'regex_match_rate_min', 'row_count_range', 'signature_valid', 'unique_key'].sort(),
     );
   });
 
@@ -194,6 +194,15 @@ describe('the check budget: every step is charged', () => {
     }
     const long = json('x'.repeat(100_000));
     expect(runChecks([{ ...base, type: 'json_schema', schema: { minLength: 60_000 } }], long, new StepBudget(100)).inconclusive).toEqual(['c']);
+  });
+
+  it('unique_key gives the same answer with a column named more than once', () => {
+    const data = csv('k,v\na,1\nb,1\na,2\n');
+    for (const columns of [['k'], ['v'], ['k', 'v']]) {
+      const once = one({ ...base, type: 'unique_key', columns }, data);
+      const twice = one({ ...base, type: 'unique_key', columns: [...columns, ...columns, columns[0]!] }, data);
+      expect(twice).toEqual(once);
+    }
   });
 
   it('reads a reference once per run, however many checks name it', () => {

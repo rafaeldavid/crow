@@ -1,7 +1,7 @@
 import { canonicalJson } from '@holdback/core';
 import fc from 'fast-check';
 import { describe, expect, it } from 'vitest';
-import { canonical, codePoints } from './cost.js';
+import { canonical, codePoints, MAX_CANONICAL_DEPTH } from './cost.js';
 import { BudgetExhausted, StepBudget } from './safe-regex.js';
 
 const utf16 = fc.array(fc.integer({ min: 0, max: 0xffff }), { maxLength: 24 }).map((units) => String.fromCharCode(...units));
@@ -38,6 +38,19 @@ describe('canonical', () => {
     canonical({ a: ['x'.repeat(160), 1, null] }, b);
     expect(1_000 - b.remaining).toBeGreaterThanOrEqual(5 + 10);
     expect(() => canonical(Array.from({ length: 100 }, () => 0), new StepBudget(50))).toThrow(BudgetExhausted);
+  });
+});
+
+describe('canonical: depth', () => {
+  const nest = (n: number): unknown => {
+    let v: unknown = 0;
+    for (let i = 1; i < n; i++) v = [v];
+    return v;
+  };
+  it(`writes a value nested ${MAX_CANONICAL_DEPTH} deep and refuses one level more, whatever the stack`, () => {
+    expect(canonical(nest(MAX_CANONICAL_DEPTH))).toBe(`${'['.repeat(MAX_CANONICAL_DEPTH - 1)}0${']'.repeat(MAX_CANONICAL_DEPTH - 1)}`);
+    expect(() => canonical(nest(MAX_CANONICAL_DEPTH + 1))).toThrow(TypeError);
+    expect(() => canonical(nest(MAX_CANONICAL_DEPTH * 50))).toThrow(TypeError);
   });
 });
 

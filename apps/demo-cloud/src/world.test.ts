@@ -15,7 +15,7 @@ import { MemoryFeedbackStore, SIM_MAX_CIPHERTEXT_BYTES, signRegistration, testAc
 import { MemoryStorage, PublicWorld, type PublicWorldOptions } from './index.js';
 import { checkExchange } from '../../../tests/contract/openapi-check.ts';
 import { JudgeBudget } from './judges.js';
-import { DEMO_FAUCET_MAX_GRANT, DEMO_MAX_CIPHERTEXT_BYTES, TimeoutBudgetRows, buildCommit, relayerFacts } from './world.js';
+import { DEMO_FAUCET_MAX_GRANT, DEMO_MAX_CIPHERTEXT_BYTES, TimeoutBudgetRows, buildCommit, relayerFacts, requiresLiveJudges } from './world.js';
 
 type J = any; // eslint-disable-line @typescript-eslint/no-explicit-any
 
@@ -1261,4 +1261,87 @@ describe('discovery publishes what Crow Control reads by script (T-066, slice 3)
     const index = ((await (await fetch(`${urls[0]}/`)).json()) as J).demo;
     expect(index.judges.tokensToday).toEqual({ input: 0, output: 0, byModel: {} });
   });
+});
+
+// N222 (the Fable review of the security pack, 2026-11-25): a verdict comes from the pinned live models or not at all.
+// A world that settles on a chain (`requireLiveJudges`, which `live` sets) with one of the three live variables missing
+// ran scripted judges, and new judged deals settled on them. It now fails closed, as a spent judge budget does: Crow's
+// adjudicators decline new judged deals, a judgment under way abstains, and discovery says why. SimChain keeps the
+// scripted judges, marked as such.
+describe('live judges fail closed on a chain world when a model variable is missing (N222)', () => {
+  const incomplete = { HOLDBACK_ANTHROPIC_API_KEY: 'k' };
+  const standIn = () => {
+    const inner = markerFake();
+    const calls: string[] = [];
+    return { calls, provider: { complete: (r: Parameters<typeof inner.complete>[0]) => (calls.push(r.model), inner.complete(r)) } };
+  };
+
+  // Red team of PR 797 (L2): the default had no test, since every world above names the flag. A chain world, the
+  // Worker's Sepolia world among them (worker.ts passes `live` and never the flag), fails closed unless told otherwise.
+  it('fails closed by default on any world with a chain, and only where the options say otherwise', () => {
+    const live = {} as NonNullable<PublicWorldOptions['live']>;
+    expect(requiresLiveJudges({ live })).toBe(true);
+    expect(requiresLiveJudges({ live, requireLiveJudges: false })).toBe(false);
+    expect(requiresLiveJudges({})).toBe(false);
+    expect(requiresLiveJudges({ requireLiveJudges: true })).toBe(true);
+  });
+
+  it('declines a judged offer with a clear reason, says so in discovery, and still accepts a checks-only offer', async () => {
+    const { urls } = await serve({ env: incomplete, requireLiveJudges: true });
+    const index = ((await (await fetch(`${urls[0]}/`)).json()) as J).demo;
+    expect(index.judges).toMatchObject({ panel: 'unavailable', registry: { uri: LIVE_REGISTRY_URI }, missing: ['HOLDBACK_OPENAI_COMPATIBLE_API_KEY', 'HOLDBACK_OPENAI_COMPATIBLE_BASE_URL'], judgedDeals: { accepting: false, resumesAt: null } });
+    expect(JSON.stringify(index)).not.toContain('"k"');
+    const notes = ((await discovery(urls)) as J).notes.join('\n');
+    expect(notes).toMatch(/judges_unconfigured/);
+    const { offer, seller } = await rubricOffer(urls);
+    expect(offer.state.notices.join(' ')).toMatch(/judges_unconfigured: .*HOLDBACK_OPENAI_COMPATIBLE_API_KEY/);
+    let state: J;
+    for (const end = Date.now() + 10_000; Date.now() < end; await new Promise((r) => setTimeout(r, 100))) {
+      state = await seller.call('GET', `/v1/commitments/${offer.id}`);
+      if (state.notices?.some((n: string) => /declined this offer/.test(n))) break;
+    }
+    expect(state!.escrowState).toBe('Offered');
+    expect(state!.notices.join(' ')).toMatch(/declined this offer: judges_unconfigured:/);
+    const plain = await rubricOffer(urls, { checksOnly: true });
+    expect((await plain.buyer.waitFor(plain.offer.id, ['AcceptedByAdjudicator'], 10_000)).escrowState).toBe('AcceptedByAdjudicator');
+  }, 90_000);
+
+  it('with every variable present (a stand-in for the models), accepts a judged offer', async () => {
+    const { provider } = standIn();
+    const { urls } = await serve({ judgeProvider: provider, requireLiveJudges: true });
+    expect(((await (await fetch(`${urls[0]}/`)).json()) as J).demo.judges).toMatchObject({ panel: 'live', judgedDeals: { accepting: true } });
+    const { offer, buyer } = await rubricOffer(urls);
+    expect((await buyer.waitFor(offer.id, ['AcceptedByAdjudicator'], 10_000)).escrowState).toBe('AcceptedByAdjudicator');
+  }, 90_000);
+
+  it('SimChain with no keys keeps scripted judges, and every scripted verdict says so', async () => {
+    const { urls } = await serve({});
+    expect(((await (await fetch(`${urls[0]}/`)).json()) as J).demo.judges).toMatchObject({ panel: 'scripted' });
+    const d = await rubricDeal(urls, DIFF);
+    const record = (await d.buyer.call('GET', `/v1/commitments/${d.id}/judgment`)) as J;
+    for (const m of record.panel.members) expect(m.verdict.rationale).toMatch(/^\[fake judge, no model ran\]/);
+  }, 90_000);
+
+  it('a judgment under way when the configuration turns incomplete abstains, and no scripted verdict stands in', async () => {
+    const storage = new MemoryStorage();
+    const { provider } = standIn();
+    const a = await serve({ judgeProvider: provider }, storage);
+    const { offer, buyer, seller } = await rubricOffer(a.urls);
+    await buyer.waitFor(offer.id, ['AcceptedByAdjudicator']);
+    await buyer.agreeAndFund(offer.terms, 40_000_000n);
+    await a.close();
+    running.splice(running.indexOf(a), 1);
+    // The same world restarts on a chain-like configuration with a variable gone, before the work is delivered.
+    const b = await serve({ env: incomplete, requireLiveJudges: true }, storage);
+    for (const x of [buyer, seller]) x.operators.splice(0, x.operators.length, ...b.urls);
+    await seller.deliver(offer.terms, new TextEncoder().encode(DIFF));
+    const escalated = await buyer.waitFor(offer.id, ['Escalated', 'Released', 'Refunded'], 40_000);
+    expect(escalated.escrowState).toBe('Escalated');
+    const record = (await buyer.call('GET', `/v1/commitments/${offer.id}/judgment`)) as J;
+    expect(record.aggregate.decision).toBe('escalate');
+    for (const m of record.panel.members) {
+      expect(m.status).toBe('error');
+      expect(JSON.stringify(m)).not.toMatch(/fake judge/);
+    }
+  }, 120_000);
 });

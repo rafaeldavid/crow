@@ -66,6 +66,7 @@ function settlementRefusal(s: SettlementBackend): string | null {
  * contract does not do.
  */
 export const LOCAL_EXCLUSIONS: Readonly<Record<string, string>> = {
+  'neutrality.fallback-lacks-check-kind': 'Phase 4: seller compensation from the primary and fallback bonds on default (triggerDefault refunds the buyer only); not in phase one: no bonds (SC-7, ADR-0031)',
   'neutrality.adjudicator-and-fallback-offline': 'Phase 4: seller compensation from the primary and fallback bonds on default (triggerDefault refunds the buyer only); not in phase one: no bonds (SC-7, ADR-0031)',
   'neutrality.appeal-adjudicator-offline-after-escalation': 'Phase 4: seller compensation from the appeal adjudicator’s bond on default; not in phase one: no bonds (SC-7, ADR-0031)',
   'honest-seller-survives-judge-noise-on-appeal': 'Phase 4: the rulebook appeal fee is not collected on chain and the appeal bond rate is not checked; not in phase one: no party appeals (SC-7, ADR-0031)',

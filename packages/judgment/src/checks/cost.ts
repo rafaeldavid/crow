@@ -14,10 +14,16 @@ export function chargeChars(budget: StepBudget | undefined, chars: number): void
   if (chars > 0) budget?.spend(Math.ceil(chars / CHARS_PER_UNIT));
 }
 
-/** Charges a sort of `n` items: n log2 n comparisons, rounded up. */
+/** Charges a sort of `n` items: n times the bit length of n - 1, which is log2 n rounded up, in integers. */
 export function chargeSort(budget: StepBudget | undefined, n: number): void {
-  if (n > 1) budget?.spend(n * Math.ceil(Math.log2(n)));
+  if (n > 1) budget?.spend(n * (32 - Math.clz32(n - 1)));
 }
+
+/**
+ * How deep canonical() follows nested arrays and objects. Past it the value is refused as canonical form refuses
+ * other values, at a fixed depth, so the answer does not depend on how much stack the engine has at that moment.
+ */
+export const MAX_CANONICAL_DEPTH = 1000;
 
 /** The number of code points in `s` (lone surrogates count one each), in one pass that allocates nothing. */
 export function codePoints(s: string): number {
@@ -59,15 +65,16 @@ function scalar(v: unknown, budget: StepBudget | undefined): string | undefined 
   return undefined;
 }
 
-function write(v: unknown, budget: StepBudget | undefined, parts: string[]): void {
+function write(v: unknown, budget: StepBudget | undefined, parts: string[], depth: number): void {
   budget?.spend(1);
+  if (depth > MAX_CANONICAL_DEPTH) throw new TypeError(`canonical JSON: nested deeper than ${MAX_CANONICAL_DEPTH}`);
   const s = scalar(v, budget);
   if (s !== undefined) parts.push(s);
   else if (Array.isArray(v)) {
     parts.push('[');
     for (let i = 0; i < v.length; i++) {
       if (i > 0) parts.push(',');
-      write(v[i], budget, parts);
+      write(v[i], budget, parts, depth + 1);
     }
     parts.push(']');
   } else if (typeof v === 'object' && Object.getPrototypeOf(v) === Object.prototype) {
@@ -79,14 +86,15 @@ function write(v: unknown, budget: StepBudget | undefined, parts: string[]): voi
     for (let i = 0; i < entries.length; i++) {
       if (i > 0) parts.push(',');
       parts.push(str(entries[i]![0], budget), ':');
-      write(entries[i]![1], budget, parts);
+      write(entries[i]![1], budget, parts, depth + 1);
     }
     parts.push('}');
   } else throw new TypeError(`canonical JSON: unsupported ${typeof v}`);
 }
 
 /**
- * The RFC 8785 form of a JSON value, the same string `canonicalJson` (core) writes and throwing where it throws.
+ * The RFC 8785 form of a JSON value, the same string `canonicalJson` (core) writes and throwing where it throws,
+ * and also past MAX_CANONICAL_DEPTH.
  * Each node costs one unit, each string and key its length, and each object its key sort. The pieces are joined
  * once at the end, so no part is copied more than once however deep the value nests.
  */
@@ -98,6 +106,6 @@ export function canonical(v: unknown, budget?: StepBudget): string {
     return s;
   }
   const parts: string[] = [];
-  write(v, budget, parts);
+  write(v, budget, parts, 1);
   return parts.join('');
 }

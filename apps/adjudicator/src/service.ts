@@ -604,14 +604,18 @@ export class Adjudicator {
   }
 
   /**
-   * ADR-0045 §10, the check-kind half: as primary it declines an offer that names a kind outside its record's checkKinds, required or
-   * not, so it joins no hold on a check it does not run. A turn taken after funding does not ask this: stage 1 fails such
-   * a check there. Sealed terms show this service no checks.
+   * ADR-0045 §10 and D92: an adjudicator signs no decision on terms that name a check kind outside its record's checkKinds,
+   * required or not, at any role. As primary it declines the offer, so it joins no hold on a check it does not run. At a
+   * later turn (a fallback takeover, an appeal, a primary whose build lost the kind) it refuses before stage 1, so the
+   * deal passes to the next adjudicator or its default outcome, which returns the price and the fee. Sealed terms show
+   * this service no checks.
    */
-  #checkKindProblem(c: DecisionTask['commitment']): Problem | null {
+  #checkKindProblem(c: DecisionTask['commitment'], role: DecisionTask['role'] | 'offer' = 'offer'): Problem | null {
     const unrun = c.acceptance?.deterministicChecks?.find((k) => !CHECK_TYPES.has(k.type));
     if (!unrun) return null;
-    return problem('adjudicator_unavailable', `${this.#cfg.name} does not run the check kind ${unrun.type}, which check ${unrun.id} names, so it declines the offer; checkKinds on its adjudicator record lists the kinds it runs`);
+    const base = `${this.#cfg.name} does not run the check kind ${unrun.type}, which check ${unrun.id} names`;
+    if (role === 'offer') return problem('adjudicator_unavailable', `${base}, so it declines the offer; checkKinds on its adjudicator record lists the kinds it runs`);
+    return problem('adjudicator_unavailable', `${base}, so as ${role} adjudicator it signs no decision; the deal passes to the next adjudicator or its default outcome, which returns the price and the fee`);
   }
 
   /**
@@ -786,6 +790,8 @@ export class Adjudicator {
    * panel it cannot seat, or a reference its store does not return.
    */
   async #runnable(c: DecisionTask['commitment'], role: DecisionTask['role']): Promise<Problem | null> {
+    const unrun = this.#checkKindProblem(c, role);
+    if (unrun) return unrun;
     const policy = await this.#boundPolicy(c);
     if (!policy.ok) return policy.error;
     const judges = this.#boundRegistry(c);
@@ -905,6 +911,19 @@ export class Adjudicator {
     return ok(held);
   }
 
+  /** True when a judged result for `key` is held in memory or in `judgedStore` (D92: such a turn still completes). */
+  async #hasKept(key: string): Promise<Result<boolean, Problem>> {
+    if (this.#judged.has(key)) return ok(true);
+    const store = this.#cfg.judgedStore;
+    if (!store) return ok(false);
+    try {
+      const kept = await this.#read('the store of judged results', () => store.get(key));
+      return ok(!!kept && 'record' in kept);
+    } catch (e) {
+      return err(problem('adjudicator_unavailable', `the store of judged results did not answer (${errorClass(e)}); not judged, retrying (no record)`));
+    }
+  }
+
   async #restore(key: string, pre: Preflight): Promise<Result<Judged | null, Problem>> {
     const store = this.#cfg.judgedStore;
     if (!store) return ok(null);
@@ -945,6 +964,14 @@ export class Adjudicator {
     const id = commitment.id;
     const mismatch = this.#termsMismatch(commitment);
     if (mismatch) return err(mismatch);
+    // D92: no decision on a check kind this build does not run, at any role. A turn whose result is already kept, in
+    // memory or in judgedStore from before a restart, still completes (ADR-0036 section 2): that stage 1 ran the kind.
+    const unrunKind = this.#checkKindProblem(commitment, role);
+    if (unrunKind) {
+      const kept = await this.#hasKept(judgedKey(task));
+      if (!kept.ok) return kept;
+      if (!kept.value) return err(unrunKind);
+    }
     // The wrong-key re-release runs no panel (#judge).
     const rerelease = role === 'appeal' && task.appealGround === 'missing-or-wrong-key' && task.firstOutcome === 'accept';
     // Before any judge is called (T-211); the fallback's cover is read again before it signs.

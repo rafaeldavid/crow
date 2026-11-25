@@ -1,12 +1,15 @@
 # @settlement sim @judges recorded @mode guaranteed_on_decision @seed 61
 # The scenario runner accepts with its own copy of the decline rule (packages/testkit/src/stub-settlement.ts), so this
 # fixture shows what the refusal does to the deal. apps/adjudicator/src/check-kinds.test.ts tests the real service.
+# Every kind in schema v0.13 runs in this build, so `lacks_check_kinds` gives Bench A a build without signature_valid.
 name: neutrality.adjudicator-lacks-check-kind
 description: >-
   ADR-0045 section 10. Tidewater offers terms that name the signature_valid check kind, and Bench A, the named
   primary, does not run it: its record's checkKinds lacks it. Bench A declines before any funds are held, so the
   buyer cannot agree and fund. After offerExpiresAt anyone expires the offer, and every balance is unchanged.
 fails: bench-a
+lacks_check_kinds:
+  bench-a: [signature_valid]
 club: fixtures/clubs/data-services-v1.yaml
 terms: fixtures/terms/signed-manifest.yaml
 parties:

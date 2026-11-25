@@ -1730,7 +1730,7 @@ The build is not started; it opens as its own task on Rafa's word.
 - **Built-in code only,** on `@noble/curves` at the exact version the adjudicator app pins. No network, no clock, no code from the delivery. The work budget is the only time limit.
 - **A bad or malformed signature fails the check;** a required failed check refunds the buyer, as today. Budget exhaustion escalates.
 - **Schema v0.13** adds the kind and a `checkKinds` list on each adjudicator's record, beside `policy`. No signed type and no contract changes (inferred).
-- **An adjudicator declines an offer with a kind it does not run,** so the offer expires unfunded. The parties' tools read the three named adjudicators' lists before signing (D32). At judging time an unknown kind still fails closed.
+- **An adjudicator declines an offer with a kind it does not run,** so the offer expires unfunded. The parties' tools read the three named adjudicators' lists before signing (D32). At a later turn it signs nothing (D92); stage 1 still fails an unknown kind closed as the last guard.
 
 **Open for Rafa:** whether `jsonEquals` stays in the first version, and whether the laboratory's export will write the signed text beside its manifest object.
 
@@ -1768,6 +1768,42 @@ The build is not started; it opens as its own task on Rafa's word.
 
 **Litmus tests.** Neutrality: holds; the verifier is built-in code in every decider, the contract's check is a hash comparison, and six fixtures show a deal under the rule ending by its terms when the primary, both first deciders, every operator, the seller or the buyer is gone, or an adjudicator lacks the kind. The hold: no stage or timeout changes, and nothing new is stored. Defended judgment: strengthened; the key check is one more deterministic check before the panel, and a decider's wrong seal can no longer pay the seller.
 
+## D92. An adjudicator signs no decision on a check kind it does not run (ADR-0045 amended, T-597)
+
+**Status:** needs Rafa, 2026-11-25.
+
+**Adopted** (Rafa may overrule) by the coordinator from a Fable research note of 2026-11-25 (`reports/crow-private/roadmap/triage/2026-11-25-fallback-unrun-kind.md`), built with the evaluator in T-597.
+
+**Why.** ADR-0045 had a fallback that lacks a kind fail the check and sign a final reject, on the reading that the money moves the same way as an undecided deal. It does not: a reject pays the fee to the adjudicator that decided, and a default returns price and fee to the buyer. The reference fallback already signs nothing for a policy, registry, panel, reference file or envelope it cannot run (ADR-0036 section 3, D81, D21: no judgment, no fee).
+
+**Rule.** An adjudicator signs no decision on a deal whose terms name a check kind outside its `checkKinds`, in a required or an optional check, at any role. As primary it declines the offer. A fallback triggers no takeover and signs nothing if someone else triggers one. An appeal adjudicator signs nothing on an escalation. So does a primary whose build lost the kind. The deal runs to the next adjudicator or to its default outcome. The refusal comes before stage 1, and a turn whose result is already kept still completes (ADR-0036 section 2).
+
+**Built:** `apps/adjudicator/src/service.ts` (the check in `#runnable` and `#preflight`), the scenario runner, the fixture `neutrality.fallback-lacks-check-kind` (SimChain only, bonds), tests in `apps/adjudicator/src/check-kinds.test.ts`, and an operator notice (D31: warn, never refuse) for each named adjudicator whose registered `checkKinds` lacks a kind the terms name (`apps/operator/src/prepare.ts`, `checkKindNotices`). The seller's own offline preflight, which reads no adjudicator records, is not changed: it would alter the pinned `buy.mjs` and `try.mjs`.
+
+**Amended:** ADR-0045 (Summary point 8, section 10, the rejected-alternatives row). D90's last proposed bullet reads as this rule.
+
+**Litmus tests.** Neutrality: holds; a refused turn is a case the default already covers. The hold: unchanged. Defended judgment: strengthened; no decision rests on a check that did not run.
+
+## D93. The match budget counts every engine step (T-599)
+
+**Status:** adopted, 2026-11-25.
+
+**Who decided.** The session for T-599, under the in-repository autonomy rule. Rafa may overrule any line.
+
+**Why.** The match budget bounds the work of a delivery's checks by a count, 50,000,000 units (`CHECK_BUDGET`). It charged each code point and each state in the current set, but not the empty moves the engine follows between code points. On some accepted patterns one unit stood for much more work than on ordinary ones, so a delivery could take far longer to judge than the budget implies (T-593, Handoff; measured in the task).
+
+**Decided:**
+
+- **Count the empty moves.** Each split state the engine visits costs one unit, beside the existing charges. The engine keeps one set of visit marks for every pattern, so a call allocates nothing of the pattern's size and a compiled pattern holds no marks of its own.
+- **A count, not a timer,** so the primary and the fallback adjudicator on one build reach the same result.
+- **Effect** (measured): no check result changes on the 1,288 patterns and every delivery the tests and snapshots use; the largest conclusive run spends 2.4% of the budget. The heaviest shapes measured now cost about as much per unit as an ordinary pattern.
+- **Cost.** A check whose pattern takes many empty moves, near the budget, may now run out and escalate where it passed or failed before. No shipped template or fixture is near that line.
+- **Version.** The checks are not a kept version (`packages/judgment/src/kept/`), so the budget's accounting belongs to the build. The primary and the fallback adjudicator deploy from one build, as for T-593.
+
+**Dropped:** a compile-time bound on how deep optional groups nest, alone or with counting. It refuses before signing, but it would refuse patterns the tests use and still miss shapes that cost as much without nesting (measured). A larger or smaller budget: the size is not the defect.
+
+**Litmus tests.** Neutrality: unchanged. The hold: unchanged. Defended judgment: strengthened; stage 1's work bound now holds for every pattern a party can write.
+
 ## D96. Every judgment step is charged to the check budget (T-607)
 
 **Status:** adopted, 2026-11-25.
@@ -1779,14 +1815,15 @@ The build is not started; it opens as its own task on Rafa's word.
 **Decided:**
 
 - **Charge every step.** The column checks charge one unit per cell they read, the JSON Schema keywords one per name they look up, and every scan one per 16 characters. Building a set entry costs `SET_UNITS`. `enum`, `const` and `uniqueItems` charge the canonical form of the value they compare. Building the table charges its length and its cells. The cost model is in `packages/judgment/src/checks/cost.ts`.
-- **Do repeated work once.** A run builds the table, counts hidden characters and reads each reference once, and every check that needs them shares the result. Terms constants (`enum`, `const`, `type`, `required`) are prepared when the schema compiles, and each check compiles once per run.
+- **Do repeated work once.** A run builds the table, counts hidden characters and reads each reference once, and every check that needs them shares the result. A reference is kept only until the last check that names it, and the JSON table reads the run's one JSON parse (T-597), which stays uncharged because `signature_valid`'s charges are part of its kind. Terms constants (`enum`, `const`, `type`, `required`) are prepared when the schema compiles, and each check compiles once per run.
+- **A fixed depth for canonical forms.** `enum`, `const`, `uniqueItems` and a JSON table cell refuse a value nested deeper than `MAX_CANONICAL_DEPTH` (1,000), as they refuse other values canonical form cannot write. Before, the limit was the engine's stack, which depends on the moment, so two adjudicators could disagree.
 - **Bound compiled patterns before signing.** A JSON schema's patterns together hold at most `MAX_SCHEMA_STATES` (20,000) NFA states; `validateCheck` refuses a schema over it, as it refuses one over `MAX_SCHEMA_NODES`.
 - **Bind the anchors as RegExp does.** In a `json_schema` `pattern`, a leading `^` binds to the first top-level alternative and a trailing `$` to the last: `^a|b` finds the `b` in "xb". Whole-cell matches (`regex_match_rate_min`) do not change.
 - **Counts, not timers,** so the primary and the fallback adjudicator on one build reach the same result.
 - **Effect** (measured): no check result changes on any check and delivery the tests and snapshots use, and none in 20,000 random checks on random deliveries run against the old code. The largest conclusive run in the tests spends 2.1% of the budget (1.4% before). The table of a delivery takes one array instead of one per row.
-- **Cost.** A check near the budget may now run out and escalate where it passed or failed before. A schema whose patterns exceed 20,000 states is refused at offer time, and an already signed one fails as invalid. A `pattern` with an anchor beside top-level alternation may now pass where it failed. No shipped template or fixture meets either case.
+- **Cost.** A check near the budget may now run out and escalate where it passed or failed before. A schema whose patterns exceed 20,000 states is refused at offer time, and an already signed one fails as invalid. A `pattern` with an anchor beside top-level alternation may now pass where it failed. A value nested deeper than 1,000 now fails those checks every time. No shipped template or fixture meets any of these cases.
 - **Version.** The checks are not a kept version (`packages/judgment/src/kept/`), so the primary and the fallback adjudicator deploy from one build, as for D93.
 
-**Dropped:** caps on the size of `enum`, `const`, `type` and `required` in the terms (D31: parametrize, don't restrict); charging the cost once it is known, by time; refusing an anchor beside top-level alternation, which `RegExp` accepts.
+**Dropped:** caps on the size of `enum`, `const`, `type` and `required` in the terms (D31: parametrize, don't restrict); charging the cost once it is known, by time; refusing an anchor beside top-level alternation, which `RegExp` accepts; charging the run's one JSON parse, which would change `signature_valid`'s pinned charges.
 
 **Litmus tests.** Neutrality: strengthened; no party can make a judging pass much slower than the budget allows. The hold: unchanged. Defended judgment: strengthened; stage 1's work bound now holds for every check a party can write.

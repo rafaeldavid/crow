@@ -2,7 +2,7 @@
 
 - **Lane:** judgment
 - **Phase:** 2
-- **Depends on:** T-593 (merged); runs beside T-599 (PR 799) and T-597 (PR 795), which touch the same files
+- **Depends on:** T-593, T-599 (PR 799) and T-597 (PR 795), all merged; this branch merges `origin/main` `91430b55`
 - **Paths this task may touch:** `packages/judgment/src/checks/` (`cost.ts` new, `index.ts`, `json-schema.ts`, `safe-regex.ts`, `table.ts`, `csv.ts` and their tests), `packages/judgment/src/normalize.ts`, `site/setup.mjs` (rebuilt), `docs/decisions-today.md` (D96), `docs/tasks/T-607-every-step-charged.md`
 - **Human gate:** no (the deploys that carry it are Rafa's)
 - **Status:** review
@@ -30,7 +30,8 @@ Make the budget bound the whole of stage 1: every step a check takes on a party'
 ## Acceptance criteria
 
 - [x] Every column check charges each cell it reads; every scan charges its length; set entries, key sorts and canonical forms are charged (`cost.ts`).
-- [x] Work shared by several checks (the table, the hidden-character count, a reference) is done once per run.
+- [x] Work shared by several checks (the table, the hidden-character count, a reference) is done once per run, and a reference is kept only while a later check needs it.
+- [x] Canonical forms refuse a value nested deeper than `MAX_CANONICAL_DEPTH`, a fixed count instead of the engine's stack.
 - [x] Terms constants are prepared when a schema compiles, and a check compiles once per run.
 - [x] A schema's patterns together hold at most `MAX_SCHEMA_STATES` states, refused in `validateCheck`.
 - [x] A `pattern` binds `^` and `$` to the first and last top-level alternative, as `RegExp` does.
@@ -40,18 +41,18 @@ Make the budget bound the whole of stage 1: every step a check takes on a party'
 
 ## Out of scope
 
-- The one JSON parse per check of a `json_schema` check, which T-597 (PR 795) makes one per run.
+- Charging the run's one JSON parse (T-597): `signature_valid`'s charges are part of its kind (ADR-0045, section 6). The JSON table now reads that parse instead of parsing again.
 - The budget's size.
 
 ## Evidence
 
-- **Results unchanged** [measured]: a scratch build ran the old code beside the new on every `runChecks` and `validateCheck` call of `corepack pnpm test` (2,233 runs) and `corepack pnpm snap` (45 runs). No outcome, detail or inconclusive list differed. The largest conclusive run spends 2.1% of the budget (1.4% under the old charges). The six runs that ran out of budget under the old code run out at the same check.
-- **Random comparison** [measured]: 20,000 random sets of checks on random CSV and JSON deliveries, with references, against the old build: 0 differences.
+- **Results unchanged** [measured]: a scratch build ran `origin/main` (`91430b55`) beside this branch on every `runChecks` and `validateCheck` call of `corepack pnpm test` (2,595 runs) and `corepack pnpm snap` (48 runs). No outcome, detail or inconclusive list differed at the default budget, apart from one artefact: an adjudicator test adds a check kind to `CHECK_TYPES` at run time, which the scratch copy of the old module cannot see. The other differences are this task's new tests, which run on a 100-unit budget on purpose. The largest conclusive run in the tests spends 4.0% of the budget, as on main. The same comparison before the merge, against `b4a0a2d8`: 2,233 and 45 runs, 0 differences.
+- **Random comparison** [measured]: 20,000 random sets of checks on random CSV and JSON deliveries, with references, against `origin/main`: 0 differences. The same against `b4a0a2d8`: 0 differences.
 - **Time per unit** [measured, Node 22.23.4, the maintainer's Mac under load from other sessions]: the shapes the old code spent the most time on now cost about as much per budget unit as ordinary deliveries in the same run. The shapes and the times are in the private notes.
-- **Tests added:** the canonical form equals `canonicalJson` and throws where it throws (property); `codePoints` equals spreading the string (property); the CSV parser agrees with a character-by-character reading, errors included (property); `isNullish` agrees with trimming code points (property); `^` and `$` beside alternation agree with `RegExp` (property); the subject cap counts code points; each check kind and the charged schema keywords run out on a small budget; a reference is read once per run; the state limit; `required` reports the first missing name.
-- **Red team:** see Handoff.
-- **Checks** [measured, 2026-11-25]: see Handoff.
-- **Pinned bundle:** `site/setup.mjs` changes, because it embeds the judgment package's checks. sha256 before `8103e24d1f2d5c773e4f8aa88bab95292c3240679ea74d0e192d496af74e5b07`, after `dba2054581c2c390b6dcebf676de1f0aaa9e7c8672e2d1fbdf3d4a28c1833ebb`. No other bundle under `site/` changes.
+- **Tests added:** the canonical form equals `canonicalJson` and throws where it throws (property), and refuses past a fixed depth; `codePoints` equals spreading the string (property); the CSV parser agrees with a character-by-character reading, errors included (property); `isNullish` agrees with trimming code points (property); `^` and `$` beside alternation agree with `RegExp` (property); the subject cap counts code points; each check kind and the charged schema keywords run out on a small budget; a reference is read once per run; the state limit; `required` reports the first missing name; `unique_key` gives the same answer with a column named twice.
+- **Red team** [measured]: a `red-teamer` subagent ran on the first commit. It found no correctness difference in 860,000 comparisons apart from deep values (below), confirmed that the anchor binding matches `RegExp`, and confirmed that charges use no timer. It found five costs this task then fixed: parsed references were all kept until the end of the run; a key column named many times multiplied the key; canonical form failed at a depth that varied with the engine's stack; doubled quotes in a CSV field were charged as text only; a JSON row cost more than its charge. Two more findings were fixed on main by T-599 and T-597. The inputs and figures are in the private notes.
+- **Checks** [measured, 2026-11-25, after merging `origin/main` `91430b55`]: `corepack pnpm build`, `typecheck` and `lint` exit 0. `corepack pnpm test`: 289 files passed, 26 skipped; 5,792 tests passed, 315 skipped, 0 failed. `corepack pnpm snap`: 57 passed, 0 failed, no snapshot diff. `node site/build.mjs && node site/check.mjs`: site check PASS. Under load from other sessions, the existing property test of random nested patterns timed out once at 30 s; its time goes to `RegExp`, not the engine (measured), and it passed in the final run.
+- **Pinned bundle:** `site/setup.mjs` changes, because it embeds the judgment package's checks. sha256 on `origin/main` `91430b55`: `3c8f1c0cb81b7e521cac37538ecfae05f372aab1cbabe725edae5a487ebeac53`; on this branch: listed in the PR. No other bundle under `site/` changes.
 
 ## Decisions
 
@@ -62,5 +63,5 @@ Make the budget bound the whole of stage 1: every step a check takes on a party'
 Done: the charges, the shared per-run work, the compact table, the state limit, the anchor binding and their tests. Not deployed.
 
 - **Deploy together.** The adjudicators, the hosted sellers and `site/setup.mjs` embed this code. Adjudicators on different builds could disagree on a check near the budget, so deploy the primary and the fallback adjudicator from one build.
-- **Merging with PRs 795 and 799.** Both touch `packages/judgment/src/checks/` and `site/setup.mjs`. Merge `origin/main` into this branch after either lands, then rebuild the bundles; never hand-resolve a bundle. PR 795's per-run JSON parse can then feed the table as well.
+- **Merging main.** PRs 795 and 799 are merged in. If `origin/main` moves before this lands, merge it (no rebase) and rebuild the bundles; never hand-resolve a bundle.
 - **Signed deals** [inferred]: a deal already signed is judged under the new charges after the deploy. A check far below the budget finishes with the same result.

@@ -23,6 +23,8 @@ export interface Table {
 export const isNonScalar = (c: Cell): c is NonScalar => typeof c === 'object' && c !== null;
 /** The cell as text for string checks; null and non-scalars have none. */
 export const cellText = (c: Cell): string | null => (typeof c === 'string' ? c : null);
+/** Units per JSON row, beside its cells: reading the row object and listing its keys. */
+const ROW_UNITS = 4;
 /** The cell in row `r` (from 0) and column `c`. */
 export const cellAt = (t: Table, r: number, c: number): Cell => t.cells[r * t.columns.length + c]!;
 
@@ -32,6 +34,30 @@ function cell(v: unknown, budget: StepBudget | undefined): Cell {
   if (typeof v === 'number') return String(v);
   if (typeof v === 'boolean') return { nonScalar: 'boolean', text: String(v) };
   return { nonScalar: Array.isArray(v) ? 'array' : 'object', text: canonical(v, budget) };
+}
+
+/** A parsed JSON delivery as a table, charging the budget for each cell and each row's keys. */
+export function jsonTable(parsed: unknown, budget?: StepBudget): Result<Table, string> {
+  if (!Array.isArray(parsed)) return err('JSON deliverable is not an array of objects');
+  const first: unknown = parsed[0];
+  if (parsed.length > 0 && (typeof first !== 'object' || first === null || Array.isArray(first))) return err('JSON row 0 is not an object');
+  const columns = parsed.length ? Object.keys(first as object) : [];
+  const keysOf = (keys: string[]) => {
+    chargeSort(budget, keys.length);
+    return canonical(keys.sort(), budget);
+  };
+  const key = keysOf([...columns]);
+  const cells: Cell[] = [];
+  for (const [i, r] of parsed.entries()) {
+    budget?.spend(ROW_UNITS);
+    if (typeof r !== 'object' || r === null || Array.isArray(r)) return err(`JSON row ${i} is not an object`);
+    if (keysOf(Object.keys(r)) !== key) return err(`JSON row ${i} has different keys from row 0`);
+    for (const c of columns) {
+      budget?.spend(1);
+      cells.push(cell((r as Record<string, unknown>)[c], budget));
+    }
+  }
+  return ok({ columns, rows: parsed.length, cells });
 }
 
 /** Reads `text` as a table, charging the budget for its length, each cell, and each row's keys. */
@@ -44,25 +70,7 @@ export function toTable(text: string, mime: MimeType, budget?: StepBudget): Resu
     } catch {
       return err('deliverable is not valid JSON');
     }
-    if (!Array.isArray(parsed)) return err('JSON deliverable is not an array of objects');
-    const first = parsed[0];
-    if (parsed.length > 0 && (typeof first !== 'object' || first === null || Array.isArray(first))) return err('JSON row 0 is not an object');
-    const columns = parsed.length ? Object.keys(first as object) : [];
-    const keysOf = (keys: string[]) => {
-      chargeSort(budget, keys.length);
-      return canonical(keys.sort(), budget);
-    };
-    const key = keysOf([...columns]);
-    const cells: Cell[] = [];
-    for (const [i, r] of parsed.entries()) {
-      if (typeof r !== 'object' || r === null || Array.isArray(r)) return err(`JSON row ${i} is not an object`);
-      if (keysOf(Object.keys(r)) !== key) return err(`JSON row ${i} has different keys from row 0`);
-      for (const c of columns) {
-        budget?.spend(1);
-        cells.push(cell((r as Record<string, unknown>)[c], budget));
-      }
-    }
-    return ok({ columns, rows: parsed.length, cells });
+    return jsonTable(parsed, budget);
   }
   const csv = parseCsv(text, budget);
   if (!csv.ok) return err(`CSV: ${csv.error}`);

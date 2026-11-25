@@ -68,7 +68,7 @@ import { decodePublicKey } from '@holdback/core/crypto';
 import { ChainSync, EvmSettlement, OperatorTimeouts, rebindToken, RelayRefused, type Book, type Cursor, type LiveChain, type RecoverReport, type SyncReport, type TimeoutBudget, type TimeoutReport } from '@holdback/settlement/live';
 import type { TimeoutKind } from '@holdback/settlement';
 import { mandateFor, SIM_CHAIN_ID, SIM_RULEBOOK, simClub, SimChain, TOKEN, wideScope, type Genesis, type JournalEntry } from '@holdback/settlement/sim';
-import { panelConfig, type JudgeProvider, type PanelConfig } from './judges.js';
+import { panelConfig, unconfiguredReason, type JudgeProvider, type PanelConfig } from './judges.js';
 import { StorageLanes } from './lanes.js';
 import { JudgedDealsPerPair, capOf, DailyCaps, DEFAULT_JUDGED_DEALS_PER_PAIR, secondsToUtcMidnight, MAX_BODY_BYTES, routedUrl, DEFAULT_DAILY_CAPS, DEFAULT_RATE, FLOOD_CEILING, problemResponse, wholeNumberVar } from './limits.js';
 import type { WorldStorage } from './storage.js';
@@ -106,9 +106,16 @@ export interface PublicWorldOptions {
   /**
    * Live judge calls a day across the demo. Default LIVE_JUDGE_CALLS_PER_DAY from `env`, else 100.
    * Live judging needs HOLDBACK_ANTHROPIC_API_KEY, HOLDBACK_OPENAI_COMPATIBLE_API_KEY and
-   * HOLDBACK_OPENAI_COMPATIBLE_BASE_URL in `env` (Worker secrets); without them the panel is scripted.
+   * HOLDBACK_OPENAI_COMPATIBLE_BASE_URL in `env` (Worker secrets); without them the panel is scripted on SimChain, and a
+   * chain world fails closed (`requireLiveJudges`).
    */
   liveCallsPerDay?: number;
+  /**
+   * N222: with the live judge variables incomplete, fail closed instead of scripting: every seat abstains and Crow's
+   * adjudicators decline new deals that can need a panel (reason `judges_unconfigured:`). Default: true for a chain
+   * world (`live`), false for SimChain, whose scripted judges are marked as such.
+   */
+  requireLiveJudges?: boolean;
   /** ADR-0036: the kept-policies data the world's adjudicators run under. Tests only; default the build's own file. */
   kept?: KeptPolicies;
   /** Stands in for the live models (tests): the world runs as if the keys were set. */
@@ -184,13 +191,22 @@ export function needsPanel(c: { acceptance?: { rubric?: { criteria?: readonly un
 }
 
 /**
+ * N222: whether a world fails closed instead of scripting when a live judge variable is missing. A world that settles on
+ * a chain (`live`) does unless its options say otherwise; SimChain does not. The test harnesses that run the demo on
+ * anvil and want its scripted, marked judges say so with `requireLiveJudges: false`.
+ */
+export const requiresLiveJudges = (o: Pick<PublicWorldOptions, 'live' | 'requireLiveJudges'>): boolean => o.requireLiveJudges ?? o.live !== undefined;
+
+/**
  * T-574 (Rafa, 2026-11-20: "Decline new judged deals until following day, until we have sufficient Crow usage, then
  * revisit"): in a live world, why Crow's primary declines a new deal that can convene a judge panel, or null. It declines
  * while today's budget, less `reserved` (what the funded judged deals still waiting for a Crow panel may need), cannot
  * hold a whole live panel of the bound policy's size with its retries (twice its seats). The reason starts with the token
  * `judge_budget_spent:`; it names the next UTC midnight to retry after, unless the daily budget can never hold a panel.
  */
-export async function judgedDealGate(panel: Pick<PanelConfig, 'live' | 'resumesAt' | 'budget' | 'registry'>, c: Parameters<typeof needsPanel>[0], panelSize: number | undefined, reserved = 0): Promise<Problem | null> {
+export async function judgedDealGate(panel: Pick<PanelConfig, 'live' | 'closed' | 'missing' | 'resumesAt' | 'budget' | 'registry'>, c: Parameters<typeof needsPanel>[0], panelSize: number | undefined, reserved = 0): Promise<Problem | null> {
+  // N222: a chain world whose live judge variables are incomplete takes no deal that can need a panel, whatever the budget.
+  if (panel.closed && needsPanel(c)) return problem('adjudicator_unavailable', unconfiguredReason(panel.missing));
   if (!panel.live || !needsPanel(c)) return null;
   // A policy it cannot read sizes the panel at the most seats the registry has.
   const need = 2 * (panelSize ?? panel.registry.active.length);
@@ -239,12 +255,14 @@ export function judgedDealLimits(o: { perPair: JudgedDealsPerPair; live: () => b
  * unanimous) with no model run (red team M1), so past the budget the panel is not convened at all: nothing is decided,
  * the turn is tried again on each pass, and if no panel can run by the deadline the default outcome applies.
  */
-export async function appealPanelGate(panel: Pick<PanelConfig, 'live' | 'canRunLive'>, task: { role: string; commitment: Parameters<typeof needsPanel>[0] }, size: number): Promise<Problem | null> {
+export async function appealPanelGate(panel: Pick<PanelConfig, 'live' | 'closed' | 'missing' | 'canRunLive'>, task: { role: string; commitment: Parameters<typeof needsPanel>[0] }, size: number): Promise<Problem | null> {
+  // N222: with the live variables incomplete the panel cannot run, so it is not convened and nothing is decided.
+  if (panel.closed && task.role === 'appeal' && needsPanel(task.commitment)) return problem('adjudicator_unavailable', `judges_unconfigured: the live judge models are not all configured (missing: ${panel.missing.join(', ')}), so this appeal panel of ${size} seats is not convened and nothing is decided; the turn is tried again on each pass until its deadline, and if no panel runs by then the default outcome applies`);
   if (!panel.live || task.role !== 'appeal' || !needsPanel(task.commitment) || (await panel.canRunLive(size))) return null;
   return problem('adjudicator_unavailable', `judge_budget_spent: this demo's live judge budget for today cannot hold this appeal panel of ${size} seats, so it is not convened and nothing is decided; the turn is tried again on each pass until its deadline, and if no panel runs by then the default outcome applies`);
 }
 
-const nameOf = (a: { name: string }, live: boolean) => `${a.name} (test; real checks, ${live ? 'live panel within a daily budget' : 'scripted panel'})`;
+const nameOf = (a: { name: string }, panel: Pick<PanelConfig, 'live' | 'closed'>) => `${a.name} (test; real checks, ${panel.live ? 'live panel within a daily budget' : panel.closed ? 'judge models not configured: no judged deals' : 'scripted panel'})`;
 /**
  * The largest amount one faucet grant gives: 1,000,000 test tokens (T-314). A request names its own `amount` up to
  * this, so a buyer funds a deal priced like a real job, fees included, from one grant. The cap bounds this free
@@ -289,6 +307,8 @@ const TIMEOUTS_PER_DAY = 200;
  */
 const OFFER_EXPIRIES_PER_DAY = 50;
 const SCRIPTED_PANEL = 'scripted judge panel: no model runs in this demo, every panel verdict is a fake judge marked "[fake judge, no model ran]"; use template checks-only for real acceptance';
+const CLOSED_PANEL = (missing: readonly string[]) =>
+  `judge panel unavailable: this demo's live judge models are not all configured (missing: ${missing.join(', ')}), so Crow's adjudicators decline deals that can need a panel (reason judges_unconfigured:) and never judge with a scripted stand-in; use template checks-only with required checks`;
 const livePanel = (perDay: number) =>
   `live judge panel: pinned models from two families (Anthropic, DeepSeek; config/judges-live.yaml), at most ${perDay} live judge calls a day across this demo; past that, Crow's adjudicators decline new deals that can need a panel until the next UTC day (demo.judges.judgedDeals), and one already open escalates and, unless a panel can run before its deadline, ends in the default outcome`;
 const SEALED =
@@ -298,9 +318,21 @@ const lc = (s: string) => s.toLowerCase();
 const hex = (b: Uint8Array) => [...b].map((x) => x.toString(16).padStart(2, '0')).join('');
 const jkey = (i: number) => `j:${String(i).padStart(12, '0')}`;
 const SEPOLIA_EXPLORER = 'https://sepolia.etherscan.io';
-/** A deal lane below 0.01 test ETH gets 0.03 from the funding lane: about 19 test deals on Sepolia at a 1 gwei tip (1.56 million gas a deal, measured). */
-const LANE_FLOOR = 10_000_000_000_000_000n;
-const LANE_TOP_UP = 30_000_000_000_000_000n;
+/**
+ * A deal lane holds at least what its next send costs, and after the once-a-minute pass at least 0.03 test ETH; the
+ * funding lane adds 0.1 below that, and `chain.keepLanes` makes a lane short for the send in hand (below) be filled
+ * before it signs. Sized for the largest transaction the relayer sends, a standing seller's contract deployment
+ * (ADR-0040 section 4): 18,007,470 gas used with a gas limit of 19,210,420 on Sepolia, at 0.13 gwei (about 0.00234 test
+ * ETH), tx 0x72c2f53cec090e08dd904a8e2fa2bf3a082db2f784f5aeef1820d615e6f8719e, block 12208509, 2026-11-25 [measured, a
+ * receipt]; `cast estimate` gave 18,295,444. A send reserves its gas limit at the fee cap, so the sizing uses the limit,
+ * 19.2 million gas, at a 1 gwei tip plus twice the base fee (15 wei then): 0.0192 test ETH, and 0.0384 at the tip's
+ * 2 gwei clamp. The floor covers one deployment at 1 gwei and a half again (0.029 rounded up to 0.03). The top-up of
+ * 0.1 pays about five deployments at 1 gwei, or about 64 ordinary deals of 1.56 million gas [measured]; the funding
+ * lane's 2.6 test ETH on 2026-11-25 fills the three lanes 8 times over. Until 2026-11-25 these were 0.01 and 0.03,
+ * sized for an ordinary deal alone, and a lane at 0.011 refused the first take's deployment.
+ */
+const LANE_FLOOR = 30_000_000_000_000_000n;
+const LANE_TOP_UP = 100_000_000_000_000_000n;
 /**
  * New addresses the faucet grants one client (IP address) per window, an hour by default: 50, so one agent can run a
  * series of test deals without waiting out the hour (one grant a deal as the try command's buyer, two when it plays
@@ -820,6 +852,8 @@ export class PublicWorld {
       // the stored cursor; it comes within a pass's wait when a deal is open (`nextPass`). The lanes' rows
       // are read here (one list), and the first pass lands them (T-219).
       await o.live.chain.attach(new StorageLanes(storage));
+      // From the first request: each deal lane's send checks its own cost, so a deployment never waits for the minute's pass.
+      o.live.chain.keepLanes(LANE_FLOOR, LANE_TOP_UP);
       const evm = await EvmSettlement.restore(o.live.chain, genesis, { books, events: events.all(), mandates: mandates.all() }, now);
       chain = evm;
       const cursor = (await storage.get<Cursor>('cursor')) ?? null;
@@ -847,7 +881,7 @@ export class PublicWorld {
     const registrations = await StorageRegistrations.load(storage, (prefix, rows) => telemetry.rows(prefix, rows));
     replayed();
     // Live or scripted judges, fixed for this instance: the registry it binds depends on which.
-    const panel = panelConfig({ env: o.env, storage, now, ...(o.judgeProvider ? { judgeProvider: o.judgeProvider } : {}), ...(o.liveCallsPerDay !== undefined ? { liveCallsPerDay: o.liveCallsPerDay } : {}) });
+    const panel = panelConfig({ env: o.env, storage, now, failClosed: requiresLiveJudges(o), ...(o.judgeProvider ? { judgeProvider: o.judgeProvider } : {}), ...(o.liveCallsPerDay !== undefined ? { liveCallsPerDay: o.liveCallsPerDay } : {}) });
     const faucetAmount = o.faucetAmount ?? 1_000n * TUSD;
     const faucetMaxAmount = o.faucetMaxAmount ?? DEMO_FAUCET_MAX_GRANT;
     if (faucetAmount > faucetMaxAmount) throw new Error(`faucetAmount ${faucetAmount} is above faucetMaxAmount ${faucetMaxAmount}`);
@@ -930,7 +964,7 @@ export class PublicWorld {
       return {
         clubId: club.id,
         token: { id: token, decimals: 6 },
-        adjudicators: ADJUDICATORS.map((a) => ({ role: a.role, address: adjudicators[a.role].address, name: nameOf(a, panel.live) })),
+        adjudicators: ADJUDICATORS.map((a) => ({ role: a.role, address: adjudicators[a.role].address, name: nameOf(a, panel) })),
         faucet: {
           path: '/v1/faucet',
           grant: tokenAmount(faucetAmount),
@@ -943,7 +977,7 @@ export class PublicWorld {
         minWindowSec: m,
         // Who judges rubric deals: the registry every adjudicator here binds, and today's live budget (UTC).
         judges: {
-          panel: panel.live ? 'live' : 'scripted',
+          panel: panel.live ? 'live' : panel.closed ? 'unavailable' : 'scripted',
           registry: { uri: panel.registryUri, hash: panel.registry.hash },
           models: panel.registry.active.map((e) => e.model),
           ...(panel.live
@@ -959,7 +993,7 @@ export class PublicWorld {
                   return { accepting: false, resumesAt: panel.budget.perDay < 2 * size ? null : panel.resumesAt() };
                 })(),
               }
-            : { missing: panel.missing }),
+            : { missing: panel.missing, ...(panel.closed ? { judgedDeals: { accepting: false, resumesAt: null } } : {}) }),
         },
         build: { commit: buildCommit(o.env), deployedAt: deployedAt[node] ?? null },
         limits: {
@@ -972,10 +1006,10 @@ export class PublicWorld {
         ...(o.live ? { relayer: relayerFacts(o.live.chain) } : {}),
       };
     };
-    const panelText = () => (panel.live ? livePanel(panel.budget.perDay) : SCRIPTED_PANEL);
+    const panelText = () => (panel.live ? livePanel(panel.budget.perDay) : panel.closed ? CLOSED_PANEL(panel.missing) : SCRIPTED_PANEL);
     const oursFor = (address: Address) => {
       const x = Object.entries(adjudicators).find(([, t]) => t.address === lc(address)) as [AdjudicatorRole, TestAdjudicator] | undefined;
-      return x ? { name: nameOf(ADJUDICATORS.find((d) => d.role === x[0])!, panel.live), cannotJudge: (terms: EscrowState['terms'], role: AdjudicatorRole) => x[1].service.cannotJudge(terms, role).catch(() => null) } : undefined;
+      return x ? { name: nameOf(ADJUDICATORS.find((d) => d.role === x[0])!, panel), cannotJudge: (terms: EscrowState['terms'], role: AdjudicatorRole) => x[1].service.cannotJudge(terms, role).catch(() => null) } : undefined;
     };
     // What the default outcome pays on this settlement layer (ADR-0036 section 2).
     const compensationBps = club.rulebook.defaultOutcome.judged.sellerCompensationRateBps;
@@ -1063,7 +1097,7 @@ export class PublicWorld {
     const fee = { token, amount: TUSD.toString() } as AdjudicatorRegistration['fee']['min'];
     for (const a of adjKeys) {
       const adj = testAdjudicator({
-        name: nameOf(a, panel.live),
+        name: nameOf(a, panel),
         // T-574: past the day's live budget, decline a new deal that needs a panel, until the next UTC day.
         offerGate: async (c) => judgedDealGate(panel, c, (await registrations.policy(c.adjudication.policyHash))?.panelSize, reservedJudgeCalls()),
         // T-581: judged deals per buyer address a day, counted when the acceptance is signed.
@@ -1841,7 +1875,7 @@ export function notesFor(
   clubId: string,
   minWindowSec: number,
   faucet: { amount: bigint; maxAmount: bigint; windowSec: number },
-  panel?: Pick<PanelConfig, 'live' | 'registry' | 'budget'>,
+  panel?: Pick<PanelConfig, 'live' | 'closed' | 'missing' | 'registry' | 'budget'>,
   fee?: OperatorFeeSchedule,
   /** A chain world's facts (D41): its chain, contracts and token, the relayer's funding lane, the explorer, the gas quote. */
   chain?: { chainId: number; rules: string; token: string; symbol: string; funding: string; explorer: string; gas?: string | undefined },
@@ -1856,7 +1890,9 @@ export function notesFor(
       ? `Operator fee: published at 0 (fees.operator in /v1/status): these nodes relay a funded agreement free for now. When it is switched on, POST /v1/prepare/agree-and-fund adds a third signature (slot operatorFee.signature), paid to ${fee.to}, outside the hold and not refunded.`
       : `Operator fee: these nodes charge an operator fee of ${fee.bps} bp of the price, at least ${amount(fee.min)}${fee.max === null ? '' : `, at most ${amount(fee.max)}`}, rounded up, paid by the buyer to ${fee.to} with the funded agreement: POST /v1/prepare/agree-and-fund returns a third signature (slot operatorFee.signature). It is a separate transfer, never part of the hold, and not refunded. A funded agree without it gets 402 payment_required; reads, prepare, the faucet, deliveries and direct submission to the settlement layer are free (ADR-0023).${gasText}${gas ? ' Submitting directly to the contract, you pay your own gas and no fee to these nodes.' : ''}`
     : undefined;
-  const judges = panel?.live
+  const judges = panel?.closed
+    ? `Adjudicators: three test adjudicators run by this demo, listed by role under demo.adjudicators in this discovery document. Deterministic checks are real. Judge panels are unavailable: the live judge models are not all configured (missing: ${panel.missing.join(', ')}; demo.judges.missing), so Crow's adjudicators decline deals that can need a panel (a rubric, or an optional check; reason judges_unconfigured:) and never judge with a scripted stand-in. Use template "checks-only" with required checks.`
+    : panel?.live
     ? `Adjudicators: three test adjudicators run by this demo, listed by role under demo.adjudicators in this discovery document. Deterministic checks are real. Rubric deals get a live judge panel: pinned models from two families, Anthropic and DeepSeek (${panel.registry.active.map((e) => e.model).join(', ')}; registry config/judges-live.yaml, not calibrated). At most ${panel.budget.perDay} live judge calls a day across this demo (UTC; demo.judges shows today's count). Past that, Crow's adjudicators decline new deals that can need a panel (a rubric, or an optional check) until the next UTC day (demo.judges.judgedDeals.resumesAt), and one already open escalates and, unless a panel can run before its deadline, ends in the default outcome, never on a scripted verdict. DeepSeek's model names are provider aliases that can change underneath.`
     : 'Adjudicators: three test adjudicators run by this demo, listed by role under demo.adjudicators in this discovery document. Deterministic checks are real. Judge panels are scripted fake judges (no model runs; verdicts start "[fake judge, no model ran]"), so use template "checks-only" for real acceptance.';
   const settlement = chain

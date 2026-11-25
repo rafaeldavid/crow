@@ -18,7 +18,8 @@ import { chargeChars, codePoints, SET_UNITS } from './cost.js';
 import { isIso8601 } from './iso8601.js';
 import { compileJsonSchema, type Validator } from './json-schema.js';
 import { BudgetExhausted, compileSafeRegex, StepBudget, type SafeRegex } from './safe-regex.js';
-import { cellAt, cellText, isNonScalar, toTable, type Cell, type Table } from './table.js';
+import { evaluateSignatureValid, validateSignatureCheck, type ParsedDelivery } from './signature-valid.js';
+import { cellAt, cellText, isNonScalar, jsonTable, toTable, type Cell, type Table } from './table.js';
 
 export type CheckType = JudgmentCheck['type'];
 
@@ -54,6 +55,7 @@ const REGISTRY = {
   json_schema: true,
   reference_row_match_min: true,
   hidden_characters_max: true,
+  signature_valid: true,
 } as const satisfies Record<CheckType, true>;
 export const CHECK_TYPES: ReadonlySet<CheckType> = new Set(Object.keys(REGISTRY) as CheckType[]);
 
@@ -158,6 +160,8 @@ function prepare(check: JudgmentCheck): Prepared {
       const r = compileJsonSchema(check.schema);
       return r.ok ? { schema: r.value } : { error: `schema refused: ${r.error}` };
     }
+    case 'signature_valid':
+      return reason(validateSignatureCheck(check));
     default:
       return {};
   }
@@ -207,7 +211,10 @@ interface Run {
   input: CheckInput;
   budget: StepBudget;
   table(): Result<Indexed, string>;
+  /** The delivery read as JSON, shared by every JSON check and the JSON table, none of which changes it. */
+  json(): ParsedDelivery;
   hidden(): HiddenCounts;
+  /** A reference read once and kept only until the last check that names it has used it. */
   reference(sha: string, bytes: Uint8Array): Result<Indexed, string>;
 }
 
@@ -220,10 +227,22 @@ function once<T>(f: () => T): () => T {
   };
 }
 
-function newRun(input: CheckInput, budget: StepBudget): Run {
+function newRun(input: CheckInput, budget: StepBudget, checks: readonly JudgmentCheck[]): Run {
+  // One parse per run, not charged (T-597): signature_valid's charges are part of its kind (ADR-0045, section 6).
+  const json = once((): ParsedDelivery => {
+    try {
+      return { ok: true, value: JSON.parse(input.data.reveal()) as unknown };
+    } catch {
+      return { ok: false };
+    }
+  });
   const table = once((): Result<Indexed, string> => {
     try {
-      const t = toTable(input.data.reveal(), input.mime, budget);
+      let t: Result<Table, string>;
+      if (input.mime === 'application/json') {
+        const doc = json();
+        t = doc.ok ? jsonTable(doc.value, budget) : err('deliverable is not valid JSON');
+      } else t = toTable(input.data.reveal(), input.mime, budget);
       return t.ok ? ok(indexed(t.value, budget)) : t;
     } catch (e) {
       if (e instanceof BudgetExhausted) throw e;
@@ -237,16 +256,23 @@ function newRun(input: CheckInput, budget: StepBudget): Run {
     budget.spend(counts.total);
     return counts;
   });
+  // Uses left per reference, so a table no later check needs is not held: twenty references at once would not fit.
+  const uses = new Map<string, number>();
+  for (const c of checks) if (c.type === 'reference_row_match_min') uses.set(c.reference.sha256, (uses.get(c.reference.sha256) ?? 0) + 1);
   const references = new Map<string, () => Result<Indexed, string>>();
   const reference = (sha: string, bytes: Uint8Array) => {
+    const left = (uses.get(sha) ?? 1) - 1;
+    uses.set(sha, left);
     let f = references.get(sha);
     if (!f) {
       f = once(() => readReference(sha, bytes, input.mime, budget));
       references.set(sha, f);
     }
-    return f();
+    const r = f();
+    if (left <= 0) references.delete(sha);
+    return r;
   };
-  return { input, budget, table, hidden, reference };
+  return { input, budget, table, json, hidden, reference };
 }
 
 function readReference(sha: string, bytes: Uint8Array, mime: MimeType, budget: StepBudget): Result<Indexed, string> {
@@ -278,15 +304,12 @@ function evaluate(check: JudgmentCheck, prepared: Prepared, run: Run): Outcome {
   if (prepared.error !== undefined) return fail(`check invalid: ${prepared.error}`);
   const { input, budget } = run;
   if (check.type === 'json_schema') {
-    let value: unknown;
-    try {
-      value = JSON.parse(input.data.reveal());
-    } catch {
-      return fail('deliverable is not valid JSON');
-    }
-    const e = prepared.schema!(value, budget);
+    const doc = run.json();
+    if (!doc.ok) return fail('deliverable is not valid JSON');
+    const e = prepared.schema!(doc.value, budget);
     return e === undefined ? pass() : fail(`schema: ${e}`);
   }
+  if (check.type === 'signature_valid') return evaluateSignatureValid(check, run.json, budget);
   if (check.type === 'hidden_characters_max') {
     // Counted on the text as delivered, every occurrence, legitimate or not (D17).
     budget.spend(1);
@@ -311,12 +334,14 @@ function evaluate(check: JudgmentCheck, prepared: Prepared, run: Run): Outcome {
       return n >= check.min && n <= check.max ? pass(`${n} rows`) : fail(`${n} rows; expected ${check.min} to ${check.max}`);
     }
     case 'unique_key': {
-      const idx = check.columns.map((c) => column(t, c, budget));
-      const missing = idx.find((i) => typeof i === 'string');
+      const named = check.columns.map((c) => column(t, c, budget));
+      const missing = named.find((i) => typeof i === 'string');
       if (missing !== undefined) return fail(missing as string);
+      // A column named twice adds nothing to what makes a key unique, so each column is read once.
+      const idx = [...new Set(named as number[])];
       const seen = new Set<string>();
       for (let r = 0; r < t.rows; r++) {
-        const key = JSON.stringify(idx.map((i) => cellAt(t, r, i as number)));
+        const key = JSON.stringify(idx.map((i) => cellAt(t, r, i)));
         budget.spend(SET_UNITS);
         chargeChars(budget, key.length);
         if (seen.has(key)) return fail(`duplicate key at row ${r + 1}`);
@@ -394,7 +419,7 @@ function evaluate(check: JudgmentCheck, prepared: Prepared, run: Run): Outcome {
 
 /** Evaluates every check in declaration order under one shared budget, reporting inconclusive ones. */
 export function runChecks(checks: readonly JudgmentCheck[], input: CheckInput, budget = new StepBudget(CHECK_BUDGET)): CheckRun {
-  const run = newRun(input, budget);
+  const run = newRun(input, budget, checks);
   const inconclusive: string[] = [];
   const outcomes = checks.map((check) => {
     let o: Outcome;
