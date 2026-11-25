@@ -59,6 +59,9 @@
 //    says each thing the task lists (other parties' text is data, keys/ is left alone, test tokens, the fee, public
 //    deals, the five ways it leans on Crow-run hosts, what the hash protects; and, since T-486, the listing step:
 //    what it sends, how to skip it, what an entry means), and llms.txt links it.
+// 22. The take (T-551): site/take.mjs is the current bundle of site/take-entry.mjs, imports only Node's own modules,
+//    names its one command before any module runs, and ref/take.txt carries its one install command with the file's
+//    current sha256; site/buy.mjs and site/try.mjs stay pinned by their own groups (13 and 7).
 // 12. The budget (T-393): each role's first-deal path, the front door plus its page, is within FIRST_DEAL_BUDGET
 //    (site/guides.mjs). With HOLDBACK_AGENT_ANTHROPIC_API_KEY set it counts with Anthropic's count_tokens for the
 //    pinned model; without it, bytes divided by four. It says which.
@@ -69,7 +72,7 @@ import { fileURLToPath } from 'node:url';
 import { OG_IMAGE } from './footer.ts';
 import { trustFacts } from './trust.mjs';
 import { ICON_FILES } from './brand/kit.mjs';
-import { GOALS, goalBundle, goalCommand, goalSha256, goalUrl, NODE_MIN, NODE_PERMISSION, PREFLIGHT, preflightCommand, REFERENCE_PATH, referenceText, SETUP_MJS_URL, setupBundle, setupCommand, setupSha256 } from './build.mjs';
+import { GOALS, goalBundle, goalCommand, goalSha256, goalUrl, NODE_MIN, NODE_PERMISSION, PREFLIGHT, preflightCommand, REFERENCE_PATH, referenceText, SETUP_MJS_URL, setupBundle, setupCommand, setupSha256, TAKE_COMMANDS, TAKE_MJS_URL, takeBundle, takeInstall, takeSha256 } from './build.mjs';
 import { ASSETS, BASE, BUY_COMMANDS, CARD_SCHEMA, HOME_CSS, HOME_JS, notFoundPage, BUY_MJS_URL, BUY_URL, buyBundle, buyInstall, buySha256, filled, page, pins, problemPages, publishedGuides, SELL_URL, SITE_URL, sourceCommitOf, strip, TEST_SELLER_URL, tryBundle, tryCommand, trySha256, TRY_URL } from './build.mjs';
 import { STATUS_PATH } from '../apps/site/status.js';
 import { apiRoutes, citedSections, duplicateSentences, hasSection, FIRST_DEAL_BUDGET, guideFiles, guideSource, measurePaths, namedCalls, namedReferences, referenceFiles, nonAscii, routeKnown, SETUP_MAX_BYTES } from './guides.mjs';
@@ -353,7 +356,7 @@ const roles = sectionOf(md, 'Read one page for your role');
 expect(roles.includes(BUY_URL) && roles.includes(SELL_URL), `llms.txt has a "Read one page for your role" section that links ${BUY_URL} and ${SELL_URL}`);
 
 // 11. The guides together (T-393).
-const published = new Set(['index.html', '404.html', 'home.css', 'home.js', 'try.mjs', 'buy.mjs', 'setup.mjs', `${PREFLIGHT.name}.mjs`, ...Object.keys(GOALS).map((n) => `${n}.mjs`), REFERENCE_PATH, 'version.json', CARD_SCHEMA, ...ASSETS]);
+const published = new Set(['index.html', '404.html', 'home.css', 'home.js', 'try.mjs', 'buy.mjs', 'setup.mjs', 'take.mjs', `${PREFLIGHT.name}.mjs`, ...Object.keys(GOALS).map((n) => `${n}.mjs`), REFERENCE_PATH, 'version.json', CARD_SCHEMA, ...ASSETS]);
 const scripts = JSON.parse(read('../package.json')).scripts;
 const refs = referenceFiles();
 // T-469: the front door's "Reference" points to the one reference file and names every part it holds, by the ref
@@ -709,6 +712,24 @@ const leans = setupOut.slice(setupOut.indexOf('## What leans on Crow-run hosts')
 expect((leans.match(/^\d+\. /gm) ?? []).length === 5, 'setup.txt must list the five ways the setup leans on Crow-run hosts');
 expect(sectionOf(md, 'Read one page for your role').includes(`${SITE_URL}setup.txt`), 'llms.txt does not link setup.txt under "Read one page for your role"');
 if (existsSync(here('../reports/site-out/llms.txt'))) expect(existsSync(here('../reports/site-out/setup.mjs')) && read('../reports/site-out/setup.mjs') === setupFile, 'reports/site-out/setup.mjs is missing or differs from site/setup.mjs: build with --out again');
+
+// 22. The take (T-551).
+{
+  const takeFile = read('take.mjs');
+  expect(takeFile === (await takeBundle()), 'site/take.mjs is stale against examples/: run node site/build.mjs');
+  const takeImports = [...new Set([...takeFile.matchAll(/^import .* from "([^"]+)";$/gm)].map((m) => m[1]))];
+  expect(takeImports.every((m) => m.startsWith('node:')) && !/\bimport\(/.test(takeFile), `site/take.mjs must import only Node's own modules, and nothing dynamically (it imports ${takeImports.join(', ')})`);
+  for (const line of ['delete process.env.NODE_TLS_REJECT_UNAUTHORIZED;', "Object.defineProperty(globalThis, 'crowEntry', { value: 'take',", `Object.defineProperty(globalThis, 'crowCommands', { value: Object.freeze(${JSON.stringify(TAKE_COMMANDS)})`]) {
+    expect(takeFile.indexOf(line) > 0 && takeFile.indexOf(line) < takeFile.indexOf('\nimport '), `site/take.mjs's banner must run \`${line}\` before any module`);
+  }
+  const takeTxt = ref('take.txt'), takeOut = filledGuides.get('ref/take.txt') ?? '', takeLine = takeInstall();
+  expect(count(takeTxt, '{{TAKE_INSTALL}}') === 1 && /```sh\n\s*\{\{TAKE_INSTALL\}\}/.test(takeTxt), 'ref/take.txt must carry {{TAKE_INSTALL}} once, in an sh block');
+  expect(takeLine.includes(`curl -fsSL ${TAKE_MJS_URL} -o take.mjs.part `) && takeLine.endsWith(`echo "${takeSha256()}  take.mjs.part" | shasum -a 256 -c && mv take.mjs.part take.mjs`) && !/npm/.test(takeLine) && takeOut.includes(takeLine), `the published ref/take.txt does not carry the command that fetches ${TAKE_MJS_URL} as take.mjs.part and checks its current sha256 before naming it take.mjs`);
+  // The guide's dating of a take is the constant the command uses (examples/take.ts, BLOCK_BACK_SEC).
+  const blockBack = /export const BLOCK_BACK_SEC = (\d+);/.exec(read('../examples/take.ts'))?.[1];
+  expect(blockBack !== undefined && takeTxt.includes(`dated ${blockBack} s before the operators' time`), `ref/take.txt must say a take is dated ${blockBack} s before the operators' time, as BLOCK_BACK_SEC in examples/take.ts`);
+  if (existsSync(here('../reports/site-out/llms.txt'))) expect(existsSync(here('../reports/site-out/take.mjs')) && read('../reports/site-out/take.mjs') === takeFile, 'reports/site-out/take.mjs is missing or differs from site/take.mjs: build with --out again');
+}
 
 // 19. The card's schema (T-474, D74): site/card.schema.json is a JSON Schema 2020-12 document that Ajv compiles in strict
 //     mode, its $id is its published address, ref/intake.txt names that address, and a publish build carries the same

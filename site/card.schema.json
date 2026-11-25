@@ -70,9 +70,9 @@
     },
     "offer": {
       "type": "object",
-      "description": "One offer: fixed terms, or a price the seller quotes for each job.",
+      "description": "One offer: fixed terms, a price the seller quotes for each job, or a standing offer any buyer takes.",
       "required": ["id"],
-      "anyOf": [{ "properties": { "terms": true }, "required": ["terms"] }, { "properties": { "pricing": true }, "required": ["pricing"] }],
+      "anyOf": [{ "properties": { "terms": true }, "required": ["terms"] }, { "properties": { "pricing": true }, "required": ["pricing"] }, { "properties": { "standing": true }, "required": ["standing"] }],
       "properties": {
         "id": { "$ref": "#/$defs/token" },
         "description": { "$ref": "#/$defs/text" },
@@ -85,6 +85,7 @@
           "propertyNames": { "$ref": "#/$defs/key" }
         },
         "pricing": { "$ref": "#/$defs/pricing" },
+        "standing": { "$ref": "#/$defs/standing" },
         "fees": {
           "type": "object",
           "properties": {
@@ -106,6 +107,68 @@
       },
       "additionalProperties": { "$ref": "#/$defs/extra" },
       "propertyNames": { "$ref": "#/$defs/key" }
+    },
+    "standing": {
+      "type": "object",
+      "description": "A standing offer (ADR-0040): a template the seller's key signed once for its seller contract, which any buyer fills and funds while no seller program runs. Its template.offerId equals the offer's id. A buyer's tool (https://crow.direct/ref/take.txt) checks that the signature is the key's over the template, and that seller is the CREATE2 address of HoldbackStandingSeller with that key and salt through the public deterministic deployer, and refuses the offer otherwise. The schema checks the shape only. The checks prove the code and what the key signed; who the key belongs to rests on the card's origin. The example is on a local chain, with placeholder addresses for the rules deployment and the token: take a real offer's values from its seller's card, never from here.",
+      "required": ["chainId", "seller", "key", "salt", "template", "signature"],
+      "properties": {
+        "chainId": { "type": "integer", "minimum": 1 },
+        "seller": { "$ref": "#/$defs/evmAddress", "description": "The seller contract: the address the terms name as seller." },
+        "key": { "$ref": "#/$defs/evmAddress", "description": "The seller's key, the contract's one constructor argument." },
+        "salt": { "type": "string", "pattern": "^0x[0-9a-fA-F]{64}$" },
+        "template": {
+          "type": "object",
+          "description": "The StandingOffer the key signed: rules, expiresAt, offerId, terms (every field of the terms but the take's, with the dates as seconds after the take's createdAt) and, for one fixed file, delivery. Bounded as an offer's terms are.",
+          "required": ["rules", "expiresAt", "offerId", "terms"],
+          "maxProperties": 32,
+          "properties": {
+            "rules": { "$ref": "#/$defs/evmAddress" },
+            "expiresAt": { "type": "string", "maxLength": 40 },
+            "offerId": { "$ref": "#/$defs/token" },
+            "terms": { "type": "object", "maxProperties": 32, "additionalProperties": { "$ref": "#/$defs/termsValue" }, "propertyNames": { "$ref": "#/$defs/key" } }
+          },
+          "additionalProperties": { "$ref": "#/$defs/termsValue" },
+          "propertyNames": { "$ref": "#/$defs/key" }
+        },
+        "signature": { "type": "string", "pattern": "^0x([0-9a-fA-F]{128}|[0-9a-fA-F]{130})$", "description": "The key's EIP-712 signature over the template, under the seller contract's own domain." }
+      },
+      "additionalProperties": { "$ref": "#/$defs/extra" },
+      "propertyNames": { "$ref": "#/$defs/key" },
+      "examples": [
+        {
+          "chainId": 31337,
+          "seller": "0x7e8a2fc293b861a7d1889bc66a292b9416deb045",
+          "key": "0x70997970c51812dc3a010c7d01b50e0d17dc79c8",
+          "salt": "0x0000000000000000000000000000000000000000000000000000000000000000",
+          "template": {
+            "rules": "0x00000000000000000000000000000000000000aa",
+            "expiresAt": "2027-01-01T00:00:00Z",
+            "offerId": "customers-2",
+            "terms": {
+              "schemaVersion": "0.8",
+              "clubId": "data-services-v1",
+              "rulebookHash": "0xb70959b8b5a5a9d365df7471120396553ed1bc0bff83059e4862e6d11b36a556",
+              "sellerPayoutAddress": "0x7a1c3e5b9d2f4a6c8e0b1d3f5a7c9e1b3d5f7a9c",
+              "deliverable": { "kind": "dataset", "description": "Two customers as CSV, one fixed file.", "format": "text/csv" },
+              "acceptance": { "deterministicChecks": [{ "id": "cols", "type": "csv_columns_exact", "required": true, "columns": ["id", "email"] }], "rubric": { "criteria": [], "passThreshold": 0 } },
+              "price": { "token": "0x00000000000000000000000000000000000000bb", "amount": "5000000" },
+              "adjudication": {
+                "adjudicator": "0x5d10fecab9242e66cb134b77309a3566ed75e3dd",
+                "fallbackAdjudicator": "0xf9e6283d068ff7016653ab6d36a7fab0294f4b8a",
+                "appealAdjudicator": "0xc372bd536a0f63fe9fde6bca1db179ce93612520",
+                "policyId": "bench-a/p1",
+                "policyHash": "0x04221c401f162ef3a3c07c9d97024f3a13eb30f262b0c088ee6f63fa2c893dbb",
+                "fee": { "token": "0x00000000000000000000000000000000000000bb", "amount": "1000000" },
+                "registryHash": "0x54bdcd5545af7f0a1d42fa9adad89dc6f5d20ea8c0e16b270d2160b78b16007a"
+              },
+              "remedy": { "onReject": "full_refund" },
+              "timing": { "offerExpiresAt": 900, "fundBy": 1800, "deliverBy": 172800, "judgeBy": 172920, "fallbackBy": 173040, "appealWindowSec": 0, "appealDecideSec": 300, "maxSubmissions": 1 }
+            }
+          },
+          "signature": "0x0d6ef81749f0e20d8404233c306a4315a47ad442c25b61699df72e45e6656965240cb88090855b0105d1cc98c3855871d9a8c0a97b96d259aab1fc868eff61721b"
+        }
+      ]
     },
     "pricing": {
       "type": "object",

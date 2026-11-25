@@ -97,6 +97,13 @@ const EXPECTED: Record<string, Omit<Contents, 'loads'>> = {
     // are schema IDs; the rest are examples in its help.
     hosts: ['(joined at run time)', '127.0.0.1', 'abitype.dev', 'adapter', 'api.crow.direct', 'api2.crow.direct', 'crow.direct', 'docs.soliditylang.org', 'holdback.dev', 'join.crow.direct', 'json-schema.org', 'sample', 'seller.example', 'sepolia.etherscan.io', 'viem.sh', 'your-site.example'],
   },
+  // T-551: it reads the card at a URL the person gives, so its hosts are the demo's, the schema IDs and viem's docs.
+  'take.mjs': {
+    imports: ['node:crypto', 'node:fs', 'node:module', 'node:path', 'node:url'],
+    requires: ['__require("crypto")', 'createRequire(...)'],
+    process: ['argv', 'cwd', 'env', 'exit', 'exitCode', 'stderr', 'stdout'],
+    hosts: ['abitype.dev', 'api.crow.direct', 'api2.crow.direct', 'docs.soliditylang.org', 'holdback.dev', 'json-schema.org', 'seller.example', 'sepolia.etherscan.io', 'viem.sh'],
+  },
 };
 
 /** Every file in site/ whose opening comment says site/build.mjs generated it: the published bundles. */
