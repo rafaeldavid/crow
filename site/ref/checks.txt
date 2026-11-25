@@ -111,11 +111,11 @@ A complete commitment with these checks, the full report schema and an optional 
 - **Algorithms:** `ecdsa-p256-sha256` (signature `der` or `raw`) and `ed25519` (`raw` only). The list is closed.
 - **The key** travels in the delivery, as a PEM block labelled `PUBLIC KEY` or as plain base64 of the DER `SubjectPublicKeyInfo`. The terms pin its SHA-256, which `openssl pkey -pubin -outform DER | sha256sum` prints. A different key fails the check before any signature work.
 - **The signed bytes are exact.** Nothing is canonicalised. `message.pointer` names a string: with `utf8` the signed bytes are its UTF-8 encoding, with `base64` they are the decoded string. Decimals in the signed text are fine.
-- **`jsonEquals` ties the signed text to an object.** The signed bytes must parse as JSON to the value at the pointer it names, so your `json_schema` checks read fields the key signed. Without it, nothing says the object and the signed text agree.
+- **`jsonEquals` ties the signed text to an object.** The signed bytes must parse as JSON to the value at the pointer it names, so your `json_schema` checks read fields the key signed. Without it, nothing says the object and the signed text agree. Numbers compare as the same 64-bit double, so `1.0` equals `1`, and digits past double precision are not bound: keep a nonce or an ID as a string. A key repeated in the signed text counts with its last value, as `JSON.parse` reads it.
 - **Base64 has one spelling:** standard alphabet, padding required, no whitespace, no non-zero trailing bits.
 - **Limits:** the key string at most 1,024 characters, the signature string at most 256, a pointer at most 512. The work is bounded by the delivery's shared check budget, with no timer, so every adjudicator gives the same result.
 - **A failed check names the step, never the bytes:** for example `signature does not verify` or `publicKey: fingerprint differs from the terms`. A required failed check refunds the buyer.
-- **Before you sign,** read `checkKinds` on all three named adjudicators. One that does not list `signature_valid` declines the offer, or fails the check at judging. `node spec/test-vectors/signature-valid/verify.mjs --check check.json delivery.json` runs one document against one check.
+- **Before you sign,** read `checkKinds` on all three named adjudicators. One that does not list `signature_valid` declines the offer as primary, and signs no decision in a later turn: the deal runs to the next adjudicator or its default outcome, which returns the price and the fee. `node spec/test-vectors/signature-valid/verify.mjs --check check.json delivery.json` runs one document against one check.
 
 ## Writing checks for a robot episode
 
