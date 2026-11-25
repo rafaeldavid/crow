@@ -49895,7 +49895,7 @@ const parseCommitment = (json) => {
 };
 const parseDisclosure = parserFor("disclosure", true);
 const parseProjection = parserFor("projection", false);
-const parseDelivery = parserFor("delivery", true, (d) => unlockRule(d.encryptedKeys));
+const parseDelivery$1 = parserFor("delivery", true, (d) => unlockRule(d.encryptedKeys));
 const parseEvent = parserFor("event", false);
 const parseJudgeVerdict = parserFor("judge-verdict", false);
 const parseJudgment = parserFor("judgment", false, (j) => "privateRecord" in j ? "privateRecord is not supported in Phase 1" : void 0);
@@ -58917,7 +58917,7 @@ const ALGORITHMS = {
 		wrongKey: "publicKey: not an Ed25519 key"
 	}
 };
-/** Section 6 limits, in characters (UTF-16 units) and bytes. */
+/** Section 6 limits, in characters and bytes. A pointer counts code points, as the schema does; the key and the signature count UTF-16 units. */
 const SIGNATURE_LIMITS = {
 	pointer: 512,
 	publicKey: 1024,
@@ -59015,7 +59015,20 @@ function hasShape(value, required, optional = []) {
 	const keys = Object.keys(value);
 	return required.every((k) => keys.includes(k)) && keys.every((k) => required.includes(k) || optional.includes(k));
 }
-const isPointer = (p) => typeof p === "string" && p.length <= SIGNATURE_LIMITS.pointer && /^(\/([^~/]|~[01])*)*$/.test(p);
+/** Code points, as the schema's maxLength counts them (a lone surrogate counts one), so both refuse the same pointers. */
+const codePoints = (s) => {
+	let n = s.length;
+	for (let i = 0; i < s.length - 1; i++) {
+		const c = s.charCodeAt(i);
+		const d = s.charCodeAt(i + 1);
+		if (c >= 55296 && c <= 56319 && d >= 56320 && d <= 57343) {
+			n--;
+			i++;
+		}
+	}
+	return n;
+};
+const isPointer = (p) => typeof p === "string" && p.length <= 2 * SIGNATURE_LIMITS.pointer && codePoints(p) <= SIGNATURE_LIMITS.pointer && /^(\/([^~/]|~[01])*)*$/.test(p);
 /** Static validation for offer time: why the terms' check is malformed, or undefined. Every parameter must be a string. */
 function validateSignatureCheck(check) {
 	if (!hasShape(check, [
@@ -59083,6 +59096,16 @@ function jsonEqual(left, right, budget) {
 	}
 	return true;
 }
+function parseDelivery(text) {
+	try {
+		return {
+			ok: true,
+			value: JSON.parse(text)
+		};
+	} catch {
+		return { ok: false };
+	}
+}
 const LONE_SURROGATE = /[\uD800-\uDBFF](?![\uDC00-\uDFFF])|(?<![\uD800-\uDBFF])[\uDC00-\uDFFF]/;
 const fail$2 = (detail) => ({
 	passed: false,
@@ -59095,12 +59118,9 @@ const fail$2 = (detail) => ({
 function evaluateSignatureValid(check, delivered, budget) {
 	const invalid = validateSignatureCheck(check);
 	if (invalid) return fail$2(`check invalid: ${invalid}`);
-	let document;
-	try {
-		document = JSON.parse(delivered);
-	} catch {
-		return fail$2("not a JSON document");
-	}
+	const parsed = typeof delivered === "string" ? parseDelivery(delivered) : delivered();
+	if (!parsed.ok) return fail$2("not a JSON document");
+	const document = parsed.value;
 	const strings = {};
 	for (const name of [
 		"publicKey",
@@ -59375,21 +59395,17 @@ const fail$1 = (detail) => ({
 	passed: false,
 	detail
 });
-function evaluate$1(check, input, table, budget) {
+function evaluate$1(check, input, table, json, budget) {
 	const invalid = validateCheck(check);
 	if (invalid) return fail$1(`check invalid: ${invalid}`);
 	if (check.type === "json_schema") {
-		let value;
-		try {
-			value = JSON.parse(input.data.reveal());
-		} catch {
-			return fail$1("deliverable is not valid JSON");
-		}
+		const doc = json();
+		if (!doc.ok) return fail$1("deliverable is not valid JSON");
 		const v = compileJsonSchema(check.schema);
-		const e = v.ok ? v.value(value, budget) : v.error;
+		const e = v.ok ? v.value(doc.value, budget) : v.error;
 		return e === void 0 ? pass$1() : fail$1(`schema: ${e}`);
 	}
-	if (check.type === "signature_valid") return evaluateSignatureValid(check, input.data.reveal(), budget);
+	if (check.type === "signature_valid") return evaluateSignatureValid(check, json, budget);
 	if (check.type === "hidden_characters_max") {
 		const counts = countHidden(input.data.reveal());
 		const over = HIDDEN_KEYS.filter((k) => check.max[k] !== void 0 && counts[k] > check.max[k]);
@@ -59488,12 +59504,24 @@ function runChecks$1(checks, input, budget = new StepBudget(CHECK_BUDGET)) {
 		}
 		return cached;
 	};
+	let parsed;
+	const json = () => {
+		if (parsed === void 0) try {
+			parsed = {
+				ok: true,
+				value: JSON.parse(input.data.reveal())
+			};
+		} catch {
+			parsed = { ok: false };
+		}
+		return parsed;
+	};
 	const inconclusive = [];
 	return {
 		outcomes: checks.map((check) => {
 			let o;
 			try {
-				o = evaluate$1(check, input, table, budget);
+				o = evaluate$1(check, input, table, json, budget);
 			} catch (e) {
 				if (e instanceof BudgetExhausted) {
 					inconclusive.push(check.id);
@@ -68744,7 +68772,7 @@ async function run(c, state, offerId, given) {
 		});
 		if (!take.ok) throw new Error(`a take of the template does not pass the API's commitment schema: ${plain$1(take.error.detail, 300)}. Nothing more was sent`);
 		const d = standingDeliveryFor(template, example.id);
-		if (d && !parseDelivery({
+		if (d && !parseDelivery$1({
 			...d,
 			signature: encodeStandingSignature(2, template, signature, example.fill)
 		}).ok) throw new Error("the template's standing delivery does not pass the API's delivery schema. Nothing more was sent");
