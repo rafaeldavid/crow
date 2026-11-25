@@ -5,7 +5,7 @@
 - **Depends on:** T-232 (pinned reads), T-549 (contract signers)
 - **Paths this task may touch:** `packages/settlement/src/interface.ts`, `packages/settlement/evm/`, `apps/operator/src/`, `apps/demo-cloud/src/`, `docs/api.md`, `docs/operations.md`, `.github/workflows/ci.yml` (the anvil job's file list), this file
 - **Human gate:** yes: merge and deploy wait for Rafa (the coordinator's brief, 2026-11-25)
-- **Status:** review
+- **Status:** done (merged in pull request 811, 2026-11-25)
 - **Agent/session:** Claude Code side session, 2026-11-25
 - **Roadmap row:** none
 

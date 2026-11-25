@@ -5,7 +5,7 @@
 - **Depends on:** T-574, T-581
 - **Paths this task may touch:** `apps/demo-cloud/src/` (judges.ts, world.ts and their tests), `docs/operations.md`, `docs/api.md`, `site/ref/limits.txt`
 - **Human gate:** yes for the deploy only; the code is in-repo
-- **Status:** review
+- **Status:** done (merged in pull request 797, 2026-11-25)
 - **Agent/session:** judges-fail-closed (side session of the coordinator, 2026-11-25)
 - **Roadmap row:** N222
 

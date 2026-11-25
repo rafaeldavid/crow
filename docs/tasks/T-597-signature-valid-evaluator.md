@@ -5,7 +5,7 @@
 - **Depends on:** T-585 (ADR-0045), T-589 (the vectors), T-590 (schema v0.13)
 - **Paths this task may touch:** `packages/judgment/src/checks/`, `packages/judgment/package.json`, `pnpm-lock.yaml`, `packages/core/src/types.ts` (the check's type), `apps/adjudicator/src/` (D92: `service.ts`, `check-kinds.test.ts`), `apps/operator/src/prepare.ts` and its test, `packages/testkit/src/` (the rule and `lacks_check_kinds`), `docs/decisions-today.md`, `docs/decisions/ADR-0045-*`, `docs/decisions/ADR-0046-*` (one line), `docs/api.md`, `docs/neutrality.md`, `fixtures/`, `spec/README.md`, `spec/test-vectors/signature-valid/README.md` (one sentence), `site/ref/checks.txt`, `site/setup.mjs` (rebuilt), this file
 - **Human gate:** no. A deploy waits for Rafa.
-- **Status:** review
+- **Status:** done (merged in pull request 795, 2026-11-25)
 - **Agent/session:** p03-signature-valid, 2026-11-25
 - **Roadmap row:** N225
 

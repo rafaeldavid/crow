@@ -2,7 +2,7 @@
 // flat objects. A cell is a string, null (empty CSV cell, JSON null or ""), or a non-scalar JSON
 // value (object, array, boolean) kept apart so no check mistakes it for text.
 import { err, ok, type MimeType, type Result } from '@holdback/core';
-import { canonical, chargeChars, chargeSort } from './cost.js';
+import { canonical, chargeChars, chargeSort, MAX_CANONICAL_DEPTH, TooDeep } from './cost.js';
 import { parseCsv } from './csv.js';
 import type { StepBudget } from './safe-regex.js';
 
@@ -36,7 +36,10 @@ function cell(v: unknown, budget: StepBudget | undefined): Cell {
   return { nonScalar: Array.isArray(v) ? 'array' : 'object', text: canonical(v, budget) };
 }
 
-/** A parsed JSON delivery as a table, charging the budget for each cell and each row's keys. */
+/**
+ * A parsed JSON delivery as a table, charging the budget for each cell and each row's keys. A cell nested deeper than
+ * MAX_CANONICAL_DEPTH levels makes it no table.
+ */
 export function jsonTable(parsed: unknown, budget?: StepBudget): Result<Table, string> {
   if (!Array.isArray(parsed)) return err('JSON deliverable is not an array of objects');
   const first: unknown = parsed[0];
@@ -54,7 +57,13 @@ export function jsonTable(parsed: unknown, budget?: StepBudget): Result<Table, s
     if (keysOf(Object.keys(r)) !== key) return err(`JSON row ${i} has different keys from row 0`);
     for (const c of columns) {
       budget?.spend(1);
-      cells.push(cell((r as Record<string, unknown>)[c], budget));
+      try {
+        cells.push(cell((r as Record<string, unknown>)[c], budget));
+      } catch (e) {
+        // D102: a fixed count, never the stack, so every adjudicator fails the same cell with the same line.
+        if (e instanceof TooDeep) return err(`JSON row ${i} has a cell nested deeper than ${MAX_CANONICAL_DEPTH} levels`);
+        throw e;
+      }
     }
   }
   return ok({ columns, rows: parsed.length, cells });

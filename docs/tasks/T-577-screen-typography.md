@@ -5,7 +5,7 @@
 - **Depends on:** T-557 (the measurement, PR 696)
 - **Paths this task may touch:** `packages/judgment/src/screen.ts`, `normalize.ts`, `intake.ts`, `kept.ts`, `kept/screen-1.ts` (new, the frozen copy), the judgment package's tests, `packages/testkit/src/replay.ts` and its test, `fixtures/replay/kept-policies.json` (new records only), the `screen-2` entry in `apps/adjudicator/src/kept-policies.json` (kept, not the default), tests that name the newest screen version, `site/setup.mjs` (rebuilt, it bundles the judgment package), a new ADR, one entry in `docs/decisions-today.md`, the screen lines of `docs/judgment-and-defenses.md`, `docs/research/2026-11-19-screen-flags-on-real-reports/` (the measuring script), and this file.
 - **Human gate:** no. Rafa answered "Yes" on 2026-11-20 to "Should the screen stop flagging honest reports for their typography?", as a researched change with a red-team pass.
-- **Status:** review
+- **Status:** done (merged in pull request 773, 2026-11-25)
 - **Agent/session:** T-577 session, 2026-11-20
 - **Roadmap row:** N40
 

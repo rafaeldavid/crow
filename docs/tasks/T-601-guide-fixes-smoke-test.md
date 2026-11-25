@@ -5,7 +5,7 @@
 - **Depends on:** T-552
 - **Paths this task may touch:** `site/setup.txt`, `site/sell.txt`, `site/buy.txt`, `site/llms.txt`, `site/ref/take.txt`; this file.
 - **Human gate:** no. The site deploy waits for Rafa.
-- **Status:** in review
+- **Status:** done (merged in pull request 798, 2026-11-25)
 - **Agent/session:** guide-fixes, 2026-11-25; branch `guide-fixes-smoke`
 - **Roadmap row:** N216
 - **Change kind:** 1 (guides)
