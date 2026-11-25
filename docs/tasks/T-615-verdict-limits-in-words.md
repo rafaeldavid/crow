@@ -19,7 +19,7 @@ Partner C's deal on Sepolia (commitment `0x59f42180…`, 2026-11-25 15:10 UTC) r
 
 Judges keep their verdicts inside the schema's caps more often, without loosening the filter, and the next filter abstention can be measured.
 
-1. A new template pair 2 replaces rule 5 only: it names each limit in words, asks for a target well under it (200 characters for each evidence; two thirds of the policy's rationale cap, at most 400, for the rationale), and says a reply over a limit is discarded. The rationale limit is filled from the policy's `rationaleMaxChars`. Pair 1 stays frozen for every deal that binds it (ADR-0036).
+1. A new template pair 2 replaces rule 5 only: it names each limit in words, asks for a target well under it (200 characters for each evidence; two thirds of the policy's rationale cap, at most 400, for the rationale), and says nothing of what happens to text over a limit, so the frozen text stays true under today's filter and under `agg-5`'s cut (D105). The rationale limit is filled from the policy's `rationaleMaxChars`. Pair 1 stays frozen for every deal that binds it (ADR-0036).
 2. A schema abstention's detail names the rule it broke as metadata only: a field path built from the schema's names and array indices, the limit, and the length, count or JSON type, with numbers bucketed (`criteria[2].evidence: 312 > 300`). Never a value, key or text from the output.
 3. The judgment record's aggregate reasons name each filter abstention's judge, filter and detail on every path; the appeal after an escalation listed only a count.
 
@@ -35,7 +35,7 @@ Judges keep their verdicts inside the schema's caps more often, without loosenin
 
 ## Acceptance criteria
 
-- [x] Pair 2's rule 5 names the 300- and 600-character limits, the 200- and 400-character targets, and that a reply over a limit is discarded; every other line of pair 1 stays, first instance and appeal (`template-limits.test.ts`).
+- [x] Pair 2's rule 5 names the 300-character evidence limit and the policy's rationale limit, the 200- and 400-character targets, and no consequence for text over a limit; every other line of pair 1 stays, first instance and appeal (`template-limits.test.ts`).
 - [x] Pair 1 keeps its hashes; pair 2 has its own; this build keeps both (`template-limits.test.ts`, `kept.test.ts`, `kept-policies.json`).
 - [x] The replay records pair 2 on every screen, aggregation and read path (`fixtures/replay/kept-policies.json`), and pair 1's records do not move.
 - [x] A pipeline test replays the live appeal: agg-3 and agg-4 reject it with the live reasons; the same panel inside the caps accepts it.
@@ -54,16 +54,17 @@ Judges keep their verdicts inside the schema's caps more often, without loosenin
 - Measured: `template-limits.test.ts` replays the appeal's shape (five seats, two families, three judges writing 340-character evidence): agg-3 and agg-4 reject with "3 judge outputs rejected by a filter"; the same panel at 288 characters accepts.
 - Inferred: the Claude seats on the appeal and DeepSeek flash on the primary failed a length cap. The records keep only the reason `schema`, not the field; no raw output is kept.
 - Guessed: stating the limits in words, with targets under them, cuts overshoots. Not measured until a live run under pair 2.
-- Measured: the 42 replay records of pair 1 (3 screens, 2 aggregations, 7 read paths) did not move. 54 records are new keys: pair 2 on the seven paths (42) and the `filtered` path for both pairs (12).
+- Measured: the 42 replay records of pair 1 (3 screens, 2 aggregations, 7 read paths) did not move. 54 records are new keys: pair 2 on the eight paths (48) and the `filtered` path for pair 1 (6).
 - Measured: `attack.injection-filter-abstain-appeal-default` changes only by the added reason `judge qwen-a output rejected by a filter (url)` and so its chain head; the decision stays reject.
 - Measured: red team 1 (pair 2 alone) and red team 2 (pair 2, the detail, the record) found no High. Their Medium and Low findings are fixed: stale bundles rebuilt; the rationale limit filled from the policy; the snapshot reviewed and updated; a replay path for filter abstentions; the scope written here; numbers in the detail bucketed; tests that passed for the wrong reason rewritten.
 - Commands run and results (measured, 2026-11-25, recipe 5):
   - `pnpm typecheck`: exit 0. `pnpm lint`: exit 0.
   - `pnpm exec vitest run packages/judgment packages/testkit apps/adjudicator/src`: 1580 passed, 12 skipped.
-  - `pnpm test`: 6103 passed, 1 failed, 321 skipped. The failure, `apps/demo-cloud/src/limits.attack.test.ts` (attack.t422-known-key-cpu), touches no changed path and passed 12 of 12 when run alone; it is a timing test under the full suite's load, for triage, not fixed here.
+  - `pnpm test`: 6103 passed, 1 failed, 321 skipped. The failure, `apps/demo-cloud/src/limits.attack.test.ts`, touches no changed path; it is recorded as a separate defect.
   - `pnpm snap`: 63 passed. `pnpm validate:spec`: ok. `node site/build.mjs && node site/check.mjs`: PASS.
 - Snapshot diffs: `attack.injection-filter-abstain-appeal-default`: the aggregate gains the reason `judge qwen-a output rejected by a filter (url)`, so the record hash and the chain head change; the decision stays reject.
-- Bundles: `site/setup.mjs` sha256 `b59bc721…` to `44372b48…`; `site/serve.mjs` sha256 `541ff38b…` to `a1c314de…`.
+- Measured, after rule 5 dropped its consequence clause: pair 2's hashes are `0x4d328a15…` / `0xfc6d93d5…`; its 48 replay records were recorded again, and pair 1's 48 did not move; the judgment, testkit and adjudicator suites pass 1580; `pnpm snap` 63 passed; the site check passes; typecheck and lint exit 0.
+- Bundles: `site/setup.mjs` sha256 `b59bc721…` to `1cb79b43…`; `site/serve.mjs` sha256 `541ff38b…` to `e1f7a4a0…`.
 
 ## Decisions
 

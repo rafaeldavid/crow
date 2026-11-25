@@ -113,7 +113,7 @@ describe('selection by the bound policy (ADR-0036 section 6)', () => {
       screens: ['screen-0', 'screen-1', 'screen-2'],
       templatePairs: [
         { promptTemplateHash: NEWEST_VERSIONS.promptTemplateHash, appealPromptTemplateHash: NEWEST_VERSIONS.appealPromptTemplateHash },
-        { promptTemplateHash: '0x8c862c9079f9336ba4a266d94d2372fe2b60c656166118f7499c1a3f8d40f8b3', appealPromptTemplateHash: '0x35d1ff26221dda1207b071c683aadb63c3116d0bb09c7e94f0c3c601e28246c1' },
+        { promptTemplateHash: '0x4d328a15ef96b9aa0f4166efc720a320f82e9c677fdd8beaff431ecefcc9629b', appealPromptTemplateHash: '0xfc6d93d5441808bbfa690c0402a0ee185eab48c508025f59cf3c4f9f5d8332f1' },
       ],
       aggregations: ['agg-3', 'agg-4'],
     });

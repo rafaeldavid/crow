@@ -83,20 +83,19 @@ describe('template pair 2 states the verdict limits in words, under the schema c
   const rule5 = (t: string) => t.split('\n').find((l) => l.startsWith('5. '))!;
   const rule = (t: string, n: number) => t.split('\n').find((l) => l.startsWith(`${n}. `));
 
-  it('names each limit, the target under it, and what happens over it; the rationale limit comes from the policy', () => {
+  it('names each limit and the target under it, says nothing of what happens over a limit; the rationale limit comes from the policy', () => {
     const r = rule5(PROMPT_TEMPLATE_2);
-    expect(r).toContain('under 200 characters');
-    expect(r).toContain('under {{rationale_target}} characters');
-    expect(r).toContain('The limits are 300 characters for each "evidence" and for "injectionEvidence" and {{rationale_max}} for "rationale"');
-    expect(r).toMatch(/discarded/);
+    expect(r).toContain('Each "evidence" and the "injectionEvidence" may be at most 300 characters; aim for 200.');
+    expect(r).toContain('The "rationale" may be at most {{rationale_max}} characters; aim for {{rationale_target}}.');
+    expect(r).not.toMatch(/discard|no verdict|abstain[^"]|cut/i);
     expect(r).toMatch(/no code fence/);
     expect(rule5(PROMPT_TEMPLATE)).not.toMatch(/\{\{rationale/);
   });
 
   it.each([
-    [600, 'under 400 characters', 'and 600 for "rationale"'],
-    [300, 'under 200 characters. The limits', 'and 300 for "rationale"'],
-    [undefined, 'under 400 characters', 'and 600 for "rationale"'],
+    [600, 'aim for 400.', 'at most 600 characters'],
+    [300, 'aim for 200.', 'at most 300 characters; aim for 200.'],
+    [undefined, 'aim for 400.', 'at most 600 characters'],
   ])('fills a policy cap of %s into the rendered rule', (cap, target, limit) => {
     const p = buildPrompt({ spec: { description: 'x' }, criteria: [criterion('fit', 1)], data: UntrustedData.wrap('a'), nonces: NONCES, templates: TEMPLATE_PAIR_2, ...(cap === undefined ? {} : { rationaleMaxChars: cap }) });
     if (!p.ok) throw new Error(p.error);
@@ -201,12 +200,12 @@ describe("partner C's appeal, replayed on the pipeline", () => {
   // told only `string<=300`. Live judges decide whether pair 2 helps; this shows the words reach every seat.
   it('under template pair 2 every judge reads the limits in words, and the record names pair 2', async () => {
     const versions = { ...NEWEST_VERSIONS, promptTemplateHash: TEMPLATE_PAIR_2.firstHash, appealPromptTemplateHash: TEMPLATE_PAIR_2.appealHash };
-    const told = (system: string) => (system.includes('under 200 characters') ? long(180) : long(340));
+    const told = (system: string) => (system.includes('aim for 200') ? long(180) : long(340));
     const two = await appealTold(told, versions);
     const one = await appealTold(told, NEWEST_VERSIONS);
     expect([one.d.aggregate.decision, two.d.aggregate.decision]).toEqual(['reject', 'accept']);
     expect(two.calls).toHaveLength(5);
-    for (const c of two.calls) expect(c.system).toContain('under 200 characters');
+    for (const c of two.calls) expect(c.system).toContain('aim for 200');
     expect(new Set(two.d.panel.members.map((m) => m.promptTemplateHash))).toEqual(new Set([TEMPLATE_PAIR_2.appealHash]));
   });
 });
