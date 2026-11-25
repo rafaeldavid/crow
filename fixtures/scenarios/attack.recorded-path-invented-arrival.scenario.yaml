@@ -4,7 +4,8 @@ description: >-
   ADR-0047. Tidewater delivers a path drawn joint by joint: q1 reaches 10000 while q2 still waits at -60000, and q2
   reaches -45000 only after q1 has moved on to 20000. Each joint passes its own coordinate of the first waypoint, but
   in no sample are both within 500 millidegrees of it, so the arm never sat at the point. Time and lengths pass; the
-  waypoints check fails. Bench A rejects with no panel, Atlas gets the price back and Bench A earns the fee.
+  waypoints check fails. Bench A rejects with no panel, Atlas gets the price back and Bench A earns the fee. One invented sample at the waypoint would pass: only a
+  signature on the recording answers that (ADR-0047, "What the kinds do not prove").
 club: fixtures/clubs/data-services-v1.yaml
 terms: fixtures/terms/recorded-path.yaml
 parties:

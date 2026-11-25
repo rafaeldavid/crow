@@ -28,7 +28,8 @@ export const isStep = (n: unknown): n is number => isSafeInt(n) && n >= 0;
 export function validateSeries(s: unknown, name: string, pointers = false): string | undefined {
   if (hasShape(s, ['pointer'])) return isPointer(s.pointer) ? undefined : `${name}.pointer must be an RFC 6901 JSON pointer of at most 512 characters`;
   if (pointers) return `${name} must be exactly { pointer }`;
-  if (hasShape(s, ['column'])) return typeof s.column === 'string' && s.column.length <= SERIES_LIMITS.column ? undefined : `${name}.column must be a string of at most ${SERIES_LIMITS.column} characters`;
+  // Code points, as the schema's maxLength counts them (a lone surrogate counts one), so both refuse the same names.
+  if (hasShape(s, ['column'])) return typeof s.column === 'string' && s.column.length <= 2 * SERIES_LIMITS.column && [...s.column].length <= SERIES_LIMITS.column ? undefined : `${name}.column must be a string of at most ${SERIES_LIMITS.column} characters`;
   return `${name} must be exactly { pointer } or { column }`;
 }
 
@@ -66,6 +67,8 @@ export function readIntegers(s: Series, label: string, src: Sources, budget: Ste
   if (!t.ok) return { ok: false, detail: t.error };
   const col = t.value.columns.indexOf(s.column);
   if (col < 0) return { ok: false, detail: `${label}: column not found` };
+  // A CSV may repeat a header name. Readers disagree on which column it names, so the check reads neither.
+  if (t.value.columns.lastIndexOf(s.column) !== col) return { ok: false, detail: `${label}: the column name appears twice` };
   const rows = t.value.rows;
   budget.spend(rows.length * DATA_WORK.perEntry);
   const out: number[] = new Array<number>(rows.length);

@@ -45,9 +45,25 @@ Measured on 2026-11-25 on one Mac, unless labelled.
 - **Contract and neighbours:** `tests/spec.test.ts`, `apps/adjudicator/src/check-kinds.test.ts`, the operator's version tests, `examples/mandate.test.ts` and `packages/core`: 30 files, 1,423 passed.
 - **Spec:** `pnpm validate:spec`: 38 of 38 examples; `spec/openapi.json` fresh.
 - **Snapshots:** `pnpm snap`: 62 of 62.
+- **Local chain:** the five new fixtures pass against the contracts on anvil (`pnpm snap --settlement=local <name>`), each with a transcript identical to SimChain's: 484,177 to 560,014 gas over 3 or 4 transactions.
+- **Neighbours:** `npx vitest run apps/adjudicator apps/operator apps/test-agents examples site tests`: 174 files, 3,053 passed, 55 skipped.
 - **Site:** `node site/build.mjs && node site/check.mjs` passes. `buy.mjs` and `try.mjs` keep their SHA-256 (`b87e478b…` and `71634a90…`). `setup.mjs`, `take.mjs` and `serve.mjs` change, because they embed the schemas or the judgment code.
+
+**Red team** (one Opus pass, given CLAUDE.md, ADR-0006, ADR-0045, ADR-0047 and the threat model; probes in the gitignored `reports/scratch/redteam-t610/`). No Critical or High finding.
+
+| Finding | Severity | State |
+| --- | --- | --- |
+| The recorded-path terms accept a reversed run whose joint columns are flipped back with the timestamps kept, and a run with one invented sample at the waypoint. No data check can tell; the fixture terms carry no `signature_valid` | Medium | Recorded: ADR-0047 "What the kinds do not prove" and both attack descriptions name it. The live deal pairs the kinds with `signature_valid` (P-22) |
+| `toTable` converts every non-scalar JSON-table cell with the recursive `canonicalJson`, so a deeply nested cell fails a column check at a depth that depends on the process's stack size (about 1,000 to 4,400 levels, measured). Older code; every column check shares it | Medium | Open, for the coordinator: a fixed depth cap in `toTable`, or convert only the columns a check reads |
+| Terms that pass the schema but contradict themselves (`minStep` above `maxStep`, a waypoint with the wrong number of coordinates) are agreed and funded, then fail at judgment: the buyer pays the fee and the seller gets nothing for good work. Nothing runs `validateCheck` at offer time | Medium | Open: the unbuilt half of ADR-0045 section 10, which T-590 and T-597 left for a later change |
+| A column name's length counted UTF-16 units, the schema code points | Low | Fixed: code points, with a test |
+| A CSV that repeats a header name read the first column | Low | Fixed: the check fails, with a test |
+| A JSON table's number cells (`-0`, `1.0`, `1e2`) passed while the ADR's CSV spelling rule refuses them | Low | Fixed in ADR-0047 section 1: a JSON table's numbers read as the pointer form reads them |
+| ADR-0047 estimated the budget at 1,048,576 bytes; the content store's cap is 10,485,760 | Info | Fixed: the red team's measured 8,400,002 units for 15.7 MB |
+| A repeated JSON key reads as its last value | Info | Fixed: stated in ADR-0047 section 1 |
 
 ## Handoff
 
 - **For P-18 (the site docs batch):** `site/ref/checks.txt` does not name the three kinds yet. ADR-0047 sections 1 to 5 hold the parameters, rules, limits and failure lines.
+- **For the coordinator:** the two open Medium findings above. Both predate this change and affect every column check or every kind.
 - **Deploy notes** (a deploy waits for Rafa): the operators' next deploy serves schema 0.14, and the reference adjudicators list 13 kinds, so the world registers them again with a later `issuedAt` (inferred, as for T-590). No signed type, contract or domain changes.

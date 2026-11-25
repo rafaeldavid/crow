@@ -73,6 +73,17 @@ describe('passes_through: the path reaches each waypoint in order', () => {
     expect(one(check({ series: [{ column: 'q1' }, { column: 'q3' }] }), csv, 'text/csv')).toMatchObject({ passed: false, detail: 'series 2: column not found' });
   });
 
+  it('fails a CSV that repeats the column name: readers disagree on which column it means', () => {
+    const c = check({ series: [{ column: 'q1' }], waypoints: [[5]] });
+    expect(one(c, 'q1,q1\n5,0\n', 'text/csv')).toMatchObject({ passed: false, detail: 'series 1: the column name appears twice' });
+  });
+
+  it('counts a column name in code points, as the schema does', () => {
+    const astral = '\u{1F916}'.repeat(128);
+    expect(validateCheck(check({ series: [{ column: astral }], waypoints: [[5]] }) as JudgmentCheck)).toBeUndefined();
+    expect(validateCheck(check({ series: [{ column: `${astral}a` }], waypoints: [[5]] }) as JudgmentCheck)).toMatch(/at most 128 characters/);
+  });
+
   it('compares exactly at the ends of the safe range', () => {
     expect(one(check({ waypoints: [[MAX, -MAX]], tolerance: 0 }), doc([MAX], [-MAX])).passed).toBe(true);
     // The difference is 2^54 - 2: far beyond any tolerance, and never rounded back under it.

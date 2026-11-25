@@ -31,11 +31,13 @@ A series is one of two shapes, closed (`$defs/Series` in `commitment.schema.json
 | Shape | Reads | Each entry must be |
 | --- | --- | --- |
 | `{ "pointer": "/telemetry/t_ms" }` | The JSON array at an RFC 6901 pointer in a JSON delivery, the same pointer `signature_valid` uses (`$defs/JsonPointer`, at most 512 characters) | A JSON number whose value is a safe integer (magnitude at most 2^53 - 1). `-0` reads as `0` |
-| `{ "column": "t_ms" }` | One column of the tabular view: a CSV, or a JSON array of flat objects, as the other column checks read it | A cell spelled as one decimal integer: an optional minus, no leading zero, no plus, no space, no exponent, at most 16 digits, and a safe integer. `-0` and an empty cell fail |
+| `{ "column": "t_ms" }` | One column of the tabular view: a CSV, or a JSON array of flat objects, as the other column checks read it | In a CSV, a cell spelled as one decimal integer: an optional minus, no leading zero, no plus, no space, no exponent, at most 16 digits, and a safe integer; `-0` and an empty cell fail. In a JSON table, a number cell is read as the pointer form reads it (so `-0`, `1.0` and `1e2` read as 0, 1 and 100), and a string cell by the CSV spelling |
 
 - **The pointer form serves column-oriented JSON,** the layout a signed recording uses. The column form serves a CSV recording.
 - **Nothing is rounded.** A decimal sample fails the check instead of being truncated, so a seller cannot move a sample across a bound by writing `10000.4`.
 - **A JSON number is read by `JSON.parse`,** as every check reads it. `1.0` and `1e2` read as the integers 1 and 100. Above 2^52 a literal with a fraction can read as an integer, since binary64 holds no fraction there; every adjudicator reads it the same way [inferred: JSON reading is IEEE 754 round to nearest].
+- **A column name the CSV header repeats fails the check.** Readers disagree on which of the two columns the name means.
+- **A key repeated in a JSON object reads as its last value,** as `JSON.parse` reads it, for both forms.
 - **A detail line never quotes a delivered value.** It names the series by its position (`series 2`) and the row by its number.
 
 ### 2. `passes_through`
@@ -88,7 +90,7 @@ A series is one of two shapes, closed (`$defs/Series` in `commitment.schema.json
 | --- | --- | --- |
 | Series per check | 32 | Bounds `validateCheck` and the per-row comparison |
 | Waypoints per check | 1,024 | Bounds `validateCheck`: at most 32,768 coordinates for each pass over the terms |
-| Column name | 128 characters | As every column check |
+| Column name | 128 characters, counted in code points as the schema counts them | As every column check |
 | Pointer | 512 characters | `$defs/JsonPointer`, as `signature_valid` |
 | Delivered series | The delivery's own limit (the node's `limits.maxCiphertextBytes`) | No separate cap; the budget bounds the work |
 | Work | 1 unit per entry read, 1 per coordinate or step compared, 1 per series whose length is read | This record |
@@ -96,7 +98,7 @@ A series is one of two shapes, closed (`$defs/Series` in `commitment.schema.json
 
 - **Every unit is charged before the work it pays for,** and a series is paid for in full before its entries are read, so a refused series still spends its length.
 - **A check that runs out of the shared budget is inconclusive** and escalates, as every kind does.
-- **At the store's limit the three kinds fit the budget by a wide margin** [inferred from the rates: a 1,048,576-byte document holds fewer than 600,000 integers, so `passes_through` over it costs at most about 1.2 million units of `CHECK_BUDGET`'s 50 million]. The tests measure a 200,000-row path at 800,000 units.
+- **At the content store's limit the three kinds fit the budget by a wide margin.** The store keeps at most 10,485,760 bytes (`MAX_CIPHERTEXT_BYTES`). The red team ran a 15.7 MB delivery under the fixture terms: 8,400,002 units of `CHECK_BUDGET`'s 50 million, in 185 ms [measured]. Terms run out only when they read each entry about ten times over, for example many heavy checks on one large series; those checks are then inconclusive and escalate [measured by the red team: 18 of 20 such checks].
 - **The limits are part of the kinds.** A change to them is a change to judgment and takes a new policy version (ADR-0036).
 
 ### 6. Schema, version and discovery
@@ -117,7 +119,7 @@ A series is one of two shapes, closed (`$defs/Series` in `commitment.schema.json
 
 | Not proved | Why |
 | --- | --- |
-| That the recording is real | A seller can compute a path through any waypoints. `signature_valid` ties the recording to a pinned key; the buyer holds a signed record the key's holder cannot deny (D26) |
+| That the recording is real | A seller can compute a path through any waypoints: reverse the joint columns of a run that went the other way and keep its timestamps, or add one invented sample at the waypoint between two real ones. Every check passes on such a file [measured by the red team]. `signature_valid` with `message.jsonEquals` over the telemetry ties the recording to a pinned key, so the buyer holds a signed record the key's holder cannot deny (D26) |
 | Physical consistency (speed against position, a tool pose against the joints) | Each needs tolerances tuned on real data. They stay on the triage list (research note, section 4) |
 | A smooth path between samples | The check reads samples. A buyer that needs a dense recording bounds the gap with `maxStep` on time |
 | Distance in joint space as one number | The tolerance is per axis. A Euclidean distance needs a square root or a squared bound; either is a later kind |

@@ -4,7 +4,8 @@ description: >-
   ADR-0047. The arm visited the second waypoint first. Tidewater reverses the rows so the path meets the buyer's
   order, and each timestamp travels with its row. The waypoints check passes on the reordered path, but the time
   check fails: row 2 is earlier than row 1. Bench A rejects with no panel, Atlas gets the price back and Bench A
-  earns the fee.
+  earns the fee. A seller that reverses the joint columns and keeps the
+  timestamps passes every check: only a signature on the recording answers that (ADR-0047, "What the kinds do not prove").
 club: fixtures/clubs/data-services-v1.yaml
 terms: fixtures/terms/recorded-path.yaml
 parties:

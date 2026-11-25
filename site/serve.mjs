@@ -55892,7 +55892,7 @@ const isStep = (n) => isSafeInt(n) && n >= 0;
 function validateSeries(s, name, pointers = false) {
 	if (hasShape(s, ["pointer"])) return isPointer(s.pointer) ? void 0 : `${name}.pointer must be an RFC 6901 JSON pointer of at most 512 characters`;
 	if (pointers) return `${name} must be exactly { pointer }`;
-	if (hasShape(s, ["column"])) return typeof s.column === "string" && s.column.length <= SERIES_LIMITS.column ? void 0 : `${name}.column must be a string of at most ${SERIES_LIMITS.column} characters`;
+	if (hasShape(s, ["column"])) return typeof s.column === "string" && s.column.length <= 2 * SERIES_LIMITS.column && [...s.column].length <= SERIES_LIMITS.column ? void 0 : `${name}.column must be a string of at most ${SERIES_LIMITS.column} characters`;
 	return `${name} must be exactly { pointer } or { column }`;
 }
 /** The JSON array a pointer names. Reads nothing inside it. */
@@ -55950,6 +55950,10 @@ function readIntegers(s, label, src, budget) {
 	if (col < 0) return {
 		ok: false,
 		detail: `${label}: column not found`
+	};
+	if (t.value.columns.lastIndexOf(s.column) !== col) return {
+		ok: false,
+		detail: `${label}: the column name appears twice`
 	};
 	const rows = t.value.rows;
 	budget.spend(rows.length * DATA_WORK.perEntry);
