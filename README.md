@@ -9,7 +9,6 @@ By design, no single party can stop a valid deal from settling on its terms or m
 ## Try it
 
 - https://crow.direct: the site.
-- https://crow.direct/visualdemo/: one deal between two agents, step by step, recorded on SimChain on 2026-11-02.
 - https://crow.direct/llms.txt: the agent guide. Point an agent at it. With an HTTP client, an EIP-712 signer and NaCl (a standard encryption library), the agent can run a deal against the public demo API. It needs no SDK or source code.
 
 What is private today: the delivered work, which is encrypted before it leaves the seller and opened only by the adjudicators and, once it has paid, the buyer. What is public in this phase: the addresses, amounts, deadlines and adjudicators a deal names, on Sepolia, to anyone who reads the chain. Private terms come in a later phase.
@@ -58,7 +57,7 @@ Three directions are being explored. None is chosen yet. Each lists the evidence
 
 ## Run it locally
 
-You need Node 22 and pnpm 12, through corepack.
+You need Node 22.18 or later and pnpm 12, through corepack.
 
 ```sh
 corepack enable
@@ -149,12 +148,13 @@ As of 2026-11-21:
 | `apps/adjudicator/` | The adjudicator service: judgment pipeline, panel, signed decisions |
 | `apps/demo/` | The narrated demo CLI and its static viewer (`pnpm demo`) |
 | `apps/demo-cloud/`, `apps/site/`, `apps/early-access/`, `apps/test-agents/` | The public demo on Cloudflare Workers, the site's Worker, early-access sign-ups, Crow's test seller |
+| `apps/hosted-sellers/` | The seller adapter Crow hosts for a design partner (ADR-0037) |
 | `packages/core/` | Types, the state machine, EIP-712 types, money and timing rules, envelope encryption |
 | `packages/settlement/` | The `Settlement` interface, SimChain (`sim/`) and the EVM implementation (`evm/`) |
 | `packages/judgment/` | Intake, declarative checks, the screen, providers, panel selection, aggregation |
 | `packages/sdk/` | The internal SDK: used by the operator, the demo and the tests (failover, direct submit); not published |
 | `packages/testkit/` | The `pnpm snap` scenario runner |
-| `contracts/` | Foundry: `contracts/src/` holds `DrandQuicknetBeacon.sol` (the drand beacon verifier), `HoldbackRules.sol`, `HoldbackTypes.sol`, `IHoldbackBeacon.sol` and `IHoldbackRules.sol` (the rules contract's interface: its declarations and the place for their descriptions, no logic); plus their tests |
+| `contracts/` | Foundry: `contracts/src/` holds `DrandQuicknetBeacon.sol` (the drand beacon verifier), `HoldbackRules.sol`, `HoldbackTypes.sol`, `IHoldbackBeacon.sol` and `IHoldbackRules.sol` (the rules contract's interface: its declarations and the place for their descriptions, no logic), and `HoldbackStandingSeller.sol` with `IHoldbackStandingSeller.sol` (a seller's own contract for standing offers, ADR-0040); plus their tests |
 | `formal/` | The TLA+ model of the commitment state machine |
 | `spec/` | JSON Schemas (the API contract), examples and the OpenAPI document |
 | `fixtures/` | Scenario fixtures, recordings, demo clubs, terms and data |

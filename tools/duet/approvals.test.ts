@@ -4,7 +4,15 @@ import { mkdirSync, mkdtempSync, realpathSync, rmSync, writeFileSync } from 'nod
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { afterAll, describe, expect, it } from 'vitest';
-import { Budget, BUDGET_STOP, dealIds, measureRun, parseRuns, trySell } from './approvals.ts';
+import { createServer } from 'node:http';
+import { runAgent } from './loop.ts';
+import { buyerBriefCold, BUYER_USAGE, scenario, START_AT_DOCS } from './scenarios.ts';
+import { runDuet } from './run.ts';
+import { anthropic, KEY_ENV, liveProvider, scripted, WORKSPACE_ENV, type ScriptStep } from './providers.ts';
+import { Recorder, Secrets } from './record.ts';
+import { Toolbox } from './tools.ts';
+import { readFileSync } from 'node:fs';
+import { Budget, BUDGET_STOP, dealIds, measureRun, parseRuns, sellBrief, trySell } from './approvals.ts';
 import type { Provider } from './providers.ts';
 import type { Event } from './record.ts';
 import type { Fence } from './tools.ts';
@@ -144,5 +152,105 @@ describe('the measures of a run', () => {
   it('reads runs as <model>:<direction>', () => {
     expect(parseRuns('claude:buy,deepseek:sell')).toEqual([{ model: 'claude', direction: 'buy' }, { model: 'deepseek', direction: 'sell' }]);
     expect(() => parseRuns('gpt:buy')).toThrow();
+  });
+});
+
+describe("the buyer's run (N215): the usage line once, no probe, the guide read", () => {
+  const facts = { docs: { guide: 'http://x/llms.txt', sell: 'http://x/sell.txt', buy: 'http://x/buy.txt' }, sellerPage: 'http://x/sellers/a/', jobApi: { quote: 'http://j/q', start: 'http://j/s', result: 'http://j/r' }, adapterPort: 4567, keyStore: '/k', token: 'tUSD', local: true };
+
+  it("gives each command's usage line once in the brief, and points only at the front door", () => {
+    const b = buyerBriefCold(scenario('paid'), facts);
+    for (const [c, u] of Object.entries(BUYER_USAGE)) expect(b).toContain(`- ${c} ${u}`);
+    expect(b.match(/- buy-with-signer /g)).toHaveLength(1);
+    expect(b).toContain('https://crow.direct/llms.txt');
+    expect(b).not.toMatch(/buy\.txt/);
+  });
+
+  it('refuses --help and an empty call with the usage line, and runs a call with arguments', async () => {
+    const dir = realpathSync(mkdtempSync(join(tmpdir(), 'approvals-usage-')));
+    made.push(dir);
+    const [work, owner] = [join(dir, 'work'), join(dir, 'owner')];
+    for (const p of [work, owner]) mkdirSync(p);
+    const secrets = new Secrets();
+    const tools = new Toolbox({ role: 'buyer', work, owner, repo: dir, operators: ['http://127.0.0.1:1'], allow: [], secrets, rec: new Recorder(join(owner, 'r.jsonl'), secrets), usage: BUYER_USAGE });
+    for (const args of [[], ['--help'], ['-h']]) {
+      const r = await tools.call('run_command', { command: 'buy-with-signer', args });
+      expect(r.isError).toBe(true);
+      expect(r.content).toMatch(/does not answer --help.*<quote URL> <key store>/);
+    }
+    // A call with arguments reaches the command's own fence, not the usage refusal.
+    expect((await tools.call('run_command', { command: 'buy-with-signer', args: ['approve'] })).content).not.toMatch(/does not answer --help/);
+  });
+
+  it('sends the workspace ID header only when it is set', async () => {
+    const seen: Array<Record<string, string>> = [];
+    const made_up = 'x'.repeat(16); // stands in for a key: nothing is sent
+    const f = (async (_u: unknown, init: { headers: Record<string, string> }) => { seen.push(init.headers); return new Response(JSON.stringify({ content: [], usage: {} }), { status: 200 }); }) as unknown as typeof fetch;
+    await anthropic('claude-opus-5-5', made_up, f).ping();
+    await anthropic('claude-opus-5-5', made_up, f, 'wrkspc_1').ping();
+    expect(seen[0]).not.toHaveProperty('anthropic-workspace-id');
+    expect(seen[1]!['anthropic-workspace-id']).toBe('wrkspc_1');
+    expect(liveProvider('anthropic', 'claude-opus-5-5', { [KEY_ENV.anthropic]: made_up, [WORKSPACE_ENV]: 'w' })).toMatchObject({ vendor: 'anthropic' });
+  });
+
+  it('runs the scripted buyer from crow.direct on the local world, reads buy.txt, probes nothing, and is measured like a seller', async () => {
+    const dir = realpathSync(mkdtempSync(join(tmpdir(), 'approvals-buyer-')));
+    made.push(dir);
+    const r = await runDuet({ scenario: 'paid', buyer: 'scripted', seller: 'scripted', brief: 'direct', coldBuyer: true, out: join(dir, 'run'), caps: { turns: 400, tokens: 50_000_000 }, graceSec: 30, timeoutSec: 180, limits: { workTokensPerAgent: 5_000_000 } });
+    const events = readFileSync(r.record, 'utf8').split('\n').filter(Boolean).map((l) => JSON.parse(l) as Event);
+    expect(events.find((e) => e.kind === 'run.start')?.['coldBuyer']).toBe(true);
+    expect(String(events.find((e) => e.role === 'buyer' && e.kind === 'agent.start')?.['brief'])).toContain('- buy-with-signer <quote URL>');
+    const m = measureRun(events, 'buyer', 'buy', 'r');
+    expect(m.guide_reads).toContain('/buy.txt');
+    expect(m.help_probes).toBe(0);
+    // One count for both sides: each web read, command and file write is one approval, from the record alone.
+    expect(m.approvals).toBe(m.approvals_by_step.length);
+    expect(m.approvals_by_step.map((s) => s.tool).every((t) => ['fetch_url', 'run_command', 'write_file'].includes(t))).toBe(true);
+    expect(m.approvals).toBeGreaterThanOrEqual(5);
+  }, 240_000);
+});
+
+describe('a scripted run with a known number of approvals', () => {
+  /** Plays the calls through the real loop, fences and record, then measures the record alone. */
+  async function measured(role: 'buyer' | 'seller', calls: (url: string) => Array<{ name: string; input: Record<string, unknown> }>) {
+    const dir = realpathSync(mkdtempSync(join(tmpdir(), 'approvals-count-')));
+    made.push(dir);
+    const [work, owner] = [join(dir, 'work'), join(dir, 'owner')];
+    for (const p of [work, owner]) mkdirSync(p);
+    writeFileSync(join(work, 'note.txt'), 'a note');
+    const server = createServer((_q, s) => s.end('a guide'));
+    await new Promise<void>((ok) => server.listen(0, '127.0.0.1', ok));
+    const origin = `http://127.0.0.1:${(server.address() as { port: number }).port}`;
+    try {
+      const secrets = new Secrets();
+      const rec = new Recorder(join(owner, 'r.jsonl'), secrets);
+      const tools = new Toolbox({ role, work, owner, repo: dir, operators: [origin], allow: [{ origin }], secrets, rec });
+      const steps: ScriptStep[] = calls(origin).map((c) => () => ({ calls: [c] }));
+      const end = await runAgent({ role, provider: scripted(steps), brief: 'brief', tools, caps: { turns: 20, tokens: 1_000_000 }, rec, signal: new AbortController().signal });
+      expect(end.status).toBe('finished');
+      return measureRun(rec.events, role, role === 'buyer' ? 'buy' : 'sell', 'r');
+    } finally { server.close(); }
+  }
+  const finish = { name: 'finish', input: { outcome: 'done', report: 'done' } };
+  const free = [{ name: 'list_files', input: {} }, { name: 'read_file', input: { path: 'note.txt' } }, { name: 'wait', input: { seconds: 1 } }];
+
+  for (const role of ['buyer', 'seller'] as const) {
+    it(`reports exactly 2 for a ${role} with one web read and one file write among free calls`, async () => {
+      const m = await measured(role, (url) => [{ name: 'fetch_url', input: { url: `${url}/a` } }, ...free, { name: 'write_file', input: { path: 'terms.json', content: '{}' } }, finish]);
+      expect(m.approvals).toBe(2);
+      expect(m.approvals_by_step.map((s) => s.tool)).toEqual(['fetch_url', 'write_file']);
+    });
+
+    it(`reports exactly 0 for a ${role} that only reads its folder and waits`, async () => {
+      const m = await measured(role, () => [...free, finish]);
+      expect(m.approvals).toBe(0);
+      expect(m.approvals_by_step).toEqual([]);
+    });
+  }
+
+  it('starts both sides with the same instruction', () => {
+    const facts = { docs: { guide: 'http://x/g', sell: 'http://x/s', buy: 'http://x/b' }, sellerPage: 'http://x/sellers/a/', jobApi: { quote: 'http://j/q', start: 'http://j/s', result: 'http://j/r' }, adapterPort: 4567, keyStore: '/k', token: 'tUSD', local: true };
+    expect(sellBrief()).toContain(START_AT_DOCS);
+    expect(buyerBriefCold(scenario('paid'), facts)).toContain(START_AT_DOCS);
   });
 });

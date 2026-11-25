@@ -215,25 +215,6 @@ describe('three scenarios, scripted, on the local phase-one world', () => {
   }
 });
 
-describe('the published demo page (site/demo/index.html, edited beside replay.ts when no run record is at hand)', () => {
-  it('uses no refused claim and says the payment hold with its release rule, the refund included (T-427)', () => {
-    const text = readerText(readFileSync(new URL('../../site/demo/index.html', import.meta.url), 'utf8'));
-    expect(text).not.toMatch(REFUSED);
-    expect(text).toContain(HERO.intro);
-    expect(text).toMatch(/If the work never arrives, the buyer takes the whole payment back after the deadline/);
-    expect(text).toContain('The price is released to the seller when the work passes, and comes back to the buyer if the work fails or misses its deadline.');
-    expect(banned(text)).toEqual([]);
-  });
-  it('carries the section "Three ways a deal ends" as replay.ts writes it, with its styles and its switch (T-427)', () => {
-    const html = readFileSync(new URL('../../site/demo/index.html', import.meta.url), 'utf8');
-    expect(html).toContain(endingsSection());
-    expect(html).toContain(ENDINGS_CSS);
-    expect(html).toContain(ENDINGS_SCRIPT);
-    expect(html.indexOf('id="demo-run"')).toBeLessThan(html.indexOf('id="endings"'));
-    expect(html.indexOf('id="endings"')).toBeLessThan(html.indexOf('<main id="learn-more">'));
-  });
-});
-
 describe('three ways a deal ends (T-427): live test deals under the player', () => {
   const html = endingsSection();
   it('shows three cards, all readable without scripts, and a switch that only the script turns on', () => {

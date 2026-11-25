@@ -1,0 +1,1 @@
+Retired on 2026-11-25 (T-586): crow.direct/demo/ and its "Learn more · How Crow works" view (`#learn-more`), because the homepage now carries the demo; the site Worker answers /demo with a 301 to the homepage. This is the page as it was last committed at `site/demo/index.html`.
