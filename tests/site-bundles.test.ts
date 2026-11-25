@@ -97,6 +97,15 @@ const EXPECTED: Record<string, Omit<Contents, 'loads'>> = {
     // are schema IDs; the rest are examples in its help.
     hosts: ['(joined at run time)', '127.0.0.1', 'abitype.dev', 'adapter', 'api.crow.direct', 'api2.crow.direct', 'crow.direct', 'docs.soliditylang.org', 'holdback.dev', 'join.crow.direct', 'json-schema.org', 'sample', 'seller.example', 'sepolia.etherscan.io', 'viem.sh', 'your-site.example'],
   },
+  // T-606: it names no operator, since the operators and the seller's own API come from its environment and its file.
+  // 127.0.0.1 is where it listens, joined to the bound port at run time, and 'adapter' is the base it parses request
+  // paths against; crow.direct is its guide's address; holdback.dev and json-schema.org are schema IDs.
+  'serve.mjs': {
+    imports: ['node:crypto', 'node:fs', 'node:http', 'node:module', 'node:path', 'node:url'],
+    requires: ['__require("buffer")', '__require("crypto")', '__require("process")', 'createRequire(...)'],
+    process: ['argv', 'env', 'exit', 'once'],
+    hosts: ['(joined at run time)', '127.0.0.1', 'abitype.dev', 'adapter', 'crow.direct', 'docs.soliditylang.org', 'holdback.dev', 'json-schema.org', 'sepolia.etherscan.io', 'viem.sh'],
+  },
   // T-551: it reads the card at a URL the person gives, so its hosts are the demo's, the schema IDs and viem's docs.
   'take.mjs': {
     imports: ['node:crypto', 'node:fs', 'node:module', 'node:path', 'node:url'],
