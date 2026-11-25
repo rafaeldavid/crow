@@ -33,8 +33,15 @@ function hasShape(value: unknown, required: string[], optional: string[] = []): 
 
 /** Code points, as the schema's maxLength counts them (a lone surrogate counts one), so both refuse the same pointers. */
 const codePoints = (s: string): number => {
-  let n = 0;
-  for (const _ of s) n++;
+  let n = s.length;
+  for (let i = 0; i < s.length - 1; i++) {
+    const c = s.charCodeAt(i);
+    const d = s.charCodeAt(i + 1);
+    if (c >= 0xd800 && c <= 0xdbff && d >= 0xdc00 && d <= 0xdfff) {
+      n--;
+      i++;
+    }
+  }
   return n;
 };
 const isPointer = (p: unknown): p is string => typeof p === 'string' && p.length <= 2 * MAX.pointer && codePoints(p) <= MAX.pointer && /^(\/([^~/]|~[01])*)*$/.test(p);
