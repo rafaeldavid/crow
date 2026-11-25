@@ -131,7 +131,7 @@ describe('check-terms', () => {
 
   describe('a pattern', () => {
     const over = 'a'.repeat(10_001);
-    const column = (pattern: string) => ({ price: '5', checks: [{ type: 'regex_match_rate_min', pattern }] });
+    const column = (pattern: string) => ({ price: '5', checks: [{ type: 'regex_match_rate_min', minBps: 5000, pattern }] });
     const inSchema = (pattern: string) => ({ price: '5', checks: [{ type: 'json_schema', schema: { items: { pattern } } }] });
 
     it('warns on a pattern over 10,000 characters, in a column check and in a JSON Schema', () => {
@@ -158,8 +158,20 @@ describe('check-terms', () => {
       expect(checkTerms({ price: '5', checks: [{ id: 'j', type: 'json_schema', schema }] })).toEqual([]);
     });
 
-    it('says nothing of a short pattern the engine refuses for another reason', () => {
-      expect(checkTerms(column('(?=a)'))).toEqual([]);
+    it('warns, with the engine reason, on a short pattern the engine refuses for its state count', () => {
+      const many = '(((a{1,30}){1,30}){1,30})';
+      expect(many.length).toBeLessThanOrEqual(LONGEST_PATTERN_CHARS);
+      const engine = compileSafeRegex(many);
+      expect(engine.ok).toBe(false);
+      const warnings = checkTerms({ price: '5', checks: [{ id: 'many', type: 'regex_match_rate_min', minBps: 5000, pattern: many }] });
+      expect(warnings.map((w) => `${w.kind} ${w.path}`)).toEqual(['check checks[0]']);
+      expect(warnings[0]!.found).toBe('the check "many"');
+      expect(warnings[0]!.why).toContain(`pattern refused: ${engine.ok ? '' : engine.error}`);
+      expect(line(warnings[0]!)).toContain('the check "many"');
+    });
+
+    it('warns once on a pattern the engine refuses for another reason', () => {
+      expect(kinds(column('(?=a)'))).toEqual(['check checks[0]']);
     });
 
     it('warns when a field with a pattern may be over 10,000 characters long', () => {
@@ -173,6 +185,27 @@ describe('check-terms', () => {
       if (!any.ok) throw new Error(any.error);
       expect(any.value.search('a'.repeat(LONGEST_MATCHED_CHARS))).toBe(true);
       expect(any.value.search('a'.repeat(LONGEST_MATCHED_CHARS + 1))).toBe(false);
+    });
+  });
+
+  describe('a check the engine refuses', () => {
+    const terms = (check: J): J => ({ price: '5', checks: [check] });
+
+    it('warns on a malformed check, with its id and the engine reason', () => {
+      const w = checkTerms(terms({ id: 'rows', type: 'row_count_range', min: 5, max: 1 }));
+      expect(w.map((x) => x.kind)).toEqual(['check']);
+      expect(w[0]!.found).toBe('the check "rows"');
+      expect(w[0]!.why).toContain('min is greater than max');
+    });
+
+    it('warns on an unknown check type and a schema the engine refuses', () => {
+      expect(kinds(terms({ id: 'x', type: 'run_code' }))).toEqual(['check checks[0]']);
+      expect(kinds(terms({ id: 's', type: 'json_schema', schema: { $ref: 'x' } }))).toEqual(['check checks[0]']);
+    });
+
+    it('says nothing of a well-formed check', () => {
+      expect(checkTerms(terms({ id: 'ok', type: 'regex_match_rate_min', minBps: 5000, pattern: '^[a-z]+$' }))).toEqual([]);
+      expect(checkTerms(terms({ id: 'r', type: 'row_count_range', min: 1, max: 5 }))).toEqual([]);
     });
   });
 
@@ -251,7 +284,7 @@ describe('check-terms', () => {
       const many = Array.from({ length: 200_000 }, (_, i) => i);
       const wide = Object.fromEntries(many.map((i) => [`k${i}`, { type: 'string' }]));
       const doc = { price: '2.50', many, wide, checks: [{ type: 'json_schema', schema: { anyOf: many.map(() => true), properties: wide, ...wide } }] };
-      expect(checkTerms(doc).map((w) => w.kind)).toEqual(['price']);
+      expect(checkTerms(doc).map((w) => w.kind)).toEqual(['price', 'check']);
     });
 
     it('reads a deeply nested document, and keeps its line short', () => {
