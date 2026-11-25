@@ -11,11 +11,11 @@ ADR-0047. Tidewater delivers the good run with the last sample of q2 dropped, so
 | Pragmas | settlement=sim · judges=recorded · mode=guaranteed_on_decision · seed=84 |
 | Prefix | attack. (adversarial input: must not auto-accept) |
 | Settlement | SimChain (T-006) driving @holdback/core `step` |
-| Judgment | @holdback/judgment (checks, screen, panel) · registry config/judges.yaml 0x8aa4…4549 · policy bench-a/p1 0xd136…9300 |
+| Judgment | @holdback/judgment (checks, screen, panel) · registry config/judges.yaml 0x8aa4…4549 · policy bench-a/p1 0x40b5…1e88 |
 | Club | fixtures/clubs/data-services-v1.yaml (loaded) · rulebook 0xd9bc…492d |
 | Buyer | atlas-buyer 0xc40c…8B95 |
 | Seller | tidewater-seller 0x6Ccc…F6Ae |
-| Terms | fixtures/terms/recorded-path.yaml (loaded) · commitment 0xa72e…5129 · price 1,500.000000 tUSD · fee 50.000000 tUSD |
+| Terms | fixtures/terms/recorded-path.yaml (loaded) · commitment 0x83cc…f963 · price 1,500.000000 tUSD · fee 50.000000 tUSD |
 | Adjudicators | primary bench-a 0xDF60…0Ed8 · fallback bench-b 0xB373…97c0 · appeal bench-c 0x4A16…6541 |
 | Operators | op-1 · op-2 |
 
@@ -46,13 +46,13 @@ ADR-0047. Tidewater delivers the good run with the last sample of q2 dropped, so
 - **Intake:** plaintext 0x8bf4…4424 · application/json · 857 bytes (fixtures/data/recorded-path/run.unequal.json) · hash verified ✓ · normalized
 - **Deterministic checks:** time ✓ · lengths ✗ (series 3 has 39 entries; series 1 has 40) · waypoints ✗ (series 2 has 39 rows; series 1 has 40)
 - **Screen:** clean
-- **Panel:** not run · first-instance template 0xabb5…4dd2 · rubric 0x551e…5e6a · seed source: commit-reveal (commitment 0xa03f…07d5, seed 0x8c08…b4b3, recomputed: match)
+- **Panel:** not run · first-instance template 0x4d32…629b · rubric 0x551e…5e6a · seed source: commit-reveal (commitment 0xa03f…07d5, seed 0x8c08…b4b3, recomputed: match)
 - **Aggregate:** reject. Reasons: required deterministic check failed: lengths, waypoints.
 - **Signed:** reject.
 
 ## Receipts and log
 
-- Events 0–7. Chain head 0x00bc…423e. Replay of 6 SimChain submissions from genesis matches the settlement state.
+- Events 0–7. Chain head 0x8243…a6d3. Replay of 6 SimChain submissions from genesis matches the settlement state.
 - Receipts from op-1: 5 (rcpt-0001–rcpt-0005). The runner labels them without signing; the operator API signs real receipts.
 
 ## Invariants

@@ -11,11 +11,11 @@ ADR-0036. A seller wants its deal judged under an older, weaker screen that the 
 | Pragmas | settlement=sim · judges=recorded · mode=guaranteed_on_decision · seed=59 |
 | Prefix | attack. (adversarial input: must not auto-accept) |
 | Settlement | SimChain (T-006) driving @holdback/core `step` |
-| Judgment | @holdback/judgment (checks, screen, panel) · registry config/judges.yaml 0x8aa4…4549 · policy bench-a/p1 0x8cb8…ea79 |
+| Judgment | @holdback/judgment (checks, screen, panel) · registry config/judges.yaml 0x8aa4…4549 · policy bench-a/p1 0x7e62…7867 |
 | Club | fixtures/clubs/data-services-v1.yaml (loaded) · rulebook 0xd9bc…492d |
 | Buyer | atlas-buyer 0x90F9…53dC |
 | Seller | tidewater-seller 0xA884…b13B |
-| Terms | fixtures/terms/clean-customers-2000.yaml (loaded) · commitment 0x19af…fa22 · price 2,000.000000 tUSD · fee 50.000000 tUSD |
+| Terms | fixtures/terms/clean-customers-2000.yaml (loaded) · commitment 0xd4f7…b9b0 · price 2,000.000000 tUSD · fee 50.000000 tUSD |
 | Adjudicators | primary bench-a 0xe321…af56 · fallback bench-b 0x6A72…54B9 · appeal bench-c 0xc843…9512 |
 | Operators | op-1 · op-2 |
 
@@ -32,8 +32,8 @@ ADR-0036. A seller wants its deal judged under an older, weaker screen that the 
 
 Refusals:
 
-- Step 4 accept: policy_mismatch: policy-hash-mismatch: the offer binds policy 0x8cb8dea5cd6984958b3453d2e79ed3b72c41f6d110f7351b3c1f2c025ccfea79; as primary bench-a accepts new deals only under its current policy 0xd136b879a6a931cc4b2b8e83e7d79803b72294fa9a535f602cfdb886f73a9300
-- Step 5 accept (implied by agree_and_fund): policy_mismatch: policy-hash-mismatch: the offer binds policy 0x8cb8dea5cd6984958b3453d2e79ed3b72c41f6d110f7351b3c1f2c025ccfea79; as primary bench-a accepts new deals only under its current policy 0xd136b879a6a931cc4b2b8e83e7d79803b72294fa9a535f602cfdb886f73a9300
+- Step 4 accept: policy_mismatch: policy-hash-mismatch: the offer binds policy 0x7e6299c6f872892ad41d62792e6ba64c2706a031e5bc586c3b4725a27bff7867; as primary bench-a accepts new deals only under its current policy 0x40b5e71fd1ca0fec9eab6096db3e2252b4202374c79a7a42aca01d8405781e88
+- Step 5 accept (implied by agree_and_fund): policy_mismatch: policy-hash-mismatch: the offer binds policy 0x7e6299c6f872892ad41d62792e6ba64c2706a031e5bc586c3b4725a27bff7867; as primary bench-a accepts new deals only under its current policy 0x40b5e71fd1ca0fec9eab6096db3e2252b4202374c79a7a42aca01d8405781e88
 - Step 5 agree: acceptance_missing: the primary adjudicator has not accepted yet
 
 Outages:
@@ -57,7 +57,7 @@ Outages:
 
 ## Receipts and log
 
-- Events 0–0. Chain head 0x64a5…5dae. Replay of 1 SimChain submissions from genesis matches the settlement state.
+- Events 0–0. Chain head 0xbbea…505d. Replay of 1 SimChain submissions from genesis matches the settlement state.
 - Receipts from op-1: 1 (rcpt-0001–rcpt-0001). The runner labels them without signing; the operator API signs real receipts.
 
 ## Invariants

@@ -42,7 +42,6 @@ describe('parseVerdict', () => {
     ['score not integer', { ...good, criteria: [{ ...good.criteria[0], score: 3.5 }, ...good.criteria.slice(1)] }, 'schema'],
     ['bad overall', { ...good, overall: 'accept' }, 'schema'],
     ['missing injectionSuspected', { criteria: good.criteria, overall: 'pass', rationale: 'x' }, 'schema'],
-    ['rationale over 600', { ...good, rationale: 'x'.repeat(601) }, 'schema'],
     ['array', [good], 'schema'],
     ['null', 'null', 'schema'],
     ['missing criterion', { ...good, criteria: good.criteria.slice(1) }, 'criteria_mismatch'],
@@ -105,9 +104,12 @@ describe('parseVerdict', () => {
     }
   });
 
-  it('applies a tighter policy rationale cap', () => {
+  // agg-5 (ADR-0049): a rationale over the schema's 600 or the policy's lower cap is cut to the cap, not refused.
+  it('cuts a rationale over 600, and over a tighter policy cap, to that cap', () => {
+    const six = parse({ ...good, rationale: 'x'.repeat(601) });
+    expect(six).toEqual({ status: 'ok', verdict: { ...good, rationale: `${'x'.repeat(595)}[cut]` }, redactedUrls: 0, cut: { rationale: true, injectionEvidence: false, evidence: 0 } });
     const r = parse({ ...good, rationale: 'x'.repeat(200) }, { rationaleMaxChars: 100 });
-    expect(r.status === 'abstain' && r.reason).toBe('schema');
+    expect(r.status === 'ok' && r.verdict.rationale).toBe(`${'x'.repeat(95)}[cut]`);
   });
 
   it('an empty rubric expects an empty criteria list', () => {
