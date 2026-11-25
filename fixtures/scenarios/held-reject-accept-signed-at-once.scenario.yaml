@@ -6,6 +6,11 @@ description: >-
   attack. prefix because an attack fixture may not end in a first-instance accept.
 club: fixtures/clubs/data-services-v1.yaml
 terms: fixtures/terms/clean-customers-2000-held.yaml
+# ADR-0036: pinned to the policy these scenarios test (template pair 2, agg-5), whatever the build's default is.
+build:
+  prompt_template: "0x4d328a15ef96b9aa0f4166efc720a320f82e9c677fdd8beaff431ecefcc9629b"
+  appeal_prompt_template: "0xfc6d93d5441808bbfa690c0402a0ee185eab48c508025f59cf3c4f9f5d8332f1"
+  aggregation: agg-5
 parties:
   buyer: atlas-buyer
   seller: tidewater-seller

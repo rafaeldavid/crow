@@ -11,11 +11,11 @@ ADR-0047, ADR-0001. The terms and the delivery of recorded-path-accepted. Bench 
 | Pragmas | settlement=sim · judges=recorded · mode=guaranteed_on_decision · seed=85 |
 | Prefix | neutrality. (an actor fails: terms-compliant terminal state anyway) |
 | Settlement | SimChain (T-006) driving @holdback/core `step` |
-| Judgment | @holdback/judgment (checks, screen, panel) · registry config/judges.yaml 0x8aa4…4549 · policy bench-a/p1 0x40b5…1e88 |
+| Judgment | @holdback/judgment (checks, screen, panel) · registry config/judges.yaml 0x8aa4…4549 · policy bench-a/p1 0xd136…9300 |
 | Club | fixtures/clubs/data-services-v1.yaml (loaded) · rulebook 0xd9bc…492d |
 | Buyer | atlas-buyer 0x2526…d703 |
 | Seller | tidewater-seller 0x65D1…23E9 |
-| Terms | fixtures/terms/recorded-path.yaml (loaded) · commitment 0x166a…83a2 · price 1,500.000000 tUSD · fee 50.000000 tUSD |
+| Terms | fixtures/terms/recorded-path.yaml (loaded) · commitment 0x1272…9f54 · price 1,500.000000 tUSD · fee 50.000000 tUSD |
 | Adjudicators | primary bench-a 0x5382…4E05 · fallback bench-b 0xF73F…F456 · appeal bench-c 0x632A…3724 |
 | Operators | op-1 · op-2 |
 
@@ -54,13 +54,13 @@ Outages:
 - **Intake:** plaintext 0x59e3…5e0f · application/json · 865 bytes (fixtures/data/recorded-path/run.json) · hash verified ✓ · normalized
 - **Deterministic checks:** time ✓ · lengths ✓ · waypoints ✓
 - **Screen:** clean
-- **Panel:** not run · first-instance template 0x4d32…629b · rubric 0x551e…5e6a · seed source: beacon round 1767830520 (seed 0x63ac…4ee2)
+- **Panel:** not run · first-instance template 0xabb5…4dd2 · rubric 0x551e…5e6a · seed source: beacon round 1767830520 (seed 0xa20c…2562)
 - **Aggregate:** accept. Reasons: all deterministic checks passed and the rubric is empty.
 - **Signed:** accept.
 
 ## Receipts and log
 
-- Events 0–10. Chain head 0x291e…c259. Replay of 7 SimChain submissions from genesis matches the settlement state.
+- Events 0–10. Chain head 0x0838…b88e. Replay of 7 SimChain submissions from genesis matches the settlement state.
 - Receipts from op-1: 5 (rcpt-0001–rcpt-0005). The runner labels them without signing; the operator API signs real receipts.
 - Receipts from op-2: 2 (rcpt-0006–rcpt-0007). The runner labels them without signing; the operator API signs real receipts.
 
