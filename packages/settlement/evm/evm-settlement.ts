@@ -39,6 +39,7 @@
 import {
   APPEAL_GROUND_APPEAL_ONLY,
   recoversFrom,
+  decodeStandingSignature,
   beaconRoundFor,
   canonicalKeccak,
   carriesAppealGround,
@@ -111,7 +112,8 @@ import {
 } from './encode.js';
 import { missingBlock, problemFromRevert, revertData, revertName } from './errors.js';
 import { assertSafeChain } from './guard.js';
-import { chainSignerCheck } from './signer-reads.js';
+import { chainSignerCheck, type CheckContext } from './signer-reads.js';
+import { CREATE2_DEPLOYER, standingDeployment, standingInitCode, standingKeyFor } from './standing-seller.js';
 import { commitmentTxs, embeddedCalls, feeLegs, idsOf, rulesCalls, type ChainTx, type RulesCall } from './sync.js';
 import type { EvmWorld } from './world.js';
 
@@ -184,7 +186,28 @@ export interface Book {
   behind?: Behind;
   /** The seller's posted delivery, held while this node has not read the transaction that landed it (T-230). */
   posted?: PostedCopy;
+  /** Each deployment of the seller contract this node sent before this deal's funding (ADR-0040 §4): its UTC day, counted in the budget, and the gas it used. */
+  deployed?: Array<{ day: string; gasUsed: string }>;
 }
+
+/**
+ * How many standing sellers' contracts an operator deploys at its own gas (ADR-0040 §4, red team finding 7), and the
+ * most gas one may take. Only for a seller this node admits by mandate, only right before a funding that simulates
+ * with the planned code, and only when the address has no code. 0 a day: this node deploys nothing, and the seller or
+ * the first buyer deploys (`neutrality.crow-deploys-nothing`).
+ */
+export interface DeployBudget {
+  perDay: number;
+  maxGas: bigint;
+}
+
+/**
+ * The default budget: 20 deployments a UTC day, each estimated at 25,000,000 gas or less. Sepolia's own RPC estimated
+ * one deployment at 18,295,444 gas on 2026-11-25, about 7 times anvil's 2,585,057 [measured, `cast estimate`]. The
+ * relayer sends it with 5% more gas than the estimate, not the quarter it adds to other calls: a deployment that loses
+ * a race to its address burns all the gas it was sent with (EIP-684).
+ */
+export const DEFAULT_DEPLOY_BUDGET: DeployBudget = { perDay: 20, maxGas: 25_000_000n };
 
 /**
  * A seller-signed delivery posted to this node while it could not read the transaction that landed it (T-230). The
@@ -367,6 +390,8 @@ interface CallContext {
   operatorFee?: { from: string; to: string; amount: TokenAmount };
   /** Runs once the call is in a block, before its events, with the block's time. */
   mined?: (at: Timestamp) => void;
+  /** A first take's funding (ADR-0040 §4): the seller contract is deployed alone, for this key, once the funding simulates with its planned code. */
+  standing?: { seller: Address; key: Address };
   /** Read from the chain, not relayed (T-218): an escalation whose decision envelopes are only a hash hands over the delivery's. */
   synced?: boolean;
 }
@@ -412,6 +437,21 @@ export class EvmSettlement implements Settlement {
   private readonly relayedAt = new Map<Hex32, number>();
   /** Relayed transactions whose receipts are applied since the last `drain` (T-219): their lane rows may go once written. */
   private relayed: string[] = [];
+  /** This node's deployment budget for standing sellers (ADR-0040 §4). An operator sets it as its policy. */
+  deployBudget: DeployBudget = DEFAULT_DEPLOY_BUDGET;
+  /** Deployments this node sent, per UTC day (rebuilt from the books after a restart). */
+  private readonly deployedOn = new Map<string, number>();
+  /** One deployment at a time per seller contract: a second first take waits, then finds the code. */
+  private readonly deploying = new Map<string, Promise<void>>();
+  /** A standing seller's runtime per key, from a simulated creation (the planned code of ADR-0040 §4). */
+  private readonly runtimes = new Map<string, Promise<Hex>>();
+  /**
+   * Contract parties whose signature on a funding this node relayed passed the simulation and failed at the block it
+   * landed in (T-549 red team, M2): until the time each holds (ms), this node relays no funding naming them, so a
+   * wallet that answers yes only in a simulation spends the relayer's gas once an hour at most. Only the party whose
+   * own signature fails at that block, and only new fundings: its funded deals go on. Kept in memory.
+   */
+  private readonly struck = new Map<string, number>();
 
   private constructor(
     readonly world: EvmChain,
@@ -467,6 +507,7 @@ export class EvmSettlement implements Settlement {
       for (const n of b.nonces) s.nonces.add(n);
       for (const [key, r] of Object.entries(b.replays ?? {})) s.idempotency.set(key, r);
       if (b.spent) s.spent.set(b.spent.day, (s.spent.get(b.spent.day) ?? 0n) + BigInt(b.spent.amount));
+      for (const d of b.deployed ?? []) s.deployedOn.set(d.day, (s.deployedOn.get(d.day) ?? 0) + 1);
       for (const h of b.chainTxs ?? []) s.seen(id, h);
     }
     let last = 0n;
@@ -907,9 +948,61 @@ export class EvmSettlement implements Settlement {
    * since a contract's answer can change after it; otherwise the latest block, at the scenario's second on anvil.
    */
   signerCheck(block?: bigint): SignerCheck {
-    const at = this.world.callAt && !this.wall ? (tx: { to: Address; data: Hex }) => this.world.callAt!(tx, secs(this.now())) : undefined;
+    const at = this.world.callAt && !this.wall ? (tx: Parameters<NonNullable<EvmChain['callAt']>>[0]) => this.world.callAt!(tx, secs(this.now())) : undefined;
     const newest = this.world.newest ? () => this.world.newest!('now') : undefined;
-    return chainSignerCheck(this.world.publicClient, block !== undefined ? { blockNumber: block } : at ? { call: at } : newest ? { blockNumber: newest } : {});
+    // Asked as the rules contract asks, from a relayer, at a gas price the chain takes (T-549 red team, M2). A step read
+    // from a mined transaction has its code there; only a check before funding knows a seller's planned code.
+    const ctx: CheckContext = {
+      rules: this.world.deployment.rules,
+      from: this.world.senderFor(this.world.deployment.rules),
+      // A chain without its own price (a test's stub) takes 1 gwei.
+      gasPrice: async () => (await this.world.gasPrice?.()) ?? 1_000_000_000n,
+      ...(block === undefined ? { plannedCode: (address: Address, signature: Hex) => this.plannedCode(address, signature) } : {}),
+    };
+    return chainSignerCheck(this.world.publicClient, ctx, block !== undefined ? { blockNumber: block } : at ? { call: at } : newest ? { blockNumber: newest } : {});
+  }
+
+  /**
+   * The code a standing seller's contract will run (ADR-0040 §4): when `signature` is a take or a standing delivery
+   * whose template the key signed for `address`, and `address` is that key's CREATE2 address through the deterministic
+   * deployer at salt 0. Undefined otherwise, and the rule then says no. Only for an address this node holds a mandate
+   * for, so a caller it does not admit cannot make it simulate creations. The runtime comes from a creation simulated
+   * at another address, so the immutables that hold its own address differ from the deployed code's (51 bytes of
+   * 11,503, measured); Solady's EIP712 then rebuilds the domain from `address(this)`, so every answer is the same.
+   */
+  private async plannedCode(address: Address, signature: Hex): Promise<Hex | undefined> {
+    if (!this.admits(address)) return undefined;
+    const key = await standingKeyFor(address, signature, this.world.chainId);
+    return key ? this.runtimeOf(key) : undefined;
+  }
+
+  /** True when this node holds a mandate for `agent` in any club. */
+  private admits(agent: Address): boolean {
+    const prefix = `${lc(agent)}|`;
+    return [...this.mandates.keys()].some((k) => k.startsWith(prefix));
+  }
+
+  /** The seller contract's runtime for `key`: its creation simulated by eth_call, once per key. A failed read is asked again next time. */
+  private runtimeOf(key: Address): Promise<Hex> {
+    const k = lc(key);
+    let p = this.runtimes.get(k);
+    if (!p) {
+      if (this.runtimes.size >= 256) this.runtimes.clear();
+      // eslint-disable-next-line no-restricted-syntax -- a creation reads no state: its code follows from the init code alone, at any block.
+      p = this.world.publicClient.call({ data: standingInitCode(key) }).then((r) => {
+        if (!r.data || r.data === '0x') throw new Error(`the seller contract's creation for key ${key} returned no code`);
+        return r.data;
+      });
+      p.catch(() => this.runtimes.delete(k));
+      this.runtimes.set(k, p);
+    }
+    return p;
+  }
+
+  /** The code at `address` now: at the node's newest block on a live chain, the latest on anvil. */
+  private async codeNow(address: Address): Promise<Hex> {
+    const blockNumber = this.world.newest ? await this.world.newest('now') : undefined;
+    return (await this.world.publicClient.getCode({ address, ...(blockNumber !== undefined ? { blockNumber } : {}) })) ?? '0x';
   }
 
   /**
@@ -970,7 +1063,7 @@ export class EvmSettlement implements Settlement {
       case 'offer': {
         const c = s.commitment;
         const t = termsOf(c);
-        if (!(await verifyTerms(this.domain, t, c.signatures.seller, t.seller, this.signerCheck()))) refuse('invalid_signature', 'the seller did not sign these terms');
+        if (!(await verifyTerms(this.domain, t, c.signatures.seller, t.seller, this.signerCheck()))) refuse('invalid_signature', await this.whyTakeRefused(t.seller, c.signatures.seller as Hex));
         if (this.books.has(c.id)) refuse('invalid_state', `commitment ${c.id} was already offered`);
         // ADR-0031 §2 (SC-1): a deployment serves one token, and agreeAndFund refuses terms in any other. Refused here,
         // before the club's and the mandates' checks and before the buyer and the adjudicator sign terms the contract
@@ -1340,7 +1433,10 @@ export class EvmSettlement implements Settlement {
     const balance = await this.tokenBalance(terms.buyerPaymentAddress, true);
     const args = [t, book.sellerSignature, acceptanceView(book.acceptance), agreeView(book.agree), { signature: m.signature }];
     const mirror = (at: Timestamp): EscrowEvent[] => [{ type: 'fund', at, message: m, buyerScope, balance: this.amount(balance), gasBuffer: this.amount(0n) }];
-    const ctx: CallContext = mined ? { mined } : {};
+    // ADR-0040 §4: a first take of a standing seller whose contract has no code yet. The deployment goes alone, just
+    // before the funding (`send`), never in the funding's own transaction.
+    const standing = await this.firstTake(terms, book);
+    const ctx: CallContext = { ...(mined ? { mined } : {}), ...(standing ? { standing } : {}) };
     if (!fee) {
       await this.call(m.commitmentId, 'agreeAndFund', args, mirror, options, false, m.from, ctx);
       return m.commitmentId;
@@ -1380,6 +1476,103 @@ export class EvmSettlement implements Settlement {
     });
     await this.send(m.commitmentId, 'agreeAndFund', multicall, bundle, mirror, options, false, m.from, { ...ctx, operatorFee: { from: lc(fee.from), to: lc(fee.to), amount: this.amount(BigInt(fee.value)) } });
     return m.commitmentId;
+  }
+
+  /**
+   * Why the seller's signature on an offer is refused. A take dated after the chain's time is refused by the seller
+   * contract (`createdAt <= block.timestamp`, ADR-0040 §1) like a forged one, and a buyer cannot tell the two apart, so
+   * the answer names the chain's time when that is the cause (the done-when test's first run, T-549).
+   */
+  private async whyTakeRefused(seller: Address, signature: Hex): Promise<string> {
+    const plain = 'the seller did not sign these terms';
+    const fill = decodeStandingSignature(signature)?.fill;
+    if (!fill) return plain;
+    if (!this.admits(seller) && (await this.codeNow(seller).catch(() => '0x')) === '0x') {
+      return `this operator reads a seller contract before its deployment only for a seller it admits by mandate, and ${seller} holds none here; deploy the contract first, or offer through an operator that admits it`;
+    }
+    const chainSec = this.wall ? Number((await this.world.publicClient.getBlock(this.world.newest ? { blockNumber: await this.world.newest('now') } : { blockTag: 'latest' }).catch(() => null))?.timestamp ?? -1) : secs(this.now());
+    return chainSec >= 0 && fill.createdAt > BigInt(chainSec)
+      ? `the seller contract approves a take only from its createdAt on, and this take's createdAt ${toTimestamp(Number(fill.createdAt) * 1000)} is after the chain's newest block time ${toTimestamp(chainSec * 1000)}; date the take at or before that block's time and sign it again`
+      : plain;
+  }
+
+  /** The seller contract and its key, when this funding is a take of a standing seller whose address has no code yet. */
+  private async firstTake(terms: AnyCommitmentTerms, book: Book): Promise<{ seller: Address; key: Address } | undefined> {
+    const key = await standingKeyFor(terms.seller, book.sellerSignature, this.world.chainId);
+    if (!key || (await this.codeNow(terms.seller)) !== '0x') return undefined;
+    return { seller: terms.seller, key };
+  }
+
+  /**
+   * Deploys a standing seller's contract, alone, before a first take's funding (ADR-0040 §4). The node reads the code
+   * first and skips the deployment when it is there, so a deployment someone else made, or another first take's,
+   * costs nothing; one that lands between this node's read and its own costs one failed deployment, and the funding
+   * still goes (`neutrality.deploy-front-run-take-still-funds`). It deploys only for a seller it admits by mandate,
+   * within its stated budget (`attack.deployment-gas-drain`); otherwise it declines, and the seller or the buyer
+   * deploys and funds through any operator or directly (`neutrality.crow-deploys-nothing`).
+   */
+  private async deployFor(id: Hex32, book: Book, s: { seller: Address; key: Address }, options: Relay, time: number): Promise<void> {
+    const k = lc(s.seller);
+    const before = this.deploying.get(k) ?? Promise.resolve();
+    const run = before.then(async () => {
+      if ((await this.codeNow(s.seller)) !== '0x') return;
+      const terms = book.state.terms;
+      const elsewhere = `deploy it yourself, one transaction to ${CREATE2_DEPLOYER} that anyone may send, then fund through any operator or directly to the settlement layer`;
+      // Admitted: the seller holds a mandate in this node, for the seller's role, still in force now. The offer checked
+      // it at the offer; a mandate can expire before the funding.
+      const scope = this.scopeFor(s.seller, terms.clubId, terms, book.club);
+      if (!scope.roles.includes('seller') || !(Date.parse(this.now()) < Date.parse(scope.expiresAt))) {
+        refuse('relay_refused', `this operator deploys a seller contract only for a seller it admits, and ${s.seller} holds no mandate in force for the seller's role in club ${terms.clubId}; ${elsewhere}`);
+      }
+      const day = this.now().slice(0, 10);
+      const used = this.deployedOn.get(day) ?? 0;
+      const { perDay, maxGas } = this.deployBudget;
+      if (used >= perDay) refuse('relay_refused', `this operator deploys at most ${perDay} standing sellers' contracts a day at its own gas and has deployed ${used} today; ${elsewhere}`);
+      // The slot is taken before the first await, so takes of several sellers at once stay within the day's budget; it
+      // is given back if nothing is sent.
+      this.deployedOn.set(day, used + 1);
+      let sent = false;
+      try {
+        await this.sendDeployment(id, book, s, options, time, maxGas, elsewhere, () => (sent = true));
+      } finally {
+        if (!sent) this.deployedOn.set(day, (this.deployedOn.get(day) ?? 1) - 1);
+      }
+    });
+    const settled = run.catch(() => undefined);
+    this.deploying.set(k, settled);
+    void settled.then(() => {
+      if (this.deploying.get(k) === settled) this.deploying.delete(k);
+    });
+    return run;
+  }
+
+  /** The deployment itself, once the budget's slot is taken: estimated, sent alone, then the code read again. `onSent` runs once it is out. */
+  private async sendDeployment(id: Hex32, book: Book, s: { seller: Address; key: Address }, options: Relay, time: number, maxGas: bigint, elsewhere: string, onSent: () => void): Promise<void> {
+    const dep = standingDeployment(s.key);
+    const from = options.sender ? privateKeyToAccount(options.sender).address : this.world.senderFor(id);
+    // At the latest block: the deployment reads no state but whether its address is free, which the code read above and the send check again.
+    // eslint-disable-next-line no-restricted-syntax -- see the line above
+    const gas = await this.world.publicClient.estimateGas({ account: from, to: dep.to, data: dep.data }).catch(async (e: unknown) => {
+      // Deployed by someone else since the read: skipped. Any other failure is no deployment, and no funding.
+      if ((await this.codeNow(s.seller)) !== '0x') return null;
+      throw e;
+    });
+    if (gas === null) return;
+    if (gas > maxGas) refuse('relay_refused', `the seller contract's deployment needs about ${gas} gas, above this operator's budget of ${maxGas} gas for one; ${elsewhere}`);
+    let mined: Mined;
+    try {
+      mined = await this.world.send({ ...(options.sender ? { key: options.sender } : { lane: id }), ...dep, gasCap: (maxGas * 105n) / 100n, gasMarginPct: 5 }, this.wall ? undefined : time);
+    } catch (e) {
+      // Declined before the broadcast (out of test ETH, gas above the cap): nothing went out.
+      if (e instanceof RelayRefused) refuse('relay_refused', `this operator cannot deploy the seller contract now: ${e.message}; ${elsewhere}`);
+      onSent();
+      throw e;
+    }
+    onSent();
+    (book.deployed ??= []).push({ day: this.now().slice(0, 10), gasUsed: mined.gasUsed.toString() });
+    this.dirty.add(id);
+    // A deployment that lost a race reverts and changes nothing: the code is there either way, and the funding goes.
+    if ((await this.codeNow(s.seller)) === '0x') refuse('relay_refused', `the seller contract's deployment in ${mined.hash} left no code at ${s.seller}; ${elsewhere}`);
   }
 
   /**
@@ -1485,6 +1678,26 @@ export class EvmSettlement implements Settlement {
     await this.send(id, fn, this.world.deployment.rules, data, mirror, options, dryRun, actor, ctx);
   }
 
+  /**
+   * After a funding reverted on chain: the contract parties whose own signature fails at the block it landed in are
+   * struck for an hour (M2). A key's signature, which cannot change, and a read that fails strike nobody.
+   */
+  private async strikeFunding(book: Book, block: bigint): Promise<void> {
+    const t = book.state.terms;
+    const check = this.signerCheck(block);
+    const fails = async (signer: Address, holds: (c: SignerCheck) => Promise<boolean>) => {
+      try {
+        const code = (await this.world.publicClient.getCode({ address: signer, blockNumber: block })) ?? '0x';
+        return code !== '0x' && !(await holds(check));
+      } catch {
+        return false;
+      }
+    };
+    const until = Date.parse(this.now()) + 3_600_000;
+    if (await fails(t.seller, (c) => verifyTerms(this.domain, t, book.sellerSignature, t.seller, c))) this.struck.set(lc(t.seller), until);
+    if (book.agree && (await fails(t.buyer, (c) => verifyMessage(this.domain, { ...book.agree!, type: 'Agree' }, t.buyer, c)))) this.struck.set(lc(t.buyer), until);
+  }
+
   /** Steps the core mirror through what the contract accepted; a refusal there is a divergence, never a refusal. */
   private mirrored(state: EscrowState, events: readonly EscrowEvent[], fn: string): EscrowState {
     let next = state;
@@ -1507,24 +1720,40 @@ export class EvmSettlement implements Settlement {
     // signed message, and the contract checks it against dealOf and the terms' deadlines in the simulation below, so it
     // is still relayed and a party with no gas can close the deal (T-228). Signed steps wait for T-227.
     if (book.behind && !TIMEOUTS.has(fn)) refuse('invalid_state', this.lag(id)!);
+    if (fn === 'agreeAndFund') {
+      const t = book.state.terms;
+      const struck = [t.buyer, t.seller].find((a) => (this.struck.get(lc(a)) ?? 0) > Date.parse(this.now()));
+      if (struck) refuse('relay_refused', `a funding this operator relayed for ${struck} passed its simulation and reverted on chain because ${struck}'s signature failed at that block, so this operator relays no funding naming it until ${toTimestamp(this.struck.get(lc(struck))!)}; submit it through another operator or directly to the settlement layer`);
+    }
     const key = options.sender;
     const from = key ? privateKeyToAccount(key).address : this.world.senderFor(id);
     const at = this.now();
     const time = secs(at);
-    try {
-      await this.world.simulate({ from, to, data }, this.wall ? undefined : time);
-    } catch (e) {
-      // A node without the block is no answer from the contract, whatever shape viem gives it (T-409 red team, L2).
-      if (missingBlock(e)) throw e;
-      const raw = revertData(e);
-      if (raw === undefined && !/revert/i.test(String((e as Error).message))) throw e;
-      throw new Refusal(problemFromRevert(this.abi, raw), revertName(this.abi, raw));
-    }
+    const simulate = async (overrides?: ReadonlyArray<{ address: Address; code: Hex }>) => {
+      try {
+        await this.world.simulate({ from, to, data, ...(overrides ? { overrides } : {}) }, this.wall ? undefined : time);
+      } catch (e) {
+        // A node without the block is no answer from the contract, whatever shape viem gives it (T-409 red team, L2).
+        if (missingBlock(e)) throw e;
+        if (e instanceof RelayRefused) refuse('relay_refused', `this operator cannot relay it now: ${e.message}; submit the same signed message through another operator or directly to the settlement layer`);
+        const raw = revertData(e);
+        if (raw === undefined && !/revert/i.test(String((e as Error).message))) throw e;
+        throw new Refusal(problemFromRevert(this.abi, raw), revertName(this.abi, raw));
+      }
+    };
+    // A first take (ADR-0040 §4): the funding must pass with the seller contract's planned code before anything is
+    // deployed, so no deployment is spent on a funding the contract would refuse.
+    await simulate(ctx.standing ? [{ address: ctx.standing.seller, code: await this.runtimeOf(ctx.standing.key) }] : undefined);
     // The mirror must accept what the contract accepted; run it before sending so a divergence changes nothing. A deal
     // behind has no mirror step: its receipt moves it as a transaction read from the chain does (`landBehind`).
     const before = book.state;
     const next = book.behind ? before : this.mirrored(before, mirror(at), fn);
     if (dryRun) return;
+    if (ctx.standing) {
+      await this.deployFor(id, book, ctx.standing, options, time);
+      // The deployed code, as the chain holds it now: the funding goes only if it passes against it.
+      await simulate();
+    }
     let mined: Mined;
     // T-219: what the relayer lane's row keeps, so a restart before the receipt applies this call as this relay.
     const note: RelayNote | undefined = key || !options.note ? undefined : { ...options.note, call: fn, ...(ctx.delivery && options.note.submission.kind !== 'deliver' ? { delivery: ctx.delivery } : {}) };
@@ -1538,6 +1767,7 @@ export class EvmSettlement implements Settlement {
     if (mined.status !== 'success') {
       if (!this.wall) throw new Error(`${fn} reverted on chain after a passing simulation: ${mined.hash}`);
       this.done(mined.hash, options);
+      if (fn === 'agreeAndFund') await this.strikeFunding(book, mined.blockNumber);
       // On a live chain the state or a deadline can move between the simulation and the block; only gas was spent.
       throw new Reverted(problem('invalid_state', `${fn} reverted on chain in ${mined.hash} after a passing simulation (the state or a deadline moved in between); nothing changed`), mined.blockNumber, mined.timestamp);
     }

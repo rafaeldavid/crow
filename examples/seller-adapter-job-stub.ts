@@ -24,6 +24,8 @@ export interface JobStubOptions {
   fail?: boolean;
   /** The first start makes the run, then answers 503: a crash between the seller's work and its answer. */
   failFirstStart?: boolean;
+  /** Every start answers 503 and makes no run, until `startsUp()`: the seller's API is down. */
+  startsDown?: boolean;
   /** The files the finished run names, in order. Default two proof files. */
   fileList?: J;
   /** Files by path. Default a short text for each default path. */
@@ -59,6 +61,8 @@ export interface JobStub {
   /** The runs made: one for each distinct X-Request-Key. */
   runs(): Array<{ id: J; key: string; reference: string }>;
   fixFiles(): void;
+  /** Ends `startsDown`: later starts make runs. */
+  startsUp(): void;
   close(): Promise<void>;
 }
 
@@ -74,6 +78,7 @@ export async function startJobStub(o: JobStubOptions): Promise<JobStub> {
   const workspacesNamed: string[] = [];
   let broken = new Set(o.brokenFiles ?? []);
   let startsSeen = 0;
+  let startsDown = o.startsDown === true;
   const files = o.files ?? DEFAULT_FILES;
 
   const server = createServer((req, res) => {
@@ -109,6 +114,7 @@ export async function startJobStub(o: JobStubOptions): Promise<JobStub> {
       if (req.method === 'POST' && route === 'runs') {
         const key = header('x-request-key');
         if (!key) return send(400, { detail: 'POST runs needs X-Request-Key' });
+        if (startsDown) return send(503, { detail: 'the seller API is down' });
         if (!runs.has(key)) runs.set(key, { id: o.runId ?? 41 + runs.size, key, reference: body?.reference, input: body?.input, reads: 0, ...(account === undefined ? {} : { workspace: account }) });
         startsSeen++;
         if (o.failFirstStart && startsSeen === 1) return send(503, { detail: 'the run was made, but the answer was lost' });
@@ -159,6 +165,7 @@ export async function startJobStub(o: JobStubOptions): Promise<JobStub> {
     workspacesNamed,
     runs: () => [...runs.values()].map(({ id, key, reference }) => ({ id, key, reference })),
     fixFiles: () => void (broken = new Set()),
+    startsUp: () => void (startsDown = false),
     close: () => new Promise<void>((resolve) => { server.closeAllConnections(); server.close(() => resolve()); }),
   };
 }

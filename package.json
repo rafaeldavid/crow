@@ -45,6 +45,7 @@
     "metrics:prices": "node scripts/metrics/refresh-prices.mjs"
   },
   "devDependencies": {
+    "@noble/curves": "1.9.1",
     "@types/node": "^26.6.6",
     "ajv": "^8.20.0",
     "ajv-formats": "^3.0.1",

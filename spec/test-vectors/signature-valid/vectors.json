@@ -1,0 +1,3020 @@
+{
+  "format": "crow-signature-valid-vectors/1",
+  "adr": "ADR-0045",
+  "keys": "THROWAWAY TEST KEYS, made for these vectors only. No private key is stored. Never trust one.",
+  "signedWith": {
+    "language": "Python",
+    "library": "cryptography",
+    "version": "50.0.2"
+  },
+  "vectors": [
+    {
+      "name": "p256/good",
+      "alg": "p256",
+      "case": "good",
+      "why": "Signed in Python; PEM key, UTF-8 message, jsonEquals.",
+      "check": {
+        "id": "manifest-signature",
+        "type": "signature_valid",
+        "required": true,
+        "alg": "ecdsa-p256-sha256",
+        "publicKey": {
+          "pointer": "/pubkey",
+          "format": "spki-pem",
+          "spkiSha256": "sha256:82c992af54306f8dc04bb2cc7ede4eaa8255c66f10f75a0fbb2d301227559027"
+        },
+        "message": {
+          "pointer": "/manifest_text",
+          "encoding": "utf8",
+          "jsonEquals": "/manifest"
+        },
+        "signature": {
+          "pointer": "/manifest_sig",
+          "encoding": "base64",
+          "format": "der"
+        }
+      },
+      "delivery": "{\"manifest\": {\"layout\": \"signature-vector/1\", \"order_id\": \"test-order-0001\", \"buyer_nonce\": \"00112233445566778899aabbccddeeff\", \"status\": \"completed\", \"sample_count\": 3, \"t_ms\": [0, 8, 16]}, \"manifest_text\": \"{\\\"buyer_nonce\\\":\\\"00112233445566778899aabbccddeeff\\\",\\\"layout\\\":\\\"signature-vector/1\\\",\\\"order_id\\\":\\\"test-order-0001\\\",\\\"sample_count\\\":3,\\\"status\\\":\\\"completed\\\",\\\"t_ms\\\":[0,8,16]}\", \"manifest_sig\": \"MEUCIQDTv+4o92qls5T6KBNduCrh1Yp54qo4eq5Txu2PaIOXqQIgQlc1KO/hCPAxL+WRElrj7k7JgYFQUcEuEO5H75s2EYQ=\", \"pubkey\": \"-----BEGIN PUBLIC KEY-----\\nMFkwEwYHKoZIzj0CAQYIKoZIzj0DAQcDQgAE5sAU3VSQsRu198c4CSF1x/7QOJUa\\nWecgTlV6vJzeMle/pSF1XlZAqOUqH3zdmGm+P6tqFTLRccQb6P24rr4Pyw==\\n-----END PUBLIC KEY-----\\n\"}",
+      "expect": {
+        "outcome": "pass"
+      }
+    },
+    {
+      "name": "p256/good-decimals-in-signed-bytes",
+      "alg": "p256",
+      "case": "float",
+      "why": "The signed text holds decimals as Python prints them (1.0, 1e-07). ADR-0045 section 2 allows them.",
+      "check": {
+        "id": "manifest-signature",
+        "type": "signature_valid",
+        "required": true,
+        "alg": "ecdsa-p256-sha256",
+        "publicKey": {
+          "pointer": "/pubkey",
+          "format": "spki-pem",
+          "spkiSha256": "sha256:82c992af54306f8dc04bb2cc7ede4eaa8255c66f10f75a0fbb2d301227559027"
+        },
+        "message": {
+          "pointer": "/manifest_text",
+          "encoding": "utf8",
+          "jsonEquals": "/manifest"
+        },
+        "signature": {
+          "pointer": "/manifest_sig",
+          "encoding": "base64",
+          "format": "der"
+        }
+      },
+      "delivery": "{\"manifest\": {\"layout\": \"signature-vector/1\", \"order_id\": \"test-order-0001\", \"buyer_nonce\": \"00112233445566778899aabbccddeeff\", \"status\": \"completed\", \"sample_count\": 3, \"t_ms\": [0, 8, 16], \"speed_factor\": 1.0, \"joint_deg\": [0.0, -45.5, 1e-07, 12.345678], \"note\": \"45\\u00b0 \\u00e9 \\ud83e\\udd16\"}, \"manifest_text\": \"{\\\"buyer_nonce\\\":\\\"00112233445566778899aabbccddeeff\\\",\\\"joint_deg\\\":[0.0,-45.5,1e-07,12.345678],\\\"layout\\\":\\\"signature-vector/1\\\",\\\"note\\\":\\\"45\\u00b0 \\u00e9 \\ud83e\\udd16\\\",\\\"order_id\\\":\\\"test-order-0001\\\",\\\"sample_count\\\":3,\\\"speed_factor\\\":1.0,\\\"status\\\":\\\"completed\\\",\\\"t_ms\\\":[0,8,16]}\", \"manifest_sig\": \"MEQCIBC2b3LrfqEhjfolvFyr8MkC+ct9E4lpXhfQ+B9Wm+AYAiBzJTbLHgcJm3KlDar9ZqAMmYMrMd9RtW75j2P/qgVlKA==\", \"pubkey\": \"-----BEGIN PUBLIC KEY-----\\nMFkwEwYHKoZIzj0CAQYIKoZIzj0DAQcDQgAE5sAU3VSQsRu198c4CSF1x/7QOJUa\\nWecgTlV6vJzeMle/pSF1XlZAqOUqH3zdmGm+P6tqFTLRccQb6P24rr4Pyw==\\n-----END PUBLIC KEY-----\\n\"}",
+      "expect": {
+        "outcome": "pass"
+      }
+    },
+    {
+      "name": "p256/good-binary-message-spki-base64",
+      "alg": "p256",
+      "case": "good",
+      "why": "A base64 message that is not UTF-8, a base64 key, no jsonEquals.",
+      "check": {
+        "id": "manifest-signature",
+        "type": "signature_valid",
+        "required": true,
+        "alg": "ecdsa-p256-sha256",
+        "publicKey": {
+          "pointer": "/pubkey",
+          "format": "spki-base64",
+          "spkiSha256": "sha256:82c992af54306f8dc04bb2cc7ede4eaa8255c66f10f75a0fbb2d301227559027"
+        },
+        "message": {
+          "pointer": "/manifest_text",
+          "encoding": "base64"
+        },
+        "signature": {
+          "pointer": "/manifest_sig",
+          "encoding": "base64",
+          "format": "der"
+        }
+      },
+      "delivery": "{\"manifest\": {\"layout\": \"signature-vector/1\", \"order_id\": \"test-order-0001\", \"buyer_nonce\": \"00112233445566778899aabbccddeeff\", \"status\": \"completed\", \"sample_count\": 3, \"t_ms\": [0, 8, 16]}, \"manifest_text\": \"dF9tcyxxMV9kZWcNCjAsMC4wCjgsMTIuNTAKAP/+\", \"manifest_sig\": \"MEUCIQCe89nn3pEoEqda5OYaWXXfqUgaZU+miooWEOkERFZzoQIgVyfdjzU2vYLd0f9qGjHvFUfaxhSpLzc+Ej0B17wTNbc=\", \"pubkey\": \"MFkwEwYHKoZIzj0CAQYIKoZIzj0DAQcDQgAE5sAU3VSQsRu198c4CSF1x/7QOJUaWecgTlV6vJzeMle/pSF1XlZAqOUqH3zdmGm+P6tqFTLRccQb6P24rr4Pyw==\"}",
+      "expect": {
+        "outcome": "pass"
+      }
+    },
+    {
+      "name": "p256/good-base64-message-jsonequals",
+      "alg": "p256",
+      "case": "good",
+      "why": "A base64 message whose bytes are the JSON of the object.",
+      "check": {
+        "id": "manifest-signature",
+        "type": "signature_valid",
+        "required": true,
+        "alg": "ecdsa-p256-sha256",
+        "publicKey": {
+          "pointer": "/pubkey",
+          "format": "spki-pem",
+          "spkiSha256": "sha256:82c992af54306f8dc04bb2cc7ede4eaa8255c66f10f75a0fbb2d301227559027"
+        },
+        "message": {
+          "pointer": "/manifest_text",
+          "encoding": "base64",
+          "jsonEquals": "/manifest"
+        },
+        "signature": {
+          "pointer": "/manifest_sig",
+          "encoding": "base64",
+          "format": "der"
+        }
+      },
+      "delivery": "{\"manifest\": {\"layout\": \"signature-vector/1\", \"order_id\": \"test-order-0001\", \"buyer_nonce\": \"00112233445566778899aabbccddeeff\", \"status\": \"completed\", \"sample_count\": 3, \"t_ms\": [0, 8, 16]}, \"manifest_text\": \"eyJidXllcl9ub25jZSI6IjAwMTEyMjMzNDQ1NTY2Nzc4ODk5YWFiYmNjZGRlZWZmIiwibGF5b3V0Ijoic2lnbmF0dXJlLXZlY3Rvci8xIiwib3JkZXJfaWQiOiJ0ZXN0LW9yZGVyLTAwMDEiLCJzYW1wbGVfY291bnQiOjMsInN0YXR1cyI6ImNvbXBsZXRlZCIsInRfbXMiOlswLDgsMTZdfQ==\", \"manifest_sig\": \"MEUCIQCgP2/kSDNmUY68kA1BUnxIVgJ7oHoZ/aCZhAONk9P8jQIgKJMb67yIMuTwxLvR8PoK7luJD7m/5vutWMrpUYrxvnk=\", \"pubkey\": \"-----BEGIN PUBLIC KEY-----\\nMFkwEwYHKoZIzj0CAQYIKoZIzj0DAQcDQgAE5sAU3VSQsRu198c4CSF1x/7QOJUa\\nWecgTlV6vJzeMle/pSF1XlZAqOUqH3zdmGm+P6tqFTLRccQb6P24rr4Pyw==\\n-----END PUBLIC KEY-----\\n\"}",
+      "expect": {
+        "outcome": "pass"
+      }
+    },
+    {
+      "name": "p256/good-object-keys-in-another-order",
+      "alg": "p256",
+      "case": "good",
+      "why": "jsonEquals ignores the order of object keys.",
+      "check": {
+        "id": "manifest-signature",
+        "type": "signature_valid",
+        "required": true,
+        "alg": "ecdsa-p256-sha256",
+        "publicKey": {
+          "pointer": "/pubkey",
+          "format": "spki-pem",
+          "spkiSha256": "sha256:82c992af54306f8dc04bb2cc7ede4eaa8255c66f10f75a0fbb2d301227559027"
+        },
+        "message": {
+          "pointer": "/manifest_text",
+          "encoding": "utf8",
+          "jsonEquals": "/manifest"
+        },
+        "signature": {
+          "pointer": "/manifest_sig",
+          "encoding": "base64",
+          "format": "der"
+        }
+      },
+      "delivery": "{\"manifest\": {\"t_ms\": [0, 8, 16], \"sample_count\": 3, \"status\": \"completed\", \"buyer_nonce\": \"00112233445566778899aabbccddeeff\", \"order_id\": \"test-order-0001\", \"layout\": \"signature-vector/1\"}, \"manifest_text\": \"{\\\"buyer_nonce\\\":\\\"00112233445566778899aabbccddeeff\\\",\\\"layout\\\":\\\"signature-vector/1\\\",\\\"order_id\\\":\\\"test-order-0001\\\",\\\"sample_count\\\":3,\\\"status\\\":\\\"completed\\\",\\\"t_ms\\\":[0,8,16]}\", \"manifest_sig\": \"MEUCIQCgP2/kSDNmUY68kA1BUnxIVgJ7oHoZ/aCZhAONk9P8jQIgKJMb67yIMuTwxLvR8PoK7luJD7m/5vutWMrpUYrxvnk=\", \"pubkey\": \"-----BEGIN PUBLIC KEY-----\\nMFkwEwYHKoZIzj0CAQYIKoZIzj0DAQcDQgAE5sAU3VSQsRu198c4CSF1x/7QOJUa\\nWecgTlV6vJzeMle/pSF1XlZAqOUqH3zdmGm+P6tqFTLRccQb6P24rr4Pyw==\\n-----END PUBLIC KEY-----\\n\"}",
+      "expect": {
+        "outcome": "pass"
+      }
+    },
+    {
+      "name": "p256/good-pem-crlf-no-final-line-end",
+      "alg": "p256",
+      "case": "good",
+      "why": "PEM lines may end in CRLF, and the final line end is optional.",
+      "check": {
+        "id": "manifest-signature",
+        "type": "signature_valid",
+        "required": true,
+        "alg": "ecdsa-p256-sha256",
+        "publicKey": {
+          "pointer": "/pubkey",
+          "format": "spki-pem",
+          "spkiSha256": "sha256:82c992af54306f8dc04bb2cc7ede4eaa8255c66f10f75a0fbb2d301227559027"
+        },
+        "message": {
+          "pointer": "/manifest_text",
+          "encoding": "utf8",
+          "jsonEquals": "/manifest"
+        },
+        "signature": {
+          "pointer": "/manifest_sig",
+          "encoding": "base64",
+          "format": "der"
+        }
+      },
+      "delivery": "{\"manifest\": {\"layout\": \"signature-vector/1\", \"order_id\": \"test-order-0001\", \"buyer_nonce\": \"00112233445566778899aabbccddeeff\", \"status\": \"completed\", \"sample_count\": 3, \"t_ms\": [0, 8, 16]}, \"manifest_text\": \"{\\\"buyer_nonce\\\":\\\"00112233445566778899aabbccddeeff\\\",\\\"layout\\\":\\\"signature-vector/1\\\",\\\"order_id\\\":\\\"test-order-0001\\\",\\\"sample_count\\\":3,\\\"status\\\":\\\"completed\\\",\\\"t_ms\\\":[0,8,16]}\", \"manifest_sig\": \"MEQCIA66UanCvUVlGxiJztSLtu77Oq8lDF7pstTNpskch0CDAiBrGMGeg2W9BA2Hy5mEWGcVVcQ8KIxOnwjeULdvcu7uew==\", \"pubkey\": \"-----BEGIN PUBLIC KEY-----\\r\\nMFkwEwYHKoZIzj0CAQYIKoZIzj0DAQcDQgAE5sAU3VSQsRu198c4CSF1x/7QOJUa\\r\\nWecgTlV6vJzeMle/pSF1XlZAqOUqH3zdmGm+P6tqFTLRccQb6P24rr4Pyw==\\r\\n-----END PUBLIC KEY-----\"}",
+      "expect": {
+        "outcome": "pass"
+      }
+    },
+    {
+      "name": "p256/wrong-key-in-delivery",
+      "alg": "p256",
+      "case": "wrong-key",
+      "why": "Another key and its own valid signature. The terms pin a different fingerprint.",
+      "check": {
+        "id": "manifest-signature",
+        "type": "signature_valid",
+        "required": true,
+        "alg": "ecdsa-p256-sha256",
+        "publicKey": {
+          "pointer": "/pubkey",
+          "format": "spki-pem",
+          "spkiSha256": "sha256:82c992af54306f8dc04bb2cc7ede4eaa8255c66f10f75a0fbb2d301227559027"
+        },
+        "message": {
+          "pointer": "/manifest_text",
+          "encoding": "utf8",
+          "jsonEquals": "/manifest"
+        },
+        "signature": {
+          "pointer": "/manifest_sig",
+          "encoding": "base64",
+          "format": "der"
+        }
+      },
+      "delivery": "{\"manifest\": {\"layout\": \"signature-vector/1\", \"order_id\": \"test-order-0001\", \"buyer_nonce\": \"00112233445566778899aabbccddeeff\", \"status\": \"completed\", \"sample_count\": 3, \"t_ms\": [0, 8, 16]}, \"manifest_text\": \"{\\\"buyer_nonce\\\":\\\"00112233445566778899aabbccddeeff\\\",\\\"layout\\\":\\\"signature-vector/1\\\",\\\"order_id\\\":\\\"test-order-0001\\\",\\\"sample_count\\\":3,\\\"status\\\":\\\"completed\\\",\\\"t_ms\\\":[0,8,16]}\", \"manifest_sig\": \"MEQCICJ7e/h18TREAxX4YWch/jUA4KmusP5G6/0xqalbHNoUAiBqQplRh8ZKFtKUP0E47jtDh4lkpXCi6amgK/LObFUS3A==\", \"pubkey\": \"-----BEGIN PUBLIC KEY-----\\nMFkwEwYHKoZIzj0CAQYIKoZIzj0DAQcDQgAEQl5azj9JC/nR0TdIprYyfkoK1SiL\\nmNoDoEEEM0ohvJzJr4KUMp7XwJ1D1k2u5wYVdCu/E8kObAwoRZQPSGnGYQ==\\n-----END PUBLIC KEY-----\\n\"}",
+      "expect": {
+        "outcome": "fail",
+        "detail": "publicKey: fingerprint differs from the terms"
+      }
+    },
+    {
+      "name": "p256/wrong-key-signed",
+      "alg": "p256",
+      "case": "wrong-key",
+      "why": "The pinned key is delivered, but another key signed.",
+      "check": {
+        "id": "manifest-signature",
+        "type": "signature_valid",
+        "required": true,
+        "alg": "ecdsa-p256-sha256",
+        "publicKey": {
+          "pointer": "/pubkey",
+          "format": "spki-pem",
+          "spkiSha256": "sha256:82c992af54306f8dc04bb2cc7ede4eaa8255c66f10f75a0fbb2d301227559027"
+        },
+        "message": {
+          "pointer": "/manifest_text",
+          "encoding": "utf8",
+          "jsonEquals": "/manifest"
+        },
+        "signature": {
+          "pointer": "/manifest_sig",
+          "encoding": "base64",
+          "format": "der"
+        }
+      },
+      "delivery": "{\"manifest\": {\"layout\": \"signature-vector/1\", \"order_id\": \"test-order-0001\", \"buyer_nonce\": \"00112233445566778899aabbccddeeff\", \"status\": \"completed\", \"sample_count\": 3, \"t_ms\": [0, 8, 16]}, \"manifest_text\": \"{\\\"buyer_nonce\\\":\\\"00112233445566778899aabbccddeeff\\\",\\\"layout\\\":\\\"signature-vector/1\\\",\\\"order_id\\\":\\\"test-order-0001\\\",\\\"sample_count\\\":3,\\\"status\\\":\\\"completed\\\",\\\"t_ms\\\":[0,8,16]}\", \"manifest_sig\": \"MEUCIQCOwWWmnngn58HaqDhKlthxwVgIqbT/utdCljS8UjDHdAIgEO/QxDbmpPohfgB5Rg40ZNXvesecOejy0GUqO2lK2fE=\", \"pubkey\": \"-----BEGIN PUBLIC KEY-----\\nMFkwEwYHKoZIzj0CAQYIKoZIzj0DAQcDQgAE5sAU3VSQsRu198c4CSF1x/7QOJUa\\nWecgTlV6vJzeMle/pSF1XlZAqOUqH3zdmGm+P6tqFTLRccQb6P24rr4Pyw==\\n-----END PUBLIC KEY-----\\n\"}",
+      "expect": {
+        "outcome": "fail",
+        "detail": "signature does not verify"
+      }
+    },
+    {
+      "name": "p256/flipped-byte-message",
+      "alg": "p256",
+      "case": "flipped-byte",
+      "why": "One byte of the signed text changed after signing.",
+      "check": {
+        "id": "manifest-signature",
+        "type": "signature_valid",
+        "required": true,
+        "alg": "ecdsa-p256-sha256",
+        "publicKey": {
+          "pointer": "/pubkey",
+          "format": "spki-pem",
+          "spkiSha256": "sha256:82c992af54306f8dc04bb2cc7ede4eaa8255c66f10f75a0fbb2d301227559027"
+        },
+        "message": {
+          "pointer": "/manifest_text",
+          "encoding": "utf8",
+          "jsonEquals": "/manifest"
+        },
+        "signature": {
+          "pointer": "/manifest_sig",
+          "encoding": "base64",
+          "format": "der"
+        }
+      },
+      "delivery": "{\"manifest\": {\"layout\": \"signature-vector/1\", \"order_id\": \"test-order-0001\", \"buyer_nonce\": \"00112233445566778899aabbccddeeff\", \"status\": \"completed\", \"sample_count\": 3, \"t_ms\": [0, 8, 16]}, \"manifest_text\": \"{\\\"buyer_nonce\\\":\\\"10112233445566778899aabbccddeeff\\\",\\\"layout\\\":\\\"signature-vector/1\\\",\\\"order_id\\\":\\\"test-order-0001\\\",\\\"sample_count\\\":3,\\\"status\\\":\\\"completed\\\",\\\"t_ms\\\":[0,8,16]}\", \"manifest_sig\": \"MEUCIQCgP2/kSDNmUY68kA1BUnxIVgJ7oHoZ/aCZhAONk9P8jQIgKJMb67yIMuTwxLvR8PoK7luJD7m/5vutWMrpUYrxvnk=\", \"pubkey\": \"-----BEGIN PUBLIC KEY-----\\nMFkwEwYHKoZIzj0CAQYIKoZIzj0DAQcDQgAE5sAU3VSQsRu198c4CSF1x/7QOJUa\\nWecgTlV6vJzeMle/pSF1XlZAqOUqH3zdmGm+P6tqFTLRccQb6P24rr4Pyw==\\n-----END PUBLIC KEY-----\\n\"}",
+      "expect": {
+        "outcome": "fail",
+        "detail": "signature does not verify"
+      }
+    },
+    {
+      "name": "p256/flipped-byte-signature",
+      "alg": "p256",
+      "case": "flipped-byte",
+      "why": "One bit of the signature's last byte changed.",
+      "check": {
+        "id": "manifest-signature",
+        "type": "signature_valid",
+        "required": true,
+        "alg": "ecdsa-p256-sha256",
+        "publicKey": {
+          "pointer": "/pubkey",
+          "format": "spki-pem",
+          "spkiSha256": "sha256:82c992af54306f8dc04bb2cc7ede4eaa8255c66f10f75a0fbb2d301227559027"
+        },
+        "message": {
+          "pointer": "/manifest_text",
+          "encoding": "utf8",
+          "jsonEquals": "/manifest"
+        },
+        "signature": {
+          "pointer": "/manifest_sig",
+          "encoding": "base64",
+          "format": "der"
+        }
+      },
+      "delivery": "{\"manifest\": {\"layout\": \"signature-vector/1\", \"order_id\": \"test-order-0001\", \"buyer_nonce\": \"00112233445566778899aabbccddeeff\", \"status\": \"completed\", \"sample_count\": 3, \"t_ms\": [0, 8, 16]}, \"manifest_text\": \"{\\\"buyer_nonce\\\":\\\"00112233445566778899aabbccddeeff\\\",\\\"layout\\\":\\\"signature-vector/1\\\",\\\"order_id\\\":\\\"test-order-0001\\\",\\\"sample_count\\\":3,\\\"status\\\":\\\"completed\\\",\\\"t_ms\\\":[0,8,16]}\", \"manifest_sig\": \"MEUCIQCgP2/kSDNmUY68kA1BUnxIVgJ7oHoZ/aCZhAONk9P8jQIgKJMb67yIMuTwxLvR8PoK7luJD7m/5vutWMrpUYrxvng=\", \"pubkey\": \"-----BEGIN PUBLIC KEY-----\\nMFkwEwYHKoZIzj0CAQYIKoZIzj0DAQcDQgAE5sAU3VSQsRu198c4CSF1x/7QOJUa\\nWecgTlV6vJzeMle/pSF1XlZAqOUqH3zdmGm+P6tqFTLRccQb6P24rr4Pyw==\\n-----END PUBLIC KEY-----\\n\"}",
+      "expect": {
+        "outcome": "fail",
+        "detail": "signature does not verify"
+      }
+    },
+    {
+      "name": "p256/flipped-byte-public-key",
+      "alg": "p256",
+      "case": "flipped-byte",
+      "why": "One bit of the delivered key changed. The fingerprint is compared before any curve arithmetic.",
+      "check": {
+        "id": "manifest-signature",
+        "type": "signature_valid",
+        "required": true,
+        "alg": "ecdsa-p256-sha256",
+        "publicKey": {
+          "pointer": "/pubkey",
+          "format": "spki-pem",
+          "spkiSha256": "sha256:82c992af54306f8dc04bb2cc7ede4eaa8255c66f10f75a0fbb2d301227559027"
+        },
+        "message": {
+          "pointer": "/manifest_text",
+          "encoding": "utf8",
+          "jsonEquals": "/manifest"
+        },
+        "signature": {
+          "pointer": "/manifest_sig",
+          "encoding": "base64",
+          "format": "der"
+        }
+      },
+      "delivery": "{\"manifest\": {\"layout\": \"signature-vector/1\", \"order_id\": \"test-order-0001\", \"buyer_nonce\": \"00112233445566778899aabbccddeeff\", \"status\": \"completed\", \"sample_count\": 3, \"t_ms\": [0, 8, 16]}, \"manifest_text\": \"{\\\"buyer_nonce\\\":\\\"00112233445566778899aabbccddeeff\\\",\\\"layout\\\":\\\"signature-vector/1\\\",\\\"order_id\\\":\\\"test-order-0001\\\",\\\"sample_count\\\":3,\\\"status\\\":\\\"completed\\\",\\\"t_ms\\\":[0,8,16]}\", \"manifest_sig\": \"MEUCIQDnuk6ETsTFYLvaQT/Tr1qqCl7+hL+rlKz4AnCt1OaJGQIgMHjj2ZI8ros5Bc4Fq6K2zQpaVAgLbIc/mYeiS3D/nH4=\", \"pubkey\": \"-----BEGIN PUBLIC KEY-----\\nMFkwEwYHKoZIzj0CAQYIKoZIzj0DAQcDQgAE5sAU3VSQsRu198c4CSF1x/7QOJUa\\nWecgTlV6vJzeMle/pSF1XlZAqOUqH3zdmGm+P6tqFTLRccQb6P24rr4Pyg==\\n-----END PUBLIC KEY-----\\n\"}",
+      "expect": {
+        "outcome": "fail",
+        "detail": "publicKey: fingerprint differs from the terms"
+      }
+    },
+    {
+      "name": "p256/random-signature-bytes",
+      "alg": "p256",
+      "case": "random-signature",
+      "why": "64 random bytes in place of the signature, in the check's usual format.",
+      "check": {
+        "id": "manifest-signature",
+        "type": "signature_valid",
+        "required": true,
+        "alg": "ecdsa-p256-sha256",
+        "publicKey": {
+          "pointer": "/pubkey",
+          "format": "spki-pem",
+          "spkiSha256": "sha256:82c992af54306f8dc04bb2cc7ede4eaa8255c66f10f75a0fbb2d301227559027"
+        },
+        "message": {
+          "pointer": "/manifest_text",
+          "encoding": "utf8",
+          "jsonEquals": "/manifest"
+        },
+        "signature": {
+          "pointer": "/manifest_sig",
+          "encoding": "base64",
+          "format": "der"
+        }
+      },
+      "delivery": "{\"manifest\": {\"layout\": \"signature-vector/1\", \"order_id\": \"test-order-0001\", \"buyer_nonce\": \"00112233445566778899aabbccddeeff\", \"status\": \"completed\", \"sample_count\": 3, \"t_ms\": [0, 8, 16]}, \"manifest_text\": \"{\\\"buyer_nonce\\\":\\\"00112233445566778899aabbccddeeff\\\",\\\"layout\\\":\\\"signature-vector/1\\\",\\\"order_id\\\":\\\"test-order-0001\\\",\\\"sample_count\\\":3,\\\"status\\\":\\\"completed\\\",\\\"t_ms\\\":[0,8,16]}\", \"manifest_sig\": \"qY5q+Pnmr14MfVdtPDVPhcDpnjNSwfLO22U3aNsQVKagAWPZXu90eN2q6P8QX/JUF2+q21jcOlVxOehzGtr7aQ==\", \"pubkey\": \"-----BEGIN PUBLIC KEY-----\\nMFkwEwYHKoZIzj0CAQYIKoZIzj0DAQcDQgAE5sAU3VSQsRu198c4CSF1x/7QOJUa\\nWecgTlV6vJzeMle/pSF1XlZAqOUqH3zdmGm+P6tqFTLRccQb6P24rr4Pyw==\\n-----END PUBLIC KEY-----\\n\"}",
+      "expect": {
+        "outcome": "fail",
+        "detail": "signature: not valid DER"
+      }
+    },
+    {
+      "name": "p256/float-respelled-after-signing",
+      "alg": "p256",
+      "case": "float",
+      "why": "Signed 1.0, delivered as 1 (what a JavaScript re-serialization writes). The bytes differ.",
+      "check": {
+        "id": "manifest-signature",
+        "type": "signature_valid",
+        "required": true,
+        "alg": "ecdsa-p256-sha256",
+        "publicKey": {
+          "pointer": "/pubkey",
+          "format": "spki-pem",
+          "spkiSha256": "sha256:82c992af54306f8dc04bb2cc7ede4eaa8255c66f10f75a0fbb2d301227559027"
+        },
+        "message": {
+          "pointer": "/manifest_text",
+          "encoding": "utf8",
+          "jsonEquals": "/manifest"
+        },
+        "signature": {
+          "pointer": "/manifest_sig",
+          "encoding": "base64",
+          "format": "der"
+        }
+      },
+      "delivery": "{\"manifest\": {\"layout\": \"signature-vector/1\", \"order_id\": \"test-order-0001\", \"buyer_nonce\": \"00112233445566778899aabbccddeeff\", \"status\": \"completed\", \"sample_count\": 3, \"t_ms\": [0, 8, 16], \"speed_factor\": 1}, \"manifest_text\": \"{\\\"buyer_nonce\\\":\\\"00112233445566778899aabbccddeeff\\\",\\\"layout\\\":\\\"signature-vector/1\\\",\\\"order_id\\\":\\\"test-order-0001\\\",\\\"sample_count\\\":3,\\\"speed_factor\\\":1,\\\"status\\\":\\\"completed\\\",\\\"t_ms\\\":[0,8,16]}\", \"manifest_sig\": \"MEUCIQDUkDyCsYKFsGZKddFAdEU4Fm7bpUjdEqIkC+SV6YNtEgIgUkJdjCI8tQvL1zfgL1usCrzZzcQeb2PQ9cwP4Ez9ffw=\", \"pubkey\": \"-----BEGIN PUBLIC KEY-----\\nMFkwEwYHKoZIzj0CAQYIKoZIzj0DAQcDQgAE5sAU3VSQsRu198c4CSF1x/7QOJUa\\nWecgTlV6vJzeMle/pSF1XlZAqOUqH3zdmGm+P6tqFTLRccQb6P24rr4Pyw==\\n-----END PUBLIC KEY-----\\n\"}",
+      "expect": {
+        "outcome": "fail",
+        "detail": "signature does not verify"
+      }
+    },
+    {
+      "name": "p256/float-introduced-after-signing",
+      "alg": "p256",
+      "case": "float",
+      "why": "Signed the integer 3, delivered as 3.0. The bytes differ.",
+      "check": {
+        "id": "manifest-signature",
+        "type": "signature_valid",
+        "required": true,
+        "alg": "ecdsa-p256-sha256",
+        "publicKey": {
+          "pointer": "/pubkey",
+          "format": "spki-pem",
+          "spkiSha256": "sha256:82c992af54306f8dc04bb2cc7ede4eaa8255c66f10f75a0fbb2d301227559027"
+        },
+        "message": {
+          "pointer": "/manifest_text",
+          "encoding": "utf8",
+          "jsonEquals": "/manifest"
+        },
+        "signature": {
+          "pointer": "/manifest_sig",
+          "encoding": "base64",
+          "format": "der"
+        }
+      },
+      "delivery": "{\"manifest\": {\"layout\": \"signature-vector/1\", \"order_id\": \"test-order-0001\", \"buyer_nonce\": \"00112233445566778899aabbccddeeff\", \"status\": \"completed\", \"sample_count\": 3, \"t_ms\": [0, 8, 16]}, \"manifest_text\": \"{\\\"buyer_nonce\\\":\\\"00112233445566778899aabbccddeeff\\\",\\\"layout\\\":\\\"signature-vector/1\\\",\\\"order_id\\\":\\\"test-order-0001\\\",\\\"sample_count\\\":3.0,\\\"status\\\":\\\"completed\\\",\\\"t_ms\\\":[0,8,16]}\", \"manifest_sig\": \"MEUCIQCgP2/kSDNmUY68kA1BUnxIVgJ7oHoZ/aCZhAONk9P8jQIgKJMb67yIMuTwxLvR8PoK7luJD7m/5vutWMrpUYrxvnk=\", \"pubkey\": \"-----BEGIN PUBLIC KEY-----\\nMFkwEwYHKoZIzj0CAQYIKoZIzj0DAQcDQgAE5sAU3VSQsRu198c4CSF1x/7QOJUa\\nWecgTlV6vJzeMle/pSF1XlZAqOUqH3zdmGm+P6tqFTLRccQb6P24rr4Pyw==\\n-----END PUBLIC KEY-----\\n\"}",
+      "expect": {
+        "outcome": "fail",
+        "detail": "signature does not verify"
+      }
+    },
+    {
+      "name": "p256/float-in-object-signed-integer",
+      "alg": "p256",
+      "case": "float",
+      "why": "The signed text says 3; the object the other checks read says 3.5.",
+      "check": {
+        "id": "manifest-signature",
+        "type": "signature_valid",
+        "required": true,
+        "alg": "ecdsa-p256-sha256",
+        "publicKey": {
+          "pointer": "/pubkey",
+          "format": "spki-pem",
+          "spkiSha256": "sha256:82c992af54306f8dc04bb2cc7ede4eaa8255c66f10f75a0fbb2d301227559027"
+        },
+        "message": {
+          "pointer": "/manifest_text",
+          "encoding": "utf8",
+          "jsonEquals": "/manifest"
+        },
+        "signature": {
+          "pointer": "/manifest_sig",
+          "encoding": "base64",
+          "format": "der"
+        }
+      },
+      "delivery": "{\"manifest\": {\"layout\": \"signature-vector/1\", \"order_id\": \"test-order-0001\", \"buyer_nonce\": \"00112233445566778899aabbccddeeff\", \"status\": \"completed\", \"sample_count\": 3.5, \"t_ms\": [0, 8, 16]}, \"manifest_text\": \"{\\\"buyer_nonce\\\":\\\"00112233445566778899aabbccddeeff\\\",\\\"layout\\\":\\\"signature-vector/1\\\",\\\"order_id\\\":\\\"test-order-0001\\\",\\\"sample_count\\\":3,\\\"status\\\":\\\"completed\\\",\\\"t_ms\\\":[0,8,16]}\", \"manifest_sig\": \"MEUCIQCgP2/kSDNmUY68kA1BUnxIVgJ7oHoZ/aCZhAONk9P8jQIgKJMb67yIMuTwxLvR8PoK7luJD7m/5vutWMrpUYrxvnk=\", \"pubkey\": \"-----BEGIN PUBLIC KEY-----\\nMFkwEwYHKoZIzj0CAQYIKoZIzj0DAQcDQgAE5sAU3VSQsRu198c4CSF1x/7QOJUa\\nWecgTlV6vJzeMle/pSF1XlZAqOUqH3zdmGm+P6tqFTLRccQb6P24rr4Pyw==\\n-----END PUBLIC KEY-----\\n\"}",
+      "expect": {
+        "outcome": "fail",
+        "detail": "message: differs from the value at jsonEquals"
+      }
+    },
+    {
+      "name": "p256/float-spelling-equal-under-jsonequals",
+      "alg": "p256",
+      "case": "float",
+      "why": "Signed 1.0, object 1: the same number, so jsonEquals holds (ADR-0045 section 3).",
+      "check": {
+        "id": "manifest-signature",
+        "type": "signature_valid",
+        "required": true,
+        "alg": "ecdsa-p256-sha256",
+        "publicKey": {
+          "pointer": "/pubkey",
+          "format": "spki-pem",
+          "spkiSha256": "sha256:82c992af54306f8dc04bb2cc7ede4eaa8255c66f10f75a0fbb2d301227559027"
+        },
+        "message": {
+          "pointer": "/manifest_text",
+          "encoding": "utf8",
+          "jsonEquals": "/manifest"
+        },
+        "signature": {
+          "pointer": "/manifest_sig",
+          "encoding": "base64",
+          "format": "der"
+        }
+      },
+      "delivery": "{\"manifest\": {\"layout\": \"signature-vector/1\", \"order_id\": \"test-order-0001\", \"buyer_nonce\": \"00112233445566778899aabbccddeeff\", \"status\": \"completed\", \"sample_count\": 3, \"t_ms\": [0, 8, 16], \"speed_factor\": 1}, \"manifest_text\": \"{\\\"buyer_nonce\\\":\\\"00112233445566778899aabbccddeeff\\\",\\\"layout\\\":\\\"signature-vector/1\\\",\\\"order_id\\\":\\\"test-order-0001\\\",\\\"sample_count\\\":3,\\\"speed_factor\\\":1.0,\\\"status\\\":\\\"completed\\\",\\\"t_ms\\\":[0,8,16]}\", \"manifest_sig\": \"MEUCIQC1xsA5YU7ThZHJq1snu0MtDEqv5SoGVHDx779RHdaIlQIgUFSNKZ4+Ag8l/dv5SQF3ynduYZULU5bD0aIOZD8+1iE=\", \"pubkey\": \"-----BEGIN PUBLIC KEY-----\\nMFkwEwYHKoZIzj0CAQYIKoZIzj0DAQcDQgAE5sAU3VSQsRu198c4CSF1x/7QOJUa\\nWecgTlV6vJzeMle/pSF1XlZAqOUqH3zdmGm+P6tqFTLRccQb6P24rr4Pyw==\\n-----END PUBLIC KEY-----\\n\"}",
+      "expect": {
+        "outcome": "pass"
+      }
+    },
+    {
+      "name": "p256/float-in-check-parameters",
+      "alg": "p256",
+      "case": "float",
+      "why": "A float in place of a pointer. The check is part of the hashed terms, so no number enters it (ADR-0022).",
+      "check": {
+        "id": "manifest-signature",
+        "type": "signature_valid",
+        "required": true,
+        "alg": "ecdsa-p256-sha256",
+        "publicKey": {
+          "pointer": "/pubkey",
+          "format": "spki-pem",
+          "spkiSha256": "sha256:82c992af54306f8dc04bb2cc7ede4eaa8255c66f10f75a0fbb2d301227559027"
+        },
+        "message": {
+          "pointer": "/manifest_text",
+          "encoding": "utf8",
+          "jsonEquals": 0.5
+        },
+        "signature": {
+          "pointer": "/manifest_sig",
+          "encoding": "base64",
+          "format": "der"
+        }
+      },
+      "delivery": "{\"manifest\": {\"layout\": \"signature-vector/1\", \"order_id\": \"test-order-0001\", \"buyer_nonce\": \"00112233445566778899aabbccddeeff\", \"status\": \"completed\", \"sample_count\": 3, \"t_ms\": [0, 8, 16]}, \"manifest_text\": \"{\\\"buyer_nonce\\\":\\\"00112233445566778899aabbccddeeff\\\",\\\"layout\\\":\\\"signature-vector/1\\\",\\\"order_id\\\":\\\"test-order-0001\\\",\\\"sample_count\\\":3,\\\"status\\\":\\\"completed\\\",\\\"t_ms\\\":[0,8,16]}\", \"manifest_sig\": \"MEUCIQDcI2KL9/fbe/vycqVHdIGU8JJpo8nxP7AkIog2fJR4eQIgImNKK/2FX4x+GURI0IDsi+UN3SaEDA8HsRFa/+3Nx5Y=\", \"pubkey\": \"-----BEGIN PUBLIC KEY-----\\nMFkwEwYHKoZIzj0CAQYIKoZIzj0DAQcDQgAE5sAU3VSQsRu198c4CSF1x/7QOJUa\\nWecgTlV6vJzeMle/pSF1XlZAqOUqH3zdmGm+P6tqFTLRccQb6P24rr4Pyw==\\n-----END PUBLIC KEY-----\\n\"}",
+      "expect": {
+        "outcome": "refused"
+      }
+    },
+    {
+      "name": "p256/oversize-public-key",
+      "alg": "p256",
+      "case": "oversize",
+      "why": "A key string of 1,025 characters.",
+      "check": {
+        "id": "manifest-signature",
+        "type": "signature_valid",
+        "required": true,
+        "alg": "ecdsa-p256-sha256",
+        "publicKey": {
+          "pointer": "/pubkey",
+          "format": "spki-pem",
+          "spkiSha256": "sha256:82c992af54306f8dc04bb2cc7ede4eaa8255c66f10f75a0fbb2d301227559027"
+        },
+        "message": {
+          "pointer": "/manifest_text",
+          "encoding": "utf8",
+          "jsonEquals": "/manifest"
+        },
+        "signature": {
+          "pointer": "/manifest_sig",
+          "encoding": "base64",
+          "format": "der"
+        }
+      },
+      "delivery": "{\"manifest\": {\"layout\": \"signature-vector/1\", \"order_id\": \"test-order-0001\", \"buyer_nonce\": \"00112233445566778899aabbccddeeff\", \"status\": \"completed\", \"sample_count\": 3, \"t_ms\": [0, 8, 16]}, \"manifest_text\": \"{\\\"buyer_nonce\\\":\\\"00112233445566778899aabbccddeeff\\\",\\\"layout\\\":\\\"signature-vector/1\\\",\\\"order_id\\\":\\\"test-order-0001\\\",\\\"sample_count\\\":3,\\\"status\\\":\\\"completed\\\",\\\"t_ms\\\":[0,8,16]}\", \"manifest_sig\": \"MEQCICKZ4CpMTqIbluqo2R3FhXKTXw0CEQUCIHSCE4eaKT2CAiBOmaV7f1klRfTnNIl4zc7Kj3qHMJDZG46Ji3kUzEd/hw==\", \"pubkey\": \"AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA\"}",
+      "expect": {
+        "outcome": "fail",
+        "detail": "publicKey: too long"
+      }
+    },
+    {
+      "name": "p256/oversize-public-key-boundary",
+      "alg": "p256",
+      "case": "oversize",
+      "why": "A key string of 1,024 characters passes the length limit and fails to decode.",
+      "check": {
+        "id": "manifest-signature",
+        "type": "signature_valid",
+        "required": true,
+        "alg": "ecdsa-p256-sha256",
+        "publicKey": {
+          "pointer": "/pubkey",
+          "format": "spki-pem",
+          "spkiSha256": "sha256:82c992af54306f8dc04bb2cc7ede4eaa8255c66f10f75a0fbb2d301227559027"
+        },
+        "message": {
+          "pointer": "/manifest_text",
+          "encoding": "utf8",
+          "jsonEquals": "/manifest"
+        },
+        "signature": {
+          "pointer": "/manifest_sig",
+          "encoding": "base64",
+          "format": "der"
+        }
+      },
+      "delivery": "{\"manifest\": {\"layout\": \"signature-vector/1\", \"order_id\": \"test-order-0001\", \"buyer_nonce\": \"00112233445566778899aabbccddeeff\", \"status\": \"completed\", \"sample_count\": 3, \"t_ms\": [0, 8, 16]}, \"manifest_text\": \"{\\\"buyer_nonce\\\":\\\"00112233445566778899aabbccddeeff\\\",\\\"layout\\\":\\\"signature-vector/1\\\",\\\"order_id\\\":\\\"test-order-0001\\\",\\\"sample_count\\\":3,\\\"status\\\":\\\"completed\\\",\\\"t_ms\\\":[0,8,16]}\", \"manifest_sig\": \"MEQCIG786EaWpMHiZ28KAFhUpFOKzbaHKv+tvp2ru0ur1dmTAiBOQl6yNlG4ff7jM8IRlbxIpGXJPNjS+i1EC5MvYUbrDQ==\", \"pubkey\": \"AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA\"}",
+      "expect": {
+        "outcome": "fail",
+        "detail": "publicKey: not a PEM public key"
+      }
+    },
+    {
+      "name": "p256/oversize-signature",
+      "alg": "p256",
+      "case": "oversize",
+      "why": "A signature string of 257 characters.",
+      "check": {
+        "id": "manifest-signature",
+        "type": "signature_valid",
+        "required": true,
+        "alg": "ecdsa-p256-sha256",
+        "publicKey": {
+          "pointer": "/pubkey",
+          "format": "spki-pem",
+          "spkiSha256": "sha256:82c992af54306f8dc04bb2cc7ede4eaa8255c66f10f75a0fbb2d301227559027"
+        },
+        "message": {
+          "pointer": "/manifest_text",
+          "encoding": "utf8",
+          "jsonEquals": "/manifest"
+        },
+        "signature": {
+          "pointer": "/manifest_sig",
+          "encoding": "base64",
+          "format": "der"
+        }
+      },
+      "delivery": "{\"manifest\": {\"layout\": \"signature-vector/1\", \"order_id\": \"test-order-0001\", \"buyer_nonce\": \"00112233445566778899aabbccddeeff\", \"status\": \"completed\", \"sample_count\": 3, \"t_ms\": [0, 8, 16]}, \"manifest_text\": \"{\\\"buyer_nonce\\\":\\\"00112233445566778899aabbccddeeff\\\",\\\"layout\\\":\\\"signature-vector/1\\\",\\\"order_id\\\":\\\"test-order-0001\\\",\\\"sample_count\\\":3,\\\"status\\\":\\\"completed\\\",\\\"t_ms\\\":[0,8,16]}\", \"manifest_sig\": \"AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA\", \"pubkey\": \"-----BEGIN PUBLIC KEY-----\\nMFkwEwYHKoZIzj0CAQYIKoZIzj0DAQcDQgAE5sAU3VSQsRu198c4CSF1x/7QOJUa\\nWecgTlV6vJzeMle/pSF1XlZAqOUqH3zdmGm+P6tqFTLRccQb6P24rr4Pyw==\\n-----END PUBLIC KEY-----\\n\"}",
+      "expect": {
+        "outcome": "fail",
+        "detail": "signature: too long"
+      }
+    },
+    {
+      "name": "p256/oversize-signature-boundary",
+      "alg": "p256",
+      "case": "oversize",
+      "why": "A signature string of 256 characters passes the length limit and decodes to too many bytes.",
+      "check": {
+        "id": "manifest-signature",
+        "type": "signature_valid",
+        "required": true,
+        "alg": "ecdsa-p256-sha256",
+        "publicKey": {
+          "pointer": "/pubkey",
+          "format": "spki-pem",
+          "spkiSha256": "sha256:82c992af54306f8dc04bb2cc7ede4eaa8255c66f10f75a0fbb2d301227559027"
+        },
+        "message": {
+          "pointer": "/manifest_text",
+          "encoding": "utf8",
+          "jsonEquals": "/manifest"
+        },
+        "signature": {
+          "pointer": "/manifest_sig",
+          "encoding": "base64",
+          "format": "der"
+        }
+      },
+      "delivery": "{\"manifest\": {\"layout\": \"signature-vector/1\", \"order_id\": \"test-order-0001\", \"buyer_nonce\": \"00112233445566778899aabbccddeeff\", \"status\": \"completed\", \"sample_count\": 3, \"t_ms\": [0, 8, 16]}, \"manifest_text\": \"{\\\"buyer_nonce\\\":\\\"00112233445566778899aabbccddeeff\\\",\\\"layout\\\":\\\"signature-vector/1\\\",\\\"order_id\\\":\\\"test-order-0001\\\",\\\"sample_count\\\":3,\\\"status\\\":\\\"completed\\\",\\\"t_ms\\\":[0,8,16]}\", \"manifest_sig\": \"AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA\", \"pubkey\": \"-----BEGIN PUBLIC KEY-----\\nMFkwEwYHKoZIzj0CAQYIKoZIzj0DAQcDQgAE5sAU3VSQsRu198c4CSF1x/7QOJUa\\nWecgTlV6vJzeMle/pSF1XlZAqOUqH3zdmGm+P6tqFTLRccQb6P24rr4Pyw==\\n-----END PUBLIC KEY-----\\n\"}",
+      "expect": {
+        "outcome": "fail",
+        "detail": "signature: wrong length"
+      }
+    },
+    {
+      "name": "p256/oversize-pointer",
+      "alg": "p256",
+      "case": "oversize",
+      "why": "A pointer of 513 characters in the check.",
+      "check": {
+        "id": "manifest-signature",
+        "type": "signature_valid",
+        "required": true,
+        "alg": "ecdsa-p256-sha256",
+        "publicKey": {
+          "pointer": "/pubkey",
+          "format": "spki-pem",
+          "spkiSha256": "sha256:82c992af54306f8dc04bb2cc7ede4eaa8255c66f10f75a0fbb2d301227559027"
+        },
+        "message": {
+          "pointer": "/manifest_text",
+          "encoding": "utf8",
+          "jsonEquals": "/manifest"
+        },
+        "signature": {
+          "pointer": "/aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+          "encoding": "base64",
+          "format": "der"
+        }
+      },
+      "delivery": "{\"manifest\": {\"layout\": \"signature-vector/1\", \"order_id\": \"test-order-0001\", \"buyer_nonce\": \"00112233445566778899aabbccddeeff\", \"status\": \"completed\", \"sample_count\": 3, \"t_ms\": [0, 8, 16]}, \"manifest_text\": \"{\\\"buyer_nonce\\\":\\\"00112233445566778899aabbccddeeff\\\",\\\"layout\\\":\\\"signature-vector/1\\\",\\\"order_id\\\":\\\"test-order-0001\\\",\\\"sample_count\\\":3,\\\"status\\\":\\\"completed\\\",\\\"t_ms\\\":[0,8,16]}\", \"manifest_sig\": \"MEUCIQDUGhuhXzDrxv9u8HdtzeigTrYf5BETX4Mz+yiAI2lwEwIgXeV0km+iKD3x30EJPsorIE1ypUAsjxGaPR/NfYIzhxI=\", \"pubkey\": \"-----BEGIN PUBLIC KEY-----\\nMFkwEwYHKoZIzj0CAQYIKoZIzj0DAQcDQgAE5sAU3VSQsRu198c4CSF1x/7QOJUa\\nWecgTlV6vJzeMle/pSF1XlZAqOUqH3zdmGm+P6tqFTLRccQb6P24rr4Pyw==\\n-----END PUBLIC KEY-----\\n\"}",
+      "expect": {
+        "outcome": "refused"
+      }
+    },
+    {
+      "name": "p256/unknown-algorithm",
+      "alg": "p256",
+      "case": "unknown-algorithm",
+      "why": "An algorithm outside the closed list. Refused at offer time; it never passes.",
+      "check": {
+        "id": "manifest-signature",
+        "type": "signature_valid",
+        "required": true,
+        "alg": "ecdsa-p384-sha384",
+        "publicKey": {
+          "pointer": "/pubkey",
+          "format": "spki-pem",
+          "spkiSha256": "sha256:82c992af54306f8dc04bb2cc7ede4eaa8255c66f10f75a0fbb2d301227559027"
+        },
+        "message": {
+          "pointer": "/manifest_text",
+          "encoding": "utf8",
+          "jsonEquals": "/manifest"
+        },
+        "signature": {
+          "pointer": "/manifest_sig",
+          "encoding": "base64",
+          "format": "der"
+        }
+      },
+      "delivery": "{\"manifest\": {\"layout\": \"signature-vector/1\", \"order_id\": \"test-order-0001\", \"buyer_nonce\": \"00112233445566778899aabbccddeeff\", \"status\": \"completed\", \"sample_count\": 3, \"t_ms\": [0, 8, 16]}, \"manifest_text\": \"{\\\"buyer_nonce\\\":\\\"00112233445566778899aabbccddeeff\\\",\\\"layout\\\":\\\"signature-vector/1\\\",\\\"order_id\\\":\\\"test-order-0001\\\",\\\"sample_count\\\":3,\\\"status\\\":\\\"completed\\\",\\\"t_ms\\\":[0,8,16]}\", \"manifest_sig\": \"MEQCIEE9V/aTeOAFMnHAN7JrBB/2z7xG5+hcjsHTdKqu3A4SAiB+KhNiAUiW8qpUW/usJdf9A0HTbZUfsqIBY+P/GdRROQ==\", \"pubkey\": \"-----BEGIN PUBLIC KEY-----\\nMFkwEwYHKoZIzj0CAQYIKoZIzj0DAQcDQgAE5sAU3VSQsRu198c4CSF1x/7QOJUa\\nWecgTlV6vJzeMle/pSF1XlZAqOUqH3zdmGm+P6tqFTLRccQb6P24rr4Pyw==\\n-----END PUBLIC KEY-----\\n\"}",
+      "expect": {
+        "outcome": "refused"
+      }
+    },
+    {
+      "name": "p256/wrong-algorithm-for-the-key",
+      "alg": "p256",
+      "case": "unknown-algorithm",
+      "why": "The check names the other algorithm, with this key pinned.",
+      "check": {
+        "id": "manifest-signature",
+        "type": "signature_valid",
+        "required": true,
+        "alg": "ed25519",
+        "publicKey": {
+          "pointer": "/pubkey",
+          "format": "spki-pem",
+          "spkiSha256": "sha256:82c992af54306f8dc04bb2cc7ede4eaa8255c66f10f75a0fbb2d301227559027"
+        },
+        "message": {
+          "pointer": "/manifest_text",
+          "encoding": "utf8",
+          "jsonEquals": "/manifest"
+        },
+        "signature": {
+          "pointer": "/manifest_sig",
+          "encoding": "base64",
+          "format": "raw"
+        }
+      },
+      "delivery": "{\"manifest\": {\"layout\": \"signature-vector/1\", \"order_id\": \"test-order-0001\", \"buyer_nonce\": \"00112233445566778899aabbccddeeff\", \"status\": \"completed\", \"sample_count\": 3, \"t_ms\": [0, 8, 16]}, \"manifest_text\": \"{\\\"buyer_nonce\\\":\\\"00112233445566778899aabbccddeeff\\\",\\\"layout\\\":\\\"signature-vector/1\\\",\\\"order_id\\\":\\\"test-order-0001\\\",\\\"sample_count\\\":3,\\\"status\\\":\\\"completed\\\",\\\"t_ms\\\":[0,8,16]}\", \"manifest_sig\": \"MEQCIAffK2Ts/FEd4Fn08kGVY5x4MfeHtYTIFl+0D2ph0CxrAiA+l1qjVmv3orZGi1BiaA/J0egx/4kBRauZdpPWSHLrdg==\", \"pubkey\": \"-----BEGIN PUBLIC KEY-----\\nMFkwEwYHKoZIzj0CAQYIKoZIzj0DAQcDQgAE5sAU3VSQsRu198c4CSF1x/7QOJUa\\nWecgTlV6vJzeMle/pSF1XlZAqOUqH3zdmGm+P6tqFTLRccQb6P24rr4Pyw==\\n-----END PUBLIC KEY-----\\n\"}",
+      "expect": {
+        "outcome": "fail",
+        "detail": "publicKey: not an Ed25519 key"
+      }
+    },
+    {
+      "name": "p256/good-raw-signature",
+      "alg": "p256",
+      "case": "good",
+      "why": "r then s in 64 bytes.",
+      "check": {
+        "id": "manifest-signature",
+        "type": "signature_valid",
+        "required": true,
+        "alg": "ecdsa-p256-sha256",
+        "publicKey": {
+          "pointer": "/pubkey",
+          "format": "spki-pem",
+          "spkiSha256": "sha256:82c992af54306f8dc04bb2cc7ede4eaa8255c66f10f75a0fbb2d301227559027"
+        },
+        "message": {
+          "pointer": "/manifest_text",
+          "encoding": "utf8",
+          "jsonEquals": "/manifest"
+        },
+        "signature": {
+          "pointer": "/manifest_sig",
+          "encoding": "base64",
+          "format": "raw"
+        }
+      },
+      "delivery": "{\"manifest\": {\"layout\": \"signature-vector/1\", \"order_id\": \"test-order-0001\", \"buyer_nonce\": \"00112233445566778899aabbccddeeff\", \"status\": \"completed\", \"sample_count\": 3, \"t_ms\": [0, 8, 16]}, \"manifest_text\": \"{\\\"buyer_nonce\\\":\\\"00112233445566778899aabbccddeeff\\\",\\\"layout\\\":\\\"signature-vector/1\\\",\\\"order_id\\\":\\\"test-order-0001\\\",\\\"sample_count\\\":3,\\\"status\\\":\\\"completed\\\",\\\"t_ms\\\":[0,8,16]}\", \"manifest_sig\": \"u3r+793m2yo1SLX71RcbR6nzcRUxUgisSnpFpghA9Ux0mz13/4K8w+RvQIBhTSI5B4o01JDlH+QDzR5P3p6u7Q==\", \"pubkey\": \"-----BEGIN PUBLIC KEY-----\\nMFkwEwYHKoZIzj0CAQYIKoZIzj0DAQcDQgAE5sAU3VSQsRu198c4CSF1x/7QOJUa\\nWecgTlV6vJzeMle/pSF1XlZAqOUqH3zdmGm+P6tqFTLRccQb6P24rr4Pyw==\\n-----END PUBLIC KEY-----\\n\"}",
+      "expect": {
+        "outcome": "pass"
+      }
+    },
+    {
+      "name": "p256/good-high-s",
+      "alg": "p256",
+      "case": "good",
+      "why": "A high s is accepted. A verifier that requires a low s fails this vector.",
+      "check": {
+        "id": "manifest-signature",
+        "type": "signature_valid",
+        "required": true,
+        "alg": "ecdsa-p256-sha256",
+        "publicKey": {
+          "pointer": "/pubkey",
+          "format": "spki-pem",
+          "spkiSha256": "sha256:82c992af54306f8dc04bb2cc7ede4eaa8255c66f10f75a0fbb2d301227559027"
+        },
+        "message": {
+          "pointer": "/manifest_text",
+          "encoding": "utf8",
+          "jsonEquals": "/manifest"
+        },
+        "signature": {
+          "pointer": "/manifest_sig",
+          "encoding": "base64",
+          "format": "der"
+        }
+      },
+      "delivery": "{\"manifest\": {\"layout\": \"signature-vector/1\", \"order_id\": \"test-order-0001\", \"buyer_nonce\": \"00112233445566778899aabbccddeeff\", \"status\": \"completed\", \"sample_count\": 3, \"t_ms\": [0, 8, 16]}, \"manifest_text\": \"{\\\"buyer_nonce\\\":\\\"00112233445566778899aabbccddeeff\\\",\\\"layout\\\":\\\"signature-vector/1\\\",\\\"order_id\\\":\\\"test-order-0001\\\",\\\"sample_count\\\":3,\\\"status\\\":\\\"completed\\\",\\\"t_ms\\\":[0,8,16]}\", \"manifest_sig\": \"MEUCIFvbNJVk4Yj3zzGJOt/TUFfHf8RWOslJRBGEl42PM/48AiEAi3uggfr5Q4puxw6r+S9pLE1T5JvOVpyRI6nEcbRZabE=\", \"pubkey\": \"-----BEGIN PUBLIC KEY-----\\nMFkwEwYHKoZIzj0CAQYIKoZIzj0DAQcDQgAE5sAU3VSQsRu198c4CSF1x/7QOJUa\\nWecgTlV6vJzeMle/pSF1XlZAqOUqH3zdmGm+P6tqFTLRccQb6P24rr4Pyw==\\n-----END PUBLIC KEY-----\\n\"}",
+      "expect": {
+        "outcome": "pass"
+      }
+    },
+    {
+      "name": "p256/good-raw-high-s",
+      "alg": "p256",
+      "case": "good",
+      "why": "A high s in the raw form.",
+      "check": {
+        "id": "manifest-signature",
+        "type": "signature_valid",
+        "required": true,
+        "alg": "ecdsa-p256-sha256",
+        "publicKey": {
+          "pointer": "/pubkey",
+          "format": "spki-pem",
+          "spkiSha256": "sha256:82c992af54306f8dc04bb2cc7ede4eaa8255c66f10f75a0fbb2d301227559027"
+        },
+        "message": {
+          "pointer": "/manifest_text",
+          "encoding": "utf8",
+          "jsonEquals": "/manifest"
+        },
+        "signature": {
+          "pointer": "/manifest_sig",
+          "encoding": "base64",
+          "format": "raw"
+        }
+      },
+      "delivery": "{\"manifest\": {\"layout\": \"signature-vector/1\", \"order_id\": \"test-order-0001\", \"buyer_nonce\": \"00112233445566778899aabbccddeeff\", \"status\": \"completed\", \"sample_count\": 3, \"t_ms\": [0, 8, 16]}, \"manifest_text\": \"{\\\"buyer_nonce\\\":\\\"00112233445566778899aabbccddeeff\\\",\\\"layout\\\":\\\"signature-vector/1\\\",\\\"order_id\\\":\\\"test-order-0001\\\",\\\"sample_count\\\":3,\\\"status\\\":\\\"completed\\\",\\\"t_ms\\\":[0,8,16]}\", \"manifest_sig\": \"nkbVJzHXwDaQKbzUEi5CzdeHRCILmSQ/R0/kaEFiD//7nAsVnfsygGRmMoY+AKD/Q9CmzQb6jjLEqk9Az96dNw==\", \"pubkey\": \"-----BEGIN PUBLIC KEY-----\\nMFkwEwYHKoZIzj0CAQYIKoZIzj0DAQcDQgAE5sAU3VSQsRu198c4CSF1x/7QOJUa\\nWecgTlV6vJzeMle/pSF1XlZAqOUqH3zdmGm+P6tqFTLRccQb6P24rr4Pyw==\\n-----END PUBLIC KEY-----\\n\"}",
+      "expect": {
+        "outcome": "pass"
+      }
+    },
+    {
+      "name": "p256/random-signature-bytes-raw",
+      "alg": "p256",
+      "case": "random-signature",
+      "why": "64 random bytes in the raw form.",
+      "check": {
+        "id": "manifest-signature",
+        "type": "signature_valid",
+        "required": true,
+        "alg": "ecdsa-p256-sha256",
+        "publicKey": {
+          "pointer": "/pubkey",
+          "format": "spki-pem",
+          "spkiSha256": "sha256:82c992af54306f8dc04bb2cc7ede4eaa8255c66f10f75a0fbb2d301227559027"
+        },
+        "message": {
+          "pointer": "/manifest_text",
+          "encoding": "utf8",
+          "jsonEquals": "/manifest"
+        },
+        "signature": {
+          "pointer": "/manifest_sig",
+          "encoding": "base64",
+          "format": "raw"
+        }
+      },
+      "delivery": "{\"manifest\": {\"layout\": \"signature-vector/1\", \"order_id\": \"test-order-0001\", \"buyer_nonce\": \"00112233445566778899aabbccddeeff\", \"status\": \"completed\", \"sample_count\": 3, \"t_ms\": [0, 8, 16]}, \"manifest_text\": \"{\\\"buyer_nonce\\\":\\\"00112233445566778899aabbccddeeff\\\",\\\"layout\\\":\\\"signature-vector/1\\\",\\\"order_id\\\":\\\"test-order-0001\\\",\\\"sample_count\\\":3,\\\"status\\\":\\\"completed\\\",\\\"t_ms\\\":[0,8,16]}\", \"manifest_sig\": \"p+hYiymaLLSaDPmCAVdhr9Tr44GvrUKwtKKsVlJoxoebteipvEAx/g2FCeRiJ9ABNNWInJKrW6C8TcnCeDD9ng==\", \"pubkey\": \"-----BEGIN PUBLIC KEY-----\\nMFkwEwYHKoZIzj0CAQYIKoZIzj0DAQcDQgAE5sAU3VSQsRu198c4CSF1x/7QOJUa\\nWecgTlV6vJzeMle/pSF1XlZAqOUqH3zdmGm+P6tqFTLRccQb6P24rr4Pyw==\\n-----END PUBLIC KEY-----\\n\"}",
+      "expect": {
+        "outcome": "fail",
+        "detail": "signature does not verify"
+      }
+    },
+    {
+      "name": "p256/raw-signature-in-der-check",
+      "alg": "p256",
+      "case": "strictness",
+      "why": "A valid raw signature in a `der` check. A verifier that guesses the format passes it by mistake.",
+      "check": {
+        "id": "manifest-signature",
+        "type": "signature_valid",
+        "required": true,
+        "alg": "ecdsa-p256-sha256",
+        "publicKey": {
+          "pointer": "/pubkey",
+          "format": "spki-pem",
+          "spkiSha256": "sha256:82c992af54306f8dc04bb2cc7ede4eaa8255c66f10f75a0fbb2d301227559027"
+        },
+        "message": {
+          "pointer": "/manifest_text",
+          "encoding": "utf8",
+          "jsonEquals": "/manifest"
+        },
+        "signature": {
+          "pointer": "/manifest_sig",
+          "encoding": "base64",
+          "format": "der"
+        }
+      },
+      "delivery": "{\"manifest\": {\"layout\": \"signature-vector/1\", \"order_id\": \"test-order-0001\", \"buyer_nonce\": \"00112233445566778899aabbccddeeff\", \"status\": \"completed\", \"sample_count\": 3, \"t_ms\": [0, 8, 16]}, \"manifest_text\": \"{\\\"buyer_nonce\\\":\\\"00112233445566778899aabbccddeeff\\\",\\\"layout\\\":\\\"signature-vector/1\\\",\\\"order_id\\\":\\\"test-order-0001\\\",\\\"sample_count\\\":3,\\\"status\\\":\\\"completed\\\",\\\"t_ms\\\":[0,8,16]}\", \"manifest_sig\": \"u3r+793m2yo1SLX71RcbR6nzcRUxUgisSnpFpghA9Ux0mz13/4K8w+RvQIBhTSI5B4o01JDlH+QDzR5P3p6u7Q==\", \"pubkey\": \"-----BEGIN PUBLIC KEY-----\\nMFkwEwYHKoZIzj0CAQYIKoZIzj0DAQcDQgAE5sAU3VSQsRu198c4CSF1x/7QOJUa\\nWecgTlV6vJzeMle/pSF1XlZAqOUqH3zdmGm+P6tqFTLRccQb6P24rr4Pyw==\\n-----END PUBLIC KEY-----\\n\"}",
+      "expect": {
+        "outcome": "fail",
+        "detail": "signature: not valid DER"
+      }
+    },
+    {
+      "name": "p256/der-signature-in-raw-check",
+      "alg": "p256",
+      "case": "strictness",
+      "why": "A DER signature in a `raw` check.",
+      "check": {
+        "id": "manifest-signature",
+        "type": "signature_valid",
+        "required": true,
+        "alg": "ecdsa-p256-sha256",
+        "publicKey": {
+          "pointer": "/pubkey",
+          "format": "spki-pem",
+          "spkiSha256": "sha256:82c992af54306f8dc04bb2cc7ede4eaa8255c66f10f75a0fbb2d301227559027"
+        },
+        "message": {
+          "pointer": "/manifest_text",
+          "encoding": "utf8",
+          "jsonEquals": "/manifest"
+        },
+        "signature": {
+          "pointer": "/manifest_sig",
+          "encoding": "base64",
+          "format": "raw"
+        }
+      },
+      "delivery": "{\"manifest\": {\"layout\": \"signature-vector/1\", \"order_id\": \"test-order-0001\", \"buyer_nonce\": \"00112233445566778899aabbccddeeff\", \"status\": \"completed\", \"sample_count\": 3, \"t_ms\": [0, 8, 16]}, \"manifest_text\": \"{\\\"buyer_nonce\\\":\\\"00112233445566778899aabbccddeeff\\\",\\\"layout\\\":\\\"signature-vector/1\\\",\\\"order_id\\\":\\\"test-order-0001\\\",\\\"sample_count\\\":3,\\\"status\\\":\\\"completed\\\",\\\"t_ms\\\":[0,8,16]}\", \"manifest_sig\": \"MEQCIBuwuuJ2nJpSF7pyi7kSotENLHDlVDSTkJgx7olcnVQSAiBI7sR5TxOYXxgkrTf68dtZ5zAmijaHrQaut+t6GIZMyQ==\", \"pubkey\": \"-----BEGIN PUBLIC KEY-----\\nMFkwEwYHKoZIzj0CAQYIKoZIzj0DAQcDQgAE5sAU3VSQsRu198c4CSF1x/7QOJUa\\nWecgTlV6vJzeMle/pSF1XlZAqOUqH3zdmGm+P6tqFTLRccQb6P24rr4Pyw==\\n-----END PUBLIC KEY-----\\n\"}",
+      "expect": {
+        "outcome": "fail",
+        "detail": "signature: wrong length"
+      }
+    },
+    {
+      "name": "p256/good-64-byte-der",
+      "alg": "p256",
+      "case": "good",
+      "why": "A valid DER signature of exactly 64 bytes, under a key built for it. The control for the next vector.",
+      "check": {
+        "id": "manifest-signature",
+        "type": "signature_valid",
+        "required": true,
+        "alg": "ecdsa-p256-sha256",
+        "publicKey": {
+          "pointer": "/pubkey",
+          "format": "spki-pem",
+          "spkiSha256": "sha256:3179ee385795b9a664047658364233f7fcc7570633ac8ccd43f4d4d69e5cafa0"
+        },
+        "message": {
+          "pointer": "/manifest_text",
+          "encoding": "utf8",
+          "jsonEquals": "/manifest"
+        },
+        "signature": {
+          "pointer": "/manifest_sig",
+          "encoding": "base64",
+          "format": "der"
+        }
+      },
+      "delivery": "{\"manifest\": {\"layout\": \"signature-vector/1\", \"order_id\": \"test-order-0001\", \"buyer_nonce\": \"00112233445566778899aabbccddeeff\", \"status\": \"completed\", \"sample_count\": 3, \"t_ms\": [0, 8, 16]}, \"manifest_text\": \"{\\\"buyer_nonce\\\":\\\"00112233445566778899aabbccddeeff\\\",\\\"layout\\\":\\\"signature-vector/1\\\",\\\"order_id\\\":\\\"test-order-0001\\\",\\\"sample_count\\\":3,\\\"status\\\":\\\"completed\\\",\\\"t_ms\\\":[0,8,16]}\", \"manifest_sig\": \"MD4CIErH/sT8LDfmmijKV4iwswwpLPtYB3I+UVCbO3DGNSbLAhoXr4vL7D7HheoZdZWdBwPtji92lT5ZBt4EbQ==\", \"pubkey\": \"-----BEGIN PUBLIC KEY-----\\nMFkwEwYHKoZIzj0CAQYIKoZIzj0DAQcDQgAErN0O0Gc6Iq0aOz98CBELQcZcVCsx\\nDbXMnjHd9Mlo92imRWG/WCFN7m2hjWvohwCJBUWXOXVWaG9Zk4cHWGYypw==\\n-----END PUBLIC KEY-----\\n\"}",
+      "expect": {
+        "outcome": "pass"
+      }
+    },
+    {
+      "name": "p256/64-byte-der-in-raw-check",
+      "alg": "p256",
+      "case": "strictness",
+      "why": "The same signature in a `raw` check is r then s, and does not verify. A verifier that names no format passes it.",
+      "check": {
+        "id": "manifest-signature",
+        "type": "signature_valid",
+        "required": true,
+        "alg": "ecdsa-p256-sha256",
+        "publicKey": {
+          "pointer": "/pubkey",
+          "format": "spki-pem",
+          "spkiSha256": "sha256:3179ee385795b9a664047658364233f7fcc7570633ac8ccd43f4d4d69e5cafa0"
+        },
+        "message": {
+          "pointer": "/manifest_text",
+          "encoding": "utf8",
+          "jsonEquals": "/manifest"
+        },
+        "signature": {
+          "pointer": "/manifest_sig",
+          "encoding": "base64",
+          "format": "raw"
+        }
+      },
+      "delivery": "{\"manifest\": {\"layout\": \"signature-vector/1\", \"order_id\": \"test-order-0001\", \"buyer_nonce\": \"00112233445566778899aabbccddeeff\", \"status\": \"completed\", \"sample_count\": 3, \"t_ms\": [0, 8, 16]}, \"manifest_text\": \"{\\\"buyer_nonce\\\":\\\"00112233445566778899aabbccddeeff\\\",\\\"layout\\\":\\\"signature-vector/1\\\",\\\"order_id\\\":\\\"test-order-0001\\\",\\\"sample_count\\\":3,\\\"status\\\":\\\"completed\\\",\\\"t_ms\\\":[0,8,16]}\", \"manifest_sig\": \"MD4CIErH/sT8LDfmmijKV4iwswwpLPtYB3I+UVCbO3DGNSbLAhoXr4vL7D7HheoZdZWdBwPtji92lT5ZBt4EbQ==\", \"pubkey\": \"-----BEGIN PUBLIC KEY-----\\nMFkwEwYHKoZIzj0CAQYIKoZIzj0DAQcDQgAErN0O0Gc6Iq0aOz98CBELQcZcVCsx\\nDbXMnjHd9Mlo92imRWG/WCFN7m2hjWvohwCJBUWXOXVWaG9Zk4cHWGYypw==\\n-----END PUBLIC KEY-----\\n\"}",
+      "expect": {
+        "outcome": "fail",
+        "detail": "signature does not verify"
+      }
+    },
+    {
+      "name": "p256/der-empty-integers",
+      "alg": "p256",
+      "case": "strictness",
+      "why": "A DER SEQUENCE of two empty INTEGERs. DER has no empty INTEGER.",
+      "check": {
+        "id": "manifest-signature",
+        "type": "signature_valid",
+        "required": true,
+        "alg": "ecdsa-p256-sha256",
+        "publicKey": {
+          "pointer": "/pubkey",
+          "format": "spki-pem",
+          "spkiSha256": "sha256:82c992af54306f8dc04bb2cc7ede4eaa8255c66f10f75a0fbb2d301227559027"
+        },
+        "message": {
+          "pointer": "/manifest_text",
+          "encoding": "utf8",
+          "jsonEquals": "/manifest"
+        },
+        "signature": {
+          "pointer": "/manifest_sig",
+          "encoding": "base64",
+          "format": "der"
+        }
+      },
+      "delivery": "{\"manifest\": {\"layout\": \"signature-vector/1\", \"order_id\": \"test-order-0001\", \"buyer_nonce\": \"00112233445566778899aabbccddeeff\", \"status\": \"completed\", \"sample_count\": 3, \"t_ms\": [0, 8, 16]}, \"manifest_text\": \"{\\\"buyer_nonce\\\":\\\"00112233445566778899aabbccddeeff\\\",\\\"layout\\\":\\\"signature-vector/1\\\",\\\"order_id\\\":\\\"test-order-0001\\\",\\\"sample_count\\\":3,\\\"status\\\":\\\"completed\\\",\\\"t_ms\\\":[0,8,16]}\", \"manifest_sig\": \"MAQCAAIA\", \"pubkey\": \"-----BEGIN PUBLIC KEY-----\\nMFkwEwYHKoZIzj0CAQYIKoZIzj0DAQcDQgAE5sAU3VSQsRu198c4CSF1x/7QOJUa\\nWecgTlV6vJzeMle/pSF1XlZAqOUqH3zdmGm+P6tqFTLRccQb6P24rr4Pyw==\\n-----END PUBLIC KEY-----\\n\"}",
+      "expect": {
+        "outcome": "fail",
+        "detail": "signature: not valid DER"
+      }
+    },
+    {
+      "name": "p256/der-trailing-byte",
+      "alg": "p256",
+      "case": "strictness",
+      "why": "One byte after the DER signature (at most 72 bytes in all).",
+      "check": {
+        "id": "manifest-signature",
+        "type": "signature_valid",
+        "required": true,
+        "alg": "ecdsa-p256-sha256",
+        "publicKey": {
+          "pointer": "/pubkey",
+          "format": "spki-pem",
+          "spkiSha256": "sha256:82c992af54306f8dc04bb2cc7ede4eaa8255c66f10f75a0fbb2d301227559027"
+        },
+        "message": {
+          "pointer": "/manifest_text",
+          "encoding": "utf8",
+          "jsonEquals": "/manifest"
+        },
+        "signature": {
+          "pointer": "/manifest_sig",
+          "encoding": "base64",
+          "format": "der"
+        }
+      },
+      "delivery": "{\"manifest\": {\"layout\": \"signature-vector/1\", \"order_id\": \"test-order-0001\", \"buyer_nonce\": \"00112233445566778899aabbccddeeff\", \"status\": \"completed\", \"sample_count\": 3, \"t_ms\": [0, 8, 16]}, \"manifest_text\": \"{\\\"buyer_nonce\\\":\\\"00112233445566778899aabbccddeeff\\\",\\\"layout\\\":\\\"signature-vector/1\\\",\\\"order_id\\\":\\\"test-order-0001\\\",\\\"sample_count\\\":3,\\\"status\\\":\\\"completed\\\",\\\"t_ms\\\":[0,8,16]}\", \"manifest_sig\": \"MEQCIBuwuuJ2nJpSF7pyi7kSotENLHDlVDSTkJgx7olcnVQSAiBI7sR5TxOYXxgkrTf68dtZ5zAmijaHrQaut+t6GIZMyQA=\", \"pubkey\": \"-----BEGIN PUBLIC KEY-----\\nMFkwEwYHKoZIzj0CAQYIKoZIzj0DAQcDQgAE5sAU3VSQsRu198c4CSF1x/7QOJUa\\nWecgTlV6vJzeMle/pSF1XlZAqOUqH3zdmGm+P6tqFTLRccQb6P24rr4Pyw==\\n-----END PUBLIC KEY-----\\n\"}",
+      "expect": {
+        "outcome": "fail",
+        "detail": "signature: not valid DER"
+      }
+    },
+    {
+      "name": "p256/der-over-72-bytes",
+      "alg": "p256",
+      "case": "strictness",
+      "why": "73 bytes in a `der` check.",
+      "check": {
+        "id": "manifest-signature",
+        "type": "signature_valid",
+        "required": true,
+        "alg": "ecdsa-p256-sha256",
+        "publicKey": {
+          "pointer": "/pubkey",
+          "format": "spki-pem",
+          "spkiSha256": "sha256:82c992af54306f8dc04bb2cc7ede4eaa8255c66f10f75a0fbb2d301227559027"
+        },
+        "message": {
+          "pointer": "/manifest_text",
+          "encoding": "utf8",
+          "jsonEquals": "/manifest"
+        },
+        "signature": {
+          "pointer": "/manifest_sig",
+          "encoding": "base64",
+          "format": "der"
+        }
+      },
+      "delivery": "{\"manifest\": {\"layout\": \"signature-vector/1\", \"order_id\": \"test-order-0001\", \"buyer_nonce\": \"00112233445566778899aabbccddeeff\", \"status\": \"completed\", \"sample_count\": 3, \"t_ms\": [0, 8, 16]}, \"manifest_text\": \"{\\\"buyer_nonce\\\":\\\"00112233445566778899aabbccddeeff\\\",\\\"layout\\\":\\\"signature-vector/1\\\",\\\"order_id\\\":\\\"test-order-0001\\\",\\\"sample_count\\\":3,\\\"status\\\":\\\"completed\\\",\\\"t_ms\\\":[0,8,16]}\", \"manifest_sig\": \"MEQCIBuwuuJ2nJpSF7pyi7kSotENLHDlVDSTkJgx7olcnVQSAiBI7sR5TxOYXxgkrTf68dtZ5zAmijaHrQaut+t6GIZMyQAAAA==\", \"pubkey\": \"-----BEGIN PUBLIC KEY-----\\nMFkwEwYHKoZIzj0CAQYIKoZIzj0DAQcDQgAE5sAU3VSQsRu198c4CSF1x/7QOJUa\\nWecgTlV6vJzeMle/pSF1XlZAqOUqH3zdmGm+P6tqFTLRccQb6P24rr4Pyw==\\n-----END PUBLIC KEY-----\\n\"}",
+      "expect": {
+        "outcome": "fail",
+        "detail": "signature: wrong length"
+      }
+    },
+    {
+      "name": "p256/r-zero",
+      "alg": "p256",
+      "case": "strictness",
+      "why": "r is 0.",
+      "check": {
+        "id": "manifest-signature",
+        "type": "signature_valid",
+        "required": true,
+        "alg": "ecdsa-p256-sha256",
+        "publicKey": {
+          "pointer": "/pubkey",
+          "format": "spki-pem",
+          "spkiSha256": "sha256:82c992af54306f8dc04bb2cc7ede4eaa8255c66f10f75a0fbb2d301227559027"
+        },
+        "message": {
+          "pointer": "/manifest_text",
+          "encoding": "utf8",
+          "jsonEquals": "/manifest"
+        },
+        "signature": {
+          "pointer": "/manifest_sig",
+          "encoding": "base64",
+          "format": "raw"
+        }
+      },
+      "delivery": "{\"manifest\": {\"layout\": \"signature-vector/1\", \"order_id\": \"test-order-0001\", \"buyer_nonce\": \"00112233445566778899aabbccddeeff\", \"status\": \"completed\", \"sample_count\": 3, \"t_ms\": [0, 8, 16]}, \"manifest_text\": \"{\\\"buyer_nonce\\\":\\\"00112233445566778899aabbccddeeff\\\",\\\"layout\\\":\\\"signature-vector/1\\\",\\\"order_id\\\":\\\"test-order-0001\\\",\\\"sample_count\\\":3,\\\"status\\\":\\\"completed\\\",\\\"t_ms\\\":[0,8,16]}\", \"manifest_sig\": \"AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAB0mz13/4K8w+RvQIBhTSI5B4o01JDlH+QDzR5P3p6u7Q==\", \"pubkey\": \"-----BEGIN PUBLIC KEY-----\\nMFkwEwYHKoZIzj0CAQYIKoZIzj0DAQcDQgAE5sAU3VSQsRu198c4CSF1x/7QOJUa\\nWecgTlV6vJzeMle/pSF1XlZAqOUqH3zdmGm+P6tqFTLRccQb6P24rr4Pyw==\\n-----END PUBLIC KEY-----\\n\"}",
+      "expect": {
+        "outcome": "fail",
+        "detail": "signature does not verify"
+      }
+    },
+    {
+      "name": "p256/s-zero",
+      "alg": "p256",
+      "case": "strictness",
+      "why": "s is 0.",
+      "check": {
+        "id": "manifest-signature",
+        "type": "signature_valid",
+        "required": true,
+        "alg": "ecdsa-p256-sha256",
+        "publicKey": {
+          "pointer": "/pubkey",
+          "format": "spki-pem",
+          "spkiSha256": "sha256:82c992af54306f8dc04bb2cc7ede4eaa8255c66f10f75a0fbb2d301227559027"
+        },
+        "message": {
+          "pointer": "/manifest_text",
+          "encoding": "utf8",
+          "jsonEquals": "/manifest"
+        },
+        "signature": {
+          "pointer": "/manifest_sig",
+          "encoding": "base64",
+          "format": "raw"
+        }
+      },
+      "delivery": "{\"manifest\": {\"layout\": \"signature-vector/1\", \"order_id\": \"test-order-0001\", \"buyer_nonce\": \"00112233445566778899aabbccddeeff\", \"status\": \"completed\", \"sample_count\": 3, \"t_ms\": [0, 8, 16]}, \"manifest_text\": \"{\\\"buyer_nonce\\\":\\\"00112233445566778899aabbccddeeff\\\",\\\"layout\\\":\\\"signature-vector/1\\\",\\\"order_id\\\":\\\"test-order-0001\\\",\\\"sample_count\\\":3,\\\"status\\\":\\\"completed\\\",\\\"t_ms\\\":[0,8,16]}\", \"manifest_sig\": \"u3r+793m2yo1SLX71RcbR6nzcRUxUgisSnpFpghA9UwAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA==\", \"pubkey\": \"-----BEGIN PUBLIC KEY-----\\nMFkwEwYHKoZIzj0CAQYIKoZIzj0DAQcDQgAE5sAU3VSQsRu198c4CSF1x/7QOJUa\\nWecgTlV6vJzeMle/pSF1XlZAqOUqH3zdmGm+P6tqFTLRccQb6P24rr4Pyw==\\n-----END PUBLIC KEY-----\\n\"}",
+      "expect": {
+        "outcome": "fail",
+        "detail": "signature does not verify"
+      }
+    },
+    {
+      "name": "p256/r-is-the-order",
+      "alg": "p256",
+      "case": "strictness",
+      "why": "r is the curve order.",
+      "check": {
+        "id": "manifest-signature",
+        "type": "signature_valid",
+        "required": true,
+        "alg": "ecdsa-p256-sha256",
+        "publicKey": {
+          "pointer": "/pubkey",
+          "format": "spki-pem",
+          "spkiSha256": "sha256:82c992af54306f8dc04bb2cc7ede4eaa8255c66f10f75a0fbb2d301227559027"
+        },
+        "message": {
+          "pointer": "/manifest_text",
+          "encoding": "utf8",
+          "jsonEquals": "/manifest"
+        },
+        "signature": {
+          "pointer": "/manifest_sig",
+          "encoding": "base64",
+          "format": "raw"
+        }
+      },
+      "delivery": "{\"manifest\": {\"layout\": \"signature-vector/1\", \"order_id\": \"test-order-0001\", \"buyer_nonce\": \"00112233445566778899aabbccddeeff\", \"status\": \"completed\", \"sample_count\": 3, \"t_ms\": [0, 8, 16]}, \"manifest_text\": \"{\\\"buyer_nonce\\\":\\\"00112233445566778899aabbccddeeff\\\",\\\"layout\\\":\\\"signature-vector/1\\\",\\\"order_id\\\":\\\"test-order-0001\\\",\\\"sample_count\\\":3,\\\"status\\\":\\\"completed\\\",\\\"t_ms\\\":[0,8,16]}\", \"manifest_sig\": \"/////wAAAAD//////////7zm+q2nF56E87nKwvxjJVF0mz13/4K8w+RvQIBhTSI5B4o01JDlH+QDzR5P3p6u7Q==\", \"pubkey\": \"-----BEGIN PUBLIC KEY-----\\nMFkwEwYHKoZIzj0CAQYIKoZIzj0DAQcDQgAE5sAU3VSQsRu198c4CSF1x/7QOJUa\\nWecgTlV6vJzeMle/pSF1XlZAqOUqH3zdmGm+P6tqFTLRccQb6P24rr4Pyw==\\n-----END PUBLIC KEY-----\\n\"}",
+      "expect": {
+        "outcome": "fail",
+        "detail": "signature does not verify"
+      }
+    },
+    {
+      "name": "p256/s-is-the-order",
+      "alg": "p256",
+      "case": "strictness",
+      "why": "s is the curve order.",
+      "check": {
+        "id": "manifest-signature",
+        "type": "signature_valid",
+        "required": true,
+        "alg": "ecdsa-p256-sha256",
+        "publicKey": {
+          "pointer": "/pubkey",
+          "format": "spki-pem",
+          "spkiSha256": "sha256:82c992af54306f8dc04bb2cc7ede4eaa8255c66f10f75a0fbb2d301227559027"
+        },
+        "message": {
+          "pointer": "/manifest_text",
+          "encoding": "utf8",
+          "jsonEquals": "/manifest"
+        },
+        "signature": {
+          "pointer": "/manifest_sig",
+          "encoding": "base64",
+          "format": "raw"
+        }
+      },
+      "delivery": "{\"manifest\": {\"layout\": \"signature-vector/1\", \"order_id\": \"test-order-0001\", \"buyer_nonce\": \"00112233445566778899aabbccddeeff\", \"status\": \"completed\", \"sample_count\": 3, \"t_ms\": [0, 8, 16]}, \"manifest_text\": \"{\\\"buyer_nonce\\\":\\\"00112233445566778899aabbccddeeff\\\",\\\"layout\\\":\\\"signature-vector/1\\\",\\\"order_id\\\":\\\"test-order-0001\\\",\\\"sample_count\\\":3,\\\"status\\\":\\\"completed\\\",\\\"t_ms\\\":[0,8,16]}\", \"manifest_sig\": \"u3r+793m2yo1SLX71RcbR6nzcRUxUgisSnpFpghA9Uz/////AAAAAP//////////vOb6racXnoTzucrC/GMlUQ==\", \"pubkey\": \"-----BEGIN PUBLIC KEY-----\\nMFkwEwYHKoZIzj0CAQYIKoZIzj0DAQcDQgAE5sAU3VSQsRu198c4CSF1x/7QOJUa\\nWecgTlV6vJzeMle/pSF1XlZAqOUqH3zdmGm+P6tqFTLRccQb6P24rr4Pyw==\\n-----END PUBLIC KEY-----\\n\"}",
+      "expect": {
+        "outcome": "fail",
+        "detail": "signature does not verify"
+      }
+    },
+    {
+      "name": "p256/compressed-point",
+      "alg": "p256",
+      "case": "strictness",
+      "why": "The same key with a compressed point, pinned by its own fingerprint.",
+      "check": {
+        "id": "manifest-signature",
+        "type": "signature_valid",
+        "required": true,
+        "alg": "ecdsa-p256-sha256",
+        "publicKey": {
+          "pointer": "/pubkey",
+          "format": "spki-pem",
+          "spkiSha256": "sha256:6545ec1c746594e235493bae6e965d07f480be95992211405073a037fcb18248"
+        },
+        "message": {
+          "pointer": "/manifest_text",
+          "encoding": "utf8",
+          "jsonEquals": "/manifest"
+        },
+        "signature": {
+          "pointer": "/manifest_sig",
+          "encoding": "base64",
+          "format": "der"
+        }
+      },
+      "delivery": "{\"manifest\": {\"layout\": \"signature-vector/1\", \"order_id\": \"test-order-0001\", \"buyer_nonce\": \"00112233445566778899aabbccddeeff\", \"status\": \"completed\", \"sample_count\": 3, \"t_ms\": [0, 8, 16]}, \"manifest_text\": \"{\\\"buyer_nonce\\\":\\\"00112233445566778899aabbccddeeff\\\",\\\"layout\\\":\\\"signature-vector/1\\\",\\\"order_id\\\":\\\"test-order-0001\\\",\\\"sample_count\\\":3,\\\"status\\\":\\\"completed\\\",\\\"t_ms\\\":[0,8,16]}\", \"manifest_sig\": \"MEUCIQCvd3LfwFIihtHP+b4AweGI1se3nMHIAozAJO9YIQ311wIgG6tzUvKnMyH/EGGt4lIfTmSwt+AflC8Yr4PkTTD7gSY=\", \"pubkey\": \"-----BEGIN PUBLIC KEY-----\\nMDkwEwYHKoZIzj0CAQYIKoZIzj0DAQcDIgAD5sAU3VSQsRu198c4CSF1x/7QOJUa\\nWecgTlV6vJzeMlc=\\n-----END PUBLIC KEY-----\\n\"}",
+      "expect": {
+        "outcome": "fail",
+        "detail": "publicKey: not a P-256 key"
+      }
+    },
+    {
+      "name": "p256/point-not-on-the-curve",
+      "alg": "p256",
+      "case": "strictness",
+      "why": "The right shape and the pinned fingerprint, with a point that is not on P-256.",
+      "check": {
+        "id": "manifest-signature",
+        "type": "signature_valid",
+        "required": true,
+        "alg": "ecdsa-p256-sha256",
+        "publicKey": {
+          "pointer": "/pubkey",
+          "format": "spki-pem",
+          "spkiSha256": "sha256:7aa3b87802cf1c6bba5cb8109f9d65de3099c8ef0ce75cc4f5f87c939ad74bc4"
+        },
+        "message": {
+          "pointer": "/manifest_text",
+          "encoding": "utf8",
+          "jsonEquals": "/manifest"
+        },
+        "signature": {
+          "pointer": "/manifest_sig",
+          "encoding": "base64",
+          "format": "der"
+        }
+      },
+      "delivery": "{\"manifest\": {\"layout\": \"signature-vector/1\", \"order_id\": \"test-order-0001\", \"buyer_nonce\": \"00112233445566778899aabbccddeeff\", \"status\": \"completed\", \"sample_count\": 3, \"t_ms\": [0, 8, 16]}, \"manifest_text\": \"{\\\"buyer_nonce\\\":\\\"00112233445566778899aabbccddeeff\\\",\\\"layout\\\":\\\"signature-vector/1\\\",\\\"order_id\\\":\\\"test-order-0001\\\",\\\"sample_count\\\":3,\\\"status\\\":\\\"completed\\\",\\\"t_ms\\\":[0,8,16]}\", \"manifest_sig\": \"MEUCIQC/RaKIhWvEQTnGJD1zrKiZqF6bk2yuegFExCxpwUqD7QIgS/hPbBgzg+bQIbVhoOoXNRzBIY8/aayZfIGikgS/h8I=\", \"pubkey\": \"-----BEGIN PUBLIC KEY-----\\nMFkwEwYHKoZIzj0CAQYIKoZIzj0DAQcDQgAE5sAU3VSQsRu198c4CSF1x/7QOJUa\\nWecgTlV6vJzeMle/pSF1XlZAqOUqH3zdmGm+P6tqFTLRccQb6P24rr4Pyg==\\n-----END PUBLIC KEY-----\\n\"}",
+      "expect": {
+        "outcome": "fail",
+        "detail": "publicKey: not a P-256 key"
+      }
+    },
+    {
+      "name": "p256/delivery-not-json",
+      "alg": "p256",
+      "case": "hostile",
+      "why": "A CSV delivery.",
+      "check": {
+        "id": "manifest-signature",
+        "type": "signature_valid",
+        "required": true,
+        "alg": "ecdsa-p256-sha256",
+        "publicKey": {
+          "pointer": "/pubkey",
+          "format": "spki-pem",
+          "spkiSha256": "sha256:82c992af54306f8dc04bb2cc7ede4eaa8255c66f10f75a0fbb2d301227559027"
+        },
+        "message": {
+          "pointer": "/manifest_text",
+          "encoding": "utf8",
+          "jsonEquals": "/manifest"
+        },
+        "signature": {
+          "pointer": "/manifest_sig",
+          "encoding": "base64",
+          "format": "der"
+        }
+      },
+      "delivery": "t_ms,q1_deg\n0,0.0\n8,12.50\n",
+      "expect": {
+        "outcome": "fail",
+        "detail": "not a JSON document"
+      }
+    },
+    {
+      "name": "p256/publicKey-pointer-to-nothing",
+      "alg": "p256",
+      "case": "hostile",
+      "why": "The document has no `pubkey`.",
+      "check": {
+        "id": "manifest-signature",
+        "type": "signature_valid",
+        "required": true,
+        "alg": "ecdsa-p256-sha256",
+        "publicKey": {
+          "pointer": "/pubkey",
+          "format": "spki-pem",
+          "spkiSha256": "sha256:82c992af54306f8dc04bb2cc7ede4eaa8255c66f10f75a0fbb2d301227559027"
+        },
+        "message": {
+          "pointer": "/manifest_text",
+          "encoding": "utf8",
+          "jsonEquals": "/manifest"
+        },
+        "signature": {
+          "pointer": "/manifest_sig",
+          "encoding": "base64",
+          "format": "der"
+        }
+      },
+      "delivery": "{\"manifest\": {\"layout\": \"signature-vector/1\", \"order_id\": \"test-order-0001\", \"buyer_nonce\": \"00112233445566778899aabbccddeeff\", \"status\": \"completed\", \"sample_count\": 3, \"t_ms\": [0, 8, 16]}, \"manifest_text\": \"{\\\"buyer_nonce\\\":\\\"00112233445566778899aabbccddeeff\\\",\\\"layout\\\":\\\"signature-vector/1\\\",\\\"order_id\\\":\\\"test-order-0001\\\",\\\"sample_count\\\":3,\\\"status\\\":\\\"completed\\\",\\\"t_ms\\\":[0,8,16]}\", \"manifest_sig\": \"MEUCIQDfwhuLYt9qnMGA18lgE1lsbPpWkWBTgfmu1NhwfNnsAAIgDFC7qaysu5nSf1xlcITx7FmSva5WR83itQeB3d7BLGo=\"}",
+      "expect": {
+        "outcome": "fail",
+        "detail": "publicKey: nothing at the pointer"
+      }
+    },
+    {
+      "name": "p256/publicKey-not-a-string",
+      "alg": "p256",
+      "case": "hostile",
+      "why": "`pubkey` is a number.",
+      "check": {
+        "id": "manifest-signature",
+        "type": "signature_valid",
+        "required": true,
+        "alg": "ecdsa-p256-sha256",
+        "publicKey": {
+          "pointer": "/pubkey",
+          "format": "spki-pem",
+          "spkiSha256": "sha256:82c992af54306f8dc04bb2cc7ede4eaa8255c66f10f75a0fbb2d301227559027"
+        },
+        "message": {
+          "pointer": "/manifest_text",
+          "encoding": "utf8",
+          "jsonEquals": "/manifest"
+        },
+        "signature": {
+          "pointer": "/manifest_sig",
+          "encoding": "base64",
+          "format": "der"
+        }
+      },
+      "delivery": "{\"manifest\": {\"layout\": \"signature-vector/1\", \"order_id\": \"test-order-0001\", \"buyer_nonce\": \"00112233445566778899aabbccddeeff\", \"status\": \"completed\", \"sample_count\": 3, \"t_ms\": [0, 8, 16]}, \"manifest_text\": \"{\\\"buyer_nonce\\\":\\\"00112233445566778899aabbccddeeff\\\",\\\"layout\\\":\\\"signature-vector/1\\\",\\\"order_id\\\":\\\"test-order-0001\\\",\\\"sample_count\\\":3,\\\"status\\\":\\\"completed\\\",\\\"t_ms\\\":[0,8,16]}\", \"manifest_sig\": \"MEUCIQC+qjK6B74wPZgsS/R3dCcaV1KLRAxjduZVyOc4wMSZZwIgN1+SsFaV4D5q1MVOkmy13yUFFF7S3M9jZoDtEm/0ouk=\", \"pubkey\": 7}",
+      "expect": {
+        "outcome": "fail",
+        "detail": "publicKey: not a string"
+      }
+    },
+    {
+      "name": "p256/message-pointer-to-nothing",
+      "alg": "p256",
+      "case": "hostile",
+      "why": "The document has no `manifest_text`.",
+      "check": {
+        "id": "manifest-signature",
+        "type": "signature_valid",
+        "required": true,
+        "alg": "ecdsa-p256-sha256",
+        "publicKey": {
+          "pointer": "/pubkey",
+          "format": "spki-pem",
+          "spkiSha256": "sha256:82c992af54306f8dc04bb2cc7ede4eaa8255c66f10f75a0fbb2d301227559027"
+        },
+        "message": {
+          "pointer": "/manifest_text",
+          "encoding": "utf8",
+          "jsonEquals": "/manifest"
+        },
+        "signature": {
+          "pointer": "/manifest_sig",
+          "encoding": "base64",
+          "format": "der"
+        }
+      },
+      "delivery": "{\"manifest\": {\"layout\": \"signature-vector/1\", \"order_id\": \"test-order-0001\", \"buyer_nonce\": \"00112233445566778899aabbccddeeff\", \"status\": \"completed\", \"sample_count\": 3, \"t_ms\": [0, 8, 16]}, \"manifest_sig\": \"MEQCIDvLhAejAvdcg35UhgXcd3hH8AqvHnnUM3+RC8OJQYqoAiA6+qnvwMPORfBOOvuhpe15dPXwvn3Wmdssa7LYmF2foQ==\", \"pubkey\": \"-----BEGIN PUBLIC KEY-----\\nMFkwEwYHKoZIzj0CAQYIKoZIzj0DAQcDQgAE5sAU3VSQsRu198c4CSF1x/7QOJUa\\nWecgTlV6vJzeMle/pSF1XlZAqOUqH3zdmGm+P6tqFTLRccQb6P24rr4Pyw==\\n-----END PUBLIC KEY-----\\n\"}",
+      "expect": {
+        "outcome": "fail",
+        "detail": "message: nothing at the pointer"
+      }
+    },
+    {
+      "name": "p256/message-not-a-string",
+      "alg": "p256",
+      "case": "hostile",
+      "why": "`manifest_text` is a number.",
+      "check": {
+        "id": "manifest-signature",
+        "type": "signature_valid",
+        "required": true,
+        "alg": "ecdsa-p256-sha256",
+        "publicKey": {
+          "pointer": "/pubkey",
+          "format": "spki-pem",
+          "spkiSha256": "sha256:82c992af54306f8dc04bb2cc7ede4eaa8255c66f10f75a0fbb2d301227559027"
+        },
+        "message": {
+          "pointer": "/manifest_text",
+          "encoding": "utf8",
+          "jsonEquals": "/manifest"
+        },
+        "signature": {
+          "pointer": "/manifest_sig",
+          "encoding": "base64",
+          "format": "der"
+        }
+      },
+      "delivery": "{\"manifest\": {\"layout\": \"signature-vector/1\", \"order_id\": \"test-order-0001\", \"buyer_nonce\": \"00112233445566778899aabbccddeeff\", \"status\": \"completed\", \"sample_count\": 3, \"t_ms\": [0, 8, 16]}, \"manifest_text\": 7, \"manifest_sig\": \"MEUCIQDQntPCrUIcnomLP24Fv2ak4qcWQnNerSrvXP/mNQfINQIgLqzN1nu6RDIzUQi+D8oBpi8GQS2NqsZqAP63eIFmqsc=\", \"pubkey\": \"-----BEGIN PUBLIC KEY-----\\nMFkwEwYHKoZIzj0CAQYIKoZIzj0DAQcDQgAE5sAU3VSQsRu198c4CSF1x/7QOJUa\\nWecgTlV6vJzeMle/pSF1XlZAqOUqH3zdmGm+P6tqFTLRccQb6P24rr4Pyw==\\n-----END PUBLIC KEY-----\\n\"}",
+      "expect": {
+        "outcome": "fail",
+        "detail": "message: not a string"
+      }
+    },
+    {
+      "name": "p256/signature-pointer-to-nothing",
+      "alg": "p256",
+      "case": "hostile",
+      "why": "The document has no `manifest_sig`.",
+      "check": {
+        "id": "manifest-signature",
+        "type": "signature_valid",
+        "required": true,
+        "alg": "ecdsa-p256-sha256",
+        "publicKey": {
+          "pointer": "/pubkey",
+          "format": "spki-pem",
+          "spkiSha256": "sha256:82c992af54306f8dc04bb2cc7ede4eaa8255c66f10f75a0fbb2d301227559027"
+        },
+        "message": {
+          "pointer": "/manifest_text",
+          "encoding": "utf8",
+          "jsonEquals": "/manifest"
+        },
+        "signature": {
+          "pointer": "/manifest_sig",
+          "encoding": "base64",
+          "format": "der"
+        }
+      },
+      "delivery": "{\"manifest\": {\"layout\": \"signature-vector/1\", \"order_id\": \"test-order-0001\", \"buyer_nonce\": \"00112233445566778899aabbccddeeff\", \"status\": \"completed\", \"sample_count\": 3, \"t_ms\": [0, 8, 16]}, \"manifest_text\": \"{\\\"buyer_nonce\\\":\\\"00112233445566778899aabbccddeeff\\\",\\\"layout\\\":\\\"signature-vector/1\\\",\\\"order_id\\\":\\\"test-order-0001\\\",\\\"sample_count\\\":3,\\\"status\\\":\\\"completed\\\",\\\"t_ms\\\":[0,8,16]}\", \"pubkey\": \"-----BEGIN PUBLIC KEY-----\\nMFkwEwYHKoZIzj0CAQYIKoZIzj0DAQcDQgAE5sAU3VSQsRu198c4CSF1x/7QOJUa\\nWecgTlV6vJzeMle/pSF1XlZAqOUqH3zdmGm+P6tqFTLRccQb6P24rr4Pyw==\\n-----END PUBLIC KEY-----\\n\"}",
+      "expect": {
+        "outcome": "fail",
+        "detail": "signature: nothing at the pointer"
+      }
+    },
+    {
+      "name": "p256/signature-not-a-string",
+      "alg": "p256",
+      "case": "hostile",
+      "why": "`manifest_sig` is a number.",
+      "check": {
+        "id": "manifest-signature",
+        "type": "signature_valid",
+        "required": true,
+        "alg": "ecdsa-p256-sha256",
+        "publicKey": {
+          "pointer": "/pubkey",
+          "format": "spki-pem",
+          "spkiSha256": "sha256:82c992af54306f8dc04bb2cc7ede4eaa8255c66f10f75a0fbb2d301227559027"
+        },
+        "message": {
+          "pointer": "/manifest_text",
+          "encoding": "utf8",
+          "jsonEquals": "/manifest"
+        },
+        "signature": {
+          "pointer": "/manifest_sig",
+          "encoding": "base64",
+          "format": "der"
+        }
+      },
+      "delivery": "{\"manifest\": {\"layout\": \"signature-vector/1\", \"order_id\": \"test-order-0001\", \"buyer_nonce\": \"00112233445566778899aabbccddeeff\", \"status\": \"completed\", \"sample_count\": 3, \"t_ms\": [0, 8, 16]}, \"manifest_text\": \"{\\\"buyer_nonce\\\":\\\"00112233445566778899aabbccddeeff\\\",\\\"layout\\\":\\\"signature-vector/1\\\",\\\"order_id\\\":\\\"test-order-0001\\\",\\\"sample_count\\\":3,\\\"status\\\":\\\"completed\\\",\\\"t_ms\\\":[0,8,16]}\", \"manifest_sig\": 7, \"pubkey\": \"-----BEGIN PUBLIC KEY-----\\nMFkwEwYHKoZIzj0CAQYIKoZIzj0DAQcDQgAE5sAU3VSQsRu198c4CSF1x/7QOJUa\\nWecgTlV6vJzeMle/pSF1XlZAqOUqH3zdmGm+P6tqFTLRccQb6P24rr4Pyw==\\n-----END PUBLIC KEY-----\\n\"}",
+      "expect": {
+        "outcome": "fail",
+        "detail": "signature: not a string"
+      }
+    },
+    {
+      "name": "p256/pointer-to-an-inherited-property",
+      "alg": "p256",
+      "case": "hostile",
+      "why": "A pointer reads the document's own members only.",
+      "check": {
+        "id": "manifest-signature",
+        "type": "signature_valid",
+        "required": true,
+        "alg": "ecdsa-p256-sha256",
+        "publicKey": {
+          "pointer": "/constructor",
+          "format": "spki-pem",
+          "spkiSha256": "sha256:82c992af54306f8dc04bb2cc7ede4eaa8255c66f10f75a0fbb2d301227559027"
+        },
+        "message": {
+          "pointer": "/manifest_text",
+          "encoding": "utf8",
+          "jsonEquals": "/manifest"
+        },
+        "signature": {
+          "pointer": "/manifest_sig",
+          "encoding": "base64",
+          "format": "der"
+        }
+      },
+      "delivery": "{\"manifest\": {\"layout\": \"signature-vector/1\", \"order_id\": \"test-order-0001\", \"buyer_nonce\": \"00112233445566778899aabbccddeeff\", \"status\": \"completed\", \"sample_count\": 3, \"t_ms\": [0, 8, 16]}, \"manifest_text\": \"{\\\"buyer_nonce\\\":\\\"00112233445566778899aabbccddeeff\\\",\\\"layout\\\":\\\"signature-vector/1\\\",\\\"order_id\\\":\\\"test-order-0001\\\",\\\"sample_count\\\":3,\\\"status\\\":\\\"completed\\\",\\\"t_ms\\\":[0,8,16]}\", \"manifest_sig\": \"MEQCIDer5yXf53VIaWXAxaDRTR/G06jaQbvVt6p+PDX04phrAiB0NhJKaXflMB56Jw8NYCjgAIvDC6R2JBKa1NVU7gA81A==\", \"pubkey\": \"-----BEGIN PUBLIC KEY-----\\nMFkwEwYHKoZIzj0CAQYIKoZIzj0DAQcDQgAE5sAU3VSQsRu198c4CSF1x/7QOJUa\\nWecgTlV6vJzeMle/pSF1XlZAqOUqH3zdmGm+P6tqFTLRccQb6P24rr4Pyw==\\n-----END PUBLIC KEY-----\\n\"}",
+      "expect": {
+        "outcome": "fail",
+        "detail": "publicKey: nothing at the pointer"
+      }
+    },
+    {
+      "name": "p256/pointer-not-rfc6901",
+      "alg": "p256",
+      "case": "hostile",
+      "why": "A pointer with no leading slash.",
+      "check": {
+        "id": "manifest-signature",
+        "type": "signature_valid",
+        "required": true,
+        "alg": "ecdsa-p256-sha256",
+        "publicKey": {
+          "pointer": "/pubkey",
+          "format": "spki-pem",
+          "spkiSha256": "sha256:82c992af54306f8dc04bb2cc7ede4eaa8255c66f10f75a0fbb2d301227559027"
+        },
+        "message": {
+          "pointer": "manifest_text",
+          "encoding": "utf8",
+          "jsonEquals": "/manifest"
+        },
+        "signature": {
+          "pointer": "/manifest_sig",
+          "encoding": "base64",
+          "format": "der"
+        }
+      },
+      "delivery": "{\"manifest\": {\"layout\": \"signature-vector/1\", \"order_id\": \"test-order-0001\", \"buyer_nonce\": \"00112233445566778899aabbccddeeff\", \"status\": \"completed\", \"sample_count\": 3, \"t_ms\": [0, 8, 16]}, \"manifest_text\": \"{\\\"buyer_nonce\\\":\\\"00112233445566778899aabbccddeeff\\\",\\\"layout\\\":\\\"signature-vector/1\\\",\\\"order_id\\\":\\\"test-order-0001\\\",\\\"sample_count\\\":3,\\\"status\\\":\\\"completed\\\",\\\"t_ms\\\":[0,8,16]}\", \"manifest_sig\": \"MEQCIHehx7MQpxn2/YlKwz+HiVWBTuOCOWPkc1r6Avg4/6aZAiBhqTcpXUIPcHO/OSRork2VIR9ShXNzGEsEKpi9ZJYo6A==\", \"pubkey\": \"-----BEGIN PUBLIC KEY-----\\nMFkwEwYHKoZIzj0CAQYIKoZIzj0DAQcDQgAE5sAU3VSQsRu198c4CSF1x/7QOJUa\\nWecgTlV6vJzeMle/pSF1XlZAqOUqH3zdmGm+P6tqFTLRccQb6P24rr4Pyw==\\n-----END PUBLIC KEY-----\\n\"}",
+      "expect": {
+        "outcome": "refused"
+      }
+    },
+    {
+      "name": "p256/ed25519-with-der",
+      "alg": "p256",
+      "case": "hostile",
+      "why": "`ed25519` takes the `raw` format only.",
+      "check": {
+        "id": "manifest-signature",
+        "type": "signature_valid",
+        "required": true,
+        "alg": "ed25519",
+        "publicKey": {
+          "pointer": "/pubkey",
+          "format": "spki-pem",
+          "spkiSha256": "sha256:82c992af54306f8dc04bb2cc7ede4eaa8255c66f10f75a0fbb2d301227559027"
+        },
+        "message": {
+          "pointer": "/manifest_text",
+          "encoding": "utf8",
+          "jsonEquals": "/manifest"
+        },
+        "signature": {
+          "pointer": "/manifest_sig",
+          "encoding": "base64",
+          "format": "der"
+        }
+      },
+      "delivery": "{\"manifest\": {\"layout\": \"signature-vector/1\", \"order_id\": \"test-order-0001\", \"buyer_nonce\": \"00112233445566778899aabbccddeeff\", \"status\": \"completed\", \"sample_count\": 3, \"t_ms\": [0, 8, 16]}, \"manifest_text\": \"{\\\"buyer_nonce\\\":\\\"00112233445566778899aabbccddeeff\\\",\\\"layout\\\":\\\"signature-vector/1\\\",\\\"order_id\\\":\\\"test-order-0001\\\",\\\"sample_count\\\":3,\\\"status\\\":\\\"completed\\\",\\\"t_ms\\\":[0,8,16]}\", \"manifest_sig\": \"MEQCIHlqnzxI4vX6gm+65j+usTPYryIVI10MgBHzJuY+gxmYAiB5ZU4z/sUoBGEpUlDnpzrexMeT8bQqfvwqu/E4SlB9Rw==\", \"pubkey\": \"-----BEGIN PUBLIC KEY-----\\nMFkwEwYHKoZIzj0CAQYIKoZIzj0DAQcDQgAE5sAU3VSQsRu198c4CSF1x/7QOJUa\\nWecgTlV6vJzeMle/pSF1XlZAqOUqH3zdmGm+P6tqFTLRccQb6P24rr4Pyw==\\n-----END PUBLIC KEY-----\\n\"}",
+      "expect": {
+        "outcome": "refused"
+      }
+    },
+    {
+      "name": "p256/extra-property",
+      "alg": "p256",
+      "case": "hostile",
+      "why": "The check's objects are closed.",
+      "check": {
+        "id": "manifest-signature",
+        "type": "signature_valid",
+        "required": true,
+        "alg": "ecdsa-p256-sha256",
+        "publicKey": {
+          "pointer": "/pubkey",
+          "format": "spki-pem",
+          "spkiSha256": "sha256:82c992af54306f8dc04bb2cc7ede4eaa8255c66f10f75a0fbb2d301227559027",
+          "key": "x"
+        },
+        "message": {
+          "pointer": "/manifest_text",
+          "encoding": "utf8",
+          "jsonEquals": "/manifest"
+        },
+        "signature": {
+          "pointer": "/manifest_sig",
+          "encoding": "base64",
+          "format": "der"
+        }
+      },
+      "delivery": "{\"manifest\": {\"layout\": \"signature-vector/1\", \"order_id\": \"test-order-0001\", \"buyer_nonce\": \"00112233445566778899aabbccddeeff\", \"status\": \"completed\", \"sample_count\": 3, \"t_ms\": [0, 8, 16]}, \"manifest_text\": \"{\\\"buyer_nonce\\\":\\\"00112233445566778899aabbccddeeff\\\",\\\"layout\\\":\\\"signature-vector/1\\\",\\\"order_id\\\":\\\"test-order-0001\\\",\\\"sample_count\\\":3,\\\"status\\\":\\\"completed\\\",\\\"t_ms\\\":[0,8,16]}\", \"manifest_sig\": \"MEUCIQCEWgzT3dehtgL+rveoKljXc/rKxPb2qgAYPMIJdoOTrwIgN1T9gcFFdbQXamKWw1liyyIG+7HRXyXHOz7GbHpwSKk=\", \"pubkey\": \"-----BEGIN PUBLIC KEY-----\\nMFkwEwYHKoZIzj0CAQYIKoZIzj0DAQcDQgAE5sAU3VSQsRu198c4CSF1x/7QOJUa\\nWecgTlV6vJzeMle/pSF1XlZAqOUqH3zdmGm+P6tqFTLRccQb6P24rr4Pyw==\\n-----END PUBLIC KEY-----\\n\"}",
+      "expect": {
+        "outcome": "refused"
+      }
+    },
+    {
+      "name": "p256/check-id-outside-the-pattern",
+      "alg": "p256",
+      "case": "hostile",
+      "why": "A check id follows the schema's pattern.",
+      "check": {
+        "id": "Manifest Signature",
+        "type": "signature_valid",
+        "required": true,
+        "alg": "ecdsa-p256-sha256",
+        "publicKey": {
+          "pointer": "/pubkey",
+          "format": "spki-pem",
+          "spkiSha256": "sha256:82c992af54306f8dc04bb2cc7ede4eaa8255c66f10f75a0fbb2d301227559027"
+        },
+        "message": {
+          "pointer": "/manifest_text",
+          "encoding": "utf8",
+          "jsonEquals": "/manifest"
+        },
+        "signature": {
+          "pointer": "/manifest_sig",
+          "encoding": "base64",
+          "format": "der"
+        }
+      },
+      "delivery": "{\"manifest\": {\"layout\": \"signature-vector/1\", \"order_id\": \"test-order-0001\", \"buyer_nonce\": \"00112233445566778899aabbccddeeff\", \"status\": \"completed\", \"sample_count\": 3, \"t_ms\": [0, 8, 16]}, \"manifest_text\": \"{\\\"buyer_nonce\\\":\\\"00112233445566778899aabbccddeeff\\\",\\\"layout\\\":\\\"signature-vector/1\\\",\\\"order_id\\\":\\\"test-order-0001\\\",\\\"sample_count\\\":3,\\\"status\\\":\\\"completed\\\",\\\"t_ms\\\":[0,8,16]}\", \"manifest_sig\": \"MEQCIF+G/+5eA4dq50w4jLUSsAtVJfxTgW8LA2GmE4xbTbZfAiAGYW1HrqTVmDW/b3sku/nrm36+GlY3QTdD6yrZLbE2EQ==\", \"pubkey\": \"-----BEGIN PUBLIC KEY-----\\nMFkwEwYHKoZIzj0CAQYIKoZIzj0DAQcDQgAE5sAU3VSQsRu198c4CSF1x/7QOJUa\\nWecgTlV6vJzeMle/pSF1XlZAqOUqH3zdmGm+P6tqFTLRccQb6P24rr4Pyw==\\n-----END PUBLIC KEY-----\\n\"}",
+      "expect": {
+        "outcome": "refused"
+      }
+    },
+    {
+      "name": "p256/pem-second-block",
+      "alg": "p256",
+      "case": "hostile",
+      "why": "Two PEM blocks.",
+      "check": {
+        "id": "manifest-signature",
+        "type": "signature_valid",
+        "required": true,
+        "alg": "ecdsa-p256-sha256",
+        "publicKey": {
+          "pointer": "/pubkey",
+          "format": "spki-pem",
+          "spkiSha256": "sha256:82c992af54306f8dc04bb2cc7ede4eaa8255c66f10f75a0fbb2d301227559027"
+        },
+        "message": {
+          "pointer": "/manifest_text",
+          "encoding": "utf8",
+          "jsonEquals": "/manifest"
+        },
+        "signature": {
+          "pointer": "/manifest_sig",
+          "encoding": "base64",
+          "format": "der"
+        }
+      },
+      "delivery": "{\"manifest\": {\"layout\": \"signature-vector/1\", \"order_id\": \"test-order-0001\", \"buyer_nonce\": \"00112233445566778899aabbccddeeff\", \"status\": \"completed\", \"sample_count\": 3, \"t_ms\": [0, 8, 16]}, \"manifest_text\": \"{\\\"buyer_nonce\\\":\\\"00112233445566778899aabbccddeeff\\\",\\\"layout\\\":\\\"signature-vector/1\\\",\\\"order_id\\\":\\\"test-order-0001\\\",\\\"sample_count\\\":3,\\\"status\\\":\\\"completed\\\",\\\"t_ms\\\":[0,8,16]}\", \"manifest_sig\": \"MEUCIQDXLfnqs1ZKyasL12hVWMTjHyAfPeRLraN6EwTpVkmukQIgKRqO4VjqDTte8P3OjrYmKmUwXghCoL+SoBUysefhW5w=\", \"pubkey\": \"-----BEGIN PUBLIC KEY-----\\nMFkwEwYHKoZIzj0CAQYIKoZIzj0DAQcDQgAE5sAU3VSQsRu198c4CSF1x/7QOJUa\\nWecgTlV6vJzeMle/pSF1XlZAqOUqH3zdmGm+P6tqFTLRccQb6P24rr4Pyw==\\n-----END PUBLIC KEY-----\\n-----BEGIN PUBLIC KEY-----\\nMFkwEwYHKoZIzj0CAQYIKoZIzj0DAQcDQgAEQl5azj9JC/nR0TdIprYyfkoK1SiL\\nmNoDoEEEM0ohvJzJr4KUMp7XwJ1D1k2u5wYVdCu/E8kObAwoRZQPSGnGYQ==\\n-----END PUBLIC KEY-----\\n\"}",
+      "expect": {
+        "outcome": "fail",
+        "detail": "publicKey: not a PEM public key"
+      }
+    },
+    {
+      "name": "p256/pem-other-label",
+      "alg": "p256",
+      "case": "hostile",
+      "why": "A PEM block with another label.",
+      "check": {
+        "id": "manifest-signature",
+        "type": "signature_valid",
+        "required": true,
+        "alg": "ecdsa-p256-sha256",
+        "publicKey": {
+          "pointer": "/pubkey",
+          "format": "spki-pem",
+          "spkiSha256": "sha256:82c992af54306f8dc04bb2cc7ede4eaa8255c66f10f75a0fbb2d301227559027"
+        },
+        "message": {
+          "pointer": "/manifest_text",
+          "encoding": "utf8",
+          "jsonEquals": "/manifest"
+        },
+        "signature": {
+          "pointer": "/manifest_sig",
+          "encoding": "base64",
+          "format": "der"
+        }
+      },
+      "delivery": "{\"manifest\": {\"layout\": \"signature-vector/1\", \"order_id\": \"test-order-0001\", \"buyer_nonce\": \"00112233445566778899aabbccddeeff\", \"status\": \"completed\", \"sample_count\": 3, \"t_ms\": [0, 8, 16]}, \"manifest_text\": \"{\\\"buyer_nonce\\\":\\\"00112233445566778899aabbccddeeff\\\",\\\"layout\\\":\\\"signature-vector/1\\\",\\\"order_id\\\":\\\"test-order-0001\\\",\\\"sample_count\\\":3,\\\"status\\\":\\\"completed\\\",\\\"t_ms\\\":[0,8,16]}\", \"manifest_sig\": \"MEQCIB3ZWfYnHeufLLfLUWvEBzK0muRp1aSZuPsfpryih0X7AiAjrgrtHazmo3fNGbYU6Jhf340llrpc0b5iiv9y3PVqhg==\", \"pubkey\": \"-----BEGIN CERTIFICATE-----\\nMFkwEwYHKoZIzj0CAQYIKoZIzj0DAQcDQgAE5sAU3VSQsRu198c4CSF1x/7QOJUa\\nWecgTlV6vJzeMle/pSF1XlZAqOUqH3zdmGm+P6tqFTLRccQb6P24rr4Pyw==\\n-----END CERTIFICATE-----\\n\"}",
+      "expect": {
+        "outcome": "fail",
+        "detail": "publicKey: not a PEM public key"
+      }
+    },
+    {
+      "name": "p256/pem-leading-text",
+      "alg": "p256",
+      "case": "hostile",
+      "why": "Text before the PEM block.",
+      "check": {
+        "id": "manifest-signature",
+        "type": "signature_valid",
+        "required": true,
+        "alg": "ecdsa-p256-sha256",
+        "publicKey": {
+          "pointer": "/pubkey",
+          "format": "spki-pem",
+          "spkiSha256": "sha256:82c992af54306f8dc04bb2cc7ede4eaa8255c66f10f75a0fbb2d301227559027"
+        },
+        "message": {
+          "pointer": "/manifest_text",
+          "encoding": "utf8",
+          "jsonEquals": "/manifest"
+        },
+        "signature": {
+          "pointer": "/manifest_sig",
+          "encoding": "base64",
+          "format": "der"
+        }
+      },
+      "delivery": "{\"manifest\": {\"layout\": \"signature-vector/1\", \"order_id\": \"test-order-0001\", \"buyer_nonce\": \"00112233445566778899aabbccddeeff\", \"status\": \"completed\", \"sample_count\": 3, \"t_ms\": [0, 8, 16]}, \"manifest_text\": \"{\\\"buyer_nonce\\\":\\\"00112233445566778899aabbccddeeff\\\",\\\"layout\\\":\\\"signature-vector/1\\\",\\\"order_id\\\":\\\"test-order-0001\\\",\\\"sample_count\\\":3,\\\"status\\\":\\\"completed\\\",\\\"t_ms\\\":[0,8,16]}\", \"manifest_sig\": \"MEQCIGeJ2o7/B/ll9jwuHSbLtWI/smDMIu3u+8SEOqjRBBUBAiBnsQaGPnE9lOLbInYzEs1AUR87MqrqZOb2zUyxK0wgXQ==\", \"pubkey\": \"key:\\n-----BEGIN PUBLIC KEY-----\\nMFkwEwYHKoZIzj0CAQYIKoZIzj0DAQcDQgAE5sAU3VSQsRu198c4CSF1x/7QOJUa\\nWecgTlV6vJzeMle/pSF1XlZAqOUqH3zdmGm+P6tqFTLRccQb6P24rr4Pyw==\\n-----END PUBLIC KEY-----\\n\"}",
+      "expect": {
+        "outcome": "fail",
+        "detail": "publicKey: not a PEM public key"
+      }
+    },
+    {
+      "name": "p256/key-base64-with-a-line-end",
+      "alg": "p256",
+      "case": "hostile",
+      "why": "A base64 key with a final line end.",
+      "check": {
+        "id": "manifest-signature",
+        "type": "signature_valid",
+        "required": true,
+        "alg": "ecdsa-p256-sha256",
+        "publicKey": {
+          "pointer": "/pubkey",
+          "format": "spki-base64",
+          "spkiSha256": "sha256:82c992af54306f8dc04bb2cc7ede4eaa8255c66f10f75a0fbb2d301227559027"
+        },
+        "message": {
+          "pointer": "/manifest_text",
+          "encoding": "utf8",
+          "jsonEquals": "/manifest"
+        },
+        "signature": {
+          "pointer": "/manifest_sig",
+          "encoding": "base64",
+          "format": "der"
+        }
+      },
+      "delivery": "{\"manifest\": {\"layout\": \"signature-vector/1\", \"order_id\": \"test-order-0001\", \"buyer_nonce\": \"00112233445566778899aabbccddeeff\", \"status\": \"completed\", \"sample_count\": 3, \"t_ms\": [0, 8, 16]}, \"manifest_text\": \"{\\\"buyer_nonce\\\":\\\"00112233445566778899aabbccddeeff\\\",\\\"layout\\\":\\\"signature-vector/1\\\",\\\"order_id\\\":\\\"test-order-0001\\\",\\\"sample_count\\\":3,\\\"status\\\":\\\"completed\\\",\\\"t_ms\\\":[0,8,16]}\", \"manifest_sig\": \"MEUCIQDLl8kqzqICDrZkRQLnwRAqsolbjfUHFfytiYQ9gp+7wwIgK0l9ioegQI4s44GbE3jPa4ZMCQCkg5+e8cNySN4xvb8=\", \"pubkey\": \"MFkwEwYHKoZIzj0CAQYIKoZIzj0DAQcDQgAE5sAU3VSQsRu198c4CSF1x/7QOJUaWecgTlV6vJzeMle/pSF1XlZAqOUqH3zdmGm+P6tqFTLRccQb6P24rr4Pyw==\\n\"}",
+      "expect": {
+        "outcome": "fail",
+        "detail": "publicKey: not valid base64"
+      }
+    },
+    {
+      "name": "p256/signature-base64-whitespace",
+      "alg": "p256",
+      "case": "hostile",
+      "why": "Base64 with a space.",
+      "check": {
+        "id": "manifest-signature",
+        "type": "signature_valid",
+        "required": true,
+        "alg": "ecdsa-p256-sha256",
+        "publicKey": {
+          "pointer": "/pubkey",
+          "format": "spki-pem",
+          "spkiSha256": "sha256:82c992af54306f8dc04bb2cc7ede4eaa8255c66f10f75a0fbb2d301227559027"
+        },
+        "message": {
+          "pointer": "/manifest_text",
+          "encoding": "utf8",
+          "jsonEquals": "/manifest"
+        },
+        "signature": {
+          "pointer": "/manifest_sig",
+          "encoding": "base64",
+          "format": "raw"
+        }
+      },
+      "delivery": "{\"manifest\": {\"layout\": \"signature-vector/1\", \"order_id\": \"test-order-0001\", \"buyer_nonce\": \"00112233445566778899aabbccddeeff\", \"status\": \"completed\", \"sample_count\": 3, \"t_ms\": [0, 8, 16]}, \"manifest_text\": \"{\\\"buyer_nonce\\\":\\\"00112233445566778899aabbccddeeff\\\",\\\"layout\\\":\\\"signature-vector/1\\\",\\\"order_id\\\":\\\"test-order-0001\\\",\\\"sample_count\\\":3,\\\"status\\\":\\\"completed\\\",\\\"t_ms\\\":[0,8,16]}\", \"manifest_sig\": \"u3r+793m2y o1SLX71RcbR6nzcRUxUgisSnpFpghA9Ux0mz13/4K8w+RvQIBhTSI5B4o01JDlH+QDzR5P3p6u7Q==\", \"pubkey\": \"-----BEGIN PUBLIC KEY-----\\nMFkwEwYHKoZIzj0CAQYIKoZIzj0DAQcDQgAE5sAU3VSQsRu198c4CSF1x/7QOJUa\\nWecgTlV6vJzeMle/pSF1XlZAqOUqH3zdmGm+P6tqFTLRccQb6P24rr4Pyw==\\n-----END PUBLIC KEY-----\\n\"}",
+      "expect": {
+        "outcome": "fail",
+        "detail": "signature: not valid base64"
+      }
+    },
+    {
+      "name": "p256/signature-base64-no-padding",
+      "alg": "p256",
+      "case": "hostile",
+      "why": "Base64 without padding.",
+      "check": {
+        "id": "manifest-signature",
+        "type": "signature_valid",
+        "required": true,
+        "alg": "ecdsa-p256-sha256",
+        "publicKey": {
+          "pointer": "/pubkey",
+          "format": "spki-pem",
+          "spkiSha256": "sha256:82c992af54306f8dc04bb2cc7ede4eaa8255c66f10f75a0fbb2d301227559027"
+        },
+        "message": {
+          "pointer": "/manifest_text",
+          "encoding": "utf8",
+          "jsonEquals": "/manifest"
+        },
+        "signature": {
+          "pointer": "/manifest_sig",
+          "encoding": "base64",
+          "format": "raw"
+        }
+      },
+      "delivery": "{\"manifest\": {\"layout\": \"signature-vector/1\", \"order_id\": \"test-order-0001\", \"buyer_nonce\": \"00112233445566778899aabbccddeeff\", \"status\": \"completed\", \"sample_count\": 3, \"t_ms\": [0, 8, 16]}, \"manifest_text\": \"{\\\"buyer_nonce\\\":\\\"00112233445566778899aabbccddeeff\\\",\\\"layout\\\":\\\"signature-vector/1\\\",\\\"order_id\\\":\\\"test-order-0001\\\",\\\"sample_count\\\":3,\\\"status\\\":\\\"completed\\\",\\\"t_ms\\\":[0,8,16]}\", \"manifest_sig\": \"u3r+793m2yo1SLX71RcbR6nzcRUxUgisSnpFpghA9Ux0mz13/4K8w+RvQIBhTSI5B4o01JDlH+QDzR5P3p6u7Q\", \"pubkey\": \"-----BEGIN PUBLIC KEY-----\\nMFkwEwYHKoZIzj0CAQYIKoZIzj0DAQcDQgAE5sAU3VSQsRu198c4CSF1x/7QOJUa\\nWecgTlV6vJzeMle/pSF1XlZAqOUqH3zdmGm+P6tqFTLRccQb6P24rr4Pyw==\\n-----END PUBLIC KEY-----\\n\"}",
+      "expect": {
+        "outcome": "fail",
+        "detail": "signature: not valid base64"
+      }
+    },
+    {
+      "name": "p256/signature-base64-url-alphabet",
+      "alg": "p256",
+      "case": "hostile",
+      "why": "The URL alphabet.",
+      "check": {
+        "id": "manifest-signature",
+        "type": "signature_valid",
+        "required": true,
+        "alg": "ecdsa-p256-sha256",
+        "publicKey": {
+          "pointer": "/pubkey",
+          "format": "spki-pem",
+          "spkiSha256": "sha256:82c992af54306f8dc04bb2cc7ede4eaa8255c66f10f75a0fbb2d301227559027"
+        },
+        "message": {
+          "pointer": "/manifest_text",
+          "encoding": "utf8",
+          "jsonEquals": "/manifest"
+        },
+        "signature": {
+          "pointer": "/manifest_sig",
+          "encoding": "base64",
+          "format": "raw"
+        }
+      },
+      "delivery": "{\"manifest\": {\"layout\": \"signature-vector/1\", \"order_id\": \"test-order-0001\", \"buyer_nonce\": \"00112233445566778899aabbccddeeff\", \"status\": \"completed\", \"sample_count\": 3, \"t_ms\": [0, 8, 16]}, \"manifest_text\": \"{\\\"buyer_nonce\\\":\\\"00112233445566778899aabbccddeeff\\\",\\\"layout\\\":\\\"signature-vector/1\\\",\\\"order_id\\\":\\\"test-order-0001\\\",\\\"sample_count\\\":3,\\\"status\\\":\\\"completed\\\",\\\"t_ms\\\":[0,8,16]}\", \"manifest_sig\": \"u3r-793m2yo1SLX71RcbR6nzcRUxUgisSnpFpghA9Ux0mz13_4K8w-RvQIBhTSI5B4o01JDlH-QDzR5P3p6u7Q==\", \"pubkey\": \"-----BEGIN PUBLIC KEY-----\\nMFkwEwYHKoZIzj0CAQYIKoZIzj0DAQcDQgAE5sAU3VSQsRu198c4CSF1x/7QOJUa\\nWecgTlV6vJzeMle/pSF1XlZAqOUqH3zdmGm+P6tqFTLRccQb6P24rr4Pyw==\\n-----END PUBLIC KEY-----\\n\"}",
+      "expect": {
+        "outcome": "fail",
+        "detail": "signature: not valid base64"
+      }
+    },
+    {
+      "name": "p256/signature-base64-trailing-bits",
+      "alg": "p256",
+      "case": "hostile",
+      "why": "Non-zero trailing bits: a second spelling of the same bytes.",
+      "check": {
+        "id": "manifest-signature",
+        "type": "signature_valid",
+        "required": true,
+        "alg": "ecdsa-p256-sha256",
+        "publicKey": {
+          "pointer": "/pubkey",
+          "format": "spki-pem",
+          "spkiSha256": "sha256:82c992af54306f8dc04bb2cc7ede4eaa8255c66f10f75a0fbb2d301227559027"
+        },
+        "message": {
+          "pointer": "/manifest_text",
+          "encoding": "utf8",
+          "jsonEquals": "/manifest"
+        },
+        "signature": {
+          "pointer": "/manifest_sig",
+          "encoding": "base64",
+          "format": "raw"
+        }
+      },
+      "delivery": "{\"manifest\": {\"layout\": \"signature-vector/1\", \"order_id\": \"test-order-0001\", \"buyer_nonce\": \"00112233445566778899aabbccddeeff\", \"status\": \"completed\", \"sample_count\": 3, \"t_ms\": [0, 8, 16]}, \"manifest_text\": \"{\\\"buyer_nonce\\\":\\\"00112233445566778899aabbccddeeff\\\",\\\"layout\\\":\\\"signature-vector/1\\\",\\\"order_id\\\":\\\"test-order-0001\\\",\\\"sample_count\\\":3,\\\"status\\\":\\\"completed\\\",\\\"t_ms\\\":[0,8,16]}\", \"manifest_sig\": \"u3r+793m2yo1SLX71RcbR6nzcRUxUgisSnpFpghA9Ux0mz13/4K8w+RvQIBhTSI5B4o01JDlH+QDzR5P3p6u7R==\", \"pubkey\": \"-----BEGIN PUBLIC KEY-----\\nMFkwEwYHKoZIzj0CAQYIKoZIzj0DAQcDQgAE5sAU3VSQsRu198c4CSF1x/7QOJUa\\nWecgTlV6vJzeMle/pSF1XlZAqOUqH3zdmGm+P6tqFTLRccQb6P24rr4Pyw==\\n-----END PUBLIC KEY-----\\n\"}",
+      "expect": {
+        "outcome": "fail",
+        "detail": "signature: not valid base64"
+      }
+    },
+    {
+      "name": "p256/message-base64-no-padding",
+      "alg": "p256",
+      "case": "hostile",
+      "why": "A base64 message without padding.",
+      "check": {
+        "id": "manifest-signature",
+        "type": "signature_valid",
+        "required": true,
+        "alg": "ecdsa-p256-sha256",
+        "publicKey": {
+          "pointer": "/pubkey",
+          "format": "spki-pem",
+          "spkiSha256": "sha256:82c992af54306f8dc04bb2cc7ede4eaa8255c66f10f75a0fbb2d301227559027"
+        },
+        "message": {
+          "pointer": "/manifest_text",
+          "encoding": "base64"
+        },
+        "signature": {
+          "pointer": "/manifest_sig",
+          "encoding": "base64",
+          "format": "der"
+        }
+      },
+      "delivery": "{\"manifest\": {\"layout\": \"signature-vector/1\", \"order_id\": \"test-order-0001\", \"buyer_nonce\": \"00112233445566778899aabbccddeeff\", \"status\": \"completed\", \"sample_count\": 3, \"t_ms\": [0, 8, 16]}, \"manifest_text\": \"YWI\", \"manifest_sig\": \"MEUCIQDhenrsTsdRuV0SvHMZRJYXfP3VrPZGH7VyelefFhtIfgIgfhX/BYrp3DgBCmHdf6cY5pLE8K0yBy+BTiNYGuTbQqs=\", \"pubkey\": \"-----BEGIN PUBLIC KEY-----\\nMFkwEwYHKoZIzj0CAQYIKoZIzj0DAQcDQgAE5sAU3VSQsRu198c4CSF1x/7QOJUa\\nWecgTlV6vJzeMle/pSF1XlZAqOUqH3zdmGm+P6tqFTLRccQb6P24rr4Pyw==\\n-----END PUBLIC KEY-----\\n\"}",
+      "expect": {
+        "outcome": "fail",
+        "detail": "message: not valid base64"
+      }
+    },
+    {
+      "name": "p256/message-lone-surrogate",
+      "alg": "p256",
+      "case": "hostile",
+      "why": "A lone surrogate has no UTF-8 encoding. The signature covers U+FFFD, which a lenient encoder puts in its place.",
+      "check": {
+        "id": "manifest-signature",
+        "type": "signature_valid",
+        "required": true,
+        "alg": "ecdsa-p256-sha256",
+        "publicKey": {
+          "pointer": "/pubkey",
+          "format": "spki-pem",
+          "spkiSha256": "sha256:82c992af54306f8dc04bb2cc7ede4eaa8255c66f10f75a0fbb2d301227559027"
+        },
+        "message": {
+          "pointer": "/manifest_text",
+          "encoding": "utf8"
+        },
+        "signature": {
+          "pointer": "/manifest_sig",
+          "encoding": "base64",
+          "format": "der"
+        }
+      },
+      "delivery": "{\"manifest\": {\"layout\": \"signature-vector/1\", \"order_id\": \"test-order-0001\", \"buyer_nonce\": \"00112233445566778899aabbccddeeff\", \"status\": \"completed\", \"sample_count\": 3, \"t_ms\": [0, 8, 16]}, \"manifest_text\": \"a\\ud800b\", \"manifest_sig\": \"MEUCIQDKvuUkedPeVcns31i+OnojCmGCiIDqYB0IzXmTk4HhfwIgDLBBpr+0NwtmZ26CQisQWENfkVSzAQLSiR0ntFEg4fk=\", \"pubkey\": \"-----BEGIN PUBLIC KEY-----\\nMFkwEwYHKoZIzj0CAQYIKoZIzj0DAQcDQgAE5sAU3VSQsRu198c4CSF1x/7QOJUa\\nWecgTlV6vJzeMle/pSF1XlZAqOUqH3zdmGm+P6tqFTLRccQb6P24rr4Pyw==\\n-----END PUBLIC KEY-----\\n\"}",
+      "expect": {
+        "outcome": "fail",
+        "detail": "message: not well-formed text"
+      }
+    },
+    {
+      "name": "p256/signed-bytes-not-json",
+      "alg": "p256",
+      "case": "hostile",
+      "why": "A good signature over text that is not JSON, in a check with jsonEquals.",
+      "check": {
+        "id": "manifest-signature",
+        "type": "signature_valid",
+        "required": true,
+        "alg": "ecdsa-p256-sha256",
+        "publicKey": {
+          "pointer": "/pubkey",
+          "format": "spki-pem",
+          "spkiSha256": "sha256:82c992af54306f8dc04bb2cc7ede4eaa8255c66f10f75a0fbb2d301227559027"
+        },
+        "message": {
+          "pointer": "/manifest_text",
+          "encoding": "utf8",
+          "jsonEquals": "/manifest"
+        },
+        "signature": {
+          "pointer": "/manifest_sig",
+          "encoding": "base64",
+          "format": "der"
+        }
+      },
+      "delivery": "{\"manifest\": {\"layout\": \"signature-vector/1\", \"order_id\": \"test-order-0001\", \"buyer_nonce\": \"00112233445566778899aabbccddeeff\", \"status\": \"completed\", \"sample_count\": 3, \"t_ms\": [0, 8, 16]}, \"manifest_text\": \"not json\", \"manifest_sig\": \"MEQCIG6tYi6rdBdVGZh660FLxQMU5PIOnx0iaSPle0Ew4irgAiA5UeWxjZTJssC1spH5vd2E1wMOfMmO+ydi2d0Hn3clrw==\", \"pubkey\": \"-----BEGIN PUBLIC KEY-----\\nMFkwEwYHKoZIzj0CAQYIKoZIzj0DAQcDQgAE5sAU3VSQsRu198c4CSF1x/7QOJUa\\nWecgTlV6vJzeMle/pSF1XlZAqOUqH3zdmGm+P6tqFTLRccQb6P24rr4Pyw==\\n-----END PUBLIC KEY-----\\n\"}",
+      "expect": {
+        "outcome": "fail",
+        "detail": "message: not JSON"
+      }
+    },
+    {
+      "name": "p256/signed-bytes-with-a-byte-order-mark",
+      "alg": "p256",
+      "case": "hostile",
+      "why": "A good signature over JSON after a byte order mark, with jsonEquals. See README, open questions.",
+      "check": {
+        "id": "manifest-signature",
+        "type": "signature_valid",
+        "required": true,
+        "alg": "ecdsa-p256-sha256",
+        "publicKey": {
+          "pointer": "/pubkey",
+          "format": "spki-pem",
+          "spkiSha256": "sha256:82c992af54306f8dc04bb2cc7ede4eaa8255c66f10f75a0fbb2d301227559027"
+        },
+        "message": {
+          "pointer": "/manifest_text",
+          "encoding": "utf8",
+          "jsonEquals": "/manifest"
+        },
+        "signature": {
+          "pointer": "/manifest_sig",
+          "encoding": "base64",
+          "format": "der"
+        }
+      },
+      "delivery": "{\"manifest\": {\"layout\": \"signature-vector/1\", \"order_id\": \"test-order-0001\", \"buyer_nonce\": \"00112233445566778899aabbccddeeff\", \"status\": \"completed\", \"sample_count\": 3, \"t_ms\": [0, 8, 16]}, \"manifest_text\": \"\\ufeff{\\\"buyer_nonce\\\":\\\"00112233445566778899aabbccddeeff\\\",\\\"layout\\\":\\\"signature-vector/1\\\",\\\"order_id\\\":\\\"test-order-0001\\\",\\\"sample_count\\\":3,\\\"status\\\":\\\"completed\\\",\\\"t_ms\\\":[0,8,16]}\", \"manifest_sig\": \"MEUCIQDveBLZWzBlEPdz8jFh1S23AHFcFhG2IuKF5WmImLtxwwIgO+Dxz1VA/nh/WReZJB7rxv3T6IT1bnnzKRrsw/pPWmU=\", \"pubkey\": \"-----BEGIN PUBLIC KEY-----\\nMFkwEwYHKoZIzj0CAQYIKoZIzj0DAQcDQgAE5sAU3VSQsRu198c4CSF1x/7QOJUa\\nWecgTlV6vJzeMle/pSF1XlZAqOUqH3zdmGm+P6tqFTLRccQb6P24rr4Pyw==\\n-----END PUBLIC KEY-----\\n\"}",
+      "expect": {
+        "outcome": "fail",
+        "detail": "message: not JSON"
+      }
+    },
+    {
+      "name": "p256/jsonequals-pointer-to-nothing",
+      "alg": "p256",
+      "case": "hostile",
+      "why": "Nothing sits at the jsonEquals pointer. See README, open questions.",
+      "check": {
+        "id": "manifest-signature",
+        "type": "signature_valid",
+        "required": true,
+        "alg": "ecdsa-p256-sha256",
+        "publicKey": {
+          "pointer": "/pubkey",
+          "format": "spki-pem",
+          "spkiSha256": "sha256:82c992af54306f8dc04bb2cc7ede4eaa8255c66f10f75a0fbb2d301227559027"
+        },
+        "message": {
+          "pointer": "/manifest_text",
+          "encoding": "utf8",
+          "jsonEquals": "/nowhere"
+        },
+        "signature": {
+          "pointer": "/manifest_sig",
+          "encoding": "base64",
+          "format": "der"
+        }
+      },
+      "delivery": "{\"manifest\": {\"layout\": \"signature-vector/1\", \"order_id\": \"test-order-0001\", \"buyer_nonce\": \"00112233445566778899aabbccddeeff\", \"status\": \"completed\", \"sample_count\": 3, \"t_ms\": [0, 8, 16]}, \"manifest_text\": \"{\\\"buyer_nonce\\\":\\\"00112233445566778899aabbccddeeff\\\",\\\"layout\\\":\\\"signature-vector/1\\\",\\\"order_id\\\":\\\"test-order-0001\\\",\\\"sample_count\\\":3,\\\"status\\\":\\\"completed\\\",\\\"t_ms\\\":[0,8,16]}\", \"manifest_sig\": \"MEUCIQC9v9GjpG6DYrk32Ij7eDePjtzy+nAw8rLOiu8byKtYGAIgNDc70QwC57ypNC+UQoTOtwKurF3EgX1UakutT7HzrM0=\", \"pubkey\": \"-----BEGIN PUBLIC KEY-----\\nMFkwEwYHKoZIzj0CAQYIKoZIzj0DAQcDQgAE5sAU3VSQsRu198c4CSF1x/7QOJUa\\nWecgTlV6vJzeMle/pSF1XlZAqOUqH3zdmGm+P6tqFTLRccQb6P24rr4Pyw==\\n-----END PUBLIC KEY-----\\n\"}",
+      "expect": {
+        "outcome": "fail",
+        "detail": "message: differs from the value at jsonEquals"
+      }
+    },
+    {
+      "name": "ed25519/good",
+      "alg": "ed25519",
+      "case": "good",
+      "why": "Signed in Python; PEM key, UTF-8 message, jsonEquals.",
+      "check": {
+        "id": "manifest-signature",
+        "type": "signature_valid",
+        "required": true,
+        "alg": "ed25519",
+        "publicKey": {
+          "pointer": "/pubkey",
+          "format": "spki-pem",
+          "spkiSha256": "sha256:7ab8560f27913cf2730dd51edc190816701ca6c0eafa939fc9da68a5b96645cf"
+        },
+        "message": {
+          "pointer": "/manifest_text",
+          "encoding": "utf8",
+          "jsonEquals": "/manifest"
+        },
+        "signature": {
+          "pointer": "/manifest_sig",
+          "encoding": "base64",
+          "format": "raw"
+        }
+      },
+      "delivery": "{\"manifest\": {\"layout\": \"signature-vector/1\", \"order_id\": \"test-order-0001\", \"buyer_nonce\": \"00112233445566778899aabbccddeeff\", \"status\": \"completed\", \"sample_count\": 3, \"t_ms\": [0, 8, 16]}, \"manifest_text\": \"{\\\"buyer_nonce\\\":\\\"00112233445566778899aabbccddeeff\\\",\\\"layout\\\":\\\"signature-vector/1\\\",\\\"order_id\\\":\\\"test-order-0001\\\",\\\"sample_count\\\":3,\\\"status\\\":\\\"completed\\\",\\\"t_ms\\\":[0,8,16]}\", \"manifest_sig\": \"LPyP4koBDwjk7C/FED3N0Eyk5wclLEjgEOvsZ1i4yA+SZJZSiVSkGYvEgG5Qq5TSG8QJmCwZWpWTwNK2EbBOBg==\", \"pubkey\": \"-----BEGIN PUBLIC KEY-----\\nMCowBQYDK2VwAyEA+Gqpst/E2rzzH+JqF1bjeQHvPIr1kBRe6pr3GCa4KeU=\\n-----END PUBLIC KEY-----\\n\"}",
+      "expect": {
+        "outcome": "pass"
+      }
+    },
+    {
+      "name": "ed25519/good-decimals-in-signed-bytes",
+      "alg": "ed25519",
+      "case": "float",
+      "why": "The signed text holds decimals as Python prints them (1.0, 1e-07). ADR-0045 section 2 allows them.",
+      "check": {
+        "id": "manifest-signature",
+        "type": "signature_valid",
+        "required": true,
+        "alg": "ed25519",
+        "publicKey": {
+          "pointer": "/pubkey",
+          "format": "spki-pem",
+          "spkiSha256": "sha256:7ab8560f27913cf2730dd51edc190816701ca6c0eafa939fc9da68a5b96645cf"
+        },
+        "message": {
+          "pointer": "/manifest_text",
+          "encoding": "utf8",
+          "jsonEquals": "/manifest"
+        },
+        "signature": {
+          "pointer": "/manifest_sig",
+          "encoding": "base64",
+          "format": "raw"
+        }
+      },
+      "delivery": "{\"manifest\": {\"layout\": \"signature-vector/1\", \"order_id\": \"test-order-0001\", \"buyer_nonce\": \"00112233445566778899aabbccddeeff\", \"status\": \"completed\", \"sample_count\": 3, \"t_ms\": [0, 8, 16], \"speed_factor\": 1.0, \"joint_deg\": [0.0, -45.5, 1e-07, 12.345678], \"note\": \"45\\u00b0 \\u00e9 \\ud83e\\udd16\"}, \"manifest_text\": \"{\\\"buyer_nonce\\\":\\\"00112233445566778899aabbccddeeff\\\",\\\"joint_deg\\\":[0.0,-45.5,1e-07,12.345678],\\\"layout\\\":\\\"signature-vector/1\\\",\\\"note\\\":\\\"45\\u00b0 \\u00e9 \\ud83e\\udd16\\\",\\\"order_id\\\":\\\"test-order-0001\\\",\\\"sample_count\\\":3,\\\"speed_factor\\\":1.0,\\\"status\\\":\\\"completed\\\",\\\"t_ms\\\":[0,8,16]}\", \"manifest_sig\": \"TugWCfKynu37j/8/Tv+ML9tmz1Q1IOzDO48suXQ2DHxebmkPKDXMYEZc9C0sgkCEFu0XRzLwGLaUEFWgxipdAw==\", \"pubkey\": \"-----BEGIN PUBLIC KEY-----\\nMCowBQYDK2VwAyEA+Gqpst/E2rzzH+JqF1bjeQHvPIr1kBRe6pr3GCa4KeU=\\n-----END PUBLIC KEY-----\\n\"}",
+      "expect": {
+        "outcome": "pass"
+      }
+    },
+    {
+      "name": "ed25519/good-binary-message-spki-base64",
+      "alg": "ed25519",
+      "case": "good",
+      "why": "A base64 message that is not UTF-8, a base64 key, no jsonEquals.",
+      "check": {
+        "id": "manifest-signature",
+        "type": "signature_valid",
+        "required": true,
+        "alg": "ed25519",
+        "publicKey": {
+          "pointer": "/pubkey",
+          "format": "spki-base64",
+          "spkiSha256": "sha256:7ab8560f27913cf2730dd51edc190816701ca6c0eafa939fc9da68a5b96645cf"
+        },
+        "message": {
+          "pointer": "/manifest_text",
+          "encoding": "base64"
+        },
+        "signature": {
+          "pointer": "/manifest_sig",
+          "encoding": "base64",
+          "format": "raw"
+        }
+      },
+      "delivery": "{\"manifest\": {\"layout\": \"signature-vector/1\", \"order_id\": \"test-order-0001\", \"buyer_nonce\": \"00112233445566778899aabbccddeeff\", \"status\": \"completed\", \"sample_count\": 3, \"t_ms\": [0, 8, 16]}, \"manifest_text\": \"dF9tcyxxMV9kZWcNCjAsMC4wCjgsMTIuNTAKAP/+\", \"manifest_sig\": \"WAAyJr0ZGzFoBBh8bSFFd0HizPdyfWpMckayiHh/nTmu6B5gW4NFAPzPPxxVMFUelFrSNtn/daAEf8sFQtv9Dg==\", \"pubkey\": \"MCowBQYDK2VwAyEA+Gqpst/E2rzzH+JqF1bjeQHvPIr1kBRe6pr3GCa4KeU=\"}",
+      "expect": {
+        "outcome": "pass"
+      }
+    },
+    {
+      "name": "ed25519/good-base64-message-jsonequals",
+      "alg": "ed25519",
+      "case": "good",
+      "why": "A base64 message whose bytes are the JSON of the object.",
+      "check": {
+        "id": "manifest-signature",
+        "type": "signature_valid",
+        "required": true,
+        "alg": "ed25519",
+        "publicKey": {
+          "pointer": "/pubkey",
+          "format": "spki-pem",
+          "spkiSha256": "sha256:7ab8560f27913cf2730dd51edc190816701ca6c0eafa939fc9da68a5b96645cf"
+        },
+        "message": {
+          "pointer": "/manifest_text",
+          "encoding": "base64",
+          "jsonEquals": "/manifest"
+        },
+        "signature": {
+          "pointer": "/manifest_sig",
+          "encoding": "base64",
+          "format": "raw"
+        }
+      },
+      "delivery": "{\"manifest\": {\"layout\": \"signature-vector/1\", \"order_id\": \"test-order-0001\", \"buyer_nonce\": \"00112233445566778899aabbccddeeff\", \"status\": \"completed\", \"sample_count\": 3, \"t_ms\": [0, 8, 16]}, \"manifest_text\": \"eyJidXllcl9ub25jZSI6IjAwMTEyMjMzNDQ1NTY2Nzc4ODk5YWFiYmNjZGRlZWZmIiwibGF5b3V0Ijoic2lnbmF0dXJlLXZlY3Rvci8xIiwib3JkZXJfaWQiOiJ0ZXN0LW9yZGVyLTAwMDEiLCJzYW1wbGVfY291bnQiOjMsInN0YXR1cyI6ImNvbXBsZXRlZCIsInRfbXMiOlswLDgsMTZdfQ==\", \"manifest_sig\": \"LPyP4koBDwjk7C/FED3N0Eyk5wclLEjgEOvsZ1i4yA+SZJZSiVSkGYvEgG5Qq5TSG8QJmCwZWpWTwNK2EbBOBg==\", \"pubkey\": \"-----BEGIN PUBLIC KEY-----\\nMCowBQYDK2VwAyEA+Gqpst/E2rzzH+JqF1bjeQHvPIr1kBRe6pr3GCa4KeU=\\n-----END PUBLIC KEY-----\\n\"}",
+      "expect": {
+        "outcome": "pass"
+      }
+    },
+    {
+      "name": "ed25519/good-object-keys-in-another-order",
+      "alg": "ed25519",
+      "case": "good",
+      "why": "jsonEquals ignores the order of object keys.",
+      "check": {
+        "id": "manifest-signature",
+        "type": "signature_valid",
+        "required": true,
+        "alg": "ed25519",
+        "publicKey": {
+          "pointer": "/pubkey",
+          "format": "spki-pem",
+          "spkiSha256": "sha256:7ab8560f27913cf2730dd51edc190816701ca6c0eafa939fc9da68a5b96645cf"
+        },
+        "message": {
+          "pointer": "/manifest_text",
+          "encoding": "utf8",
+          "jsonEquals": "/manifest"
+        },
+        "signature": {
+          "pointer": "/manifest_sig",
+          "encoding": "base64",
+          "format": "raw"
+        }
+      },
+      "delivery": "{\"manifest\": {\"t_ms\": [0, 8, 16], \"sample_count\": 3, \"status\": \"completed\", \"buyer_nonce\": \"00112233445566778899aabbccddeeff\", \"order_id\": \"test-order-0001\", \"layout\": \"signature-vector/1\"}, \"manifest_text\": \"{\\\"buyer_nonce\\\":\\\"00112233445566778899aabbccddeeff\\\",\\\"layout\\\":\\\"signature-vector/1\\\",\\\"order_id\\\":\\\"test-order-0001\\\",\\\"sample_count\\\":3,\\\"status\\\":\\\"completed\\\",\\\"t_ms\\\":[0,8,16]}\", \"manifest_sig\": \"LPyP4koBDwjk7C/FED3N0Eyk5wclLEjgEOvsZ1i4yA+SZJZSiVSkGYvEgG5Qq5TSG8QJmCwZWpWTwNK2EbBOBg==\", \"pubkey\": \"-----BEGIN PUBLIC KEY-----\\nMCowBQYDK2VwAyEA+Gqpst/E2rzzH+JqF1bjeQHvPIr1kBRe6pr3GCa4KeU=\\n-----END PUBLIC KEY-----\\n\"}",
+      "expect": {
+        "outcome": "pass"
+      }
+    },
+    {
+      "name": "ed25519/good-pem-crlf-no-final-line-end",
+      "alg": "ed25519",
+      "case": "good",
+      "why": "PEM lines may end in CRLF, and the final line end is optional.",
+      "check": {
+        "id": "manifest-signature",
+        "type": "signature_valid",
+        "required": true,
+        "alg": "ed25519",
+        "publicKey": {
+          "pointer": "/pubkey",
+          "format": "spki-pem",
+          "spkiSha256": "sha256:7ab8560f27913cf2730dd51edc190816701ca6c0eafa939fc9da68a5b96645cf"
+        },
+        "message": {
+          "pointer": "/manifest_text",
+          "encoding": "utf8",
+          "jsonEquals": "/manifest"
+        },
+        "signature": {
+          "pointer": "/manifest_sig",
+          "encoding": "base64",
+          "format": "raw"
+        }
+      },
+      "delivery": "{\"manifest\": {\"layout\": \"signature-vector/1\", \"order_id\": \"test-order-0001\", \"buyer_nonce\": \"00112233445566778899aabbccddeeff\", \"status\": \"completed\", \"sample_count\": 3, \"t_ms\": [0, 8, 16]}, \"manifest_text\": \"{\\\"buyer_nonce\\\":\\\"00112233445566778899aabbccddeeff\\\",\\\"layout\\\":\\\"signature-vector/1\\\",\\\"order_id\\\":\\\"test-order-0001\\\",\\\"sample_count\\\":3,\\\"status\\\":\\\"completed\\\",\\\"t_ms\\\":[0,8,16]}\", \"manifest_sig\": \"LPyP4koBDwjk7C/FED3N0Eyk5wclLEjgEOvsZ1i4yA+SZJZSiVSkGYvEgG5Qq5TSG8QJmCwZWpWTwNK2EbBOBg==\", \"pubkey\": \"-----BEGIN PUBLIC KEY-----\\r\\nMCowBQYDK2VwAyEA+Gqpst/E2rzzH+JqF1bjeQHvPIr1kBRe6pr3GCa4KeU=\\r\\n-----END PUBLIC KEY-----\"}",
+      "expect": {
+        "outcome": "pass"
+      }
+    },
+    {
+      "name": "ed25519/wrong-key-in-delivery",
+      "alg": "ed25519",
+      "case": "wrong-key",
+      "why": "Another key and its own valid signature. The terms pin a different fingerprint.",
+      "check": {
+        "id": "manifest-signature",
+        "type": "signature_valid",
+        "required": true,
+        "alg": "ed25519",
+        "publicKey": {
+          "pointer": "/pubkey",
+          "format": "spki-pem",
+          "spkiSha256": "sha256:7ab8560f27913cf2730dd51edc190816701ca6c0eafa939fc9da68a5b96645cf"
+        },
+        "message": {
+          "pointer": "/manifest_text",
+          "encoding": "utf8",
+          "jsonEquals": "/manifest"
+        },
+        "signature": {
+          "pointer": "/manifest_sig",
+          "encoding": "base64",
+          "format": "raw"
+        }
+      },
+      "delivery": "{\"manifest\": {\"layout\": \"signature-vector/1\", \"order_id\": \"test-order-0001\", \"buyer_nonce\": \"00112233445566778899aabbccddeeff\", \"status\": \"completed\", \"sample_count\": 3, \"t_ms\": [0, 8, 16]}, \"manifest_text\": \"{\\\"buyer_nonce\\\":\\\"00112233445566778899aabbccddeeff\\\",\\\"layout\\\":\\\"signature-vector/1\\\",\\\"order_id\\\":\\\"test-order-0001\\\",\\\"sample_count\\\":3,\\\"status\\\":\\\"completed\\\",\\\"t_ms\\\":[0,8,16]}\", \"manifest_sig\": \"tAUFKNeZk+19hkCsJS0x4c8LrBpy2cHk9l7+ZOIEkiOiARBorV0zxIT1fqRTV4uyyzzR4hdgx8B2lhV65L3UAw==\", \"pubkey\": \"-----BEGIN PUBLIC KEY-----\\nMCowBQYDK2VwAyEAb2C33OkEHdGQTrNiVU0YuF9l59awJbPJ8aP60lW+oRs=\\n-----END PUBLIC KEY-----\\n\"}",
+      "expect": {
+        "outcome": "fail",
+        "detail": "publicKey: fingerprint differs from the terms"
+      }
+    },
+    {
+      "name": "ed25519/wrong-key-signed",
+      "alg": "ed25519",
+      "case": "wrong-key",
+      "why": "The pinned key is delivered, but another key signed.",
+      "check": {
+        "id": "manifest-signature",
+        "type": "signature_valid",
+        "required": true,
+        "alg": "ed25519",
+        "publicKey": {
+          "pointer": "/pubkey",
+          "format": "spki-pem",
+          "spkiSha256": "sha256:7ab8560f27913cf2730dd51edc190816701ca6c0eafa939fc9da68a5b96645cf"
+        },
+        "message": {
+          "pointer": "/manifest_text",
+          "encoding": "utf8",
+          "jsonEquals": "/manifest"
+        },
+        "signature": {
+          "pointer": "/manifest_sig",
+          "encoding": "base64",
+          "format": "raw"
+        }
+      },
+      "delivery": "{\"manifest\": {\"layout\": \"signature-vector/1\", \"order_id\": \"test-order-0001\", \"buyer_nonce\": \"00112233445566778899aabbccddeeff\", \"status\": \"completed\", \"sample_count\": 3, \"t_ms\": [0, 8, 16]}, \"manifest_text\": \"{\\\"buyer_nonce\\\":\\\"00112233445566778899aabbccddeeff\\\",\\\"layout\\\":\\\"signature-vector/1\\\",\\\"order_id\\\":\\\"test-order-0001\\\",\\\"sample_count\\\":3,\\\"status\\\":\\\"completed\\\",\\\"t_ms\\\":[0,8,16]}\", \"manifest_sig\": \"tAUFKNeZk+19hkCsJS0x4c8LrBpy2cHk9l7+ZOIEkiOiARBorV0zxIT1fqRTV4uyyzzR4hdgx8B2lhV65L3UAw==\", \"pubkey\": \"-----BEGIN PUBLIC KEY-----\\nMCowBQYDK2VwAyEA+Gqpst/E2rzzH+JqF1bjeQHvPIr1kBRe6pr3GCa4KeU=\\n-----END PUBLIC KEY-----\\n\"}",
+      "expect": {
+        "outcome": "fail",
+        "detail": "signature does not verify"
+      }
+    },
+    {
+      "name": "ed25519/flipped-byte-message",
+      "alg": "ed25519",
+      "case": "flipped-byte",
+      "why": "One byte of the signed text changed after signing.",
+      "check": {
+        "id": "manifest-signature",
+        "type": "signature_valid",
+        "required": true,
+        "alg": "ed25519",
+        "publicKey": {
+          "pointer": "/pubkey",
+          "format": "spki-pem",
+          "spkiSha256": "sha256:7ab8560f27913cf2730dd51edc190816701ca6c0eafa939fc9da68a5b96645cf"
+        },
+        "message": {
+          "pointer": "/manifest_text",
+          "encoding": "utf8",
+          "jsonEquals": "/manifest"
+        },
+        "signature": {
+          "pointer": "/manifest_sig",
+          "encoding": "base64",
+          "format": "raw"
+        }
+      },
+      "delivery": "{\"manifest\": {\"layout\": \"signature-vector/1\", \"order_id\": \"test-order-0001\", \"buyer_nonce\": \"00112233445566778899aabbccddeeff\", \"status\": \"completed\", \"sample_count\": 3, \"t_ms\": [0, 8, 16]}, \"manifest_text\": \"{\\\"buyer_nonce\\\":\\\"10112233445566778899aabbccddeeff\\\",\\\"layout\\\":\\\"signature-vector/1\\\",\\\"order_id\\\":\\\"test-order-0001\\\",\\\"sample_count\\\":3,\\\"status\\\":\\\"completed\\\",\\\"t_ms\\\":[0,8,16]}\", \"manifest_sig\": \"LPyP4koBDwjk7C/FED3N0Eyk5wclLEjgEOvsZ1i4yA+SZJZSiVSkGYvEgG5Qq5TSG8QJmCwZWpWTwNK2EbBOBg==\", \"pubkey\": \"-----BEGIN PUBLIC KEY-----\\nMCowBQYDK2VwAyEA+Gqpst/E2rzzH+JqF1bjeQHvPIr1kBRe6pr3GCa4KeU=\\n-----END PUBLIC KEY-----\\n\"}",
+      "expect": {
+        "outcome": "fail",
+        "detail": "signature does not verify"
+      }
+    },
+    {
+      "name": "ed25519/flipped-byte-signature",
+      "alg": "ed25519",
+      "case": "flipped-byte",
+      "why": "One bit of the signature's last byte changed.",
+      "check": {
+        "id": "manifest-signature",
+        "type": "signature_valid",
+        "required": true,
+        "alg": "ed25519",
+        "publicKey": {
+          "pointer": "/pubkey",
+          "format": "spki-pem",
+          "spkiSha256": "sha256:7ab8560f27913cf2730dd51edc190816701ca6c0eafa939fc9da68a5b96645cf"
+        },
+        "message": {
+          "pointer": "/manifest_text",
+          "encoding": "utf8",
+          "jsonEquals": "/manifest"
+        },
+        "signature": {
+          "pointer": "/manifest_sig",
+          "encoding": "base64",
+          "format": "raw"
+        }
+      },
+      "delivery": "{\"manifest\": {\"layout\": \"signature-vector/1\", \"order_id\": \"test-order-0001\", \"buyer_nonce\": \"00112233445566778899aabbccddeeff\", \"status\": \"completed\", \"sample_count\": 3, \"t_ms\": [0, 8, 16]}, \"manifest_text\": \"{\\\"buyer_nonce\\\":\\\"00112233445566778899aabbccddeeff\\\",\\\"layout\\\":\\\"signature-vector/1\\\",\\\"order_id\\\":\\\"test-order-0001\\\",\\\"sample_count\\\":3,\\\"status\\\":\\\"completed\\\",\\\"t_ms\\\":[0,8,16]}\", \"manifest_sig\": \"LPyP4koBDwjk7C/FED3N0Eyk5wclLEjgEOvsZ1i4yA+SZJZSiVSkGYvEgG5Qq5TSG8QJmCwZWpWTwNK2EbBOBw==\", \"pubkey\": \"-----BEGIN PUBLIC KEY-----\\nMCowBQYDK2VwAyEA+Gqpst/E2rzzH+JqF1bjeQHvPIr1kBRe6pr3GCa4KeU=\\n-----END PUBLIC KEY-----\\n\"}",
+      "expect": {
+        "outcome": "fail",
+        "detail": "signature does not verify"
+      }
+    },
+    {
+      "name": "ed25519/flipped-byte-public-key",
+      "alg": "ed25519",
+      "case": "flipped-byte",
+      "why": "One bit of the delivered key changed. The fingerprint is compared before any curve arithmetic.",
+      "check": {
+        "id": "manifest-signature",
+        "type": "signature_valid",
+        "required": true,
+        "alg": "ed25519",
+        "publicKey": {
+          "pointer": "/pubkey",
+          "format": "spki-pem",
+          "spkiSha256": "sha256:7ab8560f27913cf2730dd51edc190816701ca6c0eafa939fc9da68a5b96645cf"
+        },
+        "message": {
+          "pointer": "/manifest_text",
+          "encoding": "utf8",
+          "jsonEquals": "/manifest"
+        },
+        "signature": {
+          "pointer": "/manifest_sig",
+          "encoding": "base64",
+          "format": "raw"
+        }
+      },
+      "delivery": "{\"manifest\": {\"layout\": \"signature-vector/1\", \"order_id\": \"test-order-0001\", \"buyer_nonce\": \"00112233445566778899aabbccddeeff\", \"status\": \"completed\", \"sample_count\": 3, \"t_ms\": [0, 8, 16]}, \"manifest_text\": \"{\\\"buyer_nonce\\\":\\\"00112233445566778899aabbccddeeff\\\",\\\"layout\\\":\\\"signature-vector/1\\\",\\\"order_id\\\":\\\"test-order-0001\\\",\\\"sample_count\\\":3,\\\"status\\\":\\\"completed\\\",\\\"t_ms\\\":[0,8,16]}\", \"manifest_sig\": \"LPyP4koBDwjk7C/FED3N0Eyk5wclLEjgEOvsZ1i4yA+SZJZSiVSkGYvEgG5Qq5TSG8QJmCwZWpWTwNK2EbBOBg==\", \"pubkey\": \"-----BEGIN PUBLIC KEY-----\\nMCowBQYDK2VwAyEA+Gqpst/E2rzzH+JqF1bjeQHvPIr1kBRe6pr3GCa4KeQ=\\n-----END PUBLIC KEY-----\\n\"}",
+      "expect": {
+        "outcome": "fail",
+        "detail": "publicKey: fingerprint differs from the terms"
+      }
+    },
+    {
+      "name": "ed25519/random-signature-bytes",
+      "alg": "ed25519",
+      "case": "random-signature",
+      "why": "64 random bytes in place of the signature, in the check's usual format.",
+      "check": {
+        "id": "manifest-signature",
+        "type": "signature_valid",
+        "required": true,
+        "alg": "ed25519",
+        "publicKey": {
+          "pointer": "/pubkey",
+          "format": "spki-pem",
+          "spkiSha256": "sha256:7ab8560f27913cf2730dd51edc190816701ca6c0eafa939fc9da68a5b96645cf"
+        },
+        "message": {
+          "pointer": "/manifest_text",
+          "encoding": "utf8",
+          "jsonEquals": "/manifest"
+        },
+        "signature": {
+          "pointer": "/manifest_sig",
+          "encoding": "base64",
+          "format": "raw"
+        }
+      },
+      "delivery": "{\"manifest\": {\"layout\": \"signature-vector/1\", \"order_id\": \"test-order-0001\", \"buyer_nonce\": \"00112233445566778899aabbccddeeff\", \"status\": \"completed\", \"sample_count\": 3, \"t_ms\": [0, 8, 16]}, \"manifest_text\": \"{\\\"buyer_nonce\\\":\\\"00112233445566778899aabbccddeeff\\\",\\\"layout\\\":\\\"signature-vector/1\\\",\\\"order_id\\\":\\\"test-order-0001\\\",\\\"sample_count\\\":3,\\\"status\\\":\\\"completed\\\",\\\"t_ms\\\":[0,8,16]}\", \"manifest_sig\": \"CPu8eq4kg3iLtnkptLG1tV8FcS+jbtYrV5lz20d6/CqWDzoLCzEBwsGT5zrgpmAxsjw7Pu5eBc/ZhYoYFnCWNA==\", \"pubkey\": \"-----BEGIN PUBLIC KEY-----\\nMCowBQYDK2VwAyEA+Gqpst/E2rzzH+JqF1bjeQHvPIr1kBRe6pr3GCa4KeU=\\n-----END PUBLIC KEY-----\\n\"}",
+      "expect": {
+        "outcome": "fail",
+        "detail": "signature does not verify"
+      }
+    },
+    {
+      "name": "ed25519/float-respelled-after-signing",
+      "alg": "ed25519",
+      "case": "float",
+      "why": "Signed 1.0, delivered as 1 (what a JavaScript re-serialization writes). The bytes differ.",
+      "check": {
+        "id": "manifest-signature",
+        "type": "signature_valid",
+        "required": true,
+        "alg": "ed25519",
+        "publicKey": {
+          "pointer": "/pubkey",
+          "format": "spki-pem",
+          "spkiSha256": "sha256:7ab8560f27913cf2730dd51edc190816701ca6c0eafa939fc9da68a5b96645cf"
+        },
+        "message": {
+          "pointer": "/manifest_text",
+          "encoding": "utf8",
+          "jsonEquals": "/manifest"
+        },
+        "signature": {
+          "pointer": "/manifest_sig",
+          "encoding": "base64",
+          "format": "raw"
+        }
+      },
+      "delivery": "{\"manifest\": {\"layout\": \"signature-vector/1\", \"order_id\": \"test-order-0001\", \"buyer_nonce\": \"00112233445566778899aabbccddeeff\", \"status\": \"completed\", \"sample_count\": 3, \"t_ms\": [0, 8, 16], \"speed_factor\": 1}, \"manifest_text\": \"{\\\"buyer_nonce\\\":\\\"00112233445566778899aabbccddeeff\\\",\\\"layout\\\":\\\"signature-vector/1\\\",\\\"order_id\\\":\\\"test-order-0001\\\",\\\"sample_count\\\":3,\\\"speed_factor\\\":1,\\\"status\\\":\\\"completed\\\",\\\"t_ms\\\":[0,8,16]}\", \"manifest_sig\": \"lHROEP0qFtH9mX6G9U8vBaLjDF2FMvul29TqtR1stubZB3na3o54m2r1TP3Vo6spH9bZKlyrEaaiZIBb1At5AA==\", \"pubkey\": \"-----BEGIN PUBLIC KEY-----\\nMCowBQYDK2VwAyEA+Gqpst/E2rzzH+JqF1bjeQHvPIr1kBRe6pr3GCa4KeU=\\n-----END PUBLIC KEY-----\\n\"}",
+      "expect": {
+        "outcome": "fail",
+        "detail": "signature does not verify"
+      }
+    },
+    {
+      "name": "ed25519/float-introduced-after-signing",
+      "alg": "ed25519",
+      "case": "float",
+      "why": "Signed the integer 3, delivered as 3.0. The bytes differ.",
+      "check": {
+        "id": "manifest-signature",
+        "type": "signature_valid",
+        "required": true,
+        "alg": "ed25519",
+        "publicKey": {
+          "pointer": "/pubkey",
+          "format": "spki-pem",
+          "spkiSha256": "sha256:7ab8560f27913cf2730dd51edc190816701ca6c0eafa939fc9da68a5b96645cf"
+        },
+        "message": {
+          "pointer": "/manifest_text",
+          "encoding": "utf8",
+          "jsonEquals": "/manifest"
+        },
+        "signature": {
+          "pointer": "/manifest_sig",
+          "encoding": "base64",
+          "format": "raw"
+        }
+      },
+      "delivery": "{\"manifest\": {\"layout\": \"signature-vector/1\", \"order_id\": \"test-order-0001\", \"buyer_nonce\": \"00112233445566778899aabbccddeeff\", \"status\": \"completed\", \"sample_count\": 3, \"t_ms\": [0, 8, 16]}, \"manifest_text\": \"{\\\"buyer_nonce\\\":\\\"00112233445566778899aabbccddeeff\\\",\\\"layout\\\":\\\"signature-vector/1\\\",\\\"order_id\\\":\\\"test-order-0001\\\",\\\"sample_count\\\":3.0,\\\"status\\\":\\\"completed\\\",\\\"t_ms\\\":[0,8,16]}\", \"manifest_sig\": \"LPyP4koBDwjk7C/FED3N0Eyk5wclLEjgEOvsZ1i4yA+SZJZSiVSkGYvEgG5Qq5TSG8QJmCwZWpWTwNK2EbBOBg==\", \"pubkey\": \"-----BEGIN PUBLIC KEY-----\\nMCowBQYDK2VwAyEA+Gqpst/E2rzzH+JqF1bjeQHvPIr1kBRe6pr3GCa4KeU=\\n-----END PUBLIC KEY-----\\n\"}",
+      "expect": {
+        "outcome": "fail",
+        "detail": "signature does not verify"
+      }
+    },
+    {
+      "name": "ed25519/float-in-object-signed-integer",
+      "alg": "ed25519",
+      "case": "float",
+      "why": "The signed text says 3; the object the other checks read says 3.5.",
+      "check": {
+        "id": "manifest-signature",
+        "type": "signature_valid",
+        "required": true,
+        "alg": "ed25519",
+        "publicKey": {
+          "pointer": "/pubkey",
+          "format": "spki-pem",
+          "spkiSha256": "sha256:7ab8560f27913cf2730dd51edc190816701ca6c0eafa939fc9da68a5b96645cf"
+        },
+        "message": {
+          "pointer": "/manifest_text",
+          "encoding": "utf8",
+          "jsonEquals": "/manifest"
+        },
+        "signature": {
+          "pointer": "/manifest_sig",
+          "encoding": "base64",
+          "format": "raw"
+        }
+      },
+      "delivery": "{\"manifest\": {\"layout\": \"signature-vector/1\", \"order_id\": \"test-order-0001\", \"buyer_nonce\": \"00112233445566778899aabbccddeeff\", \"status\": \"completed\", \"sample_count\": 3.5, \"t_ms\": [0, 8, 16]}, \"manifest_text\": \"{\\\"buyer_nonce\\\":\\\"00112233445566778899aabbccddeeff\\\",\\\"layout\\\":\\\"signature-vector/1\\\",\\\"order_id\\\":\\\"test-order-0001\\\",\\\"sample_count\\\":3,\\\"status\\\":\\\"completed\\\",\\\"t_ms\\\":[0,8,16]}\", \"manifest_sig\": \"LPyP4koBDwjk7C/FED3N0Eyk5wclLEjgEOvsZ1i4yA+SZJZSiVSkGYvEgG5Qq5TSG8QJmCwZWpWTwNK2EbBOBg==\", \"pubkey\": \"-----BEGIN PUBLIC KEY-----\\nMCowBQYDK2VwAyEA+Gqpst/E2rzzH+JqF1bjeQHvPIr1kBRe6pr3GCa4KeU=\\n-----END PUBLIC KEY-----\\n\"}",
+      "expect": {
+        "outcome": "fail",
+        "detail": "message: differs from the value at jsonEquals"
+      }
+    },
+    {
+      "name": "ed25519/float-spelling-equal-under-jsonequals",
+      "alg": "ed25519",
+      "case": "float",
+      "why": "Signed 1.0, object 1: the same number, so jsonEquals holds (ADR-0045 section 3).",
+      "check": {
+        "id": "manifest-signature",
+        "type": "signature_valid",
+        "required": true,
+        "alg": "ed25519",
+        "publicKey": {
+          "pointer": "/pubkey",
+          "format": "spki-pem",
+          "spkiSha256": "sha256:7ab8560f27913cf2730dd51edc190816701ca6c0eafa939fc9da68a5b96645cf"
+        },
+        "message": {
+          "pointer": "/manifest_text",
+          "encoding": "utf8",
+          "jsonEquals": "/manifest"
+        },
+        "signature": {
+          "pointer": "/manifest_sig",
+          "encoding": "base64",
+          "format": "raw"
+        }
+      },
+      "delivery": "{\"manifest\": {\"layout\": \"signature-vector/1\", \"order_id\": \"test-order-0001\", \"buyer_nonce\": \"00112233445566778899aabbccddeeff\", \"status\": \"completed\", \"sample_count\": 3, \"t_ms\": [0, 8, 16], \"speed_factor\": 1}, \"manifest_text\": \"{\\\"buyer_nonce\\\":\\\"00112233445566778899aabbccddeeff\\\",\\\"layout\\\":\\\"signature-vector/1\\\",\\\"order_id\\\":\\\"test-order-0001\\\",\\\"sample_count\\\":3,\\\"speed_factor\\\":1.0,\\\"status\\\":\\\"completed\\\",\\\"t_ms\\\":[0,8,16]}\", \"manifest_sig\": \"lHROEP0qFtH9mX6G9U8vBaLjDF2FMvul29TqtR1stubZB3na3o54m2r1TP3Vo6spH9bZKlyrEaaiZIBb1At5AA==\", \"pubkey\": \"-----BEGIN PUBLIC KEY-----\\nMCowBQYDK2VwAyEA+Gqpst/E2rzzH+JqF1bjeQHvPIr1kBRe6pr3GCa4KeU=\\n-----END PUBLIC KEY-----\\n\"}",
+      "expect": {
+        "outcome": "pass"
+      }
+    },
+    {
+      "name": "ed25519/float-in-check-parameters",
+      "alg": "ed25519",
+      "case": "float",
+      "why": "A float in place of a pointer. The check is part of the hashed terms, so no number enters it (ADR-0022).",
+      "check": {
+        "id": "manifest-signature",
+        "type": "signature_valid",
+        "required": true,
+        "alg": "ed25519",
+        "publicKey": {
+          "pointer": "/pubkey",
+          "format": "spki-pem",
+          "spkiSha256": "sha256:7ab8560f27913cf2730dd51edc190816701ca6c0eafa939fc9da68a5b96645cf"
+        },
+        "message": {
+          "pointer": "/manifest_text",
+          "encoding": "utf8",
+          "jsonEquals": 0.5
+        },
+        "signature": {
+          "pointer": "/manifest_sig",
+          "encoding": "base64",
+          "format": "raw"
+        }
+      },
+      "delivery": "{\"manifest\": {\"layout\": \"signature-vector/1\", \"order_id\": \"test-order-0001\", \"buyer_nonce\": \"00112233445566778899aabbccddeeff\", \"status\": \"completed\", \"sample_count\": 3, \"t_ms\": [0, 8, 16]}, \"manifest_text\": \"{\\\"buyer_nonce\\\":\\\"00112233445566778899aabbccddeeff\\\",\\\"layout\\\":\\\"signature-vector/1\\\",\\\"order_id\\\":\\\"test-order-0001\\\",\\\"sample_count\\\":3,\\\"status\\\":\\\"completed\\\",\\\"t_ms\\\":[0,8,16]}\", \"manifest_sig\": \"LPyP4koBDwjk7C/FED3N0Eyk5wclLEjgEOvsZ1i4yA+SZJZSiVSkGYvEgG5Qq5TSG8QJmCwZWpWTwNK2EbBOBg==\", \"pubkey\": \"-----BEGIN PUBLIC KEY-----\\nMCowBQYDK2VwAyEA+Gqpst/E2rzzH+JqF1bjeQHvPIr1kBRe6pr3GCa4KeU=\\n-----END PUBLIC KEY-----\\n\"}",
+      "expect": {
+        "outcome": "refused"
+      }
+    },
+    {
+      "name": "ed25519/oversize-public-key",
+      "alg": "ed25519",
+      "case": "oversize",
+      "why": "A key string of 1,025 characters.",
+      "check": {
+        "id": "manifest-signature",
+        "type": "signature_valid",
+        "required": true,
+        "alg": "ed25519",
+        "publicKey": {
+          "pointer": "/pubkey",
+          "format": "spki-pem",
+          "spkiSha256": "sha256:7ab8560f27913cf2730dd51edc190816701ca6c0eafa939fc9da68a5b96645cf"
+        },
+        "message": {
+          "pointer": "/manifest_text",
+          "encoding": "utf8",
+          "jsonEquals": "/manifest"
+        },
+        "signature": {
+          "pointer": "/manifest_sig",
+          "encoding": "base64",
+          "format": "raw"
+        }
+      },
+      "delivery": "{\"manifest\": {\"layout\": \"signature-vector/1\", \"order_id\": \"test-order-0001\", \"buyer_nonce\": \"00112233445566778899aabbccddeeff\", \"status\": \"completed\", \"sample_count\": 3, \"t_ms\": [0, 8, 16]}, \"manifest_text\": \"{\\\"buyer_nonce\\\":\\\"00112233445566778899aabbccddeeff\\\",\\\"layout\\\":\\\"signature-vector/1\\\",\\\"order_id\\\":\\\"test-order-0001\\\",\\\"sample_count\\\":3,\\\"status\\\":\\\"completed\\\",\\\"t_ms\\\":[0,8,16]}\", \"manifest_sig\": \"LPyP4koBDwjk7C/FED3N0Eyk5wclLEjgEOvsZ1i4yA+SZJZSiVSkGYvEgG5Qq5TSG8QJmCwZWpWTwNK2EbBOBg==\", \"pubkey\": \"AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA\"}",
+      "expect": {
+        "outcome": "fail",
+        "detail": "publicKey: too long"
+      }
+    },
+    {
+      "name": "ed25519/oversize-public-key-boundary",
+      "alg": "ed25519",
+      "case": "oversize",
+      "why": "A key string of 1,024 characters passes the length limit and fails to decode.",
+      "check": {
+        "id": "manifest-signature",
+        "type": "signature_valid",
+        "required": true,
+        "alg": "ed25519",
+        "publicKey": {
+          "pointer": "/pubkey",
+          "format": "spki-pem",
+          "spkiSha256": "sha256:7ab8560f27913cf2730dd51edc190816701ca6c0eafa939fc9da68a5b96645cf"
+        },
+        "message": {
+          "pointer": "/manifest_text",
+          "encoding": "utf8",
+          "jsonEquals": "/manifest"
+        },
+        "signature": {
+          "pointer": "/manifest_sig",
+          "encoding": "base64",
+          "format": "raw"
+        }
+      },
+      "delivery": "{\"manifest\": {\"layout\": \"signature-vector/1\", \"order_id\": \"test-order-0001\", \"buyer_nonce\": \"00112233445566778899aabbccddeeff\", \"status\": \"completed\", \"sample_count\": 3, \"t_ms\": [0, 8, 16]}, \"manifest_text\": \"{\\\"buyer_nonce\\\":\\\"00112233445566778899aabbccddeeff\\\",\\\"layout\\\":\\\"signature-vector/1\\\",\\\"order_id\\\":\\\"test-order-0001\\\",\\\"sample_count\\\":3,\\\"status\\\":\\\"completed\\\",\\\"t_ms\\\":[0,8,16]}\", \"manifest_sig\": \"LPyP4koBDwjk7C/FED3N0Eyk5wclLEjgEOvsZ1i4yA+SZJZSiVSkGYvEgG5Qq5TSG8QJmCwZWpWTwNK2EbBOBg==\", \"pubkey\": \"AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA\"}",
+      "expect": {
+        "outcome": "fail",
+        "detail": "publicKey: not a PEM public key"
+      }
+    },
+    {
+      "name": "ed25519/oversize-signature",
+      "alg": "ed25519",
+      "case": "oversize",
+      "why": "A signature string of 257 characters.",
+      "check": {
+        "id": "manifest-signature",
+        "type": "signature_valid",
+        "required": true,
+        "alg": "ed25519",
+        "publicKey": {
+          "pointer": "/pubkey",
+          "format": "spki-pem",
+          "spkiSha256": "sha256:7ab8560f27913cf2730dd51edc190816701ca6c0eafa939fc9da68a5b96645cf"
+        },
+        "message": {
+          "pointer": "/manifest_text",
+          "encoding": "utf8",
+          "jsonEquals": "/manifest"
+        },
+        "signature": {
+          "pointer": "/manifest_sig",
+          "encoding": "base64",
+          "format": "raw"
+        }
+      },
+      "delivery": "{\"manifest\": {\"layout\": \"signature-vector/1\", \"order_id\": \"test-order-0001\", \"buyer_nonce\": \"00112233445566778899aabbccddeeff\", \"status\": \"completed\", \"sample_count\": 3, \"t_ms\": [0, 8, 16]}, \"manifest_text\": \"{\\\"buyer_nonce\\\":\\\"00112233445566778899aabbccddeeff\\\",\\\"layout\\\":\\\"signature-vector/1\\\",\\\"order_id\\\":\\\"test-order-0001\\\",\\\"sample_count\\\":3,\\\"status\\\":\\\"completed\\\",\\\"t_ms\\\":[0,8,16]}\", \"manifest_sig\": \"AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA\", \"pubkey\": \"-----BEGIN PUBLIC KEY-----\\nMCowBQYDK2VwAyEA+Gqpst/E2rzzH+JqF1bjeQHvPIr1kBRe6pr3GCa4KeU=\\n-----END PUBLIC KEY-----\\n\"}",
+      "expect": {
+        "outcome": "fail",
+        "detail": "signature: too long"
+      }
+    },
+    {
+      "name": "ed25519/oversize-signature-boundary",
+      "alg": "ed25519",
+      "case": "oversize",
+      "why": "A signature string of 256 characters passes the length limit and decodes to too many bytes.",
+      "check": {
+        "id": "manifest-signature",
+        "type": "signature_valid",
+        "required": true,
+        "alg": "ed25519",
+        "publicKey": {
+          "pointer": "/pubkey",
+          "format": "spki-pem",
+          "spkiSha256": "sha256:7ab8560f27913cf2730dd51edc190816701ca6c0eafa939fc9da68a5b96645cf"
+        },
+        "message": {
+          "pointer": "/manifest_text",
+          "encoding": "utf8",
+          "jsonEquals": "/manifest"
+        },
+        "signature": {
+          "pointer": "/manifest_sig",
+          "encoding": "base64",
+          "format": "raw"
+        }
+      },
+      "delivery": "{\"manifest\": {\"layout\": \"signature-vector/1\", \"order_id\": \"test-order-0001\", \"buyer_nonce\": \"00112233445566778899aabbccddeeff\", \"status\": \"completed\", \"sample_count\": 3, \"t_ms\": [0, 8, 16]}, \"manifest_text\": \"{\\\"buyer_nonce\\\":\\\"00112233445566778899aabbccddeeff\\\",\\\"layout\\\":\\\"signature-vector/1\\\",\\\"order_id\\\":\\\"test-order-0001\\\",\\\"sample_count\\\":3,\\\"status\\\":\\\"completed\\\",\\\"t_ms\\\":[0,8,16]}\", \"manifest_sig\": \"AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA\", \"pubkey\": \"-----BEGIN PUBLIC KEY-----\\nMCowBQYDK2VwAyEA+Gqpst/E2rzzH+JqF1bjeQHvPIr1kBRe6pr3GCa4KeU=\\n-----END PUBLIC KEY-----\\n\"}",
+      "expect": {
+        "outcome": "fail",
+        "detail": "signature: wrong length"
+      }
+    },
+    {
+      "name": "ed25519/oversize-pointer",
+      "alg": "ed25519",
+      "case": "oversize",
+      "why": "A pointer of 513 characters in the check.",
+      "check": {
+        "id": "manifest-signature",
+        "type": "signature_valid",
+        "required": true,
+        "alg": "ed25519",
+        "publicKey": {
+          "pointer": "/pubkey",
+          "format": "spki-pem",
+          "spkiSha256": "sha256:7ab8560f27913cf2730dd51edc190816701ca6c0eafa939fc9da68a5b96645cf"
+        },
+        "message": {
+          "pointer": "/manifest_text",
+          "encoding": "utf8",
+          "jsonEquals": "/manifest"
+        },
+        "signature": {
+          "pointer": "/aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+          "encoding": "base64",
+          "format": "raw"
+        }
+      },
+      "delivery": "{\"manifest\": {\"layout\": \"signature-vector/1\", \"order_id\": \"test-order-0001\", \"buyer_nonce\": \"00112233445566778899aabbccddeeff\", \"status\": \"completed\", \"sample_count\": 3, \"t_ms\": [0, 8, 16]}, \"manifest_text\": \"{\\\"buyer_nonce\\\":\\\"00112233445566778899aabbccddeeff\\\",\\\"layout\\\":\\\"signature-vector/1\\\",\\\"order_id\\\":\\\"test-order-0001\\\",\\\"sample_count\\\":3,\\\"status\\\":\\\"completed\\\",\\\"t_ms\\\":[0,8,16]}\", \"manifest_sig\": \"LPyP4koBDwjk7C/FED3N0Eyk5wclLEjgEOvsZ1i4yA+SZJZSiVSkGYvEgG5Qq5TSG8QJmCwZWpWTwNK2EbBOBg==\", \"pubkey\": \"-----BEGIN PUBLIC KEY-----\\nMCowBQYDK2VwAyEA+Gqpst/E2rzzH+JqF1bjeQHvPIr1kBRe6pr3GCa4KeU=\\n-----END PUBLIC KEY-----\\n\"}",
+      "expect": {
+        "outcome": "refused"
+      }
+    },
+    {
+      "name": "ed25519/unknown-algorithm",
+      "alg": "ed25519",
+      "case": "unknown-algorithm",
+      "why": "An algorithm outside the closed list. Refused at offer time; it never passes.",
+      "check": {
+        "id": "manifest-signature",
+        "type": "signature_valid",
+        "required": true,
+        "alg": "ed448",
+        "publicKey": {
+          "pointer": "/pubkey",
+          "format": "spki-pem",
+          "spkiSha256": "sha256:7ab8560f27913cf2730dd51edc190816701ca6c0eafa939fc9da68a5b96645cf"
+        },
+        "message": {
+          "pointer": "/manifest_text",
+          "encoding": "utf8",
+          "jsonEquals": "/manifest"
+        },
+        "signature": {
+          "pointer": "/manifest_sig",
+          "encoding": "base64",
+          "format": "raw"
+        }
+      },
+      "delivery": "{\"manifest\": {\"layout\": \"signature-vector/1\", \"order_id\": \"test-order-0001\", \"buyer_nonce\": \"00112233445566778899aabbccddeeff\", \"status\": \"completed\", \"sample_count\": 3, \"t_ms\": [0, 8, 16]}, \"manifest_text\": \"{\\\"buyer_nonce\\\":\\\"00112233445566778899aabbccddeeff\\\",\\\"layout\\\":\\\"signature-vector/1\\\",\\\"order_id\\\":\\\"test-order-0001\\\",\\\"sample_count\\\":3,\\\"status\\\":\\\"completed\\\",\\\"t_ms\\\":[0,8,16]}\", \"manifest_sig\": \"LPyP4koBDwjk7C/FED3N0Eyk5wclLEjgEOvsZ1i4yA+SZJZSiVSkGYvEgG5Qq5TSG8QJmCwZWpWTwNK2EbBOBg==\", \"pubkey\": \"-----BEGIN PUBLIC KEY-----\\nMCowBQYDK2VwAyEA+Gqpst/E2rzzH+JqF1bjeQHvPIr1kBRe6pr3GCa4KeU=\\n-----END PUBLIC KEY-----\\n\"}",
+      "expect": {
+        "outcome": "refused"
+      }
+    },
+    {
+      "name": "ed25519/wrong-algorithm-for-the-key",
+      "alg": "ed25519",
+      "case": "unknown-algorithm",
+      "why": "The check names the other algorithm, with this key pinned.",
+      "check": {
+        "id": "manifest-signature",
+        "type": "signature_valid",
+        "required": true,
+        "alg": "ecdsa-p256-sha256",
+        "publicKey": {
+          "pointer": "/pubkey",
+          "format": "spki-pem",
+          "spkiSha256": "sha256:7ab8560f27913cf2730dd51edc190816701ca6c0eafa939fc9da68a5b96645cf"
+        },
+        "message": {
+          "pointer": "/manifest_text",
+          "encoding": "utf8",
+          "jsonEquals": "/manifest"
+        },
+        "signature": {
+          "pointer": "/manifest_sig",
+          "encoding": "base64",
+          "format": "raw"
+        }
+      },
+      "delivery": "{\"manifest\": {\"layout\": \"signature-vector/1\", \"order_id\": \"test-order-0001\", \"buyer_nonce\": \"00112233445566778899aabbccddeeff\", \"status\": \"completed\", \"sample_count\": 3, \"t_ms\": [0, 8, 16]}, \"manifest_text\": \"{\\\"buyer_nonce\\\":\\\"00112233445566778899aabbccddeeff\\\",\\\"layout\\\":\\\"signature-vector/1\\\",\\\"order_id\\\":\\\"test-order-0001\\\",\\\"sample_count\\\":3,\\\"status\\\":\\\"completed\\\",\\\"t_ms\\\":[0,8,16]}\", \"manifest_sig\": \"LPyP4koBDwjk7C/FED3N0Eyk5wclLEjgEOvsZ1i4yA+SZJZSiVSkGYvEgG5Qq5TSG8QJmCwZWpWTwNK2EbBOBg==\", \"pubkey\": \"-----BEGIN PUBLIC KEY-----\\nMCowBQYDK2VwAyEA+Gqpst/E2rzzH+JqF1bjeQHvPIr1kBRe6pr3GCa4KeU=\\n-----END PUBLIC KEY-----\\n\"}",
+      "expect": {
+        "outcome": "fail",
+        "detail": "publicKey: not a P-256 key"
+      }
+    },
+    {
+      "name": "ed25519/s-plus-the-group-order",
+      "alg": "ed25519",
+      "case": "strictness",
+      "why": "A second encoding of a valid signature: S + L.",
+      "check": {
+        "id": "manifest-signature",
+        "type": "signature_valid",
+        "required": true,
+        "alg": "ed25519",
+        "publicKey": {
+          "pointer": "/pubkey",
+          "format": "spki-pem",
+          "spkiSha256": "sha256:7ab8560f27913cf2730dd51edc190816701ca6c0eafa939fc9da68a5b96645cf"
+        },
+        "message": {
+          "pointer": "/manifest_text",
+          "encoding": "utf8",
+          "jsonEquals": "/manifest"
+        },
+        "signature": {
+          "pointer": "/manifest_sig",
+          "encoding": "base64",
+          "format": "raw"
+        }
+      },
+      "delivery": "{\"manifest\": {\"layout\": \"signature-vector/1\", \"order_id\": \"test-order-0001\", \"buyer_nonce\": \"00112233445566778899aabbccddeeff\", \"status\": \"completed\", \"sample_count\": 3, \"t_ms\": [0, 8, 16]}, \"manifest_text\": \"{\\\"buyer_nonce\\\":\\\"00112233445566778899aabbccddeeff\\\",\\\"layout\\\":\\\"signature-vector/1\\\",\\\"order_id\\\":\\\"test-order-0001\\\",\\\"sample_count\\\":3,\\\"status\\\":\\\"completed\\\",\\\"t_ms\\\":[0,8,16]}\", \"manifest_sig\": \"LPyP4koBDwjk7C/FED3N0Eyk5wclLEjgEOvsZ1i4yA9/OIyvo7e2cWFheBEvpXPnG8QJmCwZWpWTwNK2EbBOFg==\", \"pubkey\": \"-----BEGIN PUBLIC KEY-----\\nMCowBQYDK2VwAyEA+Gqpst/E2rzzH+JqF1bjeQHvPIr1kBRe6pr3GCa4KeU=\\n-----END PUBLIC KEY-----\\n\"}",
+      "expect": {
+        "outcome": "fail",
+        "detail": "signature does not verify"
+      }
+    },
+    {
+      "name": "ed25519/small-order-key",
+      "alg": "ed25519",
+      "case": "strictness",
+      "why": "A signature that fits any message. A verifier left on the lenient zip215 default fails this vector.",
+      "check": {
+        "id": "manifest-signature",
+        "type": "signature_valid",
+        "required": true,
+        "alg": "ed25519",
+        "publicKey": {
+          "pointer": "/pubkey",
+          "format": "spki-pem",
+          "spkiSha256": "sha256:d0fbfbb4f059a24b42b1b553b6d79c0586599e84d2033429b92e9b968cb39b4c"
+        },
+        "message": {
+          "pointer": "/manifest_text",
+          "encoding": "utf8",
+          "jsonEquals": "/manifest"
+        },
+        "signature": {
+          "pointer": "/manifest_sig",
+          "encoding": "base64",
+          "format": "raw"
+        }
+      },
+      "delivery": "{\"manifest\": {\"layout\": \"signature-vector/1\", \"order_id\": \"test-order-0001\", \"buyer_nonce\": \"00112233445566778899aabbccddeeff\", \"status\": \"completed\", \"sample_count\": 3, \"t_ms\": [0, 8, 16]}, \"manifest_text\": \"{\\\"buyer_nonce\\\":\\\"00112233445566778899aabbccddeeff\\\",\\\"layout\\\":\\\"signature-vector/1\\\",\\\"order_id\\\":\\\"test-order-0001\\\",\\\"sample_count\\\":3,\\\"status\\\":\\\"completed\\\",\\\"t_ms\\\":[0,8,16]}\", \"manifest_sig\": \"AQAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA==\", \"pubkey\": \"-----BEGIN PUBLIC KEY-----\\nMCowBQYDK2VwAyEAAQAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA=\\n-----END PUBLIC KEY-----\\n\"}",
+      "expect": {
+        "outcome": "fail",
+        "detail": "signature does not verify"
+      }
+    },
+    {
+      "name": "ed25519/non-canonical-r",
+      "alg": "ed25519",
+      "case": "strictness",
+      "why": "An ordinary key and an R that is not canonically encoded. The lenient zip215 rule accepts it.",
+      "check": {
+        "id": "manifest-signature",
+        "type": "signature_valid",
+        "required": true,
+        "alg": "ed25519",
+        "publicKey": {
+          "pointer": "/pubkey",
+          "format": "spki-pem",
+          "spkiSha256": "sha256:7ab8560f27913cf2730dd51edc190816701ca6c0eafa939fc9da68a5b96645cf"
+        },
+        "message": {
+          "pointer": "/manifest_text",
+          "encoding": "utf8",
+          "jsonEquals": "/manifest"
+        },
+        "signature": {
+          "pointer": "/manifest_sig",
+          "encoding": "base64",
+          "format": "raw"
+        }
+      },
+      "delivery": "{\"manifest\": {\"layout\": \"signature-vector/1\", \"order_id\": \"test-order-0001\", \"buyer_nonce\": \"00112233445566778899aabbccddeeff\", \"status\": \"completed\", \"sample_count\": 3, \"t_ms\": [0, 8, 16]}, \"manifest_text\": \"{\\\"buyer_nonce\\\":\\\"00112233445566778899aabbccddeeff\\\",\\\"layout\\\":\\\"signature-vector/1\\\",\\\"order_id\\\":\\\"test-order-0001\\\",\\\"sample_count\\\":3,\\\"status\\\":\\\"completed\\\",\\\"t_ms\\\":[0,8,16]}\", \"manifest_sig\": \"7v///////////////////////////////////////3/iCx2tCFqGDOlQ+v2HX1NeVfZhi1/BiA5hrHeB9HiuBQ==\", \"pubkey\": \"-----BEGIN PUBLIC KEY-----\\nMCowBQYDK2VwAyEA+Gqpst/E2rzzH+JqF1bjeQHvPIr1kBRe6pr3GCa4KeU=\\n-----END PUBLIC KEY-----\\n\"}",
+      "expect": {
+        "outcome": "fail",
+        "detail": "signature does not verify"
+      }
+    },
+    {
+      "name": "ed25519/short-signature",
+      "alg": "ed25519",
+      "case": "strictness",
+      "why": "63 bytes.",
+      "check": {
+        "id": "manifest-signature",
+        "type": "signature_valid",
+        "required": true,
+        "alg": "ed25519",
+        "publicKey": {
+          "pointer": "/pubkey",
+          "format": "spki-pem",
+          "spkiSha256": "sha256:7ab8560f27913cf2730dd51edc190816701ca6c0eafa939fc9da68a5b96645cf"
+        },
+        "message": {
+          "pointer": "/manifest_text",
+          "encoding": "utf8",
+          "jsonEquals": "/manifest"
+        },
+        "signature": {
+          "pointer": "/manifest_sig",
+          "encoding": "base64",
+          "format": "raw"
+        }
+      },
+      "delivery": "{\"manifest\": {\"layout\": \"signature-vector/1\", \"order_id\": \"test-order-0001\", \"buyer_nonce\": \"00112233445566778899aabbccddeeff\", \"status\": \"completed\", \"sample_count\": 3, \"t_ms\": [0, 8, 16]}, \"manifest_text\": \"{\\\"buyer_nonce\\\":\\\"00112233445566778899aabbccddeeff\\\",\\\"layout\\\":\\\"signature-vector/1\\\",\\\"order_id\\\":\\\"test-order-0001\\\",\\\"sample_count\\\":3,\\\"status\\\":\\\"completed\\\",\\\"t_ms\\\":[0,8,16]}\", \"manifest_sig\": \"LPyP4koBDwjk7C/FED3N0Eyk5wclLEjgEOvsZ1i4yA+SZJZSiVSkGYvEgG5Qq5TSG8QJmCwZWpWTwNK2EbBO\", \"pubkey\": \"-----BEGIN PUBLIC KEY-----\\nMCowBQYDK2VwAyEA+Gqpst/E2rzzH+JqF1bjeQHvPIr1kBRe6pr3GCa4KeU=\\n-----END PUBLIC KEY-----\\n\"}",
+      "expect": {
+        "outcome": "fail",
+        "detail": "signature: wrong length"
+      }
+    },
+    {
+      "name": "ed25519/der-format",
+      "alg": "ed25519",
+      "case": "unknown-algorithm",
+      "why": "`ed25519` with `der` is refused at offer time.",
+      "check": {
+        "id": "manifest-signature",
+        "type": "signature_valid",
+        "required": true,
+        "alg": "ed25519",
+        "publicKey": {
+          "pointer": "/pubkey",
+          "format": "spki-pem",
+          "spkiSha256": "sha256:7ab8560f27913cf2730dd51edc190816701ca6c0eafa939fc9da68a5b96645cf"
+        },
+        "message": {
+          "pointer": "/manifest_text",
+          "encoding": "utf8",
+          "jsonEquals": "/manifest"
+        },
+        "signature": {
+          "pointer": "/manifest_sig",
+          "encoding": "base64",
+          "format": "der"
+        }
+      },
+      "delivery": "{\"manifest\": {\"layout\": \"signature-vector/1\", \"order_id\": \"test-order-0001\", \"buyer_nonce\": \"00112233445566778899aabbccddeeff\", \"status\": \"completed\", \"sample_count\": 3, \"t_ms\": [0, 8, 16]}, \"manifest_text\": \"{\\\"buyer_nonce\\\":\\\"00112233445566778899aabbccddeeff\\\",\\\"layout\\\":\\\"signature-vector/1\\\",\\\"order_id\\\":\\\"test-order-0001\\\",\\\"sample_count\\\":3,\\\"status\\\":\\\"completed\\\",\\\"t_ms\\\":[0,8,16]}\", \"manifest_sig\": \"LPyP4koBDwjk7C/FED3N0Eyk5wclLEjgEOvsZ1i4yA+SZJZSiVSkGYvEgG5Qq5TSG8QJmCwZWpWTwNK2EbBOBg==\", \"pubkey\": \"-----BEGIN PUBLIC KEY-----\\nMCowBQYDK2VwAyEA+Gqpst/E2rzzH+JqF1bjeQHvPIr1kBRe6pr3GCa4KeU=\\n-----END PUBLIC KEY-----\\n\"}",
+      "expect": {
+        "outcome": "refused"
+      }
+    }
+  ]
+}
