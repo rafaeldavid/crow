@@ -52,12 +52,13 @@ describe('equal_lengths: every named array has the same number of entries', () =
     expect(one(c, doc([], [], [])).passed).toBe(false);
   });
 
-  it('charges one unit per series and reads no entry, however long the arrays', () => {
+  it('charges each series and the pointer it walks, and reads no entry, however long the arrays', () => {
     const n = 200_000;
     const long = Array.from({ length: n }, () => 0);
     const budget = new StepBudget(10);
     expect(run(check(), doc(long, long, long), budget).outcomes[0]!.passed).toBe(true);
-    expect(10 - budget.remaining).toBe(3);
+    // Per series: 1 unit, and 1 per 16 characters of its pointer walked (all three are under 16).
+    expect(10 - budget.remaining).toBe(3 * 2);
     expect(run(check(), doc(long, long, long), new StepBudget(2)).inconclusive).toEqual(['lengths']);
   });
 });

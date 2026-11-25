@@ -244,6 +244,7 @@ describe('parseCommitment refuses values that cannot be signed or settled', () =
     ['appealDecideSec 1e20', (c) => (c.timing.appealDecideSec = 1e20)],
     ['a price above uint256', (c) => (c.price.amount = OVER_UINT256)],
     ['a fee above uint256', (c) => (c.adjudication.fee.amount = OVER_UINT256)],
+    ['two checks with one id', (c) => c.acceptance.deterministicChecks.push({ ...c.acceptance.deterministicChecks[0]! })],
     ['an acceptance bond above uint256', (c) => (c.adjudicatorAcceptance.bondReserved.amount = OVER_UINT256)],
   ])('refuses %s with invalid_terms', (_name, patch) => {
     const c = example('commitment.example.json');

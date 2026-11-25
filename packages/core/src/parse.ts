@@ -114,6 +114,16 @@ function parserFor<T>(name: string, signed: boolean, extra?: (value: T) => strin
   };
 }
 
+/** D100: the first check id that two checks share, or undefined. */
+export function repeatedCheckId(checks: ReadonlyArray<{ id: string }> | undefined): string | undefined {
+  const seen = new Set<string>();
+  for (const { id } of checks ?? []) {
+    if (seen.has(id)) return id;
+    seen.add(id);
+  }
+  return undefined;
+}
+
 function commitmentRules(c: AnyCommitment): string | undefined {
   // The schema admits both modes and up to three submissions; Phase 1 admits only these (ADR-0007).
   const mode: string = c.settlement.mode;
@@ -125,6 +135,8 @@ function commitmentRules(c: AnyCommitment): string | undefined {
     if (c.timing[key] > UINT32_MAX) return `timing.${key} ${c.timing[key]} exceeds ${UINT32_MAX}`;
   }
   if (!(Date.parse(c.createdAt) < Date.parse(c.timing.offerExpiresAt))) return 'createdAt must be before timing.offerExpiresAt';
+  const repeated = repeatedCheckId((c as Partial<Commitment>).acceptance?.deterministicChecks);
+  if (repeated !== undefined) return `acceptance.deterministicChecks: id ${repeated} is used by more than one check`;
   // ADR-0024: private and judgment carry the bodies as privateTerms (the schema requires the form per level). Body keys
   // that unlock at a beacon round wait for the time-lock slice, as delivery keys do.
   const sealed = (c as Partial<SealedCommitment>).privateTerms;

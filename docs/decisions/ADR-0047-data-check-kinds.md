@@ -93,7 +93,7 @@ A series is one of two shapes, closed (`$defs/Series` in `commitment.schema.json
 | Column name | 128 characters, counted in code points as the schema counts them | As every column check |
 | Pointer | 512 characters | `$defs/JsonPointer`, as `signature_valid` |
 | Delivered series | The delivery's own limit (the node's `limits.maxCiphertextBytes`) | No separate cap; the budget bounds the work |
-| Work | 1 unit per entry read, 1 per coordinate or step compared, 1 per series whose length is read | This record |
+| Work | 1 unit per series, and 1 per 16 characters of its pointer walked (`chargeChars`, D96) or 1 per header column compared; 1 per entry read; 1 per coordinate or step compared | This record |
 | Wall clock | None | A timer would let two adjudicators differ on one delivery |
 
 - **Every unit is charged before the work it pays for,** and a series is paid for in full before its entries are read, so a refused series still spends its length.

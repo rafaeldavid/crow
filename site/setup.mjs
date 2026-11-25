@@ -12823,7 +12823,7 @@ var Unavailable = class extends Error {};
 const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
 /** JSON with every 0x-hex string lowercased: addresses compare ignoring case. */
 const lowerHex = (v) => JSON.parse(JSON.stringify(v ?? null), (_k, x) => typeof x === "string" && /^0x[0-9a-fA-F]+$/.test(x) ? x.toLowerCase() : x);
-const same$1 = (a, b) => jcs(lowerHex(a)) === jcs(lowerHex(b));
+const same = (a, b) => jcs(lowerHex(a)) === jcs(lowerHex(b));
 const chars = (...ranges) => ranges.map(([a, b]) => `${String.fromCodePoint(a)}-${String.fromCodePoint(b)}`).join("");
 const LINE_BREAKS$2 = new RegExp(`[${chars([10, 10], [13, 13], [8232, 8233])}]+`, "g");
 const CONTROLS$2 = new RegExp(`[${chars([0, 31], [127, 159])}]`, "g");
@@ -12865,15 +12865,15 @@ const DRAND_QUICKNET_CHAIN_HASH = "0x52db9ba70e0cc0f6eaf7803dd07447a1f5477735fd3
 
 // packages/core/dist/canonical.js
 init_keccak256(), init_toBytes();
-const LONE_SURROGATE$1 = /\p{Cs}/u;
-function str$1(s) {
-	if (LONE_SURROGATE$1.test(s)) throw new TypeError("canonical JSON: lone surrogate in string");
+const LONE_SURROGATE$2 = /\p{Cs}/u;
+function str$2(s) {
+	if (LONE_SURROGATE$2.test(s)) throw new TypeError("canonical JSON: lone surrogate in string");
 	return JSON.stringify(s);
 }
 /** Canonical JSON per RFC 8785. Throws TypeError on values JSON cannot represent. */
 function canonicalJson(value) {
 	if (value === null || typeof value === "boolean") return JSON.stringify(value);
-	if (typeof value === "string") return str$1(value);
+	if (typeof value === "string") return str$2(value);
 	if (typeof value === "number") {
 		if (!Number.isFinite(value)) throw new TypeError(`canonical JSON: non-finite number ${value}`);
 		return JSON.stringify(value);
@@ -12883,7 +12883,7 @@ function canonicalJson(value) {
 		const entries = Object.entries(value);
 		for (const [k, v] of entries) if (v === void 0) throw new TypeError(`canonical JSON: undefined at key ${k}`);
 		entries.sort(([a], [b]) => a < b ? -1 : a > b ? 1 : 0);
-		return `{${entries.map(([k, v]) => `${str$1(k)}:${canonicalJson(v)}`).join(",")}}`;
+		return `{${entries.map(([k, v]) => `${str$2(k)}:${canonicalJson(v)}`).join(",")}}`;
 	}
 	throw new TypeError(`canonical JSON: unsupported ${typeof value}`);
 }
@@ -51161,6 +51161,14 @@ function parserFor(name, signed, extra) {
 		return refusal === void 0 ? ok(copy) : err(problem("invalid_terms", `${name}: ${refusal}`));
 	};
 }
+/** D100: the first check id that two checks share, or undefined. */
+function repeatedCheckId(checks) {
+	const seen = /* @__PURE__ */ new Set();
+	for (const { id } of checks ?? []) {
+		if (seen.has(id)) return id;
+		seen.add(id);
+	}
+}
 function commitmentRules(c) {
 	const mode = c.settlement.mode;
 	const max = c.timing.maxSubmissions;
@@ -51168,6 +51176,8 @@ function commitmentRules(c) {
 	if (max !== 1) return `timing.maxSubmissions ${max} is not supported in Phase 1 (1 only)`;
 	for (const key of ["appealWindowSec", "appealDecideSec"]) if (c.timing[key] > UINT32_MAX) return `timing.${key} ${c.timing[key]} exceeds ${UINT32_MAX}`;
 	if (!(Date.parse(c.createdAt) < Date.parse(c.timing.offerExpiresAt))) return "createdAt must be before timing.offerExpiresAt";
+	const repeated = repeatedCheckId(c.acceptance?.deterministicChecks);
+	if (repeated !== void 0) return `acceptance.deterministicChecks: id ${repeated} is used by more than one check`;
 	const sealed = c.privateTerms;
 	if (sealed) return unlockRule([...sealed.deliverable.envelopes, ...sealed.acceptance.envelopes]);
 }
@@ -51442,7 +51452,7 @@ const STANDING_SELLER_DOMAIN = {
 /** The first word of a take's or a standing delivery's signature (the contract's `TAKE`, `STANDING_DELIVERY`). */
 const TAKE = 1;
 const STANDING_DELIVERY = 2;
-const str = (s) => keccak256(stringToBytes(s));
+const str$1 = (s) => keccak256(stringToBytes(s));
 const secs = (t) => {
 	const ms = Date.parse(t);
 	if (!Number.isFinite(ms) || ms % 1e3 !== 0) throw new RangeError(`${t} is not a whole second`);
@@ -51923,9 +51933,9 @@ function standingOfferView(o) {
 	return {
 		rules: getAddress(o.rules),
 		expiresAt: secs(o.expiresAt),
-		offerIdHash: str(o.offerId),
-		schemaVersionHash: str(t.schemaVersion),
-		clubIdHash: str(t.clubId),
+		offerIdHash: str$1(o.offerId),
+		schemaVersionHash: str$1(t.schemaVersion),
+		clubIdHash: str$1(t.clubId),
 		rulebookHash: t.rulebookHash,
 		sellerPayoutAddress: getAddress(t.sellerPayoutAddress),
 		...bodyHashes(atEpoch(o)),
@@ -51934,7 +51944,7 @@ function standingOfferView(o) {
 		adjudicator: getAddress(t.adjudication.adjudicator),
 		fallbackAdjudicator: getAddress(t.adjudication.fallbackAdjudicator),
 		appealAdjudicator: getAddress(t.adjudication.appealAdjudicator),
-		policyIdHash: str(t.adjudication.policyId),
+		policyIdHash: str$1(t.adjudication.policyId),
 		fee: BigInt(t.adjudication.fee.amount),
 		registryHash: t.adjudication.registryHash,
 		policyHash: t.adjudication.policyHash,
@@ -51954,8 +51964,8 @@ function standingOfferView(o) {
 		remedyHash: struct("Remedy", t.remedy),
 		delivery: o.delivery && d ? [{
 			ciphertextHash: struct("Ciphertext", d.ciphertext),
-			plaintextSha256Hash: str(o.delivery.plaintextSha256),
-			plaintextMimeHash: str(o.delivery.plaintextMime),
+			plaintextSha256Hash: str$1(o.delivery.plaintextSha256),
+			plaintextMimeHash: str$1(o.delivery.plaintextMime),
 			encryptedKeysHash: keccak256(o.delivery.encryptedKeys.length ? concat(o.delivery.encryptedKeys.map(keyHash)) : "0x"),
 			submittedAt: d.submittedAt
 		}] : []
@@ -51966,7 +51976,7 @@ function fillView(f) {
 	return {
 		buyer: getAddress(f.buyer),
 		buyerPaymentAddress: getAddress(f.buyerPaymentAddress),
-		buyerKeyHash: str(f.buyerEncryptionPublicKey),
+		buyerKeyHash: str$1(f.buyerEncryptionPublicKey),
 		nonceSeed: f.nonceSeed,
 		createdAt: secs(f.createdAt)
 	};
@@ -59023,6 +59033,13 @@ function countHidden(text) {
 	}
 	return c;
 }
+/**
+* The text of a JSON delivery with each \uXXXX escape replaced by the character it spells. A backslash pair is skipped
+* as a unit. Every character written literally stays in place, so counting the result counts each once.
+*/
+function decodeJsonEscapes(text) {
+	return text.replace(/\\(?:u([0-9a-fA-F]{4})|[\s\S])/g, (m, hex) => hex === void 0 ? m : String.fromCharCode(parseInt(hex, 16)));
+}
 
 // packages/judgment/dist/normalize.js
 const EMOJI_TAG_SEQUENCE = /\u{1F3F4}[\u{E0020}-\u{E007E}]{1,8}\u{E007F}/gu;
@@ -59045,6 +59062,11 @@ function prevBase(s, i) {
 	}
 }
 const nextChar = (s, i) => i < s.length ? String.fromCodePoint(s.codePointAt(i)) : "";
+const TAG_CHAR = /[\u{E0000}-\u{E007F}]/u;
+/** Whether normalizeText(raw) would count a tag character (tagChars above 0), without the rest of its work. */
+function hasUnexplainedTagChars(raw) {
+	return TAG_CHAR.test(raw.replace(EMOJI_TAG_SEQUENCE, "🏴"));
+}
 function normalizeText(raw) {
 	let explained = 0;
 	let tagText = "";
@@ -59103,6 +59125,98 @@ function normalizeText(raw) {
 	};
 }
 
+// packages/judgment/dist/checks/cost.js
+/** UTF-16 code units a scan reads for one budget unit. */
+const CHARS_PER_UNIT = 16;
+/** Charges a scan of `chars` UTF-16 code units. */
+function chargeChars(budget, chars) {
+	if (chars > 0) budget?.spend(Math.ceil(chars / 16));
+}
+/** Charges a sort of `n` items: n times the bit length of n - 1, which is log2 n rounded up, in integers. */
+function chargeSort(budget, n) {
+	if (n > 1) budget?.spend(n * (32 - Math.clz32(n - 1)));
+}
+/**
+* How deep canonical() follows nested arrays and objects. Past it the value is refused as canonical form refuses
+* other values, at a fixed depth, so the answer does not depend on how much stack the engine has at that moment.
+*/
+const MAX_CANONICAL_DEPTH = 1e3;
+/** The number of code points in `s` (lone surrogates count one each), in one pass that allocates nothing. */
+function codePoints$1(s) {
+	let n = s.length;
+	for (let i = 0; i < s.length - 1; i++) {
+		const c = s.charCodeAt(i);
+		if (c >= 55296 && c <= 56319) {
+			const d = s.charCodeAt(i + 1);
+			if (d >= 56320 && d <= 57343) {
+				n--;
+				i++;
+			}
+		}
+	}
+	return n;
+}
+const LONE_SURROGATE$1 = /\p{Cs}/u;
+function str(s, budget) {
+	chargeChars(budget, s.length);
+	if (LONE_SURROGATE$1.test(s)) throw new TypeError("canonical JSON: lone surrogate in string");
+	return JSON.stringify(s);
+}
+/** A scalar's canonical form, or undefined for an array or object. */
+function scalar(v, budget) {
+	if (v === null) return "null";
+	switch (typeof v) {
+		case "boolean": return v ? "true" : "false";
+		case "string": return str(v, budget);
+		case "number":
+			if (!Number.isFinite(v)) throw new TypeError(`canonical JSON: non-finite number ${v}`);
+			return String(v);
+	}
+}
+function write(v, budget, parts, depth) {
+	budget?.spend(1);
+	if (depth > 1e3) throw new TypeError(`canonical JSON: nested deeper than ${MAX_CANONICAL_DEPTH}`);
+	const s = scalar(v, budget);
+	if (s !== void 0) parts.push(s);
+	else if (Array.isArray(v)) {
+		parts.push("[");
+		for (let i = 0; i < v.length; i++) {
+			if (i > 0) parts.push(",");
+			write(v[i], budget, parts, depth + 1);
+		}
+		parts.push("]");
+	} else if (typeof v === "object" && Object.getPrototypeOf(v) === Object.prototype) {
+		const entries = Object.entries(v);
+		for (const [k, x] of entries) if (x === void 0) throw new TypeError(`canonical JSON: undefined at key ${k}`);
+		chargeSort(budget, entries.length);
+		entries.sort(([a], [b]) => a < b ? -1 : a > b ? 1 : 0);
+		parts.push("{");
+		for (let i = 0; i < entries.length; i++) {
+			if (i > 0) parts.push(",");
+			parts.push(str(entries[i][0], budget), ":");
+			write(entries[i][1], budget, parts, depth + 1);
+		}
+		parts.push("}");
+	} else throw new TypeError(`canonical JSON: unsupported ${typeof v}`);
+}
+/**
+* The RFC 8785 form of a JSON value, the same string `canonicalJson` (core) writes and throwing where it throws,
+* and also past MAX_CANONICAL_DEPTH.
+* Each node costs one unit, each string and key its length, and each object its key sort. The pieces are joined
+* once at the end, so no part is copied more than once however deep the value nests.
+*/
+function canonical(v, budget) {
+	if (typeof v !== "object" || v === null) {
+		budget?.spend(1);
+		const s = scalar(v, budget);
+		if (s === void 0) throw new TypeError(`canonical JSON: unsupported ${typeof v}`);
+		return s;
+	}
+	const parts = [];
+	write(v, budget, parts, 1);
+	return parts.join("");
+}
+
 // packages/judgment/dist/checks/iso8601.js
 const DATE = /^(\d{4})-(\d{2})-(\d{2})$/;
 const DATE_TIME = /^(\d{4})-(\d{2})-(\d{2})T(\d{2}):(\d{2}):(\d{2})(\.\d{1,9})?(Z|[+-](\d{2}):(\d{2}))$/;
@@ -59158,6 +59272,14 @@ const EMPTY = {
 	items: []
 };
 const isEmpty = (n) => n.t === "seq" && n.items.length === 0;
+/** Alternatives as one node: one alternative is itself, and only empty ones are the empty string. */
+function alt(options) {
+	if (options.length === 1) return options[0];
+	return options.every(isEmpty) ? EMPTY : {
+		t: "alt",
+		options
+	};
+}
 /**
 * Work allowance shared by every check on one delivery, in NFA state visits, empty moves included, so
 * that one unit stands for about the same work on every pattern. Linear time per cell is not enough on
@@ -59281,26 +59403,26 @@ var Parser = class {
 	constructor(cps) {
 		this.cps = cps;
 	}
+	/** The pattern's top-level alternatives, which the anchors bind to one by one. */
 	parse() {
-		const node = this.alternation();
+		const options = this.alternatives();
 		if (this.i < this.cps.length) throw new PatternError(`unexpected ) at ${this.i}`);
-		return node;
+		return options;
 	}
 	peek(offset = 0) {
 		const cp = this.cps[this.i + offset];
 		return cp === void 0 ? void 0 : String.fromCodePoint(cp);
 	}
-	alternation() {
+	alternatives() {
 		const options = [this.sequence()];
 		while (this.peek() === "|") {
 			this.i++;
 			options.push(this.sequence());
 		}
-		if (options.length === 1) return options[0];
-		return options.every(isEmpty) ? EMPTY : {
-			t: "alt",
-			options
-		};
+		return options;
+	}
+	alternation() {
+		return alt(this.alternatives());
 	}
 	/** Nested sequences are flattened (an empty one adds nothing), and a one-item sequence is the item. */
 	sequence() {
@@ -59489,7 +59611,7 @@ var Compiler = class {
 };
 const MARK = new Int32Array(MAX_STATES).fill(-1);
 let gen = 0;
-function simulate(states, start, cps, anchoredStart, anchoredEnd, budget) {
+function simulate(states, start, subject, anchoredStart, anchoredEnd, budget) {
 	if (gen > 1073676288) {
 		MARK.fill(-1);
 		gen = 0;
@@ -59513,7 +59635,9 @@ function simulate(states, start, cps, anchoredStart, anchoredEnd, budget) {
 	let current = [];
 	add(current, start);
 	const accepts = (list) => list.some((x) => states[x].k === "match");
-	for (const cp of cps) {
+	for (let i = 0; i < subject.length;) {
+		const cp = subject.codePointAt(i);
+		i += cp > 65535 ? 2 : 1;
 		budget?.spend(current.length + 1);
 		if (!anchoredEnd && accepts(current)) return true;
 		gen++;
@@ -59527,6 +59651,24 @@ function simulate(states, start, cps, anchoredStart, anchoredEnd, budget) {
 		if (current.length === 0 && anchoredStart) return false;
 	}
 	return accepts(current);
+}
+/**
+* Whether a subject is short enough to match, decided without allocating: at most MAX_SUBJECT_CHARS code points.
+* Only a subject between one and two times that many UTF-16 units needs counting, and the count is charged.
+*/
+function fits(subject, budget) {
+	if (subject.length <= 1e4) return true;
+	if (subject.length > 2 * 1e4) return false;
+	chargeChars(budget, subject.length);
+	return codePoints$1(subject) <= MAX_SUBJECT_CHARS;
+}
+function nfa(node) {
+	const c = new Compiler();
+	const start = c.build(node, 0);
+	return {
+		states: c.states,
+		start
+	};
 }
 function compileSafeRegex(pattern) {
 	if (pattern.length > 200) return err(`pattern longer than ${200} characters`);
@@ -59546,18 +59688,42 @@ function compileSafeRegex(pattern) {
 		}
 	}
 	try {
-		const ast = new Parser(cps).parse();
-		const c = new Compiler();
-		const start = c.build(ast, 0);
-		const { states } = c;
-		const run = (subject, full, budget) => {
-			const chars = [...subject];
-			if (chars.length > 1e4) return false;
-			return simulate(states, start, chars.map((ch) => ch.codePointAt(0)), full || anchoredStart, full || anchoredEnd, budget);
-		};
+		const options = new Parser(cps).parse();
+		const whole = nfa(alt(options));
+		const full = (s, b) => fits(s, b) && simulate(whole.states, whole.start, s, true, true, b);
+		let parts;
+		if (options.length === 1 || !anchoredStart && !anchoredEnd) parts = [{
+			...whole,
+			anchoredStart,
+			anchoredEnd
+		}];
+		else {
+			const first = anchoredStart ? options.slice(0, 1) : [];
+			const last = anchoredEnd ? options.slice(-1) : [];
+			const middle = options.slice(first.length, options.length - last.length);
+			parts = [];
+			if (first.length) parts.push({
+				...nfa(first[0]),
+				anchoredStart: true,
+				anchoredEnd: false
+			});
+			if (middle.length) parts.push({
+				...nfa(alt(middle)),
+				anchoredStart: false,
+				anchoredEnd: false
+			});
+			if (last.length) parts.push({
+				...nfa(last[0]),
+				anchoredStart: false,
+				anchoredEnd: true
+			});
+		}
+		const search = (s, b) => fits(s, b) && parts.some((p) => simulate(p.states, p.start, s, p.anchoredStart, p.anchoredEnd, b));
+		const states = whole.states.length + (parts.length > 1 ? parts.reduce((n, p) => n + p.states.length, 0) : 0);
 		return ok({
-			fullMatch: (s, b) => run(s, true, b),
-			search: (s, b) => run(s, false, b)
+			fullMatch: full,
+			search,
+			states
 		});
 	} catch (e) {
 		if (e instanceof PatternError) return err(e.message);
@@ -59568,6 +59734,8 @@ function compileSafeRegex(pattern) {
 // packages/judgment/dist/checks/json-schema.js
 const MAX_SCHEMA_DEPTH = 32;
 const MAX_SCHEMA_NODES = 2e3;
+/** NFA states of all the schema's patterns together, which bounds the memory a compiled schema holds. */
+const MAX_SCHEMA_STATES = 4 * MAX_STATES;
 const ANNOTATIONS = /* @__PURE__ */ new Set([
 	"$schema",
 	"title",
@@ -59589,8 +59757,26 @@ var SchemaError = class extends Error {};
 const isObject$2 = (v) => typeof v === "object" && v !== null && !Array.isArray(v);
 const own = (o, k) => Object.prototype.hasOwnProperty.call(o, k);
 const typeOf = (v) => v === null ? "null" : Array.isArray(v) ? "array" : typeof v;
-const same = (a, b) => canonicalJson(a) === canonicalJson(b);
-const count$1 = (s) => [...s].length;
+/** Whether `s` has fewer than `n` code points; it counts, and charges the count, only when the length cannot tell. */
+function shorter(s, n, budget) {
+	if (s.length < n) return true;
+	if (s.length >= 2 * n) return false;
+	chargeChars(budget, s.length);
+	return codePoints$1(s) < n;
+}
+function canon(v) {
+	try {
+		return {
+			ok: true,
+			text: canonical(v)
+		};
+	} catch (error) {
+		return {
+			ok: false,
+			error
+		};
+	}
+}
 function num(v, k) {
 	if (typeof v !== "number" || !Number.isFinite(v)) throw new SchemaError(`${k} must be a number`);
 	return v;
@@ -59613,38 +59799,79 @@ function compile(schema, depth, budget) {
 			case "type": {
 				const ts = Array.isArray(v) ? v : [v];
 				if (ts.length === 0 || !ts.every((t) => typeof t === "string" && TYPES$1.has(t))) throw new SchemaError("type must name JSON types");
-				checks.push((x) => ts.some((t) => typeOf(x) === t || t === "integer" && Number.isInteger(x) || t === "number" && typeof x === "number") ? void 0 : `expected ${ts.join("|")}`);
+				const names = new Set(ts);
+				const expected = `expected ${ts.join("|")}`;
+				checks.push((x) => names.has(typeOf(x)) || names.has("integer") && Number.isInteger(x) || names.has("number") && typeof x === "number" ? void 0 : expected);
 				break;
 			}
-			case "enum":
+			case "enum": {
 				if (!Array.isArray(v)) throw new SchemaError("enum must be an array");
-				checks.push((x) => v.some((e) => same(e, x)) ? void 0 : "not in enum");
+				const entries = /* @__PURE__ */ new Set();
+				let refused;
+				for (const [i, e] of v.entries()) {
+					const c = canon(e);
+					if (!c.ok) {
+						refused = {
+							at: i,
+							error: c.error
+						};
+						break;
+					}
+					entries.add(c.text);
+				}
+				checks.push((x, b) => {
+					if (v.length === 0) return "not in enum";
+					if (refused?.at === 0) throw refused.error;
+					const key = canonical(x, b);
+					b?.spend(8);
+					if (entries.has(key)) return void 0;
+					if (refused) throw refused.error;
+					return "not in enum";
+				});
 				break;
-			case "const":
-				checks.push((x) => same(v, x) ? void 0 : "not equal to const");
+			}
+			case "const": {
+				const c = canon(v);
+				checks.push((x, b) => {
+					if (!c.ok) throw c.error;
+					return canonical(x, b) === c.text ? void 0 : "not equal to const";
+				});
 				break;
+			}
 			case "properties": {
 				if (!isObject$2(v)) throw new SchemaError("properties must be an object");
 				const props = Object.entries(v).map(([name, s]) => [name, sub(s)]);
 				checks.push((x, b) => {
 					if (!isObject$2(x)) return void 0;
-					for (const [name, val] of props) if (own(x, name)) {
+					for (const [name, val] of props) {
+						b?.spend(1);
+						if (!own(x, name)) continue;
 						const e = val(x[name], b);
 						if (e) return `/${name}: ${e}`;
 					}
 				});
 				break;
 			}
-			case "required":
+			case "required": {
 				if (!Array.isArray(v) || !v.every((r) => typeof r === "string")) throw new SchemaError("required must be an array of strings");
-				checks.push((x) => isObject$2(x) ? v.find((r) => !own(x, r)) === void 0 ? void 0 : `missing ${v.find((r) => !own(x, r))}` : void 0);
+				const names = [...new Set(v)];
+				checks.push((x, b) => {
+					if (!isObject$2(x)) return void 0;
+					for (const r of names) {
+						b?.spend(1);
+						if (!own(x, r)) return `missing ${r}`;
+					}
+				});
 				break;
+			}
 			case "additionalProperties": {
 				const known = isObject$2(schema.properties) ? new Set(Object.keys(schema.properties)) : /* @__PURE__ */ new Set();
 				const val = sub(v);
 				checks.push((x, b) => {
 					if (!isObject$2(x)) return void 0;
-					for (const name of Object.keys(x)) if (!known.has(name)) {
+					for (const name of Object.keys(x)) {
+						b?.spend(1);
+						if (known.has(name)) continue;
 						const e = val(x[name], b);
 						if (e) return `/${name}: additional property ${e}`;
 					}
@@ -59674,7 +59901,16 @@ function compile(schema, depth, budget) {
 			}
 			case "uniqueItems":
 				if (typeof v !== "boolean") throw new SchemaError("uniqueItems must be boolean");
-				if (v) checks.push((x) => Array.isArray(x) && new Set(x.map((i) => canonicalJson(i))).size !== x.length ? "items not unique" : void 0);
+				if (v) checks.push((x, b) => {
+					if (!Array.isArray(x)) return void 0;
+					const seen = /* @__PURE__ */ new Set();
+					for (const item of x) {
+						const key = canonical(item, b);
+						b?.spend(8);
+						seen.add(key);
+					}
+					return seen.size !== x.length ? "items not unique" : void 0;
+				});
 				break;
 			case "minimum": {
 				const n = num(v, k);
@@ -59698,18 +59934,20 @@ function compile(schema, depth, budget) {
 			}
 			case "minLength": {
 				const n = nonNegInt(v, k);
-				checks.push((x) => typeof x === "string" && count$1(x) < n ? `shorter than ${n}` : void 0);
+				checks.push((x, b) => typeof x === "string" && shorter(x, n, b) ? `shorter than ${n}` : void 0);
 				break;
 			}
 			case "maxLength": {
 				const n = nonNegInt(v, k);
-				checks.push((x) => typeof x === "string" && count$1(x) > n ? `longer than ${n}` : void 0);
+				checks.push((x, b) => typeof x === "string" && !shorter(x, n + 1, b) ? `longer than ${n}` : void 0);
 				break;
 			}
 			case "pattern": {
 				if (typeof v !== "string") throw new SchemaError("pattern must be a string");
 				const r = compileSafeRegex(v);
 				if (!r.ok) throw new SchemaError(`pattern: ${r.error}`);
+				budget.states += r.value.states;
+				if (budget.states > MAX_SCHEMA_STATES) throw new SchemaError(`patterns hold more than ${MAX_SCHEMA_STATES} states in total`);
 				const re = r.value;
 				checks.push((x, b) => typeof x === "string" && !re.search(x, b) ? "does not match pattern" : void 0);
 				break;
@@ -59745,7 +59983,10 @@ function compile(schema, depth, budget) {
 }
 function compileJsonSchema(schema) {
 	try {
-		return ok(compile(schema, 0, { nodes: 0 }));
+		return ok(compile(schema, 0, {
+			nodes: 0,
+			states: 0
+		}));
 	} catch (e) {
 		if (e instanceof SchemaError) return err(e.message);
 		throw e;
@@ -60531,67 +60772,94 @@ function evaluateSignatureValid(check, delivered, budget) {
 }
 
 // packages/judgment/dist/checks/csv.js
-function parseCsv(text) {
-	const records = [];
-	let field = "";
-	let record = [];
-	let quoted = false;
-	let fieldStarted = false;
-	let i = 0;
-	const endField = () => {
-		record.push(field);
-		field = "";
-		fieldStarted = false;
+const QUOTE = 34;
+const COMMA = 44;
+const LF = 10;
+const CR = 13;
+/** Parses `text`, charging the budget for its length, one unit per field and one per doubled quote. */
+function parseCsv(text, budget) {
+	chargeChars(budget, text.length);
+	const n = text.length;
+	const header = [];
+	const cells = [];
+	let inHeader = true;
+	let records = 0;
+	let rows = 0;
+	let field = 0;
+	let ragged;
+	const addField = (v) => {
+		budget?.spend(1);
+		if (inHeader) header.push(v);
+		else if (field < header.length) cells.push(v === "" ? null : v);
+		field++;
 	};
 	const endRecord = () => {
-		endField();
-		records.push(record);
-		record = [];
-	};
-	while (i < text.length) {
-		const c = text[i];
-		if (quoted) {
-			if (c === "\"") {
-				if (text[i + 1] === "\"") {
-					field += "\"";
-					i += 2;
-					continue;
-				}
-				quoted = false;
-				i++;
-				const n = text[i];
-				if (n !== void 0 && n !== "," && n !== "\n" && n !== "\r") return err(`line ${records.length + 1}: text after closing quote`);
-				continue;
+		if (inHeader) inHeader = false;
+		else {
+			if (field !== header.length) {
+				ragged ??= {
+					row: rows + 1,
+					fields: field
+				};
+				for (let j = field; j < header.length; j++) cells.push(null);
 			}
-			field += c;
+			rows++;
+		}
+		records++;
+		field = 0;
+	};
+	let i = 0;
+	while (i < n) {
+		let value;
+		if (text.charCodeAt(i) === QUOTE) {
+			let q = i;
+			let doubled = false;
+			for (;;) {
+				q = text.indexOf("\"", q + 1);
+				if (q < 0) return err("unterminated quoted field");
+				if (text.charCodeAt(q + 1) !== QUOTE) break;
+				budget?.spend(1);
+				doubled = true;
+				q++;
+			}
+			value = text.slice(i + 1, q);
+			if (doubled) value = value.replaceAll("\"\"", "\"");
+			i = q + 1;
+			const c = text.charCodeAt(i);
+			if (i < n && c !== COMMA && c !== LF && c !== CR) return err(`line ${records + 1}: text after closing quote`);
+		} else {
+			let j = i;
+			for (; j < n; j++) {
+				const c = text.charCodeAt(j);
+				if (c === COMMA || c === LF || c === CR) break;
+				if (c === QUOTE) return err(`line ${records + 1}: quote inside an unquoted field`);
+			}
+			value = text.slice(i, j);
+			i = j;
+		}
+		addField(value);
+		if (i >= n) {
+			endRecord();
+			break;
+		}
+		const c = text.charCodeAt(i);
+		if (c === COMMA) {
 			i++;
+			if (i >= n) {
+				addField("");
+				endRecord();
+			}
 			continue;
 		}
-		if (c === "\"") {
-			if (fieldStarted) return err(`line ${records.length + 1}: quote inside an unquoted field`);
-			quoted = true;
-			fieldStarted = true;
-			i++;
-		} else if (c === ",") {
-			endField();
-			i++;
-		} else if (c === "\r" || c === "\n") {
-			endRecord();
-			i += c === "\r" && text[i + 1] === "\n" ? 2 : 1;
-		} else {
-			field += c;
-			fieldStarted = true;
-			i++;
-		}
+		i += c === CR && text.charCodeAt(i + 1) === LF ? 2 : 1;
+		endRecord();
 	}
-	if (quoted) return err("unterminated quoted field");
-	if (fieldStarted || record.length > 0) endRecord();
-	const [header, ...rows] = records;
-	if (!header) return err("empty CSV");
-	for (const [n, r] of rows.entries()) if (r.length !== header.length) return err(`row ${n + 1} has ${r.length} fields; the header has ${header.length}`);
+	if (records === 0) return err("empty CSV");
+	if (ragged) return err(`row ${ragged.row} has ${ragged.fields} fields; the header has ${header.length}`);
 	return ok({
 		header,
-		rows
+		rows,
+		cells
 	});
 }
 
@@ -60599,7 +60867,11 @@ function parseCsv(text) {
 const isNonScalar = (c) => typeof c === "object" && c !== null;
 /** The cell as text for string checks; null and non-scalars have none. */
 const cellText = (c) => typeof c === "string" ? c : null;
-function cell(v) {
+/** Units per JSON row, beside its cells: reading the row object and listing its keys. */
+const ROW_UNITS = 4;
+/** The cell in row `r` (from 0) and column `c`. */
+const cellAt = (t, r, c) => t.cells[r * t.columns.length + c];
+function cell(v, budget) {
 	if (v === null || v === void 0 || v === "") return null;
 	if (typeof v === "string") return v;
 	if (typeof v === "number") return String(v);
@@ -60609,38 +60881,54 @@ function cell(v) {
 	};
 	return {
 		nonScalar: Array.isArray(v) ? "array" : "object",
-		text: canonicalJson(v)
+		text: canonical(v, budget)
 	};
 }
-function toTable(text, mime) {
+/** A parsed JSON delivery as a table, charging the budget for each cell and each row's keys. */
+function jsonTable(parsed, budget) {
+	if (!Array.isArray(parsed)) return err("JSON deliverable is not an array of objects");
+	const first = parsed[0];
+	if (parsed.length > 0 && (typeof first !== "object" || first === null || Array.isArray(first))) return err("JSON row 0 is not an object");
+	const columns = parsed.length ? Object.keys(first) : [];
+	const keysOf = (keys) => {
+		chargeSort(budget, keys.length);
+		return canonical(keys.sort(), budget);
+	};
+	const key = keysOf([...columns]);
+	const cells = [];
+	for (const [i, r] of parsed.entries()) {
+		budget?.spend(ROW_UNITS);
+		if (typeof r !== "object" || r === null || Array.isArray(r)) return err(`JSON row ${i} is not an object`);
+		if (keysOf(Object.keys(r)) !== key) return err(`JSON row ${i} has different keys from row 0`);
+		for (const c of columns) {
+			budget?.spend(1);
+			cells.push(cell(r[c], budget));
+		}
+	}
+	return ok({
+		columns,
+		rows: parsed.length,
+		cells
+	});
+}
+/** Reads `text` as a table, charging the budget for its length, each cell, and each row's keys. */
+function toTable(text, mime, budget) {
 	if (mime === "application/json") {
+		chargeChars(budget, text.length);
 		let parsed;
 		try {
 			parsed = JSON.parse(text);
 		} catch {
 			return err("deliverable is not valid JSON");
 		}
-		if (!Array.isArray(parsed)) return err("JSON deliverable is not an array of objects");
-		const first = parsed[0];
-		if (parsed.length > 0 && (typeof first !== "object" || first === null || Array.isArray(first))) return err("JSON row 0 is not an object");
-		const columns = parsed.length ? Object.keys(first) : [];
-		const key = canonicalJson([...columns].sort());
-		const rows = [];
-		for (const [i, r] of parsed.entries()) {
-			if (typeof r !== "object" || r === null || Array.isArray(r)) return err(`JSON row ${i} is not an object`);
-			if (canonicalJson(Object.keys(r).sort()) !== key) return err(`JSON row ${i} has different keys from row 0`);
-			rows.push(columns.map((c) => cell(r[c])));
-		}
-		return ok({
-			columns,
-			rows
-		});
+		return jsonTable(parsed, budget);
 	}
-	const csv = parseCsv(text);
+	const csv = parseCsv(text, budget);
 	if (!csv.ok) return err(`CSV: ${csv.error}`);
 	return ok({
 		columns: csv.value.header,
-		rows: csv.value.rows.map((r) => r.map((v) => v === "" ? null : v))
+		rows: csv.value.rows,
+		cells: csv.value.cells
 	});
 }
 
@@ -60666,8 +60954,10 @@ function validateSeries(s, name, pointers = false) {
 	if (hasShape(s, ["column"])) return typeof s.column === "string" && s.column.length <= 2 * SERIES_LIMITS.column && [...s.column].length <= SERIES_LIMITS.column ? void 0 : `${name}.column must be a string of at most ${SERIES_LIMITS.column} characters`;
 	return `${name} must be exactly { pointer } or { column }`;
 }
-/** The JSON array a pointer names. Reads nothing inside it. */
-function readArray(pointer, label, json) {
+/** The JSON array a pointer names, charged for the pointer it walks. Reads nothing inside the array. */
+function readArray(pointer, label, json, budget) {
+	budget.spend(DATA_WORK.perSeries);
+	chargeChars(budget, pointer.length);
 	const parsed = json();
 	if (!parsed.ok) return {
 		ok: false,
@@ -60695,7 +60985,7 @@ const INTEGER_TEXT = /^(0|-?[1-9][0-9]{0,15})$/;
 */
 function readIntegers(s, label, src, budget) {
 	if ("pointer" in s) {
-		const arr = readArray(s.pointer, label, src.json);
+		const arr = readArray(s.pointer, label, src.json, budget);
 		if (!arr.ok) return arr;
 		budget.spend(arr.value.length * DATA_WORK.perEntry);
 		const out = new Array(arr.value.length);
@@ -60717,20 +61007,21 @@ function readIntegers(s, label, src, budget) {
 		ok: false,
 		detail: t.error
 	};
-	const col = t.value.columns.indexOf(s.column);
+	const { columns, rows } = t.value;
+	budget.spend(DATA_WORK.perSeries + columns.length);
+	const col = columns.indexOf(s.column);
 	if (col < 0) return {
 		ok: false,
 		detail: `${label}: column not found`
 	};
-	if (t.value.columns.lastIndexOf(s.column) !== col) return {
+	if (columns.lastIndexOf(s.column) !== col) return {
 		ok: false,
 		detail: `${label}: the column name appears twice`
 	};
-	const rows = t.value.rows;
-	budget.spend(rows.length * DATA_WORK.perEntry);
-	const out = new Array(rows.length);
-	for (let i = 0; i < rows.length; i++) {
-		const text = cellText(rows[i][col]);
+	budget.spend(rows * DATA_WORK.perEntry);
+	const out = new Array(rows);
+	for (let i = 0; i < rows; i++) {
+		const text = cellText(cellAt(t.value, i, col));
 		const v = text !== null && text.length <= 17 && INTEGER_TEXT.test(text) ? Number(text) : NaN;
 		if (!isSafeInt(v)) return {
 			ok: false,
@@ -60769,8 +61060,7 @@ function evaluateEqualLengths(check, src, budget) {
 	};
 	let first = 0;
 	for (const [i, s] of check.series.entries()) {
-		budget.spend(DATA_WORK.perSeries);
-		const arr = readArray(s.pointer, `series ${i + 1}`, src.json);
+		const arr = readArray(s.pointer, `series ${i + 1}`, src.json, budget);
 		if (!arr.ok) return {
 			passed: false,
 			detail: arr.detail
@@ -60924,8 +61214,15 @@ const REGISTRY = {
 	equal_lengths: true
 };
 const CHECK_TYPES = new Set(Object.keys(REGISTRY));
-/** Work allowance per delivery across all checks, in regex state visits and schema node visits. */
+/**
+* Work allowance per delivery across all checks. A unit is one regex state visit or schema node visit, or the
+* like for the other steps (cost.ts): one cell read, one name looked up, 16 characters scanned.
+*/
 const CHECK_BUDGET = 5e7;
+/** Units per cell of iso8601_date_column: the date patterns and the calendar test. */
+const ISO_CELL_UNITS = 2;
+/** Reference bytes per unit, for hashing, decoding and the tag scan. */
+const REFERENCE_BYTES_PER_UNIT = 4;
 /**
 * Cell values null_rate_max counts as null after trimming: built-in, case-insensitive. A per-check
 * list would need a schema field (see the task's Handoff).
@@ -60942,16 +61239,31 @@ const NULL_TOKENS = /* @__PURE__ */ new Set([
 ]);
 /** Whitespace, format characters (zero-width, bidi, tags) and blank-looking letters such as fillers. */
 const BLANK_CHAR = /[\s\p{Cf}\u034F\u115F\u1160\u17B4\u17B5\u180B-\u180F\u2800\u3164\uFE00-\uFE0F\uFFA0\u{E0100}-\u{E01EF}]/u;
-/** Null for null_rate_max: empty, blank-looking, a null token, or a non-scalar JSON value. */
-function isNullish(c) {
+const ASCII_BLANK = (cp) => cp === 32 || cp >= 9 && cp <= 13;
+const isBlank = (cp) => cp < 128 ? ASCII_BLANK(cp) : BLANK_CHAR.test(String.fromCodePoint(cp));
+/** Null for null_rate_max: empty, blank-looking, a null token, or a non-scalar JSON value. Each code point read costs one unit. */
+function isNullish(c, budget) {
 	if (c === null || isNonScalar(c)) return true;
-	const chars = [...c];
 	let start = 0;
-	let end = chars.length;
-	while (start < end && BLANK_CHAR.test(chars[start])) start++;
-	while (end > start && BLANK_CHAR.test(chars[end - 1])) end--;
+	let end = c.length;
+	while (start < end) {
+		budget?.spend(1);
+		const cp = c.codePointAt(start);
+		if (!isBlank(cp)) break;
+		start += cp > 65535 ? 2 : 1;
+	}
+	while (end > start) {
+		budget?.spend(1);
+		const lo = c.charCodeAt(end - 1);
+		const hi = end - 2 >= start ? c.charCodeAt(end - 2) : 0;
+		const at = lo >= 56320 && lo <= 57343 && hi >= 55296 && hi <= 56319 ? end - 2 : end - 1;
+		if (!isBlank(c.codePointAt(at))) break;
+		end = at;
+	}
 	if (start === end) return true;
-	return end - start <= 16 && NULL_TOKENS.has(chars.slice(start, end).join("").toLowerCase());
+	if (end - start > 32) return false;
+	const core = c.slice(start, end);
+	return codePoints$1(core) <= 16 && NULL_TOKENS.has(core.toLowerCase());
 }
 const DETAIL_MAX = 300;
 /**
@@ -60978,42 +61290,65 @@ const HIDDEN_KEYS = [
 	"otherIgnorable",
 	"total"
 ];
-/** Static validation, usable at offer time. Returns a reason the check cannot be evaluated, or undefined. */
-function validateCheck(check) {
+function prepare(check) {
 	const type = check.type;
-	if (!CHECK_TYPES.has(type)) return `unknown check type ${type.slice(0, 40)}`;
+	if (!CHECK_TYPES.has(type)) return { error: `unknown check type ${type.slice(0, 40)}` };
+	const reason = (error) => error === void 0 ? {} : { error };
 	switch (check.type) {
-		case "row_count_range": return check.min > check.max ? "min is greater than max" : void 0;
-		case "null_rate_max": return isBps(check.maxBps) ? void 0 : "maxBps must be an integer 0..10000";
-		case "reference_row_match_min": return isBps(check.minBps) ? void 0 : "minBps must be an integer 0..10000";
+		case "row_count_range": return reason(check.min > check.max ? "min is greater than max" : void 0);
+		case "null_rate_max": return reason(isBps(check.maxBps) ? void 0 : "maxBps must be an integer 0..10000");
+		case "reference_row_match_min": return reason(isBps(check.minBps) ? void 0 : "minBps must be an integer 0..10000");
 		case "regex_match_rate_min": {
-			if (!isBps(check.minBps)) return "minBps must be an integer 0..10000";
+			if (!isBps(check.minBps)) return { error: "minBps must be an integer 0..10000" };
 			const r = compileSafeRegex(check.pattern);
-			return r.ok ? void 0 : `pattern refused: ${r.error}`;
+			return r.ok ? { regex: r.value } : { error: `pattern refused: ${r.error}` };
 		}
 		case "hidden_characters_max": {
 			const keys = Object.keys(check.max ?? {});
-			if (keys.length === 0) return "max must name at least one class";
+			if (keys.length === 0) return { error: "max must name at least one class" };
 			for (const k of keys) {
-				if (!HIDDEN_KEYS.includes(k)) return `unknown hidden-character class ${k.slice(0, 40)}`;
-				if (!isCount(check.max[k])) return `max.${k} must be a non-negative integer`;
+				if (!HIDDEN_KEYS.includes(k)) return { error: `unknown hidden-character class ${k.slice(0, 40)}` };
+				if (!isCount(check.max[k])) return { error: `max.${k} must be a non-negative integer` };
 			}
-			return;
+			return {};
 		}
 		case "json_schema": {
 			const r = compileJsonSchema(check.schema);
-			return r.ok ? void 0 : `schema refused: ${r.error}`;
+			return r.ok ? { schema: r.value } : { error: `schema refused: ${r.error}` };
 		}
-		case "signature_valid": return validateSignatureCheck(check);
-		case "passes_through": return validatePassesThrough(check);
-		case "monotonic_column": return validateMonotonicColumn(check);
-		case "equal_lengths": return validateEqualLengths(check);
-		default: return;
+		case "signature_valid": return reason(validateSignatureCheck(check));
+		case "passes_through": return reason(validatePassesThrough(check));
+		case "monotonic_column": return reason(validateMonotonicColumn(check));
+		case "equal_lengths": return reason(validateEqualLengths(check));
+		default: return {};
 	}
 }
-function column(t, name) {
-	const i = t.columns.indexOf(name);
-	return i < 0 ? `column ${name} not found` : i;
+function indexed(t, budget) {
+	const index = /* @__PURE__ */ new Map();
+	for (const [i, c] of t.columns.entries()) {
+		budget.spend(1);
+		if (!index.has(c)) index.set(c, i);
+	}
+	return {
+		...t,
+		index
+	};
+}
+function column(t, name, budget) {
+	budget.spend(1);
+	return t.index.get(name) ?? `column ${name} not found`;
+}
+/**
+* The items joined by ", ", built only as far as a detail can show: past DETAIL_MAX characters the rest is cut by
+* cap anyway, so the capped detail is the same as with the whole list.
+*/
+function list$2(items) {
+	let out = "";
+	for (const [i, item] of items.entries()) {
+		out += i === 0 ? item : `, ${item}`;
+		if (out.length > DETAIL_MAX) break;
+	}
+	return out;
 }
 const pass$1 = (detail) => detail === void 0 ? { passed: true } : {
 	passed: true,
@@ -61023,150 +61358,240 @@ const fail$1 = (detail) => ({
 	passed: false,
 	detail
 });
-function evaluate$1(check, input, table, json, budget) {
-	const invalid = validateCheck(check);
-	if (invalid) return fail$1(`check invalid: ${invalid}`);
+/** D99: the text the hidden-character count reads: a JSON delivery with its \u escapes decoded. The decode is not charged: it is linear and bounded by the store limit, like the JSON parse. */
+function hiddenText(input) {
+	const text = input.data.reveal();
+	return input.mime === "application/json" && text.includes("\\u") ? decodeJsonEscapes(text) : text;
+}
+/** Charges `f` and keeps its result, unless the budget runs out first: then the next caller tries again and runs out too. */
+function once(f) {
+	let done;
+	return () => {
+		done ??= { value: f() };
+		return done.value;
+	};
+}
+function newRun(input, budget, checks) {
+	const json = once(() => {
+		try {
+			return {
+				ok: true,
+				value: JSON.parse(input.data.reveal())
+			};
+		} catch {
+			return { ok: false };
+		}
+	});
+	const table = once(() => {
+		try {
+			let t;
+			if (input.mime === "application/json") {
+				const doc = json();
+				t = doc.ok ? jsonTable(doc.value, budget) : err("deliverable is not valid JSON");
+			} else t = toTable(input.data.reveal(), input.mime, budget);
+			return t.ok ? ok(indexed(t.value, budget)) : t;
+		} catch (e) {
+			if (e instanceof BudgetExhausted) throw e;
+			return err("deliverable could not be read as a table");
+		}
+	});
+	const hidden = once(() => {
+		chargeChars(budget, input.data.reveal().length);
+		const counts = countHidden(hiddenText(input));
+		budget.spend(counts.total);
+		return counts;
+	});
+	const uses = /* @__PURE__ */ new Map();
+	for (const c of checks) if (c.type === "reference_row_match_min") uses.set(c.reference.sha256, (uses.get(c.reference.sha256) ?? 0) + 1);
+	const references = /* @__PURE__ */ new Map();
+	const reference = (sha, bytes) => {
+		const left = (uses.get(sha) ?? 1) - 1;
+		uses.set(sha, left);
+		let f = references.get(sha);
+		if (!f) {
+			f = once(() => readReference(sha, bytes, input.mime, budget));
+			references.set(sha, f);
+		}
+		const r = f();
+		if (left <= 0) references.delete(sha);
+		return r;
+	};
+	return {
+		input,
+		budget,
+		table,
+		json,
+		hidden,
+		reference
+	};
+}
+function readReference(sha, bytes, mime, budget) {
+	if (bytes.length > 10485760) return err(`reference is ${bytes.length} bytes; the cap is ${MAX_CIPHERTEXT_BYTES}`);
+	budget.spend(Math.ceil(bytes.length / REFERENCE_BYTES_PER_UNIT));
+	if (sha256$3(bytes) !== sha) return err("reference bytes do not match the committed hash");
+	let text;
+	try {
+		text = new TextDecoder("utf-8", { fatal: true }).decode(bytes);
+	} catch {
+		return err("reference is not valid UTF-8");
+	}
+	if (hasUnexplainedTagChars(text)) return err("reference contains Unicode tag characters");
+	const rr = toTable(text, mime, budget);
+	return rr.ok ? ok(indexed(rr.value, budget)) : err(`reference: ${rr.error}`);
+}
+/** The cell as a JSON string, for keys and comparisons, charged for its length. */
+function keyOf(c, budget) {
+	const k = JSON.stringify(c);
+	budget.spend(1);
+	chargeChars(budget, k.length);
+	return k;
+}
+function evaluate$1(check, prepared, run) {
+	if (prepared.error !== void 0) return fail$1(`check invalid: ${prepared.error}`);
+	const { input, budget } = run;
 	if (check.type === "json_schema") {
-		const doc = json();
+		const doc = run.json();
 		if (!doc.ok) return fail$1("deliverable is not valid JSON");
-		const v = compileJsonSchema(check.schema);
-		const e = v.ok ? v.value(doc.value, budget) : v.error;
+		const e = prepared.schema(doc.value, budget);
 		return e === void 0 ? pass$1() : fail$1(`schema: ${e}`);
 	}
-	if (check.type === "signature_valid") return evaluateSignatureValid(check, json, budget);
-	if (check.type === "passes_through") return evaluatePassesThrough(check, {
-		table,
-		json
-	}, budget);
-	if (check.type === "monotonic_column") return evaluateMonotonicColumn(check, {
-		table,
-		json
-	}, budget);
-	if (check.type === "equal_lengths") return evaluateEqualLengths(check, { json }, budget);
+	if (check.type === "signature_valid") return evaluateSignatureValid(check, run.json, budget);
+	if (check.type === "passes_through") return evaluatePassesThrough(check, run, budget);
+	if (check.type === "monotonic_column") return evaluateMonotonicColumn(check, run, budget);
+	if (check.type === "equal_lengths") return evaluateEqualLengths(check, run, budget);
 	if (check.type === "hidden_characters_max") {
-		const counts = countHidden(input.data.reveal());
+		budget.spend(1);
+		const counts = run.hidden();
 		const over = HIDDEN_KEYS.filter((k) => check.max[k] !== void 0 && counts[k] > check.max[k]);
 		const summary = HIDDEN_KEYS.map((k) => `${k} ${counts[k]}`).join(", ");
 		return over.length ? fail$1(`over the limit for ${over.join(", ")} (${summary})`) : pass$1(summary);
 	}
 	if (check.type === "csv_columns_exact" && input.mime !== "text/csv") return fail$1(`csv_columns_exact needs a text/csv deliverable, not ${input.mime}`);
-	const tr = table();
+	const tr = run.table();
 	if (!tr.ok) return fail$1(tr.error);
 	const t = tr.value;
 	switch (check.type) {
-		case "csv_columns_exact": return t.columns.length === check.columns.length && t.columns.every((c, i) => c === check.columns[i]) ? pass$1() : fail$1(`columns are [${t.columns.join(", ")}]; expected [${check.columns.join(", ")}]`);
+		case "csv_columns_exact": {
+			const n = t.columns.length === check.columns.length ? check.columns.length : 0;
+			budget.spend(n + 1);
+			return n === check.columns.length && t.columns.every((c, i) => c === check.columns[i]) ? pass$1() : fail$1(`columns are [${list$2(t.columns)}]; expected [${list$2(check.columns)}]`);
+		}
 		case "row_count_range": {
-			const n = t.rows.length;
+			const n = t.rows;
 			return n >= check.min && n <= check.max ? pass$1(`${n} rows`) : fail$1(`${n} rows; expected ${check.min} to ${check.max}`);
 		}
 		case "unique_key": {
-			const idx = check.columns.map((c) => column(t, c));
-			const missing = idx.find((i) => typeof i === "string");
+			const named = check.columns.map((c) => column(t, c, budget));
+			const missing = named.find((i) => typeof i === "string");
 			if (missing !== void 0) return fail$1(missing);
+			const idx = [...new Set(named)];
 			const seen = /* @__PURE__ */ new Set();
-			for (const [r, row] of t.rows.entries()) {
-				const key = JSON.stringify(idx.map((i) => row[i]));
+			for (let r = 0; r < t.rows; r++) {
+				const key = JSON.stringify(idx.map((i) => cellAt(t, r, i)));
+				budget.spend(8);
+				chargeChars(budget, key.length);
 				if (seen.has(key)) return fail$1(`duplicate key at row ${r + 1}`);
 				seen.add(key);
 			}
 			return pass$1();
 		}
 		case "null_rate_max": {
-			const i = column(t, check.column);
+			const i = column(t, check.column, budget);
 			if (typeof i === "string") return fail$1(i);
-			const nulls = t.rows.filter((row) => isNullish(row[i])).length;
-			return nulls * 1e4 <= check.maxBps * t.rows.length ? pass$1(`null ${pct(nulls, t.rows.length)}`) : fail$1(`null ${pct(nulls, t.rows.length)} exceeds ${bps(check.maxBps)}`);
+			let nulls = 0;
+			for (let r = 0; r < t.rows; r++) {
+				budget.spend(1);
+				if (isNullish(cellAt(t, r, i), budget)) nulls++;
+			}
+			return nulls * 1e4 <= check.maxBps * t.rows ? pass$1(`null ${pct(nulls, t.rows)}`) : fail$1(`null ${pct(nulls, t.rows)} exceeds ${bps(check.maxBps)}`);
 		}
 		case "regex_match_rate_min": {
-			const i = column(t, check.column);
+			const i = column(t, check.column, budget);
 			if (typeof i === "string") return fail$1(i);
-			const re = compileSafeRegex(check.pattern);
-			if (!re.ok) return fail$1(re.error);
+			const re = prepared.regex;
 			let matches = 0;
-			for (const row of t.rows) {
-				const s = cellText(row[i]);
-				if (s !== null && re.value.fullMatch(s, budget)) matches++;
+			for (let r = 0; r < t.rows; r++) {
+				budget.spend(1);
+				const s = cellText(cellAt(t, r, i));
+				if (s !== null && re.fullMatch(s, budget)) matches++;
 			}
-			return t.rows.length === 0 || matches * 1e4 >= check.minBps * t.rows.length ? pass$1(`match ${pct(matches, t.rows.length)}`) : fail$1(`match ${pct(matches, t.rows.length)} below ${bps(check.minBps)}`);
+			return t.rows === 0 || matches * 1e4 >= check.minBps * t.rows ? pass$1(`match ${pct(matches, t.rows)}`) : fail$1(`match ${pct(matches, t.rows)} below ${bps(check.minBps)}`);
 		}
 		case "iso8601_date_column": {
-			const i = column(t, check.column);
+			const i = column(t, check.column, budget);
 			if (typeof i === "string") return fail$1(i);
-			const bad = t.rows.findIndex((row) => row[i] !== null && (isNonScalar(row[i]) || !isIso8601(row[i])));
-			return bad < 0 ? pass$1() : fail$1(`row ${bad + 1} is not an ISO 8601 date`);
+			for (let r = 0; r < t.rows; r++) {
+				const c = cellAt(t, r, i);
+				budget.spend(ISO_CELL_UNITS);
+				if (c !== null && (isNonScalar(c) || !isIso8601(c))) return fail$1(`row ${r + 1} is not an ISO 8601 date`);
+			}
+			return pass$1();
 		}
 		case "reference_row_match_min": {
 			const bytes = input.references?.get(check.reference.sha256);
 			if (!bytes) return fail$1("reference not available");
-			if (bytes.length > 10485760) return fail$1(`reference is ${bytes.length} bytes; the cap is ${MAX_CIPHERTEXT_BYTES}`);
-			if (sha256$3(bytes) !== check.reference.sha256) return fail$1("reference bytes do not match the committed hash");
-			let text;
-			try {
-				text = new TextDecoder("utf-8", { fatal: true }).decode(bytes);
-			} catch {
-				return fail$1("reference is not valid UTF-8");
-			}
-			if (normalizeText(text).tagChars > 0) return fail$1("reference contains Unicode tag characters");
-			const rr = toTable(text, input.mime);
-			if (!rr.ok) return fail$1(`reference: ${rr.error}`);
+			const rr = run.reference(check.reference.sha256, bytes);
+			if (!rr.ok) return fail$1(rr.error);
 			const ref = rr.value;
-			const rk = column(ref, check.keyColumn);
-			const dk = column(t, check.keyColumn);
+			const rk = column(ref, check.keyColumn, budget);
+			const dk = column(t, check.keyColumn, budget);
 			if (typeof rk === "string") return fail$1(`reference: ${rk}`);
 			if (typeof dk === "string") return fail$1(dk);
-			const keyOf = (c) => JSON.stringify(c);
 			const byKey = /* @__PURE__ */ new Map();
-			for (const row of t.rows) if (!byKey.has(keyOf(row[dk]))) byKey.set(keyOf(row[dk]), row);
-			const map = ref.columns.map((c) => t.columns.indexOf(c));
-			let matched = 0;
-			for (const row of ref.rows) {
-				const d = byKey.get(keyOf(row[rk]));
-				if (d && map.every((di, ri) => di >= 0 && keyOf(d[di]) === keyOf(row[ri]))) matched++;
+			for (let r = 0; r < t.rows; r++) {
+				const k = keyOf(cellAt(t, r, dk), budget);
+				budget.spend(8);
+				if (!byKey.has(k)) byKey.set(k, r);
 			}
-			return ref.rows.length === 0 || matched * 1e4 >= check.minBps * ref.rows.length ? pass$1(`reference match ${pct(matched, ref.rows.length)}`) : fail$1(`reference match ${pct(matched, ref.rows.length)} below ${bps(check.minBps)}`);
+			const map = ref.columns.map((c) => {
+				budget.spend(1);
+				return t.index.get(c) ?? -1;
+			});
+			let matched = 0;
+			for (let r = 0; r < ref.rows; r++) {
+				const k = keyOf(cellAt(ref, r, rk), budget);
+				budget.spend(8);
+				const d = byKey.get(k);
+				if (d !== void 0 && map.every((di, ri) => di >= 0 && keyOf(cellAt(t, d, di), budget) === keyOf(cellAt(ref, r, ri), budget))) matched++;
+			}
+			return ref.rows === 0 || matched * 1e4 >= check.minBps * ref.rows ? pass$1(`reference match ${pct(matched, ref.rows)}`) : fail$1(`reference match ${pct(matched, ref.rows)} below ${bps(check.minBps)}`);
 		}
 	}
 }
 /** Evaluates every check in declaration order under one shared budget, reporting inconclusive ones. */
 function runChecks$1(checks, input, budget = new StepBudget(CHECK_BUDGET)) {
-	let cached;
-	const table = () => {
-		if (cached === void 0) try {
-			cached = toTable(input.data.reveal(), input.mime);
-		} catch {
-			cached = {
-				ok: false,
-				error: "deliverable could not be read as a table"
-			};
-		}
-		return cached;
-	};
-	let parsed;
-	const json = () => {
-		if (parsed === void 0) try {
-			parsed = {
-				ok: true,
-				value: JSON.parse(input.data.reveal())
-			};
-		} catch {
-			parsed = { ok: false };
-		}
-		return parsed;
-	};
+	const run = newRun(input, budget, checks);
 	const inconclusive = [];
+	const used = new Set(checks.map((c) => c.id));
+	const taken = /* @__PURE__ */ new Set();
+	const uniqueId = (id) => {
+		if (!taken.has(id)) {
+			taken.add(id);
+			return id;
+		}
+		for (let n = 2;; n++) {
+			const tail = `-${n}`;
+			const out = `${id.slice(0, 40 - tail.length)}${tail}`;
+			if (!used.has(out) && !taken.has(out)) {
+				taken.add(out);
+				return out;
+			}
+		}
+	};
 	return {
 		outcomes: checks.map((check) => {
+			const id = uniqueId(check.id);
 			let o;
 			try {
-				o = evaluate$1(check, input, table, json, budget);
+				o = evaluate$1(check, prepare(check), run);
 			} catch (e) {
 				if (e instanceof BudgetExhausted) {
-					inconclusive.push(check.id);
+					inconclusive.push(id);
 					o = fail$1("inconclusive: the check work budget for this delivery ran out");
 				} else o = fail$1("check could not be evaluated on this input");
 			}
 			const out = {
-				checkId: check.id,
+				checkId: id,
 				required: check.required,
 				passed: o.passed
 			};
@@ -68519,7 +68944,7 @@ async function pinnedReader(c, nothing) {
 		domain: x.domain,
 		token: x.demo?.token?.id
 	}));
-	const pin = knownPins().find((p) => same$1(p.domain, found.domain));
+	const pin = knownPins().find((p) => same(p.domain, found.domain));
 	const sepolia = pin !== void 0 && pin.domain.chainId === SEPOLIA_CHAIN_ID && pin.chain !== void 0;
 	if (!c.testWorld && !sepolia) throw new Error(`these operators serve the EIP-712 domain ${plain(jcs(found.domain))}, not Crow's deployment on Sepolia (chain ${SEPOLIA_CHAIN_ID}). ${nothing}`);
 	if (c.testWorld && (pin === void 0 || sepolia)) throw new Error(`--test-world takes a local test world, and these operators serve the EIP-712 domain ${plain(jcs(found.domain))}. ${nothing}`);

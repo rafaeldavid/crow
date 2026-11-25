@@ -90,10 +90,11 @@ describe('monotonic_column: every bound is an integer (ADR-0022)', () => {
 });
 
 describe('monotonic_column: work budget', () => {
-  it('charges one unit per entry read and one per step compared', () => {
+  it('charges the series, its pointer, each entry read and each step compared', () => {
     const budget = new StepBudget(1_000);
     run(check(), doc(T), 'application/json', budget);
-    expect(1_000 - budget.remaining).toBe(6 + 5);
+    // 1 for the series, 1 for its 5-character pointer, 6 entries and 5 steps.
+    expect(1_000 - budget.remaining).toBe(2 + 6 + 5);
   });
 
   it('is inconclusive on an oversized series', () => {

@@ -4,7 +4,8 @@
 import type { Result } from '@holdback/core';
 import type { StepBudget } from './safe-regex.js';
 import { hasShape, isPointer, resolve, type ParsedDelivery } from './signature-valid.js';
-import { cellText, type Table } from './table.js';
+import { chargeChars } from './cost.js';
+import { cellAt, cellText, type Table } from './table.js';
 
 export type Series = { pointer: string } | { column: string };
 
@@ -33,8 +34,10 @@ export function validateSeries(s: unknown, name: string, pointers = false): stri
   return `${name} must be exactly { pointer } or { column }`;
 }
 
-/** The JSON array a pointer names. Reads nothing inside it. */
-export function readArray(pointer: string, label: string, json: () => ParsedDelivery): Read<readonly unknown[]> {
+/** The JSON array a pointer names, charged for the pointer it walks. Reads nothing inside the array. */
+export function readArray(pointer: string, label: string, json: () => ParsedDelivery, budget: StepBudget): Read<readonly unknown[]> {
+  budget.spend(DATA_WORK.perSeries);
+  chargeChars(budget, pointer.length);
   const parsed = json();
   if (!parsed.ok) return { ok: false, detail: 'not a JSON document' };
   const found = resolve(parsed.value, pointer);
@@ -52,7 +55,7 @@ const INTEGER_TEXT = /^(0|-?[1-9][0-9]{0,15})$/;
  */
 export function readIntegers(s: Series, label: string, src: Sources, budget: StepBudget): Read<number[]> {
   if ('pointer' in s) {
-    const arr = readArray(s.pointer, label, src.json);
+    const arr = readArray(s.pointer, label, src.json, budget);
     if (!arr.ok) return arr;
     budget.spend(arr.value.length * DATA_WORK.perEntry);
     const out: number[] = new Array<number>(arr.value.length);
@@ -65,15 +68,17 @@ export function readIntegers(s: Series, label: string, src: Sources, budget: Ste
   }
   const t = src.table();
   if (!t.ok) return { ok: false, detail: t.error };
-  const col = t.value.columns.indexOf(s.column);
+  const { columns, rows } = t.value;
+  // One unit per column name compared: the lookup scans the header from both ends.
+  budget.spend(DATA_WORK.perSeries + columns.length);
+  const col = columns.indexOf(s.column);
   if (col < 0) return { ok: false, detail: `${label}: column not found` };
   // A CSV may repeat a header name. Readers disagree on which column it names, so the check reads neither.
-  if (t.value.columns.lastIndexOf(s.column) !== col) return { ok: false, detail: `${label}: the column name appears twice` };
-  const rows = t.value.rows;
-  budget.spend(rows.length * DATA_WORK.perEntry);
-  const out: number[] = new Array<number>(rows.length);
-  for (let i = 0; i < rows.length; i++) {
-    const text = cellText(rows[i]![col]!);
+  if (columns.lastIndexOf(s.column) !== col) return { ok: false, detail: `${label}: the column name appears twice` };
+  budget.spend(rows * DATA_WORK.perEntry);
+  const out: number[] = new Array<number>(rows);
+  for (let i = 0; i < rows; i++) {
+    const text = cellText(cellAt(t.value, i, col));
     const v = text !== null && text.length <= 17 && INTEGER_TEXT.test(text) ? Number(text) : NaN;
     if (!isSafeInt(v)) return { ok: false, detail: `${label}: row ${i + 1} is not an integer` };
     out[i] = v;

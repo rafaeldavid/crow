@@ -44947,6 +44947,14 @@ function parserFor(name, signed, extra) {
 		return refusal === void 0 ? ok(copy) : err(problem("invalid_terms", `${name}: ${refusal}`));
 	};
 }
+/** D100: the first check id that two checks share, or undefined. */
+function repeatedCheckId(checks) {
+	const seen = /* @__PURE__ */ new Set();
+	for (const { id } of checks ?? []) {
+		if (seen.has(id)) return id;
+		seen.add(id);
+	}
+}
 function commitmentRules(c) {
 	const mode = c.settlement.mode;
 	const max = c.timing.maxSubmissions;
@@ -44954,6 +44962,8 @@ function commitmentRules(c) {
 	if (max !== 1) return `timing.maxSubmissions ${max} is not supported in Phase 1 (1 only)`;
 	for (const key of ["appealWindowSec", "appealDecideSec"]) if (c.timing[key] > UINT32_MAX) return `timing.${key} ${c.timing[key]} exceeds ${UINT32_MAX}`;
 	if (!(Date.parse(c.createdAt) < Date.parse(c.timing.offerExpiresAt))) return "createdAt must be before timing.offerExpiresAt";
+	const repeated = repeatedCheckId(c.acceptance?.deterministicChecks);
+	if (repeated !== void 0) return `acceptance.deterministicChecks: id ${repeated} is used by more than one check`;
 	const sealed = c.privateTerms;
 	if (sealed) return unlockRule([...sealed.deliverable.envelopes, ...sealed.acceptance.envelopes]);
 }

@@ -41,6 +41,7 @@ A robot deal can hold the delivery to the buyer's order: the arm passed through 
 
 Measured on 2026-11-25 on one Mac, unless labelled.
 
+- **After merging `main` (PRs 804, 806, 807):** `tsc -b` and `pnpm lint` clean; `npx vitest run packages/judgment site tests/spec.test.ts apps/adjudicator/src/check-kinds.test.ts packages/core` 57 files, 2,355 passed, 2 skipped; `pnpm validate:spec` 38 of 38; `pnpm snap` 62 of 62; `node site/check.mjs` passes; `buy.mjs` and `try.mjs` equal `main`'s.
 - **`/verify` after the red team's fixes** (kinds 5 and 6): `pnpm exec vitest run packages/judgment tests/spec.test.ts` 1,186 passed, 2 skipped; `pnpm validate:spec` 38 of 38 and `spec/openapi.json` fresh; `tsc -b` and `pnpm lint` clean; `pnpm snap` 62 of 62. The only snapshot diffs are the two attack fixtures' description lines.
 - **Package, before the fixes:** `npx vitest run packages/judgment`: 24 files, 910 passed, 2 skipped.
 - **Contract and neighbours:** `tests/spec.test.ts`, `apps/adjudicator/src/check-kinds.test.ts`, the operator's version tests, `examples/mandate.test.ts` and `packages/core`: 30 files, 1,423 passed.
@@ -55,7 +56,7 @@ Measured on 2026-11-25 on one Mac, unless labelled.
 | Finding | Severity | State |
 | --- | --- | --- |
 | The recorded-path terms accept a reversed run whose joint columns are flipped back with the timestamps kept, and a run with one invented sample at the waypoint. No data check can tell; the fixture terms carry no `signature_valid` | Medium | Recorded: ADR-0047 "What the kinds do not prove" and both attack descriptions name it. The live deal pairs the kinds with `signature_valid` (P-22) |
-| `toTable` converts every non-scalar JSON-table cell with the recursive `canonicalJson`, so a deeply nested cell fails a column check at a depth that depends on the process's stack size (about 1,000 to 4,400 levels, measured). Older code; every column check shares it | Medium | Open, for the coordinator: a fixed depth cap in `toTable`, or convert only the columns a check reads |
+| `toTable` converts every non-scalar JSON-table cell with the recursive `canonicalJson`, so a deeply nested cell fails a column check at a depth that depends on the process's stack size (about 1,000 to 4,400 levels, measured). Older code; every column check shares it | Medium | Closed by PR 807 (D96), merged into this branch: `canonical` refuses past a fixed depth (`MAX_CANONICAL_DEPTH`), so the answer no longer depends on the stack [inferred from `cost.ts`] |
 | Terms that pass the schema but contradict themselves (`minStep` above `maxStep`, a waypoint with the wrong number of coordinates) are agreed and funded, then fail at judgment: the buyer pays the fee and the seller gets nothing for good work. Nothing runs `validateCheck` at offer time | Medium | Open: the unbuilt half of ADR-0045 section 10, which T-590 and T-597 left for a later change |
 | A column name's length counted UTF-16 units, the schema code points | Low | Fixed: code points, with a test |
 | A CSV that repeats a header name read the first column | Low | Fixed: the check fails, with a test |
@@ -66,5 +67,6 @@ Measured on 2026-11-25 on one Mac, unless labelled.
 ## Handoff
 
 - **For P-18 (the site docs batch):** `site/ref/checks.txt` does not name the three kinds yet. ADR-0047 sections 1 to 5 hold the parameters, rules, limits and failure lines.
-- **For the coordinator:** the two open Medium findings above. Both predate this change and affect every column check or every kind.
+- **For the coordinator:** the open Medium finding above (no `validateCheck` at offer time). It predates this change and affects every kind.
+- **Merged `main` after PRs 804, 806 and 807 (2026-11-25):** the three kinds read through 807's `Run` and charge each series, its pointer or header lookup, each entry and each comparison. `check-kinds.test.ts` renames 804's stand-in to `trend_column`.
 - **Deploy notes** (a deploy waits for Rafa): the operators' next deploy serves schema 0.14, and the reference adjudicators list 13 kinds, so the world registers them again with a later `issuedAt` (inferred, as for T-590). No signed type, contract or domain changes.

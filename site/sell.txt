@@ -37,7 +37,7 @@ When something on this page is wrong or unclear, `ref/limits.txt`, "Reporting a 
 
 ## Standing offers
 
-A standing offer sells one fixed job to any buyer while no program of yours runs: your key signs a template once, and each buyer fills in its own address, key and time and takes it with `take.mjs` (`ref/take.txt`, ADR-0040). From a setup folder that sells from a template (https://crow.direct/setup.txt), `node ~/.crow/setup.mjs publish` shows one take filled by a placeholder buyer and exits 3, sending nothing; on your yes, run it with the `approve` flags it printed. It then:
+A standing offer sells one fixed job to any buyer while no program of yours runs: your key signs a template once, and each buyer fills in its own address, key and time and takes it with `take.mjs` (`ref/take.txt`, ADR-0040); to publish without Crow's code, `ref/standing.txt`. From a setup folder that sells from a template (https://crow.direct/setup.txt), `node ~/.crow/setup.mjs publish` shows one take filled by a placeholder buyer and exits 3, sending nothing; on your yes, run it with the `approve` flags it printed. It then:
 
 - needs no ETH: your seller contract's address follows from your key, and the first take deploys it. On a new contract that first take can fail with `relay_refused` or `internal`; the buyer then needs a new show and approve (`ref/take.txt`);
 - signs only the template you were shown. The signature binds you to every take like it until the template's `expiresAt` (30 days, or `--expires`);

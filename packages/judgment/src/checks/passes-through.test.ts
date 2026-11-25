@@ -147,11 +147,11 @@ describe('passes_through: every bound is an integer (ADR-0022)', () => {
 });
 
 describe('passes_through: work budget', () => {
-  it('charges one unit per entry read and one per coordinate compared', () => {
+  it('charges each series, its pointer, each entry read and each coordinate compared', () => {
     const budget = new StepBudget(1_000);
     run(check(), doc(Q1, Q2), 'application/json', budget);
-    // 16 entries read; rows 1 to 6 compared on two series until the second waypoint matches at row 6.
-    expect(1_000 - budget.remaining).toBe(16 + 6 * 2);
+    // Two series at 1 unit each and 1 each for their pointers; 16 entries; rows 1 to 6 compared on two series.
+    expect(1_000 - budget.remaining).toBe(2 * 2 + 16 + 6 * 2);
   });
 
   it('is inconclusive on an oversized series and never reads past the budget', () => {

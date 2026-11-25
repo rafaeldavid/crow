@@ -1804,6 +1804,30 @@ The build is not started; it opens as its own task on Rafa's word.
 
 **Litmus tests.** Neutrality: unchanged. The hold: unchanged. Defended judgment: strengthened; stage 1's work bound now holds for every pattern a party can write.
 
+## D96. Every judgment step is charged to the check budget (T-607)
+
+**Status:** adopted, 2026-11-25.
+
+**Who decided.** The session for T-607, under the in-repository autonomy rule. Rafa may overrule any line.
+
+**Why.** Stage 1 bounds the work of a delivery's checks by one count, 50,000,000 units (`CHECK_BUDGET`). D93 made one unit stand for about the same work on every pattern. Outside the pattern engine, several steps did work on a party's delivery or terms that the budget did not count, so a delivery could take far longer to judge, or hold far more memory, than its size and its terms suggest (measured in the task).
+
+**Decided:**
+
+- **Charge every step.** The column checks charge one unit per cell they read, the JSON Schema keywords one per name they look up, and every scan one per 16 characters. Building a set entry costs `SET_UNITS`. `enum`, `const` and `uniqueItems` charge the canonical form of the value they compare. Building the table charges its length and its cells. The cost model is in `packages/judgment/src/checks/cost.ts`.
+- **Do repeated work once.** A run builds the table, counts hidden characters and reads each reference once, and every check that needs them shares the result. A reference is kept only until the last check that names it, and the JSON table reads the run's one JSON parse (T-597), which stays uncharged because `signature_valid`'s charges are part of its kind. Terms constants (`enum`, `const`, `type`, `required`) are prepared when the schema compiles, and each check compiles once per run.
+- **A fixed depth for canonical forms.** `enum`, `const`, `uniqueItems` and a JSON table cell refuse a value nested deeper than `MAX_CANONICAL_DEPTH` (1,000), as they refuse other values canonical form cannot write. Before, the limit was the engine's stack, which depends on the moment, so two adjudicators could disagree.
+- **Bound compiled patterns before signing.** A JSON schema's patterns together hold at most `MAX_SCHEMA_STATES` (20,000) NFA states; `validateCheck` refuses a schema over it, as it refuses one over `MAX_SCHEMA_NODES`.
+- **Bind the anchors as RegExp does.** In a `json_schema` `pattern`, a leading `^` binds to the first top-level alternative and a trailing `$` to the last: `^a|b` finds the `b` in "xb". Whole-cell matches (`regex_match_rate_min`) do not change.
+- **Counts, not timers,** so the primary and the fallback adjudicator on one build reach the same result.
+- **Effect** (measured): no check result changes on any check and delivery the tests and snapshots use, and none in 20,000 random checks on random deliveries run against the old code. The largest conclusive run in the tests spends 2.1% of the budget (1.4% before). The table of a delivery takes one array instead of one per row.
+- **Cost.** A check near the budget may now run out and escalate where it passed or failed before. A schema whose patterns exceed 20,000 states is refused at offer time, and an already signed one fails as invalid. A `pattern` with an anchor beside top-level alternation may now pass where it failed. A value nested deeper than 1,000 now fails those checks every time. No shipped template or fixture meets any of these cases.
+- **Version.** The checks are not a kept version (`packages/judgment/src/kept/`), so the primary and the fallback adjudicator deploy from one build, as for D93.
+
+**Dropped:** caps on the size of `enum`, `const`, `type` and `required` in the terms (D31: parametrize, don't restrict); charging the cost once it is known, by time; refusing an anchor beside top-level alternation, which `RegExp` accepts; charging the run's one JSON parse, which would change `signature_valid`'s pinned charges.
+
+**Litmus tests.** Neutrality: strengthened; no party can make a judging pass much slower than the budget allows. The hold: unchanged. Defended judgment: strengthened; stage 1's work bound now holds for every check a party can write.
+
 ## D98. Three check kinds read the recorded data (ADR-0047, T-610)
 
 **Status:** adopted, 2026-11-25.
@@ -1819,9 +1843,47 @@ The build is not started; it opens as its own task on Rafa's word.
 - **`equal_lengths`:** 2 to 32 JSON arrays, by pointer, have one length.
 - **A series** is a JSON array at a pointer or a column of the tabular view. Every entry must be an integer; a decimal sample fails the check, and nothing is rounded.
 - **Every bound is an integer** with the safe range as its limits, in the schema and in `validateCheck` (ADR-0022).
-- **Work:** 1 unit per entry read, per coordinate or step compared, and per array length read, from the shared budget. No clock.
+- **Work:** from the shared budget, charged as D96 charges every step: 1 unit per series and for the pointer it walks or the header it searches, 1 per entry read, 1 per coordinate or step compared. No clock.
 - **Schema v0.14,** additive. The EIP-712 domain version and `commitment.schemaVersion` stay 0.8.
 
 **Left out:** an unordered `passes_through`, one tolerance per series, a decreasing variant and a Euclidean distance. Each is one optional parameter or kind later, when a deal needs it.
 
 **Litmus tests.** Neutrality: holds; built-in code, the same result at every adjudicator (`neutrality.data-checks-primary-offline`). The hold: unchanged. Defended judgment: strengthened; stage 1 can hold a recording to the buyer's order.
+
+## D99. The hidden-character count reads decoded JSON strings (T-608)
+
+**Status:** adopted, 2026-11-25.
+
+**Who decided.** The session `hidden-and-ids`, under the in-repository autonomy rule. Rafa may overrule any line.
+
+**Why.** The count a buyer writes into a required check should match what the buyer's own reader sees in the delivery. For JSON, that reader sees decoded strings.
+
+**Decided:**
+
+- **Count raw text and decoded strings, once each.** For `application/json`, the count reads the delivery with its string escapes decoded. A character written literally counts once; a decoded one counts once. Keys count as well as values.
+- **Other formats** are unchanged.
+- **Charge.** The decode runs once per delivery, shared by every hidden-character check, and is not charged to the budget: it is linear and bounded by the store limit (measured 0.6 to 1.1 s on 10 MiB), like the JSON parse. Charging it (measured) made a required result flip to escalate on a large delivery that cost the budget elsewhere, so it waits for the work-budget change to charge it with the rest. The change is `hiddenText` in `checks/index.ts` and one line in the check's branch of `evaluate`.
+- **Version.** The checks are not a kept version (`packages/judgment/src/kept/`), so the rule belongs to the build. The primary and the fallback adjudicator deploy from one build.
+- **Effect** (measured): no judgment result on the tests and snapshots changes.
+
+**Dropped:** counting the parsed value instead of the text (it counts fewer characters on some inputs, and a delivery that does not parse has no value).
+
+**Litmus tests.** Neutrality: unchanged. The hold: unchanged. Defended judgment: strengthened.
+
+## D100. Check ids are unique within the terms (T-608)
+
+**Status:** adopted, 2026-11-25.
+
+**Who decided.** The session `hidden-and-ids`, under the in-repository autonomy rule. Rafa may overrule any line.
+
+**Why.** An id names one check. Terms in which two checks share an id are self-contradictory (D31), and a result keyed by id should have one meaning.
+
+**Decided:**
+
+- **Refuse repeated ids before signing.** `parseCommitment` and `parseAnyCommitment` refuse a plaintext commitment whose `acceptance.deterministicChecks` repeat an id. The rule lives in the parser's rules, so the schema and its version do not change. `examples/check-terms.ts` warns about the repeat.
+- **Keep every result apart.** `runChecks` reports each check under its own id (the first use of an id keeps it; a later repeat gets `id-2`, `id-3`, skipping ids the terms use), in the outcome and in the inconclusive list. Terms signed before the rule, and the opened body of a private commitment, run through it. Aggregation is untouched: it is a kept version (ADR-0036), and changing it would need a new version.
+- **Effect** (measured): no result on the tests and snapshots changes.
+
+**Dropped:** a schema rule (a change needs an ADR and a version bump); matching by position inside `aggregate` (a new aggregation version).
+
+**Litmus tests.** Neutrality: unchanged. The hold: unchanged. Defended judgment: unchanged.

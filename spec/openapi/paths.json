@@ -768,7 +768,7 @@
               },
               "operators": { "type": "array", "items": { "type": "string", "format": "uri" }, "description": "Every node of this world" },
               "minWindowSec": { "type": "integer", "minimum": 0, "description": "The club's shortest judge, fallback and appeal window" },
-              "judges": { "type": "object", "description": "Who judges rubric deals here: `panel` (live or scripted), the registry, the models and today's live budget, with today's tokens by model (`tokensToday.byModel`, counts only)", "x-holdback-untrusted": true },
+              "judges": { "type": "object", "description": "Who judges rubric deals here: `panel` (live, scripted, or unavailable while a chain world's live judge settings are incomplete), the registry, the models and today's live budget, with today's tokens by model (`tokensToday.byModel`, counts only)", "x-holdback-untrusted": true },
               "build": {
                 "type": "object",
                 "additionalProperties": false,

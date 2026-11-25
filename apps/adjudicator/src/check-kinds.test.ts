@@ -3,7 +3,7 @@
 // (packages/judgment/src/checks/checks.test.ts, "fails closed on an unknown check type").
 import { readFileSync } from 'node:fs';
 import { parseAdjudicator, policyHash, step, type Commitment } from '@holdback/core';
-import { CHECK_TYPES, fakeProvider, loadRegistry, type RegistryDoc } from '@holdback/judgment';
+import { CHECK_TYPES, fakeProvider, loadRegistry, type FakeScript, type RegistryDoc } from '@holdback/judgment';
 import { keccak256 } from 'viem';
 import { describe, expect, it } from 'vitest';
 import { DOMAIN, makeCommitment, party, TestSettlement, tusd } from './_sim.js';
@@ -34,11 +34,14 @@ const [ORDER, ECDSA, ED25519] = (JSON.parse(readFileSync(new URL('../../../spec/
 const TREND = { id: 'trend', type: 'trend_column', required: true, column: 'ts' };
 const TREND_OPTIONAL = { ...TREND, id: 'trend-b', required: false };
 
+const RUBRIC = (JSON.parse(readFileSync(new URL('../../../spec/examples/commitment.example.json', import.meta.url), 'utf8')) as Commitment).acceptance.rubric;
+
 const NINE = ['csv_columns_exact', 'row_count_range', 'unique_key', 'null_rate_max', 'regex_match_rate_min', 'iso8601_date_column', 'json_schema', 'reference_row_match_min', 'hidden_characters_max'];
 
-function bench(p: typeof A, name: string, s: TestSettlement, extra: { judgedStore?: JudgedStore } = {}) {
+function bench(p: typeof A, name: string, s: TestSettlement, extra: { judgedStore?: JudgedStore; script?: FakeScript } = {}) {
+  const { script, ...config } = extra;
   const adj = new Adjudicator({
-    ...extra,
+    ...config,
     address: p.address,
     name,
     signingKey: p.key,
@@ -49,7 +52,7 @@ function bench(p: typeof A, name: string, s: TestSettlement, extra: { judgedStor
     registryUri: 'file:///config/judges.yaml',
     fee: { min: tusd('25000000') },
     domain: DOMAIN,
-    provider: fakeProvider({}),
+    provider: fakeProvider(script ?? {}),
     settlement: s,
     trustedAdjudicators: [A.address, B.address, C.address],
   });
@@ -129,6 +132,16 @@ describe('the primary and a check kind it does not run (ADR-0045 §10)', () => {
     expect(await plain.b.declines(plain.deal, 'fallback')).toBeNull();
     expect(await plain.c.declines(plain.deal, 'appeal')).toBeNull();
   });
+
+  it('cannotJudge, whose answer the hosted state read shows as a notice, says it at every role (D92)', async () => {
+    const roles = ['primary', 'fallback', 'appeal'] as const;
+    const { a, b, c, deal } = await offered([ORDER, TREND]);
+    for (const [role, adj] of [[roles[0], a], [roles[1], b], [roles[2], c]] as const) {
+      expect(await adj.cannotJudge(deal, role), role).toMatchObject({ type: 'adjudicator_unavailable', detail: expect.stringContaining(`does not run the check kind trend_column, which check trend names, so as ${role} adjudicator it signs no decision`) });
+    }
+    const plain = await offered([ORDER]);
+    for (const [role, adj] of [[roles[0], plain.a], [roles[1], plain.b], [roles[2], plain.c]] as const) expect(await adj.cannotJudge(plain.deal, role), role).toBeNull();
+  });
 });
 
 describe('a turn on a funded deal whose terms name a kind the adjudicator does not run (D92)', () => {
@@ -188,6 +201,47 @@ describe('a turn on a funded deal whose terms name a kind the adjudicator does n
       c.state = r.value;
     }
     expect(s.state(deal.id)).toMatchObject({ kind: 'Refunded', via: { kind: 'default_outcome', from: 'FallbackJudging' } });
+  });
+
+  it('the appeal adjudicator signs nothing on an escalation, and would have decided it on a build that runs the kind', async () => {
+    const s = new TestSettlement();
+    // Only one family answers the primary's panel, so it escalates.
+    const a = bench(A, 'bench-a', s, { script: { 'gpt-a': 'timeout', 'gpt-b': 'timeout', 'qwen-a': 'timeout', 'qwen-b': 'timeout' } });
+    bench(B, 'bench-b', s);
+    const c = bench(C, 'bench-c', s);
+    // An optional check that fails stage 1 sends the delivery to the panel.
+    const acceptance = { deterministicChecks: [TREND_OPTIONAL], rubric: RUBRIC } as Commitment['acceptance'];
+    const deal = makeCommitment({ primary: A.address, fallback: B.address, appeal: C.address, policyHash: policyHashOf(a.policy), registryHash: reg.hash, buyer: BUYER, seller: SELLER, acceptance });
+    s.offer(deal);
+    const kinds = CHECK_TYPES as Set<string>;
+    kinds.add('trend_column');
+    try {
+      expect((await a.runOnce()).accepted).toEqual([deal.id]);
+      s.fund(deal.id);
+      s.at('2026-11-01T09:59:00Z');
+      // Not a table: with the made-up kind added, stage 1 has no evaluator for it and fails it here as unreadable.
+      await s.deliver(deal.id, '{"manifest":{}}', [A, B, C, BUYER].map((p) => ({ recipient: p.address, publicKey: p.enc.publicKey })));
+      expect((await a.runOnce()).decided.map((d) => d.outcome)).toEqual(['escalate']);
+    } finally {
+      kinds.delete('trend_column');
+    }
+    expect(s.state(deal.id).kind).toBe('Escalated');
+    s.at('2026-11-01T09:59:02Z');
+    const [task] = await s.tasks(C.address);
+    expect(task!.role).toBe('appeal');
+    const refused = await c.decideTask(task!);
+    expect(refused.ok ? null : refused.error).toMatchObject({ type: 'adjudicator_unavailable', detail: expect.stringContaining('so as appeal adjudicator it signs no decision') });
+    expect((await c.runOnce()).decided).toEqual([]);
+    // Nothing new beside the primary's escalation and its record.
+    expect([s.decisions(deal.id).length, s.records.size, s.state(deal.id).kind]).toEqual([1, 1, 'Escalated']);
+    // The control: only the check kind stood in the way of this same task.
+    kinds.add('trend_column');
+    try {
+      const decided = await c.decideTask(task!);
+      expect(decided.ok ? decided.value.decision?.role : decided.error.detail).toBe('appeal');
+    } finally {
+      kinds.delete('trend_column');
+    }
   });
 
   it('a turn whose result was kept before a restart still completes on a build that lost the kind (D92, ADR-0036 section 2)', async () => {

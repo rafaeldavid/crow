@@ -3,7 +3,7 @@
 // reads each array's length and nothing inside it.
 import type { JudgmentCheck } from '../terms.js';
 import type { StepBudget } from './safe-regex.js';
-import { DATA_WORK, SERIES_LIMITS as MAX, readArray, validateSeries, type DataOutcome, type Sources } from './series.js';
+import { SERIES_LIMITS as MAX, readArray, validateSeries, type DataOutcome, type Sources } from './series.js';
 import { hasShape } from './signature-valid.js';
 
 type EqualLengthsCheck = Extract<JudgmentCheck, { type: 'equal_lengths' }>;
@@ -26,8 +26,7 @@ export function evaluateEqualLengths(check: EqualLengthsCheck, src: Pick<Sources
   if (invalid) return { passed: false, detail: `check invalid: ${invalid}` };
   let first = 0;
   for (const [i, s] of check.series.entries()) {
-    budget.spend(DATA_WORK.perSeries);
-    const arr = readArray(s.pointer, `series ${i + 1}`, src.json);
+    const arr = readArray(s.pointer, `series ${i + 1}`, src.json, budget);
     if (!arr.ok) return { passed: false, detail: arr.detail };
     if (i === 0) first = arr.value.length;
     else if (arr.value.length !== first) return { passed: false, detail: `series ${i + 1} has ${arr.value.length} entries; series 1 has ${first}` };
