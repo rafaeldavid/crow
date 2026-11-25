@@ -33,7 +33,7 @@ Put ADR-0045's two schema changes into the API contract as version 0.13, with ex
 ## Out of scope
 
 - The evaluator, its `DeterministicCheck` type and its entry in stage 1's registry (P-03).
-- The check-validation half of ADR-0045 section 10. It follows in a separate change.
+- The check-validation half of ADR-0045 section 10 (the primary declines a check `validateCheck` refuses). It follows in a separate change, with P-03. T-593 now bounds each pattern's compile, but nothing bounds a whole offer's: one accepted `json_schema` check of 122,479 bytes took 351 ms (measured), eight fit a 1 MiB offer, and every adjudicator pass would pay that again until the offer expires.
 - The parties' preflight on all three adjudicators' `checkKinds` (ADR-0045 section 10).
 - `spec/test-vectors/signature-valid/` (T-589, a parallel task) and `site/ref/checks.txt`.
 
@@ -45,10 +45,10 @@ All measured on 2026-11-25 on one Mac that other sessions were loading, unless l
 - **Vectors:** the `check` objects of the 95 vectors in `spec/test-vectors/signature-valid/vectors.json` (T-589, merged into this branch from `main`) agree with both validators, Ajv over `spec/schemas` and the compiled core parsers. 11 of them expect a refusal.
 - **Over HTTP, on the SimChain operator:** `GET /v1/adjudicators/{address}` serves the nine kinds. Preparing an offer with the operator's default primary answers 400 with the decline's reason. With the primary named, the prepare and post answers carry the reason in `notices`, and the offer stays `Offered`.
 - **Bundles,** SHA-256 on `main` to SHA-256 here. Two change, because they embed the schemas:
-  - `site/setup.mjs`: `e422f778de7de70e20bec1d97bcd400a3cbbf30b10ef9b64b2ca58995c09d630` to `7cb29b1c3fa10515163d94aefd93f177a7a8a2dcf165ad43981de3f0abdb31b4`.
+  - `site/setup.mjs`: `6aef4cd79fe51de20bad53709dff499f59010c5d59024abfe51811946aed007a` to `597d46b0ed13e783a9cb89f53f9766717253ac89763f3b9ac61aafa7886e7401`.
   - `site/take.mjs`: `01a171a2166c63378b15c0df220607bd380a24ea7ba8ca3e64fbafb497d25984` to `e374077946d239c0645f6c1a8768139a0f964d389e145a168c9bed26bcbce15a`.
   - `buy.mjs`, `try.mjs`, `try-sell.mjs`, `try-judged.mjs`, `try-reclaim.mjs` and `preflight.mjs` match `main` byte for byte.
-  - PR 787 also changes `setup.mjs`. Whichever merges second merges `main` and runs `node site/build.mjs`; a bundle conflict is never resolved by hand.
+  - PR 787, which also changed `setup.mjs`, merged first. This branch merged it and rebuilt every bundle. A bundle conflict is never resolved by hand.
 - **Checks on the merged tree:** `pnpm install --frozen-lockfile`, `pnpm build`, `pnpm typecheck`, `pnpm lint`, `pnpm validate:spec` and `node site/build.mjs && node site/check.mjs` pass.
 - **Full suite, final tree:** `pnpm test` passes: 301 files passed and 2 skipped, 5,848 tests passed and 7 skipped. `pnpm snap`: 53 of 53.
 - **Local chain:** `neutrality.adjudicator-lacks-check-kind` and `neutrality.adjudicator-never-accepts` pass against the contracts on anvil, with 0 transactions and a transcript identical to SimChain's.
@@ -82,6 +82,7 @@ One further finding concerns code older than this change. It went to the coordin
 
 - **Done:** the schema, the examples, the version, the rebuilt `site/setup.mjs` and `site/take.mjs`, the published `checkKinds`, the primary's decline and its fixture. Pull request open; not merged.
 - **For P-03 (the evaluator):**
+  - Build the check-validation decline (ADR-0045 section 10) with: a compile bound over the whole offer or a verdict cached per commitment ID; a notice that names the check ID and a fixed reason, since `validateCheck`'s text can quote the party's terms; the same rule in the scenario runner; and its own red team.
   - Add `signature_valid` to `DeterministicCheck` and to stage 1's registry. The record's `checkKinds` and the decline then follow on their own.
   - `neutrality.adjudicator-lacks-check-kind`, `apps/adjudicator/src/check-kinds.test.ts` and the "not `signature_valid`" assertion will fail then, as they should. The fixture needs another way to give a primary fewer kinds.
   - `validateCheck` must refuse `ed25519` with `der` (ADR-0045 section 5). Today the schema does.
