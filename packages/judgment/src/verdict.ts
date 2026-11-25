@@ -117,6 +117,55 @@ function echoesCanary(raw: string, parsed: unknown, canary: string): boolean {
   return false;
 }
 
+/**
+ * Which verdict-schema rule an output broke, as metadata only: a field path built from the schema's own names and
+ * array indices, the limit, and the actual length, count or JSON type. Never a value, a key or text from the output:
+ * a judge's text quotes the delivery, which is untrusted and private to the deal. Lengths count code points, as the
+ * schema's maxLength does. The pipeline puts this detail in the judgment record, so a filter abstention names its rule.
+ */
+export function schemaFault(json: unknown): string {
+  const typeOf = (v: unknown) => (v === null ? 'null' : Array.isArray(v) ? 'array' : typeof v === 'number' && !Number.isFinite(v) ? 'non-finite number' : typeof v);
+  const isObject = (v: unknown): v is Record<string, unknown> => typeOf(v) === 'object';
+  const extra = (o: Record<string, unknown>, allowed: readonly string[]) => Object.keys(o).filter((k) => !allowed.includes(k)).length;
+  // Numbers the judge controls are bucketed, so the detail carries no more than a few bits a judge could choose.
+  const length = (n: number, max: number) => (n > 2 * max ? `more than ${2 * max}` : String(n));
+  const keys = (n: number) => (n === 1 ? '1 unexpected key' : `${n > 9 ? 'more than 9' : n} unexpected keys`);
+  const text = (v: unknown, path: string, max: number): string | undefined => {
+    if (typeof v !== 'string') return `${path}: ${typeOf(v)}, not a string`;
+    const n = [...v].length;
+    return n > max ? `${path}: ${length(n, max)} > ${max}` : undefined;
+  };
+  if (!isObject(json)) return `the output is a JSON ${typeOf(json)}, not an object`;
+  const top = ['criteria', 'overall', 'injectionSuspected', 'injectionEvidence', 'rationale'];
+  for (const k of ['criteria', 'overall', 'injectionSuspected', 'rationale']) if (!Object.hasOwn(json, k)) return `${k}: missing`;
+  const unexpected = extra(json, top);
+  if (unexpected) return `top level: ${keys(unexpected)}`;
+  const cs = json['criteria'];
+  if (!Array.isArray(cs)) return `criteria: ${typeOf(cs)}, not an array`;
+  if (cs.length > 12) return `criteria: ${cs.length > 24 ? 'more than 24' : cs.length} items > 12`;
+  for (const [i, c] of cs.entries()) {
+    const at = `criteria[${i}]`;
+    if (!isObject(c)) return `${at}: ${typeOf(c)}, not an object`;
+    for (const k of ['id', 'score', 'evidence']) if (!Object.hasOwn(c, k)) return `${at}.${k}: missing`;
+    const more = extra(c, ['id', 'score', 'evidence']);
+    if (more) return `${at}: ${keys(more)}`;
+    if (typeof c['id'] !== 'string' || !/^[a-z0-9_-]{1,40}$/.test(c['id'])) return `${at}.id: not a criterion id`;
+    const score = c['score'];
+    if (typeof score !== 'number' || !Number.isFinite(score)) return `${at}.score: ${typeOf(score)}, not an integer`;
+    if (!Number.isInteger(score)) return `${at}.score: not an integer`;
+    if (score < 0 || score > 4) return `${at}.score: outside 0 to 4`;
+    const e = text(c['evidence'], `${at}.evidence`, 300);
+    if (e) return e;
+  }
+  if (!['pass', 'fail', 'abstain'].includes(json['overall'] as string)) return `overall: not pass, fail or abstain`;
+  if (typeof json['injectionSuspected'] !== 'boolean') return `injectionSuspected: ${typeOf(json['injectionSuspected'])}, not a boolean`;
+  if (Object.hasOwn(json, 'injectionEvidence')) {
+    const e = text(json['injectionEvidence'], 'injectionEvidence', 300);
+    if (e) return e;
+  }
+  return text(json['rationale'], 'rationale', 600) ?? 'another schema rule';
+}
+
 export function parseVerdict(raw: string, opts: VerdictOptions): ParsedVerdict {
   if (raw.length > MAX_OUTPUT_CHARS) return abstain('too_long', `output is ${raw.length} characters`);
 
@@ -128,7 +177,7 @@ export function parseVerdict(raw: string, opts: VerdictOptions): ParsedVerdict {
     jsonOk = false;
   }
   if (echoesCanary(raw, jsonOk ? json : undefined, opts.canary)) return abstain('canary_echo', 'output contains the canary');
-  if (!jsonOk) return abstain('not_json', 'output is not a single JSON value');
+  if (!jsonOk) return abstain('not_json', `output is not a single JSON value${/^\s*```/.test(raw) ? ' (it starts with a code fence)' : ''}`);
 
   let parsed: ReturnType<typeof parseJudgeVerdict>;
   try {
@@ -136,9 +185,10 @@ export function parseVerdict(raw: string, opts: VerdictOptions): ParsedVerdict {
   } catch {
     return abstain('schema', 'output could not be validated');
   }
-  if (!parsed.ok) return abstain('schema', parsed.error.detail.slice(0, 200));
+  if (!parsed.ok) return abstain('schema', schemaFault(json));
   const verdict = parsed.value;
-  if (verdict.rationale.length > opts.rationaleMaxChars) return abstain('schema', `rationale exceeds the policy cap of ${opts.rationaleMaxChars}`);
+  // The policy cap counts UTF-16 units, as it always has; the schema's caps count code points.
+  if (verdict.rationale.length > opts.rationaleMaxChars) return abstain('schema', `rationale: ${verdict.rationale.length > 1200 ? 'more than 1200' : verdict.rationale.length} > ${opts.rationaleMaxChars} (the policy cap, in UTF-16 units)`);
 
   const want = new Set(opts.criterionIds);
   const got = verdict.criteria.map((c) => c.id);

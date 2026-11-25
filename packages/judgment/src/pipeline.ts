@@ -257,7 +257,7 @@ export async function runPipeline(input: PipelineInput): Promise<Result<Judgment
   const rubricIds = acceptance.rubric.criteria.map((c) => c.id);
   const sameIds = (cs: readonly JudgmentCriterion[]) => cs.length === rubricIds.length && cs.every((c) => rubricIds.includes(c.id)) && new Set(cs.map((c) => c.id)).size === cs.length;
 
-  type SeatResult = { member: PanelMember; verdict: PanelVerdict; canaryEcho: boolean; filtered?: string; strided: boolean };
+  type SeatResult = { member: PanelMember; verdict: PanelVerdict; canaryEcho: boolean; filtered?: string; filterDetail?: string; strided: boolean };
   // Every seat's prompt is built before any judge is called, so a refusal (a bad criteria order, a prompt that cannot
   // be built) never follows a judge call, and a retry of the turn never calls the same judges again for nothing.
   const prompts: Array<{ seat: PanelSeat; family: string; p: Exclude<ReturnType<typeof buildPrompt>, { ok: false }>['value'] }> = [];
@@ -272,6 +272,7 @@ export async function runPipeline(input: PipelineInput): Promise<Result<Judgment
       ...(input.template ? { template: input.template } : {}),
       templates,
       stride: screener.stride,
+      rationaleMaxChars: policy.rationaleMaxChars,
       ...(input.maxDataChars !== undefined ? { maxDataChars: input.maxDataChars } : {}),
       ...(input.sampleSeed ? { sample: { seed: input.sampleSeed(seat, i), mime: input.intake.mime } } : {}),
     });
@@ -311,7 +312,7 @@ export async function runPipeline(input: PipelineInput): Promise<Result<Judgment
         return seatError;
       }
       if (parsed.status === 'abstain') {
-        return { member: { ...member, status: 'abstain' }, verdict: none, canaryEcho: parsed.reason === 'canary_echo', filtered: parsed.reason, strided: p.sampling === 'stride' };
+        return { member: { ...member, status: 'abstain' }, verdict: none, canaryEcho: parsed.reason === 'canary_echo', filtered: parsed.reason, filterDetail: parsed.detail, strided: p.sampling === 'stride' };
       }
       const status = parsed.verdict.overall === 'abstain' ? 'abstain' : 'ok';
       return { member: { ...member, status, verdict: parsed.verdict }, verdict: { family, verdict: parsed.verdict }, canaryEcho: false, strided: p.sampling === 'stride' };
@@ -321,7 +322,10 @@ export async function runPipeline(input: PipelineInput): Promise<Result<Judgment
   const canarySignals = rs.filter((r) => r.canaryEcho).map((r) => ({ kind: 'canary_echo' as const, detail: `judge ${r.member.judgeId} echoed its canary` }));
   const finalScreen: ScreenResult = { flagged: baseScreen.flagged || canarySignals.length > 0, signals: [...baseScreen.signals, ...canarySignals] };
   // A filter abstention could be induced by the seller, so it escalates rather than shrinking the panel.
-  const escalate = rs.filter((r) => r.filtered).map((r) => `judge ${r.member.judgeId} output rejected by a filter (${r.filtered})`);
+  // The schema filter's detail is metadata only (verdict.ts schemaFault): a field path, a limit and a length or type.
+  const filterReason = (r: SeatResult) =>
+    `judge ${r.member.judgeId} output rejected by a filter (${r.filtered}${r.filtered === 'schema' && r.filterDetail ? `: ${r.filterDetail}` : ''})`.slice(0, 200);
+  const escalate = rs.filter((r) => r.filtered).map(filterReason);
   // A seeded sample is recomputable and unpredictable to the seller; only the even-stride fallback escalates.
   if (rs.some((r) => r.strided)) escalate.push('the judges saw a sample of the deliverable, not all of it');
   const agg = aggregation.aggregate({
@@ -335,5 +339,9 @@ export async function runPipeline(input: PipelineInput): Promise<Result<Judgment
     thresholds,
     escalate,
   });
-  return ok(wellFormed({ ...base, screen: finalScreen, panel: { ran: true, members: rs.map((r) => r.member) }, aggregate: agg }));
+  // Every filter abstention names its judge and rule in the record, on every path the aggregation takes (the appeal after
+  // an escalation lists only a count), so the next one can be measured. Decisions and statuses do not change.
+  const named = escalate.slice(0, rs.filter((r) => r.filtered).length).filter((reason) => !agg.reasons.includes(reason));
+  const aggregate = named.length ? { ...agg, reasons: [...agg.reasons, ...named] } : agg;
+  return ok(wellFormed({ ...base, screen: finalScreen, panel: { ran: true, members: rs.map((r) => r.member) }, aggregate }));
 }

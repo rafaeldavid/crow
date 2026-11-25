@@ -54,6 +54,12 @@
       "appealPromptTemplateHash": "0xa0bb1a5d8fa8ac53294a41556df71c098f73220d24efd9522e922f9004248659",
       "status": "kept",
       "since": "released before T-377"
+    },
+    {
+      "promptTemplateHash": "0x4d328a15ef96b9aa0f4166efc720a320f82e9c677fdd8beaff431ecefcc9629b",
+      "appealPromptTemplateHash": "0xfc6d93d5441808bbfa690c0402a0ee185eab48c508025f59cf3c4f9f5d8332f1",
+      "status": "kept",
+      "since": "2026-11-25, partner C's refund: rule 5 states the verdict limits in words; carried beside pair 1, the default moves in a second deploy"
     }
   ],
   "aggregations": [

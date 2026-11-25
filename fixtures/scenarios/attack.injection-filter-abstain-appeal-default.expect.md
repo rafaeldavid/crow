@@ -71,12 +71,12 @@ Refusals:
   - claude-b · anthropic/claude · placeholder-claude-b-20260601 · recorded (authored) · fail · scores 0/0/0 · injection suspected · input 0x3b32…65de
   - claude-a · anthropic/claude · placeholder-claude-a-20260601 · recorded (authored) · fail · scores 0/0/0 · injection suspected · input 0x155d…55a3
   - gpt-a · openai-compatible/gpt · placeholder-gpt-a-20260601 · recorded (authored) · fail · scores 0/0/0 · injection suspected · input 0xe9ad…fd29
-- **Aggregate:** reject (weighted score 0.00; 0 pass, 4 fail of 4 valid). Reasons: flagged appeal: rejected, a flagged case is accepted only unanimously (1 of 5 seats returned no valid verdict; 4 failed; passes span 0 of the 3 families required; a judge suspected injection; score...; screen flagged; see screen.signals; a judge suspected injection; 1 judge output rejected by a filter.
+- **Aggregate:** reject (weighted score 0.00; 0 pass, 4 fail of 4 valid). Reasons: flagged appeal: rejected, a flagged case is accepted only unanimously (1 of 5 seats returned no valid verdict; 4 failed; passes span 0 of the 3 families required; a judge suspected injection; score...; screen flagged; see screen.signals; a judge suspected injection; 1 judge output rejected by a filter; judge qwen-a output rejected by a filter (url).
 - **Signed:** reject.
 
 ## Receipts and log
 
-- Events 0–9. Chain head 0x1ee2…66e9. Replay of 7 SimChain submissions from genesis matches the settlement state.
+- Events 0–9. Chain head 0xb9ac…7f09. Replay of 7 SimChain submissions from genesis matches the settlement state.
 - Receipts from op-1: 5 (rcpt-0001–rcpt-0005). The runner labels them without signing; the operator API signs real receipts.
 
 ## Invariants
