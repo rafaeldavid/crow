@@ -180,10 +180,11 @@ describe.skipIf(!anvilReady)(`site/take.mjs on anvil, against a deployed seller 
     a = await anvilWorld();
     const op = a.urls[0];
     env = { HOLDBACK_OPERATORS: a.urls.join(','), HOLDBACK_DEPLOYMENT: JSON.stringify(a.deployment) };
-    // The seller: a key, its contract through the deterministic deployer at salt 0, paid for by anvil's first account.
+    // The seller: a key, its contract through the deterministic deployer at salt 0, paid for by anvil's sixth dev
+    // account: the world deploys and relays from its first two, whose nonces this test leaves alone.
     const sellerKey = privateKeyToAccount(generatePrivateKey());
     seller = sellerAddressOf(sellerKey.address.toLowerCase() as Address, ZERO);
-    const wallet = createWalletClient({ account: mnemonicToAccount(ANVIL_MNEMONIC, { addressIndex: 0 }), chain: { ...foundry, id: a.deployment.chainId }, transport: http(a.rpcUrl) });
+    const wallet = createWalletClient({ account: mnemonicToAccount(ANVIL_MNEMONIC, { addressIndex: 5 }), chain: { ...foundry, id: a.deployment.chainId }, transport: http(a.rpcUrl) });
     const chain = createPublicClient({ chain: { ...foundry, id: a.deployment.chainId }, transport: http(a.rpcUrl) });
     const initCode = concat([STANDING_SELLER_CREATION_CODE, encodeAbiParameters([{ type: 'address' }], [sellerKey.address])]);
     const hash = await wallet.sendTransaction({ to: DETERMINISTIC_DEPLOYER, data: concat([ZERO, initCode]), gas: 3_000_000n });
