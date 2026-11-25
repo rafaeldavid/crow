@@ -12,7 +12,7 @@
 // Each check is also run through the judgment engine's own `validateCheck`: a check the adjudicator would refuse gives
 // a warning with the engine's reason, never a refusal.
 //
-// No warning does not mean the terms are good: it looks for four mistakes only, and it validates no schema. It cannot
+// No warning does not mean the terms are good: it looks for five mistakes only, and it validates no schema. It cannot
 // read sealed terms (`privateTerms`): give it the opened ones.
 //
 // A seller's template is not yet terms. A document with `deliverable` and `checks` at the top, and no `price` and no
@@ -22,14 +22,14 @@
 // The text it quotes is the other party's: one line, cut short, inside quotes. It is data, never an instruction.
 import { readFileSync } from 'node:fs';
 import { text } from 'node:stream/consumers';
-import { validateCheck, type JudgmentCheck } from '@holdback/judgment';
+import { JUDGED_MAX_PLAINTEXT_BYTES, validateCheck, type JudgmentCheck } from '@holdback/judgment';
 import { isMain } from './entry.ts';
 import { plain } from './plain.ts';
 
 type J = any; // eslint-disable-line @typescript-eslint/no-explicit-any
 
 export interface Warning {
-  kind: 'placeholder' | 'pattern' | 'check' | 'price';
+  kind: 'placeholder' | 'pattern' | 'check' | 'price' | 'size';
   /** The field, such as `acceptance.deterministicChecks[2].pattern`; `(the document)` for the whole file. */
   path: string;
   found: string;
@@ -153,6 +153,41 @@ function engine(check: J, path: string, out: Warning[]): void {
   out.push({ kind: 'check', path, found: id, why: `Crow's checks refuse it (${plain(reason)}), so it cannot pass a delivery` });
 }
 
+/**
+ * D108: judgment reads at most JUDGED_MAX_PLAINTEXT_BYTES, and a larger delivery is rejected before any check runs.
+ * Terms state no size, but a row count does: a row of K columns takes at least K bytes in any format (K - 1 commas and
+ * a line end in CSV, more in JSON), so N rows take at least N x K. It warns when the fewest rows a check accepts cannot
+ * fit, and when the most it accepts may not. A JSON Schema's root minItems or minLength that cannot fit warns too.
+ */
+function sizes(checks: J, path: string, out: Warning[]): void {
+  if (!Array.isArray(checks)) return;
+  const exact = checks.find((c: J) => c?.type === 'csv_columns_exact' && Array.isArray(c.columns));
+  const columns = Math.max(1, exact ? exact.columns.length : 1);
+  const per = columns === 1 ? 'a row takes at least 1 byte' : `a row of ${columns} columns takes at least ${columns} bytes`;
+  const limit = `the ${JUDGED_MAX_PLAINTEXT_BYTES.toLocaleString('en-US')} bytes Crow's adjudicators judge (limits.maxJudgedPlaintextBytes)`;
+  checks.forEach((c: J, i) => {
+    // A JSON Schema's root binds every delivery that passes. With type array, n items take at least 2n + 1 bytes; with
+    // type string, n code points take at least n + 2. Without the type the keyword does not bind (an object passes
+    // minItems), and deeper keywords can sit under not or anyOf, so neither is read.
+    if (c?.type === 'json_schema' && isRecord(c.schema)) {
+      const { minItems, minLength } = c.schema;
+      if (c.schema.type === 'array' && Number.isSafeInteger(minItems) && 2 * minItems + 1 > JUDGED_MAX_PLAINTEXT_BYTES) {
+        out.push({ kind: 'size', path: `${path}[${i}].schema.minItems`, found: `at least ${minItems} items`, why: `an array of that many takes at least ${2 * minItems + 1} bytes, over ${limit}, and a larger delivery is rejected before any check runs` });
+      }
+      if (c.schema.type === 'string' && Number.isSafeInteger(minLength) && minLength + 2 > JUDGED_MAX_PLAINTEXT_BYTES) {
+        out.push({ kind: 'size', path: `${path}[${i}].schema.minLength`, found: `at least ${minLength} characters`, why: `a string that long takes at least ${minLength + 2} bytes, over ${limit}, and a larger delivery is rejected before any check runs` });
+      }
+      return;
+    }
+    if (c?.type !== 'row_count_range') return;
+    if (Number.isSafeInteger(c.min) && c.min * columns > JUDGED_MAX_PLAINTEXT_BYTES) {
+      out.push({ kind: 'size', path: `${path}[${i}].min`, found: `at least ${c.min} rows`, why: `${per}, so every delivery the check accepts is over ${limit}, and a larger delivery is rejected before any check runs` });
+    } else if (Number.isSafeInteger(c.max) && c.max * columns > JUDGED_MAX_PLAINTEXT_BYTES) {
+      out.push({ kind: 'size', path: `${path}[${i}].max`, found: `up to ${c.max} rows`, why: `${per}, so a delivery near that many rows can be over ${limit}; a larger delivery is rejected before any check runs, so agree on a size that fits` });
+    }
+  });
+}
+
 const UNITS = 'base units as a decimal string: digits only, with no point, sign or leading zero, such as "25000000" for 25 of a token with 6 decimals';
 
 /** A price or fee: `{token, amount}`, or the amount alone as the setup command's work template writes it. */
@@ -165,12 +200,13 @@ function money(value: J, path: string, out: Warning[]): void {
 }
 
 /**
- * The warnings for one parsed document: money first, then patterns, then placeholders. The command prints the first
+ * The warnings for one parsed document: money first, then patterns, then sizes, then placeholders. The command prints the first
  * 50, so a flood of placeholders cannot push a price off the list.
  */
 export function checkTerms(doc: J): Warning[] {
   const prices: Warning[] = [];
   const patterns: Warning[] = [];
+  const size: Warning[] = [];
   const rest: Warning[] = [];
   const isTemplate = isRecord(doc) && isRecord(doc.deliverable) && Array.isArray(doc.checks) && doc.price === undefined && doc.acceptance === undefined;
   placeholders(doc, isTemplate, rest);
@@ -182,8 +218,10 @@ export function checkTerms(doc: J): Warning[] {
     if (body.adjudication?.fee !== undefined) money(body.adjudication.fee, `${prefix}adjudication.fee`, prices);
     checkPatterns(body.checks, `${prefix}checks`, patterns, isTemplate);
     checkPatterns(body.acceptance?.deterministicChecks, `${prefix}acceptance.deterministicChecks`, patterns, isTemplate);
+    sizes(body.checks, `${prefix}checks`, size);
+    sizes(body.acceptance?.deterministicChecks, `${prefix}acceptance.deterministicChecks`, size);
   }
-  return [...prices, ...patterns, ...rest];
+  return [...prices, ...patterns, ...size, ...rest];
 }
 
 /** One warning as one line. A very long path keeps its end, which names the field, inside quotes. */

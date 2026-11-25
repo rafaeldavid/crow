@@ -9,8 +9,9 @@
 // unknown type, hostile shape, a string too long for a schema pattern) fails closed. A check that runs out of the shared work budget is
 // inconclusive: it is recorded as not passed, and the pipeline escalates instead of rejecting.
 import { err, ok, type MimeType, type Result } from '@holdback/core';
-import { MAX_CIPHERTEXT_BYTES as STORE_MAX_BYTES, sha256 } from '@holdback/core/crypto';
+import { sha256 } from '@holdback/core/crypto';
 import { countHidden, decodeJsonEscapes, type HiddenCounts } from '../hidden.js';
+import { JUDGED_MAX_PLAINTEXT_BYTES } from '../intake.js';
 import { hasUnexplainedTagChars } from '../normalize.js';
 import type { JudgmentCheck } from '../terms.js';
 import type { UntrustedData } from '../untrusted.js';
@@ -293,8 +294,8 @@ function newRun(input: CheckInput, budget: StepBudget, checks: readonly Judgment
 }
 
 function readReference(sha: string, bytes: Uint8Array, mime: MimeType, budget: StepBudget): Result<Indexed, string> {
-  // The most any content store keeps (references.ts, REFERENCE_MAX_BYTES): checked before hashing or parsing.
-  if (bytes.length > STORE_MAX_BYTES) return err(`reference is ${bytes.length} bytes; the cap is ${STORE_MAX_BYTES}`);
+  // D108: the judged-intake limit (references.ts, REFERENCE_MAX_BYTES), checked before hashing or parsing.
+  if (bytes.length > JUDGED_MAX_PLAINTEXT_BYTES) return err(`reference is ${bytes.length} bytes; judgment reads at most ${JUDGED_MAX_PLAINTEXT_BYTES} (the judged-intake limit)`);
   budget.spend(Math.ceil(bytes.length / REFERENCE_BYTES_PER_UNIT));
   if (sha256(bytes) !== sha) return err('reference bytes do not match the committed hash');
   let text: string;

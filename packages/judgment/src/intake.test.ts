@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import { ADJUDICATOR, delivery, fakeUnwrap, GOOD_CSV, seal, utf8 } from './_helpers.js';
-import { intake, MAX_PLAINTEXT_BYTES } from './intake.js';
+import { intake, JUDGED_MAX_PLAINTEXT_BYTES, MAX_CIPHERTEXT_BYTES, MAX_PLAINTEXT_BYTES } from './intake.js';
 import { normalizeText } from './normalize.js';
 import { UntrustedData } from './untrusted.js';
 
@@ -75,29 +75,39 @@ describe('intake', () => {
     }
   });
 
-  it('refuses plaintext over 10 MB', async () => {
+  it('D108: judges at most 1 MiB, below the 10 MiB store cap', () => {
+    expect(JUDGED_MAX_PLAINTEXT_BYTES).toBe(1024 * 1024);
     expect(MAX_PLAINTEXT_BYTES).toBe(10 * 1024 * 1024);
-    const big = new Uint8Array(MAX_PLAINTEXT_BYTES + 1).fill(0x61);
+    expect(MAX_CIPHERTEXT_BYTES).toBe(10 * 1024 * 1024 + 28);
+  });
+
+  it('refuses plaintext one byte over the judged-intake limit, naming the limit', async () => {
+    const big = new Uint8Array(JUDGED_MAX_PLAINTEXT_BYTES + 1).fill(0x61);
     const r = await run(big);
+    expect(r).toEqual({ ok: false, error: { code: 'payload_too_large', detail: `plaintext is ${JUDGED_MAX_PLAINTEXT_BYTES + 1} bytes; judgment reads at most ${JUDGED_MAX_PLAINTEXT_BYTES} (the judged-intake limit)` } });
+  });
+
+  it('refuses a 10 MiB delivery a store keeps as payload_too_large, after the ciphertext checks pass', async () => {
+    const r = await run(new Uint8Array(MAX_PLAINTEXT_BYTES).fill(0x61));
     expect(!r.ok && r.error.code).toBe('payload_too_large');
   });
 
-  it('refuses decrypted plaintext over 10 MB even when the ciphertext is small', async () => {
-    const big = new Uint8Array(MAX_PLAINTEXT_BYTES + 1).fill(0x61);
+  it('refuses decrypted plaintext over the limit even when the ciphertext is small', async () => {
+    const big = new Uint8Array(JUDGED_MAX_PLAINTEXT_BYTES + 1).fill(0x61);
     const ct = utf8('small');
     const r = await intake({ delivery: delivery(big, ct), ciphertext: ct, recipient: ADJUDICATOR, unwrapKey: fakeUnwrap, open: async () => big });
     expect(!r.ok && r.error.code).toBe('payload_too_large');
   });
 
-  it('accepts decrypted plaintext of exactly 10 MB from a custom opener', async () => {
-    const big = new Uint8Array(MAX_PLAINTEXT_BYTES).fill(0x61);
+  it('accepts decrypted plaintext of exactly the limit from a custom opener', async () => {
+    const big = new Uint8Array(JUDGED_MAX_PLAINTEXT_BYTES).fill(0x61);
     const ct = utf8('small');
     const r = await intake({ delivery: delivery(big, ct), ciphertext: ct, recipient: ADJUDICATOR, unwrapKey: fakeUnwrap, open: async () => big });
     expect(r.ok).toBe(true);
   });
 
-  it('accepts plaintext of exactly 10 MB', async () => {
-    const r = await run(new Uint8Array(MAX_PLAINTEXT_BYTES).fill(0x61));
+  it('accepts plaintext of exactly the judged-intake limit', async () => {
+    const r = await run(new Uint8Array(JUDGED_MAX_PLAINTEXT_BYTES).fill(0x61));
     expect(r.ok).toBe(true);
   });
 
