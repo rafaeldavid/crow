@@ -3,12 +3,13 @@ import { readFileSync } from 'node:fs';
 import { describe, expect, it } from 'vitest';
 import { GOOD_CSV } from './_helpers.js';
 import { normalizeText } from './normalize.js';
+import { KEPT } from './kept.js';
 import { MAX_DECODED_CHARS, screen, SCREEN_VERSION } from './screen.js';
 import { UntrustedData } from './untrusted.js';
 
 const run = (raw: string) => {
   const n = normalizeText(raw);
-  return screen({ data: UntrustedData.wrap(n.text), hiddenTagText: UntrustedData.wrap(n.hiddenTagText), removed: { tagChars: n.tagChars, zeroWidth: n.zeroWidth, nfkcChanged: n.nfkcChanged } });
+  return screen({ data: UntrustedData.wrap(n.text), hiddenTagText: UntrustedData.wrap(n.hiddenTagText), removed: { tagChars: n.tagChars, zeroWidth: n.zeroWidth, nfkcChanged: n.nfkcChanged, nfkcLetters: n.nfkcLetters } });
 };
 const kinds = (raw: string) => run(raw).signals.map((s) => s.kind);
 const b64 = (s: string) => Buffer.from(s).toString('base64');
@@ -89,6 +90,8 @@ describe('screen v0', () => {
 describe('screen: the output is pinned to SCREEN_VERSION', () => {
   const PINNED: Readonly<Record<string, string>> = {
     'screen-1': 'e4e0b609e9d80af0dc93bab9df269f7a32ddabe12ecd8fc001449300b8d4dd72',
+    // T-577, ADR-0044: the NFKC signal counts only letters, so three fullwidth digits no longer flag.
+    'screen-2': '3625551b084b756438ad55d266e0e1d5668334367f16f521aeb42c5dac94a019',
   };
   const tags = (s: string) => [...s].map((c) => String.fromCodePoint(0xe0000 + c.charCodeAt(0))).join('');
   const corpus = [
@@ -137,12 +140,29 @@ describe('screen: the output is pinned to SCREEN_VERSION', () => {
     const digest = createHash('sha256').update(corpus.map(row).join(',')).digest('hex');
     expect(PINNED[SCREEN_VERSION], `screen semantics changed: bump SCREEN_VERSION and pin ${digest} under it`).toBe(digest);
   });
+  it('each kept screen version still gives its pinned digest', () => {
+    for (const [version, impl] of KEPT.screens) {
+      if (!PINNED[version]) continue;
+      const row = (raw: string) => {
+        const n = normalizeText(raw);
+        const r = impl.screen({ data: UntrustedData.wrap(n.text), hiddenTagText: UntrustedData.wrap(n.hiddenTagText), removed: { tagChars: n.tagChars, zeroWidth: n.zeroWidth, nfkcChanged: n.nfkcChanged, nfkcLetters: n.nfkcLetters } });
+        return `${r.flagged}:${r.signals.map((s) => s.kind).join('|')}`;
+      };
+      expect(createHash('sha256').update(corpus.map(row).join(',')).digest('hex'), version).toBe(PINNED[version]);
+    }
+    expect(Object.keys(PINNED).every((v) => KEPT.screens.has(v))).toBe(true);
+  });
 });
 
 describe('screen: red-team round', () => {
-  it('signals characters NFKC changed', () => {
-    const r = run('\uFF11\uFF12\uFF13');
-    expect(r.signals).toContainEqual({ kind: 'encoded_run', detail: '3 characters changed by NFKC (fullwidth, compatibility or ligature forms)' });
+  it('signals letters NFKC changed (screen-2 counts letters only)', () => {
+    const r = run('\uFF41\uFF42\uFF43');
+    expect(r.signals).toContainEqual({ kind: 'encoded_run', detail: '3 letters changed by NFKC (fullwidth, mathematical, enclosed or ligature forms)' });
+    expect(run('\uFF11\uFF12\uFF13').flagged).toBe(false);
+  });
+  it('without the letter count, the broader count stands in (fail closed)', () => {
+    const r = screen({ data: UntrustedData.wrap('123'), hiddenTagText: UntrustedData.wrap(''), removed: { tagChars: 0, zeroWidth: 0, nfkcChanged: 3 } });
+    expect(r.flagged).toBe(true);
   });
   it('does not count space variants (no-break space) as NFKC changes', () => expect(run('a\u00A0b').flagged).toBe(false));
   it('signals mixed-script words', () => {

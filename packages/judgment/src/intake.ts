@@ -55,7 +55,7 @@ export interface Intaken {
   data: UntrustedData;
   /** The ASCII that Unicode tag characters spelled before normalization removed them. */
   hiddenTagText: UntrustedData;
-  removed: { tagChars: number; zeroWidth: number; nfkcChanged: number };
+  removed: { tagChars: number; zeroWidth: number; nfkcChanged: number; nfkcLetters: number };
   mime: MimeType;
   /** judgment.schema.json `intake`. */
   record: Judgment['intake'];
@@ -105,7 +105,7 @@ export function decodePlaintext(plaintext: Uint8Array, mime: MimeType): Result<D
     raw: UntrustedData.wrap(raw),
     data: UntrustedData.wrap(n.text),
     hiddenTagText: UntrustedData.wrap(n.hiddenTagText),
-    removed: { tagChars: n.tagChars, zeroWidth: n.zeroWidth, nfkcChanged: n.nfkcChanged },
+    removed: { tagChars: n.tagChars, zeroWidth: n.zeroWidth, nfkcChanged: n.nfkcChanged, nfkcLetters: n.nfkcLetters },
     mime,
   });
 }
