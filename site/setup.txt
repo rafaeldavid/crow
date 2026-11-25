@@ -1,6 +1,7 @@
 # Set up Crow
 
 %% T-472: the setup's one page. site/build.mjs fills the one placeholder with the pinned command; site/check.mjs holds the published page to SETUP_MAX_BYTES (site/guides.mjs).
+%% T-552: `publish` took its bytes from the `check`, `status` and sample lines, which now name the command as the page's other short forms do, from "name each failing check", which each `deliver` line carries, and from the schedule's wording.
 %% T-568: `deliver` took its bytes from the check's "fix what a failed line names", which each failed line says, "the file is not minified", and how --payout changes before the first deal, which the seller command handles.
 %% T-543: "The person's own work" is the template path; its bytes came from the check's and the status's descriptions, which each command's own lines carry.
 %% T-486 (D76): "The list" is the setup's listing step. Its four sentences on what an entry means are the command's own (examples/setup-list.ts, ENTRY_MEANS).
@@ -42,13 +43,13 @@ Add `--payout <address>` or `--payout this-key` at the end. Without it the comma
 
 It sends nothing. It takes an empty folder only. It refuses a folder inside a git work tree or a synced folder, and names the flag that overrides each; it knows common names only, so a sync service under another name passes. Run again after a stop, it continues and makes no second key. It ends with the check: one line per check, `"ok": true` on each.
 
-`node ~/.crow/setup.mjs check` runs that check alone, and sends nothing to a Crow-run host.
+`check` runs that check alone and sends nothing.
 
-`node ~/.crow/setup.mjs status` prints the folder's state and its open deals.
+`status` prints the folder's state and open deals.
 
-The sample is `squares.csv` for 1 tUSDC.
+The sample: `squares.csv`, 1 tUSDC.
 
-**The person's own work.** `seller --template <file>` sells work a JSON file describes; `seller` with no flag prints its shape. `--file <path>` adds finished work, delivered once the deal is funded. Without it `first-deal` exits 0 at `"state": "Held"` with `workPath` and `deliverBy`: put the work there. `deliver` delivers each funded deal of the folder (exit 4: work is due); `deliver --schedule` prints the scheduler entry that runs it every 5 minutes. Both deliver work that passes the agreed checks and name each failing check; `check --work <file>` runs them on a sample. Their own API: https://crow.direct/sell.txt.
+**The person's own work.** `seller --template <file>` sells work a JSON file describes; `seller` alone prints its shape. `--file <path>` adds finished work, delivered once the deal is funded. Without it `first-deal` exits 0 at `"state": "Held"` with `workPath` and `deliverBy`: put the work there. `deliver` delivers the folder's funded deals (exit 4: work is due); `deliver --schedule` prints a scheduler entry for every 5 minutes. Each delivers only work that passes the agreed checks; `check --work <file>` runs them on a sample. `publish` makes it a standing offer with no ETH: it writes the marker as `first-deal` does, and the card entry; `--preview` sends nothing. Standing offers, own APIs: https://crow.direct/sell.txt.
 
 ## The list
 
