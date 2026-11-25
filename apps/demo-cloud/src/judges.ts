@@ -7,10 +7,14 @@
 // `appealPanelGate`), so the default outcome applies unless a panel can run before the deadline. A live world never gives
 // a scripted verdict. To revisit once Crow has sufficient usage.
 //
+// N222: a world that settles on a chain fails closed the same way when a live model variable is missing (`failClosed`,
+// `PanelConfig.closed`): every seat abstains, and the primary declines a new deal that can need a panel
+// (world.ts, `judgedDealGate`, reason `judges_unconfigured:`). SimChain and the local demo keep the scripted judges.
+//
 // T-574: a panel is live or abstaining as a whole, chosen once when it starts (`PanelConfig.panel`). Before, each call
 // chose, so a live seat's retry after an HTTP 503 could go to the scripted judge once the budget ran out, and that
 // scripted pass counted as the second model family (T-570's red team, H2).
-import { liveJudges, liveRegistry, LIVE_REGISTRY_URI, markedFake, markerFake, missingLiveEnv, placeholderRegistry, type JudgeUsage, type KeptRegistry, type TestAdjudicatorOptions } from '@holdback/adjudicator';
+import { liveJudges, liveRegistry, LIVE_REGISTRY_URI, markedFake, markerFake, missingLiveEnv, OPENAI_COMPATIBLE_BASE_URL_ENV, placeholderRegistry, type JudgeUsage, type KeptRegistry, type TestAdjudicatorOptions } from '@holdback/adjudicator';
 import { wholeNumberVar } from './limits.js';
 import type { WorldStorage } from './storage.js';
 
@@ -19,6 +23,13 @@ type Registry = NonNullable<TestAdjudicatorOptions['registry']>;
 
 /** What each seat of a panel that cannot run live answers in a live world: no model ran, so the seat abstains (T-574). */
 export const ABSTAIN_DETAIL = "today's live judge budget is spent: no model ran, so this seat abstains";
+
+/** What each seat answers in a chain world whose live judge variables are incomplete (N222): no model ran, so it abstains. */
+export const UNCONFIGURED_DETAIL = 'the live judge models are not all configured: no model ran, so this seat abstains';
+
+/** Why Crow's adjudicators decline a new deal that can need a panel while the live judge variables are incomplete (N222). */
+export const unconfiguredReason = (missing: readonly string[]): string =>
+  `judges_unconfigured: this demo's live judge models are not all configured (missing: ${missing.join(', ')}), so Crow's adjudicators accept no deal that can need a judge panel and never judge with a scripted stand-in; offer checks-only terms whose checks are all required, which are accepted now`;
 
 /** The next UTC midnight after `ms`, as an ISO timestamp: when the day's live judge budget resets. */
 export const nextUtcDay = (ms: number): string => {
@@ -125,6 +136,12 @@ export class JudgeBudget {
 
 export interface PanelConfig {
   live: boolean;
+  /**
+   * N222: a chain world whose live judge variables are incomplete. Not live, and no scripted judges either: every seat
+   * abstains (UNCONFIGURED_DETAIL) and Crow's adjudicators decline new deals that can need a panel. Always false on
+   * SimChain and the local demo.
+   */
+  closed: boolean;
   registry: Registry;
   registryUri: string;
   /**
@@ -166,9 +183,11 @@ export interface PanelOptions {
   /** Stands in for the live models (tests). */
   judgeProvider?: JudgeProvider;
   liveCallsPerDay?: number;
+  /** N222: fail closed, not scripted, when the live variables are incomplete. The world sets it for every chain world. */
+  failClosed?: boolean;
 }
 
-/** Live when a stand-in is given or all three model variables are set; scripted otherwise. */
+/** Live when a stand-in is given or all three model variables are set; otherwise scripted, or closed with `failClosed` (N222). */
 export function panelConfig(o: PanelOptions): PanelConfig {
   // T-581: strict, like the other limits. A malformed value refuses to start, so a typo in this quick stop never leaves
   // judging on at the default.
@@ -176,8 +195,17 @@ export function panelConfig(o: PanelOptions): PanelConfig {
   const budget = new JudgeBudget(o.storage, perDay, o.now);
   const scripted = markedFake(markerFake());
   const live = o.judgeProvider ? { ok: true as const, value: o.judgeProvider } : liveJudges(o.env, { onUsage: (u) => budget.usage(u) });
+  if (!live.ok && o.failClosed) {
+    // All three set, yet refused: the base URL is not https (liveProvider), so name it rather than nothing (red team of PR 797, L1).
+    const unset = missingLiveEnv(o.env);
+    const missing = unset.length ? unset : [OPENAI_COMPATIBLE_BASE_URL_ENV];
+    // One line at start, names only: never a value (N222).
+    console.warn(`judges fail closed: the live judge variables are incomplete (missing: ${missing.join(', ')}); Crow's adjudicators decline new judged deals and any judgment under way abstains`);
+    const closed: JudgeProvider = { complete: async () => ({ kind: 'error', transport: false, detail: UNCONFIGURED_DETAIL }) };
+    return { live: false, closed: true, registry: liveRegistry(), registryUri: LIVE_REGISTRY_URI, kept: [], missing, provider: closed, budget, allowLive: false, panel: (_size, run) => run(), canRunLive: async () => false, resumesAt: () => nextUtcDay(o.now()) };
+  }
   if (!live.ok) {
-    return { live: false, registry: placeholderRegistry(), registryUri: PLACEHOLDER_REGISTRY_URI, kept: [], missing: missingLiveEnv(o.env), provider: scripted, budget, allowLive: false, panel: (_size, run) => run(), canRunLive: async () => true, resumesAt: () => nextUtcDay(o.now()) };
+    return { live: false, closed: false, registry: placeholderRegistry(), registryUri: PLACEHOLDER_REGISTRY_URI, kept: [], missing: missingLiveEnv(o.env), provider: scripted, budget, allowLive: false, panel: (_size, run) => run(), canRunLive: async () => true, resumesAt: () => nextUtcDay(o.now()) };
   }
   const abstain: JudgeProvider = { complete: async () => ({ kind: 'error', transport: false, detail: ABSTAIN_DETAIL }) };
   const canRunLive = async (size: number) => (await budget.remaining()) >= 2 * size;
@@ -187,6 +215,7 @@ export function panelConfig(o: PanelOptions): PanelConfig {
   let queue: Promise<unknown> = Promise.resolve();
   const cfg: PanelConfig = {
     live: true,
+    closed: false,
     registry: liveRegistry(),
     registryUri: LIVE_REGISTRY_URI,
     kept: [],
