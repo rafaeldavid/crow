@@ -41,7 +41,8 @@ A robot deal can hold the delivery to the buyer's order: the arm passed through 
 
 Measured on 2026-11-25 on one Mac, unless labelled.
 
-- **Package:** `npx vitest run packages/judgment`: 24 files, 910 passed, 2 skipped.
+- **`/verify` after the red team's fixes** (kinds 5 and 6): `pnpm exec vitest run packages/judgment tests/spec.test.ts` 1,186 passed, 2 skipped; `pnpm validate:spec` 38 of 38 and `spec/openapi.json` fresh; `tsc -b` and `pnpm lint` clean; `pnpm snap` 62 of 62. The only snapshot diffs are the two attack fixtures' description lines.
+- **Package, before the fixes:** `npx vitest run packages/judgment`: 24 files, 910 passed, 2 skipped.
 - **Contract and neighbours:** `tests/spec.test.ts`, `apps/adjudicator/src/check-kinds.test.ts`, the operator's version tests, `examples/mandate.test.ts` and `packages/core`: 30 files, 1,423 passed.
 - **Spec:** `pnpm validate:spec`: 38 of 38 examples; `spec/openapi.json` fresh.
 - **Snapshots:** `pnpm snap`: 62 of 62.
