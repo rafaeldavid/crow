@@ -10,7 +10,7 @@
 // inconclusive: it is recorded as not passed, and the pipeline escalates instead of rejecting.
 import { err, ok, type MimeType, type Result } from '@holdback/core';
 import { MAX_CIPHERTEXT_BYTES as STORE_MAX_BYTES, sha256 } from '@holdback/core/crypto';
-import { countHidden, type HiddenCounts } from '../hidden.js';
+import { countHidden, decodeJsonEscapes, type HiddenCounts } from '../hidden.js';
 import { hasUnexplainedTagChars } from '../normalize.js';
 import type { JudgmentCheck } from '../terms.js';
 import type { UntrustedData } from '../untrusted.js';
@@ -206,6 +206,12 @@ type Outcome = { passed: boolean; detail?: string };
 const pass = (detail?: string): Outcome => (detail === undefined ? { passed: true } : { passed: true, detail });
 const fail = (detail: string): Outcome => ({ passed: false, detail });
 
+/** D99: the text the hidden-character count reads: a JSON delivery with its \u escapes decoded. The decode is not charged: it is linear and bounded by the store limit, like the JSON parse. */
+function hiddenText(input: CheckInput): string {
+  const text = input.data.reveal();
+  return input.mime === 'application/json' && text.includes('\\u') ? decodeJsonEscapes(text) : text;
+}
+
 /** What one run reads once and shares among its checks, each computed on first use and charged then. */
 interface Run {
   input: CheckInput;
@@ -250,9 +256,8 @@ function newRun(input: CheckInput, budget: StepBudget, checks: readonly Judgment
     }
   });
   const hidden = once((): HiddenCounts => {
-    const text = input.data.reveal();
-    chargeChars(budget, text.length);
-    const counts = countHidden(text);
+    chargeChars(budget, input.data.reveal().length);
+    const counts = countHidden(hiddenText(input));
     budget.spend(counts.total);
     return counts;
   });
@@ -311,7 +316,7 @@ function evaluate(check: JudgmentCheck, prepared: Prepared, run: Run): Outcome {
   }
   if (check.type === 'signature_valid') return evaluateSignatureValid(check, run.json, budget);
   if (check.type === 'hidden_characters_max') {
-    // Counted on the text as delivered, every occurrence, legitimate or not (D17).
+    // Counted on the text as delivered, every occurrence, legitimate or not (D17). A JSON delivery is counted decoded (D99).
     budget.spend(1);
     const counts = run.hidden();
     const over = HIDDEN_KEYS.filter((k) => check.max[k] !== undefined && counts[k] > check.max[k]!);
@@ -421,20 +426,39 @@ function evaluate(check: JudgmentCheck, prepared: Prepared, run: Run): Outcome {
 export function runChecks(checks: readonly JudgmentCheck[], input: CheckInput, budget = new StepBudget(CHECK_BUDGET)): CheckRun {
   const run = newRun(input, budget, checks);
   const inconclusive: string[] = [];
+  // D100: each check is reported under its own id. Terms refuse a repeat; a run on terms that carry one gives each later
+  // check an id of its own.
+  const used = new Set<string>(checks.map((c) => c.id));
+  const taken = new Set<string>();
+  const uniqueId = (id: string): string => {
+    if (!taken.has(id)) {
+      taken.add(id);
+      return id;
+    }
+    for (let n = 2; ; n++) {
+      const tail = `-${n}`;
+      const out = `${id.slice(0, 40 - tail.length)}${tail}`;
+      if (!used.has(out) && !taken.has(out)) {
+        taken.add(out);
+        return out;
+      }
+    }
+  };
   const outcomes = checks.map((check) => {
+    const id = uniqueId(check.id);
     let o: Outcome;
     try {
       o = evaluate(check, prepare(check), run);
     } catch (e) {
       if (e instanceof BudgetExhausted) {
-        inconclusive.push(check.id);
+        inconclusive.push(id);
         o = fail('inconclusive: the check work budget for this delivery ran out');
       } else {
         // Hostile shapes (for example JSON nested deep enough to exhaust the stack) fail the check, never the pipeline.
         o = fail('check could not be evaluated on this input');
       }
     }
-    const out: CheckOutcome = { checkId: check.id, required: check.required, passed: o.passed };
+    const out: CheckOutcome = { checkId: id, required: check.required, passed: o.passed };
     if (o.detail !== undefined) out.detail = cap(o.detail);
     return out;
   });

@@ -43554,6 +43554,14 @@ function parserFor(name, signed, extra) {
 		return refusal === void 0 ? ok(copy) : err(problem("invalid_terms", `${name}: ${refusal}`));
 	};
 }
+/** D100: the first check id that two checks share, or undefined. */
+function repeatedCheckId(checks) {
+	const seen = /* @__PURE__ */ new Set();
+	for (const { id } of checks ?? []) {
+		if (seen.has(id)) return id;
+		seen.add(id);
+	}
+}
 function commitmentRules(c) {
 	const mode = c.settlement.mode;
 	const max = c.timing.maxSubmissions;
@@ -43561,6 +43569,8 @@ function commitmentRules(c) {
 	if (max !== 1) return `timing.maxSubmissions ${max} is not supported in Phase 1 (1 only)`;
 	for (const key of ["appealWindowSec", "appealDecideSec"]) if (c.timing[key] > UINT32_MAX) return `timing.${key} ${c.timing[key]} exceeds ${UINT32_MAX}`;
 	if (!(Date.parse(c.createdAt) < Date.parse(c.timing.offerExpiresAt))) return "createdAt must be before timing.offerExpiresAt";
+	const repeated = repeatedCheckId(c.acceptance?.deterministicChecks);
+	if (repeated !== void 0) return `acceptance.deterministicChecks: id ${repeated} is used by more than one check`;
 	const sealed = c.privateTerms;
 	if (sealed) return unlockRule([...sealed.deliverable.envelopes, ...sealed.acceptance.envelopes]);
 }
@@ -52882,6 +52892,13 @@ function countHidden(text) {
 	}
 	return c;
 }
+/**
+* The text of a JSON delivery with each \uXXXX escape replaced by the character it spells. A backslash pair is skipped
+* as a unit. Every character written literally stays in place, so counting the result counts each once.
+*/
+function decodeJsonEscapes(text) {
+	return text.replace(/\\(?:u([0-9a-fA-F]{4})|[\s\S])/g, (m, hex) => hex === void 0 ? m : String.fromCharCode(parseInt(hex, 16)));
+}
 
 // packages/judgment/dist/normalize.js
 const EMOJI_TAG_SEQUENCE = /\u{1F3F4}[\u{E0020}-\u{E007E}]{1,8}\u{E007F}/gu;
@@ -54929,6 +54946,11 @@ const fail$1 = (detail) => ({
 	passed: false,
 	detail
 });
+/** D99: the text the hidden-character count reads: a JSON delivery with its \u escapes decoded. The decode is not charged: it is linear and bounded by the store limit, like the JSON parse. */
+function hiddenText(input) {
+	const text = input.data.reveal();
+	return input.mime === "application/json" && text.includes("\\u") ? decodeJsonEscapes(text) : text;
+}
 /** Charges `f` and keeps its result, unless the budget runs out first: then the next caller tries again and runs out too. */
 function once(f) {
 	let done;
@@ -54962,9 +54984,8 @@ function newRun(input, budget, checks) {
 		}
 	});
 	const hidden = once(() => {
-		const text = input.data.reveal();
-		chargeChars(budget, text.length);
-		const counts = countHidden(text);
+		chargeChars(budget, input.data.reveal().length);
+		const counts = countHidden(hiddenText(input));
 		budget.spend(counts.total);
 		return counts;
 	});
@@ -55126,19 +55147,36 @@ function evaluate$1(check, prepared, run) {
 function runChecks(checks, input, budget = new StepBudget(CHECK_BUDGET)) {
 	const run = newRun(input, budget, checks);
 	const inconclusive = [];
+	const used = new Set(checks.map((c) => c.id));
+	const taken = /* @__PURE__ */ new Set();
+	const uniqueId = (id) => {
+		if (!taken.has(id)) {
+			taken.add(id);
+			return id;
+		}
+		for (let n = 2;; n++) {
+			const tail = `-${n}`;
+			const out = `${id.slice(0, 40 - tail.length)}${tail}`;
+			if (!used.has(out) && !taken.has(out)) {
+				taken.add(out);
+				return out;
+			}
+		}
+	};
 	return {
 		outcomes: checks.map((check) => {
+			const id = uniqueId(check.id);
 			let o;
 			try {
 				o = evaluate$1(check, prepare(check), run);
 			} catch (e) {
 				if (e instanceof BudgetExhausted) {
-					inconclusive.push(check.id);
+					inconclusive.push(id);
 					o = fail$1("inconclusive: the check work budget for this delivery ran out");
 				} else o = fail$1("check could not be evaluated on this input");
 			}
 			const out = {
-				checkId: check.id,
+				checkId: id,
 				required: check.required,
 				passed: o.passed
 			};
