@@ -333,6 +333,28 @@ The maintainers keep the notes on agent sessions and permission prompts privatel
 
 Each entry records one deploy as it ran: the date and time in UTC, the commit, each Worker's new version and its rollback target, and what was measured after it. The deploy scripts print the entry's first line (`pnpm demo-cloud:deploy`, `pnpm site:deploy`, `node apps/test-agents/scripts/deploy.mjs`). The values are true for their date: for what runs now, read "What is live" above and each node's discovery.
 
+### Schema v0.14 and the afternoon's judgment and operator changes (deployed 2026-11-25, 12:47 and 12:50 UTC)
+
+Rafa, 2026-11-25: "Yes, deploy both". The operators carry pull request 795 (T-597: the `signature_valid` check, ADR-0045), pull request 806 (T-608: the hidden-character count reads decoded JSON strings, and check ids are unique), pull request 807 (T-607: every judgment step is charged to the check budget), pull request 809 (T-610: three data check kinds, schema v0.14, ADR-0047) and pull request 811 (T-609: a write survives a failed chain read, and a 500 `internal` logs its cause). The site carries pull request 808 (the vault guide says to keep the payment module on while a hold is open), pull request 810 (`llms.txt` asks for one report after any deal) and the rebuilt bundles.
+
+**Deploy 2026-11-25 12:47 UTC, commit `ae327a9`: pass.** holdback-op1 `caa92f49-ca4f-4908-bd0b-88053ece9508` (rollback target `a99ba181-eca1-462b-955c-20dc9300fe90`), holdback-op2 `80bce206-e8ac-44cb-81c2-4e71f91dc060` (rollback target `5de78572-a276-47a2-ad99-05ed8091a653`). Smoke deal `0x0b691f6bcaa863b2e3f1d960d470169eec0db74c99814a6529f77e2768e7832b` Released in 47 s.
+
+**Site deploy 2026-11-25 12:50 UTC, commit `ae327a9`: pass.** crow-site `4eab7e27-74b3-4c4b-ae1c-de405757b518` (rollback target `97f39f81-d330-480f-a88d-568ccc327895`).
+
+After the deploys, both operators serve schema 0.14. The live site and `main` agree on the rebuilt bundles `setup.mjs` (SHA-256 `620cd827…`), `take.mjs` (`27bc44db…`) and `serve.mjs` (`4a79ccdd…`) [measured]. The daily log gives neither record the branch its deploy ran on: it is missing from both lines. The operators' record is also missing how long discovery took to name the commit.
+
+### Five deploys with missing records (deployed 2026-11-25, 08:12 to 10:32 UTC)
+
+**These five records are incomplete: the maintainers' daily log has no record line for any of these deploys.** Their times come from the maintainers' list of the day's deploys. This entry takes nothing from the merge history or from another deploy's rollback targets.
+
+| Deploy (2026-11-25, UTC) | Missing |
+| --- | --- |
+| Site, 10:32 | commit, crow-site version, rollback target, pass or fail, what it carried |
+| Operators, 09:35 | commit, both versions, both rollback targets, smoke deal, pass or fail, what it carried |
+| Site, 09:07 | commit, crow-site version, rollback target, pass or fail, what it carried |
+| Site, 08:19 | commit, crow-site version, rollback target, pass or fail, what it carried |
+| Operators, 08:12 | commit, both versions, both rollback targets, smoke deal, pass or fail, what it carried |
+
 ### The pattern engine's compile limits and a seller's standing contract (deployed 2026-11-25, 06:35 UTC)
 
 Rafa, 2026-11-25: "Yes, deploy". The operators carry pull request 787 (T-593: tighter compile limits for the pattern engine; the adjudicator compiles a party's patterns, so both nodes run one build) and pull request 783 (N216, T-549: a seller's standing contract is deployed with its first take). It ran from a clean worktree at `b5b8757` after `main`'s own checks passed there [measured]; the Dependabot job that GitHub attaches to that commit failed on a crate that cannot move (`tools/envelope-proof/osv-scanner.toml`), and it is not one of CI's checks.
