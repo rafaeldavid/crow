@@ -119,7 +119,7 @@ async function play(buyer: Agent, offerId: string): Promise<J> {
     deliverBy: terms.timing.deliverBy,
     checks: judgment?.deterministic?.map((c: J) => `${c.checkId}:${c.passed ? 'pass' : 'fail'}`) ?? null,
     decision: judgment?.aggregate?.decision ?? null,
-    panel: members.length ? { members: members.length, live: members.every((m) => !/^\[fake judge/.test(String(m.verdict?.rationale ?? ''))), verdicts: members.map((m) => m.verdict?.overall) } : null,
+    panel: members.length ? { members: members.length, live: members.every((m) => !String(m.model).startsWith('placeholder-') && !/^\[fake judge/.test(String(m.verdict?.rationale ?? ''))), verdicts: members.map((m) => m.verdict?.overall) } : null,
     seller: { deal: status.deal, detail: status.detail ?? null, transactions: status.transactions ?? [] },
   };
 }

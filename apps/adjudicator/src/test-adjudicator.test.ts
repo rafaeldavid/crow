@@ -1,10 +1,10 @@
 import { holdbackDomain, type Commitment, type TokenAmount } from '@holdback/core';
-import { fakeProvider, type JudgeRequest } from '@holdback/judgment';
+import { fakeProvider, RULE_9_PAIR_3, type JudgeRequest } from '@holdback/judgment';
 import { describe, expect, it } from 'vitest';
 import { fakeRelays } from './_sim.js';
 import { drandQuicknet } from './drand.js';
 import type { SettlementReads } from './simchain-adapter.js';
-import { FAIL_MARKER, FAKE_JUDGE_MARK, markedFake, markerFake, placeholderRegistry, testAdjudicator } from './test-adjudicator.js';
+import { FAIL_MARKER, FAKE_JUDGE_MARK, markedFake, markerFake, PLACEHOLDER_MODEL_PREFIX, placeholderRegistry, testAdjudicator } from './test-adjudicator.js';
 
 const req = {
   judgeId: 'claude-a',
@@ -28,6 +28,18 @@ describe('test adjudicator fake judges', () => {
       expect(c.evidence.startsWith(FAKE_JUDGE_MARK)).toBe(true);
       expect(c.evidence.length).toBeLessThanOrEqual(300);
     }
+  });
+
+  // ADR-0050: the mark is the placeholder- model prefix; a coded verdict has no free text, and passes unchanged.
+  it('leaves a coded verdict as the fake wrote it: the seat model prefix is its mark', async () => {
+    const coded = { ...req, system: `${req.system}\n${RULE_9_PAIR_3}` };
+    const inner = fakeProvider({ 'claude-a': 'fail' });
+    const res = await markedFake(inner).complete(coded);
+    expect(res).toEqual(await inner.complete(coded));
+    const v = JSON.parse((res as { text: string }).text) as Record<string, unknown>;
+    expect(Object.keys(v)).toEqual(['criteria', 'overall', 'injectionSuspected', 'injectionKinds', 'injectionRefs']);
+    expect(JSON.stringify(v)).not.toContain(FAKE_JUDGE_MARK);
+    expect(req.model.startsWith(PLACEHOLDER_MODEL_PREFIX)).toBe(true);
   });
 
   it('fails work that contains the FAIL-ME marker, and passes it otherwise', async () => {
