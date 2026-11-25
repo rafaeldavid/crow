@@ -1,0 +1,40 @@
+# Terms that name the three data check kinds (ADR-0047, schema v0.14): one recorded robot run as one JSON document,
+# its telemetry by column. The buyer's order is two waypoints in joint space; the run must pass through both, in
+# order, within 500 millidegrees on each joint. fixtures/data/recorded-path holds a good run and three bad ones.
+# The rubric is empty, so acceptance rests on the checks alone and no panel sits. Every bound is an integer
+# (ADR-0022). Field rules are as in clean-customers-2000.yaml.
+schemaVersion: "0.8"
+clubId: data-services-v1
+deliverable:
+  kind: dataset
+  description: "One recorded run of a two-joint arm as one JSON document. `telemetry.t_ms` is the time of each sample in milliseconds from the start, one sample every 1 to 16 ms. `telemetry.q1_mdeg` and `telemetry.q2_mdeg` are the two joint angles in millidegrees, one value per sample. The run passes through the waypoints (10000, -45000) and then (30000, -20000)."
+  format: application/json
+acceptance:
+  deterministicChecks:
+    - { id: time, type: monotonic_column, required: true, series: { pointer: /telemetry/t_ms }, minStep: 1, maxStep: 16 }
+    - { id: lengths, type: equal_lengths, required: true, series: [{ pointer: /telemetry/t_ms }, { pointer: /telemetry/q1_mdeg }, { pointer: /telemetry/q2_mdeg }] }
+    - id: waypoints
+      type: passes_through
+      required: true
+      series: [{ pointer: /telemetry/q1_mdeg }, { pointer: /telemetry/q2_mdeg }]
+      waypoints: [[10000, -45000], [30000, -20000]]
+      tolerance: 500
+  rubric:
+    passThreshold: 0
+    criteria: []
+price: { token: tUSD, amount: "1500000000" }
+adjudication:
+  policyId: bench-a/p1
+  fee: { token: tUSD, amount: "50000000" }
+timing:
+  offerExpiresInSec: 900
+  fundWithinSec: 1800
+  deliverWithinSec: 604800
+  judgeWithinSec: 120
+  fallbackWithinSec: 120
+  appealWindowSec: 0
+  appealDecideSec: 300
+  maxSubmissions: 1
+settlement: { mode: guaranteed_on_decision, token: tUSD }
+remedy: { onReject: full_refund }
+disclosure: { level: public }

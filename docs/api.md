@@ -10,7 +10,7 @@ Any operator node serves this API. It adds speed and convenience, never authorit
 - **Authentication:** none at the transport layer. Authority comes from the EIP-712 signature inside each mutating request body. Reads are public, so commitment metadata is public too (`docs/neutrality.md`, residual 9).
 - **Headers on every response:**
   - `Request-Id`, repeated in a problem's `instance` as `urn:holdback:request:<id>`;
-  - `Holdback-Schema-Version`, for example `0.13`;
+  - `Holdback-Schema-Version`, for example `0.14`;
   - the security headers: HSTS, `nosniff`, no framing, a content security policy that allows nothing, no referrer, a same-origin resource policy and a permissions policy. A non-browser client (curl, an agent) may ignore them. CORS is not set. A request over plain `http://` gets a 301 (read) or 308 (write) to HTTPS and is never processed (`docs/operations.md`, "Security headers").
 - **Trace context:** operators accept a W3C `traceparent` header and log it. Neither it nor `Request-Id` ever enters a signed message, a receipt or the event hash chain.
 - **Limits (F8):** an operator publishes its own in discovery as `limits`: `reads` and `writes`, each `{limit, windowSec, per}`, `maxCiphertextBytes` and `idempotency`. `limits.maxCiphertextBytes` is the largest ciphertext `POST /v1/ciphertext` stores, in bytes, absent on a node with no ciphertext store, and never above the protocol's 10 MiB. Numbers on this page are the public demo's; discovery is the source.
@@ -37,7 +37,8 @@ Any operator node serves this API. It adds speed and convenience, never authorit
   - `invalid_terms` (400): `field`, the input at fault, a dotted path into the JSON body (`price.amount`, `timing.fundWithinSec`, `fund.nonce`) or a query parameter or header name (`limit`, `Idempotency-Key`);
   - `payment_required` (402): `fee` `{to, token, amount}`;
   - `payload_too_large` (413): `maxBytes`, the largest body the route takes, in bytes;
-  - `rate_limited` (429): `retryAfterSec`.
+  - `rate_limited` (429): `retryAfterSec`;
+  - `internal` (500): `retryAfterSec` only when this attempt at a signed write failed before the operator sent any transaction for it: send the same request again with the same `Idempotency-Key` after that wait, or send it to another operator. It speaks for that attempt only. Without it, or when an earlier attempt of the request was answered without it, a transaction may be out: read the commitment's state, then retry with the same key.
 
   The types:
   - signatures and terms: `invalid_signature`, `scope_exceeded`, `mandate_expired`, `nonce_reused`, `rulebook_unknown`, `invalid_terms`, `deadline_passed`;
@@ -49,7 +50,7 @@ Any operator node serves this API. It adds speed and convenience, never authorit
   - requests: `idempotency_conflict`, `rate_limited`, `not_found`, `invalid_cursor` (a cursor this operator did not issue);
   - operator policy: `relay_refused` (403): this operator's own relay policy declines the call (D27). The signed message is still valid at another operator or directly at the settlement layer (ADR-0005). An operator-only type: no settlement layer returns it;
   - operator fee: `payment_required` (402): this operator relays a funded agreement only with its published fee (ADR-0023). The signed agreement is still valid elsewhere, and direct submission is free. Operator-only;
-  - the operator itself: `internal` (500), the operator failed (retry with the same key, or use another operator; quote the `Request-Id`), and `not_implemented` (501), a planned route ("Endpoints" rows marked planned), with `Link: <source>; rel="describedby"`. Operator-only.
+  - the operator itself: `internal` (500), the operator failed (retry with the same key, or use another operator; quote the `Request-Id`; its `retryAfterSec` is described above), and `not_implemented` (501), a planned route ("Endpoints" rows marked planned), with `Link: <source>; rel="describedby"`. Operator-only.
 
   The table of types, statuses, titles and next steps is `apps/operator/src/problems.ts`; the OpenAPI document's enum and the site's problem pages are generated from it.
 - **Latency:** with `HOLDBACK_SETTLEMENT=sim`, mutating calls return the final state synchronously. On a chain they return `202` with `status: "pending"` and a `submissionId`; the event stream reports inclusion.

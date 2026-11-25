@@ -12,7 +12,7 @@ Validation as of November 3, 2026 (measured, `pnpm validate:spec`): all 33 examp
 - a model ID containing "latest";
 - an extra field in a judge verdict.
 
-The `$id` URLs (`https://holdback.dev/schemas/v0.13/…`) are namespaces for resolving `$ref` between files. They are not hosted. Replace the domain if the project gets one.
+The `$id` URLs (`https://holdback.dev/schemas/v0.14/…`) are namespaces for resolving `$ref` between files. They are not hosted. Replace the domain if the project gets one.
 
 ## Annotations
 
@@ -20,6 +20,13 @@ The `$id` URLs (`https://holdback.dev/schemas/v0.13/…`) are namespaces for res
 - **Every free-text string is marked or constrained.** A string with no `date-time` format, pattern, enum or const must carry the marker. URIs count as free text: they are marked and capped at 2048 characters. Identifiers instead get a pattern: club IDs, token IDs, and `Ident` for judge, provider, family, model and version labels. `tests/spec.test.ts` lints this, with an empty allowlist.
 
 ## Changelog
+
+- **v0.14 (2026-11-25, D98, ADR-0047), additive:** every `$id`, the `Holdback-Schema-Version` header and the OpenAPI `x-holdback-schema-version` move to 0.14. No typed-data struct changes, so the EIP-712 domain version and `commitment.schemaVersion` stay 0.8, and no signature or commitment ID moves. Every document that passed v0.13 passes v0.14.
+  - **Three data check kinds:** `passes_through` (`series`, `waypoints`, `tolerance`), `monotonic_column` (`series`, optional `minStep` and `maxStep`) and `equal_lengths` (`series`, pointers only). Each branch is closed. Every number is an integer bounded by the safe range: no float enters the hashed terms (ADR-0022).
+  - **`$defs/Series`:** `{ pointer }`, a JSON array at an RFC 6901 pointer (`$defs/JsonPointer`), or `{ column }`, a column of the tabular view of at most 128 characters, marked `x-holdback-untrusted`. Limits: 1 to 32 series on a path, 1 to 1,024 waypoints, 2 to 32 arrays to compare. That each waypoint has one coordinate per series is `validateCheck`'s rule; the schema cannot express it.
+  - **The reference adjudicator runs the three kinds** and lists 13 in `checkKinds`. A build without them declines terms that name them (D92).
+  - **Examples:** new `commitment.data-checks`; `adjudicator.check-kinds` lists the new kinds, with its `registration.bodyHash` recomputed. `tests/spec.test.ts` holds the refused cases.
+  - **Old readers** refuse a v0.14 offer that names a new kind, since `DeterministicCheck` is closed.
 
 - **v0.13 (2026-11-25, D90, ADR-0045), additive:** every `$id`, the `Holdback-Schema-Version` header and the OpenAPI `x-holdback-schema-version` move to 0.13. No typed-data struct changes, so the EIP-712 domain version and `commitment.schemaVersion` stay 0.8, and no signature or commitment ID moves. Every document that passed v0.12 passes v0.13.
   - **`signature_valid`:** a tenth `DeterministicCheck` branch with `alg`, `publicKey {pointer, format, spkiSha256}`, `message {pointer, encoding, jsonEquals?}` and `signature {pointer, encoding, format}`. `alg` is a closed list, `ecdsa-p256-sha256` or `ed25519`; Ed25519 takes a `raw` signature only. Every parameter is a string. A pointer is an RFC 6901 JSON pointer of at most 512 characters (the new `$defs/JsonPointer`, marked `x-holdback-untrusted`). The limits on the strings the pointers resolve to are the evaluator's, not the schema's. A signed part may hold decimals: the schema never reads it.

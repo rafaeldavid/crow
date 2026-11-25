@@ -1828,6 +1828,28 @@ The build is not started; it opens as its own task on Rafa's word.
 
 **Litmus tests.** Neutrality: strengthened; no party can make a judging pass much slower than the budget allows. The hold: unchanged. Defended judgment: strengthened; stage 1's work bound now holds for every check a party can write.
 
+## D98. Three check kinds read the recorded data (ADR-0047, T-610)
+
+**Status:** adopted, 2026-11-25.
+
+**Who decided.** The session for T-610 (plan item P-04, row N225), under the in-repository autonomy rule. Rafa may overrule any line.
+
+**Why.** `signature_valid` (D90) proves that a pinned key signed a recording, not what the recording shows. A robot deal needs the delivery held to the buyer's order: the arm passed through its waypoints, in time order, with one value per sample in every column. No kind of schema v0.13 holds rows in time order, compares columns row by row, or counts entries of a JSON array.
+
+**Decided:**
+
+- **`passes_through`:** rows r1 < r2 < ... exist such that at row rk every series is within an integer `tolerance` of waypoint k, per axis. Up to 32 series and 1,024 waypoints.
+- **`monotonic_column`:** each step between consecutive rows lies between `minStep` (default 0) and `maxStep` (default none). `minStep` 1 is strict; `minStep` equal to `maxStep` holds a fixed rate.
+- **`equal_lengths`:** 2 to 32 JSON arrays, by pointer, have one length.
+- **A series** is a JSON array at a pointer or a column of the tabular view. Every entry must be an integer; a decimal sample fails the check, and nothing is rounded.
+- **Every bound is an integer** with the safe range as its limits, in the schema and in `validateCheck` (ADR-0022).
+- **Work:** from the shared budget, charged as D96 charges every step: 1 unit per series and for the pointer it walks or the header it searches, 1 per entry read, 1 per coordinate or step compared. No clock.
+- **Schema v0.14,** additive. The EIP-712 domain version and `commitment.schemaVersion` stay 0.8.
+
+**Left out:** an unordered `passes_through`, one tolerance per series, a decreasing variant and a Euclidean distance. Each is one optional parameter or kind later, when a deal needs it.
+
+**Litmus tests.** Neutrality: holds; built-in code, the same result at every adjudicator (`neutrality.data-checks-primary-offline`). The hold: unchanged. Defended judgment: strengthened; stage 1 can hold a recording to the buyer's order.
+
 ## D99. The hidden-character count reads decoded JSON strings (T-608)
 
 **Status:** adopted, 2026-11-25.
