@@ -10,7 +10,7 @@ import { scripted, type Provider } from './providers.ts';
 import { Recorder, Secrets } from './record.ts';
 import { replayPage } from './replay.ts';
 import { REPOSITORY } from './review.ts';
-import { AGENT_NAME, buyerBrief, buyerBriefDirect, ITEM, scenario, SCOPE, sellerBrief, sellerBriefDirect, type BriefMode, type ScenarioName } from './scenarios.ts';
+import { AGENT_NAME, buyerBrief, buyerBriefCold, buyerBriefDirect, BUYER_USAGE, ITEM, scenario, SCOPE, sellerBrief, sellerBriefDirect, type BriefMode, type ScenarioName } from './scenarios.ts';
 import { limitsFor, overLimits, ticket, type Limits, type Over } from './tickets.ts';
 import type { Event } from './record.ts';
 import { buyerScript, sellerScript } from './scripted.ts';
@@ -47,6 +47,8 @@ export interface RunOptions {
   secrets?: string[];
   /** The brief's style: `guided` (the default) names Crow's guides; `direct` names only crow.direct (scenarios.ts). */
   brief?: BriefMode;
+  /** The approvals runner's buyer (N215): the direct brief plus each command's usage line once; --help and empty calls are refused. */
+  coldBuyer?: boolean;
   /** Limits in place of limits.json's for this scenario (the tests set one low to see a ticket). */
   limits?: Partial<Limits>;
   log?: (line: string) => void;
@@ -148,7 +150,7 @@ export async function runDuet(o: RunOptions): Promise<RunResult> {
   secrets.add(sellerKey);
   const rec = new Recorder(join(dir, 'record.jsonl'), secrets);
   const vendorOf = (x: Side) => (x === 'scripted' ? { vendor: 'scripted', model: 'scripted' } : { vendor: x.vendor, model: x.model });
-  rec.add('runner', 'run.start', { scenario: s.name, title: s.title, expect: s.expect, endState: s.endState, buyer: vendorOf(o.buyer), seller: vendorOf(o.seller), caps: o.caps, world: o.world ? 'running' : 'local phase-one world', checkout: checkout(), policy: s.policy, scope: SCOPE, repository: REPOSITORY.name, item: ITEM, brief: o.brief ?? 'guided', sellerRule: s.sellerRule ?? null, sellerRulePlain: s.sellerRulePlain ?? null, buyerRule: s.buyerRule ?? null, note: s.note ?? null, engine: o.world ? `the running world at ${o.world.join(', ')} (its chain is named in the next line)` : 'the local simulator, phase-one rules' });
+  rec.add('runner', 'run.start', { scenario: s.name, title: s.title, expect: s.expect, endState: s.endState, buyer: vendorOf(o.buyer), seller: vendorOf(o.seller), caps: o.caps, world: o.world ? 'running' : 'local phase-one world', checkout: checkout(), policy: s.policy, scope: SCOPE, repository: REPOSITORY.name, item: ITEM, brief: o.brief ?? 'guided', ...(o.coldBuyer ? { coldBuyer: true } : {}), sellerRule: s.sellerRule ?? null, sellerRulePlain: s.sellerRulePlain ?? null, buyerRule: s.buyerRule ?? null, note: s.note ?? null, engine: o.world ? `the running world at ${o.world.join(', ')} (its chain is named in the next line)` : 'the local simulator, phase-one rules' });
 
   say(`Starting ${o.world ? `against ${o.world.join(', ')}` : 'the local phase-one world'}.`);
   const world = await startWorld({ rec, ...(o.world ? { world: o.world } : {}), ...(o.docs ? { docs: o.docs } : {}), sellerPublic: join(real.sellerWork, 'public'), sellerName: SELLER_NAME, report: s.report, onSecret: (v) => secrets.add(v) });
@@ -176,11 +178,11 @@ export async function runDuet(o: RunOptions): Promise<RunResult> {
 
     const timeouts = o.commandTimeoutMs ?? { short: 180_000, long: 1_200_000 };
     const stops = { buyer: new AbortController(), seller: new AbortController() };
-    const buyerTools = new Toolbox({ signal: stops.buyer.signal, role: 'buyer', work: real.buyerWork, owner: real.buyerCompany, repo: REPO, operators: world.operators, allow: buyerAllow, secrets, rec, keyStore, policy: s.policy, timeoutMs: timeouts, ...(alias ? { alias } : {}) });
+    const buyerTools = new Toolbox({ signal: stops.buyer.signal, role: 'buyer', work: real.buyerWork, owner: real.buyerCompany, repo: REPO, operators: world.operators, allow: buyerAllow, secrets, rec, keyStore, policy: s.policy, timeoutMs: timeouts, ...(o.coldBuyer ? { usage: BUYER_USAGE } : {}), ...(alias ? { alias } : {}) });
     const sellerTools = new Toolbox({ signal: stops.seller.signal, role: 'seller', work: real.sellerWork, owner: real.sellerCompany, repo: REPO, operators: world.operators, allow: sellerAllow, secrets, rec, sellerKey, adapterPort, jobApi: world.jobApi.url, timeoutMs: timeouts, ...(alias ? { alias } : {}) });
     const facts = () => ({ docs: world.docs, sellerPage, jobApi: world.jobApi.api, adapterPort, keyStore, token: world.token, local: world.local });
     const mode: BriefMode = o.brief ?? 'guided';
-    const briefs = mode === 'direct' ? { buyer: buyerBriefDirect(s, facts()), seller: sellerBriefDirect(s, facts()) } : { buyer: buyerBrief(s, facts()), seller: sellerBrief(s, facts()) };
+    const briefs = mode === 'direct' ? { buyer: o.coldBuyer ? buyerBriefCold(s, facts()) : buyerBriefDirect(s, facts()), seller: sellerBriefDirect(s, facts()) } : { buyer: buyerBrief(s, facts()), seller: sellerBrief(s, facts()) };
     const systems = mode === 'direct' ? { buyer: masterPrompt('buyer', AGENT_NAME.buyer), seller: masterPrompt('seller', AGENT_NAME.seller) } : undefined;
     // In the direct brief the scripted agents start from crow.direct, as a live one would.
     const scriptDocs = mode === 'direct' ? { guide: `${CROW_SITE}/llms.txt`, sell: `${CROW_SITE}/sell.txt`, buy: `${CROW_SITE}/buy.txt`, home: `${CROW_SITE}/`, ...(alias ? { local: world.docs.guide } : {}) } : world.docs;

@@ -224,5 +224,5 @@ Two things to check on the first run:
 | `record.ts`, `measures.ts`, `replay.ts` | The record and its secret list, the seven measures, the page |
 | `limits.json`, `tickets.ts` | The limits for each scenario, and the ticket a run over them writes |
 | `fetch-log.mjs` | The fetch hook preloaded into each client command |
-| `approvals.ts`, `approvals.test.ts` | Approvals per deal (T-571): one live model as a cold buyer or seller on the test service, under a hard USD budget checked before every turn; the approvals a person would give, counted from the record, and each final state read from both operators |
+| `approvals.ts`, `approvals.test.ts` | Approvals per deal (T-571): one live model as a cold buyer or seller on the test service, under a hard USD budget checked before every turn; the approvals a person would give, counted from the record, and each final state read from both operators; the buyer's run starts from crow.direct with each command's usage line once in its brief, refuses `--help` and empty calls, and records the guide pages it read (N215) |
 | `duet.test.ts` | The four scenarios, the tools' limits (the red team's argument shift included), the policy's date band, the loop, the providers, the measures, the mainnet guard, a typecheck of this folder, and the command line, with no key |
