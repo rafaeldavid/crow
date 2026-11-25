@@ -598,8 +598,25 @@ describe("the test seller's named offers (T-420)", () => {
     const s = startSeller(); // the default world has no live models: its panels are scripted
     const buyer = await freshBuyer();
     const { token } = await propose(s, buyer, judgedProposal(buyer, 'summary-judged'));
-    expect((await statusUntil(s, token, (x) => x.status === 'failed')).detail).toMatch(/live judge panel cannot sit/);
+    expect((await statusUntil(s, token, (x) => x.status === 'failed')).detail).toMatch(/live judge panel cannot sit.*scripted panel/);
     await s.stop();
+  });
+
+  // Red team of PR 797 (L3): on a chain world with a model variable missing, discovery reads `unavailable`, and the
+  // seller told the buyer the operators ran a scripted panel, which they no longer do (N222).
+  it('says the judge models are not configured when discovery reads an unavailable panel', async () => {
+    const closed = await serveWorld({ env: { HOLDBACK_ANTHROPIC_API_KEY: 'k' }, requireLiveJudges: true });
+    try {
+      const s = startSeller({ world: closed });
+      const buyer = await freshBuyer(closed);
+      const { token } = await propose(s, buyer, judgedProposal(buyer, 'summary-judged'));
+      const detail = (await statusUntil(s, token, (x) => x.status === 'failed')).detail;
+      expect(detail).toMatch(/live judge panel cannot sit.*judge models are not all configured/);
+      expect(detail).not.toMatch(/scripted/);
+      await s.stop();
+    } finally {
+      await closed.close();
+    }
   });
 });
 

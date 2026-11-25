@@ -644,6 +644,8 @@ ${items}
   private async panelCanSit(primary: string): Promise<string | null> {
     const j = (await this.agent.call('GET', '/.well-known/holdback.json')).demo?.judges;
     const size = Number((await this.agent.registration(primary)).policy?.panelSize ?? 3);
+    // N222: a chain world with a model variable missing reads `unavailable`: no panel sits, scripted or live.
+    if (j?.panel === 'unavailable') return "the operators' judge models are not all configured now, so no panel would read the work";
     if (j?.panel !== 'live') return 'the operators run a scripted panel now, so no model would read the work';
     const left = Number(j.liveCallsPerDay) - Number(j.liveCallsToday);
     if (!(left >= size)) return `today's live judge calls are spent (${j.liveCallsToday} of ${j.liveCallsPerDay}, UTC day ${j.day}; a panel takes ${size})`;
