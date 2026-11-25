@@ -1,0 +1,4 @@
+# The generator's Python packages, pinned. Each version was public for 14 days or more on 2026-11-25.
+cryptography==50.0.2
+cffi==2.1.1
+pycparser==3.12
