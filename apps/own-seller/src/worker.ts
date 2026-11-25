@@ -12,7 +12,7 @@
 //                      the host and the time, within 300 s (`setup.mjs leave` sends it before it removes the Worker)
 //   POST /quote, GET /defaults, GET /deals/<id>, POST /deals/<id>/ready, /job and /refund: the adapter's own routes
 //
-// The bundle (seller.json beside the Worker) holds the owner's public address and a hosted seller's bundle: the
+// The bundle (seller-bundle.txt beside the Worker) holds the owner's public address and a hosted seller's bundle: the
 // configuration, the template and the files it names. No secret. The secrets are Worker secrets, read by name:
 // HOLDBACK_KEY, the Worker's own signing key, and the variables the configuration names for its credentials. Test
 // tokens only: the object starts only on a chain in TEST_CHAINS.
@@ -72,16 +72,18 @@ export interface OwnSetup {
 }
 
 export function setupOf(raw: unknown): OwnSetup {
+  // The owner is read on its own, so a seller the check refuses can still be exported and removed by `leave`.
+  const b = raw as OwnBundle;
+  const owner = b !== null && typeof b === 'object' && typeof b.owner === 'string' && /^0x[0-9a-fA-F]{40}$/.test(b.owner) ? getAddress(b.owner) : undefined;
   try {
-    const b = raw as OwnBundle;
     if (b === null || typeof b !== 'object' || Array.isArray(b)) throw new Error('the bundle must be one JSON object: owner and seller');
     for (const k of Object.keys(b)) if (!['owner', 'seller'].includes(k)) throw new Error(`the bundle has a field the Worker does not take: ${String(k).slice(0, 40)}`);
-    if (typeof b.owner !== 'string' || !/^0x[0-9a-fA-F]{40}$/.test(b.owner)) throw new Error("owner must be the folder's address: 0x and 40 hex characters");
-    return { seller: checkBundle(b.seller), owner: getAddress(b.owner), bundleError: undefined };
+    if (owner === undefined) throw new Error("owner must be the folder's address: 0x and 40 hex characters");
+    return { seller: checkBundle(b.seller), owner, bundleError: undefined };
   } catch (e) {
     const bundleError = (e as Error).message;
     console.log(`The seller's bundle is refused: ${bundleError}`);
-    return { seller: undefined, owner: undefined, bundleError };
+    return { seller: undefined, owner, bundleError };
   }
 }
 
@@ -189,16 +191,18 @@ export class OwnSellerObject {
       ok = false;
     }
     if (!ok) return refused;
+    if (this.setup.owner === undefined) return refused;
     const journal = await journalStore(this.state.storage, () => undefined).load();
     return json(200, { type: 'crow-own-seller-export', host, exportedAt: new Date().toISOString(), journal: journal ?? { deals: {}, quotes: {} } });
   }
 
   async fetch(request: Request): Promise<Response> {
     const { seller } = this.setup;
-    if (!seller) return json(503, { type: 'unavailable', detail: 'this seller is not set up' });
     const path = new URL(request.url).pathname;
     const sub = path === '/' ? '' : path;
+    // The export comes first: the owner can take its journal and remove the Worker even when the seller is refused.
     if (sub === '/export' && request.method === 'GET') return this.export(request);
+    if (!seller) return json(503, { type: 'unavailable', detail: 'this seller is not set up' });
     if (sub === '/health' && request.method === 'GET') {
       let core: SellerAdapterCore | undefined;
       try {
@@ -269,7 +273,8 @@ ${seller.card.description === undefined ? '' : `<p>${escapeHtml(seller.card.desc
 export function workerFor(setup: OwnSetup) {
   return {
     async fetch(request: Request, env: Env): Promise<Response> {
-      if (!setup.seller) return json(503, { type: 'unavailable', detail: 'this seller is not set up; its log says why' });
+      const exporting = new URL(request.url).pathname === '/export' && setup.owner !== undefined;
+      if (!setup.seller && !exporting) return json(503, { type: 'unavailable', detail: 'this seller is not set up; its log says why' });
       let base: URL;
       try {
         base = baseOf(env.SELLER_URL);

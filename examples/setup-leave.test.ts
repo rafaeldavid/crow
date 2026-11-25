@@ -56,7 +56,7 @@ describe('T-478: leave', () => {
     const { folder } = folderWithWorker();
     const { tool, runs } = toolLog();
     const c = call(folder);
-    expect(await leave(c, tool, async () => ({ status: 200, body: { type: 'crow-own-seller-export', journal: { deals: { a: { stage: 'closed' } } } } }))).toBe(0);
+    expect(await leave(c, tool, async () => ({ status: 200, body: { type: 'crow-own-seller-export', journal: { deals: { a: { stage: 'closed' } } } } }), async () => 0)).toBe(0);
     expect(runs).toEqual([['delete', '--config', join(folder, 'cloudflare', 'wrangler.json')]]);
     expect(c.lines.at(-1)).toMatchObject({ step: 'leave', ok: true, removed: 'reviews' });
     expect(JSON.parse(readFileSync(join(folder, 'crow.json'), 'utf8')).cloudflare.leftAt).toBeTruthy();

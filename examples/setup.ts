@@ -85,7 +85,7 @@ import { deliver } from './setup-deliver.ts';
 import { publish } from './setup-publish.ts';
 import { cloudflare } from './setup-cloudflare.ts';
 import { leave } from './setup-leave.ts';
-import { checkPublished, otherOriginsOf } from './setup-published.ts';
+import { checkCardFile, checkPublished, otherOriginsOf } from './setup-published.ts';
 import { startWorkApi, WORK_CREDENTIAL_ENV, workFor, workPath } from './setup-work-api.ts';
 import { addressOf, FILES, formsOf, holdingAddressOf, locked, pinnedReader, readKey, readState, realPath, seller, writeState, writeWhole, type Call, type FirstDeal, type J, type State } from './setup-seller.ts';
 import { commitmentIdOf, jcs } from './verify.ts';
@@ -263,11 +263,29 @@ async function listStep(c: Call): Promise<number> {
   return list(c, { website, skip: false, to: new URL(to).href });
 }
 
+/** The card's local check (T-478), for a folder whose state names a card folder. */
+function cardCheckOf(folder: string): Array<ReturnType<typeof checkCardFile>> {
+  let card: string | undefined;
+  try {
+    card = readState(folder)?.card;
+  } catch {
+    return [];
+  }
+  if (card === undefined) return [];
+  let text: string | undefined;
+  try {
+    text = readFileSync(join(card, 'agent.json'), 'utf8');
+  } catch {
+    text = undefined;
+  }
+  return [checkCardFile(text)];
+}
+
 async function check(c: Call): Promise<number> {
   const published = c.flags.get('--published');
   if (published === undefined && c.flags.has('--other-origin')) throw new WrongCall('--other-origin goes with --published');
   if (published !== undefined && c.flags.has('--work')) throw new WrongCall('give --published or --work, not both');
-  const results = published !== undefined ? await checkPublished(published, { otherOrigins: otherOriginsOf(c.flags.get('--other-origin')) }) : await runChecks(c.folder, { work: c.flags.get('--work') });
+  const results = published !== undefined ? await checkPublished(published, { otherOrigins: otherOriginsOf(c.flags.get('--other-origin')) }) : [...(await runChecks(c.folder, { work: c.flags.get('--work') })), ...cardCheckOf(c.folder)];
   for (const r of results) c.say({ step: 'check', ...r });
   return results.every((r) => r.ok) ? 0 : 1;
 }

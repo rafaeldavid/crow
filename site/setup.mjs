@@ -67764,7 +67764,7 @@ async function run(c, state, offerId, given) {
 }
 
 // examples/seller-worker-pin.ts
-const SELLER_WORKER_SHA256 = "bd5a3540ee687376511789989abc1a0a7a859c47917909d56c40e563da153e15";
+const SELLER_WORKER_SHA256 = "097fde382b5314d2ad38d9912856c5cf41c12c431353e9858d19330364288808";
 
 // examples/setup-cloudflare.ts
 const plain$2 = (s, max = 300) => plain$8(String(s ?? "")).slice(0, max);
@@ -67820,13 +67820,26 @@ const COMPATIBILITY = {
 	]
 };
 const recordOf = (state) => state?.cloudflare;
-/** Wrangler through npx, with this process's environment (main() has removed every HOLDBACK_* and CROW_* variable). */
-const npxWrangler = (args, o = {}) => new Promise((done) => {
-	const child = spawn("npx", [...WRANGLER, ...args], { stdio: [
-		"pipe",
-		"pipe",
-		"pipe"
-	] });
+/**
+* Wrangler through npx, with this process's environment (main() has removed every HOLDBACK_* and CROW_* variable), run
+* in `cwd`, the folder's deploy directory: Wrangler loads a .env file from the directory it starts in, and one in the
+* person's current folder could carry an account token past the environment check (T-478 review).
+*/
+const npxWrangler = (cwd) => (args, o = {}) => new Promise((done) => {
+	const env = readdirSync(cwd).find((n) => /^\.env/.test(n) || n === ".dev.vars");
+	if (env) return done({
+		code: 2,
+		stdout: "",
+		stderr: `${join(cwd, env)} is there, and Wrangler would load it: remove it`
+	});
+	const child = spawn("npx", [...WRANGLER, ...args], {
+		cwd,
+		stdio: [
+			"pipe",
+			"pipe",
+			"pipe"
+		]
+	});
 	let stdout = "", stderr = "";
 	child.stdout.on("data", (d) => stdout += d.toString("utf8"));
 	child.stderr.on("data", (d) => stderr += d.toString("utf8"));
@@ -67878,7 +67891,7 @@ function addressOf(at, testWorld) {
 const QUESTIONS = {
 	"--config": "Which program answers the quotes? Give the seller adapter's configuration for your own API (https://crow.direct/ref/seller-adapter.txt, \"Your API's shape\"): a JSON file with sellerApi over https, scope and template, the template file beside it. The Worker starts each job there and delivers the result.",
 	"--account": `Which Cloudflare account? Its account ID, 32 hex characters. The person logs in first (${WRANGLER_LINE} login); then ${WRANGLER_LINE} whoami lists the accounts the login reaches. Never pick one for the person.`,
-	"--at": "At which address? <name>.<subdomain>.workers.dev, where <subdomain> is the account's workers.dev subdomain (the dashboard: Workers & Pages, then the subdomain; an account with none sets one there first), or a host on a zone the account has, such as crow.example.com.",
+	"--at": "At which address? <name>.<subdomain>.workers.dev, where <subdomain> is the account's workers.dev subdomain (the dashboard: Workers & Pages, then the subdomain; an account with none sets one there first), or a host on a zone the account has, such as crow.example.com. The deploy replaces a Worker of the same name on that account: choose a name no Worker of the account has yet.",
 	"--quote-credential": `Who may ask for a quote? Pass --quote-credential: buyers then need a credential you hand them yourself, typed into the Worker's secret ${QUOTE_ENV}. Or pass --open: anyone who reaches the address may ask, and each quote starts nothing but spends a faucet grant; each funded deal starts a job at your API.`,
 	"--quotes-per-day": "How many quotes a day may the Worker answer, over all callers? A whole number, such as 100. Past it the Worker answers 429 until the window ends."
 };
@@ -67983,6 +67996,7 @@ function checkSeller(seller) {
 		shippedTemplate: ""
 	});
 	if (seller.config.template === void 0) throw new Error("--config: template is required: the deal template, in a file beside the configuration");
+	if (seller.slug.length > 40 || !/^[a-z0-9]+(-[a-z0-9]+)*$/.test(seller.slug) || ["test-seller", "test-buyer"].some((r) => seller.slug.startsWith(r))) throw new Error(`the folder's name ${plain$2(seller.slug, 40)} is not one the Worker takes: 1 to 40 lowercase letters and digits in words joined by single hyphens, not starting test-seller or test-buyer. Make the folder with another --name`);
 	const c = seller.config;
 	const vars = [
 		c.sellerApi?.auth?.env,
@@ -68055,7 +68069,7 @@ async function workerBytes(c) {
 		if (bytes.length > MAX_WORKER_BYTES) throw new Error(`${SELLER_WORKER_URL} is over ${MAX_WORKER_BYTES} bytes`);
 	}
 	const sha = createHash("sha256").update(bytes).digest("hex");
-	if (sha !== "bd5a3540ee687376511789989abc1a0a7a859c47917909d56c40e563da153e15") throw new Error(`the Worker file's SHA-256 is ${sha}, not ${SELLER_WORKER_SHA256}, the one this setup.mjs carries: it is not the Worker this version writes`);
+	if (sha !== "097fde382b5314d2ad38d9912856c5cf41c12c431353e9858d19330364288808") throw new Error(`the Worker file's SHA-256 is ${sha}, not ${SELLER_WORKER_SHA256}, the one this setup.mjs carries: it is not the Worker this version writes`);
 	return bytes;
 }
 /** The card's quote entry in the card's folder: other offers kept, the draft's marks dropped. */
@@ -68089,7 +68103,7 @@ function writeCard(state, offerId, base, configSha256) {
 	return file;
 }
 /** `cloudflare` and `cloudflare --key`. */
-async function cloudflare(c, tool = npxWrangler) {
+async function cloudflare(c, tool = npxWrangler(join(c.folder, CF_DIR))) {
 	const state = readState(c.folder);
 	if (!state || !state.payout || !state.address) {
 		c.say({
@@ -68191,7 +68205,7 @@ async function prepare(c, state) {
 	};
 	if (was?.leftAt) delete state.cloudflare.leftAt;
 	writeState(c.folder, state);
-	const cfg = join(dir, CF_FILES.config);
+	join(dir, CF_FILES.config);
 	const secrets = made.credentialVars.filter((v) => v !== QUOTE_ENV);
 	c.say({
 		step: "cloudflare",
@@ -68208,10 +68222,10 @@ async function prepare(c, state) {
 		sent: "nothing to the account: the person runs the login and the deploy.",
 		next: [
 			`The person, in a terminal: ${WRANGLER_LINE} login`,
-			`The person: ${WRANGLER_LINE} deploy --config ${cfg}`,
+			`The person: cd ${dir} && ${WRANGLER_LINE} deploy --config ${CF_FILES.config}`,
 			`Then: node ~/.crow/setup.mjs cloudflare --key${c.folder.endsWith("/.crow/seller") ? "" : ` --folder ${c.folder}`}`,
-			...secrets.map((v) => `The person types the value of ${v} at Wrangler's hidden prompt: ${WRANGLER_LINE} secret put ${v} --config ${cfg}`),
-			...access === "credential" ? [`The person types the quote credentials, comma-separated, at Wrangler's hidden prompt: ${WRANGLER_LINE} secret put ${QUOTE_ENV} --config ${cfg}`] : [],
+			...secrets.map((v) => `The person types the value of ${v} at Wrangler's hidden prompt: cd ${dir} && ${WRANGLER_LINE} secret put ${v} --config ${CF_FILES.config}`),
+			...access === "credential" ? [`The person types the quote credentials, comma-separated, at Wrangler's hidden prompt: cd ${dir} && ${WRANGLER_LINE} secret put ${QUOTE_ENV} --config ${CF_FILES.config}`] : [],
 			`Then: node ~/.crow/setup.mjs check --published ${where.url}`,
 			`When an assistant shares this machine: ${WRANGLER_LINE} logout`
 		]
@@ -68256,7 +68270,7 @@ async function setKey(c, state, tool) {
 		});
 		return 1;
 	}
-	const remaining = (bundleVars(c.folder) ?? []).filter((v) => !names.includes(v)).map((v) => `The person types the value of ${v} at Wrangler's hidden prompt: ${WRANGLER_LINE} secret put ${v} --config ${cfg}`);
+	const remaining = (bundleVars(c.folder) ?? []).filter((v) => !names.includes(v)).map((v) => `The person types the value of ${v} at Wrangler's hidden prompt: cd ${dirname(cfg)} && ${WRANGLER_LINE} secret put ${v} --config ${CF_FILES.config}`);
 	if (names.includes("HOLDBACK_KEY")) {
 		if (rec.keyStartedAt === void 0) {
 			c.say({
@@ -68276,6 +68290,15 @@ async function setKey(c, state, tool) {
 			next: [...remaining, `Then: node ~/.crow/setup.mjs check --published https://${rec.at}/`]
 		});
 		return 0;
+	}
+	const strange = names.filter((n) => n !== "HOLDBACK_KEY" && !(bundleVars(c.folder) ?? []).includes(n));
+	if (strange.length) {
+		c.say({
+			step: "cloudflare-key",
+			ok: false,
+			detail: `The Worker ${rec.name} holds secrets this folder's bundle does not name (${strange.slice(0, 5).map((n) => plain$2(n, 40)).join(", ")}): it is another program's Worker, which the deploy replaced. Choose another address with cloudflare --at. Nothing was set.`
+		});
+		return 1;
 	}
 	rec.keyStartedAt = (/* @__PURE__ */ new Date()).toISOString();
 	writeState(c.folder, state);
@@ -68344,7 +68367,18 @@ const fetchExport = async (url, headers) => {
 		body: await res.json().catch(() => null)
 	};
 };
-async function leave(c, tool = npxWrangler, exporter = fetchExport) {
+/** The status /health answers after the removal, or 0 when nothing answers. */
+const probeHealth = async (url) => {
+	try {
+		return (await fetch(url, {
+			redirect: "manual",
+			signal: AbortSignal.timeout(15e3)
+		})).status;
+	} catch {
+		return 0;
+	}
+};
+async function leave(c, tool = npxWrangler(join(c.folder, CF_DIR)), exporter = fetchExport, probe = probeHealth) {
 	const state = readState(c.folder);
 	const rec = recordOf(state);
 	if (!state || !rec || rec.leftAt) {
@@ -68432,11 +68466,13 @@ async function leave(c, tool = npxWrangler, exporter = fetchExport) {
 		leftAt: (/* @__PURE__ */ new Date()).toISOString()
 	};
 	writeState(c.folder, state);
+	const after = await probe(`${scheme}://${host}/health`);
 	c.say({
 		step: "leave",
 		ok: true,
 		exported: file,
 		removed: rec.name,
+		...after === 200 ? { stillAnswers: `${scheme}://${host}/health still answers 200. Cloudflare can take a minute to stop a removed Worker; check again, and look for the Worker on the dashboard.` } : {},
 		detail: `The Worker ${rec.name} and its secrets are removed from account ${rec.account}. Cloudflare keeps the account, its workers.dev subdomain, and the Worker's logs for their retention period; check on the dashboard's Durable Objects page that the Worker's namespace is gone. The card in your card folder still names the address: take it off your site. Past deals stay public on the operators and on Sepolia.`,
 		next: [`When an assistant shares this machine: ${WRANGLER_LINE} logout`]
 	});
@@ -68474,6 +68510,8 @@ for (const [net, prefix] of [
 	["fec0::", 10],
 	["ff00::", 8],
 	["2001:db8::", 32],
+	["2001::", 32],
+	["64:ff9b:1::", 48],
 	["100::", 64]
 ]) NOT_PUBLIC.addSubnet(net, prefix, "ipv6");
 /** Whether `ip` is an address a public seller may have. An IPv4 address carried in an IPv6 one is judged as itself. */
@@ -68517,69 +68555,86 @@ const REASONS = {
 	slow: `did not answer within ${TIMEOUT_MS / 1e3} s`,
 	big: `is over ${PUBLISHED_MAX_BYTES.toLocaleString("en-US")} bytes`
 };
-/** GET over https with every rule above: one lookup, checked, and the connection made to that address only. */
-const safeGet = (url) => new Promise((done) => {
-	const literal = url.hostname.replace(/^\[|\]$/g, "");
-	if (isIP(literal) && !isPublicAddress(literal)) return done({
-		ok: false,
-		reason: REASONS.private
-	});
-	let refused = "";
-	const req = request({
-		host: literal,
-		servername: isIP(literal) ? void 0 : literal,
-		port: url.port || 443,
-		path: `${url.pathname}${url.search}`,
-		method: "GET",
-		agent: false,
-		headers: {
-			accept: "application/json",
-			"user-agent": "crow-setup-check"
-		},
-		lookup: ((host, opts, cb) => lookup(host, { all: true }, (err, addrs) => {
-			if (err || addrs.length === 0) return refused = REASONS.unresolved, cb(err ?? /* @__PURE__ */ new Error("no address"), opts?.all ? [] : "", 4);
-			if (addrs.some((a) => !isPublicAddress(a.address))) return refused = REASONS.private, cb(/* @__PURE__ */ new Error("not public"), opts?.all ? [] : "", 4);
-			if (opts?.all) cb(null, addrs);
-			else cb(null, addrs[0].address, addrs[0].family);
-		}))
-	}, (res) => {
-		const chunks = [];
-		let size = 0;
-		res.on("data", (d) => {
-			size += d.length;
-			if (size > 1048576) {
-				req.destroy();
-				done({
-					ok: false,
-					reason: REASONS.big
-				});
-			} else chunks.push(d);
-		});
-		res.on("end", () => done({
-			ok: true,
-			status: res.statusCode ?? 0,
-			location: res.headers.location !== void 0,
-			contentType: String(res.headers["content-type"] ?? ""),
-			body: Buffer.concat(chunks)
-		}));
-		res.on("error", () => done({
+/**
+* A GET with every rule above: one lookup, checked, the connection made to that address only, at most
+* PUBLISHED_MAX_BYTES read and at most TIMEOUT_MS in all. `o` is for a test: another request function (node:http's,
+* against a local server) and another address rule.
+*/
+function makeGetter(o = {}) {
+	const send = o.request ?? request, allow = o.allow ?? isPublicAddress;
+	return (url) => new Promise((resolveGot) => {
+		let settled = false;
+		let timer;
+		const done = (g) => {
+			if (settled) return;
+			settled = true;
+			clearTimeout(timer);
+			resolveGot(g);
+		};
+		const literal = url.hostname.replace(/^\[|\]$/g, "");
+		if (isIP(literal) && !allow(literal)) return done({
 			ok: false,
-			reason: REASONS.unreachable
-		}));
-	});
-	req.setTimeout(TIMEOUT_MS, () => {
-		req.destroy();
-		done({
-			ok: false,
-			reason: REASONS.slow
+			reason: REASONS.private
 		});
+		let refused = "";
+		timer = setTimeout(() => {
+			req.destroy();
+			done({
+				ok: false,
+				reason: REASONS.slow
+			});
+		}, TIMEOUT_MS);
+		const req = send({
+			host: literal,
+			servername: isIP(literal) ? void 0 : literal,
+			port: url.port || 443,
+			path: `${url.pathname}${url.search}`,
+			method: "GET",
+			agent: false,
+			headers: {
+				accept: "application/json",
+				"user-agent": "crow-setup-check"
+			},
+			lookup: ((host, opts, cb) => lookup(host, { all: true }, (err, addrs) => {
+				if (err || addrs.length === 0) return refused = REASONS.unresolved, cb(err ?? /* @__PURE__ */ new Error("no address"), opts?.all ? [] : "", 4);
+				if (addrs.some((a) => !allow(a.address))) return refused = REASONS.private, cb(/* @__PURE__ */ new Error("not public"), opts?.all ? [] : "", 4);
+				if (opts?.all) cb(null, addrs);
+				else cb(null, addrs[0].address, addrs[0].family);
+			}))
+		}, (res) => {
+			const chunks = [];
+			let size = 0;
+			res.on("data", (d) => {
+				size += d.length;
+				if (size > 1048576) {
+					req.destroy();
+					done({
+						ok: false,
+						reason: REASONS.big
+					});
+				} else chunks.push(d);
+			});
+			res.on("end", () => done({
+				ok: true,
+				status: res.statusCode ?? 0,
+				location: res.headers.location !== void 0,
+				contentType: String(res.headers["content-type"] ?? ""),
+				body: Buffer.concat(chunks)
+			}));
+			res.on("error", () => done({
+				ok: false,
+				reason: REASONS.unreachable
+			}));
+		});
+		req.on("error", () => done({
+			ok: false,
+			reason: refused || REASONS.unreachable
+		}));
+		req.end();
 	});
-	req.on("error", () => done({
-		ok: false,
-		reason: refused || REASONS.unreachable
-	}));
-	req.end();
-});
+}
+/** The getter check --published uses. */
+const safeGet = makeGetter();
 /** The card's address from the address the person gave: agent.json beside the page. */
 function cardUrlOf(target) {
 	let u;
@@ -68681,6 +68736,60 @@ async function checkPublished(target, o = {}) {
 	}
 	say("published-quote", true, "Not sent: asking for a price makes an offer and spends a faucet grant. Run first-deal for a deal.", true);
 	return out;
+}
+/**
+* The card's local check (T-477's criterion 4, taken over here): the card file in the card's folder, before it goes on
+* the party's site. A draft passes with advice; a published card must be a crow-agent card, under the size cap, whose
+* every quoted offer names https quote and defaults addresses. It reads nothing over the network.
+*/
+function checkCardFile(text) {
+	if (text === void 0) return {
+		check: "card",
+		ok: true,
+		advisory: true,
+		detail: "The card folder holds no agent.json yet."
+	};
+	if (Buffer.byteLength(text) > 1048576) return {
+		check: "card",
+		ok: false,
+		detail: `agent.json ${REASONS.big}: a buyer's agent reads no more.`
+	};
+	let c;
+	try {
+		c = JSON.parse(text);
+	} catch {
+		return {
+			check: "card",
+			ok: false,
+			detail: "agent.json is not JSON."
+		};
+	}
+	if (c?.type !== "crow-agent") return {
+		check: "card",
+		ok: false,
+		detail: "agent.json is not a crow-agent card."
+	};
+	if (String(c.status ?? "").startsWith("draft")) return {
+		check: "card",
+		ok: true,
+		advisory: true,
+		detail: "agent.json is the setup's draft: it names no quote address yet."
+	};
+	const offers = Array.isArray(c.offers) ? c.offers : [];
+	const bad = offers.findIndex((x) => {
+		const p = x?.pricing;
+		return p?.kind === "quoted" && (!https(p.quote) || !https(p.defaults));
+	});
+	if (bad >= 0) return {
+		check: "card",
+		ok: false,
+		detail: `Offer ${bad + 1} of agent.json names a quote or defaults address that is not https.`
+	};
+	return {
+		check: "card",
+		ok: true,
+		detail: `agent.json is a crow-agent card with ${offers.length} offer${offers.length === 1 ? "" : "s"}; every quoted one names https addresses.`
+	};
 }
 
 // examples/setup.ts
@@ -68973,11 +69082,28 @@ async function listStep(c) {
 		to: new URL(to).href
 	});
 }
+/** The card's local check (T-478), for a folder whose state names a card folder. */
+function cardCheckOf(folder) {
+	let card;
+	try {
+		card = readState(folder)?.card;
+	} catch {
+		return [];
+	}
+	if (card === void 0) return [];
+	let text;
+	try {
+		text = readFileSync(join(card, "agent.json"), "utf8");
+	} catch {
+		text = void 0;
+	}
+	return [checkCardFile(text)];
+}
 async function check(c) {
 	const published = c.flags.get("--published");
 	if (published === void 0 && c.flags.has("--other-origin")) throw new WrongCall("--other-origin goes with --published");
 	if (published !== void 0 && c.flags.has("--work")) throw new WrongCall("give --published or --work, not both");
-	const results = published !== void 0 ? await checkPublished(published, { otherOrigins: otherOriginsOf(c.flags.get("--other-origin")) }) : await runChecks(c.folder, { work: c.flags.get("--work") });
+	const results = published !== void 0 ? await checkPublished(published, { otherOrigins: otherOriginsOf(c.flags.get("--other-origin")) }) : [...await runChecks(c.folder, { work: c.flags.get("--work") }), ...cardCheckOf(c.folder)];
 	for (const r of results) c.say({
 		step: "check",
 		...r

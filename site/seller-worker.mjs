@@ -92635,14 +92635,15 @@ const scriptJson = (v) => JSON.stringify(v, null, 2).replace(/</g, "\\u003c");
 /** The object's name: one per Worker, the same across deploys, so a deploy keeps the seller's open deals. */
 const OBJECT_NAME = "crow-own-seller";
 function setupOf(raw) {
+	const b = raw;
+	const owner = b !== null && typeof b === "object" && typeof b.owner === "string" && /^0x[0-9a-fA-F]{40}$/.test(b.owner) ? getAddress(b.owner) : void 0;
 	try {
-		const b = raw;
 		if (b === null || typeof b !== "object" || Array.isArray(b)) throw new Error("the bundle must be one JSON object: owner and seller");
 		for (const k of Object.keys(b)) if (!["owner", "seller"].includes(k)) throw new Error(`the bundle has a field the Worker does not take: ${String(k).slice(0, 40)}`);
-		if (typeof b.owner !== "string" || !/^0x[0-9a-fA-F]{40}$/.test(b.owner)) throw new Error("owner must be the folder's address: 0x and 40 hex characters");
+		if (owner === void 0) throw new Error("owner must be the folder's address: 0x and 40 hex characters");
 		return {
 			seller: checkBundle(b.seller),
-			owner: getAddress(b.owner),
+			owner,
 			bundleError: void 0
 		};
 	} catch (e) {
@@ -92650,7 +92651,7 @@ function setupOf(raw) {
 		console.log(`The seller's bundle is refused: ${bundleError}`);
 		return {
 			seller: void 0,
-			owner: void 0,
+			owner,
 			bundleError
 		};
 	}
@@ -92775,6 +92776,7 @@ var OwnSellerObject = class {
 			ok = false;
 		}
 		if (!ok) return refused;
+		if (this.setup.owner === void 0) return refused;
 		const journal = await journalStore(this.state.storage, () => void 0).load();
 		return json(200, {
 			type: "crow-own-seller-export",
@@ -92788,13 +92790,13 @@ var OwnSellerObject = class {
 	}
 	async fetch(request) {
 		const { seller } = this.setup;
+		const path = new URL(request.url).pathname;
+		const sub = path === "/" ? "" : path;
+		if (sub === "/export" && request.method === "GET") return this.export(request);
 		if (!seller) return json(503, {
 			type: "unavailable",
 			detail: "this seller is not set up"
 		});
-		const path = new URL(request.url).pathname;
-		const sub = path === "/" ? "" : path;
-		if (sub === "/export" && request.method === "GET") return this.export(request);
 		if (sub === "/health" && request.method === "GET") {
 			let core;
 			try {
@@ -92872,7 +92874,8 @@ ${seller.card.description === void 0 ? "" : `<p>${escapeHtml(seller.card.descrip
 */
 function workerFor(setup) {
 	return { async fetch(request, env) {
-		if (!setup.seller) return json(503, {
+		const exporting = new URL(request.url).pathname === "/export" && setup.owner !== void 0;
+		if (!setup.seller && !exporting) return json(503, {
 			type: "unavailable",
 			detail: "this seller is not set up; its log says why"
 		});

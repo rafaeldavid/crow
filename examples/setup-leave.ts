@@ -29,7 +29,16 @@ const fetchExport: Exporter = async (url, headers) => {
   return { status: res.status, body: await res.json().catch(() => null) };
 };
 
-export async function leave(c: Call, tool: Tool = npxWrangler, exporter: Exporter = fetchExport): Promise<number> {
+/** The status /health answers after the removal, or 0 when nothing answers. */
+const probeHealth = async (url: string): Promise<number> => {
+  try {
+    return (await fetch(url, { redirect: 'manual', signal: AbortSignal.timeout(15_000) })).status;
+  } catch {
+    return 0;
+  }
+};
+
+export async function leave(c: Call, tool: Tool = npxWrangler(join(c.folder, CF_DIR)), exporter: Exporter = fetchExport, probe: (url: string) => Promise<number> = probeHealth): Promise<number> {
   const state = readState(c.folder);
   const rec = recordOf(state);
   if (!state || !rec || rec.leftAt) {
@@ -77,8 +86,11 @@ export async function leave(c: Call, tool: Tool = npxWrangler, exporter: Exporte
   }
   (state as State & { cloudflare: typeof rec }).cloudflare = { ...rec, leftAt: new Date().toISOString() };
   writeState(c.folder, state);
+  // A removed Worker stops answering within a few seconds; one that still answers as a seller is said so.
+  const after = await probe(`${scheme}://${host}/health`);
   c.say({
     step: 'leave', ok: true, exported: file, removed: rec.name,
+    ...(after === 200 ? { stillAnswers: `${scheme}://${host}/health still answers 200. Cloudflare can take a minute to stop a removed Worker; check again, and look for the Worker on the dashboard.` } : {}),
     detail: `The Worker ${rec.name} and its secrets are removed from account ${rec.account}. Cloudflare keeps the account, its workers.dev subdomain, and the Worker's logs for their retention period; check on the dashboard's Durable Objects page that the Worker's namespace is gone. The card in your card folder still names the address: take it off your site. Past deals stay public on the operators and on Sepolia.`,
     next: [`When an assistant shares this machine: ${WRANGLER_LINE} logout`],
   });

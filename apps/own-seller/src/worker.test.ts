@@ -187,4 +187,18 @@ describe("a seller's own Worker (T-478): the address is the party's own", () => 
     expect(setupOf({ ...b, seller: { ...(b.seller as J), config: { ...(b.seller as J).config, port: 8791 } } }).bundleError).toMatch(/config\.port/);
     expect(setupOf(b).seller?.slug).toBe('reviews');
   });
+
+  it('a refused seller still answers /export to the owner, so leave can take the journal and remove the Worker', async () => {
+    const b = bundleFor('https://api.example.com/');
+    const setup = setupOf({ ...b, seller: { ...(b.seller as J), slug: 'shop-' } });
+    expect(setup.seller).toBeUndefined();
+    expect(setup.owner).toBe(OWNER.address);
+    const object = new OwnSellerObject({ storage: new FakeStorage() }, envFor(), setup);
+    expect((await get(object, '/agent.json')).status).toBe(503);
+    expect((await get(object, '/export', await ownerHeaders(OWNER_KEY))).status).toBe(200);
+    expect((await get(object, '/export')).status).toBe(401);
+    const env = { ...envFor(), SELLER: { idFromName: (n: string) => n, get: () => ({ fetch: async () => new Response('ok') }) } } as Env;
+    expect((await workerFor(setup).fetch(new Request(`${BASE}/export`), env)).status).toBe(200);
+    expect((await workerFor(setup).fetch(new Request(`${BASE}/quote`), env)).status).toBe(503);
+  });
 });

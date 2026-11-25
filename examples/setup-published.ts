@@ -26,7 +26,7 @@ const MAX_OFFERS = 32;
 /** Addresses no public seller has: loopback, private, link-local, shared, documentation, multicast, reserved. */
 const NOT_PUBLIC = new BlockList();
 for (const [net, prefix] of [['0.0.0.0', 8], ['10.0.0.0', 8], ['100.64.0.0', 10], ['127.0.0.0', 8], ['169.254.0.0', 16], ['172.16.0.0', 12], ['192.0.0.0', 24], ['192.0.2.0', 24], ['192.88.99.0', 24], ['192.168.0.0', 16], ['198.18.0.0', 15], ['198.51.100.0', 24], ['203.0.113.0', 24], ['224.0.0.0', 3]] as const) NOT_PUBLIC.addSubnet(net, prefix, 'ipv4');
-for (const [net, prefix] of [['::', 128], ['::1', 128], ['fc00::', 7], ['fe80::', 10], ['fec0::', 10], ['ff00::', 8], ['2001:db8::', 32], ['100::', 64]] as const) NOT_PUBLIC.addSubnet(net, prefix, 'ipv6');
+for (const [net, prefix] of [['::', 128], ['::1', 128], ['fc00::', 7], ['fe80::', 10], ['fec0::', 10], ['ff00::', 8], ['2001:db8::', 32], ['2001::', 32], ['64:ff9b:1::', 48], ['100::', 64]] as const) NOT_PUBLIC.addSubnet(net, prefix, 'ipv6');
 
 /** Whether `ip` is an address a public seller may have. An IPv4 address carried in an IPv6 one is judged as itself. */
 export function isPublicAddress(ip: string): boolean {
@@ -73,13 +73,31 @@ const REASONS = {
   big: `is over ${PUBLISHED_MAX_BYTES.toLocaleString('en-US')} bytes`,
 };
 
-/** GET over https with every rule above: one lookup, checked, and the connection made to that address only. */
-export const safeGet: Getter = (url) =>
-  new Promise((done) => {
+/**
+ * A GET with every rule above: one lookup, checked, the connection made to that address only, at most
+ * PUBLISHED_MAX_BYTES read and at most TIMEOUT_MS in all. `o` is for a test: another request function (node:http's,
+ * against a local server) and another address rule.
+ */
+export function makeGetter(o: { request?: typeof request; allow?: (ip: string) => boolean } = {}): Getter {
+  const send = o.request ?? request, allow = o.allow ?? isPublicAddress;
+  return (url) => new Promise((resolveGot) => {
+    let settled = false;
+    let timer: ReturnType<typeof setTimeout> | undefined;
+    const done = (g: Got) => {
+      if (settled) return;
+      settled = true;
+      clearTimeout(timer);
+      resolveGot(g);
+    };
     const literal = url.hostname.replace(/^\[|\]$/g, '');
-    if (isIP(literal) && !isPublicAddress(literal)) return done({ ok: false, reason: REASONS.private });
+    if (isIP(literal) && !allow(literal)) return done({ ok: false, reason: REASONS.private });
     let refused = '';
-    const req = request(
+    // The whole exchange, not only each wait for a byte, ends at TIMEOUT_MS.
+    timer = setTimeout(() => {
+      req.destroy();
+      done({ ok: false, reason: REASONS.slow });
+    }, TIMEOUT_MS);
+    const req = send(
       {
         host: literal,
         servername: isIP(literal) ? undefined : literal,
@@ -93,7 +111,7 @@ export const safeGet: Getter = (url) =>
         lookup: ((host: string, opts: { all?: boolean }, cb: (err: Error | null, address: unknown, family?: number) => void) =>
           dnsLookup(host, { all: true }, (err, addrs) => {
             if (err || addrs.length === 0) return (refused = REASONS.unresolved), cb(err ?? new Error('no address'), opts?.all ? [] : '', 4);
-            if (addrs.some((a) => !isPublicAddress(a.address))) return (refused = REASONS.private), cb(new Error('not public'), opts?.all ? [] : '', 4);
+            if (addrs.some((a) => !allow(a.address))) return (refused = REASONS.private), cb(new Error('not public'), opts?.all ? [] : '', 4);
             if (opts?.all) cb(null, addrs);
             else cb(null, addrs[0]!.address, addrs[0]!.family);
           })) as never,
@@ -112,13 +130,12 @@ export const safeGet: Getter = (url) =>
         res.on('error', () => done({ ok: false, reason: REASONS.unreachable }));
       },
     );
-    req.setTimeout(TIMEOUT_MS, () => {
-      req.destroy();
-      done({ ok: false, reason: REASONS.slow });
-    });
     req.on('error', () => done({ ok: false, reason: refused || REASONS.unreachable }));
     req.end();
   });
+}
+/** The getter check --published uses. */
+export const safeGet: Getter = makeGetter();
 
 /** The card's address from the address the person gave: agent.json beside the page. */
 export function cardUrlOf(target: string): URL | string {
@@ -218,4 +235,29 @@ export async function checkPublished(target: string, o: { otherOrigins?: string[
   }
   say('published-quote', true, 'Not sent: asking for a price makes an offer and spends a faucet grant. Run first-deal for a deal.', true);
   return out;
+}
+
+/**
+ * The card's local check (T-477's criterion 4, taken over here): the card file in the card's folder, before it goes on
+ * the party's site. A draft passes with advice; a published card must be a crow-agent card, under the size cap, whose
+ * every quoted offer names https quote and defaults addresses. It reads nothing over the network.
+ */
+export function checkCardFile(text: string | undefined): CheckResult {
+  if (text === undefined) return { check: 'card', ok: true, advisory: true, detail: 'The card folder holds no agent.json yet.' };
+  if (Buffer.byteLength(text) > PUBLISHED_MAX_BYTES) return { check: 'card', ok: false, detail: `agent.json ${REASONS.big}: a buyer's agent reads no more.` };
+  let c: Record<string, unknown>;
+  try {
+    c = JSON.parse(text) as Record<string, unknown>;
+  } catch {
+    return { check: 'card', ok: false, detail: 'agent.json is not JSON.' };
+  }
+  if (c?.type !== 'crow-agent') return { check: 'card', ok: false, detail: 'agent.json is not a crow-agent card.' };
+  if (String(c.status ?? '').startsWith('draft')) return { check: 'card', ok: true, advisory: true, detail: 'agent.json is the setup\'s draft: it names no quote address yet.' };
+  const offers = Array.isArray(c.offers) ? c.offers : [];
+  const bad = offers.findIndex((x) => {
+    const p = (x as Record<string, unknown>)?.pricing as Record<string, unknown> | undefined;
+    return p?.kind === 'quoted' && (!https(p.quote) || !https(p.defaults));
+  });
+  if (bad >= 0) return { check: 'card', ok: false, detail: `Offer ${bad + 1} of agent.json names a quote or defaults address that is not https.` };
+  return { check: 'card', ok: true, detail: `agent.json is a crow-agent card with ${offers.length} offer${offers.length === 1 ? '' : 's'}; every quoted one names https addresses.` };
 }

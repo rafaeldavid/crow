@@ -215,6 +215,38 @@ describe("T-478: the Worker's key reaches the secret store on standard input onl
     for (const [where, text] of places) for (const f of forms) expect(text.includes(f), `${where} holds the key`).toBe(false);
   }, 90_000);
 
+  it('refuses a Worker that holds secrets its bundle does not name: another program\'s Worker of the same name', async () => {
+    const p = await party();
+    expect((await run(prepared(p), { bin: p.bin })).code).toBe(0);
+    writeFileSync(join(p.dir, 'store'), '[{"name":"STRIPE_KEY","type":"secret_text"}]');
+    const r = await run(['cloudflare', '--key', '--folder', p.folder], { bin: p.bin });
+    expect(r.code).toBe(1);
+    expect(r.lines.at(-1).detail).toMatch(/secrets this folder's bundle does not name \(STRIPE_KEY\)/);
+    expect(argsOf(p.dir).some((a) => a.includes('secret bulk'))).toBe(false);
+  }, 60_000);
+
+  it('runs Wrangler in the deploy folder, and not at all while a .env file is there for it to load', async () => {
+    const p = await party();
+    expect((await run(prepared(p), { bin: p.bin })).code).toBe(0);
+    writeFileSync(join(p.folder, 'cloudflare', '.env'), 'X=1\n');
+    const r = await run(['cloudflare', '--key', '--folder', p.folder], { bin: p.bin });
+    expect(r.code).toBe(1);
+    expect(r.lines.at(-1).detail).toMatch(/\.env is there, and Wrangler would load it/);
+    expect(argsOf(p.dir)).toEqual([]);
+  }, 60_000);
+
+  it('refuses a folder name the Worker would refuse, before anything is written', async () => {
+    const p = await party();
+    const other = join(p.dir, 'shop');
+    expect((await run(['seller', '--template', join(p.dir, 'template.input.json'), '--payout', 'this-key', '--folder', other, '--name', 'test-seller-own'], { bin: p.bin })).code).toBe(0);
+    const args = prepared(p);
+    args[args.indexOf('--folder') + 1] = other;
+    const r = await run(args, { bin: p.bin });
+    expect(r.code).toBe(1);
+    expect(r.lines.at(-1).detail).toMatch(/not one the Worker takes/);
+    expect(existsSync(join(other, 'cloudflare'))).toBe(false);
+  }, 60_000);
+
   it('refuses a Worker whose key this folder did not set', async () => {
     const p = await party();
     expect((await run(prepared(p), { bin: p.bin })).code).toBe(0);

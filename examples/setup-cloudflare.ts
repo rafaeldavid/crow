@@ -19,7 +19,7 @@
 // an account's token or ID is in the environment, which would choose the account without a word on the command line.
 import { spawn } from 'node:child_process';
 import { createHash } from 'node:crypto';
-import { existsSync, mkdirSync, readFileSync, statSync } from 'node:fs';
+import { existsSync, mkdirSync, readdirSync, readFileSync, statSync } from 'node:fs';
 import { dirname, isAbsolute, join, resolve } from 'node:path';
 import { generatePrivateKey } from 'viem/accounts';
 import { configFrom } from './seller-adapter-core.ts';
@@ -81,10 +81,16 @@ export const recordOf = (state: State | undefined): CloudflareRecord | undefined
 
 /** One run of the pinned Wrangler. `input` goes to its standard input and nowhere else. */
 export type Tool = (args: string[], o?: { input?: string }) => Promise<{ code: number; stdout: string; stderr: string }>;
-/** Wrangler through npx, with this process's environment (main() has removed every HOLDBACK_* and CROW_* variable). */
-export const npxWrangler: Tool = (args, o = {}) =>
+/**
+ * Wrangler through npx, with this process's environment (main() has removed every HOLDBACK_* and CROW_* variable), run
+ * in `cwd`, the folder's deploy directory: Wrangler loads a .env file from the directory it starts in, and one in the
+ * person's current folder could carry an account token past the environment check (T-478 review).
+ */
+export const npxWrangler = (cwd: string): Tool => (args, o = {}) =>
   new Promise((done) => {
-    const child = spawn('npx', [...WRANGLER, ...args], { stdio: ['pipe', 'pipe', 'pipe'] });
+    const env = readdirSync(cwd).find((n) => /^\.env/.test(n) || n === '.dev.vars');
+    if (env) return done({ code: 2, stdout: '', stderr: `${join(cwd, env)} is there, and Wrangler would load it: remove it` });
+    const child = spawn('npx', [...WRANGLER, ...args], { cwd, stdio: ['pipe', 'pipe', 'pipe'] });
     let stdout = '', stderr = '';
     child.stdout.on('data', (d: Buffer) => (stdout += d.toString('utf8')));
     child.stderr.on('data', (d: Buffer) => (stderr += d.toString('utf8')));
@@ -113,7 +119,7 @@ export function addressOf(at: string, testWorld: boolean): { url: string; host: 
 const QUESTIONS: Record<string, string> = {
   '--config': "Which program answers the quotes? Give the seller adapter's configuration for your own API (https://crow.direct/ref/seller-adapter.txt, \"Your API's shape\"): a JSON file with sellerApi over https, scope and template, the template file beside it. The Worker starts each job there and delivers the result.",
   '--account': `Which Cloudflare account? Its account ID, 32 hex characters. The person logs in first (${WRANGLER_LINE} login); then ${WRANGLER_LINE} whoami lists the accounts the login reaches. Never pick one for the person.`,
-  '--at': 'At which address? <name>.<subdomain>.workers.dev, where <subdomain> is the account\'s workers.dev subdomain (the dashboard: Workers & Pages, then the subdomain; an account with none sets one there first), or a host on a zone the account has, such as crow.example.com.',
+  '--at': 'At which address? <name>.<subdomain>.workers.dev, where <subdomain> is the account\'s workers.dev subdomain (the dashboard: Workers & Pages, then the subdomain; an account with none sets one there first), or a host on a zone the account has, such as crow.example.com. The deploy replaces a Worker of the same name on that account: choose a name no Worker of the account has yet.',
   '--quote-credential': `Who may ask for a quote? Pass --quote-credential: buyers then need a credential you hand them yourself, typed into the Worker's secret ${QUOTE_ENV}. Or pass --open: anyone who reaches the address may ask, and each quote starts nothing but spends a faucet grant; each funded deal starts a job at your API.`,
   '--quotes-per-day': 'How many quotes a day may the Worker answer, over all callers? A whole number, such as 100. Past it the Worker answers 429 until the window ends.',
 };
@@ -198,6 +204,9 @@ export function checkSeller(seller: { slug: string; config: J; files: Record<str
     shippedTemplate: '',
   });
   if (seller.config.template === undefined) throw new Error('--config: template is required: the deal template, in a file beside the configuration');
+  if (seller.slug.length > 40 || !/^[a-z0-9]+(-[a-z0-9]+)*$/.test(seller.slug) || ['test-seller', 'test-buyer'].some((r) => seller.slug.startsWith(r))) {
+    throw new Error(`the folder's name ${plain(seller.slug, 40)} is not one the Worker takes: 1 to 40 lowercase letters and digits in words joined by single hyphens, not starting test-seller or test-buyer. Make the folder with another --name`);
+  }
   const c = seller.config;
   const vars = [c.sellerApi?.auth?.env, c.quoteAuth?.env, c.alerts?.secretEnv, c.redelivery?.readyAuth?.env].filter((v): v is string => typeof v === 'string');
   for (const v of vars) if (v.startsWith('HOLDBACK_') || ['SELLER', 'OPERATOR_URLS', 'SELLER_URL'].includes(v)) throw new Error(`--config names ${plain(v, 60)} for a credential, which the Worker keeps for itself: name a variable of its own`);
@@ -263,7 +272,7 @@ function writeCard(state: State, offerId: string, base: string, configSha256: st
 }
 
 /** `cloudflare` and `cloudflare --key`. */
-export async function cloudflare(c: Call, tool: Tool = npxWrangler): Promise<number> {
+export async function cloudflare(c: Call, tool: Tool = npxWrangler(join(c.folder, CF_DIR))): Promise<number> {
   const state = readState(c.folder) as WithCloudflare | undefined;
   if (!state || !state.payout || !state.address) {
     c.say({ step: 'cloudflare', ok: false, detail: `${c.folder} has no finished ${FILES.state}: run the seller command first. Nothing was sent.` });
@@ -343,10 +352,10 @@ async function prepare(c: Call, state: WithCloudflare): Promise<number> {
     sent: 'nothing to the account: the person runs the login and the deploy.',
     next: [
       `The person, in a terminal: ${WRANGLER_LINE} login`,
-      `The person: ${WRANGLER_LINE} deploy --config ${cfg}`,
+      `The person: cd ${dir} && ${WRANGLER_LINE} deploy --config ${CF_FILES.config}`,
       `Then: node ~/.crow/setup.mjs cloudflare --key${c.folder.endsWith('/.crow/seller') ? '' : ` --folder ${c.folder}`}`,
-      ...secrets.map((v) => `The person types the value of ${v} at Wrangler's hidden prompt: ${WRANGLER_LINE} secret put ${v} --config ${cfg}`),
-      ...(access === 'credential' ? [`The person types the quote credentials, comma-separated, at Wrangler's hidden prompt: ${WRANGLER_LINE} secret put ${QUOTE_ENV} --config ${cfg}`] : []),
+      ...secrets.map((v) => `The person types the value of ${v} at Wrangler's hidden prompt: cd ${dir} && ${WRANGLER_LINE} secret put ${v} --config ${CF_FILES.config}`),
+      ...(access === 'credential' ? [`The person types the quote credentials, comma-separated, at Wrangler's hidden prompt: cd ${dir} && ${WRANGLER_LINE} secret put ${QUOTE_ENV} --config ${CF_FILES.config}`] : []),
       `Then: node ~/.crow/setup.mjs check --published ${where.url}`,
       `When an assistant shares this machine: ${WRANGLER_LINE} logout`,
     ],
@@ -376,7 +385,7 @@ async function setKey(c: Call, state: WithCloudflare, tool: Tool): Promise<numbe
     return 1;
   }
   const missing = (bundleVars(c.folder) ?? []).filter((v) => !names.includes(v));
-  const remaining = missing.map((v) => `The person types the value of ${v} at Wrangler's hidden prompt: ${WRANGLER_LINE} secret put ${v} --config ${cfg}`);
+  const remaining = missing.map((v) => `The person types the value of ${v} at Wrangler's hidden prompt: cd ${dirname(cfg)} && ${WRANGLER_LINE} secret put ${v} --config ${CF_FILES.config}`);
   if (names.includes('HOLDBACK_KEY')) {
     if (rec.keyStartedAt === undefined) {
       c.say({ step: 'cloudflare-key', ok: false, detail: `The Worker ${rec.name} already has a HOLDBACK_KEY that this folder did not set: it is another program's Worker, or another folder's. Choose another address with cloudflare --at. Nothing was set.` });
@@ -386,6 +395,11 @@ async function setKey(c: Call, state: WithCloudflare, tool: Tool): Promise<numbe
     writeState(c.folder, state);
     c.say({ step: 'cloudflare-key', ok: true, set: false, detail: `The Worker's key is set already; no second key was made.`, next: [...remaining, `Then: node ~/.crow/setup.mjs check --published https://${rec.at}/`] });
     return 0;
+  }
+  const strange = names.filter((n) => n !== 'HOLDBACK_KEY' && !(bundleVars(c.folder) ?? []).includes(n));
+  if (strange.length) {
+    c.say({ step: 'cloudflare-key', ok: false, detail: `The Worker ${rec.name} holds secrets this folder's bundle does not name (${strange.slice(0, 5).map((n) => plain(n, 40)).join(', ')}): it is another program's Worker, which the deploy replaced. Choose another address with cloudflare --at. Nothing was set.` });
+    return 1;
   }
   rec.keyStartedAt = new Date().toISOString();
   writeState(c.folder, state); // first: a stop after the store took the key leaves a folder that knows the key is its own

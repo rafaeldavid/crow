@@ -2,8 +2,10 @@
 // shapes, served to the check through its getter, so the test needs no network: a right card passes, and each fault
 // fails with its fixed reason. No result carries the fetched text, and no quote is ever asked for. The getter that
 // reaches the network refuses loopback and private addresses before it connects.
+import { createServer, request as httpRequest } from 'node:http';
+import type { AddressInfo } from 'node:net';
 import { describe, expect, it } from 'vitest';
-import { cardUrlOf, checkPublished, isPublicAddress, otherOriginsOf, safeGet, type Getter, type Got } from './setup-published.ts';
+import { cardUrlOf, checkCardFile, checkPublished, isPublicAddress, makeGetter, otherOriginsOf, PUBLISHED_MAX_BYTES, safeGet, type Getter, type Got } from './setup-published.ts';
 
 type J = any; // eslint-disable-line @typescript-eslint/no-explicit-any
 const SITE = 'https://party-example.com';
@@ -74,5 +76,31 @@ describe('T-478: check --published', () => {
       const got = await safeGet(new URL(u));
       expect(got, u).toEqual({ ok: false, reason: 'resolves to a loopback, private, link-local or other non-public address' });
     }
+  });
+
+  it('reads at most 1,048,576 bytes and follows no redirect (a local server, through the same getter)', async () => {
+    const server = createServer((req, res) => {
+      if (req.url === '/big') return res.end('x'.repeat(PUBLISHED_MAX_BYTES + 10));
+      if (req.url === '/moved') return res.writeHead(302, { location: 'http://169.254.169.254/' }).end();
+      res.end('{}');
+    });
+    await new Promise<void>((r) => server.listen(0, '127.0.0.1', r));
+    const base = `http://127.0.0.1:${(server.address() as AddressInfo).port}`;
+    const get = makeGetter({ request: httpRequest as never, allow: () => true });
+    expect(await get(new URL(`${base}/big`))).toEqual({ ok: false, reason: 'is over 1,048,576 bytes' });
+    const moved = await get(new URL(`${base}/moved`));
+    expect(moved).toMatchObject({ ok: true, status: 302, location: true });
+    expect(await makeGetter({ request: httpRequest as never })(new URL(`${base}/`))).toEqual({ ok: false, reason: 'resolves to a loopback, private, link-local or other non-public address' });
+    server.close();
+  });
+});
+
+describe("T-478: the card's local check", () => {
+  it('passes a draft with advice, fails a quoted offer without https and a card over the cap', () => {
+    expect(checkCardFile(JSON.stringify({ type: 'crow-agent', status: 'draft: not published' }))).toMatchObject({ ok: true, advisory: true });
+    expect(checkCardFile(JSON.stringify({ type: 'crow-agent', offers: [{ id: 'r', pricing: { kind: 'quoted', quote: 'https://a.example/quote', defaults: 'https://a.example/defaults' } }] }))).toMatchObject({ ok: true });
+    expect(checkCardFile(JSON.stringify({ type: 'crow-agent', offers: [{ id: 'r', pricing: { kind: 'quoted', quote: 'http://a.example/quote', defaults: 'https://a.example/defaults' } }] })).detail).toMatch(/not https/);
+    expect(checkCardFile('x'.repeat(PUBLISHED_MAX_BYTES + 1)).ok).toBe(false);
+    expect(checkCardFile('{"type":"crow-buyer"}').ok).toBe(false);
   });
 });
