@@ -3,7 +3,7 @@
 // stand-in records every argument of every run and what each read on standard input, and answers `secret list` from
 // a store it keeps in a file. Nothing reaches a Cloudflare account, and the network is not used.
 import { spawn } from 'node:child_process';
-import { chmodSync, existsSync, mkdirSync, mkdtempSync, readdirSync, readFileSync, realpathSync, statSync, writeFileSync } from 'node:fs';
+import { chmodSync, existsSync, linkSync, mkdirSync, mkdtempSync, readdirSync, readFileSync, realpathSync, statSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join, relative } from 'node:path';
 import { fileURLToPath } from 'node:url';
@@ -23,6 +23,8 @@ function standIn(dir: string): string {
   const script = `#!/bin/sh
 d='${dir}'
 printf '%s\\n' "$*" >> "$d/args.log"
+env > "$d/env.log"
+pwd > "$d/cwd.log"
 input=$(cat)
 printf '%s\\n' "$input" >> "$d/stdin.log"
 case "$*" in
@@ -183,7 +185,7 @@ describe('T-478: the prepared deploy', () => {
     const args = prepared(p).filter((a) => a !== '--quote-credential');
     const r = await run([...args, '--open'], { bin: p.bin });
     expect(r.code).toBe(0);
-    expect(r.lines.at(-1).quotes).toMatch(/anyone who reaches .* may ask. Each quote spends one of the Worker's faucet grants/);
+    expect(r.lines.at(-1).quotes).toMatch(/anyone who reaches .* may ask. Each quote asks your API for a price and spends one of the Worker's faucet grants/);
     expect(readJson(join(p.folder, 'cloudflare', 'seller-bundle.txt')).seller.config.quoteAuth).toBeUndefined();
   }, 60_000);
 });
@@ -246,6 +248,38 @@ describe("T-478: the Worker's key reaches the secret store on standard input onl
     expect(r.lines.at(-1).detail).toMatch(/not one the Worker takes/);
     expect(existsSync(join(other, 'cloudflare'))).toBe(false);
   }, 60_000);
+
+  it('gives Wrangler only the variables it needs, a sanitized log in a folder of its own, and the deploy folder as its working directory', async () => {
+    const p = await party();
+    expect((await run(prepared(p), { bin: p.bin })).code).toBe(0);
+    const r = await run(['cloudflare', '--key', '--folder', p.folder], { bin: p.bin, env: { PLANTED_TOKEN: 'planted-value-77' } });
+    expect(r.code, r.out).toBe(0);
+    const env = readFileSync(join(p.dir, 'env.log'), 'utf8');
+    expect(env).not.toContain('planted-value-77');
+    expect(env).toMatch(/^WRANGLER_LOG_SANITIZE=true$/m);
+    const logPath = /^WRANGLER_LOG_PATH=(.*)$/m.exec(env)![1]!;
+    expect(existsSync(logPath)).toBe(false); // removed when the run ended
+    expect(readFileSync(join(p.dir, 'cwd.log'), 'utf8').trim()).toBe(join(realpathSync(p.folder), 'cloudflare'));
+    for (const name of ['CLOUDFLARE_API_BASE_URL', 'WRANGLER_LOG_SANITIZE']) {
+      const refused = await run(['cloudflare', '--key', '--folder', p.folder], { bin: p.bin, env: { [name]: 'x' } });
+      expect(refused.code, name).toBe(1);
+    }
+  }, 90_000);
+
+  it('refuses a template or mapping named by a path, or one that is the folder key under another name', async () => {
+    for (const template of ['../seller/keys/signing.key', 'sub/template.json']) {
+      const p = await party({ config: { template } });
+      const r = await run(prepared(p), { bin: p.bin });
+      expect(r.code, template).toBe(1);
+      expect(r.lines.at(-1).detail).toMatch(/with no folder in the name/);
+    }
+    const p = await party({ config: { template: 'linked.json' } });
+    linkSync(join(p.folder, 'keys', 'signing.key'), join(p.dir, 'own', 'linked.json'));
+    const r = await run(prepared(p), { bin: p.bin });
+    expect(r.code).toBe(1);
+    expect(r.lines.at(-1).detail).toMatch(/names the folder's signing key/);
+    expect(existsSync(join(p.folder, 'cloudflare'))).toBe(false);
+  }, 90_000);
 
   it('refuses a Worker whose key this folder did not set', async () => {
     const p = await party();

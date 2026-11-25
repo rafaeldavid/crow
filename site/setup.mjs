@@ -31,8 +31,8 @@ Object.defineProperty(globalThis, 'crowEntry', { value: 'setup', enumerable: fal
 import { createRequire } from "node:module";
 import * as nc from "node:crypto";
 import { createHash, createHmac, randomBytes, randomUUID, timingSafeEqual, webcrypto } from "node:crypto";
-import { appendFileSync, chmodSync, closeSync, constants, existsSync, fstatSync, lstatSync, mkdirSync, openSync, readFileSync, readSync, readdirSync, realpathSync, renameSync, rmSync, statSync, writeFileSync } from "node:fs";
-import { homedir } from "node:os";
+import { appendFileSync, chmodSync, closeSync, constants, existsSync, fstatSync, lstatSync, mkdirSync, mkdtempSync, openSync, readFileSync, readSync, readdirSync, realpathSync, renameSync, rmSync, statSync, writeFileSync } from "node:fs";
+import { homedir, tmpdir } from "node:os";
 import { basename, dirname, isAbsolute, join, relative, resolve, sep } from "node:path";
 import { fileURLToPath, pathToFileURL } from "node:url";
 import { createServer } from "node:http";
@@ -67764,7 +67764,7 @@ async function run(c, state, offerId, given) {
 }
 
 // examples/seller-worker-pin.ts
-const SELLER_WORKER_SHA256 = "097fde382b5314d2ad38d9912856c5cf41c12c431353e9858d19330364288808";
+const SELLER_WORKER_SHA256 = "d6ee3dccebeff9c1a4d697e4f1e7a8c5669aee8773b4309f6feed3774054b9ed";
 
 // examples/setup-cloudflare.ts
 const plain$2 = (s, max = 300) => plain$8(String(s ?? "")).slice(0, max);
@@ -67793,7 +67793,36 @@ const ACCOUNT_VARIABLES = [
 	"CF_API_TOKEN",
 	"CF_API_KEY",
 	"CF_EMAIL",
-	"CF_ACCOUNT_ID"
+	"CF_ACCOUNT_ID",
+	"CLOUDFLARE_API_BASE_URL",
+	"CF_API_BASE_URL",
+	"WRANGLER_LOG_SANITIZE",
+	"WRANGLER_LOG_PATH",
+	"WRANGLER_LOG"
+];
+/**
+* The only variables a Wrangler run the command starts gets from this process: what npx and Wrangler need to find
+* themselves, the npm cache and the person's login. Anything else, such as a variable that names another API host,
+* stays out (red team, T-478).
+*/
+const PASSED = [
+	"PATH",
+	"HOME",
+	"USER",
+	"LOGNAME",
+	"SHELL",
+	"TMPDIR",
+	"LANG",
+	"LC_ALL",
+	"TERM",
+	"XDG_CONFIG_HOME",
+	"XDG_CACHE_HOME",
+	"npm_config_cache",
+	"npm_config_registry",
+	"APPDATA",
+	"LOCALAPPDATA",
+	"USERPROFILE",
+	"SystemRoot"
 ];
 /** Crow's own zones: no address, route or zone the command writes is under one. */
 const CROW_ZONES = ["crow.direct", "escrow.stream"];
@@ -67826,20 +67855,32 @@ const recordOf = (state) => state?.cloudflare;
 * person's current folder could carry an account token past the environment check (T-478 review).
 */
 const npxWrangler = (cwd) => (args, o = {}) => new Promise((done) => {
-	const env = readdirSync(cwd).find((n) => /^\.env/.test(n) || n === ".dev.vars");
-	if (env) return done({
+	const dotenv = readdirSync(cwd).find((n) => /^\.env/.test(n) || n === ".dev.vars");
+	if (dotenv) return done({
 		code: 2,
 		stdout: "",
-		stderr: `${join(cwd, env)} is there, and Wrangler would load it: remove it`
+		stderr: `${join(cwd, dotenv)} is there, and Wrangler would load it: remove it`
 	});
+	const logs = mkdtempSync(join(tmpdir(), "crow-wrangler-"));
+	const env = {
+		WRANGLER_LOG_SANITIZE: "true",
+		WRANGLER_LOG_PATH: logs,
+		WRANGLER_SEND_METRICS: "false"
+	};
+	for (const name of PASSED) if (process.env[name] !== void 0) env[name] = process.env[name];
 	const child = spawn("npx", [...WRANGLER, ...args], {
 		cwd,
+		env,
 		stdio: [
 			"pipe",
 			"pipe",
 			"pipe"
 		]
 	});
+	child.on("close", () => rmSync(logs, {
+		recursive: true,
+		force: true
+	}));
 	let stdout = "", stderr = "";
 	child.stdout.on("data", (d) => stdout += d.toString("utf8"));
 	child.stderr.on("data", (d) => stderr += d.toString("utf8"));
@@ -67892,8 +67933,8 @@ const QUESTIONS = {
 	"--config": "Which program answers the quotes? Give the seller adapter's configuration for your own API (https://crow.direct/ref/seller-adapter.txt, \"Your API's shape\"): a JSON file with sellerApi over https, scope and template, the template file beside it. The Worker starts each job there and delivers the result.",
 	"--account": `Which Cloudflare account? Its account ID, 32 hex characters. The person logs in first (${WRANGLER_LINE} login); then ${WRANGLER_LINE} whoami lists the accounts the login reaches. Never pick one for the person.`,
 	"--at": "At which address? <name>.<subdomain>.workers.dev, where <subdomain> is the account's workers.dev subdomain (the dashboard: Workers & Pages, then the subdomain; an account with none sets one there first), or a host on a zone the account has, such as crow.example.com. The deploy replaces a Worker of the same name on that account: choose a name no Worker of the account has yet.",
-	"--quote-credential": `Who may ask for a quote? Pass --quote-credential: buyers then need a credential you hand them yourself, typed into the Worker's secret ${QUOTE_ENV}. Or pass --open: anyone who reaches the address may ask, and each quote starts nothing but spends a faucet grant; each funded deal starts a job at your API.`,
-	"--quotes-per-day": "How many quotes a day may the Worker answer, over all callers? A whole number, such as 100. Past it the Worker answers 429 until the window ends."
+	"--quote-credential": `Who may ask for a quote? Pass --quote-credential: buyers then need a credential you hand them yourself, typed into the Worker's secret ${QUOTE_ENV}. Or pass --open: anyone who reaches the address may ask; each quote asks your API for a price and spends a faucet grant, and each funded deal starts a job at your API.`,
+	"--quotes-per-day": "How many offers a day may the Worker make, over all callers? A whole number, such as 100. The Worker counts them in its storage for each UTC day; past it, it answers 429 until the next day."
 };
 /** Reads a file the person named, up to MAX_FILE_BYTES: never an environment file. */
 function readNamed(path, flag) {
@@ -67955,8 +67996,16 @@ function bundleFrom(configPath, o) {
 	for (const field of ["template", "reportMapping"]) {
 		const name = c[field];
 		if (name === void 0) continue;
-		if (typeof name !== "string" || name === "" || isAbsolute(name)) throw new Error(`--config: ${field} must name a file beside the configuration`);
-		files[name] = readNamed(join(here, name), `--config's ${field}`);
+		if (typeof name !== "string" || !/^[A-Za-z0-9._-]{1,120}$/.test(name) || name.startsWith(".") || isAbsolute(name)) throw new Error(`--config: ${field} must name a file beside the configuration, with no folder in the name`);
+		const path = join(here, name);
+		if (o.keyFile !== void 0 && existsSync(path) && existsSync(o.keyFile) && statSync(path).ino === statSync(o.keyFile).ino && statSync(path).dev === statSync(o.keyFile).dev) throw new Error(`--config: ${field} names the folder's signing key: a key is never uploaded`);
+		const text = readNamed(path, `--config's ${field}`);
+		try {
+			JSON.parse(text);
+		} catch {
+			throw new Error(`--config: ${field} ${plain$2(name, 80)} is not JSON`);
+		}
+		files[name] = text;
 	}
 	const seller = {
 		slug: o.name,
@@ -68025,6 +68074,12 @@ function wranglerConfigFor(o) {
 		name: o.name,
 		account_id: o.account,
 		main: CF_FILES.worker,
+		no_bundle: true,
+		rules: [{
+			type: "Text",
+			globs: ["**/*.txt"],
+			fallthrough: false
+		}],
 		...COMPATIBILITY,
 		workers_dev: o.workersDev,
 		preview_urls: false,
@@ -68069,7 +68124,7 @@ async function workerBytes(c) {
 		if (bytes.length > MAX_WORKER_BYTES) throw new Error(`${SELLER_WORKER_URL} is over ${MAX_WORKER_BYTES} bytes`);
 	}
 	const sha = createHash("sha256").update(bytes).digest("hex");
-	if (sha !== "097fde382b5314d2ad38d9912856c5cf41c12c431353e9858d19330364288808") throw new Error(`the Worker file's SHA-256 is ${sha}, not ${SELLER_WORKER_SHA256}, the one this setup.mjs carries: it is not the Worker this version writes`);
+	if (sha !== "d6ee3dccebeff9c1a4d697e4f1e7a8c5669aee8773b4309f6feed3774054b9ed") throw new Error(`the Worker file's SHA-256 is ${sha}, not ${SELLER_WORKER_SHA256}, the one this setup.mjs carries: it is not the Worker this version writes`);
 	return bytes;
 }
 /** The card's quote entry in the card's folder: other offers kept, the draft's marks dropped. */
@@ -68118,7 +68173,7 @@ async function cloudflare(c, tool = npxWrangler(join(c.folder, CF_DIR))) {
 		c.say({
 			step: "cloudflare",
 			ok: false,
-			detail: `${set} is set in the environment. It chooses a Cloudflare account, or carries its credential, without a word on the command line. Run the command again without it, for example with: env -u ${set} node setup.mjs cloudflare ... Nothing was sent.`
+			detail: `${set} is set in the environment. It chooses a Cloudflare account, carries its credential, or changes where Wrangler sends or logs its requests, without a word on the command line. Run the command again without it, for example with: env -u ${set} node setup.mjs cloudflare ... Nothing was sent.`
 		});
 		return 1;
 	}
@@ -68166,7 +68221,8 @@ async function prepare(c, state) {
 		owner: state.address,
 		payout: state.payout.address,
 		access,
-		quotesPerDay: perDay
+		quotesPerDay: perDay,
+		keyFile: join(c.folder, FILES.key)
 	});
 	const worker = await workerBytes(c);
 	const dir = join(c.folder, CF_DIR);
@@ -68205,7 +68261,6 @@ async function prepare(c, state) {
 	};
 	if (was?.leftAt) delete state.cloudflare.leftAt;
 	writeState(c.folder, state);
-	join(dir, CF_FILES.config);
 	const secrets = made.credentialVars.filter((v) => v !== QUOTE_ENV);
 	c.say({
 		step: "cloudflare",
@@ -68217,7 +68272,7 @@ async function prepare(c, state) {
 		account,
 		card,
 		...made.dropped.length ? { dropped: made.dropped.map((k) => `${k}: the Worker keeps its journal in its Durable Object and opens no port`) } : {},
-		quotes: access === "open" ? `Open: anyone who reaches ${where.url}quote may ask. Each quote spends one of the Worker's faucet grants, so one caller can use them up for the day, and each funded deal starts a job at your API, paid with test tokens. At most ${perDay} quotes a day over all callers; the count is kept in the Worker's memory, so it is a brake and no cap.` : `Credential: a buyer sends Authorization: Bearer <credential>. You choose the credentials and hand each to a buyer yourself, never through this chat. At most ${perDay} quotes a day over all callers; the count is kept in the Worker's memory, so it is a brake and no cap.`,
+		quotes: access === "open" ? `Open: anyone who reaches ${where.url}quote may ask. Each quote asks your API for a price and spends one of the Worker's faucet grants, so one caller can use them up, and each funded deal starts a job at your API, paid with test tokens. At most ${perDay} offers a UTC day over all callers, counted in the Worker's storage.` : `Credential: a buyer sends Authorization: Bearer <credential>. You choose the credentials and hand each to a buyer yourself, never through this chat. At most ${perDay} offers a UTC day over all callers, counted in the Worker's storage.`,
 		binding: where.workersDev ? `A workers.dev address proves a Cloudflare account, not your domain. A buyer that starts from the card on your own site has your domain's word for the address: publish ${card} there, beside the page.` : `TLS at ${where.host} binds the quote address to your domain.`,
 		sent: "nothing to the account: the person runs the login and the deploy.",
 		next: [
@@ -68362,10 +68417,22 @@ const fetchExport = async (url, headers) => {
 		redirect: "error",
 		signal: AbortSignal.timeout(3e4)
 	});
-	return {
+	const text = await res.text();
+	if (text.length > 67108864) return {
 		status: res.status,
-		body: await res.json().catch(() => null)
+		body: null
 	};
+	try {
+		return {
+			status: res.status,
+			body: JSON.parse(text)
+		};
+	} catch {
+		return {
+			status: res.status,
+			body: null
+		};
+	}
 };
 /** The status /health answers after the removal, or 0 when nothing answers. */
 const probeHealth = async (url) => {
@@ -68511,6 +68578,8 @@ for (const [net, prefix] of [
 	["ff00::", 8],
 	["2001:db8::", 32],
 	["2001::", 32],
+	["2001:10::", 28],
+	["5f00::", 16],
 	["64:ff9b:1::", 48],
 	["100::", 64]
 ]) NOT_PUBLIC.addSubnet(net, prefix, "ipv6");
@@ -68525,6 +68594,7 @@ function isPublicAddress(ip) {
 	if (!words) return false;
 	const v4 = (hi, lo) => `${hi >> 8}.${hi & 255}.${lo >> 8}.${lo & 255}`;
 	if (words.slice(0, 5).every((w) => w === 0) && (words[5] === 65535 || words[5] === 0)) return isPublicAddress(v4(words[6], words[7]));
+	if (words.slice(0, 4).every((w) => w === 0) && words[4] === 65535 && words[5] === 0) return isPublicAddress(v4(words[6], words[7]));
 	if (words[0] === 100 && words[1] === 65435 && words.slice(2, 6).every((w) => w === 0)) return isPublicAddress(v4(words[6], words[7]));
 	if (words[0] === 8194) return isPublicAddress(v4(words[1], words[2]));
 	return true;
@@ -68564,7 +68634,13 @@ function makeGetter(o = {}) {
 	const send = o.request ?? request, allow = o.allow ?? isPublicAddress;
 	return (url) => new Promise((resolveGot) => {
 		let settled = false;
-		let timer;
+		const timer = setTimeout(() => {
+			req.destroy();
+			done({
+				ok: false,
+				reason: REASONS.slow
+			});
+		}, TIMEOUT_MS);
 		const done = (g) => {
 			if (settled) return;
 			settled = true;
@@ -68577,13 +68653,6 @@ function makeGetter(o = {}) {
 			reason: REASONS.private
 		});
 		let refused = "";
-		timer = setTimeout(() => {
-			req.destroy();
-			done({
-				ok: false,
-				reason: REASONS.slow
-			});
-		}, TIMEOUT_MS);
 		const req = send({
 			host: literal,
 			servername: isIP(literal) ? void 0 : literal,
@@ -68733,6 +68802,12 @@ async function checkPublished(target, o = {}) {
 		say("published-origin", true, `${at}: its quote and defaults addresses are on the card's origin${quote.origin !== card.origin || defaults.origin !== card.origin ? " or one named with --other-origin" : ""}.`);
 		const d = await jsonAt(get, defaults);
 		say("published-defaults", d.value !== void 0, d.value !== void 0 ? `${at}: the defaults address answers one JSON object.` : `${at}: the defaults address ${d.reason}.`);
+	}
+	if (o.ours) {
+		const live = await jsonAt(get, new URL("/agent.json", o.ours.origin));
+		const named = quoted.some(({ x }) => https(x.pricing.quote)?.origin === o.ours.origin);
+		const same = live.value?.configSha256 === o.ours.configSha256;
+		say("published-folder", named && same, !named ? "The card names no quote address on this folder's Worker." : live.value === void 0 ? `This folder's Worker's agent.json ${live.reason}.` : same ? "This folder's Worker answers with this folder's bundle." : "The Worker at this folder's address runs another bundle than this folder's: it is not this folder's Worker, or the deploy is older than the last cloudflare run.");
 	}
 	say("published-quote", true, "Not sent: asking for a price makes an offer and spends a faucet grant. Run first-deal for a deal.", true);
 	return out;
@@ -69082,6 +69157,20 @@ async function listStep(c) {
 		to: new URL(to).href
 	});
 }
+/** The folder's own Worker, when it has one: its origin and its bundle's SHA-256, for `check --published` to compare. */
+function oursOf(folder) {
+	try {
+		const rec = recordOf(readState(folder));
+		if (!rec || rec.leftAt) return {};
+		const b = JSON.parse(readFileSync(join(folder, CF_DIR, CF_FILES.bundle), "utf8"));
+		return { ours: {
+			origin: `https://${rec.at}`,
+			configSha256: sellerSha256(b.seller)
+		} };
+	} catch {
+		return {};
+	}
+}
 /** The card's local check (T-478), for a folder whose state names a card folder. */
 function cardCheckOf(folder) {
 	let card;
@@ -69103,7 +69192,10 @@ async function check(c) {
 	const published = c.flags.get("--published");
 	if (published === void 0 && c.flags.has("--other-origin")) throw new WrongCall("--other-origin goes with --published");
 	if (published !== void 0 && c.flags.has("--work")) throw new WrongCall("give --published or --work, not both");
-	const results = published !== void 0 ? await checkPublished(published, { otherOrigins: otherOriginsOf(c.flags.get("--other-origin")) }) : [...await runChecks(c.folder, { work: c.flags.get("--work") }), ...cardCheckOf(c.folder)];
+	const results = published !== void 0 ? await checkPublished(published, {
+		otherOrigins: otherOriginsOf(c.flags.get("--other-origin")),
+		...oursOf(c.folder)
+	}) : [...await runChecks(c.folder, { work: c.flags.get("--work") }), ...cardCheckOf(c.folder)];
 	for (const r of results) c.say({
 		step: "check",
 		...r

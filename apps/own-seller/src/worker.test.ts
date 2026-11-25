@@ -151,6 +151,21 @@ describe("a seller's own Worker (T-478): a deal", () => {
   }, 45_000);
 });
 
+describe("a seller's own Worker (T-478): the day's cap", () => {
+  it('counts offers in storage, so a restart of the object starts no new count', async () => {
+    const b = bundleFor((await startJobStub({ key: SECRETS.JOBS_API_KEY, readsUntilComplete: 1 }).then((s) => ((stub = s), s))).base, { config: { quoteRateLimit: { overall: { requests: 2, windowSec: 86_400 } } } });
+    const first = await seller({ bundle: b });
+    expect((await quote(first.object, agent('buyer-1'))).status).toBe(200);
+    expect((await quote(first.object, agent('buyer-2'), 'wrong')).status).toBe(401); // a refused quote takes no place
+    const second = await seller({ bundle: b, storage: first.storage });
+    expect((await quote(second.object, agent('buyer-2'))).status).toBe(200);
+    const third = await seller({ bundle: b, storage: first.storage });
+    const over = await quote(third.object, agent('buyer-1'));
+    expect(over.status).toBe(429);
+    expect(over.body.detail).toMatch(/at most 2 offers a UTC day/);
+  }, 45_000);
+});
+
 describe("a seller's own Worker (T-478): the export", () => {
   it('answers 401 with no signature, another key, an old time or a signature over another host', async () => {
     const { object } = await seller();

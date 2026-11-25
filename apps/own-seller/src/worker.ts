@@ -238,10 +238,34 @@ ${seller.card.description === undefined ? '' : `<p>${escapeHtml(seller.card.desc
       response = new Response(page, { headers: { 'content-type': 'text/html; charset=utf-8', 'cache-control': 'no-store' } });
     } else if (sub === '/agent.json' && request.method === 'GET') {
       response = json(200, this.card(seller, core));
+    } else if (sub === '/quote' && request.method === 'POST') {
+      response = await this.quote(seller, core, request);
     } else {
       response = await core.handle(request, sub);
     }
     if (core.hasOpen()) await this.schedule(Date.now() + core.pollMs);
+    return response;
+  }
+
+  /**
+   * POST /quote under the day's cap: the configuration's `quoteRateLimit.overall` with a window of 86,400 s is the most
+   * offers in one UTC day, over all callers. The core counts its window in memory, which a restart of the object
+   * empties (red team, T-478); this count is in storage. A place is taken before the quote and given back when no offer
+   * was made, so two quotes at once cannot both take the last one.
+   */
+  private async quote(s: HostedSeller, core: SellerAdapterCore, request: Request): Promise<Response> {
+    const limit = s.config.quoteRateLimit?.overall;
+    if (!limit || limit.windowSec !== 86_400) return core.handle(request, '/quote');
+    const now = new Date();
+    const key = `offers:${now.toISOString().slice(0, 10)}`;
+    const taken = (await this.state.storage.get<number>(key)) ?? 0;
+    if (taken >= limit.requests) {
+      const wait = Math.ceil((Date.UTC(now.getUTCFullYear(), now.getUTCMonth(), now.getUTCDate() + 1) - now.getTime()) / 1000);
+      return new Response(JSON.stringify({ type: 'rate_limited', detail: `this seller makes at most ${limit.requests} offers a UTC day; try again in ${wait} s` }), { status: 429, headers: { 'content-type': 'application/json', 'cache-control': 'no-store', 'retry-after': String(wait) } });
+    }
+    await this.state.storage.put({ [key]: taken + 1 });
+    const response = await core.handle(request, '/quote');
+    if (response.status !== 200) await this.state.storage.put({ [key]: Math.max(((await this.state.storage.get<number>(key)) ?? 1) - 1, 0) });
     return response;
   }
 

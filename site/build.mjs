@@ -414,13 +414,30 @@ export async function setupBundle(p = pins(), { keepOwnMains = false } = {}) {
  * and the bundle's text module, ./seller-bundle.txt, stay imports: the party's pinned Wrangler resolves them with the
  * Worker's nodejs_compat flag. Deterministic. setup.mjs carries its sha256 (examples/seller-worker-pin.ts).
  */
+/**
+ * The two Node modules the Worker's bundle names and Cloudflare's runtime does not have: a local chain's runner in
+ * packages/settlement imports them, and the Worker never calls it. Each becomes a module whose functions throw, so the
+ * party's Wrangler uploads the pinned bytes as they are (no_bundle) and nothing in them can start a process.
+ */
+const NO_PROCESS = {
+  name: 'crow-worker-no-process',
+  resolveId: (id) => (id === 'node:child_process' || id === 'node:net' ? `\0crow-no-${id.slice(5)}` : null),
+  load: (id) =>
+    id === '\0crow-no-child_process'
+      ? "const none = () => { throw new Error('a Worker starts no process'); }; export { none as spawn, none as spawnSync };"
+      : id === '\0crow-no-net'
+        ? "export function createServer() { throw new Error('a Worker opens no port'); }"
+        : null,
+};
+
 export async function sellerWorkerBundle() {
   const root = fileURLToPath(here('../'));
   const bundle = await rolldown({
+    plugins: [NO_PROCESS],
     cwd: root,
     input: fileURLToPath(here('../apps/own-seller/src/entry.ts')),
     platform: 'browser',
-    external: [/^node:/, './seller-bundle.txt'],
+    external: [/^node:(?!child_process$|net$)/, './seller-bundle.txt'],
     // As in setupBundle: the built files of packages/settlement and packages/testkit run nothing when they load, and the
     // Worker calls few of them, so the bundler leaves out the ones no code reaches (with them, a local chain's runner
     // that imports a child process).

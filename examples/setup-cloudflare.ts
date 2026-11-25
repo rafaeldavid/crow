@@ -19,7 +19,8 @@
 // an account's token or ID is in the environment, which would choose the account without a word on the command line.
 import { spawn } from 'node:child_process';
 import { createHash } from 'node:crypto';
-import { existsSync, mkdirSync, readdirSync, readFileSync, statSync } from 'node:fs';
+import { existsSync, mkdirSync, mkdtempSync, readdirSync, readFileSync, rmSync, statSync } from 'node:fs';
+import { tmpdir } from 'node:os';
 import { dirname, isAbsolute, join, resolve } from 'node:path';
 import { generatePrivateKey } from 'viem/accounts';
 import { configFrom } from './seller-adapter-core.ts';
@@ -45,7 +46,15 @@ export const CF_FILES = { worker: 'worker.mjs', bundle: 'seller-bundle.txt', con
 /** The Worker secret that holds the quote credentials, when the person chose one. */
 export const QUOTE_ENV = 'QUOTE_CREDENTIALS';
 /** Variables that pick a Cloudflare account, or carry its credential, without a word on the command line. */
-export const ACCOUNT_VARIABLES: readonly string[] = ['CLOUDFLARE_API_TOKEN', 'CLOUDFLARE_API_KEY', 'CLOUDFLARE_EMAIL', 'CLOUDFLARE_ACCOUNT_ID', 'CF_API_TOKEN', 'CF_API_KEY', 'CF_EMAIL', 'CF_ACCOUNT_ID'];
+export const ACCOUNT_VARIABLES: readonly string[] = ['CLOUDFLARE_API_TOKEN', 'CLOUDFLARE_API_KEY', 'CLOUDFLARE_EMAIL', 'CLOUDFLARE_ACCOUNT_ID', 'CF_API_TOKEN', 'CF_API_KEY', 'CF_EMAIL', 'CF_ACCOUNT_ID',
+  // and, for the person's own Wrangler runs the command prints, the ones that send its requests elsewhere or log them whole (red team, T-478)
+  'CLOUDFLARE_API_BASE_URL', 'CF_API_BASE_URL', 'WRANGLER_LOG_SANITIZE', 'WRANGLER_LOG_PATH', 'WRANGLER_LOG'];
+/**
+ * The only variables a Wrangler run the command starts gets from this process: what npx and Wrangler need to find
+ * themselves, the npm cache and the person's login. Anything else, such as a variable that names another API host,
+ * stays out (red team, T-478).
+ */
+const PASSED = ['PATH', 'HOME', 'USER', 'LOGNAME', 'SHELL', 'TMPDIR', 'LANG', 'LC_ALL', 'TERM', 'XDG_CONFIG_HOME', 'XDG_CACHE_HOME', 'npm_config_cache', 'npm_config_registry', 'APPDATA', 'LOCALAPPDATA', 'USERPROFILE', 'SystemRoot'];
 /** Crow's own zones: no address, route or zone the command writes is under one. */
 export const CROW_ZONES: readonly string[] = ['crow.direct', 'escrow.stream'];
 /** The configuration fields the Node adapter uses and the Worker has no use for: it opens no port and keeps no file. */
@@ -88,9 +97,15 @@ export type Tool = (args: string[], o?: { input?: string }) => Promise<{ code: n
  */
 export const npxWrangler = (cwd: string): Tool => (args, o = {}) =>
   new Promise((done) => {
-    const env = readdirSync(cwd).find((n) => /^\.env/.test(n) || n === '.dev.vars');
-    if (env) return done({ code: 2, stdout: '', stderr: `${join(cwd, env)} is there, and Wrangler would load it: remove it` });
-    const child = spawn('npx', [...WRANGLER, ...args], { cwd, stdio: ['pipe', 'pipe', 'pipe'] });
+    const dotenv = readdirSync(cwd).find((n) => /^\.env/.test(n) || n === '.dev.vars');
+    if (dotenv) return done({ code: 2, stdout: '', stderr: `${join(cwd, dotenv)} is there, and Wrangler would load it: remove it` });
+    // Wrangler logs each request whole to a file unless it sanitizes its log: it sanitizes, and logs into a folder of
+    // this run's own that is removed when the run ends, so no request body that carries a secret stays on disk.
+    const logs = mkdtempSync(join(tmpdir(), 'crow-wrangler-'));
+    const env: Record<string, string> = { WRANGLER_LOG_SANITIZE: 'true', WRANGLER_LOG_PATH: logs, WRANGLER_SEND_METRICS: 'false' };
+    for (const name of PASSED) if (process.env[name] !== undefined) env[name] = process.env[name]!;
+    const child = spawn('npx', [...WRANGLER, ...args], { cwd, env, stdio: ['pipe', 'pipe', 'pipe'] });
+    child.on('close', () => rmSync(logs, { recursive: true, force: true }));
     let stdout = '', stderr = '';
     child.stdout.on('data', (d: Buffer) => (stdout += d.toString('utf8')));
     child.stderr.on('data', (d: Buffer) => (stderr += d.toString('utf8')));
@@ -120,8 +135,8 @@ const QUESTIONS: Record<string, string> = {
   '--config': "Which program answers the quotes? Give the seller adapter's configuration for your own API (https://crow.direct/ref/seller-adapter.txt, \"Your API's shape\"): a JSON file with sellerApi over https, scope and template, the template file beside it. The Worker starts each job there and delivers the result.",
   '--account': `Which Cloudflare account? Its account ID, 32 hex characters. The person logs in first (${WRANGLER_LINE} login); then ${WRANGLER_LINE} whoami lists the accounts the login reaches. Never pick one for the person.`,
   '--at': 'At which address? <name>.<subdomain>.workers.dev, where <subdomain> is the account\'s workers.dev subdomain (the dashboard: Workers & Pages, then the subdomain; an account with none sets one there first), or a host on a zone the account has, such as crow.example.com. The deploy replaces a Worker of the same name on that account: choose a name no Worker of the account has yet.',
-  '--quote-credential': `Who may ask for a quote? Pass --quote-credential: buyers then need a credential you hand them yourself, typed into the Worker's secret ${QUOTE_ENV}. Or pass --open: anyone who reaches the address may ask, and each quote starts nothing but spends a faucet grant; each funded deal starts a job at your API.`,
-  '--quotes-per-day': 'How many quotes a day may the Worker answer, over all callers? A whole number, such as 100. Past it the Worker answers 429 until the window ends.',
+  '--quote-credential': `Who may ask for a quote? Pass --quote-credential: buyers then need a credential you hand them yourself, typed into the Worker's secret ${QUOTE_ENV}. Or pass --open: anyone who reaches the address may ask; each quote asks your API for a price and spends a faucet grant, and each funded deal starts a job at your API.`,
+  '--quotes-per-day': 'How many offers a day may the Worker make, over all callers? A whole number, such as 100. The Worker counts them in its storage for each UTC day; past it, it answers 429 until the next day.',
 };
 
 /** Reads a file the person named, up to MAX_FILE_BYTES: never an environment file. */
@@ -150,7 +165,7 @@ const isHttpsHost = (v: unknown): boolean => {
  * The seller's bundle from the person's configuration: the Node-only fields dropped, the payout address the folder's,
  * the quote access the person's answers. Throws, naming the field, on anything the Worker would refuse.
  */
-export function bundleFrom(configPath: string, o: { name: string; offerId: string; owner: string; payout: string; access: 'credential' | 'open'; quotesPerDay: number }): { bundle: { owner: string; seller: J }; dropped: string[]; credentialVars: string[]; configSha256: string } {
+export function bundleFrom(configPath: string, o: { name: string; offerId: string; owner: string; payout: string; access: 'credential' | 'open'; quotesPerDay: number; keyFile?: string }): { bundle: { owner: string; seller: J }; dropped: string[]; credentialVars: string[]; configSha256: string } {
   let c: J;
   try {
     c = JSON.parse(readNamed(configPath, '--config'));
@@ -178,8 +193,17 @@ export function bundleFrom(configPath: string, o: { name: string; offerId: strin
   for (const field of ['template', 'reportMapping']) {
     const name = c[field];
     if (name === undefined) continue;
-    if (typeof name !== 'string' || name === '' || isAbsolute(name)) throw new Error(`--config: ${field} must name a file beside the configuration`);
-    files[name] = readNamed(join(here, name), `--config's ${field}`);
+    // A name of a file beside the configuration, never a path out of it: the file is uploaded with the Worker.
+    if (typeof name !== 'string' || !/^[A-Za-z0-9._-]{1,120}$/.test(name) || name.startsWith('.') || isAbsolute(name)) throw new Error(`--config: ${field} must name a file beside the configuration, with no folder in the name`);
+    const path = join(here, name);
+    if (o.keyFile !== undefined && existsSync(path) && existsSync(o.keyFile) && statSync(path).ino === statSync(o.keyFile).ino && statSync(path).dev === statSync(o.keyFile).dev) throw new Error(`--config: ${field} names the folder's signing key: a key is never uploaded`);
+    const text = readNamed(path, `--config's ${field}`);
+    try {
+      JSON.parse(text);
+    } catch {
+      throw new Error(`--config: ${field} ${plain(name, 80)} is not JSON`);
+    }
+    files[name] = text;
   }
   const seller = { slug: o.name, card: { name: o.name, item: o.offerId }, config: c, files };
   return { bundle: { owner: o.owner, seller }, dropped, credentialVars: checkSeller(seller), configSha256: sellerSha256(seller) };
@@ -222,6 +246,9 @@ export function wranglerConfigFor(o: { name: string; account: string; url: strin
     name: o.name,
     account_id: o.account,
     main: CF_FILES.worker,
+    // The pinned bytes are uploaded as they are, with the bundle beside them as a text module: Wrangler bundles nothing.
+    no_bundle: true,
+    rules: [{ type: 'Text', globs: ['**/*.txt'], fallthrough: false }],
     ...COMPATIBILITY,
     workers_dev: o.workersDev,
     preview_urls: false,
@@ -280,7 +307,7 @@ export async function cloudflare(c: Call, tool: Tool = npxWrangler(join(c.folder
   }
   const set = accountVariableSet();
   if (set) {
-    c.say({ step: 'cloudflare', ok: false, detail: `${set} is set in the environment. It chooses a Cloudflare account, or carries its credential, without a word on the command line. Run the command again without it, for example with: env -u ${set} node setup.mjs cloudflare ... Nothing was sent.` });
+    c.say({ step: 'cloudflare', ok: false, detail: `${set} is set in the environment. It chooses a Cloudflare account, carries its credential, or changes where Wrangler sends or logs its requests, without a word on the command line. Run the command again without it, for example with: env -u ${set} node setup.mjs cloudflare ... Nothing was sent.` });
     return 1;
   }
   return c.flags.has('--key') ? setKey(c, state, tool) : prepare(c, state);
@@ -315,7 +342,7 @@ async function prepare(c: Call, state: WithCloudflare): Promise<number> {
   }
   const offerId = flags.get('--offer-id') ?? was?.offerId ?? state.name;
   if (!/^[A-Za-z0-9._-]{1,80}$/.test(offerId)) throw new Error("--offer-id takes 1 to 80 letters, digits, dots, hyphens and underscores: the card's offer ID. Nothing was written");
-  const made = bundleFrom(config!, { name: state.name, offerId, owner: state.address!, payout: state.payout!.address, access: access as 'credential' | 'open', quotesPerDay: perDay });
+  const made = bundleFrom(config!, { name: state.name, offerId, owner: state.address!, payout: state.payout!.address, access: access as 'credential' | 'open', quotesPerDay: perDay, keyFile: join(c.folder, FILES.key) });
   const worker = await workerBytes(c);
 
   // The deploy folder: each file written whole, and only when its bytes change.
@@ -338,14 +365,13 @@ async function prepare(c: Call, state: WithCloudflare): Promise<number> {
   if (was?.leftAt) delete state.cloudflare.leftAt;
   writeState(c.folder, state);
 
-  const cfg = join(dir, CF_FILES.config);
   const secrets = made.credentialVars.filter((v) => v !== QUOTE_ENV);
   c.say({
     step: 'cloudflare', ok: true, dir, written: changed, address: where.url, worker: where.name, account: account!, card,
     ...(made.dropped.length ? { dropped: made.dropped.map((k) => `${k}: the Worker keeps its journal in its Durable Object and opens no port`) } : {}),
     quotes: access === 'open'
-      ? `Open: anyone who reaches ${where.url}quote may ask. Each quote spends one of the Worker's faucet grants, so one caller can use them up for the day, and each funded deal starts a job at your API, paid with test tokens. At most ${perDay} quotes a day over all callers; the count is kept in the Worker's memory, so it is a brake and no cap.`
-      : `Credential: a buyer sends Authorization: Bearer <credential>. You choose the credentials and hand each to a buyer yourself, never through this chat. At most ${perDay} quotes a day over all callers; the count is kept in the Worker's memory, so it is a brake and no cap.`,
+      ? `Open: anyone who reaches ${where.url}quote may ask. Each quote asks your API for a price and spends one of the Worker's faucet grants, so one caller can use them up, and each funded deal starts a job at your API, paid with test tokens. At most ${perDay} offers a UTC day over all callers, counted in the Worker's storage.`
+      : `Credential: a buyer sends Authorization: Bearer <credential>. You choose the credentials and hand each to a buyer yourself, never through this chat. At most ${perDay} offers a UTC day over all callers, counted in the Worker's storage.`,
     binding: where.workersDev
       ? `A workers.dev address proves a Cloudflare account, not your domain. A buyer that starts from the card on your own site has your domain's word for the address: publish ${card} there, beside the page.`
       : `TLS at ${where.host} binds the quote address to your domain.`,

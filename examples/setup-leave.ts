@@ -26,7 +26,14 @@ export const exportMessage = (host: string, time: number) => `crow own-seller ex
 export type Exporter = (url: string, headers: Record<string, string>) => Promise<{ status: number; body: unknown }>;
 const fetchExport: Exporter = async (url, headers) => {
   const res = await fetch(url, { headers, redirect: 'error', signal: AbortSignal.timeout(30_000) });
-  return { status: res.status, body: await res.json().catch(() => null) };
+  // The journal of a busy seller is large, and a Worker that is not this one could answer anything: at most 64 MiB.
+  const text = await res.text();
+  if (text.length > 64 * 1024 * 1024) return { status: res.status, body: null };
+  try {
+    return { status: res.status, body: JSON.parse(text) as unknown };
+  } catch {
+    return { status: res.status, body: null };
+  }
 };
 
 /** The status /health answers after the removal, or 0 when nothing answers. */

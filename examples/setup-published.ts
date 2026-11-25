@@ -26,7 +26,7 @@ const MAX_OFFERS = 32;
 /** Addresses no public seller has: loopback, private, link-local, shared, documentation, multicast, reserved. */
 const NOT_PUBLIC = new BlockList();
 for (const [net, prefix] of [['0.0.0.0', 8], ['10.0.0.0', 8], ['100.64.0.0', 10], ['127.0.0.0', 8], ['169.254.0.0', 16], ['172.16.0.0', 12], ['192.0.0.0', 24], ['192.0.2.0', 24], ['192.88.99.0', 24], ['192.168.0.0', 16], ['198.18.0.0', 15], ['198.51.100.0', 24], ['203.0.113.0', 24], ['224.0.0.0', 3]] as const) NOT_PUBLIC.addSubnet(net, prefix, 'ipv4');
-for (const [net, prefix] of [['::', 128], ['::1', 128], ['fc00::', 7], ['fe80::', 10], ['fec0::', 10], ['ff00::', 8], ['2001:db8::', 32], ['2001::', 32], ['64:ff9b:1::', 48], ['100::', 64]] as const) NOT_PUBLIC.addSubnet(net, prefix, 'ipv6');
+for (const [net, prefix] of [['::', 128], ['::1', 128], ['fc00::', 7], ['fe80::', 10], ['fec0::', 10], ['ff00::', 8], ['2001:db8::', 32], ['2001::', 32], ['2001:10::', 28], ['5f00::', 16], ['64:ff9b:1::', 48], ['100::', 64]] as const) NOT_PUBLIC.addSubnet(net, prefix, 'ipv6');
 
 /** Whether `ip` is an address a public seller may have. An IPv4 address carried in an IPv6 one is judged as itself. */
 export function isPublicAddress(ip: string): boolean {
@@ -40,6 +40,7 @@ export function isPublicAddress(ip: string): boolean {
   if (!words) return false;
   const v4 = (hi: number, lo: number) => `${hi >> 8}.${hi & 255}.${lo >> 8}.${lo & 255}`;
   if (words.slice(0, 5).every((w) => w === 0) && (words[5] === 0xffff || words[5] === 0)) return isPublicAddress(v4(words[6]!, words[7]!));
+  if (words.slice(0, 4).every((w) => w === 0) && words[4] === 0xffff && words[5] === 0) return isPublicAddress(v4(words[6]!, words[7]!)); // SIIT, ::ffff:0:a.b.c.d
   if (words[0] === 0x64 && words[1] === 0xff9b && words.slice(2, 6).every((w) => w === 0)) return isPublicAddress(v4(words[6]!, words[7]!));
   if (words[0] === 0x2002) return isPublicAddress(v4(words[1]!, words[2]!));
   return true;
@@ -82,7 +83,11 @@ export function makeGetter(o: { request?: typeof request; allow?: (ip: string) =
   const send = o.request ?? request, allow = o.allow ?? isPublicAddress;
   return (url) => new Promise((resolveGot) => {
     let settled = false;
-    let timer: ReturnType<typeof setTimeout> | undefined;
+    // The whole exchange, not only each wait for a byte, ends at TIMEOUT_MS.
+    const timer = setTimeout(() => {
+      req.destroy();
+      done({ ok: false, reason: REASONS.slow });
+    }, TIMEOUT_MS);
     const done = (g: Got) => {
       if (settled) return;
       settled = true;
@@ -92,11 +97,6 @@ export function makeGetter(o: { request?: typeof request; allow?: (ip: string) =
     const literal = url.hostname.replace(/^\[|\]$/g, '');
     if (isIP(literal) && !allow(literal)) return done({ ok: false, reason: REASONS.private });
     let refused = '';
-    // The whole exchange, not only each wait for a byte, ends at TIMEOUT_MS.
-    timer = setTimeout(() => {
-      req.destroy();
-      done({ ok: false, reason: REASONS.slow });
-    }, TIMEOUT_MS);
     const req = send(
       {
         host: literal,
@@ -188,7 +188,7 @@ export function otherOriginsOf(text: string | undefined): string[] {
 }
 
 /** The checks of a live card, each with a reason from a fixed list. */
-export async function checkPublished(target: string, o: { otherOrigins?: string[]; get?: Getter } = {}): Promise<CheckResult[]> {
+export async function checkPublished(target: string, o: { otherOrigins?: string[]; get?: Getter; ours?: { origin: string; configSha256: string } } = {}): Promise<CheckResult[]> {
   const get = o.get ?? safeGet;
   const out: CheckResult[] = [];
   const say = (check: string, ok: boolean, detail: string, advisory = false) => out.push({ check, ok, detail, ...(advisory ? { advisory: true as const } : {}) });
@@ -232,6 +232,13 @@ export async function checkPublished(target: string, o: { otherOrigins?: string[
     say('published-origin', true, `${at}: its quote and defaults addresses are on the card's origin${quote.origin !== card.origin || defaults.origin !== card.origin ? ' or one named with --other-origin' : ''}.`);
     const d = await jsonAt(get, defaults);
     say('published-defaults', d.value !== undefined, d.value !== undefined ? `${at}: the defaults address answers one JSON object.` : `${at}: the defaults address ${d.reason}.`);
+  }
+  // From a folder with a Worker: the live Worker must be this folder's, the bundle it runs this folder's bundle.
+  if (o.ours) {
+    const live = await jsonAt(get, new URL('/agent.json', o.ours.origin));
+    const named = quoted.some(({ x }) => https((x.pricing as Record<string, unknown>).quote)?.origin === o.ours!.origin);
+    const same = (live.value as Record<string, unknown> | undefined)?.configSha256 === o.ours.configSha256;
+    say('published-folder', named && same, !named ? "The card names no quote address on this folder's Worker." : live.value === undefined ? `This folder's Worker's agent.json ${live.reason}.` : same ? "This folder's Worker answers with this folder's bundle." : "The Worker at this folder's address runs another bundle than this folder's: it is not this folder's Worker, or the deploy is older than the last cloudflare run.");
   }
   say('published-quote', true, 'Not sent: asking for a price makes an offer and spends a faucet grant. Run first-deal for a deal.', true);
   return out;

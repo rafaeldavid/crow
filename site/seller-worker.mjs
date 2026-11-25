@@ -8,8 +8,6 @@ import { createHash, createHmac, randomBytes, randomUUID, timingSafeEqual } from
 import { existsSync, mkdirSync, readFileSync, readdirSync, statSync, unlinkSync, writeFileSync } from "node:fs";
 import { fileURLToPath, pathToFileURL } from "node:url";
 import { basename, dirname, join, relative } from "node:path";
-import { spawn } from "node:child_process";
-import { createServer } from "node:net";
 
 // \0rolldown/runtime.js
 var __create = Object.create;
@@ -86127,6 +86125,20 @@ var init_live_entry = __esmMin((() => {
 	init_timeouts();
 }));
 
+// \0crow-no-child_process
+var none;
+var init__crow_no_child_process = __esmMin((() => {
+	none = () => {
+		throw new Error("a Worker starts no process");
+	};
+}));
+
+// \0crow-no-net
+function createServer() {
+	throw new Error("a Worker opens no port");
+}
+var init__crow_no_net = __esmMin((() => {}));
+
 // node_modules/.pnpm/viem@2.57.13_typescript@6.0.3/node_modules/viem/_esm/chains/definitions/foundry.js
 var foundry;
 var init_foundry = __esmMin((() => {
@@ -86357,6 +86369,8 @@ async function deploy(root, rpcUrl, client, tokenArtifact, receiptTimeoutMs, bea
 }
 var LOCAL_CHAIN_ID, ANVIL_DEPLOYER_KEY, ANVIL_GENESIS_TIME, EXPIRY_MARGIN, BOOT_SIM_SEED, TX_GAS, RECEIPT_POLL_MS, RECEIPT_TIMEOUT_MS, RECEIPT_TIMEOUT_BLOCKS, EvmWorld;
 var init_world = __esmMin((() => {
+	init__crow_no_child_process();
+	init__crow_no_net();
 	init__esm();
 	init_accounts();
 	init_chains();
@@ -86411,7 +86425,7 @@ var init_world = __esmMin((() => {
 			if (!rpcUrl) {
 				const port = await freePort();
 				const clock = options.blockTimeSec ? ["--block-time", String(options.blockTimeSec)] : ["--timestamp", String(ANVIL_GENESIS_TIME)];
-				proc = spawn("anvil", [
+				proc = none("anvil", [
 					"--chain-id",
 					String(LOCAL_CHAIN_ID),
 					"--host",
@@ -92844,8 +92858,40 @@ ${seller.card.description === void 0 ? "" : `<p>${escapeHtml(seller.card.descrip
 				"cache-control": "no-store"
 			} });
 		} else if (sub === "/agent.json" && request.method === "GET") response = json(200, this.card(seller, core));
+		else if (sub === "/quote" && request.method === "POST") response = await this.quote(seller, core, request);
 		else response = await core.handle(request, sub);
 		if (core.hasOpen()) await this.schedule(Date.now() + core.pollMs);
+		return response;
+	}
+	/**
+	* POST /quote under the day's cap: the configuration's `quoteRateLimit.overall` with a window of 86,400 s is the most
+	* offers in one UTC day, over all callers. The core counts its window in memory, which a restart of the object
+	* empties (red team, T-478); this count is in storage. A place is taken before the quote and given back when no offer
+	* was made, so two quotes at once cannot both take the last one.
+	*/
+	async quote(s, core, request) {
+		const limit = s.config.quoteRateLimit?.overall;
+		if (!limit || limit.windowSec !== 86400) return core.handle(request, "/quote");
+		const now = /* @__PURE__ */ new Date();
+		const key = `offers:${now.toISOString().slice(0, 10)}`;
+		const taken = await this.state.storage.get(key) ?? 0;
+		if (taken >= limit.requests) {
+			const wait = Math.ceil((Date.UTC(now.getUTCFullYear(), now.getUTCMonth(), now.getUTCDate() + 1) - now.getTime()) / 1e3);
+			return new Response(JSON.stringify({
+				type: "rate_limited",
+				detail: `this seller makes at most ${limit.requests} offers a UTC day; try again in ${wait} s`
+			}), {
+				status: 429,
+				headers: {
+					"content-type": "application/json",
+					"cache-control": "no-store",
+					"retry-after": String(wait)
+				}
+			});
+		}
+		await this.state.storage.put({ [key]: taken + 1 });
+		const response = await core.handle(request, "/quote");
+		if (response.status !== 200) await this.state.storage.put({ [key]: Math.max((await this.state.storage.get(key) ?? 1) - 1, 0) });
 		return response;
 	}
 	/** Moves the open deals. It never throws: a throwing alarm is retried only six times, then never again. */

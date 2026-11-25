@@ -62,6 +62,14 @@ describe('T-478: check --published', () => {
     expect(fails(httpQuote)[0]!.detail).toMatch(/not https/);
   });
 
+  it("from a folder with a Worker, fails a live Worker that runs another bundle than the folder's", async () => {
+    const mine = seller({ [`${WORKER}/agent.json`]: { ok: true, status: 200, location: false, contentType: 'application/json', body: Buffer.from(JSON.stringify({ type: 'crow-agent', configSha256: 'a'.repeat(64) })) } });
+    const ok = await checkPublished(`${SITE}/`, { otherOrigins: [WORKER], get: mine.get, ours: { origin: WORKER, configSha256: 'a'.repeat(64) } });
+    expect(fails(ok)).toEqual([]);
+    const other = await checkPublished(`${SITE}/`, { otherOrigins: [WORKER], get: mine.get, ours: { origin: WORKER, configSha256: 'b'.repeat(64) } });
+    expect(fails(other)[0]!.detail).toMatch(/runs another bundle than this folder's/);
+  });
+
   it('reads agent.json beside the page, never the page itself', () => {
     expect(String(cardUrlOf('https://party-example.com/'))).toBe('https://party-example.com/agent.json');
     expect(String(cardUrlOf('https://party-example.com/crow/index.html?x=1#y'))).toBe('https://party-example.com/crow/agent.json');
@@ -70,7 +78,7 @@ describe('T-478: check --published', () => {
   });
 
   it('the network getter refuses loopback, private and link-local addresses before it connects', async () => {
-    for (const ip of ['127.0.0.1', '10.1.2.3', '172.16.0.1', '192.168.1.1', '169.254.169.254', '100.64.0.1', '0.0.0.0', '::1', 'fe80::1', 'fd00::1', '::ffff:127.0.0.1', '::ffff:7f00:1', '64:ff9b::a00:1', '2002:a00:1::']) expect(isPublicAddress(ip), ip).toBe(false);
+    for (const ip of ['::ffff:0:10.0.0.1', '2001:0:1::1', '5f00::1', '64:ff9b:1::a00:1', '127.0.0.1', '10.1.2.3', '172.16.0.1', '192.168.1.1', '169.254.169.254', '100.64.0.1', '0.0.0.0', '::1', 'fe80::1', 'fd00::1', '::ffff:127.0.0.1', '::ffff:7f00:1', '64:ff9b::a00:1', '2002:a00:1::']) expect(isPublicAddress(ip), ip).toBe(false);
     for (const ip of ['1.1.1.1', '104.16.0.1', '2606:4700::1111']) expect(isPublicAddress(ip), ip).toBe(true);
     for (const u of ['https://127.0.0.1/agent.json', 'https://[::1]/agent.json', 'https://169.254.169.254/agent.json', 'https://localhost/agent.json']) {
       const got = await safeGet(new URL(u));

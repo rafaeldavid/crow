@@ -83,7 +83,7 @@ import { reasonLine } from './seller-refusal.ts';
 import { SAMPLE, SAMPLE_PRICE_UNITS, startSampleApi } from './setup-sample-api.ts';
 import { deliver } from './setup-deliver.ts';
 import { publish } from './setup-publish.ts';
-import { cloudflare } from './setup-cloudflare.ts';
+import { CF_DIR, CF_FILES, cloudflare, recordOf, sellerSha256 } from './setup-cloudflare.ts';
 import { leave } from './setup-leave.ts';
 import { checkCardFile, checkPublished, otherOriginsOf } from './setup-published.ts';
 import { startWorkApi, WORK_CREDENTIAL_ENV, workFor, workPath } from './setup-work-api.ts';
@@ -263,6 +263,18 @@ async function listStep(c: Call): Promise<number> {
   return list(c, { website, skip: false, to: new URL(to).href });
 }
 
+/** The folder's own Worker, when it has one: its origin and its bundle's SHA-256, for `check --published` to compare. */
+function oursOf(folder: string): { ours?: { origin: string; configSha256: string } } {
+  try {
+    const rec = recordOf(readState(folder));
+    if (!rec || rec.leftAt) return {};
+    const b = JSON.parse(readFileSync(join(folder, CF_DIR, CF_FILES.bundle), 'utf8')) as { seller: { slug: string; card: unknown; config: unknown; files: unknown } };
+    return { ours: { origin: `https://${rec.at}`, configSha256: sellerSha256(b.seller) } };
+  } catch {
+    return {};
+  }
+}
+
 /** The card's local check (T-478), for a folder whose state names a card folder. */
 function cardCheckOf(folder: string): Array<ReturnType<typeof checkCardFile>> {
   let card: string | undefined;
@@ -285,7 +297,7 @@ async function check(c: Call): Promise<number> {
   const published = c.flags.get('--published');
   if (published === undefined && c.flags.has('--other-origin')) throw new WrongCall('--other-origin goes with --published');
   if (published !== undefined && c.flags.has('--work')) throw new WrongCall('give --published or --work, not both');
-  const results = published !== undefined ? await checkPublished(published, { otherOrigins: otherOriginsOf(c.flags.get('--other-origin')) }) : [...(await runChecks(c.folder, { work: c.flags.get('--work') })), ...cardCheckOf(c.folder)];
+  const results = published !== undefined ? await checkPublished(published, { otherOrigins: otherOriginsOf(c.flags.get('--other-origin')), ...oursOf(c.folder) }) : [...(await runChecks(c.folder, { work: c.flags.get('--work') })), ...cardCheckOf(c.folder)];
   for (const r of results) c.say({ step: 'check', ...r });
   return results.every((r) => r.ok) ? 0 : 1;
 }
