@@ -32,7 +32,7 @@ A delivery's judgment must not depend on the adjudicator's memory. The primary o
 - [x] Intake also refuses text longer than the limit in UTF-16 units once normalized, directly or with its `\u` escapes decoded (red team H1).
 - [x] Normalization takes linear time on a run of variation selectors, with output identical to the old walk (red team H2).
 - [x] One Opus red team; findings fixed or recorded.
-- [ ] The bundles rebuilt with `corepack pnpm build && node site/build.mjs`; `buy.mjs` and `try.mjs` unchanged; hashes listed.
+- [x] The bundles rebuilt with `corepack pnpm build && node site/build.mjs`; `buy.mjs` and `try.mjs` unchanged; hashes listed.
 
 ## Decisions
 
@@ -52,6 +52,11 @@ Measured on 2026-11-25 on one Mac (Node 22.23.4), unless labelled. Probes in the
 - **Test first:** `heap.test.ts` failed before the change (no limit exported). With the limit at 4 MiB it fails with `b64 at 4194304 bytes failed at 128 MB: FATAL ERROR: Reached heap limit`. At 1 MiB it passes in about 8 s.
 - **Judgment package:** `corepack pnpm exec vitest run packages/judgment`, 31 files, 1,246 passed, 3 expected failures, 4 skipped. The tests that built deliveries over 1 MiB to exhaust the work budget now use 100 cells of 9,000 characters (900 kB) and still escalate.
 - **Operator and World:** `apps/demo-cloud/src/world.test.ts` and `apps/operator/src/agent-ready.test.ts`, 73 passed; `examples/check-terms.test.ts`, 51 passed.
+
+- **Bundles** (`corepack pnpm build && node site/build.mjs` after merging origin/main, SHA-256): `buy.mjs` `579788aa…`, `try.mjs` `71634a90…`, `take.mjs` `15cb5fd6…` and `preflight.mjs` `04469030…` are the same as main's. Three change, because they embed intake or normalization: `setup.mjs` `a8ed6855…` to `39a3c142…`, `serve.mjs` `37b7667c…` to `097356d7…`, and `seller-worker.mjs` `892c7fd8…` to `29f1b4f1…` (its pin in `examples/seller-worker-pin.ts` regenerated). `node site/check.mjs` passes.
+- **After the red team's fixes:** `heap.test.ts` passes every case at 64, 128 and 512 MB, among them both NFKC shapes at exactly the limit and one unit over, and both variation-selector runs at 1 MiB. Before the memo, the plain run timed out at 60 s. `normalize.test.ts` holds the memo to the old walk over 5,000 random strings, and a wrong memo (always `a`) fails it.
+
+- **Whole repository, after merging origin/main** (`bc9e9adb`): `corepack pnpm typecheck` and `corepack pnpm lint` clean; `pnpm validate:spec` passes with `spec/openapi.json` fresh; `pnpm snap` 73 of 73; `corepack pnpm test` 6,545 passed, 3 expected failures, 325 skipped, and 1 failed: `apps/own-seller/src/frozen.test.ts`. That test fails locally on any branch that changes `packages/`, and CI's shallow checkout skips it (only the gitleaks job fetches full history, `.github/workflows/ci.yml`).
 
 **Red team** (one Opus pass, given CLAUDE.md, ADR-0001, ADR-0006, the operator threat model and the threat table, not this session's conclusions; probes in the gitignored `reports/scratch/redteam-t624/`). Result: ISSUES, two High.
 
