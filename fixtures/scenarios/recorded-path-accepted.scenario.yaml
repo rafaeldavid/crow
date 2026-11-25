@@ -1,0 +1,37 @@
+# @settlement sim @judges recorded @mode guaranteed_on_decision @seed 81
+name: recorded-path-accepted
+description: >-
+  ADR-0047. Tidewater delivers one recorded run of a two-joint arm as a JSON document, its telemetry by column. Time
+  increases by 8 ms a sample, the three columns have 40 entries each, and the joints pass within 500 millidegrees of
+  both of the buyer's waypoints, in order. All three data checks pass, no panel sits, and $1,500 releases to
+  Tidewater with the key to Atlas.
+club: fixtures/clubs/data-services-v1.yaml
+terms: fixtures/terms/recorded-path.yaml
+parties:
+  buyer: atlas-buyer
+  seller: tidewater-seller
+adjudicators:
+  primary: bench-a
+  fallback: bench-b
+  appeal: bench-c
+operators: [op-1, op-2]
+faucet:
+  atlas-buyer: "10000000000"
+  bench-a: "25000000000"
+  bench-b: "25000000000"
+  bench-c: "25000000000"
+steps:
+  - offer:              { by: seller, via: op-1 }
+  - adjudicator_accept: { via: op-1 }
+  - agree_and_fund:     { by: buyer, via: op-1 }
+  - deliver:            { by: seller, via: op-1, file: data/recorded-path/run.json }
+  - advance_clock:      { seconds: 5 }
+  - judge:              { adjudicator: bench-a }
+  - verify_key_release: { by: buyer, via: op-2 }
+expect:
+  terminal: Released
+  balances:
+    atlas-buyer: "8450000000"
+    tidewater-seller: "1500000000"
+    bench-a: "25050000000"
+    escrow: "0"
