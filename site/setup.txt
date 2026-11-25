@@ -49,7 +49,7 @@ It sends nothing. It takes an empty folder only. It refuses a folder inside a gi
 
 The sample: `squares.csv`, 1 tUSDC.
 
-**The person's own work.** `seller --template <file>` sells work a JSON file describes; `seller` alone prints its shape. `--file <path>` adds finished work, delivered once the deal is funded. Without it `first-deal` exits 0 at `"state": "Held"` with `workPath` and `deliverBy`: put the work there. `deliver` delivers the folder's funded deals (exit 4: work is due); `deliver --schedule` prints a scheduler entry for every 5 minutes. Each delivers only work that passes the agreed checks; `check --work <file>` runs them on a sample. `publish` makes it a standing offer with no ETH: it writes the marker as `first-deal` does, and the card entry; `--preview` sends nothing. Standing offers, own APIs: https://crow.direct/sell.txt.
+**The person's own work.** `seller --template <file>` sells work a JSON file describes; `seller` alone prints its shape. `--file <path>` adds finished work, delivered once the deal is funded. Without it `first-deal` exits 0 at `"state": "Held"` with `workPath` and `deliverBy`: put the work there. `deliver` delivers the folder's funded deals (exit 4: work is due); `deliver --schedule` prints a scheduler entry for every 5 minutes. Each delivers only work that passes the agreed checks; `check --work <file>` runs them on a sample. `publish` makes it a standing offer with no ETH: it writes the marker as `first-deal` does, and the card entry; `--preview` sends nothing. Standing offers and own APIs: https://crow.direct/sell.txt.
 
 ## The list
 

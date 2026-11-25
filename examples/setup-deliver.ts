@@ -20,8 +20,8 @@
 //      folder signed (crow.json's `standing`), and its terms are that template filled for its buyer (core's takeTerms),
 //      under its commitment ID. A take of a template with a standing delivery needs nothing here: the buyer posts it.
 //      Otherwise the take's work file (work/<commitment ID>.<ext>) must pass the agreed checks; then the key signs the
-//      delivery for its contract (the contract's key path), sealed to the three adjudicators and the buyer. A take whose
-//      every operator already records a delivery is not delivered again. The adapter is not used: it signs only for the
+//      delivery for its contract (the contract's key path), sealed to the three adjudicators and the buyer. A take that
+//      any operator already records a delivery for is not delivered again. The adapter is not used: it signs only for the
 //      key's own address and its deal keys.
 //   5. One line per deal, then one last line with the deals delivered, still due and declined.
 //

@@ -630,7 +630,6 @@ export async function main(argv: readonly string[]): Promise<number> {
     const operators = operatorsOf(flags.get('--operators'), testWorld);
     const name = flags.get('--name') ?? 'seller';
     if (!/^[a-z0-9][a-z0-9-]{0,39}$/.test(name)) throw new WrongCall('--name takes 1 to 40 lowercase letters, digits and hyphens');
-    // The folder by its real path, every link followed: what the command checks is where it writes.
     // A local chain's deployment, pinned from a file on --test-world only: the command reads no HOLDBACK_DEPLOYMENT.
     const deployment = flags.get('--deployment');
     if (deployment !== undefined) {
@@ -644,6 +643,7 @@ export async function main(argv: readonly string[]): Promise<number> {
       if (d?.chainId !== 31337) throw new WrongCall("--deployment takes a local chain's deployment (chain 31337) only. Nothing was sent");
       process.env['HOLDBACK_DEPLOYMENT'] = JSON.stringify(d);
     }
+    // The folder by its real path, every link followed: what the command checks is where it writes.
     const folder = realPath(resolve(flags.get('--folder') ?? join(homedir(), '.crow', name)));
     const hide: Call['hide'] = (value, whole = false) => {
       for (const form of whole ? [value] : formsOf(value)) hidden.add(form);

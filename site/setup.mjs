@@ -65922,6 +65922,8 @@ const entryOf = (r) => ({
 });
 /** The folder's templates that a buyer can still take, by the operators' time: not expired and not revoked here. */
 const liveRecords = (state, nowMs) => (state.standing ?? []).filter((r) => !r.revokeSignedAt && nowMs < Date.parse(r.template.expiresAt));
+/** The templates the card lists: the live ones no later `publish --replace` replaced, so each offer ID is listed once. */
+const listedRecords = (state, nowMs) => liveRecords(state, nowMs).filter((r) => !r.replacedAt);
 /** The filled example: the template taken by a placeholder buyer at `createdAt`, as the contract's termsOf builds it. */
 function exampleOf(template, seller, createdAt) {
 	const fill = {
@@ -65980,6 +65982,7 @@ async function revocationOf(key, r) {
 /** One line for a revocation: the transaction, who may send it, and what it does. */
 const revokeLine = (rev, r) => ({
 	step: "revoke",
+	ok: true,
 	offerId: r.template.offerId,
 	templateHash: rev.templateHash,
 	chainId: r.chainId,
@@ -66174,7 +66177,7 @@ async function run(c, state, offerId, given) {
 			r.revokeSignedAt = iso(Date.now());
 		}
 		writeState(c.folder, state);
-		const card = writeCard(state, liveRecords(state, now), [offerId]);
+		const card = writeCard(state, listedRecords(state, now), [offerId]);
 		c.say({
 			step: "publish",
 			ok: true,
@@ -66185,62 +66188,79 @@ async function run(c, state, offerId, given) {
 		});
 		return 0;
 	}
-	const keep = live.length > 0 && !c.flags.has("--replace") ? live.at(-1) : void 0;
 	const { discovered } = await pinnedSeller(c.operators, key);
 	const config = loadConfig(join(c.folder, FILES.configuration));
 	const clubId = String(config.clubId ?? discovered.clubId);
+	const adjudicators = config.adjudicators ?? discovered.adjudicators;
+	const registration = await reader.registration(adjudicators.primary);
+	const rulebookHash = await reader.rulebookHash(clubId);
+	const createdAt = iso(Math.floor(now / 1e3) * 1e3);
+	const built = acceptanceFor(config, JSON.parse(readFileSync(join(c.folder, FILES.template), "utf8")), {}, void 0);
+	const terms = publicOfferTerms({
+		template: "checks-only",
+		clubId,
+		seller,
+		buyer: {
+			address: EXAMPLE_BUYER,
+			encryptionPublicKey: EXAMPLE_KEY
+		},
+		sellerPayoutAddress: state.payout.address,
+		adjudicators,
+		price: {
+			token: pin.token.id,
+			amount: state.work.price
+		},
+		deliverable: built.deliverable,
+		checks: built.acceptance.deterministicChecks,
+		timing: config.timing
+	}, registration, rulebookHash, createdAt, ZERO_SALT);
+	const rules = lc(pin.domain.verifyingContract);
+	const ready = readyPath(c.folder, state.work.format);
+	const file = existsSync(ready) ? readWorkFile(ready, false) : void 0;
+	if (file && !file.bytes) throw new Error(`${ready} ${file.problem ?? "cannot be read"}. ${nothing}`);
+	const keep = !c.flags.has("--replace") ? live.filter((r) => !r.replacedAt).at(-1) : void 0;
+	const fileSha = file?.bytes ? `sha256:${createHash("sha256").update(file.bytes).digest("hex")}` : void 0;
+	const driftAdvice = keep !== void 0 && (jcs({
+		rules,
+		terms: templateFrom(terms, {
+			rules,
+			expiresAt: keep.template.expiresAt,
+			offerId
+		}).terms
+	}) !== jcs({
+		rules: lc(keep.template.rules),
+		terms: keep.template.terms
+	}) || fileSha !== keep.template.delivery?.plaintextSha256) ? { advice: `This folder's terms or finished work changed since the live template ${templateHash(keep.template)} was signed, and it is kept as it was. Run publish --replace to sign the folder's current template.` } : {};
+	const expiresAt = given ?? iso(Math.floor(now / 1e3) * 1e3 + 30 * 864e5);
+	if (!keep && !(Date.parse(expiresAt) > now)) throw new Error(`--expires ${expiresAt} is not after the operators' time ${iso(now)}: no buyer could take the template. ${nothing}`);
+	if (preview) {
+		const shownTemplate = keep?.template ?? templateFrom(terms, {
+			rules,
+			expiresAt,
+			offerId
+		});
+		c.say({
+			...previewLine$1(c, seller, holding, !keep && !!file),
+			offerId,
+			seller,
+			key: keyAddress,
+			expiresAt: shownTemplate.expiresAt,
+			...keep ? {
+				kept: templateHash(keep.template),
+				...driftAdvice
+			} : {},
+			...file ? { file: {
+				path: ready,
+				bytes: file.bytes.length
+			} } : { delivery: "work done after funding: deliver delivers each take" },
+			example: exampleOf(shownTemplate, seller, createdAt).terms,
+			sent: "nothing: this is the preview only. Run publish without --preview to send it."
+		});
+		return 0;
+	}
 	let record;
 	if (keep) record = keep;
 	else {
-		const adjudicators = config.adjudicators ?? discovered.adjudicators;
-		const registration = await reader.registration(adjudicators.primary);
-		const rulebookHash = await reader.rulebookHash(clubId);
-		const createdAt = iso(Math.floor(now / 1e3) * 1e3);
-		const built = acceptanceFor(config, JSON.parse(readFileSync(join(c.folder, FILES.template), "utf8")), {}, void 0);
-		const terms = publicOfferTerms({
-			template: "checks-only",
-			clubId,
-			seller,
-			buyer: {
-				address: EXAMPLE_BUYER,
-				encryptionPublicKey: EXAMPLE_KEY
-			},
-			sellerPayoutAddress: state.payout.address,
-			adjudicators,
-			price: {
-				token: pin.token.id,
-				amount: state.work.price
-			},
-			deliverable: built.deliverable,
-			checks: built.acceptance.deterministicChecks,
-			timing: config.timing
-		}, registration, rulebookHash, createdAt, ZERO_SALT);
-		const expiresAt = given ?? iso(Math.floor(now / 1e3) * 1e3 + 30 * 864e5);
-		if (!(Date.parse(expiresAt) > now)) throw new Error(`--expires ${expiresAt} is not after the operators' time ${iso(now)}: no buyer could take the template. ${nothing}`);
-		const ready = readyPath(c.folder, state.work.format);
-		const file = existsSync(ready) ? readWorkFile(ready, false) : void 0;
-		if (file && !file.bytes) throw new Error(`${ready} ${file.problem ?? "cannot be read"}. ${nothing}`);
-		if (preview) {
-			const example = exampleOf(templateFrom(terms, {
-				rules: lc(pin.domain.verifyingContract),
-				expiresAt,
-				offerId
-			}), seller, createdAt);
-			c.say({
-				...previewLine$1(c, seller, holding, !!file),
-				offerId,
-				seller,
-				key: keyAddress,
-				expiresAt,
-				...file ? { file: {
-					path: ready,
-					bytes: file.bytes.length
-				} } : { delivery: "work done after funding: deliver delivers each take" },
-				example: example.terms,
-				sent: "nothing: this is the preview only. Run publish without --preview to send it."
-			});
-			return 0;
-		}
 		c.say(previewLine$1(c, seller, holding, !!file));
 		marker(c);
 		let delivery;
@@ -66284,7 +66304,7 @@ async function run(c, state, offerId, given) {
 			});
 		}
 		const template = templateFrom(terms, {
-			rules: lc(pin.domain.verifyingContract),
+			rules,
 			expiresAt,
 			offerId,
 			...delivery ? { delivery } : {}
@@ -66340,7 +66360,7 @@ async function run(c, state, offerId, given) {
 		});
 		for (const old of live) c.say(revokeLine(await revocationOf(key, old), old));
 	}
-	const card = writeCard(state, liveRecords(state, now));
+	const card = writeCard(state, listedRecords(state, now));
 	if (keep) marker(c);
 	let until;
 	try {
@@ -66369,6 +66389,7 @@ async function run(c, state, offerId, given) {
 		expiresAt: record.template.expiresAt,
 		mandateUntil: iso(until),
 		kept: keep !== void 0,
+		...driftAdvice,
 		...short ? { advice: `The template lasts past the mandate's end, ${iso(until)}: the operators admit its takes only while the mandate lasts. Run publish again before then; it renews the mandate and keeps the template.` } : {},
 		detail: `Publish ${card} on your own site as agent.json, or its JSON in a <script type="application/json" id="crow-agent"> block of a page. A buyer takes the offer ${offerId} with take.mjs (https://crow.direct/ref/take.txt); the first take deploys the seller contract ${seller}. ${record.template.delivery ? "Every take is delivered with the finished work, with nothing running here." : "Run deliver after each take is funded, or on its schedule: it delivers the work of each take of this contract."}`
 	});

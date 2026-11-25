@@ -147,6 +147,11 @@ describe.skipIf(!anvilReady)(`publish on anvil: from no ETH to a first take that
     const again = await setup(['publish', '--offer-id', 'customers-2'], folder);
     expect(lines(again.out).at(-1), again.out).toMatchObject({ step: 'publish', ok: true, kept: true, templateHash: shown.templateHash });
     expect(state().standing).toHaveLength(1);
+    // A preview once a template is live sends nothing either.
+    const quiet = world.length;
+    const previewed = await setup(['publish', '--preview', '--offer-id', 'customers-2'], folder);
+    expect(lines(previewed.out).at(-1), previewed.out).toMatchObject({ step: 'preview', kept: shown.templateHash });
+    expect(world.slice(quiet)).toEqual([]);
 
     // The buyer: take.mjs from the seller's page, stopped for the principal's yes, then approved.
     const cardUrl = `${base}/fixed`;
@@ -172,6 +177,16 @@ describe.skipIf(!anvilReady)(`publish on anvil: from no ETH to a first take that
     expect(await read<Hex32>('commitmentId', [onChain])).toBe(shown.exampleId);
     expect(commitmentId(shown.example)).toBe(shown.exampleId);
     expect([String(onChain.seller).toLowerCase(), String(onChain.buyer).toLowerCase(), String(onChain.sellerPayoutAddress).toLowerCase()]).toEqual([seller, EXAMPLE_BUYER, key]);
+
+    // Replace: a new template for the offer; the card lists the offer once, and a buyer can take the new one.
+    const replaced = await setup(['publish', '--replace', '--offer-id', 'customers-2'], folder);
+    expect(replaced.code, replaced.out + replaced.err).toBe(0);
+    expect(lines(replaced.out).find((l) => l.step === 'revoke')).toMatchObject({ ok: true, templateHash: shown.templateHash });
+    const listed = JSON.parse(readFileSync(join(dir, 'fixed-card', 'agent.json'), 'utf8')).offers.filter((o: J) => o.id === 'customers-2');
+    expect(listed).toHaveLength(1);
+    expect(templateHash(listed[0].standing.template)).not.toBe(shown.templateHash);
+    const retaken = await take([cardUrl, 'customers-2', join(dir, 'buyer-3'), '100000000']);
+    expect(retaken.code, retaken.err).toBe(3);
 
     // Revoke: the signed transaction, sent by an account that is not the seller's; the card drops the offer.
     const revoked = await setup(['publish', '--revoke', '--offer-id', 'customers-2'], folder);
