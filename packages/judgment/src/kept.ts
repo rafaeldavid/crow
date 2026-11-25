@@ -13,9 +13,11 @@ import type { AdjudicatorPolicy, Hex32 } from '@holdback/core';
 import { err, ok, type Result } from '@holdback/core';
 import { aggregate, AGGREGATION_VERSION, preDecision, signedOutcome } from './aggregate.js';
 import * as agg3 from './kept/agg-3.js';
+import * as agg4 from './kept/agg-4.js';
 import * as screen0 from './kept/screen-0.js';
 import * as screen1 from './kept/screen-1.js';
 import { strideSample0 } from './kept/stride-0.js';
+import * as verdict0 from './kept/verdict-0.js';
 import { strideSample1, TEMPLATE_PAIR, TEMPLATE_PAIR_2, type StrideSampler, type TemplatePair } from './prompt.js';
 import { screen, screenTerms, SCREEN_VERSION, type ScreenInput, type ScreenResult } from './screen.js';
 import { parseVerdict } from './verdict.js';
@@ -56,8 +58,9 @@ export interface PolicyImpl {
 const SCREEN_2: ScreenImpl = { screen, screenTerms, stride: strideSample1 };
 const SCREEN_1: ScreenImpl = { screen: screen1.screen, screenTerms: screen1.screenTerms, stride: strideSample1 };
 const SCREEN_0: ScreenImpl = { screen: screen0.screen, screenTerms: screen0.screenTerms, stride: strideSample0 };
-const AGG_3: AggregationImpl = { parseVerdict, preDecision: agg3.preDecision, aggregate: agg3.aggregate, signedOutcome: agg3.signedOutcome };
-const AGG_4: AggregationImpl = { parseVerdict, preDecision, aggregate, signedOutcome };
+// agg-3 and agg-4 read verdicts through the filter they were released with (kept/verdict-0.ts, ADR-0049 section 7).
+const AGG_3: AggregationImpl = { parseVerdict: verdict0.parseVerdict, preDecision: agg3.preDecision, aggregate: agg3.aggregate, signedOutcome: agg3.signedOutcome };
+const AGG_4: AggregationImpl = { parseVerdict: verdict0.parseVerdict, preDecision: agg4.preDecision, aggregate: agg4.aggregate, signedOutcome: agg4.signedOutcome };
 
 export const KEPT: KeptTable = {
   screens: new Map([
@@ -68,7 +71,7 @@ export const KEPT: KeptTable = {
   templatePairs: [TEMPLATE_PAIR, TEMPLATE_PAIR_2],
   aggregations: new Map([
     [agg3.AGGREGATION_VERSION, AGG_3],
-    [AGGREGATION_VERSION, AGG_4],
+    [agg4.AGGREGATION_VERSION, AGG_4],
   ]),
 };
 
