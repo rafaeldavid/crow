@@ -26,7 +26,7 @@ After this task the site no longer builds or links `/demo/`. The site Worker ans
 - [x] The sitemap no longer lists `demo/`.
 - [x] `/demo`, `/demo/`, `/demo/index.html`, `/demo.html` and anything under `/demo/` answer 301 to `/` on the same host; look-alikes (`/demos`, `/demo-club`, `/visualdemo/`) are served as before.
 - [x] The trust page answers the one Learn more topic it lacked: how a company caps what its agent spends.
-- [x] No pinned bundle (`site/*.mjs`) changes.
+- [x] No pinned bundle changes: `site/try.mjs`, `site/buy.mjs`, `site/setup.mjs`, `site/preflight.mjs` and the goal files (`site/try-sell.mjs`, `site/try-judged.mjs`, `site/try-reclaim.mjs`).
 
 ## Out of scope
 
