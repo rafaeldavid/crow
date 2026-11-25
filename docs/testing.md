@@ -127,7 +127,7 @@ An adversarial run only tests the protocol if no party can sign as another. A ru
 | Job | Runs |
 | --- | --- |
 | `typecheck, lint, spec, snap` | `pnpm typecheck`, `pnpm lint`, `pnpm validate:spec`, `pnpm snap` |
-| `docs tests` | Only on a pull request that changes nothing but `docs/` and root Markdown files, in place of the jobs above and below: the test files the job names (T-521) |
+| `docs tests` | Only on a pull request that changes nothing but `docs/` and root Markdown files: the test files the job names (T-521). It stands in for the static job, the test shards and the contracts, anvil and formal jobs; `check` and `gitleaks` still run |
 | `test (i/4)` | `pnpm build`, then `pnpm test --shard=i/4`, four shards |
 | `contracts (forge test)` | `forge test` in `contracts/` (T-203) |
 | `anvil tests, settlement` and `anvil tests, world` | The vitest suites that need anvil, in two legs whose files the job lists; any skipped test fails the job (T-205, T-035, T-313) |

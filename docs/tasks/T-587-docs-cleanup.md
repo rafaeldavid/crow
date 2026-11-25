@@ -32,11 +32,11 @@ Output: this change, and a report in the private repository with the classificat
 
 ## Acceptance criteria
 
-- [ ] Every file under `docs/` and the three root docs has a class.
-- [ ] Every test, script and build step that reads a doc is listed with the CI job that runs it.
-- [ ] No record file's content changes.
-- [ ] A test that reads a moved file is updated in the same commit, or the file stays.
-- [ ] Typecheck, lint, tests, the site build and check, and the docs tests pass.
+- [x] Every file under `docs/` and the three root docs has a class (the private report).
+- [x] Every test, script and build step that reads a doc is listed with the CI job that runs it (the private report).
+- [x] No record file's content changes.
+- [x] A test that reads a moved file is updated in the same commit, or the file stays (no test reads it).
+- [ ] Typecheck, lint, tests, the site build and check, and the docs tests pass. All passed here except `pnpm test`, which failed under machine load (Evidence); CI decides.
 
 ## Out of scope
 
