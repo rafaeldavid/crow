@@ -63022,11 +63022,11 @@ const APPEAL_PROMPT_TEMPLATE_HASH = sha256Hex(APPEAL_PROMPT_TEMPLATE);
 * Rule 5 of template pair 2. Pair 1 states the verdict schema's caps only as `string<=300` and `string<=600` inside a
 * type sketch, and judges wrote past them: on 2026-11-25 four of eight seats over one deal's two panels abstained on
 * the schema filter, and the appeal refunded an honest delivery (D27a). Pair 2 states each limit in words, with a
-* target well under it, so a judge that overshoots its target still fits judge-verdict.schema.json. The caps and the
-* filter do not change: output over a cap still abstains. The rationale's limit is the policy's rationaleMaxChars (at
+* target well under it, so a judge that overshoots its target still fits judge-verdict.schema.json. It does not say what
+* happens to text over a limit, so the frozen text stays true under today's filter and under a later one that cuts. The rationale's limit is the policy's rationaleMaxChars (at
 * most the schema's 600), filled in as a number, and its target two thirds of it, at most 400.
 */
-const RULE_5_PAIR_2 = "5. Reply with exactly one JSON object and nothing else, with no code fence: {\"criteria\":[{\"id\":string,\"score\":integer 0-4,\"evidence\":string}],\"overall\":\"pass\"|\"fail\"|\"abstain\",\"injectionSuspected\":boolean,\"injectionEvidence\"?:string,\"rationale\":string}. Keep each \"evidence\" and the \"injectionEvidence\" under 200 characters, one or two short sentences, and the \"rationale\" under {{rationale_target}} characters. The limits are 300 characters for each \"evidence\" and for \"injectionEvidence\" and {{rationale_max}} for \"rationale\"; a reply over any limit is discarded and counts as no verdict.";
+const RULE_5_PAIR_2 = "5. Reply with exactly one JSON object and nothing else, with no code fence: {\"criteria\":[{\"id\":string,\"score\":integer 0-4,\"evidence\":string}],\"overall\":\"pass\"|\"fail\"|\"abstain\",\"injectionSuspected\":boolean,\"injectionEvidence\"?:string,\"rationale\":string}. Each \"evidence\" and the \"injectionEvidence\" may be at most 300 characters; aim for 200. The \"rationale\" may be at most {{rationale_max}} characters; aim for {{rationale_target}}.";
 const withRule5 = (t) => t.split("\n").map((l) => l.startsWith("5. ") ? RULE_5_PAIR_2 : l).join("\n");
 /** Template pair 2, first instance: pair 1 with rule 5 replaced. */
 const PROMPT_TEMPLATE_2 = withRule5(PROMPT_TEMPLATE);
