@@ -100,14 +100,14 @@ describe('the three messages, built for a signature made elsewhere', () => {
     const { signature, ...unsigned } = m;
     const v = await verifyFile(fileOf('Mandate', unsigned, domain), signature, domain, { at: NOW });
     expect(v).toMatchObject({ kind: 'Mandate', signer: lc(principal.address), inEffectUntil: '2026-11-21T12:00:00Z' });
-    expect(spec.ajv.getSchema('https://holdback.dev/schemas/v0.12/mandate.schema.json')!(v.document)).toBe(true);
+    expect(spec.ajv.getSchema('https://holdback.dev/schemas/v0.13/mandate.schema.json')!(v.document)).toBe(true);
     const d = await signed('Delegation', delegation());
     const vd = await verifyDocument('Delegation', d, domain, { at: NOW, mandate: m });
     expect(vd.signer).toBe(lc(agent.address));
-    expect(spec.ajv.getSchema('https://holdback.dev/schemas/v0.12/messages.schema.json#/$defs/Delegation')!(vd.document)).toBe(true);
+    expect(spec.ajv.getSchema('https://holdback.dev/schemas/v0.13/messages.schema.json#/$defs/Delegation')!(vd.document)).toBe(true);
     const r = await signed('AgentRevocation', buildRevocation({ principal: principal.address, agent: agent.address }));
     const vr = await verifyDocument('AgentRevocation', r, domain, { at: NOW, mandate: m });
-    expect(spec.ajv.getSchema('https://holdback.dev/schemas/v0.12/messages.schema.json#/$defs/AgentRevocation')!(vr.document)).toBe(true);
+    expect(spec.ajv.getSchema('https://holdback.dev/schemas/v0.13/messages.schema.json#/$defs/AgentRevocation')!(vr.document)).toBe(true);
   });
 
   it('reads a file back to the document it was built from', () => {

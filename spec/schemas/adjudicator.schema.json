@@ -1,6 +1,6 @@
 {
   "$schema": "https://json-schema.org/draft/2020-12/schema",
-  "$id": "https://holdback.dev/schemas/v0.12/adjudicator.schema.json",
+  "$id": "https://holdback.dev/schemas/v0.13/adjudicator.schema.json",
   "title": "Adjudicator registration",
   "type": "object",
   "required": [
@@ -163,6 +163,16 @@
     "policyHash": {
       "$ref": "common.schema.json#/$defs/Hex32",
       "description": "keccak256 of the RFC 8785 canonical JSON of policy; commitments bind it"
+    },
+    "checkKinds": {
+      "type": "array",
+      "uniqueItems": true,
+      "maxItems": 100,
+      "items": {
+        "type": "string",
+        "pattern": "^[a-z0-9_]{1,40}$"
+      },
+      "description": "The deterministic check kinds this adjudicator runs, each a DeterministicCheck type (ADR-0045 §8). It sits beside policy, so policyHash does not cover it; registration.bodyHash does. Absent: the nine kinds of v0.12."
     },
     "fee": {
       "type": "object",

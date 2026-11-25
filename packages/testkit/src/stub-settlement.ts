@@ -44,7 +44,7 @@ import { privateKeyToAccount, sign as signDigest } from 'viem/accounts';
 import type { SimContext } from './context.js';
 import { loadClubFile, loadTermsFile, termsFromTemplate, type TermsTemplate } from './fixture-files.js';
 import type { AdjudicatorPolicy } from '@holdback/core';
-import type { LoadedRegistry, PolicyVersions } from '@holdback/judgment';
+import { CHECK_TYPES, type LoadedRegistry, type PolicyVersions } from '@holdback/judgment';
 import { buildDefaultVersions, keptRegistryFiles, loadJudgeRegistry, REGISTRY_FILE, runnerPolicy } from './judges-config.js';
 import { runJudgment, type JudgmentView } from './judgment.js';
 import type { Outage, StepProblem } from './prefix.js';
@@ -820,6 +820,9 @@ export class StubSettlement {
     if (c.terms.adjudication.registryHash !== this.registry.hash) {
       return this.refuse(name, call, via, problem('registry_mismatch', `the offer binds registry ${c.terms.adjudication.registryHash}; as primary ${name} accepts new deals only under its current registry ${this.registry.hash}`));
     }
+    // ADR-0045 §10: nor one naming a check kind its build does not run, as the adjudicator service declines it.
+    const unrun = c.terms.acceptance?.deterministicChecks.find((k) => !CHECK_TYPES.has(k.type));
+    if (unrun) return this.refuse(name, call, via, problem('adjudicator_unavailable', `${name} does not run the check kind ${unrun.type}, which check ${unrun.id} names, so it declines the offer`));
     const seed = this.ctx.rng.hex32();
     const message = await this.sign(name, {
       type: 'AdjudicatorAcceptance',

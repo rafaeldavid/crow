@@ -41,7 +41,7 @@ import {
   type TokenAmount,
 } from '@holdback/core';
 import { ContentKey, decodePublicKey, encodePublicKey, encryptionKeyPairFromSecretKey, open as openContent, unwrapKey, wrapKey, wrapKeyForRecipients } from '@holdback/core/crypto';
-import { describeUnavailable, intake, loadReferences, panelPlan, runPipeline, type IntakeError, type JudgeProvider, type JudgmentDraft, type LoadedRegistry, type PolicyImpl } from '@holdback/judgment';
+import { CHECK_TYPES, describeUnavailable, intake, loadReferences, panelPlan, runPipeline, type IntakeError,type JudgeProvider, type JudgmentDraft, type LoadedRegistry, type PolicyImpl } from '@holdback/judgment';
 import { concat, keccak256, stringToBytes, toBytes, type Hex } from 'viem';
 import { privateKeyToAccount } from 'viem/accounts';
 import { quicknetValue } from './drand.js';
@@ -416,6 +416,8 @@ export class Adjudicator {
       policy: this.policy,
       registry: { hash: this.#cfg.registry.hash, uri: this.#cfg.registryUri },
       policyHash: policyHashOf(this.policy),
+      // ADR-0045 §8: read from stage 1's own registry, so the record cannot list a kind this build does not run.
+      checkKinds: [...CHECK_TYPES],
       fee: this.#cfg.fee,
     };
   }
@@ -598,7 +600,18 @@ export class Adjudicator {
     // A withdrawn version is declined at once (ADR-0036 section 2); the static check keeps the default carried.
     const own = withdrawnProblem(this.policy, this.#kept) ?? registryMarkProblem(this.#cfg.registry.hash, this.#kept);
     if (own) return own;
-    return this.#termsMismatch(c) ?? this.#windowsProblem(c) ?? this.#feeProblem(c);
+    return this.#termsMismatch(c) ?? this.#windowsProblem(c) ?? this.#feeProblem(c) ?? this.#checkKindProblem(c);
+  }
+
+  /**
+   * ADR-0045 §10, the check-kind half: as primary it declines an offer that names a kind outside its record's checkKinds, required or
+   * not, so it joins no hold on a check it does not run. A turn taken after funding does not ask this: stage 1 fails such
+   * a check there. Sealed terms show this service no checks.
+   */
+  #checkKindProblem(c: DecisionTask['commitment']): Problem | null {
+    const unrun = c.acceptance?.deterministicChecks?.find((k) => !CHECK_TYPES.has(k.type));
+    if (!unrun) return null;
+    return problem('adjudicator_unavailable', `${this.#cfg.name} does not run the check kind ${unrun.type}, which check ${unrun.id} names, so it declines the offer; checkKinds on its adjudicator record lists the kinds it runs`);
   }
 
   /**
