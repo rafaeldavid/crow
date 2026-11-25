@@ -46,11 +46,11 @@ afterEach(() => {
 describe('the security headers on the site Worker (T-451)', () => {
   it('each kind of page carries the policy with the build’s hashes, no unsafe-inline for scripts, and no framing', async () => {
     const { env } = assets();
-    for (const path of ['/', '/demo/', '/trust', '/status', '/problems/not_found', '/missing']) {
+    for (const path of ['/', '/trust', '/status', '/legal', '/problems/not_found', '/missing']) {
       const r = await get(`https://crow.direct${path}`, env);
       common(r);
       const csp = r.headers.get('content-security-policy')!;
-      expect(csp).toBe(contentSecurityPolicy(HASHES, path));
+      expect(csp).toBe(contentSecurityPolicy(HASHES));
       expect(csp).toContain(`script-src 'self' '${S}'`);
       expect(csp).toContain(`style-src 'self' '${T}'`);
       expect(csp).toContain("default-src 'none'");
@@ -64,13 +64,18 @@ describe('the security headers on the site Worker (T-451)', () => {
     }
   });
 
-  it('the visual walkthrough alone may use inline styles and its Google font; its scripts are hashed as elsewhere', async () => {
+  it('no page may use inline styles or an outside font since the visual walkthrough is retired, and its old addresses answer 301 with the headers (T-586)', async () => {
     const { env } = assets();
-    const csp = (await get('https://crow.direct/visualdemo/', env)).headers.get('content-security-policy')!;
-    expect(csp).toContain("style-src 'self' 'unsafe-inline' https://fonts.googleapis.com");
-    expect(csp).toContain('font-src https://fonts.gstatic.com');
-    expect(csp).toContain(`script-src 'self' '${S}';`);
-    for (const path of ['/visualdemox', '/demo/visualdemo']) expect((await get(`https://crow.direct${path}`, env)).headers.get('content-security-policy')).not.toContain('unsafe-inline');
+    for (const path of ['/visualdemox', '/problems/visualdemo']) {
+      const csp = (await get(`https://crow.direct${path}`, env)).headers.get('content-security-policy')!;
+      expect(csp, path).not.toMatch(/unsafe-inline|fonts\.googleapis\.com|fonts\.gstatic\.com/);
+      expect(csp, path).toContain("font-src 'self'");
+    }
+    for (const path of ['/visualdemo/', '/demo/']) {
+      const r = await get(`https://crow.direct${path}`, env);
+      expect(r.status, path).toBe(301);
+      common(r);
+    }
   });
 
   it('the guides, the bundles, the icon and the JSON keep their bytes and type, and carry the headers with a policy that runs nothing', async () => {

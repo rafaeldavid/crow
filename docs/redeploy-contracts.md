@@ -1,6 +1,6 @@
 # Redeploying the phase-one contracts on Sepolia
 
-This runbook moves Crow's live test service to a new deployment of the phase-one contracts, from a frozen commit to a pushed tag. It serves the next tag, `contracts-phase-one-2` (the version with an outside scan's fixes, which the outside audit then reads: D80), and every later one: the audit loop redeploys after each round of fixes. It is drawn from the cutover of 2026-11-13, whose dated record is [`cutover-phase-one.md`](cutover-phase-one.md). The steps keep that record's numbers, so each can be read beside what happened there; the items inside a step are numbered for this page.
+This runbook moves Crow's live test service to a new deployment of the phase-one contracts, from a frozen commit to a pushed tag. It served the tag `contracts-phase-one-2`, deployed on 2026-11-19 (the version with an outside scan's fixes, which the outside audit then reads: D80), and serves every later one: the audit loop redeploys after each round of fixes. It is drawn from the cutover of 2026-11-13, whose dated record is [`cutover-phase-one.md`](cutover-phase-one.md). The steps keep that record's numbers, so each can be read beside what happened there; the items inside a step are numbered for this page.
 
 **Every value comes from its source on the day:** the record (`contracts/deployments/sepolia.json`), discovery (`/.well-known/holdback.json` and `/v1/status` on each node), the scripts' own output, and the chain. This page copies no address, hash, contract or schema version, or gas figure from a deployment. The few fixed values in its commands (a page size, a byte window, a fork balance, a tool version) each name their source beside them. A dated record of each run goes into [`operations.md`](operations.md) at step 11.4.
 
@@ -259,7 +259,7 @@ SEPOLIA_FORK_RPC=$R pnpm -C $W exec vitest run apps/adjudicator/src/drand-fork.t
 
 If anvil exits on the public node, use `SEPOLIA_FORK_RPC=$D`.
 
-- **`live-fork.test.ts`** (`apps/demo-cloud/src/live-fork.test.ts`) runs one deal through the public world's code against the new record, then `site/walkthrough.mjs`. It prints the whole output of both, each under a heading: `examples/try.ts (exit 0):`, which ends `done commitment … Released`, and `site/walkthrough.mjs (exit 0):`, which ends `walkthrough PASS`. Then it prints the Sepolia gas of each transaction the fork mined. No CI job runs the walkthrough, so this is where a stale one shows [measured on 2026-11-13].
+- **`live-fork.test.ts`** (`apps/demo-cloud/src/live-fork.test.ts`) runs one deal through the public world's code against the new record, then `site/walkthrough.mjs`. It prints the whole output of both, each under a heading: `examples/try.ts (exit 0):`, which ends `done commitment … Released`, and `site/walkthrough.mjs (exit 0):`, which ends `walkthrough PASS`. Then it prints the Sepolia gas of each transaction the fork mined. The `walkthrough` workflow runs this test on pull requests and pushes that touch the paths it lists, against the record in the repository; it is not part of the required `check`. This step runs it against the new record.
 - **`drand-fork.test.ts`** escalates and decides from live drand rounds against the new rules contract and its beacon.
 
 A failure here means the build cannot settle on the new contracts: fix it on the branch and repeat from step 3.2. A fix that touches `contracts/src` voids the deployment: go back to step 0 with a new frozen commit.
@@ -308,16 +308,13 @@ The old world's storage stays: never delete it, because a rollback serves it aga
 **Who:** Rafa, or a session on his word.
 
 1. **Deploy:** `node $W/apps/test-agents/scripts/deploy.mjs`. It waits for the seller's health to read `operational`, and rolls back otherwise. Then `curl -s https://crow.direct/agents/test-buyer/health` reads `"status": "operational"`.
-2. **Buy from the test seller with the new bundle, from an empty folder.** The live site still serves the old bundle, and `node $W/site/try.mjs` fails with "Cannot find package 'tweetnacl'": the bundle needs its two pinned packages beside it [measured on 2026-11-13]. The pins are the install line of the try command that `site/build.mjs` wrote into `site/index.html`:
+2. **Buy from the test seller with the new bundle, from an empty folder.** The live site still serves the old bundle, so run the worktree's copy. The bundle carries its two libraries and needs no install (the header of `site/try.mjs`):
 
    ```sh
-   P=$(mktemp -d) && cd $P && npm init -y >/dev/null
-   npm install --silent --ignore-scripts $(grep -o 'viem@[0-9.]* tweetnacl@[0-9.]*' $W/site/index.html | head -1)
+   P=$(mktemp -d) && cd $P
    cp $W/site/try.mjs . && node try.mjs --seller https://crow.direct/agents/test-seller
    node try.mjs --seller https://crow.direct/agents/test-seller --outcome refund
    ```
-
-   [Inferred: the published command's install, with the worktree's file in place of the download; on 2026-11-13 the coordinator linked `examples/node_modules` beside a copy instead.]
 3. **Sell to the test buyer:** `node $W/apps/test-agents/scripts/sell-to-test-buyer.mjs`.
 
 **It must show:** the deploy says `pass`; the two buys end `Released` and `Refunded`; the sale ends `released`. Save each deal's ID and transactions.
@@ -352,14 +349,14 @@ Each prints `results: … pass`. The escalation proves the operators' gas estima
    for f in try.mjs buy.mjs; do want=$(shasum -a 256 site/$f | cut -d' ' -f1); got=$(curl -fsS https://crow.direct/$f | shasum -a 256 | cut -d' ' -f1); echo "$f $([ "$want" = "$got" ] && echo same || echo DIFFERS)"; done
    curl -fsS https://crow.direct/ | grep -c "$(shasum -a 256 site/try.mjs | cut -d' ' -f1)"
    curl -fsS https://crow.direct/buy.txt | grep -c "$(shasum -a 256 site/buy.mjs | cut -d' ' -f1)"
-   curl -fsSL https://crow.direct/demo | grep -oE 'href="(https?://|/)[^"#]*' | cut -d'"' -f2 | sort -u | while read -r u; do case "$u" in /*) u="https://crow.direct$u" ;; esac; echo "$(curl -s -o /dev/null -L -w '%{http_code}' "$u") $u"; done
+   curl -fsSL https://crow.direct/ | grep -oE 'href="(https?://|/)[^"#]*' | cut -d'"' -f2 | sort -u | while read -r u; do case "$u" in /*) u="https://crow.direct$u" ;; esac; echo "$(curl -s -o /dev/null -L -w '%{http_code}' "$u") $u"; done
    curl -s -o /dev/null -w '%{http_code}\n' "https://crow.direct/no-such-page-$(date +%s)"
    curl -fsS https://crow.direct/ | wc -c
    curl -fs https://crow.direct/ | head -c 600 | grep -c '/llms.txt'
    for f in llms.txt buy.txt sell.txt; do curl -fsS https://crow.direct/$f | cmp -s - reports/site-out/$f && echo "$f same" || echo "$f DIFFERS"; done
    ```
 
-   Both scripts print `same`, and each hash count is at least `1`; every demo link starts with `200`; the missing page prints `404`; the home page's size is within `HOME_MAX_BYTES` in `site/check.mjs`, and its head, the first `POINTER_WITHIN` bytes there (the `head -c` value above), names `/llms.txt`; the three guides print `same`.
+   Both scripts print `same`, and each hash count is at least `1`; every homepage link starts with `200`; the missing page prints `404`; the home page's size is within `HOME_MAX_BYTES` in `site/check.mjs`, and its head, the first `POINTER_WITHIN` bytes there (the `head -c` value above), names `/llms.txt`; the three guides print `same`.
 
 **Rollback:** the script rolls the site back by itself on a failed live check. By hand, only together with the operators and the test agents, because the old command works only against the old world: `npx wrangler@4.151.3 rollback <crow-site version from step 0.9> --name crow-site`. Once the step passes, strangers open deals on the new world, and a rollback would leave each without an operator: fix forward.
 
@@ -400,5 +397,5 @@ The two gaps of 2026-11-13 are closed in the script (T-410): `--verify` goes thr
 
 - **The rehearsal on a fork** (step 1.2): `scripts/deploy-rehearsal.mjs` runs on a local chain only, so it does not run the type checks and tests on a Sepolia-shaped record.
 - **Etherscan:** not verified. The script's Sourcify route needs no key; Etherscan's needs a key and its API V2.
-- **A CI job for `site/walkthrough.mjs`:** a workflow change, waiting for Rafa's word; until then step 4 is where the walkthrough runs.
+- **A walkthrough that gates a merge:** `.github/workflows/walkthrough.yml` runs it, outside the required `check`. Against a new record it runs in step 4.
 - **A stopped deploy** is rerun whole: the script does not resume, and step 2.3 lists the orphans it prints.

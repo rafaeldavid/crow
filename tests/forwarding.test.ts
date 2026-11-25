@@ -1,7 +1,8 @@
 // T-312: crow.direct is the canonical home, and the old escrow.stream hostnames forward to it. The site Worker sends
 // every escrow.stream request to the same path on crow.direct with a 301 and serves the static assets for crow.direct;
 // the early-access Worker sends join.escrow.stream to join.crow.direct (301 for GET, 308 for POST, which keeps the
-// method and body) and keeps one KV namespace for both hostnames.
+// method and body) and keeps one KV namespace for both hostnames. A retired page's address answers a 301 to its
+// replacement (T-586).
 import { describe, expect, it } from 'vitest';
 // @ts-expect-error -- plain ESM Worker without type declarations
 import site from '../apps/site/worker.js';
@@ -57,6 +58,18 @@ describe('the site Worker (crow-site)', () => {
       expect(await r.text()).toBe('asset');
     }
     expect(env.asked).toEqual(['/', '/llms.txt', '/crow.png']);
+  });
+
+  it('answers the retired demo page, its Learn more view and the visual walkthrough with a 301 to the homepage, and serves look-alikes as assets (T-586)', async () => {
+    const env = assets();
+    for (const from of ['https://crow.direct/demo', 'https://crow.direct/demo/', 'https://crow.direct/demo/index.html', 'https://crow.direct/demo.html', 'https://www.crow.direct/demo/?ref=x', 'https://crow.direct/visualdemo', 'https://crow.direct/visualdemo/', 'https://crow.direct/visualdemo/index.html']) {
+      const r = await (site as Fetcher).fetch(new Request(from), env);
+      expect(r.status, from).toBe(301);
+      expect(r.headers.get('location'), from).toBe(`${new URL(from).origin}/`);
+    }
+    expect(env.asked).toEqual([]);
+    for (const path of ['/demos', '/demo-club', '/visualdemox', '/problems/visualdemo']) expect((await (site as Fetcher).fetch(new Request(`https://crow.direct${path}`), env)).status, path).toBe(200);
+    expect(env.asked).toEqual(['/demos', '/demo-club', '/visualdemox', '/problems/visualdemo']);
   });
 });
 

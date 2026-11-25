@@ -153,6 +153,8 @@ Agreed terms bind; the buyer carries the burden of acceptance. The buyer accepts
 | Escalation rate on clean calibration cases | ≤ 15% | `pnpm calibrate` |
 | Cost per panel judgment | Report only | `pnpm calibrate` |
 
+`pnpm calibrate` is not built yet: the calibration sets, their generators and the command are T-301, in Phase 3 (`docs/judgment-and-defenses.md`).
+
 ## Release criteria for v0.1
 
 - Phases 0–3 complete (`docs/plan.md`).
