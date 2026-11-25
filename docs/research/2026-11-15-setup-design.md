@@ -68,6 +68,8 @@ Rafa asked on 2026-11-15 whether Crow's API is the equivalent of Blygger's Studi
 
 One file, `setup.mjs`: the unminified bundle of `examples/setup.ts` and the tools it imports unchanged, built by `site/build.mjs` and pinned by SHA-256. It carries its two libraries inside, as the bundles of pull request 578 do, so no package is installed and npm is not in the path of a key. It works in one folder and never outside it: by default `~/.crow/<name>`. It refuses a folder inside a git work tree, a synced folder or a served folder unless told to.
 
+*Amended 2026-11-25 (D94):* one exception. `cloudflare --key` and `leave` (T-478) start one child process, a Wrangler 4.151.3 the person installed first, with `npm_config_yes=false`, so npx installs nothing at run time. The Worker's key reaches Wrangler on standard input. npm is in that path, as the tool that runs the installed Wrangler.
+
 | Command | What it does | Names the party to a Crow-run host? |
 | --- | --- | --- |
 | `seller --sample` or `seller --api <base URL>` | Makes the folder, the signing key, the adapter's configuration, the deal template and the card files; then runs `check` | No |

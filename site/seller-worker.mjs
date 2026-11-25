@@ -2166,7 +2166,7 @@ function keccakP(s, rounds = 24) {
 	}
 	clean$1(B);
 }
-var _0n$5, _1n$5, _2n$3, _7n, _256n, _0x71n, SHA3_PI, SHA3_ROTL, _SHA3_IOTA, IOTAS, SHA3_IOTA_H, SHA3_IOTA_L, rotlH, rotlL, Keccak, gen, keccak_256;
+var _0n$5, _1n$5, _2n$3, _7n, _256n, _0x71n, SHA3_PI, SHA3_ROTL, _SHA3_IOTA, IOTAS, SHA3_IOTA_H, SHA3_IOTA_L, rotlH, rotlL, Keccak, gen$1, keccak_256;
 var init_sha3 = __esmMin((() => {
 	init__u64();
 	init_utils$1();
@@ -2297,8 +2297,8 @@ var init_sha3 = __esmMin((() => {
 			return to;
 		}
 	};
-	gen = (suffix, blockLen, outputLen) => createHasher$1(() => new Keccak(blockLen, suffix, outputLen));
-	keccak_256 = /* @__PURE__ */ (() => gen(1, 136, 32))();
+	gen$1 = (suffix, blockLen, outputLen) => createHasher$1(() => new Keccak(blockLen, suffix, outputLen));
+	keccak_256 = /* @__PURE__ */ (() => gen$1(1, 136, 32))();
 }));
 
 // node_modules/.pnpm/viem@2.57.13_typescript@6.0.3/node_modules/viem/_esm/utils/hash/keccak256.js
@@ -50207,20 +50207,27 @@ function inRanges(ranges) {
 	};
 }
 function simulate(states, start, cps, anchoredStart, anchoredEnd, budget) {
-	const mark = new Int32Array(states.length).fill(-1);
-	let gen = 0;
-	let current = [];
+	if (gen > 1073676288) {
+		MARK.fill(-1);
+		gen = 0;
+	}
 	const add = (list, s) => {
+		let moves = 0;
 		const stack = [s];
 		while (stack.length) {
 			const x = stack.pop();
-			if (mark[x] === gen) continue;
-			mark[x] = gen;
+			if (MARK[x] === gen) continue;
+			MARK[x] = gen;
 			const st = states[x];
-			if (st.k === "split") stack.push(st.b, st.a);
-			else list.push(x);
+			if (st.k === "split") {
+				moves++;
+				stack.push(st.b, st.a);
+			} else list.push(x);
 		}
+		if (moves > 0) budget?.spend(moves);
 	};
+	gen++;
+	let current = [];
 	add(current, start);
 	const accepts = (list) => list.some((x) => states[x].k === "match");
 	for (const cp of cps) {
@@ -50274,7 +50281,7 @@ function compileSafeRegex(pattern) {
 		throw e;
 	}
 }
-var MAX_PATTERN_CHARS, MAX_REPEAT, MAX_STATES, MAX_COMPILE_STEPS, MAX_SUBJECT_CHARS, EMPTY, isEmpty$1, StepBudget, BudgetExhausted, PatternError, range, DIGIT, WORD, SPACE_SET, SPACE$1, LINE_TERMINATORS, DOT, not, SYNTAX, CONTROL$1, CLASS_ESCAPES, MAX_CODE_POINT, DIGIT_RANGES, WORD_RANGES, SPACE_RANGES, CLASS_RANGES, Parser$1, Compiler;
+var MAX_PATTERN_CHARS, MAX_REPEAT, MAX_STATES, MAX_COMPILE_STEPS, MAX_SUBJECT_CHARS, EMPTY, isEmpty$1, StepBudget, BudgetExhausted, PatternError, range, DIGIT, WORD, SPACE_SET, SPACE$1, LINE_TERMINATORS, DOT, not, SYNTAX, CONTROL$1, CLASS_ESCAPES, MAX_CODE_POINT, DIGIT_RANGES, WORD_RANGES, SPACE_RANGES, CLASS_RANGES, Parser$1, Compiler, MARK, gen;
 var init_safe_regex = __esmMin((() => {
 	init_dist$3();
 	MAX_PATTERN_CHARS = 200;
@@ -50576,6 +50583,8 @@ var init_safe_regex = __esmMin((() => {
 			}
 		}
 	};
+	MARK = new Int32Array(MAX_STATES).fill(-1);
+	gen = 0;
 }));
 
 // packages/judgment/dist/checks/json-schema.js

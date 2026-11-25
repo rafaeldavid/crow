@@ -1366,6 +1366,7 @@ Today a seller with its own API reads 13 files of 98,462 bytes and runs 22 comma
 
 - **One file for the assistant.** `https://crow.direct/setup.txt`, at most 8,000 bytes. The sentence a person gives: "Read https://crow.direct/setup.txt and set up Crow for me as a seller", or "as a buyer".
 - **One pinned command.** `setup.mjs`, a self-contained bundle pinned by SHA-256, as the bundles of pull request 578 are: nothing is installed. It makes the keys, writes the files, checks them, runs the first deal and removes the setup. It takes answers as flags and never prompts, so an assistant and the benchmark can drive it. It ignores settings in its environment and takes the operators as a flag, with Crow's two as the default.
+  - *Amended 2026-11-25 (D94):* `setup.mjs` itself installs nothing still. For `cloudflare --key` and `leave` only, it starts one child process, a Wrangler 4.151.3 the person installed first, and npx installs nothing at run time.
 - **What the pin protects.** A bundle that differs from the one the command names. It does not protect against whoever controls crow.direct, since the hash and the address come from that one origin; the repository holds the same bundle for a party that wants a second origin.
 - **Nothing sent before the first deal.** No step before it makes a request that names the party to a Crow-run host. The seller's setup writes `"signingKey": "per-deal"`, which takes each deal key's faucet grant with its quote and not at start. The benchmark counts such requests; the target is 0.
 - **What a fresh key for each deal costs, and what it does not give.** A seller then needs the faucet for every quote. And it does not unlink the seller's deals by itself: every offer names one payout address. So the payout address is always asked and never defaulted.
@@ -1787,3 +1788,37 @@ The build is not started; it opens as its own task on Rafa's word.
 **Dropped:** a compile-time bound on how deep optional groups nest, alone or with counting. It refuses before signing, but it would refuse patterns the tests use and still miss shapes that cost as much without nesting (measured). A larger or smaller budget: the size is not the defect.
 
 **Litmus tests.** Neutrality: unchanged. The hold: unchanged. Defended judgment: strengthened; stage 1's work bound now holds for every pattern a party can write.
+
+## D94. The setup starts one child process, a Wrangler the person installed, and installs nothing at run time (T-478)
+
+**Status:** adopted, 2026-11-25.
+
+**Adopted 2026-11-25 by the journeys session (T-532), on Rafa's word.** Rafa may overrule it.
+
+**How it was decided.** T-478 (PR 800) recorded it as its Decision 8 and named it for Rafa. Rafa's words to the journeys session (T-532): "Use Fable to review your recommendation here and make a decision". A Fable max-effort review read the branch at `7077c737` and accepted the decision with the changes below. The journeys session adopted the review's result, and T-478 built it in the same PR.
+
+**Why a child process at all.** `setup.mjs cloudflare --key` must put the Worker's own key in the account's secret store without the key reaching a printed line, an argument or a file, and it must check the store before it writes. Only Wrangler talks to the store, so the command pipes the key into Wrangler on standard input. The other way, printing the key for a shell pipe, puts the key in the transcript of any assistant that runs the command without the pipe. Until now, no published bundle started a process (T-496).
+
+- **One process, one tool.** `setup.mjs` runs `npx wrangler@4.151.3`, the repository's one Wrangler pin, for `cloudflare --key` and `leave`, and nothing else. `tests/site-bundles.test.ts` pins one import of `node:child_process`, naming `spawn` only, and one call with that version.
+- **No install at run time.** There is no `--yes`, and the child's environment sets `npm_config_yes=false`. So npx runs only a Wrangler already installed, and never resolves or installs a package while the command runs. The person installs the pinned version first, once, with `npx --yes wrangler@4.151.3 --version`; the command says so when it is missing. The review measured that a warm cache runs offline and that a missing version exits 1.
+- **No setting from outside.** The child gets an allowlisted environment, with no registry variable. It runs in the deploy folder, and a `.env`, `.dev.vars` or `.npmrc` there stops the run. The command refuses to run while a variable that picks an account, carries its credential, or changes where Wrangler sends or logs requests is set. Wrangler sanitizes its log and writes it to a folder that is removed when the run ends.
+- **Corrects** D73's "nothing is installed" and the setup design's "no package is installed and npm is not in the path of a key", for `cloudflare --key` and `leave` only (dated notes under each).
+- **For triage, not built:** a lockfile for Wrangler installed with `npm ci --ignore-scripts`, so its own dependencies are pinned too; a Worker that makes its own key in its Durable Object, so no key passes through the party's machine.
+
+**Litmus tests.** Neutrality: unchanged; Wrangler talks only to the party's own account. The hold and defended judgment: unchanged.
+
+## D95. A seller's own Worker takes the address the person typed, and the deploy's own record must show it before the key is made (T-478)
+
+**Status:** adopted, 2026-11-25.
+
+**Adopted 2026-11-25 by the journeys session (T-532), on Rafa's word.** Rafa may overrule it.
+
+**How it was decided.** T-478 (PR 800) recorded it as its Decision 6 and named it for Rafa, because it replaced the task's criterion "it checks that the account has a `workers.dev` subdomain before a first deploy there". Rafa's words to the journeys session (T-532): "Use Fable to review your recommendation here and make a decision". The Fable max-effort review accepted the typed address and added a check. Its finding: the premise that the address cannot be checked without the account's token was wrong, because Wrangler writes the deployed address to a file. The journeys session adopted that result, and T-478 built it in the same PR.
+
+- **The address is asked.** `cloudflare --at` takes `<name>.<subdomain>.workers.dev`, or a host on a zone the party has on Cloudflare. The setup never reads the account's token, so it never infers the subdomain. The question says where the dashboard shows the subdomain, and that an account with none sets one first.
+- **The deploy's record decides.** The printed deploy line sets `WRANGLER_OUTPUT_FILE_PATH=deploy-output.ndjson`. `cloudflare --key` makes no key unless that file's `deploy` entry for the Worker lists the typed address among its `targets`; a wrong subdomain stops it there. The file's shape comes from Wrangler 4.151.3's own code, read near `cli.js` lines 165433 and 181016, and is not yet measured on an account.
+- **The card waits for the check.** The card's quote entry is written by `cloudflare --key` once the check passes, not when the deploy is prepared.
+- **The live check proves the Worker, not the card.** Run from the folder, `check --published` signs a fresh nonce with the folder's key. The Worker answers with a signature of its own key, whose address `--key` recorded. A responder that echoes the public card, or a Worker with another key, fails. A test shows both.
+
+**Litmus tests.** Neutrality: the party's own account and address, chosen by the party; no Crow account, zone or route. The hold and defended judgment: unchanged.
+
