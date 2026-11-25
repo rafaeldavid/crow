@@ -85,7 +85,7 @@ This is the shape after the filter's normalization (ADR-0050 section 2); the jud
 - [x] Attack fixtures: a canary as a property name never reaches the record and abstains; keys holding a URL or an instruction never reach the record; a delivery that asks for junk only when failing does not move the decision; no recorded attack moves to accept under pair 3.
 - [x] The scripted judges' mark moves to the `placeholder-` model prefix and its readers check it.
 - [x] The hard rule's wording updated in `CLAUDE.md` and `docs/team.md` (ADR-0050 section 5); ADR-0049's status gains its one line.
-- [ ] A red team over the attack list in ADR-0050, Consequences; findings fixed or filed. (The parent session runs it.)
+- [x] A red team over the attack list in ADR-0050, Consequences; findings fixed or filed (Evidence, Red team).
 - [ ] `pnpm verify` passes: every judgment, spec, snap and demo step passes; `forge build` and the contracts-built tests fail in this worktree only (see Evidence).
 
 ## Out of scope
@@ -110,6 +110,16 @@ Measured on 2026-11-25 on `t-616-coded-verdicts`, unless labelled otherwise.
 - **No recorded attack moves to accept under pair 3** [measured, `packages/testkit/src/coded-attacks.test.ts`]: the five attack fixtures with recorded judges end escalate then reject, Refunded, under prose and under pair 3 with `agg-6`. The coded answers are built from the recordings [inferred model: each judge keeps its recorded scores, overall and flag, and a judge with no recording in a role answers as in its other role].
 - **The scripted mark** [measured]: `markedFake` passes a coded verdict unchanged; the Sepolia demo's `panelKind`, the test seller and the offer player check the `placeholder-` prefix first (`test-adjudicator.test.ts`, `demo-sepolia.test.ts`).
 - **Bundles** [measured, sha256]: `setup.mjs` `6275515f…` to `dbcc8990…`; `serve.mjs` `85c014da…` to `00b0b2fd…`; `take.mjs` `15cb5fd6…` to `da23f1e7…`; `seller-worker.mjs` `1b163543…` to `8b5da668…`, with its pin. `buy.mjs` `b5992bfd…` and `try.mjs` `71634a90…` unchanged. Validators grew from 1,038,668 to 1,121,023 bytes; each bundle from 115 KB to 157 KB larger. `node site/build.mjs && node site/check.mjs`: PASS.
+- **Red team** [measured, 2026-11-25, `packages/judgment/src/coded.redteam.test.ts`, 39 tests, now all passing; 11 were findings]:
+  - M1 (medium), a canary split across two dropped fields escaped the scan. Fixed: the scan also joins the values alone without the schema's words, and the keys alone without its key names. Tests: "a canary split across …" (4 cases).
+  - M2 (medium), reason-code order carried about 142 bits a 12-criterion seat (a 128-bit canary decoded from the record). Fixed: codes and kinds in closed-list order. Tests: "the reason codes of a 12-criterion seat cannot carry the judge's 128-bit canary to the public record"; `coded.test.ts` "keeps reason codes and injection kinds in closed-list order …".
+  - M3 (medium), the holder numbered raw lines while judges read normalized lines. Fixed: `judgedText` for both. Test: "a hidden character between CR and LF does not shift the holder's line under the judge's".
+  - L1 (low), the record kept the judge's criteria order (28.8 bits). Fixed: rubric order. Tests: "the record keeps the rubric's criteria order, not the judge's …"; `coded.test.ts` "… records the criteria in rubric order …".
+  - L2 (low), lone surrogates made two locators share an anchor. Fixed: such a locator is dropped and counted, and `anchorIndex` lists none. Test: "a locator holding a lone surrogate is dropped and counted …".
+  - L3 (low), a pointer resolved in the raw JSON, not the JSON the judges read. Fixed: resolved in the judged JSON; a repeated key there keeps no pointer. Tests: "a pointer the judge wrote from the normalized JSON resolves to the node the judge read …", "a JSON delivery whose judged text repeats a key keeps no pointer".
+  - Parity: a fullwidth canary, and a decision key written twice (read as its last value), were missed by both filters. Fixed in the coded filter only (NFKC fold, `json-keys.ts`); the frozen prose filter keeps both, held by the red team's control test. Tests: "the canary in fullwidth characters in a dropped key abstains", "a repeated decision key abstains rather than reading the last one".
+  - LIMITs the design accepts: the canary as bytes in numbers or reversed; the dropped counts (about 10 bits); the choice of codes (about 9.4 bits a criterion).
+  - The 24 `agg-6` replay records were re-recorded (codes now in list order); `agg-6` was never released. The 144 prose records are unchanged.
 - **Commands** [measured]:
   - `pnpm typecheck`, `pnpm lint`: exit 0. `pnpm validate:spec`: ok. `pnpm snap`: 63 passed, no snapshot changed. `pnpm snap --settlement=local`: pass. `pnpm demo`: pass. `forge test`: 592 passed.
   - `pnpm test`, first full run (before `forge build` ran in this worktree): 6,633 passed, 2 failed, 3 expected fail, 326 skipped. One failure (`tests/cut-feature-alignment.test.ts`, the new tests named `appealHash`) is fixed. The other is `apps/own-seller/src/frozen.test.ts`, which fails on any branch that changes `packages/`; CI's shallow checkout skips it [inferred from `.github/workflows/ci.yml`].
@@ -127,7 +137,7 @@ Measured on 2026-11-25 on `t-616-coded-verdicts`, unless labelled otherwise.
 - `agg-6` reuses `aggregate.ts`'s rule through `scoredView` (ids, scores, `overall`, flag; empty free text), so `aggregate.ts` is unchanged. A later change to `aggregate.ts` has to freeze it for both `agg-5` and `agg-6`.
 - The canary scan reads keys too (`allText`), and copies `agg-5`'s base64 decoder rather than exporting it from `verdict.ts`.
 - The anchor key is SHA-256 of `holdback/judgment/anchor/v1` and the plaintext bytes as delivered; intake drops a leading byte-order mark, and `plaintextBytes` restores it from the record's byte count.
-- Pointers resolve against the delivered JSON (not the normalized text); line numbers count the lines the judges read. Injection references without the flag are dropped, like the kinds.
+- References resolve against the text the judges read, for the filter and the holder: the normalized JSON parsed (a repeated key there keeps no pointer), or its lines (red team M3, L3; this replaced resolving pointers against the raw JSON). A locator with a lone surrogate is dropped (L2). Criteria are recorded in rubric order and codes and kinds in closed-list order (L1, M2). Injection references without the flag are dropped, like the kinds.
 - A prose-shaped answer under pair 3 counts: `evidence` and `rationale` are unknown keys, dropped and counted.
 - The scripted mark: `markedFake` still marks a prose verdict (the demo-cloud tests read that mark), and passes a coded verdict unchanged; the readers check the `placeholder-` prefix first and the rationale mark for older prose records.
 - `site/llms.txt` is unchanged: Crow's adjudicators accept new deals under the prose default only, so its line stays true. `site/ref/limits.txt` now says it per policy.
@@ -143,6 +153,8 @@ Paths touched beyond the task's list, all mechanical:
 - The verdict union's prose readers: `apps/demo/src/source/simchain.ts` and `apps/demo/agents/agents.test.ts` (a narrowing each).
 - `apps/adjudicator/src/bound-policy.test.ts` (pair 3 carried, the mix declined) and `apps/test-agents/scripts/play-offers.ts` (the mark reader).
 - Nothing under `apps/demo-cloud` or the adjudicator's decide path.
+
+Follow-up for both filters (not done): the prose filters of `agg-3` to `agg-5` are frozen, so they keep the fullwidth-canary gap and read a repeated decision key as its last value; a later prose aggregation version could adopt the coded filter's NFKC fold and `json-keys.ts`.
 
 Not done:
 - The red team over ADR-0050's attack list (the parent session runs it). Start with `coded.ts` (duplicate keys and `__proto__`, deep nesting, covert bits in codes and counts), `refs.ts` (anchor guessing on small work, U+2028 and forged `L<n>` prefixes) and `prompt.ts` (pair 3's numbering).
