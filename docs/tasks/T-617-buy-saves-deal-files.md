@@ -52,14 +52,15 @@ Written after the code, not before it as the process asks.
 
 ## Evidence
 
-All measured on 2026-11-25 on `main` at `6f123c7`, unless marked.
+All measured on 2026-11-25, rebased on `main` at `323ebd9b`, unless marked.
 
 - `pnpm typecheck`, `pnpm lint` and `pnpm validate:spec` pass.
-- `pnpm exec vitest run examples tests/site-guides.test.ts tests/site-bundles.test.ts tests/site-build.test.ts tools/duet`: 1,001 tests passed, 33 skipped, in 75 files (1 skipped).
+- `pnpm exec vitest run examples tests/site-guides.test.ts tests/site-bundles.test.ts tests/site-build.test.ts tools/duet`: 1,028 tests passed, 33 skipped, in 78 files (1 skipped).
 - `node site/build.mjs && node site/check.mjs` pass. The buyer's first-deal path is 4,971 of 5,000 tokens (4,956 before).
-- On a local simulator world, the built `buy.mjs` passed the two end-to-end tests that fund, resume and hang an operator's read. They ran from a temporary copy under `examples/`, where its two packages resolve.
+- On a local simulator world, the built `buy.mjs` passed the two end-to-end tests that fund, resume and hang an operator's read. They ran from a temporary copy under `examples/`, where its two packages resolve, before the rebase; the rebuild after it gave the same SHA-256.
 - With one operator never answering `/receipts`, the outcome printed first and the process ended after the record's 30 s limit, with exit code 0.
 - `buy.mjs` is the only published bundle that changes. It imports nothing new.
+- On this Mac, `node site/build.mjs` also rewrites `site/setup.mjs`, `site/seller-worker.mjs` and `examples/seller-worker-pin.ts`, on plain `main` too. This change leaves them as committed. Cause not found.
 - Not measured: whether a cold buyer now makes the two calls less often.
 
 ## Review
