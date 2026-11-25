@@ -5,7 +5,7 @@
 - **Depends on:** T-551, T-552
 - **Paths this task may touch:** `site/ref/standing.txt` (new), one line each in `site/llms.txt`, `site/sell.txt` and `site/ref/take.txt`, `site/build.mjs` and `site/check.mjs` (the creation code as its own published file), `examples/standing-reference.test.ts` (new), this file. Not the pinned bundles. In the private repository: `case-studies/test-crow-support/`.
 - **Human gate:** no. The site deploy and the test.crow.support deploy wait for Rafa.
-- **Status:** review
+- **Status:** done (merged in pull request 805, 2026-11-25)
 - **Agent/session:** ref-standing, a side session of 2026-11-25
 - **Roadmap row:** N216
 - **Change kind:** 1, with one review as the brief asks.

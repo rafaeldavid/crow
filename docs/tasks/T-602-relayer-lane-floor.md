@@ -5,7 +5,7 @@
 - **Depends on:** T-549 (the first take's deployment)
 - **Paths this task may touch:** `packages/settlement/evm/live.ts`, `packages/settlement/evm/lane-gas.test.ts`, `apps/demo-cloud/src/world.ts`, `docs/operations.md`, this file.
 - **Human gate:** no. The deploy waits for Rafa.
-- **Status:** in review
+- **Status:** done (merged in pull request 801, 2026-11-25)
 - **Agent/session:** lane-floor, 2026-11-25; branch `relayer-lane-floor`
 - **Roadmap row:** N216
 - **Change kind:** 3 (relayer code)

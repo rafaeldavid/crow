@@ -341,7 +341,7 @@ Rafa, 2026-11-25: "Yes, deploy both". The operators carry pull request 795 (T-59
 
 **Site deploy 2026-11-25 12:50 UTC, commit `ae327a9`: pass.** crow-site `4eab7e27-74b3-4c4b-ae1c-de405757b518` (rollback target `97f39f81-d330-480f-a88d-568ccc327895`).
 
-After the deploys, both operators serve schema 0.14. The live site and `main` agree on the rebuilt bundles `setup.mjs` (SHA-256 `620cd827…`), `take.mjs` (`27bc44db…`) and `serve.mjs` (`4a79ccdd…`) [measured]. The daily log gives neither record the branch its deploy ran on: it is missing from both lines. The operators' record is also missing how long discovery took to name the commit.
+After the deploys, both operators serve schema 0.14. When the log was written, the live site and `main` agreed on the rebuilt bundles `setup.mjs` (SHA-256 `620cd827…`), `take.mjs` (`27bc44db…`) and `serve.mjs` (`4a79ccdd…`) [measured]. Pull request 813 merged after this deploy and changes `serve.mjs` on `main`. The daily log gives neither record the branch its deploy ran on: it is missing from both lines. The operators' record is also missing how long discovery took to name the commit.
 
 ### Five deploys with missing records (deployed 2026-11-25, 08:12 to 10:32 UTC)
 

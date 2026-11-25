@@ -5,7 +5,7 @@
 - **Depends on:** none
 - **Paths this task may touch:** `packages/judgment/src/checks/index.ts`, `packages/judgment/src/hidden.ts`, `packages/core/src/parse.ts`, `packages/core/src/parse.test.ts`, `examples/check-terms.ts`, `docs/decisions-today.md`, `site/setup.mjs` (built), this file.
 - **Human gate:** no. The deploy waits for Rafa.
-- **Status:** in review
+- **Status:** done (merged in pull request 806, 2026-11-25)
 - **Agent/session:** hidden-and-ids, 2026-11-25; branch `judgment-hidden-and-ids`
 - **Roadmap row:** none (security fix, 2026-11-25)
 - **Change kind:** 4 (judgment)
