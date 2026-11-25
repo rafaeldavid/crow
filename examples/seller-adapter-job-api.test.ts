@@ -239,12 +239,16 @@ describe('seller adapter, a job API of another shape (T-366): deals', () => {
     const starts = () => stub!.requests.filter((r) => r.path === '/api/v2/runs').length;
     await until('the 503 to the start', () => lines.some((l) => l.includes(`${id} waits at starting: the seller API answered 503 to the start`)));
     world.advance(2 * 86_400 + 60); // past deliverBy
-    stub.startsUp();
+    // The API stays down until the deal closes. A pass that read the deadline as ahead before the advance may still be
+    // sending its start; it gets a 503 like the others. Only after the close does the API come back, so any start from
+    // here on would be one the adapter sent after reading the deadline as passed.
     await until('the deal to close', () => stageOf(running, id) === 'closed');
+    stub.startsUp();
     const after = starts();
-    await new Promise((r) => setTimeout(r, 400)); // several passes at pollMs 50
+    await until('the adapter to finish its passes', async () => (await running.deals()).every((d) => d.stage === 'closed'));
     expect(starts()).toBe(after);
     expect(stub.runs()).toHaveLength(0); // no start was ever accepted
+    expect(stageOf(running, id)).toBe('closed');
     expect(running.deals().find((d) => d.id === id)?.note).toMatch(/the deal is \w+; no job started|the delivery deadline passed before the job started/);
   }, 30_000);
 
