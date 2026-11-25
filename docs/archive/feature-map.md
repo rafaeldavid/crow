@@ -1,3 +1,5 @@
+> Archived 2026-11-25 (T-587): no page led here, and it repeated the scenario index in [`docs/plan.md`](../plan.md) and the beats in [`docs/demo.md`](../demo.md). Read those. The text below is as it stood and is no longer kept up.
+
 # Feature map
 
 Each demo beat (`docs/demo.md`) maps to the scenario fixtures that prove it and the packages that implement it. A beat is done when every fixture in its row passes `pnpm snap`. Fixture status, per fixture, is in the scenario index in `docs/plan.md`; the planned ones below have no file yet (most are T-016b's).

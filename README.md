@@ -58,7 +58,7 @@ Three directions are being explored. None is chosen yet. Each lists the evidence
 
 ## Run it locally
 
-You need Node 22 and pnpm 12, through corepack.
+You need Node 22.18 or later and pnpm 12, through corepack.
 
 ```sh
 corepack enable
@@ -149,12 +149,13 @@ As of 2026-11-21:
 | `apps/adjudicator/` | The adjudicator service: judgment pipeline, panel, signed decisions |
 | `apps/demo/` | The narrated demo CLI and its static viewer (`pnpm demo`) |
 | `apps/demo-cloud/`, `apps/site/`, `apps/early-access/`, `apps/test-agents/` | The public demo on Cloudflare Workers, the site's Worker, early-access sign-ups, Crow's test seller |
+| `apps/hosted-sellers/` | The seller adapter Crow hosts for a design partner (ADR-0037) |
 | `packages/core/` | Types, the state machine, EIP-712 types, money and timing rules, envelope encryption |
 | `packages/settlement/` | The `Settlement` interface, SimChain (`sim/`) and the EVM implementation (`evm/`) |
 | `packages/judgment/` | Intake, declarative checks, the screen, providers, panel selection, aggregation |
 | `packages/sdk/` | The internal SDK: used by the operator, the demo and the tests (failover, direct submit); not published |
 | `packages/testkit/` | The `pnpm snap` scenario runner |
-| `contracts/` | Foundry: `contracts/src/` holds `DrandQuicknetBeacon.sol` (the drand beacon verifier), `HoldbackRules.sol`, `HoldbackTypes.sol`, `IHoldbackBeacon.sol` and `IHoldbackRules.sol` (the rules contract's interface: its declarations and the place for their descriptions, no logic); plus their tests |
+| `contracts/` | Foundry: `contracts/src/` holds `DrandQuicknetBeacon.sol` (the drand beacon verifier), `HoldbackRules.sol`, `HoldbackTypes.sol`, `IHoldbackBeacon.sol` and `IHoldbackRules.sol` (the rules contract's interface: its declarations and the place for their descriptions, no logic), and `HoldbackStandingSeller.sol` with `IHoldbackStandingSeller.sol` (a seller's own contract for standing offers, ADR-0040); plus their tests |
 | `formal/` | The TLA+ model of the commitment state machine |
 | `spec/` | JSON Schemas (the API contract), examples and the OpenAPI document |
 | `fixtures/` | Scenario fixtures, recordings, demo clubs, terms and data |
