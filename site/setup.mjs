@@ -4162,7 +4162,7 @@ function keccakP(s, rounds = 24) {
 	}
 	clean$1(B);
 }
-var _0n$6, _1n$7, _2n$5, _7n, _256n, _0x71n, SHA3_PI, SHA3_ROTL, _SHA3_IOTA, IOTAS, SHA3_IOTA_H, SHA3_IOTA_L, rotlH, rotlL, Keccak, gen, keccak_256;
+var _0n$6, _1n$7, _2n$5, _7n, _256n, _0x71n, SHA3_PI, SHA3_ROTL, _SHA3_IOTA, IOTAS, SHA3_IOTA_H, SHA3_IOTA_L, rotlH, rotlL, Keccak, gen$1, keccak_256;
 var init_sha3 = __esmMin((() => {
 	init__u64();
 	init_utils$1();
@@ -4293,8 +4293,8 @@ var init_sha3 = __esmMin((() => {
 			return to;
 		}
 	};
-	gen = (suffix, blockLen, outputLen) => createHasher$1(() => new Keccak(blockLen, suffix, outputLen));
-	keccak_256 = /* @__PURE__ */ (() => gen(1, 136, 32))();
+	gen$1 = (suffix, blockLen, outputLen) => createHasher$1(() => new Keccak(blockLen, suffix, outputLen));
+	keccak_256 = /* @__PURE__ */ (() => gen$1(1, 136, 32))();
 }));
 
 // node_modules/.pnpm/viem@2.57.13_typescript@6.0.3/node_modules/viem/_esm/utils/hash/keccak256.js
@@ -57813,8 +57813,9 @@ const EMPTY = {
 };
 const isEmpty = (n) => n.t === "seq" && n.items.length === 0;
 /**
-* Work allowance shared by every check on one delivery, in NFA state visits. Linear time per cell
-* is not enough on its own: states x subject length x cells can still be large.
+* Work allowance shared by every check on one delivery, in NFA state visits, empty moves included, so
+* that one unit stands for about the same work on every pattern. Linear time per cell is not enough on
+* its own: states x subject length x cells can still be large.
 */
 var StepBudget = class {
 	remaining;
@@ -58140,21 +58141,30 @@ var Compiler = class {
 		}
 	}
 };
+const MARK = new Int32Array(MAX_STATES).fill(-1);
+let gen = 0;
 function simulate(states, start, cps, anchoredStart, anchoredEnd, budget) {
-	const mark = new Int32Array(states.length).fill(-1);
-	let gen = 0;
-	let current = [];
+	if (gen > 1073676288) {
+		MARK.fill(-1);
+		gen = 0;
+	}
 	const add = (list, s) => {
+		let moves = 0;
 		const stack = [s];
 		while (stack.length) {
 			const x = stack.pop();
-			if (mark[x] === gen) continue;
-			mark[x] = gen;
+			if (MARK[x] === gen) continue;
+			MARK[x] = gen;
 			const st = states[x];
-			if (st.k === "split") stack.push(st.b, st.a);
-			else list.push(x);
+			if (st.k === "split") {
+				moves++;
+				stack.push(st.b, st.a);
+			} else list.push(x);
 		}
+		if (moves > 0) budget?.spend(moves);
 	};
+	gen++;
+	let current = [];
 	add(current, start);
 	const accepts = (list) => list.some((x) => states[x].k === "match");
 	for (const cp of cps) {
@@ -59057,7 +59067,7 @@ function validateSignatureCheck(check) {
 	for (const [name, p] of [
 		["publicKey.pointer", publicKey.pointer],
 		["message.pointer", message.pointer],
-		["message.jsonEquals", message.jsonEquals ?? ""],
+		["message.jsonEquals", message.jsonEquals === void 0 ? "" : message.jsonEquals],
 		["signature.pointer", signature.pointer]
 	]) if (!isPointer(p)) return `${name} must be an RFC 6901 JSON pointer of at most ${SIGNATURE_LIMITS.pointer} characters`;
 	if (publicKey.format !== "spki-pem" && publicKey.format !== "spki-base64") return "publicKey.format must be spki-pem or spki-base64";
@@ -59143,7 +59153,10 @@ function evaluateSignatureValid(check, delivered, budget) {
 	const { format } = check.signature;
 	if (format === "der" ? signature.length > SIGNATURE_LIMITS.derBytes : signature.length !== SIGNATURE_LIMITS.rawBytes) return fail$2("signature: wrong length");
 	let message;
+	let prepaid = 0;
 	if (check.message.encoding === "utf8") {
+		prepaid = strings.message.length;
+		budget.spend(prepaid);
 		if (LONE_SURROGATE.test(strings.message)) return fail$2("message: not well-formed text");
 		message = new TextEncoder().encode(strings.message);
 	} else {
@@ -59153,7 +59166,7 @@ function evaluateSignatureValid(check, delivered, budget) {
 		message = decoded;
 	}
 	if (format === "der" && !isStrictDer(signature)) return fail$2("signature: not valid DER");
-	budget.spend(message.length + SIGNATURE_WORK.perVerification);
+	budget.spend(message.length - prepaid + SIGNATURE_WORK.perVerification);
 	if (!verifySignature(check.alg, spki, message, signature, format)) return fail$2("signature does not verify");
 	if (check.message.jsonEquals !== void 0) {
 		let signed;

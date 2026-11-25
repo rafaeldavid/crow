@@ -81,7 +81,8 @@ export class LocalWorld {
     const account = viemAccounts.mnemonicToAccount('test test test test test test test test test test test junk', { addressIndex: 1 });
     const relayerKey = `0x${Buffer.from(account.getHdKey().privateKey).toString('hex')}`;
     const chainLive = new live.LiveChain({ deployment, rpcUrls: [anvil.rpcUrl], relayerKey, pollMs: 200, rebroadcastMs: 10_000, mintBatchMs: 200 });
-    const world = await demo.PublicWorld.open({ storage: new demo.MemoryStorage(), env: ENV, ...WORLD, live: { chain: chainLive } });
+    // N222: keyless chain worlds fail closed by default; this local stand-in keeps the scripted, marked judges (red team of PR 797, M1).
+    const world = await demo.PublicWorld.open({ storage: new demo.MemoryStorage(), env: ENV, ...WORLD, live: { chain: chainLive }, requireLiveJudges: false });
     const served = await serveTwoOrigins(world); // no tickMs: this class runs the passes
     const chain = await RoundChain.open(anvil.rpcUrl, deployment as J);
     const lw = new LocalWorld(anvil, world, served, deployment, chain, null);

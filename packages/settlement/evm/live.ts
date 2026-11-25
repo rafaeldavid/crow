@@ -242,6 +242,8 @@ export class LiveChain implements EvmChain {
   readonly tokenDomain: { name: string; version: string };
   readonly expiryMargin: bigint;
   readonly beaconMarginSec: number;
+  /** The deal lanes' gas policy (`keepLanes`); none until a world sets it. */
+  private laneGas: { floor: bigint; topUp: bigint } | undefined;
   /** The funding lane, then the deal lanes. */
   readonly lanes: readonly PrivateKeyAccount[];
   private readonly keys: readonly Hex[];
@@ -570,6 +572,34 @@ export class LiveChain implements EvmChain {
     return sent;
   }
 
+  /**
+   * Sets the lanes' gas policy: `floor` is the least a deal lane holds after the once-a-minute pass (`topUpLanes`), and
+   * `topUp` is what the funding lane adds. Before it is set, a send tops nothing up and a lane short of gas is refused.
+   */
+  keepLanes(floor: bigint, topUp: bigint): void {
+    this.laneGas = { floor, topUp };
+  }
+
+  /**
+   * Before a deal lane's send: the lane holds `cost` (the send's gas at its fee cap, plus its value) or the funding lane
+   * sends the shortfall plus `topUp`. The funding lane's own refusal (too little test ETH) goes to the caller as
+   * `RelayRefused`, with nothing sent from the deal lane. Reads the balance at the funding lane's last top-up or later.
+   */
+  private async coverLane(lane: Address, cost: bigint): Promise<void> {
+    const { topUp } = this.laneGas!;
+    const held = await this.ethBalance(lane);
+    if (held >= cost) return;
+    try {
+      await this.send({ lane: FUNDING_LANE, to: lane, data: '0x', value: cost - held + topUp });
+    } catch (e) {
+      // The estimate of a transfer the funding lane cannot pay reverts with the node's own text ("the total cost ... exceeds the balance").
+      if (!(e instanceof RelayRefused) && /insufficient funds|total cost|exceeds the balance/i.test(String((e as Error | undefined)?.message ?? e))) {
+        throw new RelayRefused(`the funding lane ${this.lanes[0]!.address} has too little test ETH to fill relayer ${lane} for this transaction's gas`);
+      }
+      throw e;
+    }
+  }
+
   private async flushMints(): Promise<void> {
     const batch = this.mints.splice(0, MINT_BATCH_MAX);
     if (batch.length === 0) return;
@@ -619,6 +649,9 @@ export class LiveChain implements EvmChain {
     if (gas > cap) throw new RelayRefused(`the call needs about ${estimate} gas, above this node's cap of ${cap} gas`);
     const nonce = this.nonces.get(lc(from)) ?? (await this.nextNonce(from));
     const fee = await this.feesNow();
+    // A deal lane pays for this send's own gas before it signs: the node refuses a transaction whose gas at the fee cap,
+    // plus its value, exceeds the balance, and a seller-contract deployment costs about ten ordinary deals.
+    if (lane !== null && this.laneGas) await this.coverLane(from, gas * fee.max + value);
     const f: Flight = { from, nonce, to, data, value, gas, fee, raw: '0x', hashes: [], start: 0, checkpoint: 0, deadline: 0, row: null };
     f.raw = await this.sign(account, f, fee);
     // T-219: the row before the broadcast. A failed write throws here, with nothing sent.
