@@ -29,7 +29,13 @@ function hasShape(value: unknown, required: string[], optional: string[] = []): 
   return required.every((k) => keys.includes(k)) && keys.every((k) => required.includes(k) || optional.includes(k));
 }
 
-const isPointer = (p: unknown): p is string => typeof p === 'string' && p.length <= MAX.pointer && /^(\/([^~/]|~[01])*)*$/.test(p);
+/** Code points, as the schema's maxLength counts them (a lone surrogate counts one), so both refuse the same pointers. */
+const codePoints = (s: string): number => {
+  let n = 0;
+  for (const _ of s) n++;
+  return n;
+};
+const isPointer = (p: unknown): p is string => typeof p === 'string' && p.length <= 2 * MAX.pointer && codePoints(p) <= MAX.pointer && /^(\/([^~/]|~[01])*)*$/.test(p);
 
 /** Static validation for offer time: why the terms' check is malformed, or undefined. Every parameter must be a string. */
 export function validateSignatureCheck(check: unknown): string | undefined {

@@ -5,6 +5,7 @@ import { createHash } from 'node:crypto';
 import { ed25519 } from '@noble/curves/ed25519';
 import { p256 } from '@noble/curves/nist';
 import fc from 'fast-check';
+import { parseCommitment } from '@holdback/core';
 import { describe, expect, it } from 'vitest';
 import type { JudgmentCheck } from '../terms.js';
 import { UntrustedData } from '../untrusted.js';
@@ -100,6 +101,25 @@ describe('signature_valid: attacks fail', () => {
     expect(mutated((c) => (c.maxBytes = 5))).toBeTypeOf('string');
     expect(mutated((c) => (c.required = 1))).toBeTypeOf('string');
     expect(mutated((c) => (c.id = 'Bad Id'))).toBeTypeOf('string');
+  });
+
+  it('accepts every pointer the commitment schema accepts: the 512 limit counts code points, as the schema does', () => {
+    // Red team of PR 795: a check the schema lets into signed terms but validateCheck refuses fails every delivery.
+    const example = JSON.parse(readFileSync(new URL('../../../../spec/examples/commitment.signature-valid.example.json', import.meta.url), 'utf8')) as {
+      acceptance: { deterministicChecks: Record<string, unknown>[] };
+    };
+    const at = example.acceptance.deterministicChecks.findIndex((k) => k.type === 'signature_valid');
+    const withPointer = (p: string) => {
+      const c = structuredClone(example);
+      (c.acceptance.deterministicChecks[at]!.message as Record<string, unknown>).jsonEquals = p;
+      return { schema: parseCommitment(c).ok, check: validateCheck(c.acceptance.deterministicChecks[at] as unknown as JudgmentCheck) };
+    };
+    const astral = (n: number) => `/${'\u{1F600}'.repeat(n - 1)}`;
+    expect(withPointer(astral(512))).toEqual({ schema: true, check: undefined });
+    expect(withPointer(astral(513)).schema).toBe(false);
+    expect(withPointer(astral(513)).check).toMatch(/jsonEquals must be an RFC 6901 JSON pointer/);
+    expect(withPointer(`/${'a'.repeat(511)}`)).toEqual({ schema: true, check: undefined });
+    expect(withPointer(`/${'a'.repeat(512)}`).check).toMatch(/at most 512 characters/);
   });
 
   it('an unknown algorithm fails closed', () => {

@@ -27,7 +27,7 @@ export const ALGORITHMS = {
   },
 } as const;
 
-/** Section 6 limits, in characters (UTF-16 units) and bytes. */
+/** Section 6 limits, in characters and bytes. A pointer counts code points, as the schema does; the key and the signature count UTF-16 units. */
 export const SIGNATURE_LIMITS = { pointer: 512, publicKey: 1024, signature: 256, derBytes: 72, rawBytes: 64 } as const;
 
 const B64 = 'ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789+/';
