@@ -11,11 +11,11 @@ ADR-0051 (T-619), ADR-0029. Bench A holds its reject of the posted row-drop CSV.
 | Pragmas | settlement=sim · judges=recorded · mode=guaranteed_on_decision · seed=609 |
 | Prefix | attack. (adversarial input: must not auto-accept) |
 | Settlement | SimChain (T-006) driving @holdback/core `step` |
-| Judgment | @holdback/judgment (checks, screen, panel) · registry config/judges.yaml 0x8aa4…4549 · policy bench-a/p1 0xd136…9300 |
+| Judgment | @holdback/judgment (checks, screen, panel) · registry config/judges.yaml 0x8aa4…4549 · policy bench-a/p1 0x40b5…1e88 |
 | Club | fixtures/clubs/data-services-v1.yaml (loaded) · rulebook 0xd9bc…492d |
 | Buyer | atlas-buyer 0x9F3C…aE57 |
 | Seller | tidewater-seller 0x18C0…513E |
-| Terms | fixtures/terms/clean-customers-2000-held.yaml (loaded) · commitment 0xa7fc…d537 · price 2,000.000000 tUSD · fee 50.000000 tUSD |
+| Terms | fixtures/terms/clean-customers-2000-held.yaml (loaded) · commitment 0x3eeb…ac64 · price 2,000.000000 tUSD · fee 50.000000 tUSD |
 | Adjudicators | primary bench-a 0xfcFd…Ff0a · fallback bench-b 0x05A8…842B · appeal bench-c 0x5Ce1…718f |
 | Operators | op-1 · op-2 |
 
@@ -35,7 +35,7 @@ ADR-0051 (T-619), ADR-0029. Bench A holds its reject of the posted row-drop CSV.
 
 Refusals:
 
-- Step 7 early_accept (names a second signed delivery, fixtures/data/dataset-cleaning/customers.clean.csv, not the posted one): invalid_terms: the message names delivery 0x057b37f061f2ef69a430e7b87242accd3e858a68329749d87837fb512734cef5, not the posted delivery 0xff9ce7e9df72dccb361d1ca2f0a184177ffea526f280572becd37ad29e6debf5
+- Step 7 early_accept (names a second signed delivery, fixtures/data/dataset-cleaning/customers.clean.csv, not the posted one): invalid_terms: the message names delivery 0x114bdc9875e649bb6f2accb489f1cb00858b49097f8a0ef5ffcc12d15980e3cf, not the posted delivery 0x64071407bed4716862181f3c52d14156e6ada4b3c3a59784a3560149065c4221
 
 ## Balances (tUSD)
 
@@ -52,13 +52,13 @@ Refusals:
 - **Intake:** plaintext 0x3ee0…8312 · text/csv · 471196 bytes (fixtures/data/dataset-cleaning/customers.clean.row-drop.csv) · hash verified ✓ · normalized
 - **Deterministic checks:** cols ✓ · rows ✗ (8740 rows; expected 9400 to 9600) · uniq ✓ · dates ✓ · id_nulls ✓ · name_nulls ✓ · email_nulls ✓ · emails (optional) ✓ · hidden ✓
 - **Screen:** clean
-- **Panel:** not run · first-instance template 0xabb5…4dd2 · rubric 0x4201…7925 · seed source: commit-reveal (commitment 0xd1f7…a266, seed 0xc389…85f0, recomputed: match)
+- **Panel:** not run · first-instance template 0x4d32…629b · rubric 0x4201…7925 · seed source: commit-reveal (commitment 0xd1f7…a266, seed 0xc389…85f0, recomputed: match)
 - **Aggregate:** reject. Reasons: required deterministic check failed: rows.
 - **Signed:** reject.
 
 ## Receipts and log
 
-- Events 0–7. Chain head 0xb09e…3bb2. Replay of 6 SimChain submissions from genesis matches the settlement state.
+- Events 0–7. Chain head 0x8aee…5af7. Replay of 6 SimChain submissions from genesis matches the settlement state.
 - Receipts from op-1: 5 (rcpt-0001–rcpt-0005). The runner labels them without signing; the operator API signs real receipts.
 
 ## Invariants

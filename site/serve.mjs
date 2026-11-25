@@ -63360,10 +63360,7 @@ function termsFor(c, template, scope, options, deliverWithinSec) {
 	const filled = fill(template, scope);
 	let checks = filled.checks;
 	const deliverable = { ...filled.deliverable };
-	const timing = {
-		...c.timing,
-		...deliverWithinSec === void 0 ? {} : { deliverWithinSec }
-	};
+	const timing = { ...c.timing };
 	const ruled = {};
 	let rubric = filled.rubric;
 	for (const r of c.termsRules ?? []) {
@@ -63379,6 +63376,7 @@ function termsFor(c, template, scope, options, deliverWithinSec) {
 		if (r.rubric !== void 0) rubric = r.rubric ? filled.optionalRubric : void 0;
 	}
 	if (hasCriteria(rubric)) Object.assign(timing, c.rubricTiming ?? {});
+	if (deliverWithinSec !== void 0) timing.deliverWithinSec = deliverWithinSec;
 	Object.assign(timing, ruled);
 	return {
 		deliverable,

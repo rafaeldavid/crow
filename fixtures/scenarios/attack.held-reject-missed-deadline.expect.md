@@ -11,11 +11,11 @@ ADR-0051 (T-619). Bench A holds its reject and is down at the hold's end, until 
 | Pragmas | settlement=sim · judges=recorded · mode=guaranteed_on_decision · seed=608 |
 | Prefix | attack. (adversarial input: must not auto-accept) |
 | Settlement | SimChain (T-006) driving @holdback/core `step` |
-| Judgment | @holdback/judgment (checks, screen, panel) · registry config/judges.yaml 0x8aa4…4549 · policy bench-a/p1 0xd136…9300 |
+| Judgment | @holdback/judgment (checks, screen, panel) · registry config/judges.yaml 0x8aa4…4549 · policy bench-a/p1 0x40b5…1e88 |
 | Club | fixtures/clubs/data-services-v1.yaml (loaded) · rulebook 0xd9bc…492d |
 | Buyer | atlas-buyer 0xe4A1…C7AA |
 | Seller | tidewater-seller 0xaD90…6B8c |
-| Terms | fixtures/terms/clean-customers-2000-held.yaml (loaded) · commitment 0xbdec…c23e · price 2,000.000000 tUSD · fee 50.000000 tUSD |
+| Terms | fixtures/terms/clean-customers-2000-held.yaml (loaded) · commitment 0xa564…66dd · price 2,000.000000 tUSD · fee 50.000000 tUSD |
 | Adjudicators | primary bench-a 0x2c5A…2C9c · fallback bench-b 0x80dA…B40e · appeal bench-c 0x2E49…A7b6 |
 | Operators | op-1 · op-2 |
 
@@ -55,7 +55,7 @@ Outages:
 - **Intake:** plaintext 0x3ee0…8312 · text/csv · 471196 bytes (fixtures/data/dataset-cleaning/customers.clean.row-drop.csv) · hash verified ✓ · normalized
 - **Deterministic checks:** cols ✓ · rows ✗ (8740 rows; expected 9400 to 9600) · uniq ✓ · dates ✓ · id_nulls ✓ · name_nulls ✓ · email_nulls ✓ · emails (optional) ✓ · hidden ✓
 - **Screen:** clean
-- **Panel:** not run · first-instance template 0xabb5…4dd2 · rubric 0x4201…7925 · seed source: commit-reveal (commitment 0x6694…f7cf, seed 0x0560…ef8d, recomputed: match)
+- **Panel:** not run · first-instance template 0x4d32…629b · rubric 0x4201…7925 · seed source: commit-reveal (commitment 0x6694…f7cf, seed 0x0560…ef8d, recomputed: match)
 - **Aggregate:** reject. Reasons: required deterministic check failed: rows.
 - **Signed:** reject.
 
@@ -64,13 +64,13 @@ Outages:
 - **Intake:** plaintext 0x3ee0…8312 · text/csv · 471196 bytes (fixtures/data/dataset-cleaning/customers.clean.row-drop.csv) · hash verified ✓ · normalized
 - **Deterministic checks:** cols ✓ · rows ✗ (8740 rows; expected 9400 to 9600) · uniq ✓ · dates ✓ · id_nulls ✓ · name_nulls ✓ · email_nulls ✓ · emails (optional) ✓ · hidden ✓
 - **Screen:** clean
-- **Panel:** not run · first-instance template 0xabb5…4dd2 · rubric 0x4201…7925 · seed source: beacon round 1767485400 (seed 0xc6ff…d00c)
+- **Panel:** not run · first-instance template 0x4d32…629b · rubric 0x4201…7925 · seed source: beacon round 1767485400 (seed 0x298c…b10a)
 - **Aggregate:** reject. Reasons: required deterministic check failed: rows.
 - **Signed:** reject.
 
 ## Receipts and log
 
-- Events 0–9. Chain head 0x5cbf…0b93. Replay of 7 SimChain submissions from genesis matches the settlement state.
+- Events 0–9. Chain head 0x53c6…102c. Replay of 7 SimChain submissions from genesis matches the settlement state.
 - Receipts from op-1: 6 (rcpt-0001–rcpt-0006). The runner labels them without signing; the operator API signs real receipts.
 
 ## Invariants

@@ -35,7 +35,7 @@ ADR-0001, ADR-0006, ADR-0019, ADR-0031 section 8, ADR-0048, ADR-0051; D26, D31, 
 - [x] `examples/held-reject.ts` with a sim-world test of accept and settlement.
 - [x] Guides: `site/ref/after-funding.txt` "A held reject", lines in `site/buy.txt`, `site/ref/adjudicators.txt` and `site/ref/http-seller.txt`, within the first-deal budget.
 - [x] Fixtures: the nine held-reject scenarios, including `neutrality.held-reject-adjudicator-offline`.
-- [ ] An Opus red team, findings fixed (Evidence).
+- [x] An Opus red team, findings fixed (Evidence).
 
 ## Out of scope
 
@@ -44,7 +44,14 @@ ADR-0001, ADR-0006, ADR-0019, ADR-0031 section 8, ADR-0048, ADR-0051; D26, D31, 
 
 ## Evidence
 
-Filled at the PR; see the PR's Verification section.
+All measured on the branch after merging `origin/main` at `7f29c3a` (PR 827, agg-5's new default policy), 2026-11-25:
+
+- `corepack pnpm typecheck`: pass. `corepack pnpm lint`: pass.
+- `vitest run apps/adjudicator apps/demo-cloud packages/judgment packages/testkit examples/held-reject.test.ts examples/seller-adapter* examples/audit-deal.test.ts examples/serve.test.ts examples/setup-bundle.test.ts`: 2,329 passed, 3 expected fail, 35 skipped. The hold tests run under the new default policy.
+- `vitest run apps/operator apps/own-seller`: 362 passed, 1 failed: `apps/own-seller/src/frozen.test.ts`, T-478's branch check, which fails on any branch touching `packages/` or `examples/seller-adapter-core.ts` and which CI's shallow checkout skips (inferred from `ci.yml`).
+- `pnpm snap`: 73 passed, 0 failed. The ten held-reject snapshots were updated after the merge: only the policy, template, input and commitment hash lines changed, because agg-5's default policy has a new hash; `held-reject-accept-signed-at-once` was re-recorded with fake judges for the same reason. Outcomes and balances are unchanged.
+- `node site/build.mjs && node site/check.mjs`: pass. First-deal paths: buyer 4,995 and seller 4,994 of 5,000 tokens (estimate). New hashes: `setup.mjs` `c332e333b286a41e63fdf08ad42933b917104a618fb42eca318af5acac1b1aa1`, `serve.mjs` `37b7667ca25c4c88f4372f6a87701bbbda4406ba2d320014dbd0256a8cd03908`, `seller-worker.mjs` `d409200baa800f122916482587db640fb086a575700c01437ed9fe2f215be2e1`. `buy.mjs` and `try.mjs` are unchanged against `origin/main`.
+- **Red team (Opus, `red-teamer`):** no Critical or High. Fixed: M1 (the hold had no cap; now a day at most, and a held task skips the preflight), M2 (a service without `judgedStore` judged again after a restart; now it does not hold), L2 (the held notice hid a waiting adjudicator; now after it), L3 (`rubricTiming` overrode the seller API's `deliverWithinSec`; now the API wins). Documented: M3 (a settlement paying the seller less than the fee beats the signed reject for both parties; ADR-0048 fixes it), L4 (guides now say "up to a day", sealed terms are not held). Open: L1 (scale the 600 s margin with the window), in Handoff. Tests: `apps/adjudicator/src/hold.redteam.test.ts`, `attack.held-reject-fee-dodge`.
 
 ## Decisions
 
@@ -55,4 +62,4 @@ Filled at the PR; see the PR's Verification section.
 
 ## Handoff
 
-Done: the code, tests, fixtures, guides and records above. Not done: the red team's fixes (Evidence); the deploys (Rafa's). New bundle hashes for the partner pages, in the PR. Pre-existing and unrelated: `apps/own-seller/src/frozen.test.ts` fails locally on any branch that touches `packages/` or `examples/seller-adapter-core.ts` (it is T-478's branch check, and CI's shallow checkout skips it).
+Done: the code, tests, fixtures, guides, records and the red team's fixes above. Not done: the deploys (Rafa's: the demo Workers carry the adjudicator and operator change; the site carries the guides and bundles). Open: red team L1, a margin that scales with the window (for example max(600 s, 5% of the window)); a count of rescues that pay the seller less than the fee (M3); the latency figures on Crow Control (Out of scope). New bundle hashes for the partner pages, in the PR. Pre-existing and unrelated: `apps/own-seller/src/frozen.test.ts` fails locally on any branch that touches `packages/` or `examples/seller-adapter-core.ts` (it is T-478's branch check, and CI's shallow checkout skips it).

@@ -66473,10 +66473,7 @@ function termsFor(c, template, scope, options, deliverWithinSec) {
 	const filled = fill(template, scope);
 	let checks = filled.checks;
 	const deliverable = { ...filled.deliverable };
-	const timing = {
-		...c.timing,
-		...deliverWithinSec === void 0 ? {} : { deliverWithinSec }
-	};
+	const timing = { ...c.timing };
 	const ruled = {};
 	let rubric = filled.rubric;
 	for (const r of c.termsRules ?? []) {
@@ -66492,6 +66489,7 @@ function termsFor(c, template, scope, options, deliverWithinSec) {
 		if (r.rubric !== void 0) rubric = r.rubric ? filled.optionalRubric : void 0;
 	}
 	if (hasCriteria(rubric)) Object.assign(timing, c.rubricTiming ?? {});
+	if (deliverWithinSec !== void 0) timing.deliverWithinSec = deliverWithinSec;
 	Object.assign(timing, ruled);
 	return {
 		deliverable,
@@ -71586,7 +71584,7 @@ async function run(c, state, offerId, given) {
 }
 
 // examples/seller-worker-pin.ts
-const SELLER_WORKER_SHA256 = "3f6c94097da694fb286ddfef3f49c15886f1b6e360ce63a2a87cfe39c5024be1";
+const SELLER_WORKER_SHA256 = "d409200baa800f122916482587db640fb086a575700c01437ed9fe2f215be2e1";
 
 // examples/setup-cloudflare.ts
 const plain$2 = (s, max = 300) => plain$8(String(s ?? "")).slice(0, max);
@@ -71950,7 +71948,7 @@ async function workerBytes(c) {
 		if (bytes.length > MAX_WORKER_BYTES) throw new Error(`${SELLER_WORKER_URL} is over ${MAX_WORKER_BYTES} bytes`);
 	}
 	const sha = createHash("sha256").update(bytes).digest("hex");
-	if (sha !== "3f6c94097da694fb286ddfef3f49c15886f1b6e360ce63a2a87cfe39c5024be1") throw new Error(`the Worker file's SHA-256 is ${sha}, not ${SELLER_WORKER_SHA256}, the one this setup.mjs carries: it is not the Worker this version writes`);
+	if (sha !== "d409200baa800f122916482587db640fb086a575700c01437ed9fe2f215be2e1") throw new Error(`the Worker file's SHA-256 is ${sha}, not ${SELLER_WORKER_SHA256}, the one this setup.mjs carries: it is not the Worker this version writes`);
 	return bytes;
 }
 /** The card's quote entry in the card's folder: other offers kept, the draft's marks dropped. */

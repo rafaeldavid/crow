@@ -11,11 +11,11 @@ ADR-0051 (T-619). The same rejected delivery on today's short windows (judgeWith
 | Pragmas | settlement=sim · judges=recorded · mode=guaranteed_on_decision · seed=604 |
 | Prefix | none (normal flow: reaches a terminal state, invariants hold) |
 | Settlement | SimChain (T-006) driving @holdback/core `step` |
-| Judgment | @holdback/judgment (checks, screen, panel) · registry config/judges.yaml 0x8aa4…4549 · policy bench-a/p1 0xd136…9300 |
+| Judgment | @holdback/judgment (checks, screen, panel) · registry config/judges.yaml 0x8aa4…4549 · policy bench-a/p1 0x40b5…1e88 |
 | Club | fixtures/clubs/data-services-v1.yaml (loaded) · rulebook 0xd9bc…492d |
 | Buyer | atlas-buyer 0x605B…9Ec2 |
 | Seller | tidewater-seller 0xE5F1…329A |
-| Terms | fixtures/terms/clean-customers-2000.yaml (loaded) · commitment 0x4ad2…2358 · price 2,000.000000 tUSD · fee 50.000000 tUSD |
+| Terms | fixtures/terms/clean-customers-2000.yaml (loaded) · commitment 0x70ac…f2b8 · price 2,000.000000 tUSD · fee 50.000000 tUSD |
 | Adjudicators | primary bench-a 0x7625…5d71 · fallback bench-b 0xf8A1…C522 · appeal bench-c 0xcE11…E251 |
 | Operators | op-1 · op-2 |
 
@@ -46,13 +46,13 @@ ADR-0051 (T-619). The same rejected delivery on today's short windows (judgeWith
 - **Intake:** plaintext 0x3ee0…8312 · text/csv · 471196 bytes (fixtures/data/dataset-cleaning/customers.clean.row-drop.csv) · hash verified ✓ · normalized
 - **Deterministic checks:** cols ✓ · rows ✗ (8740 rows; expected 9400 to 9600) · uniq ✓ · dates ✓ · id_nulls ✓ · name_nulls ✓ · email_nulls ✓ · emails (optional) ✓ · hidden ✓
 - **Screen:** clean
-- **Panel:** not run · first-instance template 0xabb5…4dd2 · rubric 0x4201…7925 · seed source: commit-reveal (commitment 0x5183…64a9, seed 0x25ab…ecbd, recomputed: match)
+- **Panel:** not run · first-instance template 0x4d32…629b · rubric 0x4201…7925 · seed source: commit-reveal (commitment 0x5183…64a9, seed 0x25ab…ecbd, recomputed: match)
 - **Aggregate:** reject. Reasons: required deterministic check failed: rows.
 - **Signed:** reject.
 
 ## Receipts and log
 
-- Events 0–7. Chain head 0xecc1…4bb5. Replay of 6 SimChain submissions from genesis matches the settlement state.
+- Events 0–7. Chain head 0x129a…01a2. Replay of 6 SimChain submissions from genesis matches the settlement state.
 - Receipts from op-1: 5 (rcpt-0001–rcpt-0005). The runner labels them without signing; the operator API signs real receipts.
 
 ## Invariants

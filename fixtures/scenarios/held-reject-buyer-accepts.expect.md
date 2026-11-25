@@ -11,11 +11,11 @@ ADR-0051 (T-619). A rubric deal with the windows Crow's tools write: judgeWithin
 | Pragmas | settlement=sim · judges=recorded · mode=guaranteed_on_decision · seed=601 |
 | Prefix | none (normal flow: reaches a terminal state, invariants hold) |
 | Settlement | SimChain (T-006) driving @holdback/core `step` |
-| Judgment | @holdback/judgment (checks, screen, panel) · registry config/judges.yaml 0x8aa4…4549 · policy bench-a/p1 0xd136…9300 |
+| Judgment | @holdback/judgment (checks, screen, panel) · registry config/judges.yaml 0x8aa4…4549 · policy bench-a/p1 0x40b5…1e88 |
 | Club | fixtures/clubs/data-services-v1.yaml (loaded) · rulebook 0xd9bc…492d |
 | Buyer | atlas-buyer 0xFC2a…349d |
 | Seller | tidewater-seller 0x6820…94DE |
-| Terms | fixtures/terms/clean-customers-2000-held.yaml (loaded) · commitment 0x46b5…181a · price 2,000.000000 tUSD · fee 50.000000 tUSD |
+| Terms | fixtures/terms/clean-customers-2000-held.yaml (loaded) · commitment 0xd659…eb39 · price 2,000.000000 tUSD · fee 50.000000 tUSD |
 | Adjudicators | primary bench-a 0xe81b…4348 · fallback bench-b 0xE501…9FB3 · appeal bench-c 0xB333…6EC5 |
 | Operators | op-1 · op-2 |
 
@@ -47,13 +47,13 @@ ADR-0051 (T-619). A rubric deal with the windows Crow's tools write: judgeWithin
 - **Intake:** plaintext 0x3ee0…8312 · text/csv · 471196 bytes (fixtures/data/dataset-cleaning/customers.clean.row-drop.csv) · hash verified ✓ · normalized
 - **Deterministic checks:** cols ✓ · rows ✗ (8740 rows; expected 9400 to 9600) · uniq ✓ · dates ✓ · id_nulls ✓ · name_nulls ✓ · email_nulls ✓ · emails (optional) ✓ · hidden ✓
 - **Screen:** clean
-- **Panel:** not run · first-instance template 0xabb5…4dd2 · rubric 0x4201…7925 · seed source: commit-reveal (commitment 0xb327…151b, seed 0xafd5…08a6, recomputed: match)
+- **Panel:** not run · first-instance template 0x4d32…629b · rubric 0x4201…7925 · seed source: commit-reveal (commitment 0xb327…151b, seed 0xafd5…08a6, recomputed: match)
 - **Aggregate:** reject. Reasons: required deterministic check failed: rows.
 - **Signed:** reject.
 
 ## Receipts and log
 
-- Events 0–7. Chain head 0xc47c…8481. Replay of 6 SimChain submissions from genesis matches the settlement state.
+- Events 0–7. Chain head 0x9f14…3abb. Replay of 6 SimChain submissions from genesis matches the settlement state.
 - Receipts from op-1: 7 (rcpt-0001–rcpt-0007). The runner labels them without signing; the operator API signs real receipts.
 
 ## Invariants
