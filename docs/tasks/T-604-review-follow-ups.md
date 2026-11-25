@@ -5,7 +5,7 @@
 - **Depends on:** T-057, T-313, T-574, T-597 (D92, PR 795), T-600
 - **Paths this task may touch:** `apps/demo-cloud/src/` (worker.ts, world.ts and their tests), `docs/operations.md` (the alarm's behaviour, which item 1 changes), `apps/adjudicator/src/` (service.ts and check-kinds.test.ts, item 2), `spec/openapi/paths.json`, `spec/openapi.json`, this file
 - **Human gate:** yes for the deploy only; the code is in-repo
-- **Status:** review
+- **Status:** done (merged in pull request 804, 2026-11-25)
 - **Agent/session:** review-follow-ups, a side session of the coordinator, 2026-11-25; branch `t-604-review-follow-ups`
 - **Roadmap row:** N222
 

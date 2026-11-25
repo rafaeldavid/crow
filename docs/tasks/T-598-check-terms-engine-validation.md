@@ -5,7 +5,7 @@
 - **Depends on:** none
 - **Paths this task may touch:** `examples/check-terms.ts`, `examples/check-terms.test.ts`
 - **Human gate:** no; `check-terms` is in no pinned bundle, so no hash changes
-- **Status:** review
+- **Status:** done (merged in pull request 796, 2026-11-25)
 - **Agent/session:** check-terms-validate
 - **Roadmap row:** none (plan P-09 follow-up)
 
