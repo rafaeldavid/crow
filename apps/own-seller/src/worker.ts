@@ -8,6 +8,9 @@
 //   GET  /             the seller's page: a <script id="crow-agent"> card with the quote and defaults addresses
 //   GET  /agent.json   the same card as JSON
 //   GET  /health       operational or degraded, the open deals by stage, why each refused result was refused
+//   GET  /proof        the Worker's own key's signature over the host and a nonce, to a request the owner's key
+//                      signed: `check --published` proves the Worker it reaches is the folder's, which no
+//                      responder that echoes the public card can show
 //   GET  /export       the journal, to the folder that owns the Worker only: a signature of the owner's key over
 //                      the host and the time, within 300 s (`setup.mjs leave` sends it before it removes the Worker)
 //   POST /quote, GET /defaults, GET /deals/<id>, POST /deals/<id>/ready, /job and /refund: the adapter's own routes
@@ -17,6 +20,7 @@
 // HOLDBACK_KEY, the Worker's own signing key, and the variables the configuration names for its credentials. Test
 // tokens only: the object starts only on a chain in TEST_CHAINS.
 import { getAddress, verifyMessage, type Hex } from 'viem';
+import { privateKeyToAccount } from 'viem/accounts';
 import { createSellerAdapter, type SellerAdapterCore, type Stage } from '../../../examples/seller-adapter-core.ts';
 import { checkBundle, type HostedSeller } from '../../hosted-sellers/src/bundle.ts';
 import { journalStore, TEST_CHAINS, type DurableObjectState } from '../../hosted-sellers/src/worker.ts';
@@ -50,6 +54,9 @@ export interface OwnBundle {
 
 /** The text a `leave` signs to read the journal: the Worker's host and the time in whole seconds. */
 export const exportMessage = (host: string, time: number) => `crow own-seller export ${host} ${time}`;
+/** What the owner signs to ask for a proof, and what the Worker's own key signs in answer. */
+export const proofRequestMessage = (host: string, time: number, nonce: string) => `crow own-seller proof ${host} ${time} ${nonce}`;
+export const proofMessage = (host: string, nonce: string) => `crow own-seller worker ${host} ${nonce}`;
 /** How far the export's time may be from the Worker's clock, in seconds. */
 export const EXPORT_WINDOW_SEC = 300;
 /** Hosts Crow serves from: a party's Worker never takes an address there. */
@@ -177,23 +184,32 @@ export class OwnSellerObject {
     };
   }
 
-  /** GET /export: the journal, to a signature of the owner's key over this host and a time within 300 s. */
-  private async export(request: Request): Promise<Response> {
+  /** Whether the request carries the owner's signature over `message(host, time)`, with the time within 300 s. */
+  private async ownerSigned(request: Request, message: (host: string, time: number) => string): Promise<boolean> {
     const time = Number(request.headers.get('x-crow-owner-time'));
     const signature = request.headers.get('x-crow-owner-signature') ?? '';
-    const refused = json(401, { type: 'unauthorized', detail: "GET /export takes a signature of the owner's key: run setup.mjs leave from the folder" });
-    if (!Number.isSafeInteger(time) || Math.abs(Date.now() / 1000 - time) > EXPORT_WINDOW_SEC || !/^0x[0-9a-fA-F]{130}$/.test(signature)) return refused;
-    const host = new URL(request.url).host;
-    let ok = false;
+    if (this.setup.owner === undefined || !Number.isSafeInteger(time) || Math.abs(Date.now() / 1000 - time) > EXPORT_WINDOW_SEC || !/^0x[0-9a-fA-F]{130}$/.test(signature)) return false;
     try {
-      ok = await verifyMessage({ address: this.setup.owner as Hex, message: exportMessage(host, time), signature: signature as Hex });
+      return await verifyMessage({ address: this.setup.owner as Hex, message: message(new URL(request.url).host, time), signature: signature as Hex });
     } catch {
-      ok = false;
+      return false;
     }
-    if (!ok) return refused;
-    if (this.setup.owner === undefined) return refused;
+  }
+
+  /** GET /proof: the Worker's own key signs the host and the owner's nonce, to the owner's signed request. */
+  private async proof(request: Request): Promise<Response> {
+    const nonce = request.headers.get('x-crow-proof-nonce') ?? '';
+    if (!/^[0-9a-f]{64}$/.test(nonce) || !(await this.ownerSigned(request, (host, time) => proofRequestMessage(host, time, nonce)))) return json(401, { type: 'unauthorized', detail: "GET /proof takes a nonce and a signature of the owner's key: run setup.mjs check --published from the folder" });
+    if (typeof this.env.HOLDBACK_KEY !== 'string' || !/^0x[0-9a-f]{64}$/.test(this.env.HOLDBACK_KEY)) return json(503, { type: 'unavailable', detail: 'this Worker has no signing key yet' });
+    const account = privateKeyToAccount(this.env.HOLDBACK_KEY as Hex);
+    return json(200, { address: account.address.toLowerCase(), signature: await account.signMessage({ message: proofMessage(new URL(request.url).host, nonce) }) });
+  }
+
+  /** GET /export: the journal, to a signature of the owner's key over this host and a time within 300 s. */
+  private async export(request: Request): Promise<Response> {
+    if (!(await this.ownerSigned(request, exportMessage))) return json(401, { type: 'unauthorized', detail: "GET /export takes a signature of the owner's key: run setup.mjs leave from the folder" });
     const journal = await journalStore(this.state.storage, () => undefined).load();
-    return json(200, { type: 'crow-own-seller-export', host, exportedAt: new Date().toISOString(), journal: journal ?? { deals: {}, quotes: {} } });
+    return json(200, { type: 'crow-own-seller-export', host: new URL(request.url).host, exportedAt: new Date().toISOString(), journal: journal ?? { deals: {}, quotes: {} } });
   }
 
   async fetch(request: Request): Promise<Response> {
@@ -202,6 +218,7 @@ export class OwnSellerObject {
     const sub = path === '/' ? '' : path;
     // The export comes first: the owner can take its journal and remove the Worker even when the seller is refused.
     if (sub === '/export' && request.method === 'GET') return this.export(request);
+    if (sub === '/proof' && request.method === 'GET') return this.proof(request);
     if (!seller) return json(503, { type: 'unavailable', detail: 'this seller is not set up' });
     if (sub === '/health' && request.method === 'GET') {
       let core: SellerAdapterCore | undefined;
@@ -297,7 +314,7 @@ ${seller.card.description === undefined ? '' : `<p>${escapeHtml(seller.card.desc
 export function workerFor(setup: OwnSetup) {
   return {
     async fetch(request: Request, env: Env): Promise<Response> {
-      const exporting = new URL(request.url).pathname === '/export' && setup.owner !== undefined;
+      const exporting = ['/export', '/proof'].includes(new URL(request.url).pathname) && setup.owner !== undefined;
       if (!setup.seller && !exporting) return json(503, { type: 'unavailable', detail: 'this seller is not set up; its log says why' });
       let base: URL;
       try {

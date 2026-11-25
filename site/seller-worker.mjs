@@ -62,26 +62,26 @@ var __require = /* @__PURE__ */ ((x) => typeof require !== "undefined" ? require
 });
 
 // node_modules/.pnpm/abitype@1.2.3_typescript@6.0.3/node_modules/abitype/dist/esm/version.js
-var version$2;
-var init_version$2 = __esmMin((() => {
-	version$2 = "1.2.3";
+var version$1;
+var init_version$1 = __esmMin((() => {
+	version$1 = "1.2.3";
 }));
 
 // node_modules/.pnpm/abitype@1.2.3_typescript@6.0.3/node_modules/abitype/dist/esm/errors.js
-var BaseError$2;
-var init_errors$5 = __esmMin((() => {
-	init_version$2();
-	BaseError$2 = class BaseError$2 extends Error {
+var BaseError$1;
+var init_errors$3 = __esmMin((() => {
+	init_version$1();
+	BaseError$1 = class BaseError$1 extends Error {
 		constructor(shortMessage, args = {}) {
-			const details = args.cause instanceof BaseError$2 ? args.cause.details : args.cause?.message ? args.cause.message : args.details;
-			const docsPath = args.cause instanceof BaseError$2 ? args.cause.docsPath || args.docsPath : args.docsPath;
+			const details = args.cause instanceof BaseError$1 ? args.cause.details : args.cause?.message ? args.cause.message : args.details;
+			const docsPath = args.cause instanceof BaseError$1 ? args.cause.docsPath || args.docsPath : args.docsPath;
 			const message = [
 				shortMessage || "An error occurred.",
 				"",
 				...args.metaMessages ? [...args.metaMessages, ""] : [],
 				...docsPath ? [`Docs: https://abitype.dev${docsPath}`] : [],
 				...details ? [`Details: ${details}`] : [],
-				`Version: abitype@${version$2}`
+				`Version: abitype@${version$1}`
 			].join("\n");
 			super(message);
 			Object.defineProperty(this, "details", {
@@ -127,10 +127,10 @@ var init_errors$5 = __esmMin((() => {
 function execTyped(regex, string) {
 	return regex.exec(string)?.groups;
 }
-var bytesRegex$2, integerRegex$2, isTupleRegex;
+var bytesRegex$1, integerRegex$1, isTupleRegex;
 var init_regex$1 = __esmMin((() => {
-	bytesRegex$2 = /^bytes([1-9]|1[0-9]|2[0-9]|3[0-2])?$/;
-	integerRegex$2 = /^u?int(8|16|24|32|40|48|56|64|72|80|88|96|104|112|120|128|136|144|152|160|168|176|184|192|200|208|216|224|232|240|248|256)?$/;
+	bytesRegex$1 = /^bytes([1-9]|1[0-9]|2[0-9]|3[0-2])?$/;
+	integerRegex$1 = /^u?int(8|16|24|32|40|48|56|64|72|80|88|96|104|112|120|128|136|144|152|160|168|176|184|192|200|208|216|224|232|240|248|256)?$/;
 	isTupleRegex = /^\(.+?\).*?$/;
 }));
 
@@ -284,24 +284,10 @@ var init_signatures = __esmMin((() => {
 }));
 
 // node_modules/.pnpm/abitype@1.2.3_typescript@6.0.3/node_modules/abitype/dist/esm/human-readable/errors/abiItem.js
-var InvalidAbiItemError, UnknownTypeError, UnknownSolidityTypeError;
-var init_abiItem$1 = __esmMin((() => {
-	init_errors$5();
-	InvalidAbiItemError = class extends BaseError$2 {
-		constructor({ signature }) {
-			super("Failed to parse ABI item.", {
-				details: `parseAbiItem(${JSON.stringify(signature, null, 2)})`,
-				docsPath: "/api/human#parseabiitem-1"
-			});
-			Object.defineProperty(this, "name", {
-				enumerable: true,
-				configurable: true,
-				writable: true,
-				value: "InvalidAbiItemError"
-			});
-		}
-	};
-	UnknownTypeError = class extends BaseError$2 {
+var UnknownTypeError, UnknownSolidityTypeError;
+var init_abiItem = __esmMin((() => {
+	init_errors$3();
+	UnknownTypeError = class extends BaseError$1 {
 		constructor({ type }) {
 			super("Unknown type.", { metaMessages: [`Type "${type}" is not a valid ABI type. Perhaps you forgot to include a struct signature?`] });
 			Object.defineProperty(this, "name", {
@@ -312,7 +298,7 @@ var init_abiItem$1 = __esmMin((() => {
 			});
 		}
 	};
-	UnknownSolidityTypeError = class extends BaseError$2 {
+	UnknownSolidityTypeError = class extends BaseError$1 {
 		constructor({ type }) {
 			super("Unknown type.", { metaMessages: [`Type "${type}" is not a valid ABI type.`] });
 			Object.defineProperty(this, "name", {
@@ -328,8 +314,8 @@ var init_abiItem$1 = __esmMin((() => {
 // node_modules/.pnpm/abitype@1.2.3_typescript@6.0.3/node_modules/abitype/dist/esm/human-readable/errors/abiParameter.js
 var InvalidAbiParametersError, InvalidParameterError, SolidityProtectedKeywordError, InvalidModifierError, InvalidFunctionModifierError, InvalidAbiTypeParameterError;
 var init_abiParameter = __esmMin((() => {
-	init_errors$5();
-	InvalidAbiParametersError = class extends BaseError$2 {
+	init_errors$3();
+	InvalidAbiParametersError = class extends BaseError$1 {
 		constructor({ params }) {
 			super("Failed to parse ABI parameters.", {
 				details: `parseAbiParameters(${JSON.stringify(params, null, 2)})`,
@@ -343,7 +329,7 @@ var init_abiParameter = __esmMin((() => {
 			});
 		}
 	};
-	InvalidParameterError = class extends BaseError$2 {
+	InvalidParameterError = class extends BaseError$1 {
 		constructor({ param }) {
 			super("Invalid ABI parameter.", { details: param });
 			Object.defineProperty(this, "name", {
@@ -354,7 +340,7 @@ var init_abiParameter = __esmMin((() => {
 			});
 		}
 	};
-	SolidityProtectedKeywordError = class extends BaseError$2 {
+	SolidityProtectedKeywordError = class extends BaseError$1 {
 		constructor({ param, name }) {
 			super("Invalid ABI parameter.", {
 				details: param,
@@ -368,7 +354,7 @@ var init_abiParameter = __esmMin((() => {
 			});
 		}
 	};
-	InvalidModifierError = class extends BaseError$2 {
+	InvalidModifierError = class extends BaseError$1 {
 		constructor({ param, type, modifier }) {
 			super("Invalid ABI parameter.", {
 				details: param,
@@ -382,7 +368,7 @@ var init_abiParameter = __esmMin((() => {
 			});
 		}
 	};
-	InvalidFunctionModifierError = class extends BaseError$2 {
+	InvalidFunctionModifierError = class extends BaseError$1 {
 		constructor({ param, type, modifier }) {
 			super("Invalid ABI parameter.", {
 				details: param,
@@ -396,7 +382,7 @@ var init_abiParameter = __esmMin((() => {
 			});
 		}
 	};
-	InvalidAbiTypeParameterError = class extends BaseError$2 {
+	InvalidAbiTypeParameterError = class extends BaseError$1 {
 		constructor({ abiParameter }) {
 			super("Invalid ABI parameter.", {
 				details: JSON.stringify(abiParameter, null, 2),
@@ -415,8 +401,8 @@ var init_abiParameter = __esmMin((() => {
 // node_modules/.pnpm/abitype@1.2.3_typescript@6.0.3/node_modules/abitype/dist/esm/human-readable/errors/signature.js
 var InvalidSignatureError, UnknownSignatureError, InvalidStructSignatureError;
 var init_signature = __esmMin((() => {
-	init_errors$5();
-	InvalidSignatureError = class extends BaseError$2 {
+	init_errors$3();
+	InvalidSignatureError = class extends BaseError$1 {
 		constructor({ signature, type }) {
 			super(`Invalid ${type} signature.`, { details: signature });
 			Object.defineProperty(this, "name", {
@@ -427,7 +413,7 @@ var init_signature = __esmMin((() => {
 			});
 		}
 	};
-	UnknownSignatureError = class extends BaseError$2 {
+	UnknownSignatureError = class extends BaseError$1 {
 		constructor({ signature }) {
 			super("Unknown signature.", { details: signature });
 			Object.defineProperty(this, "name", {
@@ -438,7 +424,7 @@ var init_signature = __esmMin((() => {
 			});
 		}
 	};
-	InvalidStructSignatureError = class extends BaseError$2 {
+	InvalidStructSignatureError = class extends BaseError$1 {
 		constructor({ signature }) {
 			super("Invalid struct signature.", {
 				details: signature,
@@ -457,8 +443,8 @@ var init_signature = __esmMin((() => {
 // node_modules/.pnpm/abitype@1.2.3_typescript@6.0.3/node_modules/abitype/dist/esm/human-readable/errors/struct.js
 var CircularReferenceError;
 var init_struct = __esmMin((() => {
-	init_errors$5();
-	CircularReferenceError = class extends BaseError$2 {
+	init_errors$3();
+	CircularReferenceError = class extends BaseError$1 {
 		constructor({ type }) {
 			super("Circular reference detected.", { metaMessages: [`Struct "${type}" is a circular reference.`] });
 			Object.defineProperty(this, "name", {
@@ -474,8 +460,8 @@ var init_struct = __esmMin((() => {
 // node_modules/.pnpm/abitype@1.2.3_typescript@6.0.3/node_modules/abitype/dist/esm/human-readable/errors/splitParameters.js
 var InvalidParenthesisError;
 var init_splitParameters = __esmMin((() => {
-	init_errors$5();
-	InvalidParenthesisError = class extends BaseError$2 {
+	init_errors$3();
+	InvalidParenthesisError = class extends BaseError$1 {
 		constructor({ current, depth }) {
 			super("Unbalanced parentheses.", {
 				metaMessages: [`"${current.trim()}" has too many ${depth > 0 ? "opening" : "closing"} parentheses.`],
@@ -813,20 +799,20 @@ function splitParameters(params, result = [], current = "", depth = 0) {
 	return result;
 }
 function isSolidityType(type) {
-	return type === "address" || type === "bool" || type === "function" || type === "string" || bytesRegex$2.test(type) || integerRegex$2.test(type);
+	return type === "address" || type === "bool" || type === "function" || type === "string" || bytesRegex$1.test(type) || integerRegex$1.test(type);
 }
 /** @internal */
 function isSolidityKeyword(name) {
-	return name === "address" || name === "bool" || name === "function" || name === "string" || name === "tuple" || bytesRegex$2.test(name) || integerRegex$2.test(name) || protectedKeywordsRegex.test(name);
+	return name === "address" || name === "bool" || name === "function" || name === "string" || name === "tuple" || bytesRegex$1.test(name) || integerRegex$1.test(name) || protectedKeywordsRegex.test(name);
 }
 /** @internal */
 function isValidDataLocation(type, isArray) {
 	return isArray || type === "bytes" || type === "string" || type === "tuple";
 }
 var abiParameterWithoutTupleRegex, abiParameterWithTupleRegex, dynamicIntegerRegex, protectedKeywordsRegex;
-var init_utils$5 = __esmMin((() => {
+var init_utils$2 = __esmMin((() => {
 	init_regex$1();
-	init_abiItem$1();
+	init_abiItem();
 	init_abiParameter();
 	init_signature();
 	init_splitParameters();
@@ -897,12 +883,12 @@ function resolveStructs(abiParameters = [], structs = {}, ancestors = /* @__PURE
 var typeWithoutTupleRegex;
 var init_structs = __esmMin((() => {
 	init_regex$1();
-	init_abiItem$1();
+	init_abiItem();
 	init_abiParameter();
 	init_signature();
 	init_struct();
 	init_signatures();
-	init_utils$5();
+	init_utils$2();
 	typeWithoutTupleRegex = /^(?<type>[a-zA-Z$_][a-zA-Z0-9$_]*)(?<array>(?:\[\d*?\])+?)?$/;
 }));
 
@@ -934,48 +920,7 @@ function parseAbi(signatures) {
 var init_parseAbi = __esmMin((() => {
 	init_signatures();
 	init_structs();
-	init_utils$5();
-}));
-
-// node_modules/.pnpm/abitype@1.2.3_typescript@6.0.3/node_modules/abitype/dist/esm/human-readable/parseAbiItem.js
-/**
-* Parses human-readable ABI item (e.g. error, event, function) into {@link Abi} item
-*
-* @param signature - Human-readable ABI item
-* @returns Parsed {@link Abi} item
-*
-* @example
-* const abiItem = parseAbiItem('function balanceOf(address owner) view returns (uint256)')
-* //    ^? const abiItem: { name: "balanceOf"; type: "function"; stateMutability: "view";...
-*
-* @example
-* const abiItem = parseAbiItem([
-*   //  ^? const abiItem: { name: "foo"; type: "function"; stateMutability: "view"; inputs:...
-*   'function foo(Baz bar) view returns (string)',
-*   'struct Baz { string name; }',
-* ])
-*/
-function parseAbiItem(signature) {
-	let abiItem;
-	if (typeof signature === "string") abiItem = parseSignature(signature);
-	else {
-		const structs = parseStructs(signature);
-		const length = signature.length;
-		for (let i = 0; i < length; i++) {
-			const signature_ = signature[i];
-			if (isStructSignature(signature_)) continue;
-			abiItem = parseSignature(signature_, structs);
-			break;
-		}
-	}
-	if (!abiItem) throw new InvalidAbiItemError({ signature });
-	return abiItem;
-}
-var init_parseAbiItem = __esmMin((() => {
-	init_abiItem$1();
-	init_signatures();
-	init_structs();
-	init_utils$5();
+	init_utils$2();
 }));
 
 // node_modules/.pnpm/abitype@1.2.3_typescript@6.0.3/node_modules/abitype/dist/esm/human-readable/parseAbiParameters.js
@@ -1023,44 +968,26 @@ var init_parseAbiParameters = __esmMin((() => {
 	init_abiParameter();
 	init_signatures();
 	init_structs();
-	init_utils$5();
+	init_utils$2();
 }));
 
 // node_modules/.pnpm/abitype@1.2.3_typescript@6.0.3/node_modules/abitype/dist/esm/exports/index.js
 var init_exports = __esmMin((() => {
-	init_errors$5();
+	init_errors$3();
 	init_formatAbiItem$1();
 	init_formatAbiParameter();
 	init_formatAbiParameters();
 	init_parseAbi();
-	init_parseAbiItem();
-	init_abiParameter();
+	init_abiItem();
 	init_signatures();
 	init_structs();
-	init_utils$5();
+	init_utils$2();
+	init_abiParameter();
 	init_parseAbiParameters();
-	init_abiItem$1();
 	init_signature();
 	init_splitParameters();
 	init_struct();
 }));
-
-// node_modules/.pnpm/viem@2.57.13_typescript@6.0.3/node_modules/viem/_esm/utils/getAction.js
-/**
-* Retrieves and returns an action from the client (if exists), and falls
-* back to the tree-shakable action.
-*
-* Useful for extracting overridden actions from a client (ie. if a consumer
-* wants to override the `sendTransaction` implementation).
-*/
-function getAction(client, actionFn, name) {
-	const action_implicit = client[actionFn.name];
-	if (typeof action_implicit === "function") return action_implicit;
-	const action_explicit = client[name];
-	if (typeof action_explicit === "function") return action_explicit;
-	return (params) => actionFn(client, params);
-}
-var init_getAction = __esmMin((() => {}));
 
 // node_modules/.pnpm/viem@2.57.13_typescript@6.0.3/node_modules/viem/_esm/utils/abi/formatAbiItem.js
 function formatAbiItem(abiItem, { includeName = false } = {}) {
@@ -1095,7 +1022,7 @@ var init_isHex = __esmMin((() => {}));
 * @param value The value (hex or byte array) to retrieve the size of.
 * @returns The size of the value (in bytes).
 */
-function size$3(value) {
+function size(value) {
 	if (isHex(value, { strict: false })) return Math.ceil((value.length - 2) / 2);
 	return value.length;
 }
@@ -1104,33 +1031,33 @@ var init_size = __esmMin((() => {
 }));
 
 // node_modules/.pnpm/viem@2.57.13_typescript@6.0.3/node_modules/viem/_esm/errors/version.js
-var version$1;
-var init_version$1 = __esmMin((() => {
-	version$1 = "2.57.13";
+var version;
+var init_version = __esmMin((() => {
+	version = "2.57.13";
 }));
 
 // node_modules/.pnpm/viem@2.57.13_typescript@6.0.3/node_modules/viem/_esm/errors/base.js
-function walk$2(err, fn) {
+function walk$1(err, fn) {
 	if (fn?.(err)) return err;
-	if (err && typeof err === "object" && "cause" in err && err.cause !== void 0) return walk$2(err.cause, fn);
+	if (err && typeof err === "object" && "cause" in err && err.cause !== void 0) return walk$1(err.cause, fn);
 	return fn ? null : err;
 }
-var errorConfig, BaseError$1;
+var errorConfig, BaseError;
 var init_base = __esmMin((() => {
-	init_version$1();
+	init_version();
 	errorConfig = {
 		getDocsUrl: ({ docsBaseUrl, docsPath = "", docsSlug }) => docsPath ? `${docsBaseUrl ?? "https://viem.sh"}${docsPath}${docsSlug ? `#${docsSlug}` : ""}` : void 0,
-		version: `viem@${version$1}`
+		version: `viem@${version}`
 	};
-	BaseError$1 = class BaseError$1 extends Error {
+	BaseError = class BaseError extends Error {
 		constructor(shortMessage, args = {}) {
 			const details = (() => {
-				if (args.cause instanceof BaseError$1) return args.cause.details;
+				if (args.cause instanceof BaseError) return args.cause.details;
 				if (args.cause?.message) return args.cause.message;
 				return args.details;
 			})();
 			const docsPath = (() => {
-				if (args.cause instanceof BaseError$1) return args.cause.docsPath || args.docsPath;
+				if (args.cause instanceof BaseError) return args.cause.docsPath || args.docsPath;
 				return args.docsPath;
 			})();
 			const docsUrl = errorConfig.getDocsUrl?.({
@@ -1187,37 +1114,21 @@ var init_base = __esmMin((() => {
 			this.metaMessages = args.metaMessages;
 			this.name = args.name ?? this.name;
 			this.shortMessage = shortMessage;
-			this.version = version$1;
+			this.version = version;
 		}
 		walk(fn) {
-			return walk$2(this, fn);
+			return walk$1(this, fn);
 		}
 	};
 }));
 
 // node_modules/.pnpm/viem@2.57.13_typescript@6.0.3/node_modules/viem/_esm/errors/abi.js
-var AbiConstructorNotFoundError, AbiConstructorParamsNotFoundError, AbiDecodingDataSizeTooSmallError, AbiDecodingZeroDataError, AbiEncodingArrayLengthMismatchError, AbiEncodingBytesSizeMismatchError, AbiEncodingLengthMismatchError, AbiErrorInputsNotFoundError, AbiErrorNotFoundError, AbiErrorSignatureNotFoundError, AbiEventSignatureEmptyTopicsError, AbiEventSignatureNotFoundError, AbiEventNotFoundError, AbiFunctionNotFoundError, AbiFunctionOutputsNotFoundError, AbiFunctionSignatureNotFoundError, AbiItemAmbiguityError, BytesSizeMismatchError$1, DecodeLogDataMismatch, DecodeLogTopicsMismatch, InvalidAbiEncodingTypeError, InvalidAbiDecodingTypeError, InvalidArrayError$1, InvalidDefinitionTypeError, UnsupportedPackedAbiType;
+var AbiDecodingDataSizeTooSmallError, AbiDecodingZeroDataError, AbiEncodingArrayLengthMismatchError, AbiEncodingBytesSizeMismatchError, AbiEncodingLengthMismatchError, AbiErrorSignatureNotFoundError, AbiEventSignatureEmptyTopicsError, AbiEventSignatureNotFoundError, AbiFunctionNotFoundError, AbiFunctionSignatureNotFoundError, AbiItemAmbiguityError, BytesSizeMismatchError, DecodeLogDataMismatch, DecodeLogTopicsMismatch, InvalidAbiEncodingTypeError, InvalidAbiDecodingTypeError, InvalidArrayError, InvalidDefinitionTypeError, UnsupportedPackedAbiType;
 var init_abi = __esmMin((() => {
 	init_formatAbiItem();
 	init_size();
 	init_base();
-	AbiConstructorNotFoundError = class extends BaseError$1 {
-		constructor({ docsPath }) {
-			super(["A constructor was not found on the ABI.", "Make sure you are using the correct ABI and that the constructor exists on it."].join("\n"), {
-				docsPath,
-				name: "AbiConstructorNotFoundError"
-			});
-		}
-	};
-	AbiConstructorParamsNotFoundError = class extends BaseError$1 {
-		constructor({ docsPath }) {
-			super(["Constructor arguments were provided (`args`), but a constructor parameters (`inputs`) were not found on the ABI.", "Make sure you are using the correct ABI, and that the `inputs` attribute on the constructor exists."].join("\n"), {
-				docsPath,
-				name: "AbiConstructorParamsNotFoundError"
-			});
-		}
-	};
-	AbiDecodingDataSizeTooSmallError = class extends BaseError$1 {
+	AbiDecodingDataSizeTooSmallError = class extends BaseError {
 		constructor({ data, params, size }) {
 			super([`Data size of ${size} bytes is too small for given parameters.`].join("\n"), {
 				metaMessages: [`Params: (${formatAbiParams(params, { includeName: true })})`, `Data:   ${data} (${size} bytes)`],
@@ -1246,7 +1157,7 @@ var init_abi = __esmMin((() => {
 			this.size = size;
 		}
 	};
-	AbiDecodingZeroDataError = class extends BaseError$1 {
+	AbiDecodingZeroDataError = class extends BaseError {
 		constructor({ cause } = {}) {
 			super("Cannot decode zero data (\"0x\") with ABI parameters.", {
 				name: "AbiDecodingZeroDataError",
@@ -1254,7 +1165,7 @@ var init_abi = __esmMin((() => {
 			});
 		}
 	};
-	AbiEncodingArrayLengthMismatchError = class extends BaseError$1 {
+	AbiEncodingArrayLengthMismatchError = class extends BaseError {
 		constructor({ expectedLength, givenLength, type }) {
 			super([
 				`ABI encoding array length mismatch for type ${type}.`,
@@ -1263,12 +1174,12 @@ var init_abi = __esmMin((() => {
 			].join("\n"), { name: "AbiEncodingArrayLengthMismatchError" });
 		}
 	};
-	AbiEncodingBytesSizeMismatchError = class extends BaseError$1 {
+	AbiEncodingBytesSizeMismatchError = class extends BaseError {
 		constructor({ expectedSize, value }) {
-			super(`Size of bytes "${value}" (bytes${size$3(value)}) does not match expected size (bytes${expectedSize}).`, { name: "AbiEncodingBytesSizeMismatchError" });
+			super(`Size of bytes "${value}" (bytes${size(value)}) does not match expected size (bytes${expectedSize}).`, { name: "AbiEncodingBytesSizeMismatchError" });
 		}
 	};
-	AbiEncodingLengthMismatchError = class extends BaseError$1 {
+	AbiEncodingLengthMismatchError = class extends BaseError {
 		constructor({ expectedLength, givenLength }) {
 			super([
 				"ABI encoding params/values length mismatch.",
@@ -1277,27 +1188,7 @@ var init_abi = __esmMin((() => {
 			].join("\n"), { name: "AbiEncodingLengthMismatchError" });
 		}
 	};
-	AbiErrorInputsNotFoundError = class extends BaseError$1 {
-		constructor(errorName, { docsPath }) {
-			super([
-				`Arguments (\`args\`) were provided to "${errorName}", but "${errorName}" on the ABI does not contain any parameters (\`inputs\`).`,
-				"Cannot encode error result without knowing what the parameter types are.",
-				"Make sure you are using the correct ABI and that the inputs exist on it."
-			].join("\n"), {
-				docsPath,
-				name: "AbiErrorInputsNotFoundError"
-			});
-		}
-	};
-	AbiErrorNotFoundError = class extends BaseError$1 {
-		constructor(errorName, { docsPath } = {}) {
-			super([`Error ${errorName ? `"${errorName}" ` : ""}not found on ABI.`, "Make sure you are using the correct ABI and that the error exists on it."].join("\n"), {
-				docsPath,
-				name: "AbiErrorNotFoundError"
-			});
-		}
-	};
-	AbiErrorSignatureNotFoundError = class extends BaseError$1 {
+	AbiErrorSignatureNotFoundError = class extends BaseError {
 		constructor(signature, { docsPath, cause }) {
 			super([
 				`Encoded error signature "${signature}" not found on ABI.`,
@@ -1317,7 +1208,7 @@ var init_abi = __esmMin((() => {
 			this.signature = signature;
 		}
 	};
-	AbiEventSignatureEmptyTopicsError = class extends BaseError$1 {
+	AbiEventSignatureEmptyTopicsError = class extends BaseError {
 		constructor({ docsPath }) {
 			super("Cannot extract event signature from empty topics.", {
 				docsPath,
@@ -1325,7 +1216,7 @@ var init_abi = __esmMin((() => {
 			});
 		}
 	};
-	AbiEventSignatureNotFoundError = class extends BaseError$1 {
+	AbiEventSignatureNotFoundError = class extends BaseError {
 		constructor(signature, { docsPath }) {
 			super([
 				`Encoded event signature "${signature}" not found on ABI.`,
@@ -1337,15 +1228,7 @@ var init_abi = __esmMin((() => {
 			});
 		}
 	};
-	AbiEventNotFoundError = class extends BaseError$1 {
-		constructor(eventName, { docsPath } = {}) {
-			super([`Event ${eventName ? `"${eventName}" ` : ""}not found on ABI.`, "Make sure you are using the correct ABI and that the event exists on it."].join("\n"), {
-				docsPath,
-				name: "AbiEventNotFoundError"
-			});
-		}
-	};
-	AbiFunctionNotFoundError = class extends BaseError$1 {
+	AbiFunctionNotFoundError = class extends BaseError {
 		constructor(functionName, { docsPath } = {}) {
 			super([`Function ${functionName ? `"${functionName}" ` : ""}not found on ABI.`, "Make sure you are using the correct ABI and that the function exists on it."].join("\n"), {
 				docsPath,
@@ -1353,19 +1236,7 @@ var init_abi = __esmMin((() => {
 			});
 		}
 	};
-	AbiFunctionOutputsNotFoundError = class extends BaseError$1 {
-		constructor(functionName, { docsPath }) {
-			super([
-				`Function "${functionName}" does not contain any \`outputs\` on ABI.`,
-				"Cannot decode function result without knowing what the parameter types are.",
-				"Make sure you are using the correct ABI and that the function exists on it."
-			].join("\n"), {
-				docsPath,
-				name: "AbiFunctionOutputsNotFoundError"
-			});
-		}
-	};
-	AbiFunctionSignatureNotFoundError = class extends BaseError$1 {
+	AbiFunctionSignatureNotFoundError = class extends BaseError {
 		constructor(signature, { docsPath }) {
 			super([
 				`Encoded function signature "${signature}" not found on ABI.`,
@@ -1377,7 +1248,7 @@ var init_abi = __esmMin((() => {
 			});
 		}
 	};
-	AbiItemAmbiguityError = class extends BaseError$1 {
+	AbiItemAmbiguityError = class extends BaseError {
 		constructor(x, y) {
 			super("Found ambiguous types in overloaded ABI items.", {
 				metaMessages: [
@@ -1391,12 +1262,12 @@ var init_abi = __esmMin((() => {
 			});
 		}
 	};
-	BytesSizeMismatchError$1 = class extends BaseError$1 {
+	BytesSizeMismatchError = class extends BaseError {
 		constructor({ expectedSize, givenSize }) {
 			super(`Expected bytes${expectedSize}, got bytes${givenSize}.`, { name: "BytesSizeMismatchError" });
 		}
 	};
-	DecodeLogDataMismatch = class extends BaseError$1 {
+	DecodeLogDataMismatch = class extends BaseError {
 		constructor({ abiItem, data, params, size }) {
 			super([`Data size of ${size} bytes is too small for non-indexed event parameters.`].join("\n"), {
 				metaMessages: [`Params: (${formatAbiParams(params, { includeName: true })})`, `Data:   ${data} (${size} bytes)`],
@@ -1432,7 +1303,7 @@ var init_abi = __esmMin((() => {
 			this.size = size;
 		}
 	};
-	DecodeLogTopicsMismatch = class extends BaseError$1 {
+	DecodeLogTopicsMismatch = class extends BaseError {
 		constructor({ abiItem, param }) {
 			super([`Expected a topic for indexed event parameter${param.name ? ` "${param.name}"` : ""} on event "${formatAbiItem(abiItem, { includeName: true })}".`].join("\n"), { name: "DecodeLogTopicsMismatch" });
 			Object.defineProperty(this, "abiItem", {
@@ -1444,7 +1315,7 @@ var init_abi = __esmMin((() => {
 			this.abiItem = abiItem;
 		}
 	};
-	InvalidAbiEncodingTypeError = class extends BaseError$1 {
+	InvalidAbiEncodingTypeError = class extends BaseError {
 		constructor(type, { docsPath }) {
 			super([`Type "${type}" is not a valid encoding type.`, "Please provide a valid ABI type."].join("\n"), {
 				docsPath,
@@ -1452,7 +1323,7 @@ var init_abi = __esmMin((() => {
 			});
 		}
 	};
-	InvalidAbiDecodingTypeError = class extends BaseError$1 {
+	InvalidAbiDecodingTypeError = class extends BaseError {
 		constructor(type, { docsPath }) {
 			super([`Type "${type}" is not a valid decoding type.`, "Please provide a valid ABI type."].join("\n"), {
 				docsPath,
@@ -1460,57 +1331,41 @@ var init_abi = __esmMin((() => {
 			});
 		}
 	};
-	InvalidArrayError$1 = class extends BaseError$1 {
+	InvalidArrayError = class extends BaseError {
 		constructor(value) {
 			super([`Value "${value}" is not a valid array.`].join("\n"), { name: "InvalidArrayError" });
 		}
 	};
-	InvalidDefinitionTypeError = class extends BaseError$1 {
+	InvalidDefinitionTypeError = class extends BaseError {
 		constructor(type) {
 			super([`"${type}" is not a valid definition type.`, "Valid types: \"function\", \"event\", \"error\""].join("\n"), { name: "InvalidDefinitionTypeError" });
 		}
 	};
-	UnsupportedPackedAbiType = class extends BaseError$1 {
+	UnsupportedPackedAbiType = class extends BaseError {
 		constructor(type) {
 			super(`Type "${type}" is not supported for packed encoding.`, { name: "UnsupportedPackedAbiType" });
 		}
 	};
 }));
 
-// node_modules/.pnpm/viem@2.57.13_typescript@6.0.3/node_modules/viem/_esm/errors/log.js
-var FilterTypeNotSupportedError$1;
-var init_log$2 = __esmMin((() => {
-	init_base();
-	FilterTypeNotSupportedError$1 = class extends BaseError$1 {
-		constructor(type) {
-			super(`Filter type "${type}" is not supported.`, { name: "FilterTypeNotSupportedError" });
-		}
-	};
-}));
-
 // node_modules/.pnpm/viem@2.57.13_typescript@6.0.3/node_modules/viem/_esm/errors/data.js
-var SliceOffsetOutOfBoundsError$2, SizeExceedsPaddingSizeError$2, InvalidBytesLengthError;
+var SliceOffsetOutOfBoundsError, SizeExceedsPaddingSizeError;
 var init_data = __esmMin((() => {
 	init_base();
-	SliceOffsetOutOfBoundsError$2 = class extends BaseError$1 {
+	SliceOffsetOutOfBoundsError = class extends BaseError {
 		constructor({ offset, position, size }) {
 			super(`Slice ${position === "start" ? "starting" : "ending"} at offset "${offset}" is out-of-bounds (size: ${size}).`, { name: "SliceOffsetOutOfBoundsError" });
 		}
 	};
-	SizeExceedsPaddingSizeError$2 = class extends BaseError$1 {
+	SizeExceedsPaddingSizeError = class extends BaseError {
 		constructor({ size, targetSize, type }) {
 			super(`${type.charAt(0).toUpperCase()}${type.slice(1).toLowerCase()} size (${size}) exceeds padding size (${targetSize}).`, { name: "SizeExceedsPaddingSizeError" });
-		}
-	};
-	InvalidBytesLengthError = class extends BaseError$1 {
-		constructor({ size, targetSize, type }) {
-			super(`${type.charAt(0).toUpperCase()}${type.slice(1).toLowerCase()} is expected to be ${targetSize} ${type} long, but is ${size} ${type} long.`, { name: "InvalidBytesLengthError" });
 		}
 	};
 }));
 
 // node_modules/.pnpm/viem@2.57.13_typescript@6.0.3/node_modules/viem/_esm/utils/data/pad.js
-function pad$2(hexOrBytes, { dir, size = 32 } = {}) {
+function pad(hexOrBytes, { dir, size = 32 } = {}) {
 	if (typeof hexOrBytes === "string") return padHex(hexOrBytes, {
 		dir,
 		size
@@ -1523,7 +1378,7 @@ function pad$2(hexOrBytes, { dir, size = 32 } = {}) {
 function padHex(hex_, { dir, size = 32 } = {}) {
 	if (size === null) return hex_;
 	const hex = hex_.replace("0x", "");
-	if (hex.length > size * 2) throw new SizeExceedsPaddingSizeError$2({
+	if (hex.length > size * 2) throw new SizeExceedsPaddingSizeError({
 		size: Math.ceil(hex.length / 2),
 		targetSize: size,
 		type: "hex"
@@ -1532,7 +1387,7 @@ function padHex(hex_, { dir, size = 32 } = {}) {
 }
 function padBytes(bytes, { dir, size = 32 } = {}) {
 	if (size === null) return bytes;
-	if (bytes.length > size) throw new SizeExceedsPaddingSizeError$2({
+	if (bytes.length > size) throw new SizeExceedsPaddingSizeError({
 		size: bytes.length,
 		targetSize: size,
 		type: "bytes"
@@ -1549,45 +1404,45 @@ var init_pad = __esmMin((() => {
 }));
 
 // node_modules/.pnpm/viem@2.57.13_typescript@6.0.3/node_modules/viem/_esm/errors/encoding.js
-var IntegerOutOfRangeError$1, InvalidBytesBooleanError$1, InvalidHexBooleanError$1, InvalidHexValueError$1, RlpDepthLimitExceededError, RlpListBoundaryExceededError, RlpTrailingBytesError, SizeOverflowError$2;
+var IntegerOutOfRangeError, InvalidBytesBooleanError, InvalidHexBooleanError, InvalidHexValueError, RlpDepthLimitExceededError, RlpListBoundaryExceededError, RlpTrailingBytesError, SizeOverflowError;
 var init_encoding = __esmMin((() => {
 	init_base();
-	IntegerOutOfRangeError$1 = class extends BaseError$1 {
+	IntegerOutOfRangeError = class extends BaseError {
 		constructor({ max, min, signed, size, value }) {
 			super(`Number "${value}" is not in safe ${size ? `${size * 8}-bit ${signed ? "signed" : "unsigned"} ` : ""}integer range ${max ? `(${min} to ${max})` : `(above ${min})`}`, { name: "IntegerOutOfRangeError" });
 		}
 	};
-	InvalidBytesBooleanError$1 = class extends BaseError$1 {
+	InvalidBytesBooleanError = class extends BaseError {
 		constructor(bytes) {
 			super(`Bytes value "${bytes}" is not a valid boolean. The bytes array must contain a single byte of either a 0 or 1 value.`, { name: "InvalidBytesBooleanError" });
 		}
 	};
-	InvalidHexBooleanError$1 = class extends BaseError$1 {
+	InvalidHexBooleanError = class extends BaseError {
 		constructor(hex) {
 			super(`Hex value "${hex}" is not a valid boolean. The hex value must be "0x0" (false) or "0x1" (true).`, { name: "InvalidHexBooleanError" });
 		}
 	};
-	InvalidHexValueError$1 = class extends BaseError$1 {
+	InvalidHexValueError = class extends BaseError {
 		constructor(value) {
 			super(`Hex value "${value}" is an odd length (${value.length}). It must be an even length.`, { name: "InvalidHexValueError" });
 		}
 	};
-	RlpDepthLimitExceededError = class extends BaseError$1 {
+	RlpDepthLimitExceededError = class extends BaseError {
 		constructor({ limit }) {
 			super(`RLP depth limit of \`${limit}\` exceeded.`, { name: "RlpDepthLimitExceededError" });
 		}
 	};
-	RlpListBoundaryExceededError = class extends BaseError$1 {
+	RlpListBoundaryExceededError = class extends BaseError {
 		constructor({ consumed, declared }) {
 			super(`RLP list items consumed \`${consumed}\` bytes but the list declared a length of \`${declared}\`.`, { name: "RlpListBoundaryExceededError" });
 		}
 	};
-	RlpTrailingBytesError = class extends BaseError$1 {
+	RlpTrailingBytesError = class extends BaseError {
 		constructor({ count }) {
 			super(`RLP payload encodes a single item, but \`${count}\` trailing ${count === 1 ? "byte remains" : "bytes remain"}.`, { name: "RlpTrailingBytesError" });
 		}
 	};
-	SizeOverflowError$2 = class extends BaseError$1 {
+	SizeOverflowError = class extends BaseError {
 		constructor({ givenSize, maxSize }) {
 			super(`Size cannot exceed ${maxSize} bytes. Given size: ${givenSize} bytes.`, { name: "SizeOverflowError" });
 		}
@@ -1595,7 +1450,7 @@ var init_encoding = __esmMin((() => {
 }));
 
 // node_modules/.pnpm/viem@2.57.13_typescript@6.0.3/node_modules/viem/_esm/utils/data/trim.js
-function trim$1(hexOrBytes, { dir = "left" } = {}) {
+function trim(hexOrBytes, { dir = "left" } = {}) {
 	let data = typeof hexOrBytes === "string" ? hexOrBytes.replace("0x", "") : hexOrBytes;
 	let sliceLength = 0;
 	for (let i = 0; i < data.length - 1; i++) if (data[dir === "left" ? i : data.length - i - 1].toString() === "0") sliceLength++;
@@ -1610,10 +1465,10 @@ function trim$1(hexOrBytes, { dir = "left" } = {}) {
 var init_trim$1 = __esmMin((() => {}));
 
 // node_modules/.pnpm/viem@2.57.13_typescript@6.0.3/node_modules/viem/_esm/utils/encoding/fromHex.js
-function assertSize$2(hexOrBytes, { size }) {
-	if (size$3(hexOrBytes) > size) throw new SizeOverflowError$2({
-		givenSize: size$3(hexOrBytes),
-		maxSize: size
+function assertSize(hexOrBytes, { size: size$1 }) {
+	if (size(hexOrBytes) > size$1) throw new SizeOverflowError({
+		givenSize: size(hexOrBytes),
+		maxSize: size$1
 	});
 }
 /**
@@ -1644,7 +1499,7 @@ function assertSize$2(hexOrBytes, { size }) {
 * })
 * // 'Hello world'
 */
-function fromHex$1(hex, toOrOpts) {
+function fromHex(hex, toOrOpts) {
 	const opts = typeof toOrOpts === "string" ? { to: toOrOpts } : toOrOpts;
 	const to = opts.to;
 	if (to === "number") return hexToNumber$1(hex, opts);
@@ -1674,7 +1529,7 @@ function fromHex$1(hex, toOrOpts) {
 */
 function hexToBigInt(hex, opts = {}) {
 	const { signed } = opts;
-	if (opts.size) assertSize$2(hex, { size: opts.size });
+	if (opts.size) assertSize(hex, { size: opts.size });
 	const value = BigInt(hex);
 	if (!signed) return value;
 	const size = Math.ceil((hex.length - 2) / 2);
@@ -1703,12 +1558,12 @@ function hexToBigInt(hex, opts = {}) {
 function hexToBool(hex_, opts = {}) {
 	let hex = hex_;
 	if (opts.size) {
-		assertSize$2(hex, { size: opts.size });
-		hex = trim$1(hex);
+		assertSize(hex, { size: opts.size });
+		hex = trim(hex);
 	}
-	if (trim$1(hex) === "0x00") return false;
-	if (trim$1(hex) === "0x01") return true;
-	throw new InvalidHexBooleanError$1(hex);
+	if (trim(hex) === "0x00") return false;
+	if (trim(hex) === "0x01") return true;
+	throw new InvalidHexBooleanError(hex);
 }
 /**
 * Decodes a hex string into a number.
@@ -1732,7 +1587,7 @@ function hexToBool(hex_, opts = {}) {
 function hexToNumber$1(hex, opts = {}) {
 	const value = hexToBigInt(hex, opts);
 	const number = Number(value);
-	if (!Number.isSafeInteger(number)) throw new IntegerOutOfRangeError$1({
+	if (!Number.isSafeInteger(number)) throw new IntegerOutOfRangeError({
 		max: `${Number.MAX_SAFE_INTEGER}`,
 		min: `${Number.MIN_SAFE_INTEGER}`,
 		signed: opts.signed,
@@ -1765,8 +1620,8 @@ function hexToNumber$1(hex, opts = {}) {
 function hexToString(hex, opts = {}) {
 	let bytes = hexToBytes$1(hex);
 	if (opts.size) {
-		assertSize$2(bytes, { size: opts.size });
-		bytes = trim$1(bytes, { dir: "right" });
+		assertSize(bytes, { size: opts.size });
+		bytes = trim(bytes, { dir: "right" });
 	}
 	return new TextDecoder().decode(bytes);
 }
@@ -1836,8 +1691,8 @@ function toHex(value, opts = {}) {
 function boolToHex(value, opts = {}) {
 	const hex = `0x${Number(value)}`;
 	if (typeof opts.size === "number") {
-		assertSize$2(hex, { size: opts.size });
-		return pad$2(hex, { size: opts.size });
+		assertSize(hex, { size: opts.size });
+		return pad(hex, { size: opts.size });
 	}
 	return hex;
 }
@@ -1862,11 +1717,11 @@ function boolToHex(value, opts = {}) {
 */
 function bytesToHex$1(value, opts = {}) {
 	let string = "";
-	for (let i = 0; i < value.length; i++) string += hexes$2[value[i]];
+	for (let i = 0; i < value.length; i++) string += hexes$1[value[i]];
 	const hex = `0x${string}`;
 	if (typeof opts.size === "number") {
-		assertSize$2(hex, { size: opts.size });
-		return pad$2(hex, {
+		assertSize(hex, { size: opts.size });
+		return pad(hex, {
 			dir: "right",
 			size: opts.size
 		});
@@ -1903,7 +1758,7 @@ function numberToHex(value_, opts = {}) {
 	const minValue = typeof maxValue === "bigint" && signed ? -maxValue - 1n : 0;
 	if (maxValue && value > maxValue || value < minValue) {
 		const suffix = typeof value_ === "bigint" ? "n" : "";
-		throw new IntegerOutOfRangeError$1({
+		throw new IntegerOutOfRangeError({
 			max: maxValue ? `${maxValue}${suffix}` : void 0,
 			min: `${minValue}${suffix}`,
 			signed,
@@ -1912,7 +1767,7 @@ function numberToHex(value_, opts = {}) {
 		});
 	}
 	const hex = `0x${(signed && value < 0 ? (1n << BigInt(size * 8)) + BigInt(value) : value).toString(16)}`;
-	if (size) return pad$2(hex, { size });
+	if (size) return pad(hex, { size });
 	return hex;
 }
 /**
@@ -1935,15 +1790,15 @@ function numberToHex(value_, opts = {}) {
 * // '0x48656c6c6f20576f726c64210000000000000000000000000000000000000000'
 */
 function stringToHex(value_, opts = {}) {
-	return bytesToHex$1(encoder$4.encode(value_), opts);
+	return bytesToHex$1(encoder$1.encode(value_), opts);
 }
-var hexes$2, encoder$4;
+var hexes$1, encoder$1;
 var init_toHex = __esmMin((() => {
 	init_encoding();
 	init_pad();
 	init_fromHex();
-	hexes$2 = /*#__PURE__*/ Array.from({ length: 256 }, (_v, i) => i.toString(16).padStart(2, "0"));
-	encoder$4 = /*#__PURE__*/ new TextEncoder();
+	hexes$1 = /*#__PURE__*/ Array.from({ length: 256 }, (_v, i) => i.toString(16).padStart(2, "0"));
+	encoder$1 = /*#__PURE__*/ new TextEncoder();
 }));
 
 // node_modules/.pnpm/viem@2.57.13_typescript@6.0.3/node_modules/viem/_esm/utils/encoding/toBytes.js
@@ -1972,7 +1827,7 @@ var init_toHex = __esmMin((() => {
 * const data = toBytes(420, { size: 4 })
 * // Uint8Array([0, 0, 1, 164])
 */
-function toBytes$2(value, opts = {}) {
+function toBytes$1(value, opts = {}) {
 	if (typeof value === "number" || typeof value === "bigint") return numberToBytes(value, opts);
 	if (typeof value === "boolean") return boolToBytes(value, opts);
 	if (isHex(value)) return hexToBytes$1(value, opts);
@@ -2001,15 +1856,15 @@ function boolToBytes(value, opts = {}) {
 	const bytes = /* @__PURE__ */ new Uint8Array(1);
 	bytes[0] = Number(value);
 	if (typeof opts.size === "number") {
-		assertSize$2(bytes, { size: opts.size });
-		return pad$2(bytes, { size: opts.size });
+		assertSize(bytes, { size: opts.size });
+		return pad(bytes, { size: opts.size });
 	}
 	return bytes;
 }
-function charCodeToBase16$1(char) {
-	if (char >= charCodeMap$1.zero && char <= charCodeMap$1.nine) return char - charCodeMap$1.zero;
-	if (char >= charCodeMap$1.A && char <= charCodeMap$1.F) return char - (charCodeMap$1.A - 10);
-	if (char >= charCodeMap$1.a && char <= charCodeMap$1.f) return char - (charCodeMap$1.a - 10);
+function charCodeToBase16(char) {
+	if (char >= charCodeMap.zero && char <= charCodeMap.nine) return char - charCodeMap.zero;
+	if (char >= charCodeMap.A && char <= charCodeMap.F) return char - (charCodeMap.A - 10);
+	if (char >= charCodeMap.a && char <= charCodeMap.f) return char - (charCodeMap.a - 10);
 }
 /**
 * Encodes a hex string into a byte array.
@@ -2033,8 +1888,8 @@ function charCodeToBase16$1(char) {
 function hexToBytes$1(hex_, opts = {}) {
 	let hex = hex_;
 	if (opts.size) {
-		assertSize$2(hex, { size: opts.size });
-		hex = pad$2(hex, {
+		assertSize(hex, { size: opts.size });
+		hex = pad(hex, {
 			dir: "right",
 			size: opts.size
 		});
@@ -2044,9 +1899,9 @@ function hexToBytes$1(hex_, opts = {}) {
 	const length = hexString.length / 2;
 	const bytes = new Uint8Array(length);
 	for (let index = 0, j = 0; index < length; index++) {
-		const nibbleLeft = charCodeToBase16$1(hexString.charCodeAt(j++));
-		const nibbleRight = charCodeToBase16$1(hexString.charCodeAt(j++));
-		if (nibbleLeft === void 0 || nibbleRight === void 0) throw new BaseError$1(`Invalid byte sequence ("${hexString[j - 2]}${hexString[j - 1]}" in "${hexString}").`);
+		const nibbleLeft = charCodeToBase16(hexString.charCodeAt(j++));
+		const nibbleRight = charCodeToBase16(hexString.charCodeAt(j++));
+		if (nibbleLeft === void 0 || nibbleRight === void 0) throw new BaseError(`Invalid byte sequence ("${hexString[j - 2]}${hexString[j - 1]}" in "${hexString}").`);
 		bytes[index] = nibbleLeft * 16 + nibbleRight;
 	}
 	return bytes;
@@ -2093,25 +1948,25 @@ function numberToBytes(value, opts) {
 * // Uint8Array([72, 101, 108, 108, 111, 32, 87, 111, 114, 108, 100, 33, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0])
 */
 function stringToBytes(value, opts = {}) {
-	const bytes = encoder$3.encode(value);
+	const bytes = encoder.encode(value);
 	if (typeof opts.size === "number") {
-		assertSize$2(bytes, { size: opts.size });
-		return pad$2(bytes, {
+		assertSize(bytes, { size: opts.size });
+		return pad(bytes, {
 			dir: "right",
 			size: opts.size
 		});
 	}
 	return bytes;
 }
-var encoder$3, charCodeMap$1;
+var encoder, charCodeMap;
 var init_toBytes = __esmMin((() => {
 	init_base();
 	init_isHex();
 	init_pad();
 	init_fromHex();
 	init_toHex();
-	encoder$3 = /*#__PURE__*/ new TextEncoder();
-	charCodeMap$1 = {
+	encoder = /*#__PURE__*/ new TextEncoder();
+	charCodeMap = {
 		zero: 48,
 		nine: 57,
 		A: 65,
@@ -2228,7 +2083,7 @@ function utf8ToBytes$1(str) {
 * Warning: when Uint8Array is passed, it would NOT get copied.
 * Keep in mind for future mutable operations.
 */
-function toBytes$1(data) {
+function toBytes(data) {
 	if (typeof data === "string") data = utf8ToBytes$1(data);
 	abytes$1(data);
 	return data;
@@ -2251,7 +2106,7 @@ function concatBytes$2(...arrays) {
 }
 /** Wraps hash function, creating an interface on top of it */
 function createHasher$1(hashCons) {
-	const hashC = (msg) => hashCons().update(toBytes$1(msg)).digest();
+	const hashC = (msg) => hashCons().update(toBytes(msg)).digest();
 	const tmp = hashCons();
 	hashC.outputLen = tmp.outputLen;
 	hashC.blockLen = tmp.blockLen;
@@ -2265,7 +2120,7 @@ function randomBytes$1(bytesLength = 32) {
 	throw new Error("crypto.getRandomValues must be defined");
 }
 var isLE, swap32IfBE, Hash;
-var init_utils$4 = __esmMin((() => {
+var init_utils$1 = __esmMin((() => {
 	init_crypto$1();
 	isLE = /* @__PURE__ */ (() => new Uint8Array(new Uint32Array([287454020]).buffer)[0] === 68)();
 	swap32IfBE = isLE ? (u) => u : byteSwap32;
@@ -2314,7 +2169,7 @@ function keccakP(s, rounds = 24) {
 var _0n$5, _1n$5, _2n$3, _7n, _256n, _0x71n, SHA3_PI, SHA3_ROTL, _SHA3_IOTA, IOTAS, SHA3_IOTA_H, SHA3_IOTA_L, rotlH, rotlL, Keccak, gen, keccak_256;
 var init_sha3 = __esmMin((() => {
 	init__u64();
-	init_utils$4();
+	init_utils$1();
 	_0n$5 = BigInt(0);
 	_1n$5 = BigInt(1);
 	_2n$3 = BigInt(2);
@@ -2370,7 +2225,7 @@ var init_sha3 = __esmMin((() => {
 		}
 		update(data) {
 			aexists(this);
-			data = toBytes$1(data);
+			data = toBytes(data);
 			abytes$1(data);
 			const { blockLen, state } = this;
 			const len = data.length;
@@ -2447,9 +2302,9 @@ var init_sha3 = __esmMin((() => {
 }));
 
 // node_modules/.pnpm/viem@2.57.13_typescript@6.0.3/node_modules/viem/_esm/utils/hash/keccak256.js
-function keccak256$1(value, to_) {
+function keccak256(value, to_) {
 	const to = to_ || "hex";
-	const bytes = keccak_256(isHex(value, { strict: false }) ? toBytes$2(value) : value);
+	const bytes = keccak_256(isHex(value, { strict: false }) ? toBytes$1(value) : value);
 	if (to === "bytes") return bytes;
 	return toHex(bytes);
 }
@@ -2468,11 +2323,11 @@ var hash;
 var init_hashSignature = __esmMin((() => {
 	init_toBytes();
 	init_keccak256();
-	hash = (value) => keccak256$1(toBytes$2(value));
+	hash = (value) => keccak256(toBytes$1(value));
 }));
 
 // node_modules/.pnpm/viem@2.57.13_typescript@6.0.3/node_modules/viem/_esm/utils/hash/normalizeSignature.js
-function normalizeSignature$1(signature) {
+function normalizeSignature(signature) {
 	let active = true;
 	let current = "";
 	let level = 0;
@@ -2514,7 +2369,7 @@ function normalizeSignature$1(signature) {
 		result += char;
 		current += char;
 	}
-	if (!valid) throw new BaseError$1("Unable to normalize signature.");
+	if (!valid) throw new BaseError("Unable to normalize signature.");
 	return result;
 }
 var init_normalizeSignature = __esmMin((() => {
@@ -2531,7 +2386,7 @@ var init_toSignature = __esmMin((() => {
 			if (typeof def === "string") return def;
 			return formatAbiItem$1(def);
 		})();
-		return normalizeSignature$1(def_);
+		return normalizeSignature(def_);
 	};
 }));
 
@@ -2555,10 +2410,10 @@ var init_toEventSelector = __esmMin((() => {
 }));
 
 // node_modules/.pnpm/viem@2.57.13_typescript@6.0.3/node_modules/viem/_esm/errors/address.js
-var InvalidAddressError$1;
-var init_address$1 = __esmMin((() => {
+var InvalidAddressError;
+var init_address = __esmMin((() => {
 	init_base();
-	InvalidAddressError$1 = class extends BaseError$1 {
+	InvalidAddressError = class extends BaseError {
 		constructor({ address }) {
 			super(`Address "${address}" is invalid.`, {
 				metaMessages: ["- Address must be a hex value of 20 bytes (40 hex characters).", "- Address must match its checksum counterpart."],
@@ -2569,9 +2424,9 @@ var init_address$1 = __esmMin((() => {
 }));
 
 // node_modules/.pnpm/viem@2.57.13_typescript@6.0.3/node_modules/viem/_esm/utils/lru.js
-var LruMap$1;
-var init_lru$1 = __esmMin((() => {
-	LruMap$1 = class extends Map {
+var LruMap;
+var init_lru = __esmMin((() => {
+	LruMap = class extends Map {
 		constructor(size) {
 			super();
 			Object.defineProperty(this, "maxSize", {
@@ -2606,7 +2461,7 @@ var init_lru$1 = __esmMin((() => {
 function checksumAddress(address_, chainId) {
 	if (checksumAddressCache.has(`${address_}.${chainId}`)) return checksumAddressCache.get(`${address_}.${chainId}`);
 	const hexAddress = chainId ? `${chainId}${address_.toLowerCase()}` : address_.substring(2).toLowerCase();
-	const hash = keccak256$1(stringToBytes(hexAddress), "bytes");
+	const hash = keccak256(stringToBytes(hexAddress), "bytes");
 	const address = (chainId ? hexAddress.substring(`${chainId}0x`.length) : hexAddress).split("");
 	for (let i = 0; i < 40; i += 2) {
 		if (hash[i >> 1] >> 4 >= 8 && address[i]) address[i] = address[i].toUpperCase();
@@ -2617,17 +2472,17 @@ function checksumAddress(address_, chainId) {
 	return result;
 }
 function getAddress(address, chainId) {
-	if (!isAddress(address, { strict: false })) throw new InvalidAddressError$1({ address });
+	if (!isAddress(address, { strict: false })) throw new InvalidAddressError({ address });
 	return checksumAddress(address, chainId);
 }
 var checksumAddressCache;
 var init_getAddress = __esmMin((() => {
-	init_address$1();
+	init_address();
 	init_toBytes();
 	init_keccak256();
-	init_lru$1();
+	init_lru();
 	init_isAddress();
-	checksumAddressCache = /*#__PURE__*/ new LruMap$1(8192);
+	checksumAddressCache = /*#__PURE__*/ new LruMap(8192);
 }));
 
 // node_modules/.pnpm/viem@2.57.13_typescript@6.0.3/node_modules/viem/_esm/utils/address/isAddress.js
@@ -2636,7 +2491,7 @@ function isAddress(address, options) {
 	const cacheKey = `${address}.${strict}`;
 	if (isAddressCache.has(cacheKey)) return isAddressCache.get(cacheKey);
 	const result = (() => {
-		if (!addressRegex$1.test(address)) return false;
+		if (!addressRegex.test(address)) return false;
 		if (address.toLowerCase() === address) return true;
 		if (strict) return checksumAddress(address) === address;
 		return true;
@@ -2644,16 +2499,16 @@ function isAddress(address, options) {
 	isAddressCache.set(cacheKey, result);
 	return result;
 }
-var addressRegex$1, isAddressCache;
+var addressRegex, isAddressCache;
 var init_isAddress = __esmMin((() => {
-	init_lru$1();
+	init_lru();
 	init_getAddress();
-	addressRegex$1 = /^0x[a-fA-F0-9]{40}$/;
-	isAddressCache = /*#__PURE__*/ new LruMap$1(8192);
+	addressRegex = /^0x[a-fA-F0-9]{40}$/;
+	isAddressCache = /*#__PURE__*/ new LruMap(8192);
 }));
 
 // node_modules/.pnpm/viem@2.57.13_typescript@6.0.3/node_modules/viem/_esm/utils/data/concat.js
-function concat$1(values) {
+function concat(values) {
 	if (typeof values[0] === "string") return concatHex(values);
 	return concatBytes$1(values);
 }
@@ -2681,22 +2536,22 @@ var init_concat = __esmMin((() => {}));
 * @param start The start offset (in bytes).
 * @param end The end offset (in bytes).
 */
-function slice$2(value, start, end, { strict } = {}) {
+function slice(value, start, end, { strict } = {}) {
 	if (isHex(value, { strict: false })) return sliceHex(value, start, end, { strict });
 	return sliceBytes(value, start, end, { strict });
 }
-function assertStartOffset$2(value, start) {
-	if (typeof start === "number" && start > 0 && start > size$3(value) - 1) throw new SliceOffsetOutOfBoundsError$2({
+function assertStartOffset(value, start) {
+	if (typeof start === "number" && start > 0 && start > size(value) - 1) throw new SliceOffsetOutOfBoundsError({
 		offset: start,
 		position: "start",
-		size: size$3(value)
+		size: size(value)
 	});
 }
-function assertEndOffset$2(value, start, end) {
-	if (typeof start === "number" && typeof end === "number" && size$3(value) !== end - start) throw new SliceOffsetOutOfBoundsError$2({
+function assertEndOffset(value, start, end) {
+	if (typeof start === "number" && typeof end === "number" && size(value) !== end - start) throw new SliceOffsetOutOfBoundsError({
 		offset: end,
 		position: "end",
-		size: size$3(value)
+		size: size(value)
 	});
 }
 /**
@@ -2707,9 +2562,9 @@ function assertEndOffset$2(value, start, end) {
 * @param end The end offset (in bytes).
 */
 function sliceBytes(value_, start, end, { strict } = {}) {
-	assertStartOffset$2(value_, start);
+	assertStartOffset(value_, start);
 	const value = value_.slice(start, end);
-	if (strict) assertEndOffset$2(value, start, end);
+	if (strict) assertEndOffset(value, start, end);
 	return value;
 }
 /**
@@ -2720,9 +2575,9 @@ function sliceBytes(value_, start, end, { strict } = {}) {
 * @param end The end offset (in bytes).
 */
 function sliceHex(value_, start, end, { strict } = {}) {
-	assertStartOffset$2(value_, start);
+	assertStartOffset(value_, start);
 	const value = `0x${value_.replace("0x", "").slice((start ?? 0) * 2, (end ?? value_.length) * 2)}`;
-	if (strict) assertEndOffset$2(value, start, end);
+	if (strict) assertEndOffset(value, start, end);
 	return value;
 }
 var init_slice = __esmMin((() => {
@@ -2732,11 +2587,11 @@ var init_slice = __esmMin((() => {
 }));
 
 // node_modules/.pnpm/viem@2.57.13_typescript@6.0.3/node_modules/viem/_esm/utils/regex.js
-var arrayRegex$1, bytesRegex$1, integerRegex$1;
+var arrayRegex, bytesRegex, integerRegex;
 var init_regex = __esmMin((() => {
-	arrayRegex$1 = /^(.*)\[([0-9]*)\]$/;
-	bytesRegex$1 = /^bytes([1-9]|1[0-9]|2[0-9]|3[0-2])?$/;
-	integerRegex$1 = /^(u?int)(8|16|24|32|40|48|56|64|72|80|88|96|104|112|120|128|136|144|152|160|168|176|184|192|200|208|216|224|232|240|248|256)?$/;
+	arrayRegex = /^(.*)\[([0-9]*)\]$/;
+	bytesRegex = /^bytes([1-9]|1[0-9]|2[0-9]|3[0-2])?$/;
+	integerRegex = /^(u?int)(8|16|24|32|40|48|56|64|72|80|88|96|104|112|120|128|136|144|152|160|168|176|184|192|200|208|216|224|232|240|248|256)?$/;
 }));
 
 // node_modules/.pnpm/viem@2.57.13_typescript@6.0.3/node_modules/viem/_esm/utils/abi/encodeAbiParameters.js
@@ -2794,10 +2649,10 @@ function prepareParams({ params, values }) {
 	return preparedParams;
 }
 function prepareParam({ param, value }) {
-	const arrayComponents = getArrayComponents$1(param.type);
+	const arrayComponents = getArrayComponents(param.type);
 	if (arrayComponents) {
 		const [length, type] = arrayComponents;
-		return encodeArray$1(value, {
+		return encodeArray(value, {
 			length,
 			param: {
 				...param,
@@ -2805,19 +2660,19 @@ function prepareParam({ param, value }) {
 			}
 		});
 	}
-	if (param.type === "tuple") return encodeTuple$1(value, { param });
-	if (param.type === "address") return encodeAddress$1(value);
+	if (param.type === "tuple") return encodeTuple(value, { param });
+	if (param.type === "address") return encodeAddress(value);
 	if (param.type === "bool") return encodeBool(value);
 	if (param.type.startsWith("uint") || param.type.startsWith("int")) {
 		const signed = param.type.startsWith("int");
-		const [, , size = "256"] = integerRegex$1.exec(param.type) ?? [];
-		return encodeNumber$1(value, {
+		const [, , size = "256"] = integerRegex.exec(param.type) ?? [];
+		return encodeNumber(value, {
 			signed,
 			size: Number(size)
 		});
 	}
-	if (param.type.startsWith("bytes")) return encodeBytes$1(value, { param });
-	if (param.type === "string") return encodeString$1(value);
+	if (param.type.startsWith("bytes")) return encodeBytes(value, { param });
+	if (param.type === "string") return encodeString(value);
 	throw new InvalidAbiEncodingTypeError(param.type, { docsPath: "/docs/contract/encodeAbiParameters" });
 }
 function encodeParams(preparedParams) {
@@ -2825,7 +2680,7 @@ function encodeParams(preparedParams) {
 	for (let i = 0; i < preparedParams.length; i++) {
 		const { dynamic, encoded } = preparedParams[i];
 		if (dynamic) staticSize += 32;
-		else staticSize += size$3(encoded);
+		else staticSize += size(encoded);
 	}
 	const staticParams = [];
 	const dynamicParams = [];
@@ -2835,21 +2690,21 @@ function encodeParams(preparedParams) {
 		if (dynamic) {
 			staticParams.push(numberToHex(staticSize + dynamicSize, { size: 32 }));
 			dynamicParams.push(encoded);
-			dynamicSize += size$3(encoded);
+			dynamicSize += size(encoded);
 		} else staticParams.push(encoded);
 	}
 	return concatHex([...staticParams, ...dynamicParams]);
 }
-function encodeAddress$1(value) {
-	if (!isAddress(value)) throw new InvalidAddressError$1({ address: value });
+function encodeAddress(value) {
+	if (!isAddress(value)) throw new InvalidAddressError({ address: value });
 	return {
 		dynamic: false,
 		encoded: padHex(value.toLowerCase())
 	};
 }
-function encodeArray$1(value, { length, param }) {
+function encodeArray(value, { length, param }) {
 	const dynamic = length === null;
-	if (!Array.isArray(value)) throw new InvalidArrayError$1(value);
+	if (!Array.isArray(value)) throw new InvalidArrayError(value);
 	if (!dynamic && value.length !== length) throw new AbiEncodingArrayLengthMismatchError({
 		expectedLength: length,
 		givenLength: value.length,
@@ -2884,9 +2739,9 @@ function encodeArray$1(value, { length, param }) {
 		encoded: concatHex(preparedParams.map(({ encoded }) => encoded))
 	};
 }
-function encodeBytes$1(value, { param }) {
+function encodeBytes(value, { param }) {
 	const [, paramSize] = param.type.split("bytes");
-	const bytesSize = size$3(value);
+	const bytesSize = size(value);
 	if (!paramSize) {
 		let value_ = value;
 		if (bytesSize % 32 !== 0) value_ = padHex(value_, {
@@ -2908,17 +2763,17 @@ function encodeBytes$1(value, { param }) {
 	};
 }
 function encodeBool(value) {
-	if (typeof value !== "boolean") throw new BaseError$1(`Invalid boolean value: "${value}" (type: ${typeof value}). Expected: \`true\` or \`false\`.`);
+	if (typeof value !== "boolean") throw new BaseError(`Invalid boolean value: "${value}" (type: ${typeof value}). Expected: \`true\` or \`false\`.`);
 	return {
 		dynamic: false,
 		encoded: padHex(boolToHex(value))
 	};
 }
-function encodeNumber$1(value, { signed, size = 256 }) {
+function encodeNumber(value, { signed, size = 256 }) {
 	if (typeof size === "number") {
 		const max = 2n ** (BigInt(size) - (signed ? 1n : 0n)) - 1n;
 		const min = signed ? -max - 1n : 0n;
-		if (value > max || value < min) throw new IntegerOutOfRangeError$1({
+		if (value > max || value < min) throw new IntegerOutOfRangeError({
 			max: max.toString(),
 			min: min.toString(),
 			signed,
@@ -2934,17 +2789,17 @@ function encodeNumber$1(value, { signed, size = 256 }) {
 		})
 	};
 }
-function encodeString$1(value) {
+function encodeString(value) {
 	const hexValue = stringToHex(value);
-	const partsLength = Math.ceil(size$3(hexValue) / 32);
+	const partsLength = Math.ceil(size(hexValue) / 32);
 	const parts = [];
-	for (let i = 0; i < partsLength; i++) parts.push(padHex(slice$2(hexValue, i * 32, (i + 1) * 32), { dir: "right" }));
+	for (let i = 0; i < partsLength; i++) parts.push(padHex(slice(hexValue, i * 32, (i + 1) * 32), { dir: "right" }));
 	return {
 		dynamic: true,
-		encoded: concatHex([padHex(numberToHex(size$3(hexValue), { size: 32 })), ...parts])
+		encoded: concatHex([padHex(numberToHex(size(hexValue), { size: 32 })), ...parts])
 	};
 }
-function encodeTuple$1(value, { param }) {
+function encodeTuple(value, { param }) {
 	let dynamic = false;
 	const preparedParams = [];
 	for (let i = 0; i < param.components.length; i++) {
@@ -2961,7 +2816,7 @@ function encodeTuple$1(value, { param }) {
 		encoded: dynamic ? encodeParams(preparedParams) : concatHex(preparedParams.map(({ encoded }) => encoded))
 	};
 }
-function getArrayComponents$1(type) {
+function getArrayComponents(type) {
 	const matches = type.match(/^(.*)\[(\d+)?\]$/);
 	return matches ? [matches[2] ? Number(matches[2]) : null, matches[1]] : void 0;
 }
@@ -2971,7 +2826,7 @@ function isDynamicType(param) {
 	if (type === "bytes") return true;
 	if (type.endsWith("[]")) return true;
 	if (type === "tuple") return param.components.some(isDynamicType);
-	const arrayComponents = getArrayComponents$1(type);
+	const arrayComponents = getArrayComponents(type);
 	if (arrayComponents) return isDynamicType({
 		...param,
 		type: arrayComponents[1]
@@ -2980,7 +2835,7 @@ function isDynamicType(param) {
 }
 var init_encodeAbiParameters = __esmMin((() => {
 	init_abi();
-	init_address$1();
+	init_address();
 	init_base();
 	init_encoding();
 	init_isAddress();
@@ -2997,7 +2852,7 @@ var toFunctionSelector;
 var init_toFunctionSelector = __esmMin((() => {
 	init_slice();
 	init_toSignatureHash();
-	toFunctionSelector = (fn) => slice$2(toSignatureHash(fn), 0, 4);
+	toFunctionSelector = (fn) => slice(toSignatureHash(fn), 0, 4);
 }));
 
 // node_modules/.pnpm/viem@2.57.13_typescript@6.0.3/node_modules/viem/_esm/utils/abi/getAbiItem.js
@@ -3027,10 +2882,10 @@ function getAbiItem(parameters) {
 		if (args.every((arg, index) => {
 			const abiParameter = "inputs" in abiItem && abiItem.inputs[index];
 			if (!abiParameter) return false;
-			return isArgOfType$1(arg, abiParameter);
+			return isArgOfType(arg, abiParameter);
 		})) {
 			if (matchedAbiItem && "inputs" in matchedAbiItem && matchedAbiItem.inputs) {
-				const ambiguousTypes = getAmbiguousTypes$1(abiItem.inputs, matchedAbiItem.inputs, args);
+				const ambiguousTypes = getAmbiguousTypes(abiItem.inputs, matchedAbiItem.inputs, args);
 				if (ambiguousTypes) throw new AbiItemAmbiguityError({
 					abiItem,
 					type: ambiguousTypes[0]
@@ -3046,7 +2901,7 @@ function getAbiItem(parameters) {
 	return abiItems[0];
 }
 /** @internal */
-function isArgOfType$1(arg, abiParameter) {
+function isArgOfType(arg, abiParameter) {
 	const argType = typeof arg;
 	const abiParameterType = abiParameter.type;
 	switch (abiParameterType) {
@@ -3056,14 +2911,14 @@ function isArgOfType$1(arg, abiParameter) {
 		case "string": return argType === "string";
 		default: {
 			if (abiParameterType === "tuple" && "components" in abiParameter) return Object.values(abiParameter.components).every((component, index) => {
-				return argType === "object" && isArgOfType$1(getComponentValue$1(arg, component, index), component);
+				return argType === "object" && isArgOfType(getComponentValue(arg, component, index), component);
 			});
 			if (/^u?int(8|16|24|32|40|48|56|64|72|80|88|96|104|112|120|128|136|144|152|160|168|176|184|192|200|208|216|224|232|240|248|256)?$/.test(abiParameterType)) return argType === "number" || argType === "bigint";
 			if (/^bytes([1-9]|1[0-9]|2[0-9]|3[0-2])?$/.test(abiParameterType)) return argType === "string" || arg instanceof Uint8Array;
-			const arrayComponents = getArrayComponents$1(abiParameterType);
+			const arrayComponents = getArrayComponents(abiParameterType);
 			if (arrayComponents) {
 				const [length, type] = arrayComponents;
-				return Array.isArray(arg) && (length === null || arg.length === length) && arg.every((x) => isArgOfType$1(x, {
+				return Array.isArray(arg) && (length === null || arg.length === length) && arg.every((x) => isArgOfType(x, {
 					...abiParameter,
 					type
 				}));
@@ -3073,21 +2928,21 @@ function isArgOfType$1(arg, abiParameter) {
 	}
 }
 /** @internal */
-function getAmbiguousTypes$1(sourceParameters, targetParameters, args) {
+function getAmbiguousTypes(sourceParameters, targetParameters, args) {
 	for (const parameterIndex in sourceParameters) {
 		const sourceParameter = sourceParameters[parameterIndex];
 		const targetParameter = targetParameters[parameterIndex];
 		if (!targetParameter) continue;
 		if (sourceParameter.type === "tuple" && targetParameter.type === "tuple" && "components" in sourceParameter && "components" in targetParameter) {
 			const value = args[parameterIndex];
-			const types = getAmbiguousTypes$1(sourceParameter.components, targetParameter.components, sourceParameter.components.map((component, index) => getComponentValue$1(value, component, index)));
+			const types = getAmbiguousTypes(sourceParameter.components, targetParameter.components, sourceParameter.components.map((component, index) => getComponentValue(value, component, index)));
 			if (types) return types;
 			continue;
 		}
-		const sourceArray = getArrayComponents$1(sourceParameter.type);
-		const targetArray = getArrayComponents$1(targetParameter.type);
+		const sourceArray = getArrayComponents(sourceParameter.type);
+		const targetArray = getArrayComponents(targetParameter.type);
 		if (sourceArray && targetArray) {
-			const types = getAmbiguousTypes$1([{
+			const types = getAmbiguousTypes([{
 				...sourceParameter,
 				type: sourceArray[1]
 			}], [{
@@ -3107,7 +2962,7 @@ function getAmbiguousTypes$1(sourceParameters, targetParameters, args) {
 	}
 }
 /** Reads a tuple component's value by index from arrays and by name from objects, like `encodeAbiParameters`. */
-function getComponentValue$1(arg, component, index) {
+function getComponentValue(arg, component, index) {
 	if (Array.isArray(arg)) return arg[index];
 	return arg?.[component.name];
 }
@@ -3120,138 +2975,6 @@ var init_getAbiItem = __esmMin((() => {
 	init_encodeAbiParameters();
 }));
 
-// node_modules/.pnpm/viem@2.57.13_typescript@6.0.3/node_modules/viem/_esm/utils/abi/encodeEventTopics.js
-function encodeEventTopics(parameters) {
-	const { abi, eventName, args } = parameters;
-	let abiItem = abi[0];
-	if (eventName) {
-		const item = getAbiItem({
-			abi,
-			name: eventName
-		});
-		if (!item) throw new AbiEventNotFoundError(eventName, { docsPath: docsPath$6 });
-		abiItem = item;
-	}
-	if (abiItem.type !== "event") throw new AbiEventNotFoundError(void 0, { docsPath: docsPath$6 });
-	let topics = [];
-	if (args && "inputs" in abiItem) {
-		const indexedInputs = abiItem.inputs?.filter((param) => "indexed" in param && param.indexed);
-		const args_ = Array.isArray(args) ? args : Object.values(args).length > 0 ? indexedInputs?.map((x) => args[x.name]) ?? [] : [];
-		if (args_.length > 0) topics = indexedInputs?.map((param, i) => {
-			if (Array.isArray(args_[i])) return args_[i].map((_, j) => encodeArg({
-				param,
-				value: args_[i][j]
-			}));
-			return typeof args_[i] !== "undefined" && args_[i] !== null ? encodeArg({
-				param,
-				value: args_[i]
-			}) : null;
-		}) ?? [];
-	}
-	if (abiItem.anonymous) return topics;
-	const definition = formatAbiItem(abiItem);
-	return [toEventSelector(definition), ...topics];
-}
-function encodeArg({ param, value }) {
-	if (param.type === "string") return keccak256$1(stringToBytes(value));
-	if (param.type === "bytes") return keccak256$1(toBytes$2(value));
-	if (param.type === "tuple" || param.type.match(/^(.*)\[(\d+)?\]$/)) throw new FilterTypeNotSupportedError$1(param.type);
-	return encodeAbiParameters([param], [value]);
-}
-var docsPath$6;
-var init_encodeEventTopics = __esmMin((() => {
-	init_abi();
-	init_log$2();
-	init_toBytes();
-	init_keccak256();
-	init_toEventSelector();
-	init_encodeAbiParameters();
-	init_formatAbiItem();
-	init_getAbiItem();
-	docsPath$6 = "/docs/contract/encodeEventTopics";
-}));
-
-// node_modules/.pnpm/viem@2.57.13_typescript@6.0.3/node_modules/viem/_esm/utils/filters/createFilterRequestScope.js
-/**
-* Scopes `request` to the filter ID. If the client is a fallback, it will
-* listen for responses and scope the child transport `request` function
-* to the successful filter ID.
-*/
-function createFilterRequestScope(client, { method }) {
-	const requestMap = {};
-	if (client.transport.type === "fallback") client.transport.onResponse?.(({ method: method_, response: id, status, transport }) => {
-		if (status === "success" && method === method_) requestMap[id] = transport.request;
-	});
-	return ((id) => requestMap[id] || client.request);
-}
-var init_createFilterRequestScope = __esmMin((() => {}));
-
-// node_modules/.pnpm/viem@2.57.13_typescript@6.0.3/node_modules/viem/_esm/actions/public/createContractEventFilter.js
-/**
-* Creates a Filter to retrieve event logs that can be used with [`getFilterChanges`](https://viem.sh/docs/actions/public/getFilterChanges) or [`getFilterLogs`](https://viem.sh/docs/actions/public/getFilterLogs).
-*
-* - Docs: https://viem.sh/docs/contract/createContractEventFilter
-*
-* @param client - Client to use
-* @param parameters - {@link CreateContractEventFilterParameters}
-* @returns [`Filter`](https://viem.sh/docs/glossary/types#filter). {@link CreateContractEventFilterReturnType}
-*
-* @example
-* import { createPublicClient, http, parseAbi } from 'viem'
-* import { mainnet } from 'viem/chains'
-* import { createContractEventFilter } from 'viem/contract'
-*
-* const client = createPublicClient({
-*   chain: mainnet,
-*   transport: http(),
-* })
-* const filter = await createContractEventFilter(client, {
-*   abi: parseAbi(['event Transfer(address indexed, address indexed, uint256)']),
-* })
-*/
-async function createContractEventFilter(client, parameters) {
-	const { address, abi, args, eventName, fromBlock, strict, toBlock } = parameters;
-	const getRequest = createFilterRequestScope(client, { method: "eth_newFilter" });
-	const topics = eventName ? encodeEventTopics({
-		abi,
-		args,
-		eventName
-	}) : void 0;
-	const id = await client.request({
-		method: "eth_newFilter",
-		params: [{
-			address,
-			fromBlock: typeof fromBlock === "bigint" ? numberToHex(fromBlock) : fromBlock,
-			toBlock: typeof toBlock === "bigint" ? numberToHex(toBlock) : toBlock,
-			topics
-		}]
-	});
-	return {
-		abi,
-		args,
-		eventName,
-		id,
-		request: getRequest(id),
-		strict: Boolean(strict),
-		type: "event"
-	};
-}
-var init_createContractEventFilter = __esmMin((() => {
-	init_encodeEventTopics();
-	init_toHex();
-	init_createFilterRequestScope();
-}));
-
-// node_modules/.pnpm/viem@2.57.13_typescript@6.0.3/node_modules/viem/_esm/accounts/utils/parseAccount.js
-function parseAccount(account) {
-	if (typeof account === "string") return {
-		address: account,
-		type: "json-rpc"
-	};
-	return account;
-}
-var init_parseAccount = __esmMin((() => {}));
-
 // node_modules/.pnpm/viem@2.57.13_typescript@6.0.3/node_modules/viem/_esm/utils/abi/prepareEncodeFunctionData.js
 function prepareEncodeFunctionData(parameters) {
 	const { abi, args, functionName } = parameters;
@@ -3262,22 +2985,22 @@ function prepareEncodeFunctionData(parameters) {
 			args,
 			name: functionName
 		});
-		if (!item) throw new AbiFunctionNotFoundError(functionName, { docsPath: docsPath$5 });
+		if (!item) throw new AbiFunctionNotFoundError(functionName, { docsPath: docsPath$1 });
 		abiItem = item;
 	}
-	if (abiItem.type !== "function") throw new AbiFunctionNotFoundError(void 0, { docsPath: docsPath$5 });
+	if (abiItem.type !== "function") throw new AbiFunctionNotFoundError(void 0, { docsPath: docsPath$1 });
 	return {
 		abi: [abiItem],
 		functionName: toFunctionSelector(formatAbiItem(abiItem))
 	};
 }
-var docsPath$5;
+var docsPath$1;
 var init_prepareEncodeFunctionData = __esmMin((() => {
 	init_abi();
 	init_toFunctionSelector();
 	init_formatAbiItem();
 	init_getAbiItem();
-	docsPath$5 = "/docs/contract/encodeFunctionData";
+	docsPath$1 = "/docs/contract/encodeFunctionData";
 }));
 
 // node_modules/.pnpm/viem@2.57.13_typescript@6.0.3/node_modules/viem/_esm/utils/abi/encodeFunctionData.js
@@ -3299,19 +3022,8 @@ var init_encodeFunctionData = __esmMin((() => {
 }));
 
 // node_modules/.pnpm/viem@2.57.13_typescript@6.0.3/node_modules/viem/_esm/constants/solidity.js
-var panicReasons, solidityError, solidityPanic;
+var solidityError, solidityPanic;
 var init_solidity = __esmMin((() => {
-	panicReasons = {
-		1: "An `assert` condition failed.",
-		17: "Arithmetic operation resulted in underflow or overflow.",
-		18: "Division or modulo by zero (e.g. `5 / 0` or `23 % 0`).",
-		33: "Attempted to convert to an invalid type.",
-		34: "Attempted to access a storage byte array that is incorrectly encoded.",
-		49: "Performed `.pop()` on an empty array",
-		50: "Array index is out of bounds.",
-		65: "Allocated too much memory or created an array which is too large.",
-		81: "Attempted to call a zero-initialized variable of internal function type."
-	};
 	solidityError = {
 		inputs: [{
 			name: "message",
@@ -3331,20 +3043,20 @@ var init_solidity = __esmMin((() => {
 }));
 
 // node_modules/.pnpm/viem@2.57.13_typescript@6.0.3/node_modules/viem/_esm/errors/cursor.js
-var NegativeOffsetError$1, PositionOutOfBoundsError$1, RecursiveReadLimitExceededError$1;
-var init_cursor$2 = __esmMin((() => {
+var NegativeOffsetError, PositionOutOfBoundsError, RecursiveReadLimitExceededError;
+var init_cursor$1 = __esmMin((() => {
 	init_base();
-	NegativeOffsetError$1 = class extends BaseError$1 {
+	NegativeOffsetError = class extends BaseError {
 		constructor({ offset }) {
 			super(`Offset \`${offset}\` cannot be negative.`, { name: "NegativeOffsetError" });
 		}
 	};
-	PositionOutOfBoundsError$1 = class extends BaseError$1 {
+	PositionOutOfBoundsError = class extends BaseError {
 		constructor({ length, position }) {
 			super(`Position \`${position}\` is out of bounds (\`0 < position < ${length}\`).`, { name: "PositionOutOfBoundsError" });
 		}
 	};
-	RecursiveReadLimitExceededError$1 = class extends BaseError$1 {
+	RecursiveReadLimitExceededError = class extends BaseError {
 		constructor({ count, limit }) {
 			super(`Recursive read limit of \`${limit}\` exceeded (recursive read count: \`${count}\`).`, { name: "RecursiveReadLimitExceededError" });
 		}
@@ -3353,17 +3065,17 @@ var init_cursor$2 = __esmMin((() => {
 
 // node_modules/.pnpm/viem@2.57.13_typescript@6.0.3/node_modules/viem/_esm/utils/cursor.js
 function createCursor(bytes, { recursiveReadLimit = 8192 } = {}) {
-	const cursor = Object.create(staticCursor$1);
+	const cursor = Object.create(staticCursor);
 	cursor.bytes = bytes;
 	cursor.dataView = new DataView(bytes.buffer ?? bytes, bytes.byteOffset, bytes.byteLength);
 	cursor.positionReadCount = /* @__PURE__ */ new Map();
 	cursor.recursiveReadLimit = recursiveReadLimit;
 	return cursor;
 }
-var staticCursor$1;
-var init_cursor$1 = __esmMin((() => {
-	init_cursor$2();
-	staticCursor$1 = {
+var staticCursor;
+var init_cursor = __esmMin((() => {
+	init_cursor$1();
+	staticCursor = {
 		bytes: /* @__PURE__ */ new Uint8Array(),
 		dataView: /* @__PURE__ */ new DataView(/* @__PURE__ */ new ArrayBuffer(0)),
 		position: 0,
@@ -3371,19 +3083,19 @@ var init_cursor$1 = __esmMin((() => {
 		recursiveReadCount: 0,
 		recursiveReadLimit: Number.POSITIVE_INFINITY,
 		assertReadLimit() {
-			if (this.recursiveReadCount >= this.recursiveReadLimit) throw new RecursiveReadLimitExceededError$1({
+			if (this.recursiveReadCount >= this.recursiveReadLimit) throw new RecursiveReadLimitExceededError({
 				count: this.recursiveReadCount + 1,
 				limit: this.recursiveReadLimit
 			});
 		},
 		assertPosition(position) {
-			if (position < 0 || position > this.bytes.length - 1) throw new PositionOutOfBoundsError$1({
+			if (position < 0 || position > this.bytes.length - 1) throw new PositionOutOfBoundsError({
 				length: this.bytes.length,
 				position
 			});
 		},
 		decrementPosition(offset) {
-			if (offset < 0) throw new NegativeOffsetError$1({ offset });
+			if (offset < 0) throw new NegativeOffsetError({ offset });
 			const position = this.position - offset;
 			this.assertPosition(position);
 			this.position = position;
@@ -3392,7 +3104,7 @@ var init_cursor$1 = __esmMin((() => {
 			return this.positionReadCount.get(position || this.position) || 0;
 		},
 		incrementPosition(offset) {
-			if (offset < 0) throw new NegativeOffsetError$1({ offset });
+			if (offset < 0) throw new NegativeOffsetError({ offset });
 			const position = this.position + offset;
 			this.assertPosition(position);
 			this.position = position;
@@ -3534,7 +3246,7 @@ var init_cursor$1 = __esmMin((() => {
 * // 420n
 */
 function bytesToBigInt(bytes, opts = {}) {
-	if (typeof opts.size !== "undefined") assertSize$2(bytes, { size: opts.size });
+	if (typeof opts.size !== "undefined") assertSize(bytes, { size: opts.size });
 	const hex = bytesToHex$1(bytes);
 	return hexToBigInt(hex, opts);
 }
@@ -3555,10 +3267,10 @@ function bytesToBigInt(bytes, opts = {}) {
 function bytesToBool(bytes_, opts = {}) {
 	let bytes = bytes_;
 	if (typeof opts.size !== "undefined") {
-		assertSize$2(bytes, { size: opts.size });
-		bytes = trim$1(bytes);
+		assertSize(bytes, { size: opts.size });
+		bytes = trim(bytes);
 	}
-	if (bytes.length > 1 || bytes[0] > 1) throw new InvalidBytesBooleanError$1(bytes);
+	if (bytes.length > 1 || bytes[0] > 1) throw new InvalidBytesBooleanError(bytes);
 	return Boolean(bytes[0]);
 }
 /**
@@ -3576,7 +3288,7 @@ function bytesToBool(bytes_, opts = {}) {
 * // 420
 */
 function bytesToNumber(bytes, opts = {}) {
-	if (typeof opts.size !== "undefined") assertSize$2(bytes, { size: opts.size });
+	if (typeof opts.size !== "undefined") assertSize(bytes, { size: opts.size });
 	const hex = bytesToHex$1(bytes);
 	return hexToNumber$1(hex, opts);
 }
@@ -3597,8 +3309,8 @@ function bytesToNumber(bytes, opts = {}) {
 function bytesToString(bytes_, opts = {}) {
 	let bytes = bytes_;
 	if (typeof opts.size !== "undefined") {
-		assertSize$2(bytes, { size: opts.size });
-		bytes = trim$1(bytes, { dir: "right" });
+		assertSize(bytes, { size: opts.size });
+		bytes = trim(bytes, { dir: "right" });
 	}
 	return new TextDecoder().decode(bytes);
 }
@@ -3613,28 +3325,28 @@ var init_fromBytes = __esmMin((() => {
 function decodeAbiParameters(params, data) {
 	const bytes = typeof data === "string" ? hexToBytes$1(data) : data;
 	const cursor = createCursor(bytes);
-	if (size$3(bytes) === 0 && params.length > 0) throw new AbiDecodingZeroDataError();
-	if (size$3(data) && size$3(data) < 32) throw new AbiDecodingDataSizeTooSmallError({
+	if (size(bytes) === 0 && params.length > 0) throw new AbiDecodingZeroDataError();
+	if (size(data) && size(data) < 32) throw new AbiDecodingDataSizeTooSmallError({
 		data: typeof data === "string" ? data : bytesToHex$1(data),
 		params,
-		size: size$3(data)
+		size: size(data)
 	});
 	let consumed = 0;
 	const values = [];
 	for (let i = 0; i < params.length; ++i) {
 		const param = params[i];
 		if (consumed < bytes.length) cursor.setPosition(consumed);
-		const [data, consumed_] = decodeParameter$1(cursor, param, { staticPosition: 0 });
+		const [data, consumed_] = decodeParameter(cursor, param, { staticPosition: 0 });
 		consumed += consumed_;
 		values.push(data);
 	}
 	return values;
 }
-function decodeParameter$1(cursor, param, { staticPosition }) {
-	const arrayComponents = getArrayComponents$1(param.type);
+function decodeParameter(cursor, param, { staticPosition }) {
+	const arrayComponents = getArrayComponents(param.type);
 	if (arrayComponents) {
 		const [length, type] = arrayComponents;
-		return decodeArray$1(cursor, {
+		return decodeArray(cursor, {
 			...param,
 			type
 		}, {
@@ -3642,30 +3354,30 @@ function decodeParameter$1(cursor, param, { staticPosition }) {
 			staticPosition
 		});
 	}
-	if (param.type === "tuple") return decodeTuple$1(cursor, param, { staticPosition });
-	if (param.type === "address") return decodeAddress$2(cursor);
-	if (param.type === "bool") return decodeBool$1(cursor);
-	if (param.type.startsWith("bytes")) return decodeBytes$1(cursor, param, { staticPosition });
-	if (param.type.startsWith("uint") || param.type.startsWith("int")) return decodeNumber$1(cursor, param);
-	if (param.type === "string") return decodeString$1(cursor, { staticPosition });
+	if (param.type === "tuple") return decodeTuple(cursor, param, { staticPosition });
+	if (param.type === "address") return decodeAddress(cursor);
+	if (param.type === "bool") return decodeBool(cursor);
+	if (param.type.startsWith("bytes")) return decodeBytes(cursor, param, { staticPosition });
+	if (param.type.startsWith("uint") || param.type.startsWith("int")) return decodeNumber(cursor, param);
+	if (param.type === "string") return decodeString(cursor, { staticPosition });
 	throw new InvalidAbiDecodingTypeError(param.type, { docsPath: "/docs/contract/decodeAbiParameters" });
 }
-function decodeAddress$2(cursor) {
+function decodeAddress(cursor) {
 	const value = cursor.readBytes(32);
 	return [checksumAddress(bytesToHex$1(sliceBytes(value, -20))), 32];
 }
-function decodeArray$1(cursor, param, { length, staticPosition }) {
+function decodeArray(cursor, param, { length, staticPosition }) {
 	if (length === null) {
-		const start = staticPosition + bytesToNumber(cursor.readBytes(sizeOfOffset$1));
-		const startOfData = start + sizeOfLength$1;
+		const start = staticPosition + bytesToNumber(cursor.readBytes(sizeOfOffset));
+		const startOfData = start + sizeOfLength;
 		cursor.setPosition(start);
-		const length = bytesToNumber(cursor.readBytes(sizeOfLength$1));
-		const dynamicChild = hasDynamicChild$1(param);
+		const length = bytesToNumber(cursor.readBytes(sizeOfLength));
+		const dynamicChild = hasDynamicChild(param);
 		let consumed = 0;
 		const value = [];
 		for (let i = 0; i < length; ++i) {
 			cursor.setPosition(startOfData + (dynamicChild ? i * 32 : consumed));
-			const [data, consumed_] = decodeParameter$1(cursor, param, { staticPosition: startOfData });
+			const [data, consumed_] = decodeParameter(cursor, param, { staticPosition: startOfData });
 			consumed += consumed_;
 			value.push(data);
 			if (consumed_ === 0) {
@@ -3676,12 +3388,12 @@ function decodeArray$1(cursor, param, { length, staticPosition }) {
 		cursor.setPosition(staticPosition + 32);
 		return [value, 32];
 	}
-	if (hasDynamicChild$1(param)) {
-		const start = staticPosition + bytesToNumber(cursor.readBytes(sizeOfOffset$1));
+	if (hasDynamicChild(param)) {
+		const start = staticPosition + bytesToNumber(cursor.readBytes(sizeOfOffset));
 		const value = [];
 		for (let i = 0; i < length; ++i) {
 			cursor.setPosition(start + i * 32);
-			const [data] = decodeParameter$1(cursor, param, { staticPosition: start });
+			const [data] = decodeParameter(cursor, param, { staticPosition: start });
 			value.push(data);
 		}
 		cursor.setPosition(staticPosition + 32);
@@ -3690,7 +3402,7 @@ function decodeArray$1(cursor, param, { length, staticPosition }) {
 	let consumed = 0;
 	const value = [];
 	for (let i = 0; i < length; ++i) {
-		const [data, consumed_] = decodeParameter$1(cursor, param, { staticPosition: staticPosition + consumed });
+		const [data, consumed_] = decodeParameter(cursor, param, { staticPosition: staticPosition + consumed });
 		consumed += consumed_;
 		value.push(data);
 		if (consumed_ === 0) {
@@ -3700,10 +3412,10 @@ function decodeArray$1(cursor, param, { length, staticPosition }) {
 	}
 	return [value, consumed];
 }
-function decodeBool$1(cursor) {
+function decodeBool(cursor) {
 	return [bytesToBool(cursor.readBytes(32), { size: 32 }), 32];
 }
-function decodeBytes$1(cursor, param, { staticPosition }) {
+function decodeBytes(cursor, param, { staticPosition }) {
 	const [_, size] = param.type.split("bytes");
 	if (!size) {
 		const offset = bytesToNumber(cursor.readBytes(32));
@@ -3719,22 +3431,22 @@ function decodeBytes$1(cursor, param, { staticPosition }) {
 	}
 	return [bytesToHex$1(cursor.readBytes(Number.parseInt(size, 10), 32)), 32];
 }
-function decodeNumber$1(cursor, param) {
+function decodeNumber(cursor, param) {
 	const signed = param.type.startsWith("int");
 	const size = Number.parseInt(param.type.split("int")[1] || "256", 10);
 	const value = cursor.readBytes(32);
 	return [size > 48 ? bytesToBigInt(value, { signed }) : bytesToNumber(value, { signed }), 32];
 }
-function decodeTuple$1(cursor, param, { staticPosition }) {
+function decodeTuple(cursor, param, { staticPosition }) {
 	const hasUnnamedChild = param.components.length === 0 || param.components.some(({ name }) => !name);
 	const value = hasUnnamedChild ? [] : {};
 	let consumed = 0;
-	if (hasDynamicChild$1(param)) {
-		const start = staticPosition + bytesToNumber(cursor.readBytes(sizeOfOffset$1));
+	if (hasDynamicChild(param)) {
+		const start = staticPosition + bytesToNumber(cursor.readBytes(sizeOfOffset));
 		for (let i = 0; i < param.components.length; ++i) {
 			const component = param.components[i];
 			cursor.setPosition(start + consumed);
-			const [data, consumed_] = decodeParameter$1(cursor, component, { staticPosition: start });
+			const [data, consumed_] = decodeParameter(cursor, component, { staticPosition: start });
 			consumed += consumed_;
 			value[hasUnnamedChild ? i : component?.name] = data;
 		}
@@ -3743,13 +3455,13 @@ function decodeTuple$1(cursor, param, { staticPosition }) {
 	}
 	for (let i = 0; i < param.components.length; ++i) {
 		const component = param.components[i];
-		const [data, consumed_] = decodeParameter$1(cursor, component, { staticPosition });
+		const [data, consumed_] = decodeParameter(cursor, component, { staticPosition });
 		value[hasUnnamedChild ? i : component?.name] = data;
 		consumed += consumed_;
 	}
 	return [value, consumed];
 }
-function decodeString$1(cursor, { staticPosition }) {
+function decodeString(cursor, { staticPosition }) {
 	const start = staticPosition + bytesToNumber(cursor.readBytes(32));
 	cursor.setPosition(start);
 	const length = bytesToNumber(cursor.readBytes(32));
@@ -3762,38 +3474,38 @@ function decodeString$1(cursor, { staticPosition }) {
 	cursor.setPosition(staticPosition + 32);
 	return [value, 32];
 }
-function hasDynamicChild$1(param) {
+function hasDynamicChild(param) {
 	const { type } = param;
 	if (type === "string") return true;
 	if (type === "bytes") return true;
 	if (type.endsWith("[]")) return true;
-	if (type === "tuple") return param.components?.some(hasDynamicChild$1);
-	const arrayComponents = getArrayComponents$1(param.type);
-	if (arrayComponents && hasDynamicChild$1({
+	if (type === "tuple") return param.components?.some(hasDynamicChild);
+	const arrayComponents = getArrayComponents(param.type);
+	if (arrayComponents && hasDynamicChild({
 		...param,
 		type: arrayComponents[1]
 	})) return true;
 	return false;
 }
-var sizeOfLength$1, sizeOfOffset$1;
+var sizeOfLength, sizeOfOffset;
 var init_decodeAbiParameters = __esmMin((() => {
 	init_abi();
 	init_getAddress();
-	init_cursor$1();
+	init_cursor();
 	init_size();
 	init_slice();
 	init_fromBytes();
 	init_toBytes();
 	init_toHex();
 	init_encodeAbiParameters();
-	sizeOfLength$1 = 32;
-	sizeOfOffset$1 = 32;
+	sizeOfLength = 32;
+	sizeOfOffset = 32;
 }));
 
 // node_modules/.pnpm/viem@2.57.13_typescript@6.0.3/node_modules/viem/_esm/utils/abi/decodeErrorResult.js
 function decodeErrorResult(parameters) {
 	const { abi, data, cause } = parameters;
-	const signature = slice$2(data, 0, 4);
+	const signature = slice(data, 0, 4);
 	if (signature === "0x") throw new AbiDecodingZeroDataError({ cause });
 	const abiItem = [
 		...abi || [],
@@ -3806,7 +3518,7 @@ function decodeErrorResult(parameters) {
 	});
 	return {
 		abiItem,
-		args: "inputs" in abiItem && abiItem.inputs && abiItem.inputs.length > 0 ? decodeAbiParameters(abiItem.inputs, slice$2(data, 4)) : void 0,
+		args: "inputs" in abiItem && abiItem.inputs && abiItem.inputs.length > 0 ? decodeAbiParameters(abiItem.inputs, slice(data, 4)) : void 0,
 		errorName: abiItem.name
 	};
 }
@@ -3820,23 +3532,12 @@ var init_decodeErrorResult = __esmMin((() => {
 }));
 
 // node_modules/.pnpm/viem@2.57.13_typescript@6.0.3/node_modules/viem/_esm/utils/stringify.js
-var stringify$2;
+var stringify$1;
 var init_stringify$1 = __esmMin((() => {
-	stringify$2 = (value, replacer, space) => JSON.stringify(value, (key, value_) => {
+	stringify$1 = (value, replacer, space) => JSON.stringify(value, (key, value_) => {
 		const value = typeof value_ === "bigint" ? value_.toString() : value_;
 		return typeof replacer === "function" ? replacer(key, value) : value;
 	}, space);
-}));
-
-// node_modules/.pnpm/viem@2.57.13_typescript@6.0.3/node_modules/viem/_esm/utils/abi/formatAbiItemWithArgs.js
-function formatAbiItemWithArgs({ abiItem, args, includeFunctionName = true, includeName = false }) {
-	if (!("name" in abiItem)) return;
-	if (!("inputs" in abiItem)) return;
-	if (!abiItem.inputs) return;
-	return `${includeFunctionName ? abiItem.name : ""}(${abiItem.inputs.map((input, i) => `${includeName && input.name ? `${input.name}: ` : ""}${typeof args[i] === "object" ? stringify$2(args[i]) : args[i]}`).join(", ")})`;
-}
-var init_formatAbiItemWithArgs = __esmMin((() => {
-	init_stringify$1();
 }));
 
 // node_modules/.pnpm/viem@2.57.13_typescript@6.0.3/node_modules/viem/_esm/utils/unit/Value.js
@@ -3855,7 +3556,7 @@ var init_formatAbiItemWithArgs = __esmMin((() => {
 * @param decimals - The exponent to divide the `bigint` Value by.
 * @returns The string representation of the Value.
 */
-function format$2(value, decimals = 0) {
+function format(value, decimals = 0) {
 	if (!Number.isInteger(decimals) || decimals < 0) throw new InvalidDecimalsError({ decimals });
 	let display = value.toString();
 	const negative = display.startsWith("-");
@@ -3864,24 +3565,6 @@ function format$2(value, decimals = 0) {
 	let [integer, fraction] = [display.slice(0, display.length - decimals), display.slice(display.length - decimals)];
 	fraction = fraction.replace(/(0+)$/, "");
 	return `${negative ? "-" : ""}${integer || "0"}${fraction ? `.${fraction}` : ""}`;
-}
-/**
-* Formats a `bigint` Value (default: wei) to a string representation of Ether.
-*
-* @example
-* ```ts twoslash
-* import { Value } from 'ox'
-*
-* Value.formatEther(1_000_000_000_000_000_000n)
-* // @log: '1'
-* ```
-*
-* @param wei - The Value to format.
-* @param unit - The unit to format the Value in. @default 'wei'.
-* @returns The Ether string representation of the Value.
-*/
-function formatEther$1(wei, unit = "wei") {
-	return format$2(wei, exponents.ether - exponents[unit]);
 }
 /**
 * Formats a `bigint` Value (default: wei) to a string representation of Gwei.
@@ -3899,68 +3582,9 @@ function formatEther$1(wei, unit = "wei") {
 * @returns The Gwei string representation of the Value.
 */
 function formatGwei$1(wei, unit = "wei") {
-	return format$2(wei, exponents.gwei - exponents[unit]);
+	return format(wei, exponents.gwei - exponents[unit]);
 }
-/**
-* Parses a `string` representation of a Value to `bigint` (multiplied by the given exponent).
-*
-* @example
-* ```ts twoslash
-* import { Value } from 'ox'
-*
-* Value.from('420', 9)
-* // @log: 420000000000n
-* ```
-*
-* @param value - The string representation of the Value.
-* @param decimals - The exponent to multiply the Value by.
-* @returns The `bigint` representation of the Value.
-*/
-function from$8(value, decimals = 0) {
-	if (!Number.isInteger(decimals) || decimals < 0) throw new InvalidDecimalsError({ decimals });
-	if (!/^-?(?:[0-9]+(?:\.[0-9]*)?|\.[0-9]+)$/.test(value)) throw new InvalidDecimalNumberError({ value });
-	let [integer = "", fraction = "0"] = value.split(".");
-	const negative = integer.startsWith("-");
-	if (negative) integer = integer.slice(1);
-	if (integer === "") integer = "0";
-	fraction = fraction.replace(/(0+)$/, "");
-	if (decimals === 0) {
-		if (fraction.length > 0 && Number.parseInt(fraction[0], 10) >= 5) integer = `${BigInt(integer) + 1n}`;
-		fraction = "";
-	} else if (fraction.length > decimals) {
-		const left = fraction.slice(0, decimals);
-		if (Number.parseInt(fraction.slice(decimals, decimals + 1), 10) >= 5) {
-			const carried = carry(left);
-			if (carried.length > decimals) {
-				fraction = carried.slice(1);
-				integer = `${BigInt(integer) + 1n}`;
-			} else fraction = carried;
-		} else fraction = left;
-	} else fraction = fraction.padEnd(decimals, "0");
-	return BigInt(`${negative ? "-" : ""}${integer}${fraction}`);
-}
-/**
-* Adds 1 to a digit string with carry, returning a string of the same length
-* unless the carry overflows past the most-significant digit (in which case
-* the returned string is one digit longer).
-*
-* @internal
-*/
-function carry(digits) {
-	const out = digits.split("");
-	let i = out.length - 1;
-	while (i >= 0) {
-		const d = Number.parseInt(out[i], 10) + 1;
-		if (d < 10) {
-			out[i] = String(d);
-			return out.join("");
-		}
-		out[i] = "0";
-		i--;
-	}
-	return `1${out.join("")}`;
-}
-var exponents, InvalidDecimalNumberError, InvalidDecimalsError;
+var exponents, InvalidDecimalsError;
 var init_Value = __esmMin((() => {
 	exponents = {
 		wei: 0,
@@ -3968,17 +3592,6 @@ var init_Value = __esmMin((() => {
 		szabo: 12,
 		finney: 15,
 		ether: 18
-	};
-	InvalidDecimalNumberError = class extends Error {
-		constructor({ value }) {
-			super(`Value \`${value}\` is not a valid decimal number.`);
-			Object.defineProperty(this, "name", {
-				enumerable: true,
-				configurable: true,
-				writable: true,
-				value: "Value.InvalidDecimalNumberError"
-			});
-		}
 	};
 	InvalidDecimalsError = class extends Error {
 		constructor({ decimals }) {
@@ -3991,25 +3604,6 @@ var init_Value = __esmMin((() => {
 			});
 		}
 	};
-}));
-
-// node_modules/.pnpm/viem@2.57.13_typescript@6.0.3/node_modules/viem/_esm/utils/unit/formatEther.js
-/**
-* Converts numerical wei to a string representation of ether.
-*
-* - Docs: https://viem.sh/docs/utilities/formatEther
-*
-* @example
-* import { formatEther } from 'viem'
-*
-* formatEther(1000000000000000000n)
-* // '1'
-*/
-function formatEther(wei, unit = "wei") {
-	return formatEther$1(wei, unit);
-}
-var init_formatEther = __esmMin((() => {
-	init_Value();
 }));
 
 // node_modules/.pnpm/viem@2.57.13_typescript@6.0.3/node_modules/viem/_esm/utils/unit/formatGwei.js
@@ -4031,47 +3625,8 @@ var init_formatGwei = __esmMin((() => {
 	init_Value();
 }));
 
-// node_modules/.pnpm/viem@2.57.13_typescript@6.0.3/node_modules/viem/_esm/errors/stateOverride.js
-/** @internal */
-function prettyStateMapping(stateMapping) {
-	return stateMapping.reduce((pretty, { slot, value }) => {
-		return `${pretty}        ${slot}: ${value}\n`;
-	}, "");
-}
-function prettyStateOverride(stateOverride) {
-	return stateOverride.reduce((pretty, { address, ...state }) => {
-		let val = `${pretty}    ${address}:\n`;
-		if (state.nonce) val += `      nonce: ${state.nonce}\n`;
-		if (state.balance) val += `      balance: ${state.balance}\n`;
-		if (state.code) val += `      code: ${state.code}\n`;
-		if (state.state) {
-			val += "      state:\n";
-			val += prettyStateMapping(state.state);
-		}
-		if (state.stateDiff) {
-			val += "      stateDiff:\n";
-			val += prettyStateMapping(state.stateDiff);
-		}
-		return val;
-	}, "  State Override:\n").slice(0, -1);
-}
-var AccountStateConflictError, StateAssignmentConflictError;
-var init_stateOverride$1 = __esmMin((() => {
-	init_base();
-	AccountStateConflictError = class extends BaseError$1 {
-		constructor({ address }) {
-			super(`State for account "${address}" is set multiple times.`, { name: "AccountStateConflictError" });
-		}
-	};
-	StateAssignmentConflictError = class extends BaseError$1 {
-		constructor() {
-			super("state and stateDiff are set on the same account.", { name: "StateAssignmentConflictError" });
-		}
-	};
-}));
-
 // node_modules/.pnpm/viem@2.57.13_typescript@6.0.3/node_modules/viem/_esm/errors/transaction.js
-function prettyPrint$1(args) {
+function prettyPrint(args) {
 	const entries = Object.entries(args).map(([key, value]) => {
 		if (value === void 0 || value === false) return null;
 		return [key, value];
@@ -4079,36 +3634,26 @@ function prettyPrint$1(args) {
 	const maxLength = entries.reduce((acc, [key]) => Math.max(acc, key.length), 0);
 	return entries.map(([key, value]) => `  ${`${key}:`.padEnd(maxLength + 1)}  ${value}`).join("\n");
 }
-var FeePayerNonceMismatchError, InvalidLegacyVError, InvalidYParityError$1, InvalidSerializableTransactionError, InvalidSerializedTransactionTypeError, InvalidSerializedTransactionError, InvalidStorageKeySizeError, TransactionExecutionError, TransactionNotFoundError, TransactionReceiptNotFoundError, TransactionReceiptRevertedError, WaitForTransactionReceiptTimeoutError;
-var init_transaction$1 = __esmMin((() => {
-	init_formatEther();
-	init_formatGwei();
+var InvalidLegacyVError, InvalidYParityError, InvalidSerializableTransactionError, InvalidSerializedTransactionTypeError, InvalidSerializedTransactionError, InvalidStorageKeySizeError;
+var init_transaction = __esmMin((() => {
 	init_base();
-	FeePayerNonceMismatchError = class extends BaseError$1 {
-		constructor({ filledNonce, requestedNonce }) {
-			super("The filled transaction nonce does not match the requested nonce.", {
-				metaMessages: [`Requested Nonce: ${requestedNonce}`, `Filled Nonce: ${filledNonce}`],
-				name: "FeePayerNonceMismatchError"
-			});
-		}
-	};
-	InvalidLegacyVError = class extends BaseError$1 {
+	InvalidLegacyVError = class extends BaseError {
 		constructor({ v }) {
 			super(`Invalid \`v\` value "${v}". Expected 27 or 28.`, { name: "InvalidLegacyVError" });
 		}
 	};
-	InvalidYParityError$1 = class extends BaseError$1 {
+	InvalidYParityError = class extends BaseError {
 		constructor({ yParity }) {
 			super(`Invalid \`yParity\` value "${yParity}". Expected 0 or 1.`, { name: "InvalidYParityError" });
 		}
 	};
-	InvalidSerializableTransactionError = class extends BaseError$1 {
+	InvalidSerializableTransactionError = class extends BaseError {
 		constructor({ transaction }) {
 			super("Cannot infer a transaction type from provided transaction.", {
 				metaMessages: [
 					"Provided Transaction:",
 					"{",
-					prettyPrint$1(transaction),
+					prettyPrint(transaction),
 					"}",
 					"",
 					"To infer the type, either provide:",
@@ -4123,7 +3668,7 @@ var init_transaction$1 = __esmMin((() => {
 			});
 		}
 	};
-	InvalidSerializedTransactionTypeError = class extends BaseError$1 {
+	InvalidSerializedTransactionTypeError = class extends BaseError {
 		constructor({ serializedType }) {
 			super(`Serialized transaction type "${serializedType}" is invalid.`, { name: "InvalidSerializedTransactionType" });
 			Object.defineProperty(this, "serializedType", {
@@ -4135,7 +3680,7 @@ var init_transaction$1 = __esmMin((() => {
 			this.serializedType = serializedType;
 		}
 	};
-	InvalidSerializedTransactionError = class extends BaseError$1 {
+	InvalidSerializedTransactionError = class extends BaseError {
 		constructor({ attributes, serializedTransaction, type }) {
 			const missing = Object.entries(attributes).map(([key, value]) => typeof value === "undefined" ? key : void 0).filter(Boolean);
 			super(`Invalid serialized transaction of type "${type}" was provided.`, {
@@ -4158,981 +3703,11 @@ var init_transaction$1 = __esmMin((() => {
 			this.type = type;
 		}
 	};
-	InvalidStorageKeySizeError = class extends BaseError$1 {
+	InvalidStorageKeySizeError = class extends BaseError {
 		constructor({ storageKey }) {
 			super(`Size for storage key "${storageKey}" is invalid. Expected 32 bytes. Got ${Math.floor((storageKey.length - 2) / 2)} bytes.`, { name: "InvalidStorageKeySizeError" });
 		}
 	};
-	TransactionExecutionError = class extends BaseError$1 {
-		constructor(cause, { account, docsPath, chain, data, gas, gasPrice, maxFeePerGas, maxPriorityFeePerGas, nonce, to, value }) {
-			const prettyArgs = prettyPrint$1({
-				chain: chain && `${chain?.name} (id: ${chain?.id})`,
-				from: account?.address,
-				to,
-				value: typeof value !== "undefined" && `${formatEther(value)} ${chain?.nativeCurrency?.symbol || "ETH"}`,
-				data,
-				gas,
-				gasPrice: typeof gasPrice !== "undefined" && `${formatGwei(gasPrice)} gwei`,
-				maxFeePerGas: typeof maxFeePerGas !== "undefined" && `${formatGwei(maxFeePerGas)} gwei`,
-				maxPriorityFeePerGas: typeof maxPriorityFeePerGas !== "undefined" && `${formatGwei(maxPriorityFeePerGas)} gwei`,
-				nonce
-			});
-			super(cause.shortMessage, {
-				cause,
-				docsPath,
-				metaMessages: [
-					...cause.metaMessages ? [...cause.metaMessages, " "] : [],
-					"Request Arguments:",
-					prettyArgs
-				].filter(Boolean),
-				name: "TransactionExecutionError"
-			});
-			Object.defineProperty(this, "cause", {
-				enumerable: true,
-				configurable: true,
-				writable: true,
-				value: void 0
-			});
-			this.cause = cause;
-		}
-	};
-	TransactionNotFoundError = class extends BaseError$1 {
-		constructor({ blockHash, blockNumber, blockTag, hash, index }) {
-			let identifier = "Transaction";
-			if (blockTag && index !== void 0) identifier = `Transaction at block time "${blockTag}" at index "${index}"`;
-			if (blockHash && index !== void 0) identifier = `Transaction at block hash "${blockHash}" at index "${index}"`;
-			if (blockNumber && index !== void 0) identifier = `Transaction at block number "${blockNumber}" at index "${index}"`;
-			if (hash) identifier = `Transaction with hash "${hash}"`;
-			super(`${identifier} could not be found.`, { name: "TransactionNotFoundError" });
-		}
-	};
-	TransactionReceiptNotFoundError = class extends BaseError$1 {
-		constructor({ hash }) {
-			super(`Transaction receipt with hash "${hash}" could not be found. The Transaction may not be processed on a block yet.`, { name: "TransactionReceiptNotFoundError" });
-		}
-	};
-	TransactionReceiptRevertedError = class extends BaseError$1 {
-		constructor({ receipt }) {
-			super(`Transaction with hash "${receipt.transactionHash}" reverted.`, {
-				metaMessages: [
-					"The receipt marked the transaction as \"reverted\". This could mean that the function on the contract you are trying to call threw an error.",
-					" ",
-					"You can attempt to extract the revert reason by:",
-					"- calling the `simulateContract` or `simulateCalls` Action with the `abi` and `functionName` of the contract",
-					"- using the `call` Action with raw `data`"
-				],
-				name: "TransactionReceiptRevertedError"
-			});
-			Object.defineProperty(this, "receipt", {
-				enumerable: true,
-				configurable: true,
-				writable: true,
-				value: void 0
-			});
-			this.receipt = receipt;
-		}
-	};
-	WaitForTransactionReceiptTimeoutError = class extends BaseError$1 {
-		constructor({ hash }) {
-			super(`Timed out while waiting for transaction with hash "${hash}" to be confirmed.`, { name: "WaitForTransactionReceiptTimeoutError" });
-		}
-	};
-}));
-
-// node_modules/.pnpm/viem@2.57.13_typescript@6.0.3/node_modules/viem/_esm/errors/utils.js
-function getAbortError(signal) {
-	if (signal?.reason) return signal.reason;
-	if (typeof DOMException === "function") return new DOMException("This operation was aborted", "AbortError");
-	const error = /* @__PURE__ */ new Error("This operation was aborted");
-	error.name = "AbortError";
-	return error;
-}
-function isAbortError(error) {
-	return typeof error === "object" && error !== null && "name" in error && error.name === "AbortError";
-}
-var getContractAddress$1, getUrl;
-var init_utils$3 = __esmMin((() => {
-	getContractAddress$1 = (address) => address;
-	getUrl = (url) => {
-		try {
-			const parsed = new URL(url);
-			if (!parsed.username && !parsed.password) return url;
-			parsed.username = "";
-			parsed.password = "";
-			return parsed.toString();
-		} catch {
-			return url;
-		}
-	};
-}));
-
-// node_modules/.pnpm/viem@2.57.13_typescript@6.0.3/node_modules/viem/_esm/errors/contract.js
-var CallExecutionError, ContractFunctionExecutionError, ContractFunctionRevertedError, ContractFunctionZeroDataError, CounterfactualDeploymentFailedError, RawContractError;
-var init_contract$1 = __esmMin((() => {
-	init_parseAccount();
-	init_solidity();
-	init_decodeErrorResult();
-	init_formatAbiItem();
-	init_formatAbiItemWithArgs();
-	init_getAbiItem();
-	init_formatEther();
-	init_formatGwei();
-	init_abi();
-	init_base();
-	init_stateOverride$1();
-	init_transaction$1();
-	init_utils$3();
-	CallExecutionError = class extends BaseError$1 {
-		constructor(cause, { account: account_, docsPath, chain, data, gas, gasPrice, maxFeePerGas, maxPriorityFeePerGas, nonce, to, value, stateOverride }) {
-			const account = account_ ? parseAccount(account_) : void 0;
-			let prettyArgs = prettyPrint$1({
-				from: account?.address,
-				to,
-				value: typeof value !== "undefined" && `${formatEther(value)} ${chain?.nativeCurrency?.symbol || "ETH"}`,
-				data,
-				gas,
-				gasPrice: typeof gasPrice !== "undefined" && `${formatGwei(gasPrice)} gwei`,
-				maxFeePerGas: typeof maxFeePerGas !== "undefined" && `${formatGwei(maxFeePerGas)} gwei`,
-				maxPriorityFeePerGas: typeof maxPriorityFeePerGas !== "undefined" && `${formatGwei(maxPriorityFeePerGas)} gwei`,
-				nonce
-			});
-			if (stateOverride) prettyArgs += `\n${prettyStateOverride(stateOverride)}`;
-			super(cause.shortMessage, {
-				cause,
-				docsPath,
-				metaMessages: [
-					...cause.metaMessages ? [...cause.metaMessages, " "] : [],
-					"Raw Call Arguments:",
-					prettyArgs
-				].filter(Boolean),
-				name: "CallExecutionError"
-			});
-			Object.defineProperty(this, "cause", {
-				enumerable: true,
-				configurable: true,
-				writable: true,
-				value: void 0
-			});
-			this.cause = cause;
-		}
-	};
-	ContractFunctionExecutionError = class extends BaseError$1 {
-		constructor(cause, { abi, args, contractAddress, docsPath, functionName, sender }) {
-			const abiItem = getAbiItem({
-				abi,
-				args,
-				name: functionName
-			});
-			const formattedArgs = abiItem ? formatAbiItemWithArgs({
-				abiItem,
-				args,
-				includeFunctionName: false,
-				includeName: false
-			}) : void 0;
-			const functionWithParams = abiItem ? formatAbiItem(abiItem, { includeName: true }) : void 0;
-			const prettyArgs = prettyPrint$1({
-				address: contractAddress && getContractAddress$1(contractAddress),
-				function: functionWithParams,
-				args: formattedArgs && formattedArgs !== "()" && `${[...Array(functionName?.length ?? 0).keys()].map(() => " ").join("")}${formattedArgs}`,
-				sender
-			});
-			super(cause.shortMessage || `An unknown error occurred while executing the contract function "${functionName}".`, {
-				cause,
-				docsPath,
-				metaMessages: [
-					...cause.metaMessages ? [...cause.metaMessages, " "] : [],
-					prettyArgs && "Contract Call:",
-					prettyArgs
-				].filter(Boolean),
-				name: "ContractFunctionExecutionError"
-			});
-			Object.defineProperty(this, "abi", {
-				enumerable: true,
-				configurable: true,
-				writable: true,
-				value: void 0
-			});
-			Object.defineProperty(this, "args", {
-				enumerable: true,
-				configurable: true,
-				writable: true,
-				value: void 0
-			});
-			Object.defineProperty(this, "cause", {
-				enumerable: true,
-				configurable: true,
-				writable: true,
-				value: void 0
-			});
-			Object.defineProperty(this, "contractAddress", {
-				enumerable: true,
-				configurable: true,
-				writable: true,
-				value: void 0
-			});
-			Object.defineProperty(this, "formattedArgs", {
-				enumerable: true,
-				configurable: true,
-				writable: true,
-				value: void 0
-			});
-			Object.defineProperty(this, "functionName", {
-				enumerable: true,
-				configurable: true,
-				writable: true,
-				value: void 0
-			});
-			Object.defineProperty(this, "sender", {
-				enumerable: true,
-				configurable: true,
-				writable: true,
-				value: void 0
-			});
-			this.abi = abi;
-			this.args = args;
-			this.cause = cause;
-			this.contractAddress = contractAddress;
-			this.functionName = functionName;
-			this.sender = sender;
-		}
-	};
-	ContractFunctionRevertedError = class extends BaseError$1 {
-		constructor({ abi, data, functionName, message, cause: error }) {
-			let cause;
-			let decodedData;
-			let metaMessages;
-			let reason;
-			if (data && data !== "0x") try {
-				decodedData = decodeErrorResult({
-					abi,
-					data,
-					cause: error
-				});
-				const { abiItem, errorName, args: errorArgs } = decodedData;
-				if (errorName === "Error") reason = errorArgs[0];
-				else if (errorName === "Panic") {
-					const [firstArg] = errorArgs;
-					reason = panicReasons[firstArg];
-				} else {
-					const errorWithParams = abiItem ? formatAbiItem(abiItem, { includeName: true }) : void 0;
-					const formattedArgs = abiItem && errorArgs ? formatAbiItemWithArgs({
-						abiItem,
-						args: errorArgs,
-						includeFunctionName: false,
-						includeName: false
-					}) : void 0;
-					metaMessages = [errorWithParams ? `Error: ${errorWithParams}` : "", formattedArgs && formattedArgs !== "()" ? `       ${[...Array(errorName?.length ?? 0).keys()].map(() => " ").join("")}${formattedArgs}` : ""];
-				}
-			} catch (err) {
-				cause = err;
-			}
-			else if (message) reason = message;
-			let signature;
-			if (cause instanceof AbiErrorSignatureNotFoundError) {
-				signature = cause.signature;
-				metaMessages = [
-					`Unable to decode signature "${signature}" as it was not found on the provided ABI.`,
-					"Make sure you are using the correct ABI and that the error exists on it.",
-					`You can look up the decoded signature here: https://4byte.sourcify.dev/?q=${signature}.`
-				];
-			}
-			super(reason && reason !== "execution reverted" || signature ? [`The contract function "${functionName}" reverted with the following ${signature ? "signature" : "reason"}:`, reason || signature].join("\n") : `The contract function "${functionName}" reverted.`, {
-				cause: cause ?? error,
-				metaMessages,
-				name: "ContractFunctionRevertedError"
-			});
-			Object.defineProperty(this, "data", {
-				enumerable: true,
-				configurable: true,
-				writable: true,
-				value: void 0
-			});
-			Object.defineProperty(this, "raw", {
-				enumerable: true,
-				configurable: true,
-				writable: true,
-				value: void 0
-			});
-			Object.defineProperty(this, "reason", {
-				enumerable: true,
-				configurable: true,
-				writable: true,
-				value: void 0
-			});
-			Object.defineProperty(this, "signature", {
-				enumerable: true,
-				configurable: true,
-				writable: true,
-				value: void 0
-			});
-			this.data = decodedData;
-			this.raw = data;
-			this.reason = reason;
-			this.signature = signature;
-		}
-	};
-	ContractFunctionZeroDataError = class extends BaseError$1 {
-		constructor({ functionName, cause }) {
-			super(`The contract function "${functionName}" returned no data ("0x").`, {
-				metaMessages: [
-					"This could be due to any of the following:",
-					`  - The contract does not have the function "${functionName}",`,
-					"  - The parameters passed to the contract function may be invalid, or",
-					"  - The address is not a contract."
-				],
-				name: "ContractFunctionZeroDataError",
-				cause
-			});
-		}
-	};
-	CounterfactualDeploymentFailedError = class extends BaseError$1 {
-		constructor({ factory }) {
-			super(`Deployment for counterfactual contract call failed${factory ? ` for factory "${factory}".` : ""}`, {
-				metaMessages: [
-					"Please ensure:",
-					"- The `factory` is a valid contract deployment factory (ie. Create2 Factory, ERC-4337 Factory, etc).",
-					"- The `factoryData` is a valid encoded function call for contract deployment function on the factory."
-				],
-				name: "CounterfactualDeploymentFailedError"
-			});
-		}
-	};
-	RawContractError = class extends BaseError$1 {
-		constructor({ data, message }) {
-			super(message || "", { name: "RawContractError" });
-			Object.defineProperty(this, "code", {
-				enumerable: true,
-				configurable: true,
-				writable: true,
-				value: 3
-			});
-			Object.defineProperty(this, "data", {
-				enumerable: true,
-				configurable: true,
-				writable: true,
-				value: void 0
-			});
-			this.data = data;
-		}
-	};
-}));
-
-// node_modules/.pnpm/viem@2.57.13_typescript@6.0.3/node_modules/viem/_esm/errors/request.js
-var HttpRequestError, ResponseBodyTooLargeError, RpcRequestError, TimeoutError;
-var init_request = __esmMin((() => {
-	init_stringify$1();
-	init_base();
-	init_utils$3();
-	HttpRequestError = class extends BaseError$1 {
-		constructor({ body, cause, details, headers, status, url }) {
-			super("HTTP request failed.", {
-				cause,
-				details,
-				metaMessages: [
-					status && `Status: ${status}`,
-					`URL: ${getUrl(url)}`,
-					body && `Request body: ${stringify$2(body)}`
-				].filter(Boolean),
-				name: "HttpRequestError"
-			});
-			Object.defineProperty(this, "body", {
-				enumerable: true,
-				configurable: true,
-				writable: true,
-				value: void 0
-			});
-			Object.defineProperty(this, "headers", {
-				enumerable: true,
-				configurable: true,
-				writable: true,
-				value: void 0
-			});
-			Object.defineProperty(this, "status", {
-				enumerable: true,
-				configurable: true,
-				writable: true,
-				value: void 0
-			});
-			Object.defineProperty(this, "url", {
-				enumerable: true,
-				configurable: true,
-				writable: true,
-				value: void 0
-			});
-			this.body = body;
-			this.headers = headers;
-			this.status = status;
-			this.url = url;
-		}
-	};
-	ResponseBodyTooLargeError = class extends BaseError$1 {
-		constructor({ maxSize, size }) {
-			super("HTTP response body exceeded the size limit.", {
-				metaMessages: [`Max: ${maxSize} bytes`, `Received: ${size} bytes`],
-				name: "ResponseBodyTooLargeError"
-			});
-			Object.defineProperty(this, "maxSize", {
-				enumerable: true,
-				configurable: true,
-				writable: true,
-				value: void 0
-			});
-			Object.defineProperty(this, "size", {
-				enumerable: true,
-				configurable: true,
-				writable: true,
-				value: void 0
-			});
-			this.maxSize = maxSize;
-			this.size = size;
-		}
-	};
-	RpcRequestError = class extends BaseError$1 {
-		constructor({ body, error, headers, status, url }) {
-			super("RPC Request failed.", {
-				cause: error,
-				details: error.message,
-				metaMessages: [
-					status && `Status: ${status}`,
-					`URL: ${getUrl(url)}`,
-					`Request body: ${stringify$2(body)}`
-				].filter(Boolean),
-				name: "RpcRequestError"
-			});
-			Object.defineProperty(this, "code", {
-				enumerable: true,
-				configurable: true,
-				writable: true,
-				value: void 0
-			});
-			Object.defineProperty(this, "data", {
-				enumerable: true,
-				configurable: true,
-				writable: true,
-				value: void 0
-			});
-			/** Response headers, when the error came from a non-2xx HTTP response. */
-			Object.defineProperty(this, "headers", {
-				enumerable: true,
-				configurable: true,
-				writable: true,
-				value: void 0
-			});
-			/** Response status, when the error came from a non-2xx HTTP response. */
-			Object.defineProperty(this, "status", {
-				enumerable: true,
-				configurable: true,
-				writable: true,
-				value: void 0
-			});
-			Object.defineProperty(this, "url", {
-				enumerable: true,
-				configurable: true,
-				writable: true,
-				value: void 0
-			});
-			this.code = error.code;
-			this.data = error.data;
-			this.headers = headers;
-			this.status = status;
-			this.url = url;
-		}
-	};
-	TimeoutError = class extends BaseError$1 {
-		constructor({ body, url }) {
-			super("The request took too long to respond.", {
-				details: "The request timed out.",
-				metaMessages: [`URL: ${getUrl(url)}`, `Request body: ${stringify$2(body)}`],
-				name: "TimeoutError"
-			});
-			Object.defineProperty(this, "url", {
-				enumerable: true,
-				configurable: true,
-				writable: true,
-				value: void 0
-			});
-			this.url = url;
-		}
-	};
-}));
-
-// node_modules/.pnpm/viem@2.57.13_typescript@6.0.3/node_modules/viem/_esm/errors/rpc.js
-var unknownErrorCode, RpcError, ProviderRpcError, ParseRpcError, InvalidRequestRpcError, MethodNotFoundRpcError, InvalidParamsRpcError, InternalRpcError, InvalidInputRpcError, ResourceNotFoundRpcError, ResourceUnavailableRpcError, TransactionRejectedRpcError, MethodNotSupportedRpcError, LimitExceededRpcError, JsonRpcVersionUnsupportedError, UserRejectedRequestError, UnauthorizedProviderError, UnsupportedProviderMethodError, ProviderDisconnectedError, ChainDisconnectedError, SwitchChainError, UnsupportedNonOptionalCapabilityError, UnsupportedChainIdError, DuplicateIdError, UnknownBundleIdError, BundleTooLargeError, AtomicReadyWalletRejectedUpgradeError, AtomicityNotSupportedError, WalletConnectSessionSettlementError, UnknownRpcError;
-var init_rpc = __esmMin((() => {
-	init_base();
-	init_request();
-	unknownErrorCode = -1;
-	RpcError = class extends BaseError$1 {
-		constructor(cause, { code, docsPath, metaMessages, name, shortMessage }) {
-			super(shortMessage, {
-				cause,
-				docsPath,
-				metaMessages: metaMessages || cause?.metaMessages,
-				name: name || "RpcError"
-			});
-			Object.defineProperty(this, "code", {
-				enumerable: true,
-				configurable: true,
-				writable: true,
-				value: void 0
-			});
-			this.name = name || cause.name;
-			this.code = cause instanceof RpcRequestError ? cause.code : code ?? unknownErrorCode;
-		}
-	};
-	ProviderRpcError = class extends RpcError {
-		constructor(cause, options) {
-			super(cause, options);
-			Object.defineProperty(this, "data", {
-				enumerable: true,
-				configurable: true,
-				writable: true,
-				value: void 0
-			});
-			this.data = options.data;
-		}
-	};
-	ParseRpcError = class ParseRpcError extends RpcError {
-		constructor(cause) {
-			super(cause, {
-				code: ParseRpcError.code,
-				name: "ParseRpcError",
-				shortMessage: "Invalid JSON was received by the server. An error occurred on the server while parsing the JSON text."
-			});
-		}
-	};
-	Object.defineProperty(ParseRpcError, "code", {
-		enumerable: true,
-		configurable: true,
-		writable: true,
-		value: -32700
-	});
-	InvalidRequestRpcError = class InvalidRequestRpcError extends RpcError {
-		constructor(cause) {
-			super(cause, {
-				code: InvalidRequestRpcError.code,
-				name: "InvalidRequestRpcError",
-				shortMessage: "JSON is not a valid request object."
-			});
-		}
-	};
-	Object.defineProperty(InvalidRequestRpcError, "code", {
-		enumerable: true,
-		configurable: true,
-		writable: true,
-		value: -32600
-	});
-	MethodNotFoundRpcError = class MethodNotFoundRpcError extends RpcError {
-		constructor(cause, { method } = {}) {
-			super(cause, {
-				code: MethodNotFoundRpcError.code,
-				name: "MethodNotFoundRpcError",
-				shortMessage: `The method${method ? ` "${method}"` : ""} does not exist / is not available.`
-			});
-		}
-	};
-	Object.defineProperty(MethodNotFoundRpcError, "code", {
-		enumerable: true,
-		configurable: true,
-		writable: true,
-		value: -32601
-	});
-	InvalidParamsRpcError = class InvalidParamsRpcError extends RpcError {
-		constructor(cause) {
-			super(cause, {
-				code: InvalidParamsRpcError.code,
-				name: "InvalidParamsRpcError",
-				shortMessage: ["Invalid parameters were provided to the RPC method.", "Double check you have provided the correct parameters."].join("\n")
-			});
-		}
-	};
-	Object.defineProperty(InvalidParamsRpcError, "code", {
-		enumerable: true,
-		configurable: true,
-		writable: true,
-		value: -32602
-	});
-	InternalRpcError = class InternalRpcError extends RpcError {
-		constructor(cause) {
-			super(cause, {
-				code: InternalRpcError.code,
-				name: "InternalRpcError",
-				shortMessage: "An internal error was received."
-			});
-		}
-	};
-	Object.defineProperty(InternalRpcError, "code", {
-		enumerable: true,
-		configurable: true,
-		writable: true,
-		value: -32603
-	});
-	InvalidInputRpcError = class InvalidInputRpcError extends RpcError {
-		constructor(cause) {
-			super(cause, {
-				code: InvalidInputRpcError.code,
-				name: "InvalidInputRpcError",
-				shortMessage: ["Missing or invalid parameters.", "Double check you have provided the correct parameters."].join("\n")
-			});
-		}
-	};
-	Object.defineProperty(InvalidInputRpcError, "code", {
-		enumerable: true,
-		configurable: true,
-		writable: true,
-		value: -32e3
-	});
-	ResourceNotFoundRpcError = class ResourceNotFoundRpcError extends RpcError {
-		constructor(cause) {
-			super(cause, {
-				code: ResourceNotFoundRpcError.code,
-				name: "ResourceNotFoundRpcError",
-				shortMessage: "Requested resource not found."
-			});
-			Object.defineProperty(this, "name", {
-				enumerable: true,
-				configurable: true,
-				writable: true,
-				value: "ResourceNotFoundRpcError"
-			});
-		}
-	};
-	Object.defineProperty(ResourceNotFoundRpcError, "code", {
-		enumerable: true,
-		configurable: true,
-		writable: true,
-		value: -32001
-	});
-	ResourceUnavailableRpcError = class ResourceUnavailableRpcError extends RpcError {
-		constructor(cause) {
-			super(cause, {
-				code: ResourceUnavailableRpcError.code,
-				name: "ResourceUnavailableRpcError",
-				shortMessage: "Requested resource not available."
-			});
-		}
-	};
-	Object.defineProperty(ResourceUnavailableRpcError, "code", {
-		enumerable: true,
-		configurable: true,
-		writable: true,
-		value: -32002
-	});
-	TransactionRejectedRpcError = class TransactionRejectedRpcError extends RpcError {
-		constructor(cause) {
-			super(cause, {
-				code: TransactionRejectedRpcError.code,
-				name: "TransactionRejectedRpcError",
-				shortMessage: "Transaction creation failed."
-			});
-		}
-	};
-	Object.defineProperty(TransactionRejectedRpcError, "code", {
-		enumerable: true,
-		configurable: true,
-		writable: true,
-		value: -32003
-	});
-	MethodNotSupportedRpcError = class MethodNotSupportedRpcError extends RpcError {
-		constructor(cause, { method } = {}) {
-			super(cause, {
-				code: MethodNotSupportedRpcError.code,
-				name: "MethodNotSupportedRpcError",
-				shortMessage: `Method${method ? ` "${method}"` : ""} is not supported.`
-			});
-		}
-	};
-	Object.defineProperty(MethodNotSupportedRpcError, "code", {
-		enumerable: true,
-		configurable: true,
-		writable: true,
-		value: -32004
-	});
-	LimitExceededRpcError = class LimitExceededRpcError extends RpcError {
-		constructor(cause) {
-			super(cause, {
-				code: LimitExceededRpcError.code,
-				name: "LimitExceededRpcError",
-				shortMessage: "Request exceeds defined limit."
-			});
-		}
-	};
-	Object.defineProperty(LimitExceededRpcError, "code", {
-		enumerable: true,
-		configurable: true,
-		writable: true,
-		value: -32005
-	});
-	JsonRpcVersionUnsupportedError = class JsonRpcVersionUnsupportedError extends RpcError {
-		constructor(cause) {
-			super(cause, {
-				code: JsonRpcVersionUnsupportedError.code,
-				name: "JsonRpcVersionUnsupportedError",
-				shortMessage: "Version of JSON-RPC protocol is not supported."
-			});
-		}
-	};
-	Object.defineProperty(JsonRpcVersionUnsupportedError, "code", {
-		enumerable: true,
-		configurable: true,
-		writable: true,
-		value: -32006
-	});
-	UserRejectedRequestError = class UserRejectedRequestError extends ProviderRpcError {
-		constructor(cause) {
-			super(cause, {
-				code: UserRejectedRequestError.code,
-				name: "UserRejectedRequestError",
-				shortMessage: "User rejected the request."
-			});
-		}
-	};
-	Object.defineProperty(UserRejectedRequestError, "code", {
-		enumerable: true,
-		configurable: true,
-		writable: true,
-		value: 4001
-	});
-	UnauthorizedProviderError = class UnauthorizedProviderError extends ProviderRpcError {
-		constructor(cause) {
-			super(cause, {
-				code: UnauthorizedProviderError.code,
-				name: "UnauthorizedProviderError",
-				shortMessage: "The requested method and/or account has not been authorized by the user."
-			});
-		}
-	};
-	Object.defineProperty(UnauthorizedProviderError, "code", {
-		enumerable: true,
-		configurable: true,
-		writable: true,
-		value: 4100
-	});
-	UnsupportedProviderMethodError = class UnsupportedProviderMethodError extends ProviderRpcError {
-		constructor(cause, { method } = {}) {
-			super(cause, {
-				code: UnsupportedProviderMethodError.code,
-				name: "UnsupportedProviderMethodError",
-				shortMessage: `The Provider does not support the requested method${method ? ` " ${method}"` : ""}.`
-			});
-		}
-	};
-	Object.defineProperty(UnsupportedProviderMethodError, "code", {
-		enumerable: true,
-		configurable: true,
-		writable: true,
-		value: 4200
-	});
-	ProviderDisconnectedError = class ProviderDisconnectedError extends ProviderRpcError {
-		constructor(cause) {
-			super(cause, {
-				code: ProviderDisconnectedError.code,
-				name: "ProviderDisconnectedError",
-				shortMessage: "The Provider is disconnected from all chains."
-			});
-		}
-	};
-	Object.defineProperty(ProviderDisconnectedError, "code", {
-		enumerable: true,
-		configurable: true,
-		writable: true,
-		value: 4900
-	});
-	ChainDisconnectedError = class ChainDisconnectedError extends ProviderRpcError {
-		constructor(cause) {
-			super(cause, {
-				code: ChainDisconnectedError.code,
-				name: "ChainDisconnectedError",
-				shortMessage: "The Provider is not connected to the requested chain."
-			});
-		}
-	};
-	Object.defineProperty(ChainDisconnectedError, "code", {
-		enumerable: true,
-		configurable: true,
-		writable: true,
-		value: 4901
-	});
-	SwitchChainError = class SwitchChainError extends ProviderRpcError {
-		constructor(cause) {
-			super(cause, {
-				code: SwitchChainError.code,
-				name: "SwitchChainError",
-				shortMessage: "An error occurred when attempting to switch chain."
-			});
-		}
-	};
-	Object.defineProperty(SwitchChainError, "code", {
-		enumerable: true,
-		configurable: true,
-		writable: true,
-		value: 4902
-	});
-	UnsupportedNonOptionalCapabilityError = class UnsupportedNonOptionalCapabilityError extends ProviderRpcError {
-		constructor(cause) {
-			super(cause, {
-				code: UnsupportedNonOptionalCapabilityError.code,
-				name: "UnsupportedNonOptionalCapabilityError",
-				shortMessage: "This Wallet does not support a capability that was not marked as optional."
-			});
-		}
-	};
-	Object.defineProperty(UnsupportedNonOptionalCapabilityError, "code", {
-		enumerable: true,
-		configurable: true,
-		writable: true,
-		value: 5700
-	});
-	UnsupportedChainIdError = class UnsupportedChainIdError extends ProviderRpcError {
-		constructor(cause) {
-			super(cause, {
-				code: UnsupportedChainIdError.code,
-				name: "UnsupportedChainIdError",
-				shortMessage: "This Wallet does not support the requested chain ID."
-			});
-		}
-	};
-	Object.defineProperty(UnsupportedChainIdError, "code", {
-		enumerable: true,
-		configurable: true,
-		writable: true,
-		value: 5710
-	});
-	DuplicateIdError = class DuplicateIdError extends ProviderRpcError {
-		constructor(cause) {
-			super(cause, {
-				code: DuplicateIdError.code,
-				name: "DuplicateIdError",
-				shortMessage: "There is already a bundle submitted with this ID."
-			});
-		}
-	};
-	Object.defineProperty(DuplicateIdError, "code", {
-		enumerable: true,
-		configurable: true,
-		writable: true,
-		value: 5720
-	});
-	UnknownBundleIdError = class UnknownBundleIdError extends ProviderRpcError {
-		constructor(cause) {
-			super(cause, {
-				code: UnknownBundleIdError.code,
-				name: "UnknownBundleIdError",
-				shortMessage: "This bundle id is unknown / has not been submitted"
-			});
-		}
-	};
-	Object.defineProperty(UnknownBundleIdError, "code", {
-		enumerable: true,
-		configurable: true,
-		writable: true,
-		value: 5730
-	});
-	BundleTooLargeError = class BundleTooLargeError extends ProviderRpcError {
-		constructor(cause) {
-			super(cause, {
-				code: BundleTooLargeError.code,
-				name: "BundleTooLargeError",
-				shortMessage: "The call bundle is too large for the Wallet to process."
-			});
-		}
-	};
-	Object.defineProperty(BundleTooLargeError, "code", {
-		enumerable: true,
-		configurable: true,
-		writable: true,
-		value: 5740
-	});
-	AtomicReadyWalletRejectedUpgradeError = class AtomicReadyWalletRejectedUpgradeError extends ProviderRpcError {
-		constructor(cause) {
-			super(cause, {
-				code: AtomicReadyWalletRejectedUpgradeError.code,
-				name: "AtomicReadyWalletRejectedUpgradeError",
-				shortMessage: "The Wallet can support atomicity after an upgrade, but the user rejected the upgrade."
-			});
-		}
-	};
-	Object.defineProperty(AtomicReadyWalletRejectedUpgradeError, "code", {
-		enumerable: true,
-		configurable: true,
-		writable: true,
-		value: 5750
-	});
-	AtomicityNotSupportedError = class AtomicityNotSupportedError extends ProviderRpcError {
-		constructor(cause) {
-			super(cause, {
-				code: AtomicityNotSupportedError.code,
-				name: "AtomicityNotSupportedError",
-				shortMessage: "The wallet does not support atomic execution but the request requires it."
-			});
-		}
-	};
-	Object.defineProperty(AtomicityNotSupportedError, "code", {
-		enumerable: true,
-		configurable: true,
-		writable: true,
-		value: 5760
-	});
-	WalletConnectSessionSettlementError = class WalletConnectSessionSettlementError extends ProviderRpcError {
-		constructor(cause) {
-			super(cause, {
-				code: WalletConnectSessionSettlementError.code,
-				name: "WalletConnectSessionSettlementError",
-				shortMessage: "WalletConnect session settlement failed."
-			});
-		}
-	};
-	Object.defineProperty(WalletConnectSessionSettlementError, "code", {
-		enumerable: true,
-		configurable: true,
-		writable: true,
-		value: 7e3
-	});
-	UnknownRpcError = class extends RpcError {
-		constructor(cause) {
-			super(cause, {
-				name: "UnknownRpcError",
-				shortMessage: "An unknown RPC error occurred."
-			});
-		}
-	};
-}));
-
-// node_modules/.pnpm/viem@2.57.13_typescript@6.0.3/node_modules/viem/_esm/utils/errors/getContractError.js
-function getContractError(err, { abi, address, args, docsPath, functionName, sender }) {
-	const error = err instanceof RawContractError ? err : err instanceof BaseError$1 ? err.walk((err) => typeof err === "object" && err !== null && "data" in err) || err.walk() : {};
-	const { code, data, details, message, shortMessage } = error;
-	const cause = (() => {
-		if (err instanceof AbiDecodingZeroDataError) return new ContractFunctionZeroDataError({
-			functionName,
-			cause: err
-		});
-		if ([EXECUTION_REVERTED_ERROR_CODE, InternalRpcError.code].includes(code) && (data || details || message || shortMessage) || code === InvalidInputRpcError.code && details === "execution reverted" && data) return new ContractFunctionRevertedError({
-			abi,
-			data: typeof data === "object" ? data.data : data,
-			functionName,
-			message: error instanceof RpcRequestError ? details : shortMessage ?? message,
-			cause: err
-		});
-		return err;
-	})();
-	return new ContractFunctionExecutionError(cause, {
-		abi,
-		args,
-		contractAddress: address,
-		docsPath,
-		functionName,
-		sender
-	});
-}
-var EXECUTION_REVERTED_ERROR_CODE;
-var init_getContractError = __esmMin((() => {
-	init_abi();
-	init_base();
-	init_contract$1();
-	init_request();
-	init_rpc();
-	EXECUTION_REVERTED_ERROR_CODE = 3;
 }));
 
 // node_modules/.pnpm/viem@2.57.13_typescript@6.0.3/node_modules/viem/_esm/accounts/utils/publicKeyToAddress.js
@@ -5144,7 +3719,7 @@ var init_getContractError = __esmMin((() => {
 * @returns The address.
 */
 function publicKeyToAddress(publicKey) {
-	const address = keccak256$1(`0x${publicKey.substring(4)}`).substring(26);
+	const address = keccak256(`0x${publicKey.substring(4)}`).substring(26);
 	return checksumAddress(`0x${address}`);
 }
 var init_publicKeyToAddress = __esmMin((() => {
@@ -5175,7 +3750,7 @@ function Maj(a, b, c) {
 }
 var HashMD, SHA256_IV;
 var init__md = __esmMin((() => {
-	init_utils$4();
+	init_utils$1();
 	HashMD = class extends Hash {
 		constructor(blockLen, outputLen, padOffset, isLE) {
 			super();
@@ -5192,7 +3767,7 @@ var init__md = __esmMin((() => {
 		}
 		update(data) {
 			aexists(this);
-			data = toBytes$1(data);
+			data = toBytes(data);
 			abytes$1(data);
 			const { view, buffer, blockLen } = this;
 			const len = data.length;
@@ -5276,7 +3851,7 @@ var init__md = __esmMin((() => {
 var SHA256_K, SHA256_W, SHA256$1, sha256$4;
 var init_sha2 = __esmMin((() => {
 	init__md();
-	init_utils$4();
+	init_utils$1();
 	SHA256_K = /* @__PURE__ */ Uint32Array.from([
 		1116352408,
 		1899447441,
@@ -5426,14 +4001,14 @@ var init_sha2 = __esmMin((() => {
 // node_modules/.pnpm/@noble+hashes@1.8.0/node_modules/@noble/hashes/esm/hmac.js
 var HMAC, hmac;
 var init_hmac = __esmMin((() => {
-	init_utils$4();
+	init_utils$1();
 	HMAC = class extends Hash {
 		constructor(hash, _key) {
 			super();
 			this.finished = false;
 			this.destroyed = false;
 			ahash(hash);
-			const key = toBytes$1(_key);
+			const key = toBytes(_key);
 			this.iHash = hash.create();
 			if (typeof this.iHash.update !== "function") throw new Error("Expected instance of class which extends utils.Hash");
 			this.blockLen = this.iHash.blockLen;
@@ -5519,7 +4094,7 @@ function bytesToHex(bytes) {
 	abytes(bytes);
 	if (hasHexBuiltin) return bytes.toHex();
 	let hex = "";
-	for (let i = 0; i < bytes.length; i++) hex += hexes$1[bytes[i]];
+	for (let i = 0; i < bytes.length; i++) hex += hexes[bytes[i]];
 	return hex;
 }
 function asciiToBase16(ch) {
@@ -5705,12 +4280,12 @@ function memoized(fn) {
 		return computed;
 	};
 }
-var _0n$4, _1n$4, hasHexBuiltin, hexes$1, asciis, isPosBig, bitMask, u8n, u8fr, validatorFns;
-var init_utils$2 = __esmMin((() => {
+var _0n$4, _1n$4, hasHexBuiltin, hexes, asciis, isPosBig, bitMask, u8n, u8fr, validatorFns;
+var init_utils = __esmMin((() => {
 	_0n$4 = /* @__PURE__ */ BigInt(0);
 	_1n$4 = /* @__PURE__ */ BigInt(1);
 	hasHexBuiltin = typeof Uint8Array.from([]).toHex === "function" && typeof Uint8Array.fromHex === "function";
-	hexes$1 = /* @__PURE__ */ Array.from({ length: 256 }, (_, i) => i.toString(16).padStart(2, "0"));
+	hexes = /* @__PURE__ */ Array.from({ length: 256 }, (_, i) => i.toString(16).padStart(2, "0"));
 	asciis = {
 		_0: 48,
 		_9: 57,
@@ -6031,8 +4606,8 @@ function mapHashToField(key, fieldOrder, isLE = false) {
 }
 var _0n$3, _1n$3, _2n$2, _3n$1, _4n$1, _5n, _8n, FIELD_FIELDS;
 var init_modular = __esmMin((() => {
-	init_utils$4();
-	init_utils$2();
+	init_utils$1();
+	init_utils();
 	_0n$3 = BigInt(0);
 	_1n$3 = BigInt(1);
 	_2n$2 = /* @__PURE__ */ BigInt(2);
@@ -6308,7 +4883,7 @@ function validateBasic(curve) {
 var _0n$2, _1n$2, pointPrecomputes, pointWindowSizes;
 var init_curve = __esmMin((() => {
 	init_modular();
-	init_utils$2();
+	init_utils();
 	_0n$2 = BigInt(0);
 	_1n$2 = BigInt(1);
 	pointPrecomputes = /* @__PURE__ */ new WeakMap();
@@ -7210,7 +5785,7 @@ var DERErr, DER, _0n$1, _1n$1, _2n$1, _3n, _4n;
 var init_weierstrass = __esmMin((() => {
 	init_curve();
 	init_modular();
-	init_utils$2();
+	init_utils();
 	DERErr = class extends Error {
 		constructor(m = "") {
 			super(m);
@@ -7321,7 +5896,7 @@ function createCurve(curveDef, defHash) {
 }
 var init__shortw_utils = __esmMin((() => {
 	init_hmac();
-	init_utils$4();
+	init_utils$1();
 	init_weierstrass();
 }));
 
@@ -7485,7 +6060,7 @@ function createHasher(Point, mapToCurve, defaults) {
 var os2ip;
 var init_hash_to_curve = __esmMin((() => {
 	init_modular();
-	init_utils$2();
+	init_utils();
 	os2ip = bytesToNumberBE;
 }));
 
@@ -7609,11 +6184,11 @@ function schnorrVerify(signature, message, publicKey) {
 var secp256k1P, secp256k1N, _0n, _1n, _2n, divNearest, Fpk1, secp256k1, TAGGED_HASH_PREFIXES, pointToBytes, numTo32b, modP, modN, Point, GmulAdd, num$1, schnorr, isoMap, mapSWU, secp256k1_hasher, hashToCurve, encodeToCurve;
 var init_secp256k1 = __esmMin((() => {
 	init_sha2();
-	init_utils$4();
+	init_utils$1();
 	init__shortw_utils();
 	init_hash_to_curve();
 	init_modular();
-	init_utils$2();
+	init_utils();
 	init_weierstrass();
 	secp256k1P = BigInt("0xfffffffffffffffffffffffffffffffffffffffffffffffffffffffefffffc2f");
 	secp256k1N = BigInt("0xfffffffffffffffffffffffffffffffebaaedce6af48a03bbfd25e8cd0364141");
@@ -7737,7 +6312,7 @@ async function recoverPublicKey({ hash, signature }) {
 			return new secp256k1.Signature(hexToBigInt(r), hexToBigInt(s)).addRecoveryBit(recoveryBit);
 		}
 		const signatureHex = isHex(signature) ? signature : toHex(signature);
-		if (size$3(signatureHex) !== 65) throw new Error("invalid signature length");
+		if (size(signatureHex) !== 65) throw new Error("invalid signature length");
 		const recoveryBit = toRecoveryBit(hexToNumber$1(`0x${signatureHex.slice(130)}`));
 		return secp256k1.Signature.fromCompact(signatureHex.substring(2, 130)).addRecoveryBit(recoveryBit);
 	})().recoverPublicKey(hashHex.substring(2)).toHex(false)}`;
@@ -7830,11 +6405,11 @@ function getSizeOfLength(length) {
 	if (length < 2 ** 16) return 2;
 	if (length < 2 ** 24) return 3;
 	if (length < 2 ** 32) return 4;
-	throw new BaseError$1("Length is too large.");
+	throw new BaseError("Length is too large.");
 }
 var init_toRlp = __esmMin((() => {
 	init_base();
-	init_cursor$1();
+	init_cursor();
 	init_toBytes();
 	init_toHex();
 }));
@@ -7846,7 +6421,7 @@ var init_toRlp = __esmMin((() => {
 function hashAuthorization(parameters) {
 	const { chainId, nonce, to } = parameters;
 	const address = parameters.contractAddress ?? parameters.address;
-	const hash = keccak256$1(concatHex(["0x05", toRlp([
+	const hash = keccak256(concatHex(["0x05", toRlp([
 		chainId ? numberToHex(chainId) : "0x",
 		address,
 		nonce ? numberToHex(nonce) : "0x"
@@ -7862,66 +6437,12 @@ var init_hashAuthorization = __esmMin((() => {
 	init_keccak256();
 }));
 
-// node_modules/.pnpm/viem@2.57.13_typescript@6.0.3/node_modules/viem/_esm/utils/authorization/recoverAuthorizationAddress.js
-async function recoverAuthorizationAddress(parameters) {
-	const { authorization, signature } = parameters;
-	return recoverAddress({
-		hash: hashAuthorization(authorization),
-		signature: signature ?? authorization
-	});
-}
-var init_recoverAuthorizationAddress = __esmMin((() => {
-	init_recoverAddress();
-	init_hashAuthorization();
-}));
-
-// node_modules/.pnpm/viem@2.57.13_typescript@6.0.3/node_modules/viem/_esm/errors/estimateGas.js
-var EstimateGasExecutionError;
-var init_estimateGas$1 = __esmMin((() => {
-	init_formatEther();
-	init_formatGwei();
-	init_base();
-	init_transaction$1();
-	EstimateGasExecutionError = class extends BaseError$1 {
-		constructor(cause, { account, docsPath, chain, data, gas, gasPrice, maxFeePerGas, maxPriorityFeePerGas, nonce, to, value }) {
-			const prettyArgs = prettyPrint$1({
-				from: account?.address,
-				to,
-				value: typeof value !== "undefined" && `${formatEther(value)} ${chain?.nativeCurrency?.symbol || "ETH"}`,
-				data,
-				gas,
-				gasPrice: typeof gasPrice !== "undefined" && `${formatGwei(gasPrice)} gwei`,
-				maxFeePerGas: typeof maxFeePerGas !== "undefined" && `${formatGwei(maxFeePerGas)} gwei`,
-				maxPriorityFeePerGas: typeof maxPriorityFeePerGas !== "undefined" && `${formatGwei(maxPriorityFeePerGas)} gwei`,
-				nonce
-			});
-			super(cause.shortMessage, {
-				cause,
-				docsPath,
-				metaMessages: [
-					...cause.metaMessages ? [...cause.metaMessages, " "] : [],
-					"Estimate Gas Arguments:",
-					prettyArgs
-				].filter(Boolean),
-				name: "EstimateGasExecutionError"
-			});
-			Object.defineProperty(this, "cause", {
-				enumerable: true,
-				configurable: true,
-				writable: true,
-				value: void 0
-			});
-			this.cause = cause;
-		}
-	};
-}));
-
 // node_modules/.pnpm/viem@2.57.13_typescript@6.0.3/node_modules/viem/_esm/errors/node.js
-var ExecutionRevertedError, FeeCapTooHighError, FeeCapTooLowError, NonceTooHighError, NonceTooLowError, NonceMaxValueError, InsufficientFundsError, IntrinsicGasTooHighError, IntrinsicGasTooLowError, TransactionTypeNotSupportedError, TipAboveFeeCapError, UnknownNodeError;
+var ExecutionRevertedError, FeeCapTooHighError, FeeCapTooLowError, NonceTooHighError, NonceTooLowError, NonceMaxValueError, InsufficientFundsError, IntrinsicGasTooHighError, IntrinsicGasTooLowError, TransactionTypeNotSupportedError, TipAboveFeeCapError;
 var init_node = __esmMin((() => {
 	init_formatGwei();
 	init_base();
-	ExecutionRevertedError = class extends BaseError$1 {
+	ExecutionRevertedError = class extends BaseError {
 		constructor({ cause, message } = {}) {
 			const reason = message?.replace("execution reverted: ", "")?.replace("execution reverted", "");
 			super(`Execution reverted ${reason ? `with reason: ${reason}` : "for an unknown reason"}.`, {
@@ -7942,7 +6463,7 @@ var init_node = __esmMin((() => {
 		writable: true,
 		value: /execution reverted|gas required exceeds allowance/
 	});
-	FeeCapTooHighError = class extends BaseError$1 {
+	FeeCapTooHighError = class extends BaseError {
 		constructor({ cause, maxFeePerGas } = {}) {
 			super(`The fee cap (\`maxFeePerGas\`${maxFeePerGas ? ` = ${formatGwei(maxFeePerGas)} gwei` : ""}) cannot be higher than the maximum allowed value (2^256-1).`, {
 				cause,
@@ -7956,7 +6477,7 @@ var init_node = __esmMin((() => {
 		writable: true,
 		value: /max fee per gas higher than 2\^256-1|fee cap higher than 2\^256-1/
 	});
-	FeeCapTooLowError = class extends BaseError$1 {
+	FeeCapTooLowError = class extends BaseError {
 		constructor({ cause, maxFeePerGas } = {}) {
 			super(`The fee cap (\`maxFeePerGas\`${maxFeePerGas ? ` = ${formatGwei(maxFeePerGas)}` : ""} gwei) cannot be lower than the block base fee.`, {
 				cause,
@@ -7970,7 +6491,7 @@ var init_node = __esmMin((() => {
 		writable: true,
 		value: /max fee per gas less than block base fee|fee cap less than block base fee|transaction is outdated/
 	});
-	NonceTooHighError = class extends BaseError$1 {
+	NonceTooHighError = class extends BaseError {
 		constructor({ cause, nonce } = {}) {
 			super(`Nonce provided for the transaction ${nonce ? `(${nonce}) ` : ""}is higher than the next one expected.`, {
 				cause,
@@ -7984,7 +6505,7 @@ var init_node = __esmMin((() => {
 		writable: true,
 		value: /nonce too high/
 	});
-	NonceTooLowError = class extends BaseError$1 {
+	NonceTooLowError = class extends BaseError {
 		constructor({ cause, nonce } = {}) {
 			super([`Nonce provided for the transaction ${nonce ? `(${nonce}) ` : ""}is lower than the current nonce of the account.`, "Try increasing the nonce or find the latest nonce with `getTransactionCount`."].join("\n"), {
 				cause,
@@ -7998,7 +6519,7 @@ var init_node = __esmMin((() => {
 		writable: true,
 		value: /nonce too low|transaction already imported|already known/
 	});
-	NonceMaxValueError = class extends BaseError$1 {
+	NonceMaxValueError = class extends BaseError {
 		constructor({ cause, nonce } = {}) {
 			super(`Nonce provided for the transaction ${nonce ? `(${nonce}) ` : ""}exceeds the maximum allowed nonce.`, {
 				cause,
@@ -8012,7 +6533,7 @@ var init_node = __esmMin((() => {
 		writable: true,
 		value: /nonce has max value/
 	});
-	InsufficientFundsError = class extends BaseError$1 {
+	InsufficientFundsError = class extends BaseError {
 		constructor({ cause } = {}) {
 			super(["The total cost (gas * gas fee + value) of executing this transaction exceeds the balance of the account."].join("\n"), {
 				cause,
@@ -8036,7 +6557,7 @@ var init_node = __esmMin((() => {
 		writable: true,
 		value: /insufficient funds|exceeds transaction sender account balance|outoffunds/
 	});
-	IntrinsicGasTooHighError = class extends BaseError$1 {
+	IntrinsicGasTooHighError = class extends BaseError {
 		constructor({ cause, gas } = {}) {
 			super(`The amount of gas ${gas ? `(${gas}) ` : ""}provided for the transaction exceeds the limit allowed for the block.`, {
 				cause,
@@ -8050,7 +6571,7 @@ var init_node = __esmMin((() => {
 		writable: true,
 		value: /intrinsic gas too high|gas limit reached/
 	});
-	IntrinsicGasTooLowError = class extends BaseError$1 {
+	IntrinsicGasTooLowError = class extends BaseError {
 		constructor({ cause, gas } = {}) {
 			super(`The amount of gas ${gas ? `(${gas}) ` : ""}provided for the transaction is too low.`, {
 				cause,
@@ -8064,7 +6585,7 @@ var init_node = __esmMin((() => {
 		writable: true,
 		value: /intrinsic gas too low/
 	});
-	TransactionTypeNotSupportedError = class extends BaseError$1 {
+	TransactionTypeNotSupportedError = class extends BaseError {
 		constructor({ cause }) {
 			super("The transaction type is not supported for this chain.", {
 				cause,
@@ -8078,7 +6599,7 @@ var init_node = __esmMin((() => {
 		writable: true,
 		value: /transaction type not valid/
 	});
-	TipAboveFeeCapError = class extends BaseError$1 {
+	TipAboveFeeCapError = class extends BaseError {
 		constructor({ cause, maxPriorityFeePerGas, maxFeePerGas } = {}) {
 			super([`The provided tip (\`maxPriorityFeePerGas\`${maxPriorityFeePerGas ? ` = ${formatGwei(maxPriorityFeePerGas)} gwei` : ""}) cannot be higher than the fee cap (\`maxFeePerGas\`${maxFeePerGas ? ` = ${formatGwei(maxFeePerGas)} gwei` : ""}).`].join("\n"), {
 				cause,
@@ -8092,717 +6613,76 @@ var init_node = __esmMin((() => {
 		writable: true,
 		value: /max priority fee per gas higher than max fee per gas|tip higher than fee cap/
 	});
-	UnknownNodeError = class extends BaseError$1 {
-		constructor({ cause }) {
-			super(`An error occurred while executing: ${cause?.shortMessage}`, {
-				cause,
-				name: "UnknownNodeError"
-			});
-		}
-	};
-}));
-
-// node_modules/.pnpm/viem@2.57.13_typescript@6.0.3/node_modules/viem/_esm/utils/errors/getNodeError.js
-function getNodeError(err, args) {
-	const message = (err.details || "").toLowerCase();
-	const executionRevertedError = err instanceof BaseError$1 ? err.walk((e) => e?.code === ExecutionRevertedError.code) : err;
-	if (executionRevertedError instanceof BaseError$1) return new ExecutionRevertedError({
-		cause: err,
-		message: executionRevertedError.details
-	});
-	if (ExecutionRevertedError.nodeMessage.test(message)) return new ExecutionRevertedError({
-		cause: err,
-		message: err.details
-	});
-	if (FeeCapTooHighError.nodeMessage.test(message)) return new FeeCapTooHighError({
-		cause: err,
-		maxFeePerGas: args?.maxFeePerGas
-	});
-	if (FeeCapTooLowError.nodeMessage.test(message)) return new FeeCapTooLowError({
-		cause: err,
-		maxFeePerGas: args?.maxFeePerGas
-	});
-	if (NonceTooHighError.nodeMessage.test(message)) return new NonceTooHighError({
-		cause: err,
-		nonce: args?.nonce
-	});
-	if (NonceTooLowError.nodeMessage.test(message)) return new NonceTooLowError({
-		cause: err,
-		nonce: args?.nonce
-	});
-	if (NonceMaxValueError.nodeMessage.test(message)) return new NonceMaxValueError({
-		cause: err,
-		nonce: args?.nonce
-	});
-	if (InsufficientFundsError.nodeMessage.test(message)) return new InsufficientFundsError({ cause: err });
-	if (IntrinsicGasTooHighError.nodeMessage.test(message)) return new IntrinsicGasTooHighError({
-		cause: err,
-		gas: args?.gas
-	});
-	if (IntrinsicGasTooLowError.nodeMessage.test(message)) return new IntrinsicGasTooLowError({
-		cause: err,
-		gas: args?.gas
-	});
-	if (TransactionTypeNotSupportedError.nodeMessage.test(message)) return new TransactionTypeNotSupportedError({ cause: err });
-	if (TipAboveFeeCapError.nodeMessage.test(message)) return new TipAboveFeeCapError({
-		cause: err,
-		maxFeePerGas: args?.maxFeePerGas,
-		maxPriorityFeePerGas: args?.maxPriorityFeePerGas
-	});
-	return new UnknownNodeError({ cause: err });
-}
-var init_getNodeError = __esmMin((() => {
-	init_base();
-	init_node();
-}));
-
-// node_modules/.pnpm/viem@2.57.13_typescript@6.0.3/node_modules/viem/_esm/utils/errors/getEstimateGasError.js
-function getEstimateGasError(err, { docsPath, ...args }) {
-	const cause = (() => {
-		const cause = getNodeError(err, args);
-		if (cause instanceof UnknownNodeError) return err;
-		return cause;
-	})();
-	return new EstimateGasExecutionError(cause, {
-		docsPath,
-		...args
-	});
-}
-var init_getEstimateGasError = __esmMin((() => {
-	init_estimateGas$1();
-	init_node();
-	init_getNodeError();
-}));
-
-// node_modules/.pnpm/viem@2.57.13_typescript@6.0.3/node_modules/viem/_esm/utils/formatters/extract.js
-/**
-* @description Picks out the keys from `value` that exist in the formatter..
-*/
-function extract(value_, { format }) {
-	if (!format) return {};
-	const value = {};
-	function extract_(formatted) {
-		const keys = Object.keys(formatted);
-		for (const key of keys) {
-			if (key in value_) value[key] = value_[key];
-			if (formatted[key] && typeof formatted[key] === "object" && !Array.isArray(formatted[key])) extract_(formatted[key]);
-		}
-	}
-	extract_(format(value_ || {}));
-	return value;
-}
-var init_extract = __esmMin((() => {}));
-
-// node_modules/.pnpm/viem@2.57.13_typescript@6.0.3/node_modules/viem/_esm/utils/formatters/transactionRequest.js
-function formatTransactionRequest(request, _) {
-	const rpcRequest = {};
-	if (typeof request.authorizationList !== "undefined") rpcRequest.authorizationList = formatAuthorizationList$1(request.authorizationList);
-	if (typeof request.accessList !== "undefined") rpcRequest.accessList = request.accessList;
-	if (typeof request.blobVersionedHashes !== "undefined") rpcRequest.blobVersionedHashes = request.blobVersionedHashes;
-	if (typeof request.blobs !== "undefined") {
-		if (typeof request.blobs[0] !== "string") rpcRequest.blobs = request.blobs.map((x) => bytesToHex$1(x));
-		else rpcRequest.blobs = request.blobs;
-	}
-	if (typeof request.data !== "undefined") rpcRequest.data = request.data;
-	if (request.account) rpcRequest.from = request.account.address;
-	if (typeof request.from !== "undefined") rpcRequest.from = request.from;
-	if (typeof request.gas !== "undefined") rpcRequest.gas = numberToHex(request.gas);
-	if (typeof request.gasPrice !== "undefined") rpcRequest.gasPrice = numberToHex(request.gasPrice);
-	if (typeof request.maxFeePerBlobGas !== "undefined") rpcRequest.maxFeePerBlobGas = numberToHex(request.maxFeePerBlobGas);
-	if (typeof request.maxFeePerGas !== "undefined") rpcRequest.maxFeePerGas = numberToHex(request.maxFeePerGas);
-	if (typeof request.maxPriorityFeePerGas !== "undefined") rpcRequest.maxPriorityFeePerGas = numberToHex(request.maxPriorityFeePerGas);
-	if (typeof request.nonce !== "undefined") rpcRequest.nonce = numberToHex(request.nonce);
-	if (typeof request.to !== "undefined") rpcRequest.to = request.to;
-	if (typeof request.type !== "undefined") rpcRequest.type = rpcTransactionType[request.type];
-	if (typeof request.value !== "undefined") rpcRequest.value = numberToHex(request.value);
-	return rpcRequest;
-}
-function formatAuthorizationList$1(authorizationList) {
-	return authorizationList.map((authorization) => ({
-		address: authorization.address,
-		r: authorization.r ? numberToHex(BigInt(authorization.r)) : authorization.r,
-		s: authorization.s ? numberToHex(BigInt(authorization.s)) : authorization.s,
-		chainId: numberToHex(authorization.chainId),
-		nonce: numberToHex(authorization.nonce),
-		...typeof authorization.yParity !== "undefined" ? { yParity: numberToHex(authorization.yParity) } : {},
-		...typeof authorization.v !== "undefined" && typeof authorization.yParity === "undefined" ? { v: numberToHex(authorization.v) } : {}
-	}));
-}
-var rpcTransactionType;
-var init_transactionRequest = __esmMin((() => {
-	init_toHex();
-	rpcTransactionType = {
-		legacy: "0x0",
-		eip2930: "0x1",
-		eip1559: "0x2",
-		eip4844: "0x3",
-		eip7702: "0x4"
-	};
-}));
-
-// node_modules/.pnpm/viem@2.57.13_typescript@6.0.3/node_modules/viem/_esm/utils/stateOverride.js
-/** @internal */
-function serializeStateMapping(stateMapping) {
-	if (!stateMapping || stateMapping.length === 0) return void 0;
-	return stateMapping.reduce((acc, { slot, value }) => {
-		if (slot.length !== 66) throw new InvalidBytesLengthError({
-			size: slot.length,
-			targetSize: 66,
-			type: "hex"
-		});
-		if (value.length !== 66) throw new InvalidBytesLengthError({
-			size: value.length,
-			targetSize: 66,
-			type: "hex"
-		});
-		acc[slot] = value;
-		return acc;
-	}, {});
-}
-/** @internal */
-function serializeAccountStateOverride(parameters) {
-	const { balance, nonce, state, stateDiff, code } = parameters;
-	const rpcAccountStateOverride = {};
-	if (code !== void 0) rpcAccountStateOverride.code = code;
-	if (balance !== void 0) rpcAccountStateOverride.balance = numberToHex(balance);
-	if (nonce !== void 0) rpcAccountStateOverride.nonce = numberToHex(nonce);
-	if (state !== void 0) rpcAccountStateOverride.state = serializeStateMapping(state);
-	if (stateDiff !== void 0) {
-		if (rpcAccountStateOverride.state) throw new StateAssignmentConflictError();
-		rpcAccountStateOverride.stateDiff = serializeStateMapping(stateDiff);
-	}
-	return rpcAccountStateOverride;
-}
-/** @internal */
-function serializeStateOverride(parameters) {
-	if (!parameters) return void 0;
-	const rpcStateOverride = {};
-	for (const { address, ...accountState } of parameters) {
-		if (!isAddress(address, { strict: false })) throw new InvalidAddressError$1({ address });
-		if (rpcStateOverride[address]) throw new AccountStateConflictError({ address });
-		rpcStateOverride[address] = serializeAccountStateOverride(accountState);
-	}
-	return rpcStateOverride;
-}
-var init_stateOverride = __esmMin((() => {
-	init_address$1();
-	init_data();
-	init_stateOverride$1();
-	init_isAddress();
-	init_toHex();
 }));
 
 // node_modules/.pnpm/viem@2.57.13_typescript@6.0.3/node_modules/viem/_esm/constants/number.js
-var maxInt8$1, maxInt16$1, maxInt24$1, maxInt32$1, maxInt40$1, maxInt48$1, maxInt56$1, maxInt64$1, maxInt72$1, maxInt80$1, maxInt88$1, maxInt96$1, maxInt104$1, maxInt112$1, maxInt120$1, maxInt128$1, maxInt136$1, maxInt144$1, maxInt152$1, maxInt160$1, maxInt168$1, maxInt176$1, maxInt184$1, maxInt192$1, maxInt200$1, maxInt208$1, maxInt216$1, maxInt224$1, maxInt232$1, maxInt240$1, maxInt248$1, maxInt256$1, minInt8$1, minInt16$1, minInt24$1, minInt32$1, minInt40$1, minInt48$1, minInt56$1, minInt64$1, minInt72$1, minInt80$1, minInt88$1, minInt96$1, minInt104$1, minInt112$1, minInt120$1, minInt128$1, minInt136$1, minInt144$1, minInt152$1, minInt160$1, minInt168$1, minInt176$1, minInt184$1, minInt192$1, minInt200$1, minInt208$1, minInt216$1, minInt224$1, minInt232$1, minInt240$1, minInt248$1, minInt256$1, maxUint256$1;
+var maxInt8, maxInt16, maxInt24, maxInt32, maxInt40, maxInt48, maxInt56, maxInt64, maxInt72, maxInt80, maxInt88, maxInt96, maxInt104, maxInt112, maxInt120, maxInt128, maxInt136, maxInt144, maxInt152, maxInt160, maxInt168, maxInt176, maxInt184, maxInt192, maxInt200, maxInt208, maxInt216, maxInt224, maxInt232, maxInt240, maxInt248, maxInt256, minInt8, minInt16, minInt24, minInt32, minInt40, minInt48, minInt56, minInt64, minInt72, minInt80, minInt88, minInt96, minInt104, minInt112, minInt120, minInt128, minInt136, minInt144, minInt152, minInt160, minInt168, minInt176, minInt184, minInt192, minInt200, minInt208, minInt216, minInt224, minInt232, minInt240, minInt248, minInt256, maxUint256;
 var init_number = __esmMin((() => {
-	maxInt8$1 = 2n ** (8n - 1n) - 1n;
-	maxInt16$1 = 2n ** (16n - 1n) - 1n;
-	maxInt24$1 = 2n ** (24n - 1n) - 1n;
-	maxInt32$1 = 2n ** (32n - 1n) - 1n;
-	maxInt40$1 = 2n ** (40n - 1n) - 1n;
-	maxInt48$1 = 2n ** (48n - 1n) - 1n;
-	maxInt56$1 = 2n ** (56n - 1n) - 1n;
-	maxInt64$1 = 2n ** (64n - 1n) - 1n;
-	maxInt72$1 = 2n ** (72n - 1n) - 1n;
-	maxInt80$1 = 2n ** (80n - 1n) - 1n;
-	maxInt88$1 = 2n ** (88n - 1n) - 1n;
-	maxInt96$1 = 2n ** (96n - 1n) - 1n;
-	maxInt104$1 = 2n ** (104n - 1n) - 1n;
-	maxInt112$1 = 2n ** (112n - 1n) - 1n;
-	maxInt120$1 = 2n ** (120n - 1n) - 1n;
-	maxInt128$1 = 2n ** (128n - 1n) - 1n;
-	maxInt136$1 = 2n ** (136n - 1n) - 1n;
-	maxInt144$1 = 2n ** (144n - 1n) - 1n;
-	maxInt152$1 = 2n ** (152n - 1n) - 1n;
-	maxInt160$1 = 2n ** (160n - 1n) - 1n;
-	maxInt168$1 = 2n ** (168n - 1n) - 1n;
-	maxInt176$1 = 2n ** (176n - 1n) - 1n;
-	maxInt184$1 = 2n ** (184n - 1n) - 1n;
-	maxInt192$1 = 2n ** (192n - 1n) - 1n;
-	maxInt200$1 = 2n ** (200n - 1n) - 1n;
-	maxInt208$1 = 2n ** (208n - 1n) - 1n;
-	maxInt216$1 = 2n ** (216n - 1n) - 1n;
-	maxInt224$1 = 2n ** (224n - 1n) - 1n;
-	maxInt232$1 = 2n ** (232n - 1n) - 1n;
-	maxInt240$1 = 2n ** (240n - 1n) - 1n;
-	maxInt248$1 = 2n ** (248n - 1n) - 1n;
-	maxInt256$1 = 2n ** (256n - 1n) - 1n;
-	minInt8$1 = -(2n ** (8n - 1n));
-	minInt16$1 = -(2n ** (16n - 1n));
-	minInt24$1 = -(2n ** (24n - 1n));
-	minInt32$1 = -(2n ** (32n - 1n));
-	minInt40$1 = -(2n ** (40n - 1n));
-	minInt48$1 = -(2n ** (48n - 1n));
-	minInt56$1 = -(2n ** (56n - 1n));
-	minInt64$1 = -(2n ** (64n - 1n));
-	minInt72$1 = -(2n ** (72n - 1n));
-	minInt80$1 = -(2n ** (80n - 1n));
-	minInt88$1 = -(2n ** (88n - 1n));
-	minInt96$1 = -(2n ** (96n - 1n));
-	minInt104$1 = -(2n ** (104n - 1n));
-	minInt112$1 = -(2n ** (112n - 1n));
-	minInt120$1 = -(2n ** (120n - 1n));
-	minInt128$1 = -(2n ** (128n - 1n));
-	minInt136$1 = -(2n ** (136n - 1n));
-	minInt144$1 = -(2n ** (144n - 1n));
-	minInt152$1 = -(2n ** (152n - 1n));
-	minInt160$1 = -(2n ** (160n - 1n));
-	minInt168$1 = -(2n ** (168n - 1n));
-	minInt176$1 = -(2n ** (176n - 1n));
-	minInt184$1 = -(2n ** (184n - 1n));
-	minInt192$1 = -(2n ** (192n - 1n));
-	minInt200$1 = -(2n ** (200n - 1n));
-	minInt208$1 = -(2n ** (208n - 1n));
-	minInt216$1 = -(2n ** (216n - 1n));
-	minInt224$1 = -(2n ** (224n - 1n));
-	minInt232$1 = -(2n ** (232n - 1n));
-	minInt240$1 = -(2n ** (240n - 1n));
-	minInt248$1 = -(2n ** (248n - 1n));
-	minInt256$1 = -(2n ** (256n - 1n));
-	maxUint256$1 = 2n ** 256n - 1n;
-}));
-
-// node_modules/.pnpm/viem@2.57.13_typescript@6.0.3/node_modules/viem/_esm/utils/transaction/assertRequest.js
-function assertRequest(args) {
-	const { account: account_, maxFeePerGas, maxPriorityFeePerGas, to } = args;
-	const account = account_ ? parseAccount(account_) : void 0;
-	if (account && !isAddress(account.address)) throw new InvalidAddressError$1({ address: account.address });
-	if (to && !isAddress(to)) throw new InvalidAddressError$1({ address: to });
-	if (maxFeePerGas && maxFeePerGas > maxUint256$1) throw new FeeCapTooHighError({ maxFeePerGas });
-	if (maxPriorityFeePerGas && maxFeePerGas && maxPriorityFeePerGas > maxFeePerGas) throw new TipAboveFeeCapError({
-		maxFeePerGas,
-		maxPriorityFeePerGas
-	});
-}
-var init_assertRequest = __esmMin((() => {
-	init_parseAccount();
-	init_number();
-	init_address$1();
-	init_node();
-	init_isAddress();
-}));
-
-// node_modules/.pnpm/viem@2.57.13_typescript@6.0.3/node_modules/viem/_esm/errors/fee.js
-var BaseFeeScalarError, Eip1559FeesNotSupportedError, MaxFeePerGasTooLowError;
-var init_fee$1 = __esmMin((() => {
-	init_formatGwei();
-	init_base();
-	BaseFeeScalarError = class extends BaseError$1 {
-		constructor() {
-			super("`baseFeeMultiplier` must be greater than 1.", { name: "BaseFeeScalarError" });
-		}
-	};
-	Eip1559FeesNotSupportedError = class extends BaseError$1 {
-		constructor() {
-			super("Chain does not support EIP-1559 fees.", { name: "Eip1559FeesNotSupportedError" });
-		}
-	};
-	MaxFeePerGasTooLowError = class extends BaseError$1 {
-		constructor({ maxPriorityFeePerGas }) {
-			super(`\`maxFeePerGas\` cannot be less than the \`maxPriorityFeePerGas\` (${formatGwei(maxPriorityFeePerGas)} gwei).`, { name: "MaxFeePerGasTooLowError" });
-		}
-	};
-}));
-
-// node_modules/.pnpm/viem@2.57.13_typescript@6.0.3/node_modules/viem/_esm/errors/block.js
-var BlockNotFoundError;
-var init_block$1 = __esmMin((() => {
-	init_base();
-	BlockNotFoundError = class extends BaseError$1 {
-		constructor({ blockHash, blockNumber }) {
-			let identifier = "Block";
-			if (blockHash) identifier = `Block at hash "${blockHash}"`;
-			if (blockNumber) identifier = `Block at number "${blockNumber}"`;
-			super(`${identifier} could not be found.`, { name: "BlockNotFoundError" });
-		}
-	};
-}));
-
-// node_modules/.pnpm/viem@2.57.13_typescript@6.0.3/node_modules/viem/_esm/utils/formatters/transaction.js
-function formatTransaction(transaction, _) {
-	const transaction_ = {
-		...transaction,
-		blockHash: transaction.blockHash ? transaction.blockHash : null,
-		blockNumber: transaction.blockNumber ? BigInt(transaction.blockNumber) : null,
-		...transaction.blockTimestamp != null && { blockTimestamp: BigInt(transaction.blockTimestamp) },
-		chainId: transaction.chainId ? hexToNumber$1(transaction.chainId) : void 0,
-		gas: transaction.gas ? BigInt(transaction.gas) : void 0,
-		gasPrice: transaction.gasPrice ? BigInt(transaction.gasPrice) : void 0,
-		maxFeePerBlobGas: transaction.maxFeePerBlobGas ? BigInt(transaction.maxFeePerBlobGas) : void 0,
-		maxFeePerGas: transaction.maxFeePerGas ? BigInt(transaction.maxFeePerGas) : void 0,
-		maxPriorityFeePerGas: transaction.maxPriorityFeePerGas ? BigInt(transaction.maxPriorityFeePerGas) : void 0,
-		nonce: transaction.nonce ? hexToNumber$1(transaction.nonce) : void 0,
-		to: transaction.to ? transaction.to : null,
-		transactionIndex: transaction.transactionIndex ? Number(transaction.transactionIndex) : null,
-		type: transaction.type ? transactionType[transaction.type] : void 0,
-		typeHex: transaction.type ? transaction.type : void 0,
-		value: transaction.value ? BigInt(transaction.value) : void 0,
-		v: transaction.v ? BigInt(transaction.v) : void 0
-	};
-	if (transaction.authorizationList) transaction_.authorizationList = formatAuthorizationList(transaction.authorizationList);
-	transaction_.yParity = (() => {
-		if (transaction.yParity) return Number(transaction.yParity);
-		if (typeof transaction_.v === "bigint") {
-			if (transaction_.v === 0n || transaction_.v === 27n) return 0;
-			if (transaction_.v === 1n || transaction_.v === 28n) return 1;
-			if (transaction_.v >= 35n) return transaction_.v % 2n === 0n ? 1 : 0;
-		}
-	})();
-	if (transaction_.type === "legacy") {
-		delete transaction_.accessList;
-		delete transaction_.maxFeePerBlobGas;
-		delete transaction_.maxFeePerGas;
-		delete transaction_.maxPriorityFeePerGas;
-		delete transaction_.yParity;
-	}
-	if (transaction_.type === "eip2930") {
-		delete transaction_.maxFeePerBlobGas;
-		delete transaction_.maxFeePerGas;
-		delete transaction_.maxPriorityFeePerGas;
-	}
-	if (transaction_.type === "eip1559") delete transaction_.maxFeePerBlobGas;
-	return transaction_;
-}
-function formatAuthorizationList(authorizationList) {
-	return authorizationList.map((authorization) => ({
-		address: authorization.address,
-		chainId: Number(authorization.chainId),
-		nonce: Number(authorization.nonce),
-		r: authorization.r,
-		s: authorization.s,
-		yParity: Number(authorization.yParity)
-	}));
-}
-var transactionType;
-var init_transaction = __esmMin((() => {
-	init_fromHex();
-	transactionType = {
-		"0x0": "legacy",
-		"0x1": "eip2930",
-		"0x2": "eip1559",
-		"0x3": "eip4844",
-		"0x4": "eip7702"
-	};
-}));
-
-// node_modules/.pnpm/viem@2.57.13_typescript@6.0.3/node_modules/viem/_esm/utils/formatters/block.js
-function formatBlock(block, _) {
-	const transactions = (block.transactions ?? []).map((transaction) => {
-		if (typeof transaction === "string") return transaction;
-		return formatTransaction(transaction);
-	});
-	return {
-		...block,
-		baseFeePerGas: block.baseFeePerGas ? BigInt(block.baseFeePerGas) : null,
-		blobGasUsed: block.blobGasUsed ? BigInt(block.blobGasUsed) : void 0,
-		difficulty: block.difficulty ? BigInt(block.difficulty) : void 0,
-		excessBlobGas: block.excessBlobGas ? BigInt(block.excessBlobGas) : void 0,
-		gasLimit: block.gasLimit ? BigInt(block.gasLimit) : void 0,
-		gasUsed: block.gasUsed ? BigInt(block.gasUsed) : void 0,
-		hash: block.hash ? block.hash : null,
-		logsBloom: block.logsBloom ? block.logsBloom : null,
-		nonce: block.nonce ? block.nonce : null,
-		number: block.number ? BigInt(block.number) : null,
-		size: block.size ? BigInt(block.size) : void 0,
-		timestamp: block.timestamp ? BigInt(block.timestamp) : void 0,
-		transactions,
-		totalDifficulty: block.totalDifficulty ? BigInt(block.totalDifficulty) : null
-	};
-}
-var init_block = __esmMin((() => {
-	init_transaction();
-}));
-
-// node_modules/.pnpm/viem@2.57.13_typescript@6.0.3/node_modules/viem/_esm/actions/public/getBlock.js
-/**
-* Returns information about a block at a block number, hash, or tag.
-*
-* - Docs: https://viem.sh/docs/actions/public/getBlock
-* - Examples: https://stackblitz.com/github/wevm/viem/tree/main/examples/blocks_fetching-blocks
-* - JSON-RPC Methods:
-*   - Calls [`eth_getBlockByNumber`](https://ethereum.org/en/developers/docs/apis/json-rpc/#eth_getblockbynumber) for `blockNumber` & `blockTag`.
-*   - Calls [`eth_getBlockByHash`](https://ethereum.org/en/developers/docs/apis/json-rpc/#eth_getblockbyhash) for `blockHash`.
-*
-* @param client - Client to use
-* @param parameters - {@link GetBlockParameters}
-* @returns Information about the block. {@link GetBlockReturnType}
-*
-* @example
-* import { createPublicClient, http } from 'viem'
-* import { mainnet } from 'viem/chains'
-* import { getBlock } from 'viem/public'
-*
-* const client = createPublicClient({
-*   chain: mainnet,
-*   transport: http(),
-* })
-* const block = await getBlock(client)
-*/
-async function getBlock(client, { blockHash, blockNumber, blockTag = client.experimental_blockTag ?? "latest", includeTransactions: includeTransactions_ } = {}) {
-	const includeTransactions = includeTransactions_ ?? false;
-	const blockNumberHex = blockNumber !== void 0 ? numberToHex(blockNumber) : void 0;
-	let block = null;
-	if (blockHash) block = await client.request({
-		method: "eth_getBlockByHash",
-		params: [blockHash, includeTransactions]
-	}, { dedupe: true });
-	else block = await client.request({
-		method: "eth_getBlockByNumber",
-		params: [blockNumberHex || blockTag, includeTransactions]
-	}, { dedupe: Boolean(blockNumberHex) });
-	if (!block) throw new BlockNotFoundError({
-		blockHash,
-		blockNumber
-	});
-	return (client.chain?.formatters?.block?.format || formatBlock)(block, "getBlock");
-}
-var init_getBlock = __esmMin((() => {
-	init_block$1();
-	init_toHex();
-	init_block();
-}));
-
-// node_modules/.pnpm/viem@2.57.13_typescript@6.0.3/node_modules/viem/_esm/actions/public/getGasPrice.js
-/**
-* Returns the current price of gas (in wei).
-*
-* - Docs: https://viem.sh/docs/actions/public/getGasPrice
-* - JSON-RPC Methods: [`eth_gasPrice`](https://ethereum.org/en/developers/docs/apis/json-rpc/#eth_gasprice)
-*
-* @param client - Client to use
-* @returns The gas price (in wei). {@link GetGasPriceReturnType}
-*
-* @example
-* import { createPublicClient, http } from 'viem'
-* import { mainnet } from 'viem/chains'
-* import { getGasPrice } from 'viem/public'
-*
-* const client = createPublicClient({
-*   chain: mainnet,
-*   transport: http(),
-* })
-* const gasPrice = await getGasPrice(client)
-*/
-async function getGasPrice(client) {
-	const gasPrice = await client.request({ method: "eth_gasPrice" });
-	return BigInt(gasPrice);
-}
-var init_getGasPrice = __esmMin((() => {}));
-
-// node_modules/.pnpm/viem@2.57.13_typescript@6.0.3/node_modules/viem/_esm/actions/public/estimateMaxPriorityFeePerGas.js
-/**
-* Returns an estimate for the max priority fee per gas (in wei) for a
-* transaction to be likely included in the next block.
-* Defaults to [`chain.fees.defaultPriorityFee`](/docs/clients/chains#fees-defaultpriorityfee) if set.
-*
-* - Docs: https://viem.sh/docs/actions/public/estimateMaxPriorityFeePerGas
-*
-* @param client - Client to use
-* @returns An estimate (in wei) for the max priority fee per gas. {@link EstimateMaxPriorityFeePerGasReturnType}
-*
-* @example
-* import { createPublicClient, http } from 'viem'
-* import { mainnet } from 'viem/chains'
-* import { estimateMaxPriorityFeePerGas } from 'viem/actions'
-*
-* const client = createPublicClient({
-*   chain: mainnet,
-*   transport: http(),
-* })
-* const maxPriorityFeePerGas = await estimateMaxPriorityFeePerGas(client)
-* // 10000000n
-*/
-async function estimateMaxPriorityFeePerGas(client, args) {
-	return internal_estimateMaxPriorityFeePerGas(client, args);
-}
-async function internal_estimateMaxPriorityFeePerGas(client, args) {
-	const { block: block_, chain = client.chain, request } = args || {};
-	try {
-		const maxPriorityFeePerGas = chain?.fees?.maxPriorityFeePerGas ?? chain?.fees?.defaultPriorityFee;
-		if (typeof maxPriorityFeePerGas === "function") {
-			const maxPriorityFeePerGas_ = await maxPriorityFeePerGas({
-				block: block_ || await getAction(client, getBlock, "getBlock")({}),
-				client,
-				request
-			});
-			if (maxPriorityFeePerGas_ === null) throw new Error();
-			return maxPriorityFeePerGas_;
-		}
-		if (typeof maxPriorityFeePerGas !== "undefined") return maxPriorityFeePerGas;
-		const maxPriorityFeePerGasHex = await client.request({ method: "eth_maxPriorityFeePerGas" });
-		return hexToBigInt(maxPriorityFeePerGasHex);
-	} catch {
-		const [block, gasPrice] = await Promise.all([block_ ? Promise.resolve(block_) : getAction(client, getBlock, "getBlock")({}), getAction(client, getGasPrice, "getGasPrice")({})]);
-		if (typeof block.baseFeePerGas !== "bigint") throw new Eip1559FeesNotSupportedError();
-		const maxPriorityFeePerGas = gasPrice - block.baseFeePerGas;
-		if (maxPriorityFeePerGas < 0n) return 0n;
-		return maxPriorityFeePerGas;
-	}
-}
-var init_estimateMaxPriorityFeePerGas = __esmMin((() => {
-	init_fee$1();
-	init_fromHex();
-	init_getAction();
-	init_getBlock();
-	init_getGasPrice();
-}));
-
-// node_modules/.pnpm/viem@2.57.13_typescript@6.0.3/node_modules/viem/_esm/actions/public/estimateFeesPerGas.js
-/**
-* Returns an estimate for the fees per gas (in wei) for a
-* transaction to be likely included in the next block.
-* Defaults to [`chain.fees.estimateFeesPerGas`](/docs/clients/chains#fees-estimatefeespergas) if set.
-*
-* - Docs: https://viem.sh/docs/actions/public/estimateFeesPerGas
-*
-* @param client - Client to use
-* @param parameters - {@link EstimateFeesPerGasParameters}
-* @returns An estimate (in wei) for the fees per gas. {@link EstimateFeesPerGasReturnType}
-*
-* @example
-* import { createPublicClient, http } from 'viem'
-* import { mainnet } from 'viem/chains'
-* import { estimateFeesPerGas } from 'viem/actions'
-*
-* const client = createPublicClient({
-*   chain: mainnet,
-*   transport: http(),
-* })
-* const maxPriorityFeePerGas = await estimateFeesPerGas(client)
-* // { maxFeePerGas: ..., maxPriorityFeePerGas: ... }
-*/
-async function estimateFeesPerGas(client, args) {
-	return internal_estimateFeesPerGas(client, args);
-}
-async function internal_estimateFeesPerGas(client, args) {
-	const { block: block_, chain = client.chain, request, type = "eip1559" } = args || {};
-	const baseFeeMultiplier = await (async () => {
-		if (typeof chain?.fees?.baseFeeMultiplier === "function") return chain.fees.baseFeeMultiplier({
-			block: block_,
-			client,
-			request
-		});
-		return chain?.fees?.baseFeeMultiplier ?? 1.2;
-	})();
-	if (baseFeeMultiplier < 1) throw new BaseFeeScalarError();
-	const denominator = 10 ** (baseFeeMultiplier.toString().split(".")[1]?.length ?? 0);
-	const multiply = (base) => base * BigInt(Math.round(baseFeeMultiplier * denominator)) / BigInt(denominator);
-	const block = block_ ? block_ : await getAction(client, getBlock, "getBlock")({});
-	if (typeof chain?.fees?.estimateFeesPerGas === "function") {
-		const fees = await chain.fees.estimateFeesPerGas({
-			block: block_,
-			client,
-			multiply,
-			request,
-			type
-		});
-		if (fees !== null) return fees;
-	}
-	if (type === "eip1559") {
-		if (typeof block.baseFeePerGas !== "bigint") throw new Eip1559FeesNotSupportedError();
-		const maxPriorityFeePerGas = typeof request?.maxPriorityFeePerGas === "bigint" ? request.maxPriorityFeePerGas : await internal_estimateMaxPriorityFeePerGas(client, {
-			block,
-			chain,
-			request
-		});
-		const baseFeePerGas = multiply(block.baseFeePerGas);
-		return {
-			maxFeePerGas: request?.maxFeePerGas ?? baseFeePerGas + maxPriorityFeePerGas,
-			maxPriorityFeePerGas
-		};
-	}
-	return { gasPrice: request?.gasPrice ?? multiply(await getAction(client, getGasPrice, "getGasPrice")({})) };
-}
-var init_estimateFeesPerGas = __esmMin((() => {
-	init_fee$1();
-	init_getAction();
-	init_estimateMaxPriorityFeePerGas();
-	init_getBlock();
-	init_getGasPrice();
-}));
-
-// node_modules/.pnpm/viem@2.57.13_typescript@6.0.3/node_modules/viem/_esm/utils/block/formatBlockParameter.js
-/**
-* Formats block parameters for RPC calls according to EIP-1898.
-*
-* @param parameters - Block parameters
-* @returns Formatted block parameter for RPC call
-*
-* @example
-* // Using block tag
-* formatBlockParameter({ blockTag: 'latest' })
-* // => 'latest'
-*
-* @example
-* // Using block number
-* formatBlockParameter({ blockNumber: 69420n })
-* // => '0x10f2c'
-*
-* @example
-* // Using block hash (EIP-1898)
-* formatBlockParameter({ blockHash: '0x...' })
-* // => { blockHash: '0x...' }
-*
-* @example
-* // Using block hash with requireCanonical (EIP-1898)
-* formatBlockParameter({ blockHash: '0x...', requireCanonical: true })
-* // => { blockHash: '0x...', requireCanonical: true }
-*/
-function formatBlockParameter(parameters) {
-	const { blockHash, blockNumber, blockTag, requireCanonical } = parameters;
-	if (requireCanonical !== void 0 && !blockHash) throw new BaseError$1("`requireCanonical` can only be provided when `blockHash` is set.");
-	if (blockHash) return requireCanonical ? {
-		blockHash,
-		requireCanonical
-	} : { blockHash };
-	if (typeof blockNumber === "bigint") return numberToHex(blockNumber);
-	return blockTag ?? "latest";
-}
-var init_formatBlockParameter = __esmMin((() => {
-	init_base();
-	init_toHex();
-}));
-
-// node_modules/.pnpm/viem@2.57.13_typescript@6.0.3/node_modules/viem/_esm/actions/public/getTransactionCount.js
-/**
-* Returns the number of [Transactions](https://viem.sh/docs/glossary/terms#transaction) an Account has sent.
-*
-* - Docs: https://viem.sh/docs/actions/public/getTransactionCount
-* - JSON-RPC Methods: [`eth_getTransactionCount`](https://ethereum.org/en/developers/docs/apis/json-rpc/#eth_gettransactioncount)
-*
-* @param client - Client to use
-* @param parameters - {@link GetTransactionCountParameters}
-* @returns The number of transactions an account has sent. {@link GetTransactionCountReturnType}
-*
-* @example
-* import { createPublicClient, http } from 'viem'
-* import { mainnet } from 'viem/chains'
-* import { getTransactionCount } from 'viem/public'
-*
-* const client = createPublicClient({
-*   chain: mainnet,
-*   transport: http(),
-* })
-* const transactionCount = await getTransactionCount(client, {
-*   address: '0xA0Cf798816D4b9b9866b5330EEa46a18382f251e',
-* })
-*/
-async function getTransactionCount(client, { address, blockHash, blockNumber, blockTag = "latest", requireCanonical }) {
-	const block = formatBlockParameter({
-		blockHash,
-		blockNumber,
-		blockTag,
-		requireCanonical
-	});
-	const count = await client.request({
-		method: "eth_getTransactionCount",
-		params: [address, block]
-	}, { dedupe: typeof blockNumber === "bigint" || blockHash !== void 0 });
-	return hexToNumber$1(count);
-}
-var init_getTransactionCount = __esmMin((() => {
-	init_formatBlockParameter();
-	init_fromHex();
+	maxInt8 = 2n ** (8n - 1n) - 1n;
+	maxInt16 = 2n ** (16n - 1n) - 1n;
+	maxInt24 = 2n ** (24n - 1n) - 1n;
+	maxInt32 = 2n ** (32n - 1n) - 1n;
+	maxInt40 = 2n ** (40n - 1n) - 1n;
+	maxInt48 = 2n ** (48n - 1n) - 1n;
+	maxInt56 = 2n ** (56n - 1n) - 1n;
+	maxInt64 = 2n ** (64n - 1n) - 1n;
+	maxInt72 = 2n ** (72n - 1n) - 1n;
+	maxInt80 = 2n ** (80n - 1n) - 1n;
+	maxInt88 = 2n ** (88n - 1n) - 1n;
+	maxInt96 = 2n ** (96n - 1n) - 1n;
+	maxInt104 = 2n ** (104n - 1n) - 1n;
+	maxInt112 = 2n ** (112n - 1n) - 1n;
+	maxInt120 = 2n ** (120n - 1n) - 1n;
+	maxInt128 = 2n ** (128n - 1n) - 1n;
+	maxInt136 = 2n ** (136n - 1n) - 1n;
+	maxInt144 = 2n ** (144n - 1n) - 1n;
+	maxInt152 = 2n ** (152n - 1n) - 1n;
+	maxInt160 = 2n ** (160n - 1n) - 1n;
+	maxInt168 = 2n ** (168n - 1n) - 1n;
+	maxInt176 = 2n ** (176n - 1n) - 1n;
+	maxInt184 = 2n ** (184n - 1n) - 1n;
+	maxInt192 = 2n ** (192n - 1n) - 1n;
+	maxInt200 = 2n ** (200n - 1n) - 1n;
+	maxInt208 = 2n ** (208n - 1n) - 1n;
+	maxInt216 = 2n ** (216n - 1n) - 1n;
+	maxInt224 = 2n ** (224n - 1n) - 1n;
+	maxInt232 = 2n ** (232n - 1n) - 1n;
+	maxInt240 = 2n ** (240n - 1n) - 1n;
+	maxInt248 = 2n ** (248n - 1n) - 1n;
+	maxInt256 = 2n ** (256n - 1n) - 1n;
+	minInt8 = -(2n ** (8n - 1n));
+	minInt16 = -(2n ** (16n - 1n));
+	minInt24 = -(2n ** (24n - 1n));
+	minInt32 = -(2n ** (32n - 1n));
+	minInt40 = -(2n ** (40n - 1n));
+	minInt48 = -(2n ** (48n - 1n));
+	minInt56 = -(2n ** (56n - 1n));
+	minInt64 = -(2n ** (64n - 1n));
+	minInt72 = -(2n ** (72n - 1n));
+	minInt80 = -(2n ** (80n - 1n));
+	minInt88 = -(2n ** (88n - 1n));
+	minInt96 = -(2n ** (96n - 1n));
+	minInt104 = -(2n ** (104n - 1n));
+	minInt112 = -(2n ** (112n - 1n));
+	minInt120 = -(2n ** (120n - 1n));
+	minInt128 = -(2n ** (128n - 1n));
+	minInt136 = -(2n ** (136n - 1n));
+	minInt144 = -(2n ** (144n - 1n));
+	minInt152 = -(2n ** (152n - 1n));
+	minInt160 = -(2n ** (160n - 1n));
+	minInt168 = -(2n ** (168n - 1n));
+	minInt176 = -(2n ** (176n - 1n));
+	minInt184 = -(2n ** (184n - 1n));
+	minInt192 = -(2n ** (192n - 1n));
+	minInt200 = -(2n ** (200n - 1n));
+	minInt208 = -(2n ** (208n - 1n));
+	minInt216 = -(2n ** (216n - 1n));
+	minInt224 = -(2n ** (224n - 1n));
+	minInt232 = -(2n ** (232n - 1n));
+	minInt240 = -(2n ** (240n - 1n));
+	minInt248 = -(2n ** (248n - 1n));
+	minInt256 = -(2n ** (256n - 1n));
+	maxUint256 = 2n ** 256n - 1n;
 }));
 
 // node_modules/.pnpm/viem@2.57.13_typescript@6.0.3/node_modules/viem/_esm/utils/blob/blobsToCommitments.js
@@ -8876,7 +6756,7 @@ var init_sha256$1 = __esmMin((() => {
 // node_modules/.pnpm/viem@2.57.13_typescript@6.0.3/node_modules/viem/_esm/utils/hash/sha256.js
 function sha256$2(value, to_) {
 	const to = to_ || "hex";
-	const bytes = sha256$3(isHex(value, { strict: false }) ? toBytes$2(value) : value);
+	const bytes = sha256$3(isHex(value, { strict: false }) ? toBytes$1(value) : value);
 	if (to === "bytes") return bytes;
 	return toHex(bytes);
 }
@@ -8968,7 +6848,7 @@ var BlobSizeTooLargeError, EmptyBlobError, InvalidVersionedHashSizeError, Invali
 var init_blob = __esmMin((() => {
 	init_kzg();
 	init_base();
-	BlobSizeTooLargeError = class extends BaseError$1 {
+	BlobSizeTooLargeError = class extends BaseError {
 		constructor({ maxSize, size }) {
 			super("Blob size is too large.", {
 				metaMessages: [`Max: ${maxSize} bytes`, `Given: ${size} bytes`],
@@ -8976,12 +6856,12 @@ var init_blob = __esmMin((() => {
 			});
 		}
 	};
-	EmptyBlobError = class extends BaseError$1 {
+	EmptyBlobError = class extends BaseError {
 		constructor() {
 			super("Blob data must not be empty.", { name: "EmptyBlobError" });
 		}
 	};
-	InvalidVersionedHashSizeError = class extends BaseError$1 {
+	InvalidVersionedHashSizeError = class extends BaseError {
 		constructor({ hash, size }) {
 			super(`Versioned hash "${hash}" size is invalid.`, {
 				metaMessages: ["Expected: 32", `Received: ${size}`],
@@ -8989,7 +6869,7 @@ var init_blob = __esmMin((() => {
 			});
 		}
 	};
-	InvalidVersionedHashVersionError = class extends BaseError$1 {
+	InvalidVersionedHashVersionError = class extends BaseError {
 		constructor({ hash, version }) {
 			super(`Versioned hash "${hash}" version is invalid.`, {
 				metaMessages: [`Expected: ${1}`, `Received: ${version}`],
@@ -9013,7 +6893,7 @@ var init_blob = __esmMin((() => {
 function toBlobs(parameters) {
 	const to = parameters.to ?? (typeof parameters.data === "string" ? "hex" : "bytes");
 	const data = typeof parameters.data === "string" ? hexToBytes$1(parameters.data) : parameters.data;
-	const size_ = size$3(data);
+	const size_ = size(data);
 	if (!size_) throw new EmptyBlobError();
 	if (size_ > 761855) throw new BlobSizeTooLargeError({
 		maxSize: maxBytesPerTransaction,
@@ -9044,7 +6924,7 @@ function toBlobs(parameters) {
 var init_toBlobs = __esmMin((() => {
 	init_blob$1();
 	init_blob();
-	init_cursor$1();
+	init_cursor();
 	init_size();
 	init_toBytes();
 	init_toHex();
@@ -9122,654 +7002,28 @@ function getTransactionType(transaction) {
 	throw new InvalidSerializableTransactionError({ transaction });
 }
 var init_getTransactionType = __esmMin((() => {
-	init_transaction$1();
-}));
-
-// node_modules/.pnpm/viem@2.57.13_typescript@6.0.3/node_modules/viem/_esm/utils/errors/getTransactionError.js
-function getTransactionError(err, { docsPath, ...args }) {
-	const cause = (() => {
-		const cause = getNodeError(err, args);
-		if (cause instanceof UnknownNodeError) return err;
-		return cause;
-	})();
-	return new TransactionExecutionError(cause, {
-		docsPath,
-		...args
-	});
-}
-var init_getTransactionError = __esmMin((() => {
-	init_node();
-	init_transaction$1();
-	init_getNodeError();
-}));
-
-// node_modules/.pnpm/viem@2.57.13_typescript@6.0.3/node_modules/viem/_esm/actions/public/getChainId.js
-/**
-* Returns the chain ID associated with the current network.
-*
-* - Docs: https://viem.sh/docs/actions/public/getChainId
-* - JSON-RPC Methods: [`eth_chainId`](https://ethereum.org/en/developers/docs/apis/json-rpc/#eth_chainid)
-*
-* @param client - Client to use
-* @returns The current chain ID. {@link GetChainIdReturnType}
-*
-* @example
-* import { createPublicClient, http } from 'viem'
-* import { mainnet } from 'viem/chains'
-* import { getChainId } from 'viem/public'
-*
-* const client = createPublicClient({
-*   chain: mainnet,
-*   transport: http(),
-* })
-* const chainId = await getChainId(client)
-* // 1
-*/
-async function getChainId(client) {
-	const chainIdHex = await client.request({ method: "eth_chainId" }, { dedupe: true });
-	return hexToNumber$1(chainIdHex);
-}
-var init_getChainId = __esmMin((() => {
-	init_fromHex();
-}));
-
-// node_modules/.pnpm/viem@2.57.13_typescript@6.0.3/node_modules/viem/_esm/actions/public/fillTransaction.js
-/**
-* Fills a transaction request with the necessary fields to be signed over.
-*
-* - Docs: https://viem.sh/docs/actions/public/fillTransaction
-*
-* @param client - Client to use
-* @param parameters - {@link FillTransactionParameters}
-* @returns The filled transaction. {@link FillTransactionReturnType}
-*
-* @example
-* import { createPublicClient, http } from 'viem'
-* import { mainnet } from 'viem/chains'
-* import { fillTransaction } from 'viem/public'
-*
-* const client = createPublicClient({
-*   chain: mainnet,
-*   transport: http(),
-* })
-* const result = await fillTransaction(client, {
-*   account: '0xA0Cf798816D4b9b9866b5330EEa46a18382f251e',
-*   to: '0x70997970c51812dc3a010c7d01b50e0d17dc79c8',
-*   value: parseEther('1'),
-* })
-*/
-async function fillTransaction(client, parameters) {
-	const { account = client.account, accessList, authorizationList, chain = client.chain, blobVersionedHashes, blobs, data, gas, gasPrice, maxFeePerBlobGas, maxFeePerGas, maxPriorityFeePerGas, nonce: nonce_, nonceManager, to, type, value, ...rest } = parameters;
-	const nonce = await (async () => {
-		if (!account) return nonce_;
-		if (!nonceManager) return nonce_;
-		if (typeof nonce_ !== "undefined") return nonce_;
-		const account_ = parseAccount(account);
-		const chainId = chain ? chain.id : await getAction(client, getChainId, "getChainId")({});
-		return await nonceManager.consume({
-			address: account_.address,
-			chainId,
-			client
-		});
-	})();
-	assertRequest(parameters);
-	const chainFormat = chain?.formatters?.transactionRequest?.format;
-	const request = (chainFormat || formatTransactionRequest)({
-		...extract(rest, { format: chainFormat }),
-		account: account ? parseAccount(account) : void 0,
-		accessList,
-		authorizationList,
-		blobs,
-		blobVersionedHashes,
-		data,
-		gas,
-		gasPrice,
-		maxFeePerBlobGas,
-		maxFeePerGas,
-		maxPriorityFeePerGas,
-		nonce,
-		to,
-		type,
-		value
-	}, "fillTransaction");
-	try {
-		const response = await client.request({
-			method: "eth_fillTransaction",
-			params: [request]
-		});
-		const transaction = (chain?.formatters?.transaction?.format || formatTransaction)(response.tx);
-		delete transaction.blockHash;
-		delete transaction.blockNumber;
-		delete transaction.r;
-		delete transaction.s;
-		delete transaction.transactionIndex;
-		delete transaction.v;
-		delete transaction.yParity;
-		transaction.data = transaction.input;
-		const hasFeePayerSignature = typeof transaction.feePayerSignature !== "undefined" && transaction.feePayerSignature !== null;
-		if (hasFeePayerSignature && typeof nonce !== "undefined" && BigInt(transaction.nonce) !== BigInt(nonce)) throw new FeePayerNonceMismatchError({
-			filledNonce: transaction.nonce,
-			requestedNonce: nonce
-		});
-		if (!hasFeePayerSignature) {
-			if (transaction.gas) transaction.gas = parameters.gas ?? transaction.gas;
-			if (transaction.gasPrice) transaction.gasPrice = parameters.gasPrice ?? transaction.gasPrice;
-			if (transaction.maxFeePerBlobGas) transaction.maxFeePerBlobGas = parameters.maxFeePerBlobGas ?? transaction.maxFeePerBlobGas;
-			if (transaction.maxFeePerGas) transaction.maxFeePerGas = parameters.maxFeePerGas ?? transaction.maxFeePerGas;
-			if (transaction.maxPriorityFeePerGas) transaction.maxPriorityFeePerGas = parameters.maxPriorityFeePerGas ?? transaction.maxPriorityFeePerGas;
-			if (typeof transaction.nonce !== "undefined" && typeof parameters.nonce !== "undefined") transaction.nonce = typeof transaction.nonce === "bigint" ? BigInt(parameters.nonce) : parameters.nonce;
-			const feeMultiplier = await (async () => {
-				if (typeof chain?.fees?.baseFeeMultiplier === "function") {
-					const block = await getAction(client, getBlock, "getBlock")({});
-					return chain.fees.baseFeeMultiplier({
-						block,
-						client,
-						request: parameters
-					});
-				}
-				return chain?.fees?.baseFeeMultiplier ?? 1.2;
-			})();
-			if (feeMultiplier < 1) throw new BaseFeeScalarError();
-			const denominator = 10 ** (feeMultiplier.toString().split(".")[1]?.length ?? 0);
-			const multiplyFee = (base) => base * BigInt(Math.round(feeMultiplier * denominator)) / BigInt(denominator);
-			if (transaction.maxFeePerGas && !parameters.maxFeePerGas) transaction.maxFeePerGas = multiplyFee(transaction.maxFeePerGas);
-			if (transaction.gasPrice && !parameters.gasPrice) transaction.gasPrice = multiplyFee(transaction.gasPrice);
-		}
-		return {
-			raw: response.raw,
-			transaction: {
-				from: request.from,
-				...transaction
-			},
-			...response.capabilities ? { capabilities: response.capabilities } : {}
-		};
-	} catch (err) {
-		throw getTransactionError(err, {
-			...parameters,
-			chain: client.chain
-		});
-	}
-}
-var init_fillTransaction = __esmMin((() => {
-	init_parseAccount();
-	init_fee$1();
-	init_transaction$1();
-	init_getTransactionError();
-	init_extract();
 	init_transaction();
-	init_transactionRequest();
-	init_getAction();
-	init_assertRequest();
-	init_getBlock();
-	init_getChainId();
-}));
-
-// node_modules/.pnpm/viem@2.57.13_typescript@6.0.3/node_modules/viem/_esm/actions/wallet/prepareTransactionRequest.js
-/**
-* Prepares a transaction request for signing.
-*
-* - Docs: https://viem.sh/docs/actions/wallet/prepareTransactionRequest
-*
-* @param args - {@link PrepareTransactionRequestParameters}
-* @returns The transaction request. {@link PrepareTransactionRequestReturnType}
-*
-* @example
-* import { createWalletClient, custom } from 'viem'
-* import { mainnet } from 'viem/chains'
-* import { prepareTransactionRequest } from 'viem/actions'
-*
-* const client = createWalletClient({
-*   chain: mainnet,
-*   transport: custom(window.ethereum),
-* })
-* const request = await prepareTransactionRequest(client, {
-*   account: '0xA0Cf798816D4b9b9866b5330EEa46a18382f251e',
-*   to: '0x0000000000000000000000000000000000000000',
-*   value: 1n,
-* })
-*
-* @example
-* // Account Hoisting
-* import { createWalletClient, http } from 'viem'
-* import { privateKeyToAccount } from 'viem/accounts'
-* import { mainnet } from 'viem/chains'
-* import { prepareTransactionRequest } from 'viem/actions'
-*
-* const client = createWalletClient({
-*   account: privateKeyToAccount('0x…'),
-*   chain: mainnet,
-*   transport: custom(window.ethereum),
-* })
-* const request = await prepareTransactionRequest(client, {
-*   to: '0x0000000000000000000000000000000000000000',
-*   value: 1n,
-* })
-*/
-async function prepareTransactionRequest(client, args) {
-	let request = args;
-	request.account ??= client.account;
-	request.parameters ??= defaultParameters;
-	const { account: account_, chain = client.chain, nonceManager, parameters } = request;
-	const prepareTransactionRequest = (() => {
-		if (typeof chain?.prepareTransactionRequest === "function") return {
-			fn: chain.prepareTransactionRequest,
-			runAt: ["beforeFillTransaction"]
-		};
-		if (Array.isArray(chain?.prepareTransactionRequest)) return {
-			fn: chain.prepareTransactionRequest[0],
-			runAt: chain.prepareTransactionRequest[1].runAt
-		};
-	})();
-	let chainId;
-	async function getChainId$1() {
-		if (chainId) return chainId;
-		if (typeof request.chainId !== "undefined") return request.chainId;
-		if (chain) return chain.id;
-		chainId = await getAction(client, getChainId, "getChainId")({});
-		return chainId;
-	}
-	let account = account_ ? parseAccount(account_) : account_;
-	let nonce = request.nonce;
-	if (prepareTransactionRequest?.fn && prepareTransactionRequest.runAt?.includes("beforeFillTransaction")) {
-		request = await prepareTransactionRequest.fn({
-			...request,
-			chain
-		}, {
-			client,
-			phase: "beforeFillTransaction"
-		});
-		nonce ??= request.nonce;
-		const sender = request.account ?? request.from;
-		account = sender ? parseAccount(sender) : void 0;
-	}
-	if (parameters.includes("nonce") && typeof nonce === "undefined" && account && nonceManager) {
-		const chainId = await getChainId$1();
-		nonce = await nonceManager.consume({
-			address: account.address,
-			chainId,
-			client
-		});
-	}
-	const fillResult = (() => {
-		if ((parameters.includes("blobVersionedHashes") || parameters.includes("sidecars")) && request.kzg && request.blobs) return false;
-		if (parameters.length > 0 && "feePayer" in request && request.feePayer && !("feePayerSignature" in request && request.feePayerSignature)) return true;
-		if (supportsFillTransaction.get(client.uid) === false) return false;
-		if (!["fees", "gas"].some((parameter) => parameters.includes(parameter))) return false;
-		if (parameters.includes("chainId") && typeof request.chainId !== "number") return true;
-		if (parameters.includes("nonce") && typeof nonce !== "number") return true;
-		if (parameters.includes("fees") && typeof request.gasPrice !== "bigint" && (typeof request.maxFeePerGas !== "bigint" || typeof request.maxPriorityFeePerGas !== "bigint")) return true;
-		if (parameters.includes("gas") && typeof request.gas !== "bigint") return true;
-		return false;
-	})() ? await getAction(client, fillTransaction, "fillTransaction")({
-		...request,
-		nonce
-	}).then((result) => {
-		const { chainId, from, gas, gasPrice, nonce, maxFeePerBlobGas, maxFeePerGas, maxPriorityFeePerGas, type, ...rest } = result.transaction;
-		const feeToken = "feeToken" in rest ? rest.feeToken : void 0;
-		const hasFilledFeePayerSignature = "feePayerSignature" in rest && rest.feePayerSignature !== null && typeof rest.feePayerSignature !== "undefined";
-		const shouldUseFilledFeeToken = typeof feeToken !== "undefined" && feeToken !== null && (!("feeToken" in request) || hasFilledFeePayerSignature);
-		supportsFillTransaction.set(client.uid, true);
-		return {
-			...request,
-			...from ? { from } : {},
-			...type && !request.type ? { type } : {},
-			...typeof chainId !== "undefined" ? { chainId } : {},
-			...typeof gas !== "undefined" ? { gas } : {},
-			...typeof gasPrice !== "undefined" ? { gasPrice } : {},
-			...typeof nonce !== "undefined" ? { nonce } : {},
-			...typeof maxFeePerBlobGas !== "undefined" && request.type !== "legacy" && request.type !== "eip2930" ? { maxFeePerBlobGas } : {},
-			...typeof maxFeePerGas !== "undefined" && request.type !== "legacy" && request.type !== "eip2930" ? { maxFeePerGas } : {},
-			...typeof maxPriorityFeePerGas !== "undefined" && request.type !== "legacy" && request.type !== "eip2930" ? { maxPriorityFeePerGas } : {},
-			..."nonceKey" in rest && typeof rest.nonceKey !== "undefined" ? { nonceKey: rest.nonceKey } : {},
-			..."validBefore" in rest && rest.validBefore !== null && typeof rest.validBefore !== "undefined" ? { validBefore: rest.validBefore } : {},
-			..."validAfter" in rest && rest.validAfter !== null && typeof rest.validAfter !== "undefined" ? { validAfter: rest.validAfter } : {},
-			..."keyAuthorization" in rest && typeof rest.keyAuthorization !== "undefined" && rest.keyAuthorization !== null && !("keyAuthorization" in request) ? { keyAuthorization: rest.keyAuthorization } : {},
-			..."feePayerSignature" in rest && typeof rest.feePayerSignature !== "undefined" && rest.feePayerSignature !== null ? { feePayerSignature: rest.feePayerSignature } : {},
-			...shouldUseFilledFeeToken ? { feeToken } : {},
-			...result.capabilities ? { _capabilities: result.capabilities } : {}
-		};
-	}).catch((e) => {
-		const error = e;
-		if (error.name !== "TransactionExecutionError") return request;
-		if (error.walk?.((error) => error instanceof FeePayerNonceMismatchError)) throw e;
-		if (error.walk?.((e) => {
-			return e.name === "ExecutionRevertedError";
-		})) throw e;
-		if (error.walk?.((e) => {
-			const error = e;
-			return error.name === "MethodNotFoundRpcError" || error.name === "MethodNotSupportedRpcError" || error.message?.includes("eth_fillTransaction is not available");
-		})) supportsFillTransaction.set(client.uid, false);
-		return request;
-	}) : request;
-	nonce ??= fillResult.nonce;
-	request = {
-		...fillResult,
-		...account ? { from: account?.address } : {},
-		...typeof nonce !== "undefined" ? { nonce } : {}
-	};
-	const { blobs, gas, kzg, type } = request;
-	if (prepareTransactionRequest?.fn && prepareTransactionRequest.runAt?.includes("beforeFillParameters")) request = await prepareTransactionRequest.fn({
-		...request,
-		chain
-	}, {
-		client,
-		phase: "beforeFillParameters"
-	});
-	let block;
-	async function getBlock$1() {
-		if (block) return block;
-		block = await getAction(client, getBlock, "getBlock")({ blockTag: "latest" });
-		return block;
-	}
-	if (parameters.includes("nonce") && typeof nonce === "undefined" && account && !nonceManager) request.nonce = await getAction(client, getTransactionCount, "getTransactionCount")({
-		address: account.address,
-		blockTag: "pending"
-	});
-	if ((parameters.includes("blobVersionedHashes") || parameters.includes("sidecars")) && blobs && kzg) {
-		const commitments = blobsToCommitments({
-			blobs,
-			kzg
-		});
-		if (parameters.includes("blobVersionedHashes")) {
-			const versionedHashes = commitmentsToVersionedHashes({
-				commitments,
-				to: "hex"
-			});
-			request.blobVersionedHashes = versionedHashes;
-		}
-		if (parameters.includes("sidecars")) {
-			const proofs = blobsToProofs({
-				blobs,
-				commitments,
-				kzg
-			});
-			const sidecars = toBlobSidecars({
-				blobs,
-				commitments,
-				proofs,
-				to: "hex"
-			});
-			request.sidecars = sidecars;
-		}
-	}
-	if (parameters.includes("chainId")) request.chainId = await getChainId$1();
-	if ((parameters.includes("fees") || parameters.includes("type")) && typeof type === "undefined") try {
-		request.type = getTransactionType(request);
-	} catch {
-		let isEip1559Network = eip1559NetworkCache.get(client.uid);
-		if (typeof isEip1559Network === "undefined") {
-			isEip1559Network = typeof (await getBlock$1())?.baseFeePerGas === "bigint";
-			eip1559NetworkCache.set(client.uid, isEip1559Network);
-		}
-		request.type = isEip1559Network ? "eip1559" : "legacy";
-	}
-	if (parameters.includes("fees")) {
-		if (request.type !== "legacy" && request.type !== "eip2930") {
-			if (typeof request.maxFeePerGas === "undefined" || typeof request.maxPriorityFeePerGas === "undefined") {
-				const block = await getBlock$1();
-				const { maxFeePerGas, maxPriorityFeePerGas } = await internal_estimateFeesPerGas(client, {
-					block,
-					chain,
-					request
-				});
-				if (typeof request.maxPriorityFeePerGas === "undefined" && request.maxFeePerGas && request.maxFeePerGas < maxPriorityFeePerGas) throw new MaxFeePerGasTooLowError({ maxPriorityFeePerGas });
-				request.maxPriorityFeePerGas = maxPriorityFeePerGas;
-				request.maxFeePerGas = maxFeePerGas;
-			}
-		} else {
-			if (typeof request.maxFeePerGas !== "undefined" || typeof request.maxPriorityFeePerGas !== "undefined") throw new Eip1559FeesNotSupportedError();
-			if (typeof request.gasPrice === "undefined") {
-				const block = await getBlock$1();
-				const { gasPrice: gasPrice_ } = await internal_estimateFeesPerGas(client, {
-					block,
-					chain,
-					request,
-					type: "legacy"
-				});
-				request.gasPrice = gasPrice_;
-			}
-		}
-	}
-	if (parameters.includes("gas") && typeof gas === "undefined") request.gas = await getAction(client, estimateGas, "estimateGas")({
-		...request,
-		account,
-		prepare: account?.type === "local" ? [] : ["blobVersionedHashes"]
-	});
-	if (prepareTransactionRequest?.fn && prepareTransactionRequest.runAt?.includes("afterFillParameters")) request = await prepareTransactionRequest.fn({
-		...request,
-		chain
-	}, {
-		client,
-		phase: "afterFillParameters"
-	});
-	assertRequest(request);
-	delete request.parameters;
-	return request;
-}
-var defaultParameters, eip1559NetworkCache, supportsFillTransaction;
-var init_prepareTransactionRequest = __esmMin((() => {
-	init_parseAccount();
-	init_estimateFeesPerGas();
-	init_estimateGas();
-	init_getBlock();
-	init_getTransactionCount();
-	init_fee$1();
-	init_transaction$1();
-	init_blobsToCommitments();
-	init_blobsToProofs();
-	init_commitmentsToVersionedHashes();
-	init_toBlobSidecars();
-	init_getAction();
-	init_lru$1();
-	init_assertRequest();
-	init_getTransactionType();
-	init_fillTransaction();
-	init_getChainId();
-	defaultParameters = [
-		"blobVersionedHashes",
-		"chainId",
-		"fees",
-		"gas",
-		"nonce",
-		"type"
-	];
-	eip1559NetworkCache = /*#__PURE__*/ new Map();
-	supportsFillTransaction = /*#__PURE__*/ new LruMap$1(128);
-}));
-
-// node_modules/.pnpm/viem@2.57.13_typescript@6.0.3/node_modules/viem/_esm/actions/public/estimateGas.js
-/**
-* Estimates the gas necessary to complete a transaction without submitting it to the network.
-*
-* - Docs: https://viem.sh/docs/actions/public/estimateGas
-* - JSON-RPC Methods: [`eth_estimateGas`](https://ethereum.org/en/developers/docs/apis/json-rpc/#eth_estimategas)
-*
-* @param client - Client to use
-* @param parameters - {@link EstimateGasParameters}
-* @returns The gas estimate (in gas units). {@link EstimateGasReturnType}
-*
-* @example
-* import { createPublicClient, http, parseEther } from 'viem'
-* import { mainnet } from 'viem/chains'
-* import { estimateGas } from 'viem/public'
-*
-* const client = createPublicClient({
-*   chain: mainnet,
-*   transport: http(),
-* })
-* const gasEstimate = await estimateGas(client, {
-*   account: '0xA0Cf798816D4b9b9866b5330EEa46a18382f251e',
-*   to: '0x70997970c51812dc3a010c7d01b50e0d17dc79c8',
-*   value: parseEther('1'),
-* })
-*/
-async function estimateGas(client, args) {
-	const { account: account_ = client.account, prepare = true } = args;
-	const account = account_ ? parseAccount(account_) : void 0;
-	const parameters = (() => {
-		if (Array.isArray(prepare)) return prepare;
-		if (account?.type !== "local") return ["blobVersionedHashes"];
-	})();
-	try {
-		const to = await (async () => {
-			if (args.to) return args.to;
-			if (args.authorizationList && args.authorizationList.length > 0) return await recoverAuthorizationAddress({ authorization: args.authorizationList[0] }).catch(() => {
-				throw new BaseError$1("`to` is required. Could not infer from `authorizationList`");
-			});
-		})();
-		const { accessList, authorizationList, blobs, blobVersionedHashes, blockNumber, blockTag, data, gas, gasPrice, maxFeePerBlobGas, maxFeePerGas, maxPriorityFeePerGas, nonce, value, stateOverride, ...rest } = prepare ? await prepareTransactionRequest(client, {
-			...args,
-			parameters,
-			to
-		}) : args;
-		if (gas && args.gas !== gas) return gas;
-		const block = (typeof blockNumber === "bigint" ? numberToHex(blockNumber) : void 0) || blockTag;
-		const rpcStateOverride = serializeStateOverride(stateOverride);
-		assertRequest(args);
-		const chainFormat = client.chain?.formatters?.transactionRequest?.format;
-		const request = (chainFormat || formatTransactionRequest)({
-			...extract(rest, { format: chainFormat }),
-			account,
-			accessList,
-			authorizationList,
-			blobs,
-			blobVersionedHashes,
-			data,
-			gasPrice,
-			maxFeePerBlobGas,
-			maxFeePerGas,
-			maxPriorityFeePerGas,
-			nonce,
-			to,
-			value
-		}, "estimateGas");
-		return BigInt(await client.request({
-			method: "eth_estimateGas",
-			params: rpcStateOverride ? [
-				request,
-				block ?? client.experimental_blockTag ?? "latest",
-				rpcStateOverride
-			] : block ? [request, block] : [request]
-		}));
-	} catch (err) {
-		throw getEstimateGasError(err, {
-			...args,
-			account,
-			chain: client.chain
-		});
-	}
-}
-var init_estimateGas = __esmMin((() => {
-	init_parseAccount();
-	init_base();
-	init_recoverAuthorizationAddress();
-	init_toHex();
-	init_getEstimateGasError();
-	init_extract();
-	init_transactionRequest();
-	init_stateOverride();
-	init_assertRequest();
-	init_prepareTransactionRequest();
-}));
-
-// node_modules/.pnpm/viem@2.57.13_typescript@6.0.3/node_modules/viem/_esm/actions/public/estimateContractGas.js
-/**
-* Estimates the gas required to successfully execute a contract write function call.
-*
-* - Docs: https://viem.sh/docs/contract/estimateContractGas
-*
-* Internally, uses a [Public Client](https://viem.sh/docs/clients/public) to call the [`estimateGas` action](https://viem.sh/docs/actions/public/estimateGas) with [ABI-encoded `data`](https://viem.sh/docs/contract/encodeFunctionData).
-*
-* @param client - Client to use
-* @param parameters - {@link EstimateContractGasParameters}
-* @returns The gas estimate (in wei). {@link EstimateContractGasReturnType}
-*
-* @example
-* import { createPublicClient, http, parseAbi } from 'viem'
-* import { mainnet } from 'viem/chains'
-* import { estimateContractGas } from 'viem/contract'
-*
-* const client = createPublicClient({
-*   chain: mainnet,
-*   transport: http(),
-* })
-* const gas = await estimateContractGas(client, {
-*   address: '0xFBA3912Ca04dd458c843e2EE08967fC04f3579c2',
-*   abi: parseAbi(['function mint() public']),
-*   functionName: 'mint',
-*   account: '0xf39fd6e51aad88f6f4ce6ab8827279cfffb92266',
-* })
-*/
-async function estimateContractGas(client, parameters) {
-	const { abi, address, args, functionName, dataSuffix = typeof client.dataSuffix === "string" ? client.dataSuffix : client.dataSuffix?.value, ...request } = parameters;
-	const data = encodeFunctionData({
-		abi,
-		args,
-		functionName
-	});
-	try {
-		return await getAction(client, estimateGas, "estimateGas")({
-			data: `${data}${dataSuffix ? dataSuffix.replace("0x", "") : ""}`,
-			to: address,
-			...request
-		});
-	} catch (error) {
-		const account = request.account ? parseAccount(request.account) : void 0;
-		throw getContractError(error, {
-			abi,
-			address,
-			args,
-			docsPath: "/docs/contract/estimateContractGas",
-			functionName,
-			sender: account?.address
-		});
-	}
-}
-var init_estimateContractGas = __esmMin((() => {
-	init_parseAccount();
-	init_encodeFunctionData();
-	init_getContractError();
-	init_getAction();
-	init_estimateGas();
 }));
 
 // node_modules/.pnpm/viem@2.57.13_typescript@6.0.3/node_modules/viem/_esm/utils/address/isAddressEqual.js
 function isAddressEqual(a, b) {
-	if (!isAddress(a, { strict: false })) throw new InvalidAddressError$1({ address: a });
-	if (!isAddress(b, { strict: false })) throw new InvalidAddressError$1({ address: b });
+	if (!isAddress(a, { strict: false })) throw new InvalidAddressError({ address: a });
+	if (!isAddress(b, { strict: false })) throw new InvalidAddressError({ address: b });
 	return a.toLowerCase() === b.toLowerCase();
 }
 var init_isAddressEqual = __esmMin((() => {
-	init_address$1();
+	init_address();
 	init_isAddress();
 }));
-
-// node_modules/.pnpm/viem@2.57.13_typescript@6.0.3/node_modules/viem/_esm/utils/formatters/log.js
-function formatLog(log, { args, eventName } = {}) {
-	return {
-		...log,
-		blockHash: log.blockHash ? log.blockHash : null,
-		blockNumber: log.blockNumber ? BigInt(log.blockNumber) : null,
-		blockTimestamp: log.blockTimestamp ? BigInt(log.blockTimestamp) : log.blockTimestamp === null ? null : void 0,
-		logIndex: log.logIndex ? Number(log.logIndex) : null,
-		transactionHash: log.transactionHash ? log.transactionHash : null,
-		transactionIndex: log.transactionIndex ? Number(log.transactionIndex) : null,
-		...eventName ? {
-			args,
-			eventName
-		} : {}
-	};
-}
-var init_log$1 = __esmMin((() => {}));
 
 // node_modules/.pnpm/viem@2.57.13_typescript@6.0.3/node_modules/viem/_esm/utils/abi/decodeEventLog.js
 function decodeEventLog(parameters) {
 	const { abi, data, strict: strict_, topics } = parameters;
 	const strict = strict_ ?? true;
 	const [signature, ...argTopics] = topics;
-	if (!signature) throw new AbiEventSignatureEmptyTopicsError({ docsPath: docsPath$4 });
+	if (!signature) throw new AbiEventSignatureEmptyTopicsError({ docsPath });
 	const abiItem = abi.find((x) => x.type === "event" && signature === toEventSelector(formatAbiItem(x)));
-	if (!(abiItem && "name" in abiItem) || abiItem.type !== "event") throw new AbiEventSignatureNotFoundError(signature, { docsPath: docsPath$4 });
+	if (!(abiItem && "name" in abiItem) || abiItem.type !== "event") throw new AbiEventSignatureNotFoundError(signature, { docsPath });
 	const { name, inputs } = abiItem;
 	const isUnnamed = inputs?.some((x) => !("name" in x && x.name));
 	const args = isUnnamed ? [] : {};
@@ -9805,11 +7059,11 @@ function decodeEventLog(parameters) {
 			}
 		} catch (err) {
 			if (strict) {
-				if (err instanceof AbiDecodingDataSizeTooSmallError || err instanceof PositionOutOfBoundsError$1) throw new DecodeLogDataMismatch({
+				if (err instanceof AbiDecodingDataSizeTooSmallError || err instanceof PositionOutOfBoundsError) throw new DecodeLogDataMismatch({
 					abiItem,
 					data,
 					params: inputsToDecode,
-					size: size$3(data)
+					size: size(data)
 				});
 				throw err;
 			}
@@ -9830,2205 +7084,24 @@ function decodeTopic({ param, value }) {
 	if (param.type === "string" || param.type === "bytes" || param.type === "tuple" || param.type.match(/^(.*)\[(\d+)?\]$/)) return value;
 	return (decodeAbiParameters([param], value) || [])[0];
 }
-var docsPath$4;
+var docsPath;
 var init_decodeEventLog = __esmMin((() => {
 	init_abi();
-	init_cursor$2();
+	init_cursor$1();
 	init_size();
 	init_toEventSelector();
 	init_decodeAbiParameters();
 	init_formatAbiItem();
-	docsPath$4 = "/docs/contract/decodeEventLog";
-}));
-
-// node_modules/.pnpm/viem@2.57.13_typescript@6.0.3/node_modules/viem/_esm/utils/abi/parseEventLogs.js
-/**
-* Extracts & decodes logs matching the provided signature(s) (`abi` + optional `eventName`)
-* from a set of opaque logs.
-*
-* @param parameters - {@link ParseEventLogsParameters}
-* @returns The logs. {@link ParseEventLogsReturnType}
-*
-* @example
-* import { createClient, http } from 'viem'
-* import { mainnet } from 'viem/chains'
-* import { parseEventLogs } from 'viem/op-stack'
-*
-* const client = createClient({
-*   chain: mainnet,
-*   transport: http(),
-* })
-*
-* const receipt = await getTransactionReceipt(client, {
-*   hash: '0xec23b2ba4bc59ba61554507c1b1bc91649e6586eb2dd00c728e8ed0db8bb37ea',
-* })
-*
-* const logs = parseEventLogs({ logs: receipt.logs })
-* // [{ args: { ... }, eventName: 'TransactionDeposited', ... }, ...]
-*/
-function parseEventLogs(parameters) {
-	const { abi, args, logs, strict = true } = parameters;
-	const eventName = (() => {
-		if (!parameters.eventName) return void 0;
-		if (Array.isArray(parameters.eventName)) return parameters.eventName;
-		return [parameters.eventName];
-	})();
-	const abiTopics = abi.filter((abiItem) => abiItem.type === "event").map((abiItem) => ({
-		abi: abiItem,
-		selector: toEventSelector(abiItem)
-	}));
-	return logs.map((log) => {
-		const formattedLog = typeof log.blockNumber === "string" ? formatLog(log) : log;
-		const abiItems = abiTopics.filter((abiTopic) => formattedLog.topics[0] === abiTopic.selector);
-		if (abiItems.length === 0) return null;
-		let event;
-		let abiItem;
-		for (const item of abiItems) try {
-			event = decodeEventLog({
-				...formattedLog,
-				abi: [item.abi],
-				strict: true
-			});
-			abiItem = item;
-			break;
-		} catch {}
-		if (!event && !strict) {
-			abiItem = abiItems[0];
-			try {
-				event = decodeEventLog({
-					data: formattedLog.data,
-					topics: formattedLog.topics,
-					abi: [abiItem.abi],
-					strict: false
-				});
-			} catch {
-				const isUnnamed = abiItem.abi.inputs?.some((x) => !("name" in x && x.name));
-				event = {
-					eventName: abiItem.abi.name,
-					args: isUnnamed ? [] : {}
-				};
-			}
-		}
-		if (!event || !abiItem) return null;
-		if (eventName && !eventName.includes(event.eventName)) return null;
-		if (!includesArgs({
-			args: event.args,
-			inputs: abiItem.abi.inputs,
-			matchArgs: args,
-			topics: formattedLog.topics
-		})) return null;
-		return {
-			...event,
-			...formattedLog
-		};
-	}).filter(Boolean);
-}
-function includesArgs(parameters) {
-	const { args, inputs, matchArgs, topics } = parameters;
-	if (!matchArgs) return true;
-	if (!args) return false;
-	const topicInputs = inputs.filter((input) => input.indexed).slice(0, topics.length - 1);
-	function isEqual(input, value, arg) {
-		try {
-			if (input.type === "address") return isAddressEqual(value, arg);
-			if (topicInputs.includes(input) && (input.type === "string" || input.type === "bytes")) {
-				const bytes = input.type === "string" ? stringToBytes(value) : toBytes$2(value);
-				return keccak256$1(bytes) === arg;
-			}
-			if (typeof value === "string" && typeof arg === "string" && bytesRegex$1.test(input.type)) return value.toLowerCase() === arg.toLowerCase();
-			return value === arg;
-		} catch {
-			return false;
-		}
-	}
-	if (Array.isArray(args) && Array.isArray(matchArgs)) return matchArgs.every((value, index) => {
-		if (value === null || value === void 0) return true;
-		const input = inputs[index];
-		if (!input) return false;
-		return (Array.isArray(value) ? value : [value]).some((value) => isEqual(input, value, args[index]));
-	});
-	if (typeof args === "object" && !Array.isArray(args) && typeof matchArgs === "object" && !Array.isArray(matchArgs)) return Object.entries(matchArgs).every(([key, value]) => {
-		if (value === null || value === void 0) return true;
-		const input = inputs.find((input) => input.name === key);
-		if (!input) return false;
-		return (Array.isArray(value) ? value : [value]).some((value) => isEqual(input, value, args[key]));
-	});
-	return false;
-}
-var init_parseEventLogs = __esmMin((() => {
-	init_isAddressEqual();
-	init_toBytes();
-	init_log$1();
-	init_keccak256();
-	init_toEventSelector();
-	init_regex();
-	init_decodeEventLog();
-}));
-
-// node_modules/.pnpm/viem@2.57.13_typescript@6.0.3/node_modules/viem/_esm/actions/public/getLogs.js
-/**
-* Returns a list of event logs matching the provided parameters.
-*
-* - Docs: https://viem.sh/docs/actions/public/getLogs
-* - Examples: https://stackblitz.com/github/wevm/viem/tree/main/examples/logs_event-logs
-* - JSON-RPC Methods: [`eth_getLogs`](https://ethereum.org/en/developers/docs/apis/json-rpc/#eth_getlogs)
-*
-* @param client - Client to use
-* @param parameters - {@link GetLogsParameters}
-* @returns A list of event logs. {@link GetLogsReturnType}
-*
-* @example
-* import { createPublicClient, http, parseAbiItem } from 'viem'
-* import { mainnet } from 'viem/chains'
-* import { getLogs } from 'viem/public'
-*
-* const client = createPublicClient({
-*   chain: mainnet,
-*   transport: http(),
-* })
-* const logs = await getLogs(client)
-*/
-async function getLogs(client, { address, blockHash, fromBlock, toBlock, event, events: events_, args, strict: strict_ } = {}) {
-	const strict = strict_ ?? false;
-	const events = events_ ?? (event ? [event] : void 0);
-	let topics = [];
-	if (events) {
-		topics = [events.flatMap((event) => encodeEventTopics({
-			abi: [event],
-			eventName: event.name,
-			args: events_ ? void 0 : args
-		}))];
-		if (event) topics = topics[0];
-	}
-	let logs;
-	if (blockHash) logs = await client.request({
-		method: "eth_getLogs",
-		params: [{
-			address,
-			topics,
-			blockHash
-		}]
-	});
-	else logs = await client.request({
-		method: "eth_getLogs",
-		params: [{
-			address,
-			topics,
-			fromBlock: typeof fromBlock === "bigint" ? numberToHex(fromBlock) : fromBlock,
-			toBlock: typeof toBlock === "bigint" ? numberToHex(toBlock) : toBlock
-		}]
-	});
-	const formattedLogs = logs.map((log) => formatLog(log));
-	if (!events) return formattedLogs;
-	return parseEventLogs({
-		abi: events,
-		args,
-		logs: formattedLogs,
-		strict
-	});
-}
-var init_getLogs = __esmMin((() => {
-	init_encodeEventTopics();
-	init_parseEventLogs();
-	init_toHex();
-	init_log$1();
-}));
-
-// node_modules/.pnpm/viem@2.57.13_typescript@6.0.3/node_modules/viem/_esm/actions/public/getContractEvents.js
-/**
-* Returns a list of event logs emitted by a contract.
-*
-* - Docs: https://viem.sh/docs/contract/getContractEvents#getcontractevents
-* - JSON-RPC Methods: [`eth_getLogs`](https://ethereum.org/en/developers/docs/apis/json-rpc/#eth_getlogs)
-*
-* @param client - Client to use
-* @param parameters - {@link GetContractEventsParameters}
-* @returns A list of event logs. {@link GetContractEventsReturnType}
-*
-* @example
-* import { createClient, http } from 'viem'
-* import { mainnet } from 'viem/chains'
-* import { getContractEvents } from 'viem/public'
-* import { wagmiAbi } from './abi'
-*
-* const client = createClient({
-*   chain: mainnet,
-*   transport: http(),
-* })
-* const logs = await getContractEvents(client, {
-*  address: '0xFBA3912Ca04dd458c843e2EE08967fC04f3579c2',
-*  abi: wagmiAbi,
-*  eventName: 'Transfer'
-* })
-*/
-async function getContractEvents(client, parameters) {
-	const { abi, address, args, blockHash, eventName, fromBlock, toBlock, strict } = parameters;
-	const event = eventName ? getAbiItem({
-		abi,
-		name: eventName
-	}) : void 0;
-	const events = !event ? abi.filter((x) => x.type === "event") : void 0;
-	return getAction(client, getLogs, "getLogs")({
-		address,
-		args,
-		blockHash,
-		event,
-		events,
-		fromBlock,
-		toBlock,
-		strict
-	});
-}
-var init_getContractEvents = __esmMin((() => {
-	init_getAbiItem();
-	init_getAction();
-	init_getLogs();
-}));
-
-// node_modules/.pnpm/viem@2.57.13_typescript@6.0.3/node_modules/viem/_esm/utils/abi/decodeFunctionResult.js
-function decodeFunctionResult(parameters) {
-	const { abi, args, functionName, data } = parameters;
-	let abiItem = abi[0];
-	if (functionName) {
-		const item = getAbiItem({
-			abi,
-			args,
-			name: functionName
-		});
-		if (!item) throw new AbiFunctionNotFoundError(functionName, { docsPath: docsPath$3 });
-		abiItem = item;
-	}
-	if (abiItem.type !== "function") throw new AbiFunctionNotFoundError(void 0, { docsPath: docsPath$3 });
-	if (!abiItem.outputs) throw new AbiFunctionOutputsNotFoundError(abiItem.name, { docsPath: docsPath$3 });
-	const values = decodeAbiParameters(abiItem.outputs, data);
-	if (values && values.length > 1) return values;
-	if (values && values.length === 1) return values[0];
-}
-var docsPath$3;
-var init_decodeFunctionResult = __esmMin((() => {
-	init_abi();
-	init_decodeAbiParameters();
-	init_getAbiItem();
-	docsPath$3 = "/docs/contract/decodeFunctionResult";
-}));
-
-// node_modules/.pnpm/ox@0.14.59_typescript@6.0.3/node_modules/ox/_esm/core/version.js
-var version;
-var init_version = __esmMin((() => {
-	version = "0.1.1";
-}));
-
-// node_modules/.pnpm/ox@0.14.59_typescript@6.0.3/node_modules/ox/_esm/core/internal/errors.js
-/** @internal */
-function getVersion() {
-	return version;
-}
-/** @internal */
-function prettyPrint(args) {
-	if (!args) return "";
-	const entries = Object.entries(args).map(([key, value]) => {
-		if (value === void 0 || value === false) return null;
-		return [key, value];
-	}).filter(Boolean);
-	const maxLength = entries.reduce((acc, [key]) => Math.max(acc, key.length), 0);
-	return entries.map(([key, value]) => `  ${`${key}:`.padEnd(maxLength + 1)}  ${value}`).join("\n");
-}
-var init_errors$4 = __esmMin((() => {
-	init_version();
-}));
-
-// node_modules/.pnpm/ox@0.14.59_typescript@6.0.3/node_modules/ox/_esm/core/Errors.js
-/** @internal */
-function walk$1(err, fn) {
-	if (fn?.(err)) return err;
-	if (err && typeof err === "object" && "cause" in err && err.cause) return walk$1(err.cause, fn);
-	return fn ? null : err;
-}
-var BaseError;
-var init_Errors = __esmMin((() => {
-	init_errors$4();
-	BaseError = class BaseError extends Error {
-		static setStaticOptions(options) {
-			BaseError.prototype.docsOrigin = options.docsOrigin;
-			BaseError.prototype.showVersion = options.showVersion;
-			BaseError.prototype.version = options.version;
-		}
-		constructor(shortMessage, options = {}) {
-			const details = (() => {
-				if (options.cause instanceof BaseError) {
-					if (options.cause.details) return options.cause.details;
-					if (options.cause.shortMessage) return options.cause.shortMessage;
-				}
-				if (options.cause && "details" in options.cause && typeof options.cause.details === "string") return options.cause.details;
-				if (options.cause?.message) return options.cause.message;
-				return options.details;
-			})();
-			const docsPath = (() => {
-				if (options.cause instanceof BaseError) return options.cause.docsPath || options.docsPath;
-				return options.docsPath;
-			})();
-			const docsBaseUrl = options.docsOrigin ?? BaseError.prototype.docsOrigin;
-			const docs = `${docsBaseUrl}${docsPath ?? ""}`;
-			const showVersion = Boolean(options.version ?? BaseError.prototype.showVersion);
-			const version = options.version ?? BaseError.prototype.version;
-			const message = [
-				shortMessage || "An error occurred.",
-				...options.metaMessages ? ["", ...options.metaMessages] : [],
-				...details || docsPath || showVersion ? [
-					"",
-					details ? `Details: ${details}` : void 0,
-					docsPath ? `See: ${docs}` : void 0,
-					showVersion ? `Version: ${version}` : void 0
-				] : []
-			].filter((x) => typeof x === "string").join("\n");
-			super(message, options.cause ? { cause: options.cause } : void 0);
-			Object.defineProperty(this, "details", {
-				enumerable: true,
-				configurable: true,
-				writable: true,
-				value: void 0
-			});
-			Object.defineProperty(this, "docs", {
-				enumerable: true,
-				configurable: true,
-				writable: true,
-				value: void 0
-			});
-			Object.defineProperty(this, "docsOrigin", {
-				enumerable: true,
-				configurable: true,
-				writable: true,
-				value: void 0
-			});
-			Object.defineProperty(this, "docsPath", {
-				enumerable: true,
-				configurable: true,
-				writable: true,
-				value: void 0
-			});
-			Object.defineProperty(this, "shortMessage", {
-				enumerable: true,
-				configurable: true,
-				writable: true,
-				value: void 0
-			});
-			Object.defineProperty(this, "showVersion", {
-				enumerable: true,
-				configurable: true,
-				writable: true,
-				value: void 0
-			});
-			Object.defineProperty(this, "version", {
-				enumerable: true,
-				configurable: true,
-				writable: true,
-				value: void 0
-			});
-			Object.defineProperty(this, "cause", {
-				enumerable: true,
-				configurable: true,
-				writable: true,
-				value: void 0
-			});
-			Object.defineProperty(this, "name", {
-				enumerable: true,
-				configurable: true,
-				writable: true,
-				value: "BaseError"
-			});
-			this.cause = options.cause;
-			this.details = details;
-			this.docs = docs;
-			this.docsOrigin = docsBaseUrl;
-			this.docsPath = docsPath;
-			this.shortMessage = shortMessage;
-			this.showVersion = showVersion;
-			this.version = version;
-		}
-		walk(fn) {
-			return walk$1(this, fn);
-		}
-	};
-	Object.defineProperty(BaseError, "defaultStaticOptions", {
-		enumerable: true,
-		configurable: true,
-		writable: true,
-		value: {
-			docsOrigin: "https://oxlib.sh",
-			showVersion: false,
-			version: `ox@${getVersion()}`
-		}
-	});
-	(() => {
-		BaseError.setStaticOptions(BaseError.defaultStaticOptions);
-	})();
-}));
-
-// node_modules/.pnpm/ox@0.14.59_typescript@6.0.3/node_modules/ox/_esm/core/internal/bytes.js
-/** @internal */
-function assertSize$1(bytes, size_) {
-	if (size$2(bytes) > size_) throw new SizeOverflowError$1({
-		givenSize: size$2(bytes),
-		maxSize: size_
-	});
-}
-/** @internal */
-function assertStartOffset$1(value, start) {
-	if (typeof start === "number" && start > 0 && start > size$2(value) - 1) throw new SliceOffsetOutOfBoundsError$1({
-		offset: start,
-		position: "start",
-		size: size$2(value)
-	});
-}
-/** @internal */
-function assertEndOffset$1(value, start, end) {
-	if (typeof start === "number" && typeof end === "number" && size$2(value) !== end - start) throw new SliceOffsetOutOfBoundsError$1({
-		offset: end,
-		position: "end",
-		size: size$2(value)
-	});
-}
-/** @internal */
-function charCodeToBase16(char) {
-	if (char >= charCodeMap.zero && char <= charCodeMap.nine) return char - charCodeMap.zero;
-	if (char >= charCodeMap.A && char <= charCodeMap.F) return char - (charCodeMap.A - 10);
-	if (char >= charCodeMap.a && char <= charCodeMap.f) return char - (charCodeMap.a - 10);
-}
-/** @internal */
-function pad$1(bytes, options = {}) {
-	const { dir, size = 32 } = options;
-	if (size === 0) return bytes;
-	if (bytes.length > size) throw new SizeExceedsPaddingSizeError$1({
-		size: bytes.length,
-		targetSize: size,
-		type: "Bytes"
-	});
-	const paddedBytes = new Uint8Array(size);
-	for (let i = 0; i < size; i++) {
-		const padEnd = dir === "right";
-		paddedBytes[padEnd ? i : size - i - 1] = bytes[padEnd ? i : bytes.length - i - 1];
-	}
-	return paddedBytes;
-}
-/** @internal */
-function trim(value, options = {}) {
-	const { dir = "left" } = options;
-	let data = value;
-	let sliceLength = 0;
-	for (let i = 0; i < data.length - 1; i++) if (data[dir === "left" ? i : data.length - i - 1].toString() === "0") sliceLength++;
-	else break;
-	data = dir === "left" ? data.slice(sliceLength) : data.slice(0, data.length - sliceLength);
-	return data;
-}
-var charCodeMap;
-var init_bytes = __esmMin((() => {
-	init_Bytes();
-	charCodeMap = {
-		zero: 48,
-		nine: 57,
-		A: 65,
-		F: 70,
-		a: 97,
-		f: 102
-	};
-}));
-
-// node_modules/.pnpm/ox@0.14.59_typescript@6.0.3/node_modules/ox/_esm/core/internal/hex.js
-/** @internal */
-function assertSize(hex, size_) {
-	if (size$1(hex) > size_) throw new SizeOverflowError({
-		givenSize: size$1(hex),
-		maxSize: size_
-	});
-}
-/** @internal */
-function assertStartOffset(value, start) {
-	if (typeof start === "number" && start > 0 && start > size$1(value) - 1) throw new SliceOffsetOutOfBoundsError({
-		offset: start,
-		position: "start",
-		size: size$1(value)
-	});
-}
-/** @internal */
-function assertEndOffset(value, start, end) {
-	if (typeof start === "number" && typeof end === "number" && size$1(value) !== end - start) throw new SliceOffsetOutOfBoundsError({
-		offset: end,
-		position: "end",
-		size: size$1(value)
-	});
-}
-/** @internal */
-function pad(hex_, options = {}) {
-	const { dir, size = 32 } = options;
-	if (size === 0) return hex_;
-	const hex = hex_.replace("0x", "");
-	if (hex.length > size * 2) throw new SizeExceedsPaddingSizeError({
-		size: Math.ceil(hex.length / 2),
-		targetSize: size,
-		type: "Hex"
-	});
-	return `0x${hex[dir === "right" ? "padEnd" : "padStart"](size * 2, "0")}`;
-}
-var init_hex = __esmMin((() => {
-	init_Hex();
-}));
-
-// node_modules/.pnpm/ox@0.14.59_typescript@6.0.3/node_modules/ox/_esm/core/Json.js
-/**
-* Stringifies a value to its JSON representation, with support for `bigint`.
-*
-* @example
-* ```ts twoslash
-* import { Json } from 'ox'
-*
-* const json = Json.stringify({
-*   foo: 'bar',
-*   baz: 69420694206942069420694206942069420694206942069420n,
-* })
-* // @log: '{"foo":"bar","baz":"69420694206942069420694206942069420694206942069420#__bigint"}'
-* ```
-*
-* @param value - The value to stringify.
-* @param replacer - A function that transforms the results. It is passed the key and value of the property, and must return the value to be used in the JSON string. If this function returns `undefined`, the property is not included in the resulting JSON string.
-* @param space - A string or number that determines the indentation of the JSON string. If it is a number, it indicates the number of spaces to use as indentation; if it is a string (e.g. `'\t'`), it uses the string as the indentation character.
-* @returns The JSON string.
-*/
-function stringify$1(value, replacer, space) {
-	return JSON.stringify(value, (key, value) => {
-		if (typeof replacer === "function") return replacer(key, value);
-		if (typeof value === "bigint") return value.toString() + bigIntSuffix;
-		return value;
-	}, space);
-}
-var bigIntSuffix;
-var init_Json = __esmMin((() => {
-	bigIntSuffix = "#__bigint";
-}));
-
-// node_modules/.pnpm/ox@0.14.59_typescript@6.0.3/node_modules/ox/_esm/core/Bytes.js
-/**
-* Instantiates a {@link ox#Bytes.Bytes} value from a `Uint8Array`, a hex string, or an array of unsigned 8-bit integers.
-*
-* :::tip
-*
-* To instantiate from a **Boolean**, **String**, or **Number**, use one of the following:
-*
-* - `Bytes.fromBoolean`
-*
-* - `Bytes.fromString`
-*
-* - `Bytes.fromNumber`
-*
-* :::
-*
-* @example
-* ```ts twoslash
-* // @noErrors
-* import { Bytes } from 'ox'
-*
-* const data = Bytes.from([255, 124, 5, 4])
-* // @log: Uint8Array([255, 124, 5, 4])
-*
-* const data = Bytes.from('0xdeadbeef')
-* // @log: Uint8Array([222, 173, 190, 239])
-* ```
-*
-* @param value - Value to convert.
-* @returns A {@link ox#Bytes.Bytes} instance.
-*/
-function from$7(value) {
-	if (value instanceof Uint8Array) return value;
-	if (typeof value === "string") return fromHex(value);
-	return fromArray(value);
-}
-/**
-* Converts an array of unsigned 8-bit integers into {@link ox#Bytes.Bytes}.
-*
-* @example
-* ```ts twoslash
-* import { Bytes } from 'ox'
-*
-* const data = Bytes.fromArray([255, 124, 5, 4])
-* // @log: Uint8Array([255, 124, 5, 4])
-* ```
-*
-* @param value - Value to convert.
-* @returns A {@link ox#Bytes.Bytes} instance.
-*/
-function fromArray(value) {
-	return value instanceof Uint8Array ? value : new Uint8Array(value);
-}
-/**
-* Encodes a {@link ox#Hex.Hex} value into {@link ox#Bytes.Bytes}.
-*
-* @example
-* ```ts twoslash
-* import { Bytes } from 'ox'
-*
-* const data = Bytes.fromHex('0x48656c6c6f20776f726c6421')
-* // @log: Uint8Array([72, 101, 108, 108, 111, 32, 87, 111, 114, 108, 100, 33])
-* ```
-*
-* @example
-* ```ts twoslash
-* import { Bytes } from 'ox'
-*
-* const data = Bytes.fromHex('0x48656c6c6f20776f726c6421', { size: 32 })
-* // @log: Uint8Array([72, 101, 108, 108, 111, 32, 87, 111, 114, 108, 100, 33, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0])
-* ```
-*
-* @param value - {@link ox#Hex.Hex} value to encode.
-* @param options - Encoding options.
-* @returns Encoded {@link ox#Bytes.Bytes}.
-*/
-function fromHex(value, options = {}) {
-	const { size } = options;
-	let hex = value;
-	if (size) {
-		assertSize(value, size);
-		hex = padRight(value, size);
-	}
-	let hexString = hex.slice(2);
-	if (hexString.length % 2) hexString = `0${hexString}`;
-	const length = hexString.length / 2;
-	const bytes = new Uint8Array(length);
-	for (let index = 0, j = 0; index < length; index++) {
-		const nibbleLeft = charCodeToBase16(hexString.charCodeAt(j++));
-		const nibbleRight = charCodeToBase16(hexString.charCodeAt(j++));
-		if (nibbleLeft === void 0 || nibbleRight === void 0) throw new BaseError(`Invalid byte sequence ("${hexString[j - 2]}${hexString[j - 1]}" in "${hexString}").`);
-		bytes[index] = nibbleLeft << 4 | nibbleRight;
-	}
-	return bytes;
-}
-/**
-* Encodes a string into {@link ox#Bytes.Bytes}.
-*
-* @example
-* ```ts twoslash
-* import { Bytes } from 'ox'
-*
-* const data = Bytes.fromString('Hello world!')
-* // @log: Uint8Array([72, 101, 108, 108, 111, 32, 119, 111, 114, 108, 100, 33])
-* ```
-*
-* @example
-* ```ts twoslash
-* import { Bytes } from 'ox'
-*
-* const data = Bytes.fromString('Hello world!', { size: 32 })
-* // @log: Uint8Array([72, 101, 108, 108, 111, 32, 87, 111, 114, 108, 100, 33, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0])
-* ```
-*
-* @param value - String to encode.
-* @param options - Encoding options.
-* @returns Encoded {@link ox#Bytes.Bytes}.
-*/
-function fromString$2(value, options = {}) {
-	const { size } = options;
-	const bytes = encoder$2.encode(value);
-	if (typeof size === "number") {
-		assertSize$1(bytes, size);
-		return padRight$1(bytes, size);
-	}
-	return bytes;
-}
-/**
-* Pads a {@link ox#Bytes.Bytes} value to the right with zero bytes until it reaches the given `size` (default: 32 bytes).
-*
-* @example
-* ```ts twoslash
-* import { Bytes } from 'ox'
-*
-* Bytes.padRight(Bytes.from([1]), 4)
-* // @log: Uint8Array([1, 0, 0, 0])
-* ```
-*
-* @param value - {@link ox#Bytes.Bytes} value to pad.
-* @param size - Size to pad the {@link ox#Bytes.Bytes} value to.
-* @returns Padded {@link ox#Bytes.Bytes} value.
-*/
-function padRight$1(value, size) {
-	return pad$1(value, {
-		dir: "right",
-		size
-	});
-}
-/**
-* Retrieves the size of a {@link ox#Bytes.Bytes} value.
-*
-* @example
-* ```ts twoslash
-* import { Bytes } from 'ox'
-*
-* Bytes.size(Bytes.from([1, 2, 3, 4]))
-* // @log: 4
-* ```
-*
-* @param value - {@link ox#Bytes.Bytes} value.
-* @returns Size of the {@link ox#Bytes.Bytes} value.
-*/
-function size$2(value) {
-	return value.length;
-}
-/**
-* Returns a section of a {@link ox#Bytes.Bytes} value given a start/end bytes offset.
-*
-* @example
-* ```ts twoslash
-* import { Bytes } from 'ox'
-*
-* Bytes.slice(
-*   Bytes.from([1, 2, 3, 4, 5, 6, 7, 8, 9]),
-*   1,
-*   4,
-* )
-* // @log: Uint8Array([2, 3, 4])
-* ```
-*
-* @param value - The {@link ox#Bytes.Bytes} value.
-* @param start - Start offset.
-* @param end - End offset.
-* @param options - Slice options.
-* @returns Sliced {@link ox#Bytes.Bytes} value.
-*/
-function slice$1(value, start, end, options = {}) {
-	const { strict } = options;
-	assertStartOffset$1(value, start);
-	const value_ = value.slice(start, end);
-	if (strict) assertEndOffset$1(value_, start, end);
-	return value_;
-}
-/**
-* Decodes a {@link ox#Bytes.Bytes} into a bigint.
-*
-* @example
-* ```ts
-* import { Bytes } from 'ox'
-*
-* Bytes.toBigInt(Bytes.from([1, 164]))
-* // @log: 420n
-* ```
-*
-* @param bytes - The {@link ox#Bytes.Bytes} to decode.
-* @param options - Decoding options.
-* @returns Decoded bigint.
-*/
-function toBigInt$2(bytes, options = {}) {
-	const { size } = options;
-	if (typeof size !== "undefined") assertSize$1(bytes, size);
-	const hex = fromBytes$1(bytes, options);
-	return toBigInt$1(hex, options);
-}
-/**
-* Decodes a {@link ox#Bytes.Bytes} into a boolean.
-*
-* @example
-* ```ts
-* import { Bytes } from 'ox'
-*
-* Bytes.toBoolean(Bytes.from([1]))
-* // @log: true
-* ```
-*
-* @param bytes - The {@link ox#Bytes.Bytes} to decode.
-* @param options - Decoding options.
-* @returns Decoded boolean.
-*/
-function toBoolean(bytes, options = {}) {
-	const { size } = options;
-	let bytes_ = bytes;
-	if (typeof size !== "undefined") {
-		assertSize$1(bytes_, size);
-		bytes_ = trimLeft(bytes_);
-	}
-	if (bytes_.length > 1 || bytes_[0] > 1) throw new InvalidBytesBooleanError(bytes_);
-	return Boolean(bytes_[0]);
-}
-/**
-* Decodes a {@link ox#Bytes.Bytes} into a number.
-*
-* @example
-* ```ts twoslash
-* import { Bytes } from 'ox'
-*
-* Bytes.toNumber(Bytes.from([1, 164]))
-* // @log: 420
-* ```
-*/
-function toNumber$1(bytes, options = {}) {
-	const { size } = options;
-	if (typeof size !== "undefined") assertSize$1(bytes, size);
-	const hex = fromBytes$1(bytes, options);
-	return toNumber(hex, options);
-}
-/**
-* Decodes a {@link ox#Bytes.Bytes} into a string.
-*
-* @example
-* ```ts twoslash
-* import { Bytes } from 'ox'
-*
-* const data = Bytes.toString(Bytes.from([72, 101, 108, 108, 111, 32, 87, 111, 114, 108, 100, 33]))
-* // @log: 'Hello world'
-* ```
-*
-* @param bytes - The {@link ox#Bytes.Bytes} to decode.
-* @param options - Options.
-* @returns Decoded string.
-*/
-function toString$1(bytes, options = {}) {
-	const { size } = options;
-	let bytes_ = bytes;
-	if (typeof size !== "undefined") {
-		assertSize$1(bytes_, size);
-		bytes_ = trimRight(bytes_);
-	}
-	return decoder$1.decode(bytes_);
-}
-/**
-* Trims leading zeros from a {@link ox#Bytes.Bytes} value.
-*
-* @example
-* ```ts twoslash
-* import { Bytes } from 'ox'
-*
-* Bytes.trimLeft(Bytes.from([0, 0, 0, 0, 1, 2, 3]))
-* // @log: Uint8Array([1, 2, 3])
-* ```
-*
-* @param value - {@link ox#Bytes.Bytes} value.
-* @returns Trimmed {@link ox#Bytes.Bytes} value.
-*/
-function trimLeft(value) {
-	return trim(value, { dir: "left" });
-}
-/**
-* Trims trailing zeros from a {@link ox#Bytes.Bytes} value.
-*
-* @example
-* ```ts twoslash
-* import { Bytes } from 'ox'
-*
-* Bytes.trimRight(Bytes.from([1, 2, 3, 0, 0, 0, 0]))
-* // @log: Uint8Array([1, 2, 3])
-* ```
-*
-* @param value - {@link ox#Bytes.Bytes} value.
-* @returns Trimmed {@link ox#Bytes.Bytes} value.
-*/
-function trimRight(value) {
-	return trim(value, { dir: "right" });
-}
-var decoder$1, encoder$2, InvalidBytesBooleanError, InvalidBytesTypeError, SizeOverflowError$1, SliceOffsetOutOfBoundsError$1, SizeExceedsPaddingSizeError$1;
-var init_Bytes = __esmMin((() => {
-	init_Errors();
-	init_Hex();
-	init_bytes();
-	init_hex();
-	init_Json();
-	decoder$1 = /*#__PURE__*/ new TextDecoder();
-	encoder$2 = /*#__PURE__*/ new TextEncoder();
-	InvalidBytesBooleanError = class extends BaseError {
-		constructor(bytes) {
-			super(`Bytes value \`${bytes}\` is not a valid boolean.`, { metaMessages: ["The bytes array must contain a single byte of either a `0` or `1` value."] });
-			Object.defineProperty(this, "name", {
-				enumerable: true,
-				configurable: true,
-				writable: true,
-				value: "Bytes.InvalidBytesBooleanError"
-			});
-		}
-	};
-	InvalidBytesTypeError = class extends BaseError {
-		constructor(value) {
-			super(`Value \`${typeof value === "object" ? stringify$1(value) : value}\` of type \`${typeof value}\` is an invalid Bytes value.`, { metaMessages: ["Bytes values must be of type `Bytes`."] });
-			Object.defineProperty(this, "name", {
-				enumerable: true,
-				configurable: true,
-				writable: true,
-				value: "Bytes.InvalidBytesTypeError"
-			});
-		}
-	};
-	SizeOverflowError$1 = class extends BaseError {
-		constructor({ givenSize, maxSize }) {
-			super(`Size cannot exceed \`${maxSize}\` bytes. Given size: \`${givenSize}\` bytes.`);
-			Object.defineProperty(this, "name", {
-				enumerable: true,
-				configurable: true,
-				writable: true,
-				value: "Bytes.SizeOverflowError"
-			});
-		}
-	};
-	SliceOffsetOutOfBoundsError$1 = class extends BaseError {
-		constructor({ offset, position, size }) {
-			super(`Slice ${position === "start" ? "starting" : "ending"} at offset \`${offset}\` is out-of-bounds (size: \`${size}\`).`);
-			Object.defineProperty(this, "name", {
-				enumerable: true,
-				configurable: true,
-				writable: true,
-				value: "Bytes.SliceOffsetOutOfBoundsError"
-			});
-		}
-	};
-	SizeExceedsPaddingSizeError$1 = class extends BaseError {
-		constructor({ size, targetSize, type }) {
-			super(`${type.charAt(0).toUpperCase()}${type.slice(1).toLowerCase()} size (\`${size}\`) exceeds padding size (\`${targetSize}\`).`);
-			Object.defineProperty(this, "name", {
-				enumerable: true,
-				configurable: true,
-				writable: true,
-				value: "Bytes.SizeExceedsPaddingSizeError"
-			});
-		}
-	};
-}));
-
-// node_modules/.pnpm/ox@0.14.59_typescript@6.0.3/node_modules/ox/_esm/core/Hex.js
-/**
-* Asserts if the given value is {@link ox#Hex.Hex}.
-*
-* @example
-* ```ts twoslash
-* import { Hex } from 'ox'
-*
-* Hex.assert('abc')
-* // @error: InvalidHexValueTypeError:
-* // @error: Value `"abc"` of type `string` is an invalid hex type.
-* // @error: Hex types must be represented as `"0x\${string}"`.
-* ```
-*
-* @param value - The value to assert.
-* @param options - Options.
-*/
-function assert$4(value, options = {}) {
-	const { even = false, strict = false } = options;
-	if (!value) throw new InvalidHexTypeError(value);
-	if (typeof value !== "string") throw new InvalidHexTypeError(value);
-	if (strict) {
-		if (!/^0x[0-9a-fA-F]*$/.test(value)) throw new InvalidHexValueError(value);
-	}
-	if (!value.startsWith("0x")) throw new InvalidHexValueError(value);
-	if (even && value.length % 2 !== 0) throw new InvalidLengthError(value);
-}
-/**
-* Concatenates two or more {@link ox#Hex.Hex}.
-*
-* @example
-* ```ts twoslash
-* import { Hex } from 'ox'
-*
-* Hex.concat('0x123', '0x456')
-* // @log: '0x123456'
-* ```
-*
-* @param values - The {@link ox#Hex.Hex} values to concatenate.
-* @returns The concatenated {@link ox#Hex.Hex} value.
-*/
-function concat(...values) {
-	return `0x${values.reduce((acc, x) => acc + x.replace("0x", ""), "")}`;
-}
-/**
-* Instantiates a {@link ox#Hex.Hex} value from a hex string or {@link ox#Bytes.Bytes} value.
-*
-* :::tip
-*
-* To instantiate from a **Boolean**, **String**, or **Number**, use one of the following:
-*
-* - `Hex.fromBoolean`
-*
-* - `Hex.fromString`
-*
-* - `Hex.fromNumber`
-*
-* :::
-*
-* @example
-* ```ts twoslash
-* import { Bytes, Hex } from 'ox'
-*
-* Hex.from('0x48656c6c6f20576f726c6421')
-* // @log: '0x48656c6c6f20576f726c6421'
-*
-* Hex.from(Bytes.from([72, 101, 108, 108, 111, 32, 87, 111, 114, 108, 100, 33]))
-* // @log: '0x48656c6c6f20576f726c6421'
-* ```
-*
-* @param value - The {@link ox#Bytes.Bytes} value to encode.
-* @returns The encoded {@link ox#Hex.Hex} value.
-*/
-function from$6(value) {
-	if (value instanceof Uint8Array) return fromBytes$1(value);
-	if (Array.isArray(value)) return fromBytes$1(new Uint8Array(value));
-	return value;
-}
-/**
-* Encodes a boolean into a {@link ox#Hex.Hex} value.
-*
-* @example
-* ```ts twoslash
-* import { Hex } from 'ox'
-*
-* Hex.fromBoolean(true)
-* // @log: '0x1'
-*
-* Hex.fromBoolean(false)
-* // @log: '0x0'
-*
-* Hex.fromBoolean(true, { size: 32 })
-* // @log: '0x0000000000000000000000000000000000000000000000000000000000000001'
-* ```
-*
-* @param value - The boolean value to encode.
-* @param options - Options.
-* @returns The encoded {@link ox#Hex.Hex} value.
-*/
-function fromBoolean(value, options = {}) {
-	const hex = `0x${Number(value)}`;
-	if (typeof options.size === "number") {
-		assertSize(hex, options.size);
-		return padLeft(hex, options.size);
-	}
-	return hex;
-}
-/**
-* Encodes a {@link ox#Bytes.Bytes} value into a {@link ox#Hex.Hex} value.
-*
-* @example
-* ```ts twoslash
-* import { Bytes, Hex } from 'ox'
-*
-* Hex.fromBytes(Bytes.from([72, 101, 108, 108, 111, 32, 87, 111, 114, 108, 100, 33]))
-* // @log: '0x48656c6c6f20576f726c6421'
-* ```
-*
-* @param value - The {@link ox#Bytes.Bytes} value to encode.
-* @param options - Options.
-* @returns The encoded {@link ox#Hex.Hex} value.
-*/
-function fromBytes$1(value, options = {}) {
-	let string = "";
-	for (let i = 0; i < value.length; i++) string += hexes[value[i]];
-	const hex = `0x${string}`;
-	if (typeof options.size === "number") {
-		assertSize(hex, options.size);
-		return padRight(hex, options.size);
-	}
-	return hex;
-}
-/**
-* Encodes a number or bigint into a {@link ox#Hex.Hex} value.
-*
-* @example
-* ```ts twoslash
-* import { Hex } from 'ox'
-*
-* Hex.fromNumber(420)
-* // @log: '0x1a4'
-*
-* Hex.fromNumber(420, { size: 32 })
-* // @log: '0x00000000000000000000000000000000000000000000000000000000000001a4'
-* ```
-*
-* @param value - The number or bigint value to encode.
-* @param options - Options.
-* @returns The encoded {@link ox#Hex.Hex} value.
-*/
-function fromNumber(value, options = {}) {
-	const { signed, size } = options;
-	const value_ = BigInt(value);
-	let maxValue;
-	if (size) {
-		if (signed) maxValue = (1n << BigInt(size) * 8n - 1n) - 1n;
-		else maxValue = 2n ** (BigInt(size) * 8n) - 1n;
-	} else if (typeof value === "number") maxValue = BigInt(Number.MAX_SAFE_INTEGER);
-	const minValue = typeof maxValue === "bigint" && signed ? -maxValue - 1n : 0;
-	if (maxValue && value_ > maxValue || value_ < minValue) {
-		const suffix = typeof value === "bigint" ? "n" : "";
-		throw new IntegerOutOfRangeError({
-			max: maxValue ? `${maxValue}${suffix}` : void 0,
-			min: `${minValue}${suffix}`,
-			signed,
-			size,
-			value: `${value}${suffix}`
-		});
-	}
-	const hex = `0x${(signed && value_ < 0 ? BigInt.asUintN(size * 8, BigInt(value_)) : value_).toString(16)}`;
-	if (size) return padLeft(hex, size);
-	return hex;
-}
-/**
-* Encodes a string into a {@link ox#Hex.Hex} value.
-*
-* @example
-* ```ts twoslash
-* import { Hex } from 'ox'
-* Hex.fromString('Hello World!')
-* // '0x48656c6c6f20576f726c6421'
-*
-* Hex.fromString('Hello World!', { size: 32 })
-* // '0x48656c6c6f20576f726c64210000000000000000000000000000000000000000'
-* ```
-*
-* @param value - The string value to encode.
-* @param options - Options.
-* @returns The encoded {@link ox#Hex.Hex} value.
-*/
-function fromString$1(value, options = {}) {
-	return fromBytes$1(encoder$1.encode(value), options);
-}
-/**
-* Pads a {@link ox#Hex.Hex} value to the left with zero bytes until it reaches the given `size` (default: 32 bytes).
-*
-* @example
-* ```ts twoslash
-* import { Hex } from 'ox'
-*
-* Hex.padLeft('0x1234', 4)
-* // @log: '0x00001234'
-* ```
-*
-* @param value - The {@link ox#Hex.Hex} value to pad.
-* @param size - The size (in bytes) of the output hex value.
-* @returns The padded {@link ox#Hex.Hex} value.
-*/
-function padLeft(value, size) {
-	return pad(value, {
-		dir: "left",
-		size
-	});
-}
-/**
-* Pads a {@link ox#Hex.Hex} value to the right with zero bytes until it reaches the given `size` (default: 32 bytes).
-*
-* @example
-* ```ts
-* import { Hex } from 'ox'
-*
-* Hex.padRight('0x1234', 4)
-* // @log: '0x12340000'
-* ```
-*
-* @param value - The {@link ox#Hex.Hex} value to pad.
-* @param size - The size (in bytes) of the output hex value.
-* @returns The padded {@link ox#Hex.Hex} value.
-*/
-function padRight(value, size) {
-	return pad(value, {
-		dir: "right",
-		size
-	});
-}
-/**
-* Returns a section of a {@link ox#Bytes.Bytes} value given a start/end bytes offset.
-*
-* @example
-* ```ts twoslash
-* import { Hex } from 'ox'
-*
-* Hex.slice('0x0123456789', 1, 4)
-* // @log: '0x234567'
-* ```
-*
-* @param value - The {@link ox#Hex.Hex} value to slice.
-* @param start - The start offset (in bytes).
-* @param end - The end offset (in bytes).
-* @param options - Options.
-* @returns The sliced {@link ox#Hex.Hex} value.
-*/
-function slice(value, start, end, options = {}) {
-	const { strict } = options;
-	assertStartOffset(value, start);
-	const value_ = `0x${value.replace("0x", "").slice((start ?? 0) * 2, (end ?? value.length) * 2)}`;
-	if (strict) assertEndOffset(value_, start, end);
-	return value_;
-}
-/**
-* Retrieves the size of a {@link ox#Hex.Hex} value (in bytes).
-*
-* @example
-* ```ts twoslash
-* import { Hex } from 'ox'
-*
-* Hex.size('0xdeadbeef')
-* // @log: 4
-* ```
-*
-* @param value - The {@link ox#Hex.Hex} value to get the size of.
-* @returns The size of the {@link ox#Hex.Hex} value (in bytes).
-*/
-function size$1(value) {
-	return Math.ceil((value.length - 2) / 2);
-}
-/**
-* Decodes a {@link ox#Hex.Hex} value into a BigInt.
-*
-* @example
-* ```ts twoslash
-* import { Hex } from 'ox'
-*
-* Hex.toBigInt('0x1a4')
-* // @log: 420n
-*
-* Hex.toBigInt('0x00000000000000000000000000000000000000000000000000000000000001a4', { size: 32 })
-* // @log: 420n
-* ```
-*
-* @param hex - The {@link ox#Hex.Hex} value to decode.
-* @param options - Options.
-* @returns The decoded BigInt.
-*/
-function toBigInt$1(hex, options = {}) {
-	const { signed } = options;
-	if (options.size) assertSize(hex, options.size);
-	const value = BigInt(hex);
-	if (!signed) return value;
-	const size = (hex.length - 2) / 2;
-	const max_unsigned = (1n << BigInt(size) * 8n) - 1n;
-	if (value <= max_unsigned >> 1n) return value;
-	return value - max_unsigned - 1n;
-}
-/**
-* Decodes a {@link ox#Hex.Hex} value into a number.
-*
-* @example
-* ```ts twoslash
-* import { Hex } from 'ox'
-*
-* Hex.toNumber('0x1a4')
-* // @log: 420
-*
-* Hex.toNumber('0x00000000000000000000000000000000000000000000000000000000000001a4', { size: 32 })
-* // @log: 420
-* ```
-*
-* @param hex - The {@link ox#Hex.Hex} value to decode.
-* @param options - Options.
-* @returns The decoded number.
-*/
-function toNumber(hex, options = {}) {
-	const { signed, size } = options;
-	if (!signed && !size) return Number(hex);
-	return Number(toBigInt$1(hex, options));
-}
-/**
-* Checks if the given value is {@link ox#Hex.Hex}.
-*
-* @example
-* ```ts twoslash
-* import { Bytes, Hex } from 'ox'
-*
-* Hex.validate('0xdeadbeef')
-* // @log: true
-*
-* Hex.validate(Bytes.from([1, 2, 3]))
-* // @log: false
-* ```
-*
-* @param value - The value to check.
-* @param options - Options.
-* @returns `true` if the value is a {@link ox#Hex.Hex}, `false` otherwise.
-*/
-function validate$3(value, options = {}) {
-	const { even = false, strict = false } = options;
-	try {
-		assert$4(value, {
-			even,
-			strict
-		});
-		return true;
-	} catch {
-		return false;
-	}
-}
-var encoder$1, hexes, IntegerOutOfRangeError, InvalidHexBooleanError, InvalidHexTypeError, InvalidHexValueError, InvalidLengthError, SizeOverflowError, SliceOffsetOutOfBoundsError, SizeExceedsPaddingSizeError;
-var init_Hex = __esmMin((() => {
-	init_Errors();
-	init_hex();
-	init_Json();
-	encoder$1 = /*#__PURE__*/ new TextEncoder();
-	hexes = /*#__PURE__*/ Array.from({ length: 256 }, (_v, i) => i.toString(16).padStart(2, "0"));
-	IntegerOutOfRangeError = class extends BaseError {
-		constructor({ max, min, signed, size, value }) {
-			super(`Number \`${value}\` is not in safe${size ? ` ${size * 8}-bit` : ""}${signed ? " signed" : " unsigned"} integer range ${max ? `(\`${min}\` to \`${max}\`)` : `(above \`${min}\`)`}`);
-			Object.defineProperty(this, "name", {
-				enumerable: true,
-				configurable: true,
-				writable: true,
-				value: "Hex.IntegerOutOfRangeError"
-			});
-		}
-	};
-	InvalidHexBooleanError = class extends BaseError {
-		constructor(hex) {
-			super(`Hex value \`"${hex}"\` is not a valid boolean.`, { metaMessages: ["The hex value must be `\"0x0\"` (false) or `\"0x1\"` (true)."] });
-			Object.defineProperty(this, "name", {
-				enumerable: true,
-				configurable: true,
-				writable: true,
-				value: "Hex.InvalidHexBooleanError"
-			});
-		}
-	};
-	InvalidHexTypeError = class extends BaseError {
-		constructor(value) {
-			super(`Value \`${typeof value === "object" ? stringify$1(value) : value}\` of type \`${typeof value}\` is an invalid hex type.`, { metaMessages: ["Hex types must be represented as `\"0x${string}\"`."] });
-			Object.defineProperty(this, "name", {
-				enumerable: true,
-				configurable: true,
-				writable: true,
-				value: "Hex.InvalidHexTypeError"
-			});
-		}
-	};
-	InvalidHexValueError = class extends BaseError {
-		constructor(value) {
-			super(`Value \`${value}\` is an invalid hex value.`, { metaMessages: ["Hex values must start with `\"0x\"` and contain only hexadecimal characters (0-9, a-f, A-F)."] });
-			Object.defineProperty(this, "name", {
-				enumerable: true,
-				configurable: true,
-				writable: true,
-				value: "Hex.InvalidHexValueError"
-			});
-		}
-	};
-	InvalidLengthError = class extends BaseError {
-		constructor(value) {
-			super(`Hex value \`"${value}"\` is an odd length (${value.length - 2} nibbles).`, { metaMessages: ["It must be an even length."] });
-			Object.defineProperty(this, "name", {
-				enumerable: true,
-				configurable: true,
-				writable: true,
-				value: "Hex.InvalidLengthError"
-			});
-		}
-	};
-	SizeOverflowError = class extends BaseError {
-		constructor({ givenSize, maxSize }) {
-			super(`Size cannot exceed \`${maxSize}\` bytes. Given size: \`${givenSize}\` bytes.`);
-			Object.defineProperty(this, "name", {
-				enumerable: true,
-				configurable: true,
-				writable: true,
-				value: "Hex.SizeOverflowError"
-			});
-		}
-	};
-	SliceOffsetOutOfBoundsError = class extends BaseError {
-		constructor({ offset, position, size }) {
-			super(`Slice ${position === "start" ? "starting" : "ending"} at offset \`${offset}\` is out-of-bounds (size: \`${size}\`).`);
-			Object.defineProperty(this, "name", {
-				enumerable: true,
-				configurable: true,
-				writable: true,
-				value: "Hex.SliceOffsetOutOfBoundsError"
-			});
-		}
-	};
-	SizeExceedsPaddingSizeError = class extends BaseError {
-		constructor({ size, targetSize, type }) {
-			super(`${type.charAt(0).toUpperCase()}${type.slice(1).toLowerCase()} size (\`${size}\`) exceeds padding size (\`${targetSize}\`).`);
-			Object.defineProperty(this, "name", {
-				enumerable: true,
-				configurable: true,
-				writable: true,
-				value: "Hex.SizeExceedsPaddingSizeError"
-			});
-		}
-	};
-}));
-
-// node_modules/.pnpm/ox@0.14.59_typescript@6.0.3/node_modules/ox/_esm/core/Withdrawal.js
-/**
-* Converts a {@link ox#Withdrawal.Withdrawal} to an {@link ox#Withdrawal.Rpc}.
-*
-* @example
-* ```ts twoslash
-* import { Withdrawal } from 'ox'
-*
-* const withdrawal = Withdrawal.toRpc({
-*   address: '0x00000000219ab540356cBB839Cbe05303d7705Fa',
-*   amount: 6423331n,
-*   index: 0,
-*   validatorIndex: 1,
-* })
-* // @log: {
-* // @log:   address: '0x00000000219ab540356cBB839Cbe05303d7705Fa',
-* // @log:   amount: '0x620323',
-* // @log:   index: '0x0',
-* // @log:   validatorIndex: '0x1',
-* // @log: }
-* ```
-*
-* @param withdrawal - The Withdrawal to convert.
-* @returns An RPC Withdrawal.
-*/
-function toRpc$1(withdrawal) {
-	return {
-		address: withdrawal.address,
-		amount: fromNumber(withdrawal.amount),
-		index: fromNumber(withdrawal.index),
-		validatorIndex: fromNumber(withdrawal.validatorIndex)
-	};
-}
-var init_Withdrawal = __esmMin((() => {
-	init_Hex();
-}));
-
-// node_modules/.pnpm/ox@0.14.59_typescript@6.0.3/node_modules/ox/_esm/core/BlockOverrides.js
-/**
-* Converts an {@link ox#BlockOverrides.BlockOverrides} to an {@link ox#BlockOverrides.Rpc}.
-*
-* @example
-* ```ts twoslash
-* import { BlockOverrides } from 'ox'
-*
-* const blockOverrides = BlockOverrides.toRpc({
-*   baseFeePerGas: 1n,
-*   blobBaseFee: 2n,
-*   feeRecipient: '0x0000000000000000000000000000000000000000',
-*   gasLimit: 4n,
-*   number: 5n,
-*   prevRandao: 6n,
-*   time: 78187493520n,
-*   withdrawals: [
-*     {
-*       address: '0x0000000000000000000000000000000000000000',
-*       amount: 1n,
-*       index: 0,
-*       validatorIndex: 1,
-*     },
-*   ],
-* })
-* ```
-*
-* @param blockOverrides - The block overrides to convert.
-* @returns An instantiated {@link ox#BlockOverrides.Rpc}.
-*/
-function toRpc(blockOverrides) {
-	return {
-		...typeof blockOverrides.baseFeePerGas === "bigint" && { baseFeePerGas: fromNumber(blockOverrides.baseFeePerGas) },
-		...typeof blockOverrides.blobBaseFee === "bigint" && { blobBaseFee: fromNumber(blockOverrides.blobBaseFee) },
-		...typeof blockOverrides.feeRecipient === "string" && { feeRecipient: blockOverrides.feeRecipient },
-		...typeof blockOverrides.gasLimit === "bigint" && { gasLimit: fromNumber(blockOverrides.gasLimit) },
-		...typeof blockOverrides.number === "bigint" && { number: fromNumber(blockOverrides.number) },
-		...typeof blockOverrides.prevRandao === "bigint" && { prevRandao: fromNumber(blockOverrides.prevRandao) },
-		...typeof blockOverrides.time === "bigint" && { time: fromNumber(blockOverrides.time) },
-		...blockOverrides.withdrawals && { withdrawals: blockOverrides.withdrawals.map(toRpc$1) }
-	};
-}
-var init_BlockOverrides = __esmMin((() => {
-	init_Hex();
-	init_Withdrawal();
-}));
-
-// node_modules/.pnpm/viem@2.57.13_typescript@6.0.3/node_modules/viem/_esm/constants/abis.js
-var multicall3Abi, batchGatewayAbi, universalResolverErrors, universalResolverResolveAbi, universalResolverReverseAbi, textResolverAbi, addressResolverAbi, erc1271Abi, erc6492SignatureValidatorAbi, erc20Abi;
-var init_abis = __esmMin((() => {
-	multicall3Abi = [
-		{
-			inputs: [{
-				components: [
-					{
-						name: "target",
-						type: "address"
-					},
-					{
-						name: "allowFailure",
-						type: "bool"
-					},
-					{
-						name: "callData",
-						type: "bytes"
-					}
-				],
-				name: "calls",
-				type: "tuple[]"
-			}],
-			name: "aggregate3",
-			outputs: [{
-				components: [{
-					name: "success",
-					type: "bool"
-				}, {
-					name: "returnData",
-					type: "bytes"
-				}],
-				name: "returnData",
-				type: "tuple[]"
-			}],
-			stateMutability: "view",
-			type: "function"
-		},
-		{
-			inputs: [{
-				name: "addr",
-				type: "address"
-			}],
-			name: "getEthBalance",
-			outputs: [{
-				name: "balance",
-				type: "uint256"
-			}],
-			stateMutability: "view",
-			type: "function"
-		},
-		{
-			inputs: [],
-			name: "getCurrentBlockTimestamp",
-			outputs: [{
-				internalType: "uint256",
-				name: "timestamp",
-				type: "uint256"
-			}],
-			stateMutability: "view",
-			type: "function"
-		}
-	];
-	batchGatewayAbi = [{
-		name: "query",
-		type: "function",
-		stateMutability: "view",
-		inputs: [{
-			type: "tuple[]",
-			name: "queries",
-			components: [
-				{
-					type: "address",
-					name: "sender"
-				},
-				{
-					type: "string[]",
-					name: "urls"
-				},
-				{
-					type: "bytes",
-					name: "data"
-				}
-			]
-		}],
-		outputs: [{
-			type: "bool[]",
-			name: "failures"
-		}, {
-			type: "bytes[]",
-			name: "responses"
-		}]
-	}, {
-		name: "HttpError",
-		type: "error",
-		inputs: [{
-			type: "uint16",
-			name: "status"
-		}, {
-			type: "string",
-			name: "message"
-		}]
-	}];
-	universalResolverErrors = [
-		{
-			inputs: [{
-				name: "dns",
-				type: "bytes"
-			}],
-			name: "DNSDecodingFailed",
-			type: "error"
-		},
-		{
-			inputs: [{
-				name: "ens",
-				type: "string"
-			}],
-			name: "DNSEncodingFailed",
-			type: "error"
-		},
-		{
-			inputs: [],
-			name: "EmptyAddress",
-			type: "error"
-		},
-		{
-			inputs: [{
-				name: "status",
-				type: "uint16"
-			}, {
-				name: "message",
-				type: "string"
-			}],
-			name: "HttpError",
-			type: "error"
-		},
-		{
-			inputs: [],
-			name: "InvalidBatchGatewayResponse",
-			type: "error"
-		},
-		{
-			inputs: [{
-				name: "errorData",
-				type: "bytes"
-			}],
-			name: "ResolverError",
-			type: "error"
-		},
-		{
-			inputs: [{
-				name: "name",
-				type: "bytes"
-			}, {
-				name: "resolver",
-				type: "address"
-			}],
-			name: "ResolverNotContract",
-			type: "error"
-		},
-		{
-			inputs: [{
-				name: "name",
-				type: "bytes"
-			}],
-			name: "ResolverNotFound",
-			type: "error"
-		},
-		{
-			inputs: [{
-				name: "primary",
-				type: "string"
-			}, {
-				name: "primaryAddress",
-				type: "bytes"
-			}],
-			name: "ReverseAddressMismatch",
-			type: "error"
-		},
-		{
-			inputs: [{
-				internalType: "bytes4",
-				name: "selector",
-				type: "bytes4"
-			}],
-			name: "UnsupportedResolverProfile",
-			type: "error"
-		}
-	];
-	universalResolverResolveAbi = [...universalResolverErrors, {
-		name: "resolveWithGateways",
-		type: "function",
-		stateMutability: "view",
-		inputs: [
-			{
-				name: "name",
-				type: "bytes"
-			},
-			{
-				name: "data",
-				type: "bytes"
-			},
-			{
-				name: "gateways",
-				type: "string[]"
-			}
-		],
-		outputs: [{
-			name: "",
-			type: "bytes"
-		}, {
-			name: "address",
-			type: "address"
-		}]
-	}];
-	universalResolverReverseAbi = [...universalResolverErrors, {
-		name: "reverseWithGateways",
-		type: "function",
-		stateMutability: "view",
-		inputs: [
-			{
-				type: "bytes",
-				name: "reverseName"
-			},
-			{
-				type: "uint256",
-				name: "coinType"
-			},
-			{
-				type: "string[]",
-				name: "gateways"
-			}
-		],
-		outputs: [
-			{
-				type: "string",
-				name: "resolvedName"
-			},
-			{
-				type: "address",
-				name: "resolver"
-			},
-			{
-				type: "address",
-				name: "reverseResolver"
-			}
-		]
-	}];
-	textResolverAbi = [{
-		name: "text",
-		type: "function",
-		stateMutability: "view",
-		inputs: [{
-			name: "name",
-			type: "bytes32"
-		}, {
-			name: "key",
-			type: "string"
-		}],
-		outputs: [{
-			name: "",
-			type: "string"
-		}]
-	}];
-	addressResolverAbi = [{
-		name: "addr",
-		type: "function",
-		stateMutability: "view",
-		inputs: [{
-			name: "name",
-			type: "bytes32"
-		}],
-		outputs: [{
-			name: "",
-			type: "address"
-		}]
-	}, {
-		name: "addr",
-		type: "function",
-		stateMutability: "view",
-		inputs: [{
-			name: "name",
-			type: "bytes32"
-		}, {
-			name: "coinType",
-			type: "uint256"
-		}],
-		outputs: [{
-			name: "",
-			type: "bytes"
-		}]
-	}];
-	erc1271Abi = [{
-		name: "isValidSignature",
-		type: "function",
-		stateMutability: "view",
-		inputs: [{
-			name: "hash",
-			type: "bytes32"
-		}, {
-			name: "signature",
-			type: "bytes"
-		}],
-		outputs: [{
-			name: "",
-			type: "bytes4"
-		}]
-	}];
-	erc6492SignatureValidatorAbi = [{
-		inputs: [
-			{
-				name: "_signer",
-				type: "address"
-			},
-			{
-				name: "_hash",
-				type: "bytes32"
-			},
-			{
-				name: "_signature",
-				type: "bytes"
-			}
-		],
-		stateMutability: "nonpayable",
-		type: "constructor"
-	}, {
-		inputs: [
-			{
-				name: "_signer",
-				type: "address"
-			},
-			{
-				name: "_hash",
-				type: "bytes32"
-			},
-			{
-				name: "_signature",
-				type: "bytes"
-			}
-		],
-		outputs: [{ type: "bool" }],
-		stateMutability: "nonpayable",
-		type: "function",
-		name: "isValidSig"
-	}];
-	erc20Abi = [
-		{
-			type: "event",
-			name: "Approval",
-			inputs: [
-				{
-					indexed: true,
-					name: "owner",
-					type: "address"
-				},
-				{
-					indexed: true,
-					name: "spender",
-					type: "address"
-				},
-				{
-					indexed: false,
-					name: "value",
-					type: "uint256"
-				}
-			]
-		},
-		{
-			type: "event",
-			name: "Transfer",
-			inputs: [
-				{
-					indexed: true,
-					name: "from",
-					type: "address"
-				},
-				{
-					indexed: true,
-					name: "to",
-					type: "address"
-				},
-				{
-					indexed: false,
-					name: "value",
-					type: "uint256"
-				}
-			]
-		},
-		{
-			type: "function",
-			name: "allowance",
-			stateMutability: "view",
-			inputs: [{
-				name: "owner",
-				type: "address"
-			}, {
-				name: "spender",
-				type: "address"
-			}],
-			outputs: [{ type: "uint256" }]
-		},
-		{
-			type: "function",
-			name: "approve",
-			stateMutability: "nonpayable",
-			inputs: [{
-				name: "spender",
-				type: "address"
-			}, {
-				name: "amount",
-				type: "uint256"
-			}],
-			outputs: [{ type: "bool" }]
-		},
-		{
-			type: "function",
-			name: "balanceOf",
-			stateMutability: "view",
-			inputs: [{
-				name: "account",
-				type: "address"
-			}],
-			outputs: [{ type: "uint256" }]
-		},
-		{
-			type: "function",
-			name: "decimals",
-			stateMutability: "view",
-			inputs: [],
-			outputs: [{ type: "uint8" }]
-		},
-		{
-			type: "function",
-			name: "name",
-			stateMutability: "view",
-			inputs: [],
-			outputs: [{ type: "string" }]
-		},
-		{
-			type: "function",
-			name: "symbol",
-			stateMutability: "view",
-			inputs: [],
-			outputs: [{ type: "string" }]
-		},
-		{
-			type: "function",
-			name: "totalSupply",
-			stateMutability: "view",
-			inputs: [],
-			outputs: [{ type: "uint256" }]
-		},
-		{
-			type: "function",
-			name: "transfer",
-			stateMutability: "nonpayable",
-			inputs: [{
-				name: "recipient",
-				type: "address"
-			}, {
-				name: "amount",
-				type: "uint256"
-			}],
-			outputs: [{ type: "bool" }]
-		},
-		{
-			type: "function",
-			name: "transferFrom",
-			stateMutability: "nonpayable",
-			inputs: [
-				{
-					name: "sender",
-					type: "address"
-				},
-				{
-					name: "recipient",
-					type: "address"
-				},
-				{
-					name: "amount",
-					type: "uint256"
-				}
-			],
-			outputs: [{ type: "bool" }]
-		}
-	];
-}));
-
-// node_modules/.pnpm/viem@2.57.13_typescript@6.0.3/node_modules/viem/_esm/constants/contract.js
-var aggregate3Signature;
-var init_contract = __esmMin((() => {
-	aggregate3Signature = "0x82ad56cb";
-}));
-
-// node_modules/.pnpm/viem@2.57.13_typescript@6.0.3/node_modules/viem/_esm/constants/contracts.js
-var deploylessCallViaBytecodeBytecode, deploylessCallViaFactoryBytecode, erc6492SignatureValidatorByteCode, multicall3Bytecode;
-var init_contracts = __esmMin((() => {
-	deploylessCallViaBytecodeBytecode = "0x608060405234801561001057600080fd5b5060405161018e38038061018e83398101604081905261002f91610124565b6000808351602085016000f59050803b61004857600080fd5b6000808351602085016000855af16040513d6000823e81610067573d81fd5b3d81f35b634e487b7160e01b600052604160045260246000fd5b600082601f83011261009257600080fd5b81516001600160401b038111156100ab576100ab61006b565b604051601f8201601f19908116603f011681016001600160401b03811182821017156100d9576100d961006b565b6040528181528382016020018510156100f157600080fd5b60005b82811015610110576020818601810151838301820152016100f4565b506000918101602001919091529392505050565b6000806040838503121561013757600080fd5b82516001600160401b0381111561014d57600080fd5b61015985828601610081565b602085015190935090506001600160401b0381111561017757600080fd5b61018385828601610081565b915050925092905056fe";
-	deploylessCallViaFactoryBytecode = "0x608060405234801561001057600080fd5b506040516102c03803806102c083398101604081905261002f916101e6565b836001600160a01b03163b6000036100e457600080836001600160a01b03168360405161005c9190610270565b6000604051808303816000865af19150503d8060008114610099576040519150601f19603f3d011682016040523d82523d6000602084013e61009e565b606091505b50915091508115806100b857506001600160a01b0386163b155b156100e1578060405163101bb98d60e01b81526004016100d8919061028c565b60405180910390fd5b50505b6000808451602086016000885af16040513d6000823e81610103573d81fd5b3d81f35b80516001600160a01b038116811461011e57600080fd5b919050565b634e487b7160e01b600052604160045260246000fd5b60005b8381101561015457818101518382015260200161013c565b50506000910152565b600082601f83011261016e57600080fd5b81516001600160401b0381111561018757610187610123565b604051601f8201601f19908116603f011681016001600160401b03811182821017156101b5576101b5610123565b6040528181528382016020018510156101cd57600080fd5b6101de826020830160208701610139565b949350505050565b600080600080608085870312156101fc57600080fd5b61020585610107565b60208601519094506001600160401b0381111561022157600080fd5b61022d8782880161015d565b93505061023c60408601610107565b60608601519092506001600160401b0381111561025857600080fd5b6102648782880161015d565b91505092959194509250565b60008251610282818460208701610139565b9190910192915050565b60208152600082518060208401526102ab816040850160208701610139565b601f01601f1916919091016040019291505056fe";
-	erc6492SignatureValidatorByteCode = "0x608060405234801561001057600080fd5b5060405161069438038061069483398101604081905261002f9161051e565b600061003c848484610048565b9050806000526001601ff35b60007f64926492649264926492649264926492649264926492649264926492649264926100748361040c565b036101e7576000606080848060200190518101906100929190610577565b60405192955090935091506000906001600160a01b038516906100b69085906105dd565b6000604051808303816000865af19150503d80600081146100f3576040519150601f19603f3d011682016040523d82523d6000602084013e6100f8565b606091505b50509050876001600160a01b03163b60000361016057806101605760405162461bcd60e51b815260206004820152601e60248201527f5369676e617475726556616c696461746f723a206465706c6f796d656e74000060448201526064015b60405180910390fd5b604051630b135d3f60e11b808252906001600160a01b038a1690631626ba7e90610190908b9087906004016105f9565b602060405180830381865afa1580156101ad573d6000803e3d6000fd5b505050506040513d601f19601f820116820180604052508101906101d19190610633565b6001600160e01b03191614945050505050610405565b6001600160a01b0384163b1561027a57604051630b135d3f60e11b808252906001600160a01b03861690631626ba7e9061022790879087906004016105f9565b602060405180830381865afa158015610244573d6000803e3d6000fd5b505050506040513d601f19601f820116820180604052508101906102689190610633565b6001600160e01b031916149050610405565b81516041146102df5760405162461bcd60e51b815260206004820152603a602482015260008051602061067483398151915260448201527f3a20696e76616c6964207369676e6174757265206c656e6774680000000000006064820152608401610157565b6102e7610425565b5060208201516040808401518451859392600091859190811061030c5761030c61065d565b016020015160f81c9050601b811480159061032b57508060ff16601c14155b1561038c5760405162461bcd60e51b815260206004820152603b602482015260008051602061067483398151915260448201527f3a20696e76616c6964207369676e617475726520762076616c756500000000006064820152608401610157565b60408051600081526020810180835289905260ff83169181019190915260608101849052608081018390526001600160a01b0389169060019060a0016020604051602081039080840390855afa1580156103ea573d6000803e3d6000fd5b505050602060405103516001600160a01b0316149450505050505b9392505050565b600060208251101561041d57600080fd5b508051015190565b60405180606001604052806003906020820280368337509192915050565b6001600160a01b038116811461045857600080fd5b50565b634e487b7160e01b600052604160045260246000fd5b60005b8381101561048c578181015183820152602001610474565b50506000910152565b600082601f8301126104a657600080fd5b81516001600160401b038111156104bf576104bf61045b565b604051601f8201601f19908116603f011681016001600160401b03811182821017156104ed576104ed61045b565b60405281815283820160200185101561050557600080fd5b610516826020830160208701610471565b949350505050565b60008060006060848603121561053357600080fd5b835161053e81610443565b6020850151604086015191945092506001600160401b0381111561056157600080fd5b61056d86828701610495565b9150509250925092565b60008060006060848603121561058c57600080fd5b835161059781610443565b60208501519093506001600160401b038111156105b357600080fd5b6105bf86828701610495565b604086015190935090506001600160401b0381111561056157600080fd5b600082516105ef818460208701610471565b9190910192915050565b828152604060208201526000825180604084015261061e816060850160208701610471565b601f01601f1916919091016060019392505050565b60006020828403121561064557600080fd5b81516001600160e01b03198116811461040557600080fd5b634e487b7160e01b600052603260045260246000fdfe5369676e617475726556616c696461746f72237265636f7665725369676e6572";
-	multicall3Bytecode = "0x608060405234801561001057600080fd5b506115b9806100206000396000f3fe6080604052600436106100f35760003560e01c80634d2301cc1161008a578063a8b0574e11610059578063a8b0574e14610325578063bce38bd714610350578063c3077fa914610380578063ee82ac5e146103b2576100f3565b80634d2301cc1461026257806372425d9d1461029f57806382ad56cb146102ca57806386d516e8146102fa576100f3565b80633408e470116100c65780633408e470146101af578063399542e9146101da5780633e64a6961461020c57806342cbb15c14610237576100f3565b80630f28c97d146100f8578063174dea7114610123578063252dba421461015357806327e86d6e14610184575b600080fd5b34801561010457600080fd5b5061010d6103ef565b60405161011a9190610c0a565b60405180910390f35b61013d60048036038101906101389190610c94565b6103f7565b60405161014a9190610e94565b60405180910390f35b61016d60048036038101906101689190610f0c565b610615565b60405161017b92919061101b565b60405180910390f35b34801561019057600080fd5b506101996107ab565b6040516101a69190611064565b60405180910390f35b3480156101bb57600080fd5b506101c46107b7565b6040516101d19190610c0a565b60405180910390f35b6101f460048036038101906101ef91906110ab565b6107bf565b6040516102039392919061110b565b60405180910390f35b34801561021857600080fd5b506102216107e1565b60405161022e9190610c0a565b60405180910390f35b34801561024357600080fd5b5061024c6107e9565b6040516102599190610c0a565b60405180910390f35b34801561026e57600080fd5b50610289600480360381019061028491906111a7565b6107f1565b6040516102969190610c0a565b60405180910390f35b3480156102ab57600080fd5b506102b4610812565b6040516102c19190610c0a565b60405180910390f35b6102e460048036038101906102df919061122a565b61081a565b6040516102f19190610e94565b60405180910390f35b34801561030657600080fd5b5061030f6109e4565b60405161031c9190610c0a565b60405180910390f35b34801561033157600080fd5b5061033a6109ec565b6040516103479190611286565b60405180910390f35b61036a600480360381019061036591906110ab565b6109f4565b6040516103779190610e94565b60405180910390f35b61039a60048036038101906103959190610f0c565b610ba6565b6040516103a99392919061110b565b60405180910390f35b3480156103be57600080fd5b506103d960048036038101906103d491906112cd565b610bca565b6040516103e69190611064565b60405180910390f35b600042905090565b60606000808484905090508067ffffffffffffffff81111561041c5761041b6112fa565b5b60405190808252806020026020018201604052801561045557816020015b610442610bd5565b81526020019060019003908161043a5790505b5092503660005b828110156105c957600085828151811061047957610478611329565b5b6020026020010151905087878381811061049657610495611329565b5b90506020028101906104a89190611367565b925060008360400135905080860195508360000160208101906104cb91906111a7565b73ffffffffffffffffffffffffffffffffffffffff16818580606001906104f2919061138f565b604051610500929190611431565b60006040518083038185875af1925050503d806000811461053d576040519150601f19603f3d011682016040523d82523d6000602084013e610542565b606091505b5083600001846020018290528215151515815250505081516020850135176105bc577f08c379a000000000000000000000000000000000000000000000000000000000600052602060045260176024527f4d756c746963616c6c333a2063616c6c206661696c656400000000000000000060445260846000fd5b826001019250505061045c565b5082341461060c576040517f08c379a0000000000000000000000000000000000000000000000000000000008152600401610603906114a7565b60405180910390fd5b50505092915050565b6000606043915060008484905090508067ffffffffffffffff81111561063e5761063d6112fa565b5b60405190808252806020026020018201604052801561067157816020015b606081526020019060019003908161065c5790505b5091503660005b828110156107a157600087878381811061069557610694611329565b5b90506020028101906106a791906114c7565b92508260000160208101906106bc91906111a7565b73ffffffffffffffffffffffffffffffffffffffff168380602001906106e2919061138f565b6040516106f0929190611431565b6000604051808303816000865af19150503d806000811461072d576040519150601f19603f3d011682016040523d82523d6000602084013e610732565b606091505b5086848151811061074657610745611329565b5b60200260200101819052819250505080610795576040517f08c379a000000000000000000000000000000000000000000000000000000000815260040161078c9061153b565b60405180910390fd5b81600101915050610678565b5050509250929050565b60006001430340905090565b600046905090565b6000806060439250434091506107d68686866109f4565b905093509350939050565b600048905090565b600043905090565b60008173ffffffffffffffffffffffffffffffffffffffff16319050919050565b600044905090565b606060008383905090508067ffffffffffffffff81111561083e5761083d6112fa565b5b60405190808252806020026020018201604052801561087757816020015b610864610bd5565b81526020019060019003908161085c5790505b5091503660005b828110156109db57600084828151811061089b5761089a611329565b5b602002602001015190508686838181106108b8576108b7611329565b5b90506020028101906108ca919061155b565b92508260000160208101906108df91906111a7565b73ffffffffffffffffffffffffffffffffffffffff16838060400190610905919061138f565b604051610913929190611431565b6000604051808303816000865af19150503d8060008114610950576040519150601f19603f3d011682016040523d82523d6000602084013e610955565b606091505b5082600001836020018290528215151515815250505080516020840135176109cf577f08c379a000000000000000000000000000000000000000000000000000000000600052602060045260176024527f4d756c746963616c6c333a2063616c6c206661696c656400000000000000000060445260646000fd5b8160010191505061087e565b50505092915050565b600045905090565b600041905090565b606060008383905090508067ffffffffffffffff811115610a1857610a176112fa565b5b604051908082528060200260200182016040528015610a5157816020015b610a3e610bd5565b815260200190600190039081610a365790505b5091503660005b82811015610b9c576000848281518110610a7557610a74611329565b5b60200260200101519050868683818110610a9257610a91611329565b5b9050602002810190610aa491906114c7565b9250826000016020810190610ab991906111a7565b73ffffffffffffffffffffffffffffffffffffffff16838060200190610adf919061138f565b604051610aed929190611431565b6000604051808303816000865af19150503d8060008114610b2a576040519150601f19603f3d011682016040523d82523d6000602084013e610b2f565b606091505b508260000183602001829052821515151581525050508715610b90578060000151610b8f576040517f08c379a0000000000000000000000000000000000000000000000000000000008152600401610b869061153b565b60405180910390fd5b5b81600101915050610a58565b5050509392505050565b6000806060610bb7600186866107bf565b8093508194508295505050509250925092565b600081409050919050565b6040518060400160405280600015158152602001606081525090565b6000819050919050565b610c0481610bf1565b82525050565b6000602082019050610c1f6000830184610bfb565b92915050565b600080fd5b600080fd5b600080fd5b600080fd5b600080fd5b60008083601f840112610c5457610c53610c2f565b5b8235905067ffffffffffffffff811115610c7157610c70610c34565b5b602083019150836020820283011115610c8d57610c8c610c39565b5b9250929050565b60008060208385031215610cab57610caa610c25565b5b600083013567ffffffffffffffff811115610cc957610cc8610c2a565b5b610cd585828601610c3e565b92509250509250929050565b600081519050919050565b600082825260208201905092915050565b6000819050602082019050919050565b60008115159050919050565b610d2281610d0d565b82525050565b600081519050919050565b600082825260208201905092915050565b60005b83811015610d62578082015181840152602081019050610d47565b83811115610d71576000848401525b50505050565b6000601f19601f8301169050919050565b6000610d9382610d28565b610d9d8185610d33565b9350610dad818560208601610d44565b610db681610d77565b840191505092915050565b6000604083016000830151610dd96000860182610d19565b5060208301518482036020860152610df18282610d88565b9150508091505092915050565b6000610e0a8383610dc1565b905092915050565b6000602082019050919050565b6000610e2a82610ce1565b610e348185610cec565b935083602082028501610e4685610cfd565b8060005b85811015610e825784840389528151610e638582610dfe565b9450610e6e83610e12565b925060208a01995050600181019050610e4a565b50829750879550505050505092915050565b60006020820190508181036000830152610eae8184610e1f565b905092915050565b60008083601f840112610ecc57610ecb610c2f565b5b8235905067ffffffffffffffff811115610ee957610ee8610c34565b5b602083019150836020820283011115610f0557610f04610c39565b5b9250929050565b60008060208385031215610f2357610f22610c25565b5b600083013567ffffffffffffffff811115610f4157610f40610c2a565b5b610f4d85828601610eb6565b92509250509250929050565b600081519050919050565b600082825260208201905092915050565b6000819050602082019050919050565b6000610f918383610d88565b905092915050565b6000602082019050919050565b6000610fb182610f59565b610fbb8185610f64565b935083602082028501610fcd85610f75565b8060005b858110156110095784840389528151610fea8582610f85565b9450610ff583610f99565b925060208a01995050600181019050610fd1565b50829750879550505050505092915050565b60006040820190506110306000830185610bfb565b81810360208301526110428184610fa6565b90509392505050565b6000819050919050565b61105e8161104b565b82525050565b60006020820190506110796000830184611055565b92915050565b61108881610d0d565b811461109357600080fd5b50565b6000813590506110a58161107f565b92915050565b6000806000604084860312156110c4576110c3610c25565b5b60006110d286828701611096565b935050602084013567ffffffffffffffff8111156110f3576110f2610c2a565b5b6110ff86828701610eb6565b92509250509250925092565b60006060820190506111206000830186610bfb565b61112d6020830185611055565b818103604083015261113f8184610e1f565b9050949350505050565b600073ffffffffffffffffffffffffffffffffffffffff82169050919050565b600061117482611149565b9050919050565b61118481611169565b811461118f57600080fd5b50565b6000813590506111a18161117b565b92915050565b6000602082840312156111bd576111bc610c25565b5b60006111cb84828501611192565b91505092915050565b60008083601f8401126111ea576111e9610c2f565b5b8235905067ffffffffffffffff81111561120757611206610c34565b5b60208301915083602082028301111561122357611222610c39565b5b9250929050565b6000806020838503121561124157611240610c25565b5b600083013567ffffffffffffffff81111561125f5761125e610c2a565b5b61126b858286016111d4565b92509250509250929050565b61128081611169565b82525050565b600060208201905061129b6000830184611277565b92915050565b6112aa81610bf1565b81146112b557600080fd5b50565b6000813590506112c7816112a1565b92915050565b6000602082840312156112e3576112e2610c25565b5b60006112f1848285016112b8565b91505092915050565b7f4e487b7100000000000000000000000000000000000000000000000000000000600052604160045260246000fd5b7f4e487b7100000000000000000000000000000000000000000000000000000000600052603260045260246000fd5b600080fd5b600080fd5b600080fd5b60008235600160800383360303811261138357611382611358565b5b80830191505092915050565b600080833560016020038436030381126113ac576113ab611358565b5b80840192508235915067ffffffffffffffff8211156113ce576113cd61135d565b5b6020830192506001820236038313156113ea576113e9611362565b5b509250929050565b600081905092915050565b82818337600083830152505050565b600061141883856113f2565b93506114258385846113fd565b82840190509392505050565b600061143e82848661140c565b91508190509392505050565b600082825260208201905092915050565b7f4d756c746963616c6c333a2076616c7565206d69736d61746368000000000000600082015250565b6000611491601a8361144a565b915061149c8261145b565b602082019050919050565b600060208201905081810360008301526114c081611484565b9050919050565b6000823560016040038336030381126114e3576114e2611358565b5b80830191505092915050565b7f4d756c746963616c6c333a2063616c6c206661696c6564000000000000000000600082015250565b600061152560178361144a565b9150611530826114ef565b602082019050919050565b6000602082019050818103600083015261155481611518565b9050919050565b60008235600160600383360303811261157757611576611358565b5b8083019150509291505056fea264697066735822122020c1bc9aacf8e4a6507193432a895a8e77094f45a1395583f07b24e860ef06cd64736f6c634300080c0033";
+	docsPath = "/docs/contract/decodeEventLog";
 }));
 
 // node_modules/.pnpm/viem@2.57.13_typescript@6.0.3/node_modules/viem/_esm/errors/chain.js
-var ChainDoesNotSupportContract, ChainMismatchError, ChainNotFoundError, ClientChainNotConfiguredError, InvalidChainIdError;
+var InvalidChainIdError;
 var init_chain$1 = __esmMin((() => {
 	init_base();
-	ChainDoesNotSupportContract = class extends BaseError$1 {
-		constructor({ blockNumber, chain, contract }) {
-			super(`Chain "${chain.name}" does not support contract "${contract.name}".`, {
-				metaMessages: ["This could be due to any of the following:", ...blockNumber && contract.blockCreated && contract.blockCreated > blockNumber ? [`- The contract "${contract.name}" was not deployed until block ${contract.blockCreated} (current block ${blockNumber}).`] : [`- The chain does not have the contract "${contract.name}" configured.`]],
-				name: "ChainDoesNotSupportContract"
-			});
-		}
-	};
-	ChainMismatchError = class extends BaseError$1 {
-		constructor({ chain, currentChainId }) {
-			super(`The current chain of the wallet (id: ${currentChainId}) does not match the target chain for the transaction (id: ${chain.id} – ${chain.name}).`, {
-				metaMessages: [`Current Chain ID:  ${currentChainId}`, `Expected Chain ID: ${chain.id} – ${chain.name}`],
-				name: "ChainMismatchError"
-			});
-		}
-	};
-	ChainNotFoundError = class extends BaseError$1 {
-		constructor() {
-			super(["No chain was provided to the request.", "Please provide a chain with the `chain` argument on the Action, or by supplying a `chain` to WalletClient."].join("\n"), { name: "ChainNotFoundError" });
-		}
-	};
-	ClientChainNotConfiguredError = class extends BaseError$1 {
-		constructor() {
-			super("No chain was provided to the Client.", { name: "ClientChainNotConfiguredError" });
-		}
-	};
-	InvalidChainIdError = class extends BaseError$1 {
+	InvalidChainIdError = class extends BaseError {
 		constructor({ chainId }) {
 			super(typeof chainId === "number" ? `Chain ID "${chainId}" is invalid.` : "Chain ID is invalid.", { name: "InvalidChainIdError" });
-		}
-	};
-}));
-
-// node_modules/.pnpm/viem@2.57.13_typescript@6.0.3/node_modules/viem/_esm/utils/abi/encodeDeployData.js
-function encodeDeployData(parameters) {
-	const { abi, args, bytecode } = parameters;
-	if (!args || args.length === 0) return bytecode;
-	const description = abi.find((x) => "type" in x && x.type === "constructor");
-	if (!description) throw new AbiConstructorNotFoundError({ docsPath: docsPath$2 });
-	if (!("inputs" in description)) throw new AbiConstructorParamsNotFoundError({ docsPath: docsPath$2 });
-	if (!description.inputs || description.inputs.length === 0) throw new AbiConstructorParamsNotFoundError({ docsPath: docsPath$2 });
-	const data = encodeAbiParameters(description.inputs, args);
-	return concatHex([bytecode, data]);
-}
-var docsPath$2;
-var init_encodeDeployData = __esmMin((() => {
-	init_abi();
-	init_concat();
-	init_encodeAbiParameters();
-	docsPath$2 = "/docs/contract/encodeDeployData";
-}));
-
-// node_modules/.pnpm/viem@2.57.13_typescript@6.0.3/node_modules/viem/_esm/utils/chain/getChainContractAddress.js
-function getChainContractAddress({ blockNumber, chain, contract: name }) {
-	const contract = chain?.contracts?.[name];
-	if (!contract) throw new ChainDoesNotSupportContract({
-		chain,
-		contract: { name }
-	});
-	if (blockNumber && contract.blockCreated && contract.blockCreated > blockNumber) throw new ChainDoesNotSupportContract({
-		blockNumber,
-		chain,
-		contract: {
-			name,
-			blockCreated: contract.blockCreated
-		}
-	});
-	return contract.address;
-}
-var init_getChainContractAddress = __esmMin((() => {
-	init_chain$1();
-}));
-
-// node_modules/.pnpm/viem@2.57.13_typescript@6.0.3/node_modules/viem/_esm/utils/errors/getCallError.js
-function getCallError(err, { docsPath, ...args }) {
-	const cause = (() => {
-		const cause = getNodeError(err, args);
-		if (cause instanceof UnknownNodeError) return err;
-		return cause;
-	})();
-	return new CallExecutionError(cause, {
-		docsPath,
-		...args
-	});
-}
-var init_getCallError = __esmMin((() => {
-	init_contract$1();
-	init_node();
-	init_getNodeError();
-}));
-
-// node_modules/.pnpm/viem@2.57.13_typescript@6.0.3/node_modules/viem/_esm/utils/promise/withResolvers.js
-/** @internal */
-function withResolvers() {
-	let resolve = () => void 0;
-	let reject = () => void 0;
-	return {
-		promise: new Promise((resolve_, reject_) => {
-			resolve = resolve_;
-			reject = reject_;
-		}),
-		resolve,
-		reject
-	};
-}
-var init_withResolvers = __esmMin((() => {}));
-
-// node_modules/.pnpm/viem@2.57.13_typescript@6.0.3/node_modules/viem/_esm/utils/promise/createBatchScheduler.js
-/** @internal */
-function createBatchScheduler({ fn, id, shouldSplitBatch, wait = 0, sort }) {
-	const exec = async () => {
-		const scheduler = getScheduler();
-		flush();
-		const args = scheduler.map(({ args }) => args);
-		if (args.length === 0) return;
-		fn(args).then((data) => {
-			if (sort && Array.isArray(data)) data.sort(sort);
-			for (let i = 0; i < scheduler.length; i++) {
-				const { resolve } = scheduler[i];
-				resolve?.([data[i], data]);
-			}
-		}).catch((err) => {
-			for (let i = 0; i < scheduler.length; i++) {
-				const { reject } = scheduler[i];
-				reject?.(err);
-			}
-		});
-	};
-	const flush = () => schedulerCache.delete(id);
-	const getBatchedArgs = () => getScheduler().map(({ args }) => args);
-	const getScheduler = () => schedulerCache.get(id) || [];
-	const setScheduler = (item) => schedulerCache.set(id, [...getScheduler(), item]);
-	return {
-		flush,
-		async schedule(args) {
-			const { promise, resolve, reject } = withResolvers();
-			if (shouldSplitBatch?.([...getBatchedArgs(), args])) exec();
-			if (getScheduler().length > 0) {
-				setScheduler({
-					args,
-					resolve,
-					reject
-				});
-				return promise;
-			}
-			setScheduler({
-				args,
-				resolve,
-				reject
-			});
-			setTimeout(exec, wait);
-			return promise;
-		}
-	};
-}
-var schedulerCache;
-var init_createBatchScheduler = __esmMin((() => {
-	init_withResolvers();
-	schedulerCache = /*#__PURE__*/ new Map();
-}));
-
-// node_modules/.pnpm/viem@2.57.13_typescript@6.0.3/node_modules/viem/_esm/errors/ccip.js
-var OffchainLookupError, OffchainLookupResponseMalformedError, OffchainLookupSenderMismatchError;
-var init_ccip$1 = __esmMin((() => {
-	init_stringify$1();
-	init_base();
-	init_utils$3();
-	OffchainLookupError = class extends BaseError$1 {
-		constructor({ callbackSelector, cause, data, extraData, sender, urls }) {
-			super(cause.shortMessage || "An error occurred while fetching for an offchain result.", {
-				cause,
-				metaMessages: [
-					...cause.metaMessages || [],
-					cause.metaMessages?.length ? "" : [],
-					"Offchain Gateway Call:",
-					urls && ["  Gateway URL(s):", ...urls.map((url) => `    ${getUrl(url)}`)],
-					`  Sender: ${sender}`,
-					`  Data: ${data}`,
-					`  Callback selector: ${callbackSelector}`,
-					`  Extra data: ${extraData}`
-				].flat(),
-				name: "OffchainLookupError"
-			});
-		}
-	};
-	OffchainLookupResponseMalformedError = class extends BaseError$1 {
-		constructor({ result, url }) {
-			super("Offchain gateway response is malformed. Response data must be a hex value.", {
-				metaMessages: [`Gateway URL: ${getUrl(url)}`, `Response: ${stringify$2(result)}`],
-				name: "OffchainLookupResponseMalformedError"
-			});
-		}
-	};
-	OffchainLookupSenderMismatchError = class extends BaseError$1 {
-		constructor({ sender, to }) {
-			super("Reverted sender address does not match target contract address (`to`).", {
-				metaMessages: [`Contract address: ${to}`, `OffchainLookup sender address: ${sender}`],
-				name: "OffchainLookupSenderMismatchError"
-			});
 		}
 	};
 }));
@@ -12036,12 +7109,12 @@ var init_ccip$1 = __esmMin((() => {
 // node_modules/.pnpm/viem@2.57.13_typescript@6.0.3/node_modules/viem/_esm/utils/abi/decodeFunctionData.js
 function decodeFunctionData(parameters) {
 	const { abi, data } = parameters;
-	const signature = slice$2(data, 0, 4);
+	const signature = slice(data, 0, 4);
 	const description = abi.find((x) => x.type === "function" && signature === toFunctionSelector(formatAbiItem(x)));
 	if (!description) throw new AbiFunctionSignatureNotFoundError(signature, { docsPath: "/docs/contract/decodeFunctionData" });
 	return {
 		functionName: description.name,
-		args: "inputs" in description && description.inputs && description.inputs.length > 0 ? decodeAbiParameters(description.inputs, slice$2(data, 4)) : void 0
+		args: "inputs" in description && description.inputs && description.inputs.length > 0 ? decodeAbiParameters(description.inputs, slice(data, 4)) : void 0
 	};
 }
 var init_decodeFunctionData = __esmMin((() => {
@@ -12052,3835 +7125,8 @@ var init_decodeFunctionData = __esmMin((() => {
 	init_formatAbiItem();
 }));
 
-// node_modules/.pnpm/viem@2.57.13_typescript@6.0.3/node_modules/viem/_esm/utils/abi/encodeErrorResult.js
-function encodeErrorResult(parameters) {
-	const { abi, errorName, args } = parameters;
-	let abiItem = abi[0];
-	if (errorName) {
-		const item = getAbiItem({
-			abi,
-			args,
-			name: errorName
-		});
-		if (!item) throw new AbiErrorNotFoundError(errorName, { docsPath: docsPath$1 });
-		abiItem = item;
-	}
-	if (abiItem.type !== "error") throw new AbiErrorNotFoundError(void 0, { docsPath: docsPath$1 });
-	const definition = formatAbiItem(abiItem);
-	const signature = toFunctionSelector(definition);
-	let data = "0x";
-	if (args && args.length > 0) {
-		if (!abiItem.inputs) throw new AbiErrorInputsNotFoundError(abiItem.name, { docsPath: docsPath$1 });
-		data = encodeAbiParameters(abiItem.inputs, args);
-	}
-	return concatHex([signature, data]);
-}
-var docsPath$1;
-var init_encodeErrorResult = __esmMin((() => {
-	init_abi();
-	init_concat();
-	init_toFunctionSelector();
-	init_encodeAbiParameters();
-	init_formatAbiItem();
-	init_getAbiItem();
-	docsPath$1 = "/docs/contract/encodeErrorResult";
-}));
-
-// node_modules/.pnpm/viem@2.57.13_typescript@6.0.3/node_modules/viem/_esm/utils/abi/encodeFunctionResult.js
-function encodeFunctionResult(parameters) {
-	const { abi, functionName, result } = parameters;
-	let abiItem = abi[0];
-	if (functionName) {
-		const item = getAbiItem({
-			abi,
-			name: functionName
-		});
-		if (!item) throw new AbiFunctionNotFoundError(functionName, { docsPath });
-		abiItem = item;
-	}
-	if (abiItem.type !== "function") throw new AbiFunctionNotFoundError(void 0, { docsPath });
-	if (!abiItem.outputs) throw new AbiFunctionOutputsNotFoundError(abiItem.name, { docsPath });
-	const values = (() => {
-		if (abiItem.outputs.length === 0) return [];
-		if (abiItem.outputs.length === 1) return [result];
-		if (Array.isArray(result)) return result;
-		throw new InvalidArrayError$1(result);
-	})();
-	return encodeAbiParameters(abiItem.outputs, values);
-}
-var docsPath;
-var init_encodeFunctionResult = __esmMin((() => {
-	init_abi();
-	init_encodeAbiParameters();
-	init_getAbiItem();
-	docsPath = "/docs/contract/encodeFunctionResult";
-}));
-
-// node_modules/.pnpm/viem@2.57.13_typescript@6.0.3/node_modules/viem/_esm/utils/ens/localBatchGatewayRequest.js
-async function localBatchGatewayRequest(parameters) {
-	const { data, ccipRequest } = parameters;
-	const { args: [queries] } = decodeFunctionData({
-		abi: batchGatewayAbi,
-		data
-	});
-	const failures = [];
-	const responses = [];
-	await Promise.all(queries.map(async (query, i) => {
-		try {
-			responses[i] = query.urls.includes("x-batch-gateway:true") ? await localBatchGatewayRequest({
-				data: query.data,
-				ccipRequest
-			}) : await ccipRequest(query);
-			failures[i] = false;
-		} catch (err) {
-			failures[i] = true;
-			responses[i] = encodeError(err);
-		}
-	}));
-	return encodeFunctionResult({
-		abi: batchGatewayAbi,
-		functionName: "query",
-		result: [failures, responses]
-	});
-}
-function encodeError(error) {
-	if (error.name === "HttpRequestError" && error.status) return encodeErrorResult({
-		abi: batchGatewayAbi,
-		errorName: "HttpError",
-		args: [error.status, error.shortMessage]
-	});
-	return encodeErrorResult({
-		abi: [solidityError],
-		errorName: "Error",
-		args: ["shortMessage" in error ? error.shortMessage : error.message]
-	});
-}
-var localBatchGatewayUrl;
-var init_localBatchGatewayRequest = __esmMin((() => {
-	init_abis();
-	init_solidity();
-	init_decodeFunctionData();
-	init_encodeErrorResult();
-	init_encodeFunctionResult();
-	localBatchGatewayUrl = "x-batch-gateway:true";
-}));
-
-// node_modules/.pnpm/viem@2.57.13_typescript@6.0.3/node_modules/viem/_esm/utils/ccip.js
-var ccip_exports = /* @__PURE__ */ __exportAll({
-	ccipRequest: () => ccipRequest,
-	offchainLookup: () => offchainLookup,
-	offchainLookupAbiItem: () => offchainLookupAbiItem,
-	offchainLookupSignature: () => offchainLookupSignature
-});
-async function offchainLookup(client, { blockNumber, blockTag, data, requestOptions, to }) {
-	const { args } = decodeErrorResult({
-		data,
-		abi: [offchainLookupAbiItem]
-	});
-	const [sender, urls, callData, callbackSelector, extraData] = args;
-	const { ccipRead } = client;
-	const ccipRequest_ = ccipRead && typeof ccipRead?.request === "function" ? ccipRead.request : ccipRequest;
-	try {
-		if (!isAddressEqual(to, sender)) throw new OffchainLookupSenderMismatchError({
-			sender,
-			to
-		});
-		const result = urls.includes("x-batch-gateway:true") ? await localBatchGatewayRequest({
-			data: callData,
-			ccipRequest: (parameters) => ccipRequest_({
-				...parameters,
-				requestOptions
-			})
-		}) : await ccipRequest_({
-			data: callData,
-			requestOptions,
-			sender,
-			urls
-		});
-		const { data: data_ } = await call$1(client, {
-			blockNumber,
-			blockTag,
-			data: concat$1([callbackSelector, encodeAbiParameters([{ type: "bytes" }, { type: "bytes" }], [result, extraData])]),
-			requestOptions,
-			to
-		});
-		return data_;
-	} catch (err) {
-		if (requestOptions?.signal?.aborted) throw getAbortError(requestOptions.signal);
-		if (isAbortError(err)) throw err;
-		throw new OffchainLookupError({
-			callbackSelector,
-			cause: err,
-			data,
-			extraData,
-			sender,
-			urls
-		});
-	}
-}
-async function ccipRequest({ data, requestOptions, sender, urls }) {
-	let error = /* @__PURE__ */ new Error("An unknown error occurred.");
-	for (let i = 0; i < urls.length; i++) {
-		if (requestOptions?.signal?.aborted) throw getAbortError(requestOptions.signal);
-		const url = urls[i];
-		const method = url.includes("{data}") ? "GET" : "POST";
-		const body = method === "POST" ? {
-			data,
-			sender
-		} : void 0;
-		const headers = method === "POST" ? { "Content-Type": "application/json" } : {};
-		try {
-			const response = await fetch(url.replace("{sender}", sender.toLowerCase()).replace("{data}", data), {
-				body: JSON.stringify(body),
-				headers,
-				method,
-				...requestOptions?.signal ? { signal: requestOptions.signal } : {}
-			});
-			let result;
-			if (response.headers.get("Content-Type")?.startsWith("application/json")) result = (await response.json()).data;
-			else result = await response.text();
-			if (!response.ok) {
-				error = new HttpRequestError({
-					body,
-					details: result?.error ? stringify$2(result.error) : response.statusText,
-					headers: response.headers,
-					status: response.status,
-					url
-				});
-				continue;
-			}
-			if (!isHex(result)) {
-				error = new OffchainLookupResponseMalformedError({
-					result,
-					url
-				});
-				continue;
-			}
-			return result;
-		} catch (err) {
-			if (requestOptions?.signal?.aborted) throw getAbortError(requestOptions.signal);
-			if (isAbortError(err)) throw err;
-			error = new HttpRequestError({
-				body,
-				details: err.message,
-				url
-			});
-		}
-	}
-	throw error;
-}
-var offchainLookupSignature, offchainLookupAbiItem;
-var init_ccip = __esmMin((() => {
-	init_call();
-	init_ccip$1();
-	init_request();
-	init_utils$3();
-	init_decodeErrorResult();
-	init_encodeAbiParameters();
-	init_isAddressEqual();
-	init_concat();
-	init_isHex();
-	init_localBatchGatewayRequest();
-	init_stringify$1();
-	offchainLookupSignature = "0x556f1830";
-	offchainLookupAbiItem = {
-		name: "OffchainLookup",
-		type: "error",
-		inputs: [
-			{
-				name: "sender",
-				type: "address"
-			},
-			{
-				name: "urls",
-				type: "string[]"
-			},
-			{
-				name: "callData",
-				type: "bytes"
-			},
-			{
-				name: "callbackFunction",
-				type: "bytes4"
-			},
-			{
-				name: "extraData",
-				type: "bytes"
-			}
-		]
-	};
-}));
-
-// node_modules/.pnpm/viem@2.57.13_typescript@6.0.3/node_modules/viem/_esm/actions/public/call.js
-/**
-* Executes a new message call immediately without submitting a transaction to the network.
-*
-* - Docs: https://viem.sh/docs/actions/public/call
-* - JSON-RPC Methods: [`eth_call`](https://ethereum.org/en/developers/docs/apis/json-rpc/#eth_call)
-*
-* @param client - Client to use
-* @param parameters - {@link CallParameters}
-* @returns The call data. {@link CallReturnType}
-*
-* @example
-* import { createPublicClient, http } from 'viem'
-* import { mainnet } from 'viem/chains'
-* import { call } from 'viem/public'
-*
-* const client = createPublicClient({
-*   chain: mainnet,
-*   transport: http(),
-* })
-* const data = await call(client, {
-*   account: '0xf39fd6e51aad88f6f4ce6ab8827279cfffb92266',
-*   data: '0xc02aaa39b223fe8d0a0e5c4f27ead9083c756cc2',
-*   to: '0x70997970c51812dc3a010c7d01b50e0d17dc79c8',
-* })
-*/
-async function call$1(client, args) {
-	const { account: account_ = client.account, authorizationList, batch = Boolean(client.batch?.multicall), blockHash, blockNumber, blockTag = client.experimental_blockTag ?? "latest", requireCanonical, accessList, blobs, blockOverrides, code, data: data_, factory, factoryData, gas, gasPrice, maxFeePerBlobGas, maxFeePerGas, maxPriorityFeePerGas, nonce, requestOptions, to, value, stateOverride, ...rest } = args;
-	const account = account_ ? parseAccount(account_) : void 0;
-	if (code && (factory || factoryData)) throw new BaseError$1("Cannot provide both `code` & `factory`/`factoryData` as parameters.");
-	if (code && to) throw new BaseError$1("Cannot provide both `code` & `to` as parameters.");
-	const deploylessCallViaBytecode = code && data_;
-	const deploylessCallViaFactory = factory && factoryData && to && data_;
-	const deploylessCall = deploylessCallViaBytecode || deploylessCallViaFactory;
-	const data = (() => {
-		if (deploylessCallViaBytecode) return toDeploylessCallViaBytecodeData({
-			code,
-			data: data_
-		});
-		if (deploylessCallViaFactory) return toDeploylessCallViaFactoryData({
-			data: data_,
-			factory,
-			factoryData,
-			to
-		});
-		return data_;
-	})();
-	try {
-		assertRequest(args);
-		const block = formatBlockParameter({
-			blockHash,
-			blockNumber,
-			blockTag,
-			requireCanonical
-		});
-		const rpcBlockOverrides = blockOverrides ? toRpc(blockOverrides) : void 0;
-		const rpcStateOverride = serializeStateOverride(stateOverride);
-		const chainFormat = client.chain?.formatters?.transactionRequest?.format;
-		const request = (chainFormat || formatTransactionRequest)({
-			...extract(rest, { format: chainFormat }),
-			accessList,
-			account,
-			authorizationList,
-			blobs,
-			data,
-			gas,
-			gasPrice,
-			maxFeePerBlobGas,
-			maxFeePerGas,
-			maxPriorityFeePerGas,
-			nonce,
-			to: deploylessCall ? void 0 : to,
-			value
-		}, "call");
-		if (batch && shouldPerformMulticall({ request }) && !rpcBlockOverrides && blockHash === void 0) try {
-			const { deployless = false } = typeof client.batch?.multicall === "object" ? client.batch.multicall : {};
-			const multicallAddress = getMulticallAddress(client, {
-				blockNumber,
-				deployless
-			});
-			if (!multicallAddress || !hasStateOverrideForAddress(rpcStateOverride, multicallAddress)) return await scheduleMulticall$1(client, {
-				...request,
-				blockHash,
-				blockNumber,
-				blockTag,
-				multicallAddress,
-				requestOptions,
-				requireCanonical,
-				rpcStateOverride
-			});
-		} catch (err) {
-			if (!(err instanceof ClientChainNotConfiguredError) && !(err instanceof ChainDoesNotSupportContract)) throw err;
-		}
-		const params = (() => {
-			const base = [request, block];
-			if (rpcStateOverride && rpcBlockOverrides) return [
-				...base,
-				rpcStateOverride,
-				rpcBlockOverrides
-			];
-			if (rpcStateOverride) return [...base, rpcStateOverride];
-			if (rpcBlockOverrides) return [
-				...base,
-				{},
-				rpcBlockOverrides
-			];
-			return base;
-		})();
-		const response = await client.request({
-			method: "eth_call",
-			params
-		}, requestOptions);
-		if (response === "0x") return { data: void 0 };
-		return { data: response };
-	} catch (err) {
-		if (requestOptions?.signal?.aborted) throw getAbortError(requestOptions.signal);
-		if (isAbortError(err)) throw err;
-		const data = getRevertErrorData(err);
-		const { offchainLookup, offchainLookupSignature } = await Promise.resolve().then(() => (init_ccip(), ccip_exports));
-		if (client.ccipRead !== false && data?.slice(0, 10) === offchainLookupSignature && to) return { data: await offchainLookup(client, {
-			data,
-			requestOptions,
-			to
-		}) };
-		if (deploylessCall && data?.slice(0, 10) === "0x101bb98d") throw new CounterfactualDeploymentFailedError({ factory });
-		throw getCallError(err, {
-			...args,
-			account,
-			chain: client.chain
-		});
-	}
-}
-function shouldPerformMulticall({ request }) {
-	const { data, to, ...request_ } = request;
-	if (!data) return false;
-	if (data.startsWith("0x82ad56cb")) return false;
-	if (!to) return false;
-	if (Object.values(request_).filter((x) => typeof x !== "undefined").length > 0) return false;
-	return true;
-}
-function getRequestOptionsId(requestOptions) {
-	if (!requestOptions) return "default";
-	const id = requestOptionsIds.get(requestOptions);
-	if (id !== void 0) return id;
-	const nextId = requestOptionsId++;
-	requestOptionsIds.set(requestOptions, nextId);
-	return nextId;
-}
-async function scheduleMulticall$1(client, args) {
-	const { batchSize = 1024, deployless = false, wait = 0 } = typeof client.batch?.multicall === "object" ? client.batch.multicall : {};
-	const { blockHash, blockNumber, blockTag = client.experimental_blockTag ?? "latest", requireCanonical, data, multicallAddress: multicallAddress_, requestOptions, rpcStateOverride, to } = args;
-	const multicallAddress = multicallAddress_ !== void 0 ? multicallAddress_ : getMulticallAddress(client, {
-		blockNumber,
-		deployless
-	});
-	const block = formatBlockParameter({
-		blockHash,
-		blockNumber,
-		blockTag,
-		requireCanonical
-	});
-	const blockId = typeof block === "string" ? block : JSON.stringify(block);
-	const stateOverrideKey = rpcStateOverride ? `.${JSON.stringify(rpcStateOverride)}` : "";
-	const { schedule } = createBatchScheduler({
-		id: `${client.uid}.${blockId}.${getRequestOptionsId(requestOptions)}${stateOverrideKey}`,
-		wait,
-		shouldSplitBatch(args) {
-			return args.reduce((size, { data }) => size + (data.length - 2), 0) > batchSize * 2;
-		},
-		fn: async (requests) => {
-			const calls = requests.map((request) => ({
-				allowFailure: true,
-				callData: request.data,
-				target: request.to
-			}));
-			const calldata = encodeFunctionData({
-				abi: multicall3Abi,
-				args: [calls],
-				functionName: "aggregate3"
-			});
-			const multicallRequest = { ...multicallAddress === null ? { data: toDeploylessCallViaBytecodeData({
-				code: multicall3Bytecode,
-				data: calldata
-			}) } : {
-				to: multicallAddress,
-				data: calldata
-			} };
-			const data = await client.request({
-				method: "eth_call",
-				params: rpcStateOverride ? [
-					multicallRequest,
-					block,
-					rpcStateOverride
-				] : [multicallRequest, block]
-			}, requestOptions);
-			return decodeFunctionResult({
-				abi: multicall3Abi,
-				args: [calls],
-				functionName: "aggregate3",
-				data: data || "0x"
-			});
-		}
-	});
-	const [{ returnData, success }] = await schedule({
-		data,
-		to
-	});
-	if (!success) throw new RawContractError({ data: returnData });
-	if (returnData === "0x") return { data: void 0 };
-	return { data: returnData };
-}
-function getMulticallAddress(client, parameters) {
-	const { blockNumber, deployless } = parameters;
-	if (deployless) return null;
-	if (client.chain) return getChainContractAddress({
-		blockNumber,
-		chain: client.chain,
-		contract: "multicall3"
-	});
-	throw new ClientChainNotConfiguredError();
-}
-function hasStateOverrideForAddress(rpcStateOverride, address) {
-	if (!rpcStateOverride) return false;
-	return Object.keys(rpcStateOverride).some((stateOverrideAddress) => isAddressEqual(stateOverrideAddress, address));
-}
-function toDeploylessCallViaBytecodeData(parameters) {
-	const { code, data } = parameters;
-	return encodeDeployData({
-		abi: parseAbi(["constructor(bytes, bytes)"]),
-		bytecode: deploylessCallViaBytecodeBytecode,
-		args: [code, data]
-	});
-}
-function toDeploylessCallViaFactoryData(parameters) {
-	const { data, factory, factoryData, to } = parameters;
-	return encodeDeployData({
-		abi: parseAbi(["constructor(address, bytes, address, bytes)"]),
-		bytecode: deploylessCallViaFactoryBytecode,
-		args: [
-			to,
-			data,
-			factory,
-			factoryData
-		]
-	});
-}
-/** @internal */
-function getRevertErrorData(err) {
-	if (!(err instanceof BaseError$1)) return void 0;
-	const error = err.walk();
-	return typeof error?.data === "object" ? error.data?.data : error.data;
-}
-var requestOptionsId, requestOptionsIds;
-var init_call = __esmMin((() => {
-	init_exports();
-	init_BlockOverrides();
-	init_parseAccount();
-	init_abis();
-	init_contract();
-	init_contracts();
-	init_base();
-	init_chain$1();
-	init_contract$1();
-	init_utils$3();
-	init_decodeFunctionResult();
-	init_encodeDeployData();
-	init_encodeFunctionData();
-	init_isAddressEqual();
-	init_formatBlockParameter();
-	init_getChainContractAddress();
-	init_getCallError();
-	init_extract();
-	init_transactionRequest();
-	init_createBatchScheduler();
-	init_stateOverride();
-	init_assertRequest();
-	requestOptionsId = 0;
-	requestOptionsIds = /* @__PURE__ */ new WeakMap();
-}));
-
-// node_modules/.pnpm/viem@2.57.13_typescript@6.0.3/node_modules/viem/_esm/actions/public/readContract.js
-/**
-* Calls a read-only function on a contract, and returns the response.
-*
-* - Docs: https://viem.sh/docs/contract/readContract
-* - Examples: https://stackblitz.com/github/wevm/viem/tree/main/examples/contracts_reading-contracts
-*
-* A "read-only" function (constant function) on a Solidity contract is denoted by a `view` or `pure` keyword. They can only read the state of the contract, and cannot make any changes to it. Since read-only methods do not change the state of the contract, they do not require any gas to be executed, and can be called by any user without the need to pay for gas.
-*
-* Internally, uses a [Public Client](https://viem.sh/docs/clients/public) to call the [`call` action](https://viem.sh/docs/actions/public/call) with [ABI-encoded `data`](https://viem.sh/docs/contract/encodeFunctionData).
-*
-* @param client - Client to use
-* @param parameters - {@link ReadContractParameters}
-* @returns The response from the contract. Type is inferred. {@link ReadContractReturnType}
-*
-* @example
-* import { createPublicClient, http, parseAbi } from 'viem'
-* import { mainnet } from 'viem/chains'
-* import { readContract } from 'viem/contract'
-*
-* const client = createPublicClient({
-*   chain: mainnet,
-*   transport: http(),
-* })
-* const result = await readContract(client, {
-*   address: '0xFBA3912Ca04dd458c843e2EE08967fC04f3579c2',
-*   abi: parseAbi(['function balanceOf(address) view returns (uint256)']),
-*   functionName: 'balanceOf',
-*   args: ['0xA0Cf798816D4b9b9866b5330EEa46a18382f251e'],
-* })
-* // 424122n
-*/
-async function readContract(client, parameters) {
-	const { abi, address, args, functionName, ...rest } = parameters;
-	const calldata = encodeFunctionData({
-		abi,
-		args,
-		functionName
-	});
-	try {
-		const { data } = await getAction(client, call$1, "call")({
-			...rest,
-			data: calldata,
-			to: address
-		});
-		return decodeFunctionResult({
-			abi,
-			args,
-			functionName,
-			data: data || "0x"
-		});
-	} catch (error) {
-		throw getContractError(error, {
-			abi,
-			address,
-			args,
-			docsPath: "/docs/contract/readContract",
-			functionName
-		});
-	}
-}
-var init_readContract = __esmMin((() => {
-	init_decodeFunctionResult();
-	init_encodeFunctionData();
-	init_getContractError();
-	init_getAction();
-	init_call();
-}));
-
-// node_modules/.pnpm/viem@2.57.13_typescript@6.0.3/node_modules/viem/_esm/actions/public/simulateContract.js
-/**
-* Simulates/validates a contract interaction. This is useful for retrieving **return data** and **revert reasons** of contract write functions.
-*
-* - Docs: https://viem.sh/docs/contract/simulateContract
-* - Examples: https://stackblitz.com/github/wevm/viem/tree/main/examples/contracts_writing-to-contracts
-*
-* This function does not require gas to execute and _**does not**_ change the state of the blockchain. It is almost identical to [`readContract`](https://viem.sh/docs/contract/readContract), but also supports contract write functions.
-*
-* Internally, uses a [Public Client](https://viem.sh/docs/clients/public) to call the [`call` action](https://viem.sh/docs/actions/public/call) with [ABI-encoded `data`](https://viem.sh/docs/contract/encodeFunctionData).
-*
-* @param client - Client to use
-* @param parameters - {@link SimulateContractParameters}
-* @returns The simulation result and write request. {@link SimulateContractReturnType}
-*
-* @example
-* import { createPublicClient, http } from 'viem'
-* import { mainnet } from 'viem/chains'
-* import { simulateContract } from 'viem/contract'
-*
-* const client = createPublicClient({
-*   chain: mainnet,
-*   transport: http(),
-* })
-* const result = await simulateContract(client, {
-*   address: '0xFBA3912Ca04dd458c843e2EE08967fC04f3579c2',
-*   abi: parseAbi(['function mint(uint32) view returns (uint32)']),
-*   functionName: 'mint',
-*   args: ['69420'],
-*   account: '0xA0Cf798816D4b9b9866b5330EEa46a18382f251e',
-* })
-*/
-async function simulateContract(client, parameters) {
-	const { abi, address, args, functionName, dataSuffix = typeof client.dataSuffix === "string" ? client.dataSuffix : client.dataSuffix?.value, ...callRequest } = parameters;
-	const account = callRequest.account ? parseAccount(callRequest.account) : client.account;
-	const calldata = encodeFunctionData({
-		abi,
-		args,
-		functionName
-	});
-	try {
-		const { data } = await getAction(client, call$1, "call")({
-			batch: false,
-			data: `${calldata}${dataSuffix ? dataSuffix.replace("0x", "") : ""}`,
-			to: address,
-			...callRequest,
-			account
-		});
-		return {
-			result: decodeFunctionResult({
-				abi,
-				args,
-				functionName,
-				data: data || "0x"
-			}),
-			request: {
-				abi: abi.filter((abiItem) => "name" in abiItem && abiItem.name === parameters.functionName),
-				address,
-				args,
-				dataSuffix,
-				functionName,
-				...callRequest,
-				account
-			}
-		};
-	} catch (error) {
-		throw getContractError(error, {
-			abi,
-			address,
-			args,
-			docsPath: "/docs/contract/simulateContract",
-			functionName,
-			sender: account?.address
-		});
-	}
-}
-var init_simulateContract = __esmMin((() => {
-	init_parseAccount();
-	init_decodeFunctionResult();
-	init_encodeFunctionData();
-	init_getContractError();
-	init_getAction();
-	init_call();
-}));
-
-// node_modules/.pnpm/viem@2.57.13_typescript@6.0.3/node_modules/viem/_esm/utils/observe.js
-/**
-* @description Sets up an observer for a given function. If another function
-* is set up under the same observer id, the function will only be called once
-* for both instances of the observer.
-*/
-function observe(observerId, callbacks, fn) {
-	const callbackId = ++callbackCount;
-	const getListeners = () => listenersCache.get(observerId) || [];
-	const unsubscribe = () => {
-		const nextListeners = getListeners().filter((cb) => cb.id !== callbackId);
-		if (nextListeners.length === 0) {
-			listenersCache.delete(observerId);
-			cleanupCache.delete(observerId);
-			return;
-		}
-		listenersCache.set(observerId, nextListeners);
-	};
-	const unwatch = () => {
-		const listeners = getListeners();
-		if (!listeners.some((cb) => cb.id === callbackId)) return;
-		const cleanup = cleanupCache.get(observerId);
-		if (listeners.length === 1 && cleanup) {
-			const p = cleanup();
-			if (p instanceof Promise) p.catch(() => {});
-		}
-		unsubscribe();
-	};
-	const listeners = getListeners();
-	listenersCache.set(observerId, [...listeners, {
-		id: callbackId,
-		fns: callbacks
-	}]);
-	if (listeners && listeners.length > 0) return unwatch;
-	const emit = {};
-	for (const key in callbacks) emit[key] = ((...args) => {
-		const listeners = getListeners();
-		if (listeners.length === 0) return;
-		for (const listener of listeners) listener.fns[key]?.(...args);
-	});
-	const cleanup = fn(emit);
-	if (typeof cleanup === "function") cleanupCache.set(observerId, cleanup);
-	return unwatch;
-}
-var listenersCache, cleanupCache, callbackCount;
-var init_observe = __esmMin((() => {
-	listenersCache = /*#__PURE__*/ new Map();
-	cleanupCache = /*#__PURE__*/ new Map();
-	callbackCount = 0;
-}));
-
-// node_modules/.pnpm/viem@2.57.13_typescript@6.0.3/node_modules/viem/_esm/utils/wait.js
-async function wait(time, { signal } = {}) {
-	return new Promise((resolve, reject) => {
-		if (signal?.aborted) {
-			reject(getAbortError(signal));
-			return;
-		}
-		const cleanup = () => signal?.removeEventListener("abort", onAbort);
-		const timeout = setTimeout(() => {
-			cleanup();
-			resolve();
-		}, Math.min(time, 2 ** 31 - 1));
-		const onAbort = () => {
-			clearTimeout(timeout);
-			cleanup();
-			reject(getAbortError(signal));
-		};
-		signal?.addEventListener("abort", onAbort, { once: true });
-	});
-}
-var init_wait = __esmMin((() => {
-	init_utils$3();
-}));
-
-// node_modules/.pnpm/viem@2.57.13_typescript@6.0.3/node_modules/viem/_esm/utils/poll.js
-/**
-* @description Polls a function at a specified interval.
-*/
-function poll(fn, { emitOnBegin, initialWaitTime, interval }) {
-	let active = true;
-	const unwatch = () => active = false;
-	const watch = async () => {
-		let data;
-		if (emitOnBegin) data = await fn({ unpoll: unwatch });
-		const initialWait = await initialWaitTime?.(data) ?? interval;
-		await wait(initialWait);
-		const poll = async () => {
-			if (!active) return;
-			await fn({ unpoll: unwatch });
-			await wait(interval);
-			poll();
-		};
-		poll();
-	};
-	watch();
-	return unwatch;
-}
-var init_poll = __esmMin((() => {
-	init_wait();
-}));
-
-// node_modules/.pnpm/viem@2.57.13_typescript@6.0.3/node_modules/viem/_esm/utils/promise/withCache.js
-function getCache(cacheKey) {
-	const buildCache = (cacheKey, cache) => ({
-		clear: () => cache.delete(cacheKey),
-		get: () => cache.get(cacheKey),
-		set: (data) => cache.set(cacheKey, data)
-	});
-	const promise = buildCache(cacheKey, promiseCache$1);
-	const response = buildCache(cacheKey, responseCache);
-	return {
-		clear: () => {
-			promise.clear();
-			response.clear();
-		},
-		promise,
-		response
-	};
-}
-/**
-* @description Returns the result of a given promise, and caches the result for
-* subsequent invocations against a provided cache key.
-*/
-async function withCache(fn, { cacheKey, cacheTime = Number.POSITIVE_INFINITY }) {
-	const cache = getCache(cacheKey);
-	const response = cache.response.get();
-	if (response && cacheTime > 0) {
-		if (Date.now() - response.created.getTime() < cacheTime) return response.data;
-	}
-	let promise = cache.promise.get();
-	if (!promise) {
-		promise = fn();
-		cache.promise.set(promise);
-	}
-	try {
-		const data = await promise;
-		cache.response.set({
-			created: /* @__PURE__ */ new Date(),
-			data
-		});
-		return data;
-	} finally {
-		cache.promise.clear();
-	}
-}
-var promiseCache$1, responseCache;
-var init_withCache = __esmMin((() => {
-	promiseCache$1 = /*#__PURE__*/ new Map();
-	responseCache = /*#__PURE__*/ new Map();
-}));
-
-// node_modules/.pnpm/viem@2.57.13_typescript@6.0.3/node_modules/viem/_esm/actions/public/getBlockNumber.js
-/**
-* Returns the number of the most recent block seen.
-*
-* - Docs: https://viem.sh/docs/actions/public/getBlockNumber
-* - Examples: https://stackblitz.com/github/wevm/viem/tree/main/examples/blocks_fetching-blocks
-* - JSON-RPC Methods: [`eth_blockNumber`](https://ethereum.org/en/developers/docs/apis/json-rpc/#eth_blocknumber)
-*
-* @param client - Client to use
-* @param parameters - {@link GetBlockNumberParameters}
-* @returns The number of the block. {@link GetBlockNumberReturnType}
-*
-* @example
-* import { createPublicClient, http } from 'viem'
-* import { mainnet } from 'viem/chains'
-* import { getBlockNumber } from 'viem/public'
-*
-* const client = createPublicClient({
-*   chain: mainnet,
-*   transport: http(),
-* })
-* const blockNumber = await getBlockNumber(client)
-* // 69420n
-*/
-async function getBlockNumber(client, { cacheTime = client.cacheTime } = {}) {
-	const blockNumberHex = await withCache(() => client.request({ method: "eth_blockNumber" }), {
-		cacheKey: cacheKey(client.uid),
-		cacheTime
-	});
-	return BigInt(blockNumberHex);
-}
-var cacheKey;
-var init_getBlockNumber = __esmMin((() => {
-	init_withCache();
-	cacheKey = (id) => `blockNumber.${id}`;
-}));
-
-// node_modules/.pnpm/viem@2.57.13_typescript@6.0.3/node_modules/viem/_esm/actions/public/getFilterChanges.js
-/**
-* Returns a list of logs or hashes based on a [Filter](/docs/glossary/terms#filter) since the last time it was called.
-*
-* - Docs: https://viem.sh/docs/actions/public/getFilterChanges
-* - JSON-RPC Methods: [`eth_getFilterChanges`](https://ethereum.org/en/developers/docs/apis/json-rpc/#eth_getfilterchanges)
-*
-* A Filter can be created from the following actions:
-*
-* - [`createBlockFilter`](https://viem.sh/docs/actions/public/createBlockFilter)
-* - [`createContractEventFilter`](https://viem.sh/docs/contract/createContractEventFilter)
-* - [`createEventFilter`](https://viem.sh/docs/actions/public/createEventFilter)
-* - [`createPendingTransactionFilter`](https://viem.sh/docs/actions/public/createPendingTransactionFilter)
-*
-* Depending on the type of filter, the return value will be different:
-*
-* - If the filter was created with `createContractEventFilter` or `createEventFilter`, it returns a list of logs.
-* - If the filter was created with `createPendingTransactionFilter`, it returns a list of transaction hashes.
-* - If the filter was created with `createBlockFilter`, it returns a list of block hashes.
-*
-* @param client - Client to use
-* @param parameters - {@link GetFilterChangesParameters}
-* @returns Logs or hashes. {@link GetFilterChangesReturnType}
-*
-* @example
-* // Blocks
-* import { createPublicClient, http } from 'viem'
-* import { mainnet } from 'viem/chains'
-* import { createBlockFilter, getFilterChanges } from 'viem/public'
-*
-* const client = createPublicClient({
-*   chain: mainnet,
-*   transport: http(),
-* })
-* const filter = await createBlockFilter(client)
-* const hashes = await getFilterChanges(client, { filter })
-*
-* @example
-* // Contract Events
-* import { createPublicClient, http, parseAbi } from 'viem'
-* import { mainnet } from 'viem/chains'
-* import { createContractEventFilter, getFilterChanges } from 'viem/public'
-*
-* const client = createPublicClient({
-*   chain: mainnet,
-*   transport: http(),
-* })
-* const filter = await createContractEventFilter(client, {
-*   address: '0xa0b86991c6218b36c1d19d4a2e9eb0ce3606eb48',
-*   abi: parseAbi(['event Transfer(address indexed, address indexed, uint256)']),
-*   eventName: 'Transfer',
-* })
-* const logs = await getFilterChanges(client, { filter })
-*
-* @example
-* // Raw Events
-* import { createPublicClient, http, parseAbiItem } from 'viem'
-* import { mainnet } from 'viem/chains'
-* import { createEventFilter, getFilterChanges } from 'viem/public'
-*
-* const client = createPublicClient({
-*   chain: mainnet,
-*   transport: http(),
-* })
-* const filter = await createEventFilter(client, {
-*   address: '0xa0b86991c6218b36c1d19d4a2e9eb0ce3606eb48',
-*   event: parseAbiItem('event Transfer(address indexed, address indexed, uint256)'),
-* })
-* const logs = await getFilterChanges(client, { filter })
-*
-* @example
-* // Transactions
-* import { createPublicClient, http } from 'viem'
-* import { mainnet } from 'viem/chains'
-* import { createPendingTransactionFilter, getFilterChanges } from 'viem/public'
-*
-* const client = createPublicClient({
-*   chain: mainnet,
-*   transport: http(),
-* })
-* const filter = await createPendingTransactionFilter(client)
-* const hashes = await getFilterChanges(client, { filter })
-*/
-async function getFilterChanges(_client, { filter }) {
-	const strict = "strict" in filter && filter.strict;
-	const logs = await filter.request({
-		method: "eth_getFilterChanges",
-		params: [filter.id]
-	});
-	if (typeof logs[0] === "string") return logs;
-	const formattedLogs = logs.map((log) => formatLog(log));
-	if (!("abi" in filter) || !filter.abi) return formattedLogs;
-	return parseEventLogs({
-		abi: filter.abi,
-		logs: formattedLogs,
-		strict
-	});
-}
-var init_getFilterChanges = __esmMin((() => {
-	init_parseEventLogs();
-	init_log$1();
-}));
-
-// node_modules/.pnpm/viem@2.57.13_typescript@6.0.3/node_modules/viem/_esm/actions/public/uninstallFilter.js
-/**
-* Destroys a [`Filter`](https://viem.sh/docs/glossary/types#filter).
-*
-* - Docs: https://viem.sh/docs/actions/public/uninstallFilter
-* - JSON-RPC Methods: [`eth_uninstallFilter`](https://ethereum.org/en/developers/docs/apis/json-rpc/#eth_uninstallFilter)
-*
-* Destroys a Filter that was created from one of the following Actions:
-* - [`createBlockFilter`](https://viem.sh/docs/actions/public/createBlockFilter)
-* - [`createEventFilter`](https://viem.sh/docs/actions/public/createEventFilter)
-* - [`createPendingTransactionFilter`](https://viem.sh/docs/actions/public/createPendingTransactionFilter)
-*
-* @param client - Client to use
-* @param parameters - {@link UninstallFilterParameters}
-* @returns A boolean indicating if the Filter was successfully uninstalled. {@link UninstallFilterReturnType}
-*
-* @example
-* import { createPublicClient, http } from 'viem'
-* import { mainnet } from 'viem/chains'
-* import { createPendingTransactionFilter, uninstallFilter } from 'viem/public'
-*
-* const filter = await createPendingTransactionFilter(client)
-* const uninstalled = await uninstallFilter(client, { filter })
-* // true
-*/
-async function uninstallFilter(_client, { filter }) {
-	return filter.request({
-		method: "eth_uninstallFilter",
-		params: [filter.id]
-	});
-}
-var init_uninstallFilter = __esmMin((() => {}));
-
-// node_modules/.pnpm/viem@2.57.13_typescript@6.0.3/node_modules/viem/_esm/actions/public/watchContractEvent.js
-/**
-* Watches and returns emitted contract event logs.
-*
-* - Docs: https://viem.sh/docs/contract/watchContractEvent
-*
-* This Action will batch up all the event logs found within the [`pollingInterval`](https://viem.sh/docs/contract/watchContractEvent#pollinginterval-optional), and invoke them via [`onLogs`](https://viem.sh/docs/contract/watchContractEvent#onLogs).
-*
-* `watchContractEvent` will attempt to create an [Event Filter](https://viem.sh/docs/contract/createContractEventFilter) and listen to changes to the Filter per polling interval, however, if the RPC Provider does not support Filters (e.g. `eth_newFilter`), then `watchContractEvent` will fall back to using [`getLogs`](https://viem.sh/docs/actions/public/getLogs) instead. If `getLogs` fails for a block range, `watchContractEvent` will retry with smaller block ranges and may call `onLogs` more than once per polling interval.
-*
-* @param client - Client to use
-* @param parameters - {@link WatchContractEventParameters}
-* @returns A function that can be invoked to stop watching for new event logs. {@link WatchContractEventReturnType}
-*
-* @example
-* import { createPublicClient, http, parseAbi } from 'viem'
-* import { mainnet } from 'viem/chains'
-* import { watchContractEvent } from 'viem/contract'
-*
-* const client = createPublicClient({
-*   chain: mainnet,
-*   transport: http(),
-* })
-* const unwatch = watchContractEvent(client, {
-*   address: '0xFBA3912Ca04dd458c843e2EE08967fC04f3579c2',
-*   abi: parseAbi(['event Transfer(address indexed from, address indexed to, uint256 value)']),
-*   eventName: 'Transfer',
-*   args: { from: '0xc961145a54C96E3aE9bAA048c4F4D6b04C13916b' },
-*   onLogs: (logs) => console.log(logs),
-* })
-*/
-function watchContractEvent(client, parameters) {
-	const { abi, address, args, batch = true, eventName, fromBlock, onError, onLogs, poll: poll_, pollingInterval = client.pollingInterval, strict: strict_ } = parameters;
-	const enablePolling = (() => {
-		if (typeof poll_ !== "undefined") return poll_;
-		if (typeof fromBlock === "bigint") return true;
-		if (client.transport.type === "webSocket" || client.transport.type === "ipc") return false;
-		if (client.transport.type === "fallback" && (client.transport.transports[0].config.type === "webSocket" || client.transport.transports[0].config.type === "ipc")) return false;
-		return true;
-	})();
-	const pollContractEvent = () => {
-		const strict = strict_ ?? false;
-		const observerId = stringify$2([
-			"watchContractEvent",
-			address,
-			args,
-			batch,
-			client.uid,
-			eventName,
-			pollingInterval,
-			strict,
-			fromBlock
-		]);
-		return observe(observerId, {
-			onLogs,
-			onError
-		}, (emit) => {
-			let active = true;
-			let previousBlockNumber = fromBlock === void 0 ? void 0 : fromBlock - 1n;
-			let filter;
-			let initialized = false;
-			const emitLogs = (logs) => {
-				if (logs.length === 0) return;
-				if (batch) emit.onLogs(logs);
-				else for (const log of logs) emit.onLogs([log]);
-			};
-			const getLogsInRange = (from, to) => getAction(client, getContractEvents, "getContractEvents")({
-				abi,
-				address,
-				args,
-				eventName,
-				fromBlock: from,
-				toBlock: to,
-				strict
-			});
-			const unwatch = poll(async () => {
-				if (!initialized) {
-					try {
-						filter = await getAction(client, createContractEventFilter, "createContractEventFilter")({
-							abi,
-							address,
-							args,
-							eventName,
-							strict,
-							fromBlock
-						});
-					} catch {}
-					initialized = true;
-					if (filter) return;
-				}
-				try {
-					if (filter) {
-						const logs = await getAction(client, getFilterChanges, "getFilterChanges")({ filter });
-						emitLogs(logs);
-						return;
-					}
-					const blockNumber = await getAction(client, getBlockNumber, "getBlockNumber")({});
-					previousBlockNumber ??= blockNumber;
-					let size = blockNumber - previousBlockNumber;
-					while (previousBlockNumber < blockNumber) {
-						const from = previousBlockNumber + 1n;
-						const end = previousBlockNumber + size;
-						const to = end < blockNumber ? end : blockNumber;
-						const logs = await getLogsInRange(from, to).catch((error) => {
-							if (from === to || !isRangeError$1(error)) throw error;
-						});
-						if (!active) return;
-						if (!logs) {
-							size = (to - from + 1n) / 2n;
-							continue;
-						}
-						previousBlockNumber = to;
-						emitLogs(logs);
-					}
-				} catch (err) {
-					if (filter && err instanceof InvalidInputRpcError) initialized = false;
-					emit.onError?.(err);
-				}
-			}, {
-				emitOnBegin: true,
-				interval: pollingInterval
-			});
-			return async () => {
-				active = false;
-				if (filter) await getAction(client, uninstallFilter, "uninstallFilter")({ filter });
-				unwatch();
-			};
-		});
-	};
-	const subscribeContractEvent = () => {
-		const strict = strict_ ?? false;
-		const observerId = stringify$2([
-			"watchContractEvent",
-			address,
-			args,
-			batch,
-			client.uid,
-			eventName,
-			pollingInterval,
-			strict
-		]);
-		let active = true;
-		let unsubscribe = () => active = false;
-		return observe(observerId, {
-			onLogs,
-			onError
-		}, (emit) => {
-			(async () => {
-				try {
-					const transport = (() => {
-						if (client.transport.type === "fallback") {
-							const transport = client.transport.transports.find((transport) => transport.config.type === "webSocket" || transport.config.type === "ipc");
-							if (!transport) return client.transport;
-							return transport.value;
-						}
-						return client.transport;
-					})();
-					const topics = eventName ? encodeEventTopics({
-						abi,
-						eventName,
-						args
-					}) : [];
-					const { unsubscribe: unsubscribe_ } = await transport.subscribe({
-						params: ["logs", {
-							address,
-							topics
-						}],
-						onData(data) {
-							if (!active) return;
-							const log = data.result;
-							try {
-								const { eventName, args } = decodeEventLog({
-									abi,
-									data: log.data,
-									topics: log.topics,
-									strict: strict_
-								});
-								const formatted = formatLog(log, {
-									args,
-									eventName
-								});
-								emit.onLogs([formatted]);
-							} catch (err) {
-								let eventName;
-								let isUnnamed;
-								if (err instanceof DecodeLogDataMismatch || err instanceof DecodeLogTopicsMismatch) {
-									if (strict_) return;
-									eventName = err.abiItem.name;
-									isUnnamed = err.abiItem.inputs?.some((x) => !("name" in x && x.name));
-								}
-								const formatted = formatLog(log, {
-									args: isUnnamed ? [] : {},
-									eventName
-								});
-								emit.onLogs([formatted]);
-							}
-						},
-						onError(error) {
-							emit.onError?.(error);
-						}
-					});
-					unsubscribe = unsubscribe_;
-					if (!active) unsubscribe();
-				} catch (err) {
-					onError?.(err);
-				}
-			})();
-			return () => unsubscribe();
-		});
-	};
-	return enablePolling ? pollContractEvent() : subscribeContractEvent();
-}
-/** Returns whether a failed `eth_getLogs` request may succeed with a smaller block range. */
-function isRangeError$1(error) {
-	if (!(error instanceof BaseError$1)) return true;
-	const cause = error.walk((err) => err instanceof HttpRequestError || err instanceof RpcRequestError);
-	if (!cause) return true;
-	if (cause instanceof RpcRequestError && cause.code === 429) return false;
-	if (cause instanceof HttpRequestError && cause.status === void 0) return false;
-	return cause.status !== 401 && cause.status !== 403 && cause.status !== 429;
-}
-var init_watchContractEvent = __esmMin((() => {
-	init_abi();
-	init_base();
-	init_request();
-	init_rpc();
-	init_decodeEventLog();
-	init_encodeEventTopics();
-	init_log$1();
-	init_getAction();
-	init_observe();
-	init_poll();
-	init_stringify$1();
-	init_createContractEventFilter();
-	init_getBlockNumber();
-	init_getContractEvents();
-	init_getFilterChanges();
-	init_uninstallFilter();
-}));
-
-// node_modules/.pnpm/viem@2.57.13_typescript@6.0.3/node_modules/viem/_esm/errors/account.js
-var AccountNotFoundError, AccountTypeNotSupportedError;
-var init_account = __esmMin((() => {
-	init_base();
-	AccountNotFoundError = class extends BaseError$1 {
-		constructor({ docsPath } = {}) {
-			super(["Could not find an Account to execute with this Action.", "Please provide an Account with the `account` argument on the Action, or by supplying an `account` to the Client."].join("\n"), {
-				docsPath,
-				docsSlug: "account",
-				name: "AccountNotFoundError"
-			});
-		}
-	};
-	AccountTypeNotSupportedError = class extends BaseError$1 {
-		constructor({ docsPath, metaMessages, type }) {
-			super(`Account type "${type}" is not supported.`, {
-				docsPath,
-				metaMessages,
-				name: "AccountTypeNotSupportedError"
-			});
-		}
-	};
-}));
-
-// node_modules/.pnpm/viem@2.57.13_typescript@6.0.3/node_modules/viem/_esm/utils/chain/assertCurrentChain.js
-function assertCurrentChain({ chain, currentChainId }) {
-	if (!chain) throw new ChainNotFoundError();
-	if (currentChainId !== chain.id) throw new ChainMismatchError({
-		chain,
-		currentChainId
-	});
-}
-var init_assertCurrentChain = __esmMin((() => {
-	init_chain$1();
-}));
-
-// node_modules/.pnpm/viem@2.57.13_typescript@6.0.3/node_modules/viem/_esm/actions/wallet/sendRawTransaction.js
-/**
-* Sends a **signed** transaction to the network
-*
-* - Docs: https://viem.sh/docs/actions/wallet/sendRawTransaction
-* - JSON-RPC Method: [`eth_sendRawTransaction`](https://ethereum.github.io/execution-apis/api-documentation/)
-*
-* @param client - Client to use
-* @param parameters - {@link SendRawTransactionParameters}
-* @returns The transaction hash. {@link SendRawTransactionReturnType}
-*
-* @example
-* import { createWalletClient, custom } from 'viem'
-* import { mainnet } from 'viem/chains'
-* import { sendRawTransaction } from 'viem/wallet'
-*
-* const client = createWalletClient({
-*   chain: mainnet,
-*   transport: custom(window.ethereum),
-* })
-*
-* const hash = await sendRawTransaction(client, {
-*   serializedTransaction: '0x02f850018203118080825208808080c080a04012522854168b27e5dc3d5839bab5e6b39e1a0ffd343901ce1622e3d64b48f1a04e00902ae0502c4728cbf12156290df99c3ed7de85b1dbfe20b5c36931733a33'
-* })
-*/
-async function sendRawTransaction(client, { serializedTransaction }) {
-	return client.request({
-		method: "eth_sendRawTransaction",
-		params: [serializedTransaction]
-	}, { retryCount: 0 });
-}
-var init_sendRawTransaction = __esmMin((() => {}));
-
-// node_modules/.pnpm/viem@2.57.13_typescript@6.0.3/node_modules/viem/_esm/actions/wallet/sendTransaction.js
-/**
-* Creates, signs, and sends a new transaction to the network.
-*
-* - Docs: https://viem.sh/docs/actions/wallet/sendTransaction
-* - Examples: https://stackblitz.com/github/wevm/viem/tree/main/examples/transactions_sending-transactions
-* - JSON-RPC Methods:
-*   - JSON-RPC Accounts: [`eth_sendTransaction`](https://ethereum.org/en/developers/docs/apis/json-rpc/#eth_sendtransaction)
-*   - Local Accounts: [`eth_sendRawTransaction`](https://ethereum.org/en/developers/docs/apis/json-rpc/#eth_sendrawtransaction)
-*
-* @param client - Client to use
-* @param parameters - {@link SendTransactionParameters}
-* @returns The [Transaction](https://viem.sh/docs/glossary/terms#transaction) hash. {@link SendTransactionReturnType}
-*
-* @example
-* import { createWalletClient, custom } from 'viem'
-* import { mainnet } from 'viem/chains'
-* import { sendTransaction } from 'viem/wallet'
-*
-* const client = createWalletClient({
-*   chain: mainnet,
-*   transport: custom(window.ethereum),
-* })
-* const hash = await sendTransaction(client, {
-*   account: '0xA0Cf798816D4b9b9866b5330EEa46a18382f251e',
-*   to: '0x70997970c51812dc3a010c7d01b50e0d17dc79c8',
-*   value: 1000000000000000000n,
-* })
-*
-* @example
-* // Account Hoisting
-* import { createWalletClient, http } from 'viem'
-* import { privateKeyToAccount } from 'viem/accounts'
-* import { mainnet } from 'viem/chains'
-* import { sendTransaction } from 'viem/wallet'
-*
-* const client = createWalletClient({
-*   account: privateKeyToAccount('0x…'),
-*   chain: mainnet,
-*   transport: http(),
-* })
-* const hash = await sendTransaction(client, {
-*   to: '0x70997970c51812dc3a010c7d01b50e0d17dc79c8',
-*   value: 1000000000000000000n,
-* })
-*/
-async function sendTransaction(client, parameters) {
-	const { account: account_ = client.account, assertChainId = true, chain = client.chain, accessList, authorizationList, blobs, data, dataSuffix = typeof client.dataSuffix === "string" ? client.dataSuffix : client.dataSuffix?.value, gas, gasPrice, maxFeePerBlobGas, maxFeePerGas, maxPriorityFeePerGas, nonce, type, value, ...rest } = parameters;
-	if (typeof account_ === "undefined") throw new AccountNotFoundError({ docsPath: "/docs/actions/wallet/sendTransaction" });
-	const account = account_ ? parseAccount(account_) : null;
-	let nonceManagerParameters;
-	try {
-		assertRequest(parameters);
-		const to = await (async () => {
-			if (parameters.to) return parameters.to;
-			if (parameters.to === null) return void 0;
-			if (authorizationList && authorizationList.length > 0) return await recoverAuthorizationAddress({ authorization: authorizationList[0] }).catch(() => {
-				throw new BaseError$1("`to` is required. Could not infer from `authorizationList`.");
-			});
-		})();
-		if (account?.type === "json-rpc" || account === null) {
-			let chainId;
-			if (chain !== null) {
-				chainId = await getAction(client, getChainId, "getChainId")({});
-				if (assertChainId) assertCurrentChain({
-					currentChainId: chainId,
-					chain
-				});
-			}
-			const chainFormat = client.chain?.formatters?.transactionRequest?.format;
-			const request = (chainFormat || formatTransactionRequest)({
-				...extract(rest, { format: chainFormat }),
-				accessList,
-				account,
-				authorizationList,
-				blobs,
-				chainId,
-				data: dataSuffix ? concat$1([data ?? "0x", dataSuffix]) : data,
-				gas,
-				gasPrice,
-				maxFeePerBlobGas,
-				maxFeePerGas,
-				maxPriorityFeePerGas,
-				nonce,
-				to,
-				type,
-				value
-			}, "sendTransaction");
-			const isWalletNamespaceSupported = supportsWalletNamespace$1.get(client.uid);
-			const method = isWalletNamespaceSupported ? "wallet_sendTransaction" : "eth_sendTransaction";
-			try {
-				return await client.request({
-					method,
-					params: [request]
-				}, { retryCount: 0 });
-			} catch (e) {
-				if (isWalletNamespaceSupported === false) throw e;
-				const error = e;
-				if (error.name === "InvalidInputRpcError" || error.name === "InvalidParamsRpcError" || error.name === "MethodNotFoundRpcError" || error.name === "MethodNotSupportedRpcError") return await client.request({
-					method: "wallet_sendTransaction",
-					params: [request]
-				}, { retryCount: 0 }).then((hash) => {
-					supportsWalletNamespace$1.set(client.uid, true);
-					return hash;
-				}).catch((e) => {
-					const walletNamespaceError = e;
-					if (walletNamespaceError.name === "MethodNotFoundRpcError" || walletNamespaceError.name === "MethodNotSupportedRpcError") {
-						supportsWalletNamespace$1.set(client.uid, false);
-						throw error;
-					}
-					throw walletNamespaceError;
-				});
-				throw error;
-			}
-		}
-		if (account?.type === "local") {
-			const nonceManager = (() => {
-				if (!account.nonceManager || typeof nonce !== "undefined") return account.nonceManager;
-				const nonceManager = account.nonceManager;
-				return {
-					consume(parameters) {
-						nonceManagerParameters = {
-							address: parameters.address,
-							chainId: parameters.chainId
-						};
-						return nonceManager.consume(parameters);
-					},
-					get(parameters) {
-						return nonceManager.get(parameters);
-					},
-					increment(parameters) {
-						return nonceManager.increment(parameters);
-					},
-					reset(parameters) {
-						return nonceManager.reset(parameters);
-					}
-				};
-			})();
-			const request = await getAction(client, prepareTransactionRequest, "prepareTransactionRequest")({
-				account,
-				accessList,
-				authorizationList,
-				blobs,
-				chain,
-				data: dataSuffix ? concat$1([data ?? "0x", dataSuffix]) : data,
-				gas,
-				gasPrice,
-				maxFeePerBlobGas,
-				maxFeePerGas,
-				maxPriorityFeePerGas,
-				nonce,
-				nonceManager,
-				parameters: [...defaultParameters, "sidecars"],
-				type,
-				value,
-				...rest,
-				to
-			});
-			const serializer = chain?.serializers?.transaction;
-			const signedTransaction = await account.signTransaction(request, { serializer });
-			const transactionEnvelope = (chain ?? client.chain)?.serializers?.transactionEnvelope;
-			const serializedTransaction = transactionEnvelope ? await transactionEnvelope({
-				serializedTransaction: signedTransaction,
-				transaction: request
-			}) : signedTransaction;
-			return await getAction(client, sendRawTransaction, "sendRawTransaction")({ serializedTransaction });
-		}
-		if (account?.type === "smart") throw new AccountTypeNotSupportedError({
-			metaMessages: ["Consider using the `sendUserOperation` Action instead."],
-			docsPath: "/docs/actions/bundler/sendUserOperation",
-			type: "smart"
-		});
-		throw new AccountTypeNotSupportedError({
-			docsPath: "/docs/actions/wallet/sendTransaction",
-			type: account?.type
-		});
-	} catch (err) {
-		if (err instanceof AccountTypeNotSupportedError) throw err;
-		if (nonceManagerParameters) account?.nonceManager?.reset(nonceManagerParameters);
-		throw getTransactionError(err, {
-			...parameters,
-			account,
-			chain: parameters.chain || void 0
-		});
-	}
-}
-var supportsWalletNamespace$1;
-var init_sendTransaction = __esmMin((() => {
-	init_parseAccount();
-	init_account();
-	init_base();
-	init_recoverAuthorizationAddress();
-	init_assertCurrentChain();
-	init_concat();
-	init_getTransactionError();
-	init_extract();
-	init_transactionRequest();
-	init_getAction();
-	init_lru$1();
-	init_assertRequest();
-	init_getChainId();
-	init_prepareTransactionRequest();
-	init_sendRawTransaction();
-	supportsWalletNamespace$1 = new LruMap$1(128);
-}));
-
-// node_modules/.pnpm/viem@2.57.13_typescript@6.0.3/node_modules/viem/_esm/actions/wallet/writeContract.js
-/**
-* Executes a write function on a contract.
-*
-* - Docs: https://viem.sh/docs/contract/writeContract
-* - Examples: https://stackblitz.com/github/wevm/viem/tree/main/examples/contracts_writing-to-contracts
-*
-* A "write" function on a Solidity contract modifies the state of the blockchain. These types of functions require gas to be executed, and hence a [Transaction](https://viem.sh/docs/glossary/terms) is needed to be broadcast in order to change the state.
-*
-* Internally, uses a [Wallet Client](https://viem.sh/docs/clients/wallet) to call the [`sendTransaction` action](https://viem.sh/docs/actions/wallet/sendTransaction) with [ABI-encoded `data`](https://viem.sh/docs/contract/encodeFunctionData).
-*
-* __Warning: The `write` internally sends a transaction – it does not validate if the contract write will succeed (the contract may throw an error). It is highly recommended to [simulate the contract write with `contract.simulate`](https://viem.sh/docs/contract/writeContract#usage) before you execute it.__
-*
-* @param client - Client to use
-* @param parameters - {@link WriteContractParameters}
-* @returns A [Transaction Hash](https://viem.sh/docs/glossary/terms#hash). {@link WriteContractReturnType}
-*
-* @example
-* import { createWalletClient, custom, parseAbi } from 'viem'
-* import { mainnet } from 'viem/chains'
-* import { writeContract } from 'viem/contract'
-*
-* const client = createWalletClient({
-*   chain: mainnet,
-*   transport: custom(window.ethereum),
-* })
-* const hash = await writeContract(client, {
-*   address: '0xFBA3912Ca04dd458c843e2EE08967fC04f3579c2',
-*   abi: parseAbi(['function mint(uint32 tokenId) nonpayable']),
-*   functionName: 'mint',
-*   args: [69420],
-* })
-*
-* @example
-* // With Validation
-* import { createWalletClient, http, parseAbi } from 'viem'
-* import { mainnet } from 'viem/chains'
-* import { simulateContract, writeContract } from 'viem/contract'
-*
-* const client = createWalletClient({
-*   chain: mainnet,
-*   transport: http(),
-* })
-* const { request } = await simulateContract(client, {
-*   address: '0xFBA3912Ca04dd458c843e2EE08967fC04f3579c2',
-*   abi: parseAbi(['function mint(uint32 tokenId) nonpayable']),
-*   functionName: 'mint',
-*   args: [69420],
-* }
-* const hash = await writeContract(client, request)
-*/
-async function writeContract(client, parameters) {
-	return writeContract.internal(client, sendTransaction, "sendTransaction", parameters);
-}
-var init_writeContract = __esmMin((() => {
-	init_parseAccount();
-	init_account();
-	init_encodeFunctionData();
-	init_getContractError();
-	init_getAction();
-	init_sendTransaction();
-	(function(writeContract) {
-		async function internal(client, actionFn, name, parameters) {
-			const { abi, account: account_ = client.account, address, args, functionName, ...request } = parameters;
-			if (typeof account_ === "undefined") throw new AccountNotFoundError({ docsPath: "/docs/contract/writeContract" });
-			const account = account_ ? parseAccount(account_) : null;
-			const data = encodeFunctionData({
-				abi,
-				args,
-				functionName
-			});
-			try {
-				return await getAction(client, actionFn, name)({
-					data,
-					to: address,
-					account,
-					...request
-				});
-			} catch (error) {
-				throw getContractError(error, {
-					abi,
-					address,
-					args,
-					docsPath: "/docs/contract/writeContract",
-					functionName,
-					sender: account?.address
-				});
-			}
-		}
-		writeContract.internal = internal;
-	})(writeContract || (writeContract = {}));
-}));
-
-// node_modules/.pnpm/viem@2.57.13_typescript@6.0.3/node_modules/viem/_esm/errors/calls.js
-var BundleFailedError;
-var init_calls = __esmMin((() => {
-	init_base();
-	BundleFailedError = class extends BaseError$1 {
-		constructor(result) {
-			super(`Call bundle failed with status: ${result.statusCode}`, { name: "BundleFailedError" });
-			Object.defineProperty(this, "result", {
-				enumerable: true,
-				configurable: true,
-				writable: true,
-				value: void 0
-			});
-			this.result = result;
-		}
-	};
-}));
-
-// node_modules/.pnpm/viem@2.57.13_typescript@6.0.3/node_modules/viem/_esm/utils/promise/withRetry.js
-function withRetry(fn, { delay: delay_ = 100, retryCount = 2, shouldRetry = () => true, signal } = {}) {
-	return new Promise((resolve, reject) => {
-		const onAbort = () => reject(getAbortError(signal));
-		signal?.addEventListener("abort", onAbort, { once: true });
-		const attemptRetry = async ({ count = 0 } = {}) => {
-			if (signal?.aborted) {
-				reject(getAbortError(signal));
-				return;
-			}
-			const retry = async ({ error }) => {
-				const delay = typeof delay_ === "function" ? delay_({
-					count,
-					error
-				}) : delay_;
-				if (delay) try {
-					await wait(delay, { signal });
-				} catch (err) {
-					reject(err);
-					return;
-				}
-				return attemptRetry({ count: count + 1 });
-			};
-			try {
-				resolve(await fn());
-			} catch (err) {
-				if (signal?.aborted) {
-					reject(getAbortError(signal));
-					return;
-				}
-				if (isAbortError(err)) {
-					reject(err);
-					return;
-				}
-				if (count < retryCount && await shouldRetry({
-					count,
-					error: err
-				})) return retry({ error: err });
-				reject(err);
-			}
-		};
-		attemptRetry().catch(reject).finally(() => signal?.removeEventListener("abort", onAbort));
-	});
-}
-var init_withRetry = __esmMin((() => {
-	init_utils$3();
-	init_wait();
-}));
-
-// node_modules/.pnpm/viem@2.57.13_typescript@6.0.3/node_modules/viem/_esm/utils/formatters/transactionReceipt.js
-function formatTransactionReceipt(transactionReceipt, _) {
-	const receipt = {
-		...transactionReceipt,
-		blockNumber: transactionReceipt.blockNumber ? BigInt(transactionReceipt.blockNumber) : null,
-		contractAddress: transactionReceipt.contractAddress ? transactionReceipt.contractAddress : null,
-		cumulativeGasUsed: transactionReceipt.cumulativeGasUsed ? BigInt(transactionReceipt.cumulativeGasUsed) : null,
-		effectiveGasPrice: transactionReceipt.effectiveGasPrice ? BigInt(transactionReceipt.effectiveGasPrice) : null,
-		gasUsed: transactionReceipt.gasUsed ? BigInt(transactionReceipt.gasUsed) : null,
-		logs: transactionReceipt.logs ? transactionReceipt.logs.map((log) => formatLog(log)) : null,
-		to: transactionReceipt.to ? transactionReceipt.to : null,
-		transactionIndex: transactionReceipt.transactionIndex ? hexToNumber$1(transactionReceipt.transactionIndex) : null,
-		status: transactionReceipt.status ? receiptStatuses[transactionReceipt.status] : null,
-		type: transactionReceipt.type ? transactionType[transactionReceipt.type] || transactionReceipt.type : null
-	};
-	if (transactionReceipt.blobGasPrice) receipt.blobGasPrice = BigInt(transactionReceipt.blobGasPrice);
-	if (transactionReceipt.blobGasUsed) receipt.blobGasUsed = BigInt(transactionReceipt.blobGasUsed);
-	return receipt;
-}
-var receiptStatuses;
-var init_transactionReceipt = __esmMin((() => {
-	init_fromHex();
-	init_log$1();
-	init_transaction();
-	receiptStatuses = {
-		"0x0": "reverted",
-		"0x1": "success"
-	};
-}));
-
-// node_modules/.pnpm/viem@2.57.13_typescript@6.0.3/node_modules/viem/_esm/actions/wallet/sendCalls.js
-/**
-* Requests the connected wallet to send a batch of calls.
-*
-* - Docs: https://viem.sh/docs/actions/wallet/sendCalls
-* - JSON-RPC Methods: [`wallet_sendCalls`](https://eips.ethereum.org/EIPS/eip-5792)
-*
-* @param client - Client to use
-* @returns Transaction identifier. {@link SendCallsReturnType}
-*
-* @example
-* import { createWalletClient, custom } from 'viem'
-* import { mainnet } from 'viem/chains'
-* import { sendCalls } from 'viem/actions'
-*
-* const client = createWalletClient({
-*   chain: mainnet,
-*   transport: custom(window.ethereum),
-* })
-* const id = await sendCalls(client, {
-*   account: '0xA0Cf798816D4b9b9866b5330EEa46a18382f251e',
-*   calls: [
-*     {
-*       data: '0xdeadbeef',
-*       to: '0x70997970c51812dc3a010c7d01b50e0d17dc79c8',
-*     },
-*     {
-*       to: '0x70997970c51812dc3a010c7d01b50e0d17dc79c8',
-*       value: 69420n,
-*     },
-*   ],
-* })
-*/
-async function sendCalls(client, parameters) {
-	const { account: account_ = client.account, chain = client.chain, experimental_fallback, experimental_fallbackDelay = 32, forceAtomic = false, id, version = "2.0.0" } = parameters;
-	const account = account_ ? parseAccount(account_) : null;
-	let capabilities = parameters.capabilities;
-	if (client.dataSuffix && !parameters.capabilities?.dataSuffix) {
-		if (typeof client.dataSuffix === "string") capabilities = {
-			...parameters.capabilities,
-			dataSuffix: {
-				value: client.dataSuffix,
-				optional: true
-			}
-		};
-		else capabilities = {
-			...parameters.capabilities,
-			dataSuffix: {
-				value: client.dataSuffix.value,
-				...client.dataSuffix.required ? {} : { optional: true }
-			}
-		};
-	}
-	const calls = parameters.calls.map((call_) => {
-		const call = call_;
-		const data = call.abi ? encodeFunctionData({
-			abi: call.abi,
-			functionName: call.functionName,
-			args: call.args
-		}) : call.data;
-		return {
-			data: call.dataSuffix ? concat$1([data ?? "0x", call.dataSuffix]) : data,
-			to: call.to,
-			value: call.value ? numberToHex(call.value) : void 0
-		};
-	});
-	try {
-		const response = await client.request({
-			method: "wallet_sendCalls",
-			params: [{
-				atomicRequired: forceAtomic,
-				calls,
-				capabilities,
-				chainId: numberToHex(chain.id),
-				from: account?.address,
-				id,
-				version
-			}]
-		}, { retryCount: 0 });
-		if (typeof response === "string") return { id: response };
-		return response;
-	} catch (err) {
-		const error = err;
-		if (experimental_fallback && (error.name === "MethodNotFoundRpcError" || error.name === "MethodNotSupportedRpcError" || error.name === "UnknownRpcError" || error.details.toLowerCase() === "this request method is not supported" || error.details.toLowerCase().includes("does not exist / is not available") || error.details.toLowerCase().includes("missing or invalid. request()") || error.details.toLowerCase().includes("did not match any variant of untagged enum") || error.details.toLowerCase().includes("account upgraded to unsupported contract") || error.details.toLowerCase().includes("eip-7702 not supported") || error.details.toLowerCase().includes("unsupported wc_ method") || error.details.toLowerCase().includes("feature toggled misconfigured") || error.details.toLowerCase().includes("jsonrpcengine: response has no error or result for request"))) {
-			if (capabilities) {
-				if (Object.values(capabilities).some((capability) => !capability.optional)) {
-					const message = "non-optional `capabilities` are not supported on fallback to `eth_sendTransaction`.";
-					throw new UnsupportedNonOptionalCapabilityError(new BaseError$1(message, { details: message }));
-				}
-			}
-			if (forceAtomic && calls.length > 1) {
-				const message = "`forceAtomic` is not supported on fallback to `eth_sendTransaction`.";
-				throw new AtomicityNotSupportedError(new BaseError$1(message, { details: message }));
-			}
-			const results = [];
-			for (const call of calls) {
-				try {
-					const value = await sendTransaction(client, {
-						account,
-						chain,
-						data: call.data,
-						to: call.to,
-						value: call.value ? hexToBigInt(call.value) : void 0
-					});
-					results.push({
-						status: "fulfilled",
-						value
-					});
-				} catch (reason) {
-					results.push({
-						reason,
-						status: "rejected"
-					});
-				}
-				if (experimental_fallbackDelay > 0) await new Promise((resolve) => setTimeout(resolve, experimental_fallbackDelay));
-			}
-			if (results.every((r) => r.status === "rejected")) throw results[0].reason;
-			const hashes = results.map((result) => {
-				if (result.status === "fulfilled") return result.value;
-				return fallbackTransactionErrorMagicIdentifier;
-			});
-			return { id: concat$1([
-				...hashes,
-				numberToHex(chain.id, { size: 32 }),
-				fallbackMagicIdentifier
-			]) };
-		}
-		throw getTransactionError(err, {
-			...parameters,
-			account,
-			chain: parameters.chain
-		});
-	}
-}
-var fallbackMagicIdentifier, fallbackTransactionErrorMagicIdentifier;
-var init_sendCalls = __esmMin((() => {
-	init_parseAccount();
-	init_base();
-	init_rpc();
-	init_encodeFunctionData();
-	init_concat();
-	init_fromHex();
-	init_toHex();
-	init_getTransactionError();
-	init_sendTransaction();
-	fallbackMagicIdentifier = "0x5792579257925792579257925792579257925792579257925792579257925792";
-	fallbackTransactionErrorMagicIdentifier = numberToHex(0, { size: 32 });
-}));
-
-// node_modules/.pnpm/viem@2.57.13_typescript@6.0.3/node_modules/viem/_esm/actions/wallet/getCallsStatus.js
-/**
-* Returns the status of a call batch that was sent via `sendCalls`.
-*
-* - Docs: https://viem.sh/docs/actions/wallet/getCallsStatus
-* - JSON-RPC Methods: [`wallet_getCallsStatus`](https://eips.ethereum.org/EIPS/eip-5792)
-*
-* @param client - Client to use
-* @returns Status of the calls. {@link GetCallsStatusReturnType}
-*
-* @example
-* import { createWalletClient, custom } from 'viem'
-* import { mainnet } from 'viem/chains'
-* import { getCallsStatus } from 'viem/actions'
-*
-* const client = createWalletClient({
-*   chain: mainnet,
-*   transport: custom(window.ethereum),
-* })
-* const { receipts, status } = await getCallsStatus(client, { id: '0xdeadbeef' })
-*/
-async function getCallsStatus(client, parameters) {
-	async function getStatus(id) {
-		if (id.endsWith("0x5792579257925792579257925792579257925792579257925792579257925792".slice(2))) {
-			const chainId = trim$1(sliceHex(id, -64, -32));
-			const hashes = sliceHex(id, 0, -64).slice(2).match(/.{1,64}/g);
-			const receipts = await Promise.all(hashes.map((hash) => fallbackTransactionErrorMagicIdentifier.slice(2) !== hash ? client.request({
-				method: "eth_getTransactionReceipt",
-				params: [`0x${hash}`]
-			}, { dedupe: true }) : void 0));
-			const status = (() => {
-				if (receipts.some((r) => r === null)) return 100;
-				if (receipts.every((r) => r?.status === "0x1")) return 200;
-				if (receipts.every((r) => r?.status === "0x0")) return 500;
-				return 600;
-			})();
-			return {
-				atomic: false,
-				chainId: hexToNumber$1(chainId),
-				receipts: receipts.filter(Boolean),
-				status,
-				version: "2.0.0"
-			};
-		}
-		return client.request({
-			method: "wallet_getCallsStatus",
-			params: [id]
-		});
-	}
-	const { atomic = false, chainId, receipts, version = "2.0.0", ...response } = await getStatus(parameters.id);
-	const [status, statusCode] = (() => {
-		const statusCode = response.status;
-		if (statusCode >= 100 && statusCode < 200) return ["pending", statusCode];
-		if (statusCode >= 200 && statusCode < 300) return ["success", statusCode];
-		if (statusCode >= 300 && statusCode < 700) return ["failure", statusCode];
-		if (statusCode === "CONFIRMED") return ["success", 200];
-		if (statusCode === "PENDING") return ["pending", 100];
-		return [void 0, statusCode];
-	})();
-	return {
-		...response,
-		atomic,
-		chainId: chainId ? hexToNumber$1(chainId) : void 0,
-		receipts: receipts?.map((receipt) => ({
-			...receipt,
-			blockNumber: hexToBigInt(receipt.blockNumber),
-			gasUsed: hexToBigInt(receipt.gasUsed),
-			status: receiptStatuses[receipt.status]
-		})) ?? [],
-		statusCode,
-		status,
-		version
-	};
-}
-var init_getCallsStatus = __esmMin((() => {
-	init_slice();
-	init_trim$1();
-	init_fromHex();
-	init_transactionReceipt();
-	init_sendCalls();
-}));
-
-// node_modules/.pnpm/viem@2.57.13_typescript@6.0.3/node_modules/viem/_esm/actions/wallet/waitForCallsStatus.js
-function getFunctionId(fn) {
-	let fnId = functionIds.get(fn);
-	if (fnId === void 0) {
-		fnId = ++functionCount;
-		functionIds.set(fn, fnId);
-	}
-	return fnId;
-}
-/**
-* Waits for the status & receipts of a call bundle that was sent via `sendCalls`.
-*
-* - Docs: https://viem.sh/docs/actions/wallet/waitForCallsStatus
-* - JSON-RPC Methods: [`wallet_getCallsStatus`](https://eips.ethereum.org/EIPS/eip-5792)
-*
-* @param client - Client to use
-* @param parameters - {@link WaitForCallsStatusParameters}
-* @returns Status & receipts of the call bundle. {@link WaitForCallsStatusReturnType}
-*
-* @example
-* import { createWalletClient, custom } from 'viem'
-* import { mainnet } from 'viem/chains'
-* import { waitForCallsStatus } from 'viem/actions'
-*
-* const client = createWalletClient({
-*   chain: mainnet,
-*   transport: custom(window.ethereum),
-* })
-*
-* const { receipts, status } = await waitForCallsStatus(client, { id: '0xdeadbeef' })
-*/
-async function waitForCallsStatus(client, parameters) {
-	const { id, pollingInterval = client.pollingInterval, status = ({ statusCode }) => statusCode === 200 || statusCode >= 300, retryCount = 4, retryDelay = ({ count }) => ~~(1 << count) * 200, timeout = 6e4, throwOnFailure = false } = parameters;
-	const observerId = stringify$2([
-		"waitForCallsStatus",
-		client.uid,
-		id,
-		{
-			pollingInterval,
-			retryCount,
-			retryDelay: typeof parameters.retryDelay === "function" ? ["function", getFunctionId(parameters.retryDelay)] : parameters.retryDelay,
-			status: parameters.status ? getFunctionId(parameters.status) : void 0,
-			throwOnFailure
-		}
-	]);
-	const { promise, resolve, reject } = withResolvers();
-	let timer;
-	const unobserve = observe(observerId, {
-		resolve,
-		reject
-	}, (emit) => {
-		const unpoll = poll(async () => {
-			const done = (fn) => {
-				clearTimeout(timer);
-				unpoll();
-				fn();
-				unobserve();
-			};
-			try {
-				const result = await withRetry(async () => {
-					const result = await getAction(client, getCallsStatus, "getCallsStatus")({ id });
-					if (throwOnFailure && result.status === "failure") throw new BundleFailedError(result);
-					return result;
-				}, {
-					retryCount,
-					delay: retryDelay
-				});
-				if (!status(result)) return;
-				done(() => emit.resolve(result));
-			} catch (error) {
-				done(() => emit.reject(error));
-			}
-		}, {
-			interval: pollingInterval,
-			emitOnBegin: true
-		});
-		return unpoll;
-	});
-	timer = timeout ? setTimeout(() => {
-		unobserve();
-		clearTimeout(timer);
-		reject(new WaitForCallsStatusTimeoutError({ id }));
-	}, timeout) : void 0;
-	return await promise.finally(() => unobserve());
-}
-var functionIds, functionCount, WaitForCallsStatusTimeoutError;
-var init_waitForCallsStatus = __esmMin((() => {
-	init_base();
-	init_calls();
-	init_getAction();
-	init_observe();
-	init_poll();
-	init_withResolvers();
-	init_withRetry();
-	init_stringify$1();
-	init_getCallsStatus();
-	functionIds = /*#__PURE__*/ new WeakMap();
-	functionCount = 0;
-	WaitForCallsStatusTimeoutError = class extends BaseError$1 {
-		constructor({ id }) {
-			super(`Timed out while waiting for call bundle with id "${id}" to be confirmed.`, { name: "WaitForCallsStatusTimeoutError" });
-		}
-	};
-}));
-
-// node_modules/.pnpm/viem@2.57.13_typescript@6.0.3/node_modules/viem/_esm/utils/uid.js
-function uid(length = 11) {
-	if (!buffer || index + length > size * 2) {
-		buffer = "";
-		index = 0;
-		for (let i = 0; i < size; i++) buffer += (256 + Math.random() * 256 | 0).toString(16).substring(1);
-	}
-	return buffer.substring(index, index++ + length);
-}
-var size, index, buffer;
-var init_uid = __esmMin((() => {
-	size = 256;
-	index = size;
-	;
-}));
-
-// node_modules/.pnpm/viem@2.57.13_typescript@6.0.3/node_modules/viem/_esm/clients/createClient.js
-function createClient(parameters) {
-	const { batch, chain, ccipRead, dataSuffix, key = "base", name = "Base Client", tokens, type = "base" } = parameters;
-	const experimental_blockTag = parameters.experimental_blockTag ?? (typeof chain?.experimental_preconfirmationTime === "number" ? "pending" : void 0);
-	const blockTime = chain?.blockTime ?? 12e3;
-	const defaultPollingInterval = Math.min(Math.max(Math.floor(blockTime / 2), 500), 4e3);
-	const pollingInterval = parameters.pollingInterval ?? defaultPollingInterval;
-	const cacheTime = parameters.cacheTime ?? Math.min(pollingInterval, Math.floor(blockTime / 2));
-	const account = parameters.account ? parseAccount(parameters.account) : void 0;
-	const { config, request, value } = parameters.transport({
-		account,
-		chain,
-		pollingInterval
-	});
-	return decorate({
-		account,
-		batch,
-		cacheTime,
-		ccipRead,
-		chain,
-		dataSuffix,
-		key,
-		name,
-		pollingInterval,
-		request,
-		tokens,
-		transport: {
-			...config,
-			...value
-		},
-		type,
-		uid: uid(),
-		...experimental_blockTag ? { experimental_blockTag } : {}
-	});
-}
-/**
-* Attaches `extend` and `scope` to a base Client. Base keys other than
-* `scope` are reserved, so extensions cannot override them.
-*/
-function decorate(client) {
-	function extend(base, extensions) {
-		return (extendFn) => {
-			const extended = extendFn(base);
-			for (const key in client) if (key !== "scope") delete extended[key];
-			const combined = {
-				...base,
-				...extended
-			};
-			for (const key in extended) {
-				const a = base[key];
-				const b = extended[key];
-				if (isPlainObject(a) && isPlainObject(b)) combined[key] = {
-					...a,
-					...b
-				};
-			}
-			const next = [...extensions, extendFn];
-			const { scope: scope_combined } = combined;
-			return Object.assign(combined, {
-				extend: extend(combined, next),
-				scope: typeof scope_combined === "function" && scopes_builtin.has(scope_combined) ? scope(next) : scope_combined
-			});
-		};
-	}
-	function scope(extensions) {
-		const scopes = /* @__PURE__ */ new WeakMap();
-		const fn = (options = {}) => {
-			const cached = options.signal && scopes.get(options.signal);
-			if (cached) return cached;
-			const id = `scope.${scopeId++}`;
-			const controller = new AbortController();
-			const { signal } = options;
-			if (signal?.aborted) controller.abort(signal.reason);
-			else signal?.addEventListener("abort", () => controller.abort(signal.reason), { once: true });
-			const request = (args, options_request) => client.request(args, {
-				...options_request,
-				signal: options_request?.signal ?? controller.signal,
-				uid: options_request?.uid ?? id
-			});
-			const scoped = extensions.reduce((base, extendFn) => base.extend(extendFn), decorate({
-				...client,
-				request,
-				uid: id
-			}));
-			if (signal) scopes.set(signal, scoped);
-			return scoped;
-		};
-		scopes_builtin.add(fn);
-		return fn;
-	}
-	return Object.assign(client, {
-		extend: extend(client, []),
-		scope: scope([])
-	});
-}
-/** Whether `value` is a plain object (`{}`), as opposed to a function, array,
-* or class instance. Used to decide which extension namespaces to merge. */
-function isPlainObject(value) {
-	if (typeof value !== "object" || value === null) return false;
-	const prototype = Object.getPrototypeOf(value);
-	return prototype === Object.prototype || prototype === null;
-}
-/**
-* Binds an action function to a `client`, returning a parameter-only version
-* along with any helpers the action exposes. Helpers that need a client
-* (`.call`, `.calls`, `.callWithPeriod`, `.estimateGas`, `.prepare`,
-* `.prepareRecipient`, `.predict`, `.simulate`) are bound to `client`;
-* pure helpers (`.extractEvent`, `.extractEvents`) are copied as-is. Used
-* by decorators that attach namespaced actions to a Client.
-* @internal
-*/
-function bindActionDecorators(client, action) {
-	const wrapped = (parameters = {}) => action(client, parameters);
-	for (const key of [
-		"call",
-		"calls",
-		"callWithPeriod",
-		"estimateGas",
-		"prepare",
-		"prepareRecipient",
-		"predict",
-		"simulate"
-	]) if (Object.hasOwn(action, key)) {
-		const helper = action[key];
-		wrapped[key] = (args = {}) => {
-			if (helper.length === 1) return helper(args);
-			return helper(client, args);
-		};
-	}
-	for (const key of ["extractEvent", "extractEvents"]) if (Object.hasOwn(action, key)) wrapped[key] = action[key];
-	return wrapped;
-}
-var scopes_builtin, scopeId;
-var init_createClient = __esmMin((() => {
-	init_parseAccount();
-	init_uid();
-	scopes_builtin = /* @__PURE__ */ new WeakSet();
-	scopeId = 0;
-}));
-
-// node_modules/.pnpm/viem@2.57.13_typescript@6.0.3/node_modules/viem/_esm/utils/ens/errors.js
-function isNullUniversalResolverError(err) {
-	if (!(err instanceof BaseError$1)) return false;
-	const cause = err.walk((e) => e instanceof ContractFunctionRevertedError);
-	if (!(cause instanceof ContractFunctionRevertedError)) return false;
-	if (cause.data?.errorName === "HttpError") return true;
-	if (cause.data?.errorName === "ResolverError") return true;
-	if (cause.data?.errorName === "ResolverNotContract") return true;
-	if (cause.data?.errorName === "ResolverNotFound") return true;
-	if (cause.data?.errorName === "ReverseAddressMismatch") return true;
-	if (cause.data?.errorName === "UnsupportedResolverProfile") return true;
-	return false;
-}
-var init_errors$3 = __esmMin((() => {
-	init_base();
-	init_contract$1();
-}));
-
-// node_modules/.pnpm/viem@2.57.13_typescript@6.0.3/node_modules/viem/_esm/utils/ens/encodedLabelToLabelhash.js
-function encodedLabelToLabelhash(label) {
-	if (label.length !== 66) return null;
-	if (label.indexOf("[") !== 0) return null;
-	if (label.indexOf("]") !== 65) return null;
-	const hash = `0x${label.slice(1, 65)}`;
-	if (!isHex(hash)) return null;
-	return hash;
-}
-var init_encodedLabelToLabelhash = __esmMin((() => {
-	init_isHex();
-}));
-
-// node_modules/.pnpm/viem@2.57.13_typescript@6.0.3/node_modules/viem/_esm/utils/ens/namehash.js
-/**
-* @description Hashes ENS name
-*
-* - Since ENS names prohibit certain forbidden characters (e.g. underscore) and have other validation rules, you likely want to [normalize ENS names](https://docs.ens.domains/contract-api-reference/name-processing#normalising-names) with [UTS-46 normalization](https://unicode.org/reports/tr46) before passing them to `namehash`. You can use the built-in [`normalize`](https://viem.sh/docs/ens/utilities/normalize) function for this.
-*
-* @example
-* namehash('wevm.eth')
-* '0x08c85f2f4059e930c45a6aeff9dcd3bd95dc3c5c1cddef6a0626b31152248560'
-*
-* @link https://eips.ethereum.org/EIPS/eip-137
-*/
-function namehash(name) {
-	let result = (/* @__PURE__ */ new Uint8Array(32)).fill(0);
-	if (!name) return bytesToHex$1(result);
-	const labels = name.split(".");
-	for (let i = labels.length - 1; i >= 0; i -= 1) {
-		const hashFromEncodedLabel = encodedLabelToLabelhash(labels[i]);
-		const hashed = hashFromEncodedLabel ? toBytes$2(hashFromEncodedLabel) : keccak256$1(stringToBytes(labels[i]), "bytes");
-		result = keccak256$1(concat$1([result, hashed]), "bytes");
-	}
-	return bytesToHex$1(result);
-}
-var init_namehash = __esmMin((() => {
-	init_concat();
-	init_toBytes();
-	init_toHex();
-	init_keccak256();
-	init_encodedLabelToLabelhash();
-}));
-
-// node_modules/.pnpm/viem@2.57.13_typescript@6.0.3/node_modules/viem/_esm/utils/ens/encodeLabelhash.js
-function encodeLabelhash(hash) {
-	return `[${hash.slice(2)}]`;
-}
-var init_encodeLabelhash = __esmMin((() => {}));
-
-// node_modules/.pnpm/viem@2.57.13_typescript@6.0.3/node_modules/viem/_esm/utils/ens/labelhash.js
-/**
-* @description Hashes ENS label
-*
-* - Since ENS labels prohibit certain forbidden characters (e.g. underscore) and have other validation rules, you likely want to [normalize ENS labels](https://docs.ens.domains/contract-api-reference/name-processing#normalising-names) with [UTS-46 normalization](https://unicode.org/reports/tr46) before passing them to `labelhash`. You can use the built-in [`normalize`](https://viem.sh/docs/ens/utilities/normalize) function for this.
-*
-* @example
-* labelhash('eth')
-* '0x4f5b812789fc606be1b3b16908db13fc7a9adf7ca72641f84d75b47069d3d7f0'
-*/
-function labelhash(label) {
-	const result = (/* @__PURE__ */ new Uint8Array(32)).fill(0);
-	if (!label) return bytesToHex$1(result);
-	return encodedLabelToLabelhash(label) || keccak256$1(stringToBytes(label));
-}
-var init_labelhash = __esmMin((() => {
-	init_toBytes();
-	init_toHex();
-	init_keccak256();
-	init_encodedLabelToLabelhash();
-}));
-
-// node_modules/.pnpm/viem@2.57.13_typescript@6.0.3/node_modules/viem/_esm/utils/ens/packetToBytes.js
-function packetToBytes(packet) {
-	const value = packet.replace(/^\.|\.$/gm, "");
-	if (value.length === 0) return /* @__PURE__ */ new Uint8Array(1);
-	const bytes = new Uint8Array(stringToBytes(value).byteLength + 2);
-	let offset = 0;
-	const list = value.split(".");
-	for (let i = 0; i < list.length; i++) {
-		let encoded = stringToBytes(list[i]);
-		if (encoded.byteLength > 255) encoded = stringToBytes(encodeLabelhash(labelhash(list[i])));
-		bytes[offset] = encoded.length;
-		bytes.set(encoded, offset + 1);
-		offset += encoded.length + 1;
-	}
-	if (bytes.byteLength !== offset + 1) return bytes.slice(0, offset + 1);
-	return bytes;
-}
-var init_packetToBytes = __esmMin((() => {
-	init_toBytes();
-	init_encodeLabelhash();
-	init_labelhash();
-}));
-
-// node_modules/.pnpm/viem@2.57.13_typescript@6.0.3/node_modules/viem/_esm/actions/ens/getEnsAddress.js
-/**
-* Gets address for ENS name.
-*
-* - Docs: https://viem.sh/docs/ens/actions/getEnsAddress
-* - Examples: https://stackblitz.com/github/wevm/viem/tree/main/examples/ens
-*
-* Calls `resolve(bytes, bytes)` on ENS Universal Resolver Contract.
-*
-* Since ENS names prohibit certain forbidden characters (e.g. underscore) and have other validation rules, you likely want to [normalize ENS names](https://docs.ens.domains/contract-api-reference/name-processing#normalising-names) with [UTS-46 normalization](https://unicode.org/reports/tr46) before passing them to `getEnsAddress`. You can use the built-in [`normalize`](https://viem.sh/docs/ens/utilities/normalize) function for this.
-*
-* @param client - Client to use
-* @param parameters - {@link GetEnsAddressParameters}
-* @returns Address for ENS name or `null` if not found. {@link GetEnsAddressReturnType}
-*
-* @example
-* import { createPublicClient, http } from 'viem'
-* import { mainnet } from 'viem/chains'
-* import { getEnsAddress, normalize } from 'viem/ens'
-*
-* const client = createPublicClient({
-*   chain: mainnet,
-*   transport: http(),
-* })
-* const ensAddress = await getEnsAddress(client, {
-*   name: normalize('wevm.eth'),
-* })
-* // '0xd2135CfB216b74109775236E36d4b433F1DF507B'
-*/
-async function getEnsAddress(client, parameters) {
-	const { blockNumber, blockTag, coinType, name, gatewayUrls, strict } = parameters;
-	const { chain } = client;
-	const universalResolverAddress = (() => {
-		if (parameters.universalResolverAddress) return parameters.universalResolverAddress;
-		if (!chain) throw new Error("client chain not configured. universalResolverAddress is required.");
-		return getChainContractAddress({
-			blockNumber,
-			chain,
-			contract: "ensUniversalResolver"
-		});
-	})();
-	const tlds = chain?.ensTlds;
-	if (tlds && !tlds.some((tld) => name.endsWith(tld))) return null;
-	const args = (() => {
-		if (coinType != null) return [namehash(name), BigInt(coinType)];
-		return [namehash(name)];
-	})();
-	try {
-		const functionData = encodeFunctionData({
-			abi: addressResolverAbi,
-			functionName: "addr",
-			args
-		});
-		const readContractParameters = {
-			address: universalResolverAddress,
-			abi: universalResolverResolveAbi,
-			functionName: "resolveWithGateways",
-			args: [
-				toHex(packetToBytes(name)),
-				functionData,
-				gatewayUrls ?? ["x-batch-gateway:true"]
-			],
-			blockNumber,
-			blockTag
-		};
-		const res = await getAction(client, readContract, "readContract")(readContractParameters);
-		if (res[0] === "0x") return null;
-		const address = decodeAddress$1({
-			coinType,
-			data: res[0],
-			args
-		});
-		if (address === "0x") return null;
-		if (trim$1(address) === "0x00") return null;
-		return address;
-	} catch (err) {
-		if (strict) throw err;
-		if (isNullUniversalResolverError(err)) return null;
-		throw err;
-	}
-}
-function decodeAddress$1({ coinType, data, args }) {
-	try {
-		return decodeFunctionResult({
-			abi: addressResolverAbi,
-			args,
-			functionName: "addr",
-			data
-		});
-	} catch (err) {
-		if (coinType == null) throw err;
-		const address = trim$1(data);
-		if (size$3(address) === 20) return getAddress(address);
-		throw err;
-	}
-}
-var init_getEnsAddress = __esmMin((() => {
-	init_abis();
-	init_decodeFunctionResult();
-	init_encodeFunctionData();
-	init_getAddress();
-	init_getChainContractAddress();
-	init_size();
-	init_trim$1();
-	init_toHex();
-	init_errors$3();
-	init_localBatchGatewayRequest();
-	init_namehash();
-	init_packetToBytes();
-	init_getAction();
-	init_readContract();
-}));
-
-// node_modules/.pnpm/ox@0.14.59_typescript@6.0.3/node_modules/ox/_esm/core/Base64.js
-/**
-* Encodes a {@link ox#Bytes.Bytes} to a Base64-encoded string (with optional padding and/or URL-safe characters).
-*
-* @example
-* ```ts twoslash
-* import { Base64, Bytes } from 'ox'
-*
-* const value = Base64.fromBytes(Bytes.fromString('hello world'))
-* // @log: 'aGVsbG8gd29ybGQ='
-* ```
-*
-* @example
-* ### No Padding
-*
-* Turn off [padding of encoded data](https://datatracker.ietf.org/doc/html/rfc4648#section-3.2) with the `pad` option:
-*
-* ```ts twoslash
-* import { Base64, Bytes } from 'ox'
-*
-* const value = Base64.fromBytes(Bytes.fromString('hello world'), { pad: false })
-* // @log: 'aGVsbG8gd29ybGQ'
-* ```
-*
-* ### URL-safe Encoding
-*
-* Turn on [URL-safe encoding](https://datatracker.ietf.org/doc/html/rfc4648#section-5) (Base64 URL) with the `url` option:
-*
-* ```ts twoslash
-* import { Base64, Bytes } from 'ox'
-*
-* const value = Base64.fromBytes(Bytes.fromString('hello wod'), { url: true })
-* // @log: 'aGVsbG8gd29_77-9ZA=='
-* ```
-*
-* @param value - The byte array to encode.
-* @param options - Encoding options.
-* @returns The Base64 encoded string.
-*/
-function fromBytes(value, options = {}) {
-	const { pad = true, url = false } = options;
-	const encoded = new Uint8Array(Math.ceil(value.length / 3) * 4);
-	for (let i = 0, j = 0; j < value.length; i += 4, j += 3) {
-		const y = (value[j] << 16) + (value[j + 1] << 8) + (value[j + 2] | 0);
-		encoded[i] = integerToCharacter[y >> 18];
-		encoded[i + 1] = integerToCharacter[y >> 12 & 63];
-		encoded[i + 2] = integerToCharacter[y >> 6 & 63];
-		encoded[i + 3] = integerToCharacter[y & 63];
-	}
-	const k = value.length % 3;
-	const end = Math.floor(value.length / 3) * 4 + (k && k + 1);
-	let base64 = decoder.decode(new Uint8Array(encoded.buffer, 0, end));
-	if (pad && k === 1) base64 += "==";
-	if (pad && k === 2) base64 += "=";
-	if (url) base64 = base64.replaceAll("+", "-").replaceAll("/", "_");
-	return base64;
-}
-/**
-* Encodes a string to a Base64-encoded string (with optional padding and/or URL-safe characters).
-*
-* @example
-* ```ts twoslash
-* import { Base64 } from 'ox'
-*
-* const value = Base64.fromString('hello world')
-* // @log: 'aGVsbG8gd29ybGQ='
-* ```
-*
-* @example
-* ### No Padding
-*
-* Turn off [padding of encoded data](https://datatracker.ietf.org/doc/html/rfc4648#section-3.2) with the `pad` option:
-*
-* ```ts twoslash
-* import { Base64 } from 'ox'
-*
-* const value = Base64.fromString('hello world', { pad: false })
-* // @log: 'aGVsbG8gd29ybGQ'
-* ```
-*
-* ### URL-safe Encoding
-*
-* Turn on [URL-safe encoding](https://datatracker.ietf.org/doc/html/rfc4648#section-5) (Base64 URL) with the `url` option:
-*
-* ```ts twoslash
-* import { Base64 } from 'ox'
-*
-* const value = Base64.fromString('hello wod', { url: true })
-* // @log: 'aGVsbG8gd29_77-9ZA=='
-* ```
-*
-* @param value - The string to encode.
-* @param options - Encoding options.
-* @returns The Base64 encoded string.
-*/
-function fromString(value, options = {}) {
-	return fromBytes(fromString$2(value), options);
-}
-/**
-* Decodes a Base64-encoded string (with optional padding and/or URL-safe characters) to {@link ox#Bytes.Bytes}.
-*
-* @example
-* ```ts twoslash
-* import { Base64, Bytes } from 'ox'
-*
-* const value = Base64.toBytes('aGVsbG8gd29ybGQ=')
-* // @log: Uint8Array([104, 101, 108, 108, 111, 32, 119, 111, 114, 108, 100])
-* ```
-*
-* @param value - The string, hex value, or byte array to encode.
-* @returns The Base64 decoded {@link ox#Bytes.Bytes}.
-*/
-function toBytes(value) {
-	const base64 = value.replace(/=+$/, "");
-	const size = base64.length;
-	const decoded = new Uint8Array(size + 3);
-	encoder.encodeInto(base64 + "===", decoded);
-	for (let i = 0, j = 0; i < base64.length; i += 4, j += 3) {
-		const x = (characterToInteger[decoded[i]] << 18) + (characterToInteger[decoded[i + 1]] << 12) + (characterToInteger[decoded[i + 2]] << 6) + characterToInteger[decoded[i + 3]];
-		decoded[j] = x >> 16;
-		decoded[j + 1] = x >> 8 & 255;
-		decoded[j + 2] = x & 255;
-	}
-	const decodedSize = (size >> 2) * 3 + (size % 4 && size % 4 - 1);
-	return new Uint8Array(decoded.buffer, 0, decodedSize);
-}
-/**
-* Decodes a Base64-encoded string (with optional padding and/or URL-safe characters) to a string.
-*
-* @example
-* ```ts twoslash
-* import { Base64 } from 'ox'
-*
-* const value = Base64.toString('aGVsbG8gd29ybGQ=')
-* // @log: 'hello world'
-* ```
-*
-* @param value - The string, hex value, or byte array to encode.
-* @returns The Base64 decoded string.
-*/
-function toString(value) {
-	return toString$1(toBytes(value));
-}
-var encoder, decoder, integerToCharacter, characterToInteger;
-var init_Base64 = __esmMin((() => {
-	init_Bytes();
-	encoder = /*#__PURE__*/ new TextEncoder();
-	decoder = /*#__PURE__*/ new TextDecoder();
-	integerToCharacter = /*#__PURE__*/ Object.fromEntries(Array.from("ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789+/").map((a, i) => [i, a.charCodeAt(0)]));
-	characterToInteger = {
-		...Object.fromEntries(Array.from("ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789+/").map((a, i) => [a.charCodeAt(0), i])),
-		["=".charCodeAt(0)]: 0,
-		["-".charCodeAt(0)]: 62,
-		["_".charCodeAt(0)]: 63
-	};
-}));
-
-// node_modules/.pnpm/viem@2.57.13_typescript@6.0.3/node_modules/viem/_esm/errors/ens.js
-var EnsAvatarInvalidMetadataError, EnsAvatarInvalidNftUriError, EnsAvatarUriResolutionError, EnsAvatarUnsupportedNamespaceError;
-var init_ens = __esmMin((() => {
-	init_base();
-	EnsAvatarInvalidMetadataError = class extends BaseError$1 {
-		constructor({ data }) {
-			super("Unable to extract image from metadata. The metadata may be malformed or invalid.", {
-				metaMessages: [
-					"- Metadata must be a JSON object with at least an `image`, `image_url` or `image_data` property.",
-					"",
-					`Provided data: ${JSON.stringify(data)}`
-				],
-				name: "EnsAvatarInvalidMetadataError"
-			});
-		}
-	};
-	EnsAvatarInvalidNftUriError = class extends BaseError$1 {
-		constructor({ reason }) {
-			super(`ENS NFT avatar URI is invalid. ${reason}`, { name: "EnsAvatarInvalidNftUriError" });
-		}
-	};
-	EnsAvatarUriResolutionError = class extends BaseError$1 {
-		constructor({ uri }) {
-			super(`Unable to resolve ENS avatar URI "${uri}". The URI may be malformed, invalid, or does not respond with a valid image.`, { name: "EnsAvatarUriResolutionError" });
-		}
-	};
-	EnsAvatarUnsupportedNamespaceError = class extends BaseError$1 {
-		constructor({ namespace }) {
-			super(`ENS NFT avatar namespace "${namespace}" is not supported. Must be "erc721" or "erc1155".`, { name: "EnsAvatarUnsupportedNamespaceError" });
-		}
-	};
-}));
-
-// node_modules/.pnpm/viem@2.57.13_typescript@6.0.3/node_modules/viem/_esm/utils/ens/avatar/utils.js
-/** @internal */
-async function isImageUri(uri) {
-	try {
-		const res = await fetch(uri, { method: "HEAD" });
-		if (res.status === 200) return res.headers.get("content-type")?.startsWith("image/");
-		return false;
-	} catch (error) {
-		if (typeof error === "object" && typeof error.response !== "undefined") return false;
-		if (!Object.hasOwn(globalThis, "Image")) return false;
-		return new Promise((resolve) => {
-			const img = new Image();
-			img.onload = () => {
-				resolve(true);
-			};
-			img.onerror = () => {
-				resolve(false);
-			};
-			img.src = uri;
-		});
-	}
-}
-/** @internal */
-function getGateway(custom, defaultGateway) {
-	if (!custom) return defaultGateway;
-	if (custom.endsWith("/")) return custom.slice(0, -1);
-	return custom;
-}
-function resolveAvatarUri({ uri, gatewayUrls }) {
-	const isEncoded = base64Regex.test(uri);
-	if (isEncoded) return {
-		uri,
-		isOnChain: true,
-		isEncoded
-	};
-	const ipfsGateway = getGateway(gatewayUrls?.ipfs, "https://ipfs.io");
-	const arweaveGateway = getGateway(gatewayUrls?.arweave, "https://arweave.net");
-	const { protocol, subpath, target, subtarget = "" } = uri.match(networkRegex)?.groups || {};
-	const isIPNS = protocol === "ipns:/" || subpath === "ipns/";
-	const isIPFS = protocol === "ipfs:/" || subpath === "ipfs/" || ipfsHashRegex.test(uri);
-	if (uri.startsWith("http") && !isIPNS && !isIPFS) {
-		let replacedUri = uri;
-		if (gatewayUrls?.arweave) replacedUri = uri.replace(/https:\/\/arweave.net/g, gatewayUrls?.arweave);
-		return {
-			uri: replacedUri,
-			isOnChain: false,
-			isEncoded: false
-		};
-	}
-	if ((isIPNS || isIPFS) && target) return {
-		uri: `${ipfsGateway}/${isIPNS ? "ipns" : "ipfs"}/${target}${subtarget}`,
-		isOnChain: false,
-		isEncoded: false
-	};
-	if (protocol === "ar:/" && target) return {
-		uri: `${arweaveGateway}/${target}${subtarget || ""}`,
-		isOnChain: false,
-		isEncoded: false
-	};
-	let parsedUri = uri.replace(dataURIRegex, "");
-	if (parsedUri.startsWith("<svg")) parsedUri = `data:image/svg+xml;base64,${fromString(parsedUri)}`;
-	if (parsedUri.startsWith("data:") || parsedUri.startsWith("{")) return {
-		uri: parsedUri,
-		isOnChain: true,
-		isEncoded: false
-	};
-	throw new EnsAvatarUriResolutionError({ uri });
-}
-function getJsonImage(data) {
-	if (typeof data !== "object" || !("image" in data) && !("image_url" in data) && !("image_data" in data)) throw new EnsAvatarInvalidMetadataError({ data });
-	return data.image || data.image_url || data.image_data;
-}
-async function getMetadataAvatarUri({ gatewayUrls, uri }) {
-	try {
-		return await parseAvatarUri({
-			gatewayUrls,
-			uri: getJsonImage(await fetch(uri).then((res) => res.json()))
-		});
-	} catch {
-		throw new EnsAvatarUriResolutionError({ uri });
-	}
-}
-async function parseAvatarUri({ gatewayUrls, uri }) {
-	const { uri: resolvedURI, isOnChain } = resolveAvatarUri({
-		uri,
-		gatewayUrls
-	});
-	if (isOnChain) return resolvedURI;
-	if (await isImageUri(resolvedURI)) return resolvedURI;
-	throw new EnsAvatarUriResolutionError({ uri });
-}
-function parseNftUri(uri_) {
-	let uri = uri_;
-	if (uri.startsWith("did:nft:")) uri = uri.replace("did:nft:", "").replace(/_/g, "/");
-	const [reference, asset_namespace, tokenID] = uri.split("/");
-	const [eip_namespace, chainID] = reference.split(":");
-	const [erc_namespace, contractAddress] = asset_namespace.split(":");
-	if (!eip_namespace || eip_namespace.toLowerCase() !== "eip155") throw new EnsAvatarInvalidNftUriError({ reason: "Only EIP-155 supported" });
-	if (!chainID) throw new EnsAvatarInvalidNftUriError({ reason: "Chain ID not found" });
-	if (!contractAddress) throw new EnsAvatarInvalidNftUriError({ reason: "Contract address not found" });
-	if (!tokenID) throw new EnsAvatarInvalidNftUriError({ reason: "Token ID not found" });
-	if (!erc_namespace) throw new EnsAvatarInvalidNftUriError({ reason: "ERC namespace not found" });
-	return {
-		chainID: Number.parseInt(chainID, 10),
-		namespace: erc_namespace.toLowerCase(),
-		contractAddress,
-		tokenID
-	};
-}
-async function getNftTokenUri(client, { nft }) {
-	if (nft.namespace === "erc721") return readContract(client, {
-		address: nft.contractAddress,
-		abi: [{
-			name: "tokenURI",
-			type: "function",
-			stateMutability: "view",
-			inputs: [{
-				name: "tokenId",
-				type: "uint256"
-			}],
-			outputs: [{
-				name: "",
-				type: "string"
-			}]
-		}],
-		functionName: "tokenURI",
-		args: [BigInt(nft.tokenID)]
-	});
-	if (nft.namespace === "erc1155") return readContract(client, {
-		address: nft.contractAddress,
-		abi: [{
-			name: "uri",
-			type: "function",
-			stateMutability: "view",
-			inputs: [{
-				name: "_id",
-				type: "uint256"
-			}],
-			outputs: [{
-				name: "",
-				type: "string"
-			}]
-		}],
-		functionName: "uri",
-		args: [BigInt(nft.tokenID)]
-	});
-	throw new EnsAvatarUnsupportedNamespaceError({ namespace: nft.namespace });
-}
-/**
-* Substitutes the `{id}` placeholder of an NFT metadata URI with the token ID.
-*
-* ERC-1155 requires the ID to be substituted as lowercase hex, without a `0x`
-* prefix and zero-padded to 64 characters.
-*
-* @see https://eips.ethereum.org/EIPS/eip-1155#metadata
-*/
-function getNftMetadataUri({ nft, uri }) {
-	const tokenId = nft.namespace === "erc1155" ? numberToHex(BigInt(nft.tokenID), { size: 32 }).slice(2) : nft.tokenID;
-	return uri.replace(/(?:0x)?{id}/, tokenId);
-}
-var networkRegex, ipfsHashRegex, base64Regex, dataURIRegex;
-var init_utils$1 = __esmMin((() => {
-	init_Base64();
-	init_readContract();
-	init_ens();
-	init_toHex();
-	networkRegex = /(?<protocol>https?:\/\/[^/]*|ipfs:\/|ipns:\/|ar:\/)?(?<root>\/)?(?<subpath>ipfs\/|ipns\/)?(?<target>[\w\-.]+)(?<subtarget>\/.*)?/;
-	ipfsHashRegex = /^(Qm[1-9A-HJ-NP-Za-km-z]{44,}|b[A-Za-z2-7]{58,}|B[A-Z2-7]{58,}|z[1-9A-HJ-NP-Za-km-z]{48,}|F[0-9A-F]{50,})(\/(?<target>[\w\-.]+))?(?<subtarget>\/.*)?$/;
-	base64Regex = /^data:([a-zA-Z\-/+]*);base64,([^"].*)/;
-	dataURIRegex = /^data:([a-zA-Z\-/+]*)?(;[a-zA-Z0-9].*?)?(,)/;
-}));
-
-// node_modules/.pnpm/viem@2.57.13_typescript@6.0.3/node_modules/viem/_esm/utils/ens/avatar/parseAvatarRecord.js
-async function parseAvatarRecord(client, { gatewayUrls, record }) {
-	if (/eip155:/i.test(record)) return parseNftAvatarUri(client, {
-		gatewayUrls,
-		record
-	});
-	return parseAvatarUri({
-		uri: record,
-		gatewayUrls
-	});
-}
-async function parseNftAvatarUri(client, { gatewayUrls, record }) {
-	const nft = parseNftUri(record);
-	const nftUri = await getNftTokenUri(client, { nft });
-	const { uri: resolvedNftUri, isOnChain, isEncoded } = resolveAvatarUri({
-		uri: nftUri,
-		gatewayUrls
-	});
-	if (isOnChain && (resolvedNftUri.includes("data:application/json;base64,") || resolvedNftUri.startsWith("{"))) {
-		const encodedJson = isEncoded ? toString(resolvedNftUri.replace("data:application/json;base64,", "").replace(/\s/g, "")) : resolvedNftUri;
-		const decoded = JSON.parse(encodedJson);
-		return parseAvatarUri({
-			uri: getJsonImage(decoded),
-			gatewayUrls
-		});
-	}
-	return getMetadataAvatarUri({
-		gatewayUrls,
-		uri: getNftMetadataUri({
-			nft,
-			uri: resolvedNftUri
-		})
-	});
-}
-var init_parseAvatarRecord = __esmMin((() => {
-	init_Base64();
-	init_utils$1();
-}));
-
-// node_modules/.pnpm/viem@2.57.13_typescript@6.0.3/node_modules/viem/_esm/actions/ens/getEnsText.js
-/**
-* Gets a text record for specified ENS name.
-*
-* - Docs: https://viem.sh/docs/ens/actions/getEnsResolver
-* - Examples: https://stackblitz.com/github/wevm/viem/tree/main/examples/ens
-*
-* Calls `resolve(bytes, bytes)` on ENS Universal Resolver Contract.
-*
-* Since ENS names prohibit certain forbidden characters (e.g. underscore) and have other validation rules, you likely want to [normalize ENS names](https://docs.ens.domains/contract-api-reference/name-processing#normalising-names) with [UTS-46 normalization](https://unicode.org/reports/tr46) before passing them to `getEnsAddress`. You can use the built-in [`normalize`](https://viem.sh/docs/ens/utilities/normalize) function for this.
-*
-* @param client - Client to use
-* @param parameters - {@link GetEnsTextParameters}
-* @returns Address for ENS resolver. {@link GetEnsTextReturnType}
-*
-* @example
-* import { createPublicClient, http } from 'viem'
-* import { mainnet } from 'viem/chains'
-* import { getEnsText, normalize } from 'viem/ens'
-*
-* const client = createPublicClient({
-*   chain: mainnet,
-*   transport: http(),
-* })
-* const twitterRecord = await getEnsText(client, {
-*   name: normalize('wevm.eth'),
-*   key: 'com.twitter',
-* })
-* // 'wevm_dev'
-*/
-async function getEnsText(client, parameters) {
-	const { blockNumber, blockTag, key, name, gatewayUrls, strict } = parameters;
-	const { chain } = client;
-	const universalResolverAddress = (() => {
-		if (parameters.universalResolverAddress) return parameters.universalResolverAddress;
-		if (!chain) throw new Error("client chain not configured. universalResolverAddress is required.");
-		return getChainContractAddress({
-			blockNumber,
-			chain,
-			contract: "ensUniversalResolver"
-		});
-	})();
-	const tlds = chain?.ensTlds;
-	if (tlds && !tlds.some((tld) => name.endsWith(tld))) return null;
-	try {
-		const readContractParameters = {
-			address: universalResolverAddress,
-			abi: universalResolverResolveAbi,
-			args: [
-				toHex(packetToBytes(name)),
-				encodeFunctionData({
-					abi: textResolverAbi,
-					functionName: "text",
-					args: [namehash(name), key]
-				}),
-				gatewayUrls ?? ["x-batch-gateway:true"]
-			],
-			functionName: "resolveWithGateways",
-			blockNumber,
-			blockTag
-		};
-		const res = await getAction(client, readContract, "readContract")(readContractParameters);
-		if (res[0] === "0x") return null;
-		const record = decodeFunctionResult({
-			abi: textResolverAbi,
-			functionName: "text",
-			data: res[0]
-		});
-		return record === "" ? null : record;
-	} catch (err) {
-		if (strict) throw err;
-		if (isNullUniversalResolverError(err)) return null;
-		throw err;
-	}
-}
-var init_getEnsText = __esmMin((() => {
-	init_abis();
-	init_decodeFunctionResult();
-	init_encodeFunctionData();
-	init_getChainContractAddress();
-	init_toHex();
-	init_errors$3();
-	init_localBatchGatewayRequest();
-	init_namehash();
-	init_packetToBytes();
-	init_getAction();
-	init_readContract();
-}));
-
-// node_modules/.pnpm/viem@2.57.13_typescript@6.0.3/node_modules/viem/_esm/actions/ens/getEnsAvatar.js
-/**
-* Gets the avatar of an ENS name.
-*
-* - Docs: https://viem.sh/docs/ens/actions/getEnsAvatar
-* - Examples: https://stackblitz.com/github/wevm/viem/tree/main/examples/ens
-*
-* Calls [`getEnsText`](https://viem.sh/docs/ens/actions/getEnsText) with `key` set to `'avatar'`.
-*
-* Since ENS names prohibit certain forbidden characters (e.g. underscore) and have other validation rules, you likely want to [normalize ENS names](https://docs.ens.domains/contract-api-reference/name-processing#normalising-names) with [UTS-46 normalization](https://unicode.org/reports/tr46) before passing them to `getEnsAddress`. You can use the built-in [`normalize`](https://viem.sh/docs/ens/utilities/normalize) function for this.
-*
-* @param client - Client to use
-* @param parameters - {@link GetEnsAvatarParameters}
-* @returns Avatar URI or `null` if not found. {@link GetEnsAvatarReturnType}
-*
-* @example
-* import { createPublicClient, http } from 'viem'
-* import { mainnet } from 'viem/chains'
-* import { getEnsAvatar, normalize } from 'viem/ens'
-*
-* const client = createPublicClient({
-*   chain: mainnet,
-*   transport: http(),
-* })
-* const ensAvatar = await getEnsAvatar(client, {
-*   name: normalize('wevm.eth'),
-* })
-* // 'https://ipfs.io/ipfs/Qma8mnp6xV3J2cRNf3mTth5C8nV11CAnceVinc3y8jSbio'
-*/
-async function getEnsAvatar(client, { blockNumber, blockTag, assetGatewayUrls, name, gatewayUrls, strict, universalResolverAddress }) {
-	const record = await getAction(client, getEnsText, "getEnsText")({
-		blockNumber,
-		blockTag,
-		key: "avatar",
-		name,
-		universalResolverAddress,
-		gatewayUrls,
-		strict
-	});
-	if (!record) return null;
-	try {
-		return await parseAvatarRecord(client, {
-			record,
-			gatewayUrls: assetGatewayUrls
-		});
-	} catch {
-		return null;
-	}
-}
-var init_getEnsAvatar = __esmMin((() => {
-	init_parseAvatarRecord();
-	init_getAction();
-	init_getEnsText();
-}));
-
-// node_modules/.pnpm/viem@2.57.13_typescript@6.0.3/node_modules/viem/_esm/actions/ens/getEnsName.js
-/**
-* Gets primary name for specified address.
-*
-* - Docs: https://viem.sh/docs/ens/actions/getEnsName
-* - Examples: https://stackblitz.com/github/wevm/viem/tree/main/examples/ens
-*
-* Calls `reverse(bytes)` on ENS Universal Resolver Contract to "reverse resolve" the address to the primary ENS name.
-*
-* @param client - Client to use
-* @param parameters - {@link GetEnsNameParameters}
-* @returns Name or `null` if not found. {@link GetEnsNameReturnType}
-*
-* @example
-* import { createPublicClient, http } from 'viem'
-* import { mainnet } from 'viem/chains'
-* import { getEnsName } from 'viem/ens'
-*
-* const client = createPublicClient({
-*   chain: mainnet,
-*   transport: http(),
-* })
-* const ensName = await getEnsName(client, {
-*   address: '0xd2135CfB216b74109775236E36d4b433F1DF507B',
-* })
-* // 'wevm.eth'
-*/
-async function getEnsName(client, parameters) {
-	const { address, blockNumber, blockTag, coinType = 60n, gatewayUrls, strict } = parameters;
-	const { chain } = client;
-	const universalResolverAddress = (() => {
-		if (parameters.universalResolverAddress) return parameters.universalResolverAddress;
-		if (!chain) throw new Error("client chain not configured. universalResolverAddress is required.");
-		return getChainContractAddress({
-			blockNumber,
-			chain,
-			contract: "ensUniversalResolver"
-		});
-	})();
-	try {
-		const readContractParameters = {
-			address: universalResolverAddress,
-			abi: universalResolverReverseAbi,
-			args: [
-				address,
-				coinType,
-				gatewayUrls ?? ["x-batch-gateway:true"]
-			],
-			functionName: "reverseWithGateways",
-			blockNumber,
-			blockTag
-		};
-		const [name] = await getAction(client, readContract, "readContract")(readContractParameters);
-		return name || null;
-	} catch (err) {
-		if (strict) throw err;
-		if (isNullUniversalResolverError(err)) return null;
-		throw err;
-	}
-}
-var init_getEnsName = __esmMin((() => {
-	init_abis();
-	init_getChainContractAddress();
-	init_errors$3();
-	init_localBatchGatewayRequest();
-	init_getAction();
-	init_readContract();
-}));
-
-// node_modules/.pnpm/viem@2.57.13_typescript@6.0.3/node_modules/viem/_esm/actions/ens/getEnsResolver.js
-/**
-* Gets resolver for ENS name.
-*
-* - Docs: https://viem.sh/docs/ens/actions/getEnsResolver
-* - Examples: https://stackblitz.com/github/wevm/viem/tree/main/examples/ens
-*
-* Calls `findResolver(bytes)` on ENS Universal Resolver Contract to retrieve the resolver of an ENS name.
-*
-* Since ENS names prohibit certain forbidden characters (e.g. underscore) and have other validation rules, you likely want to [normalize ENS names](https://docs.ens.domains/contract-api-reference/name-processing#normalising-names) with [UTS-46 normalization](https://unicode.org/reports/tr46) before passing them to `getEnsAddress`. You can use the built-in [`normalize`](https://viem.sh/docs/ens/utilities/normalize) function for this.
-*
-* @param client - Client to use
-* @param parameters - {@link GetEnsResolverParameters}
-* @returns Address for ENS resolver. {@link GetEnsResolverReturnType}
-*
-* @example
-* import { createPublicClient, http } from 'viem'
-* import { mainnet } from 'viem/chains'
-* import { getEnsResolver, normalize } from 'viem/ens'
-*
-* const client = createPublicClient({
-*   chain: mainnet,
-*   transport: http(),
-* })
-* const resolverAddress = await getEnsResolver(client, {
-*   name: normalize('wevm.eth'),
-* })
-* // '0x4976fb03C32e5B8cfe2b6cCB31c09Ba78EBaBa41'
-*/
-async function getEnsResolver(client, parameters) {
-	const { blockNumber, blockTag, name } = parameters;
-	const { chain } = client;
-	const universalResolverAddress = (() => {
-		if (parameters.universalResolverAddress) return parameters.universalResolverAddress;
-		if (!chain) throw new Error("client chain not configured. universalResolverAddress is required.");
-		return getChainContractAddress({
-			blockNumber,
-			chain,
-			contract: "ensUniversalResolver"
-		});
-	})();
-	const tlds = chain?.ensTlds;
-	if (tlds && !tlds.some((tld) => name.endsWith(tld))) throw new Error(`${name} is not a valid ENS TLD (${tlds?.join(", ")}) for chain "${chain.name}" (id: ${chain.id}).`);
-	const [resolverAddress] = await getAction(client, readContract, "readContract")({
-		address: universalResolverAddress,
-		abi: [{
-			inputs: [{ type: "bytes" }],
-			name: "findResolver",
-			outputs: [
-				{ type: "address" },
-				{ type: "bytes32" },
-				{ type: "uint256" }
-			],
-			stateMutability: "view",
-			type: "function"
-		}],
-		functionName: "findResolver",
-		args: [toHex(packetToBytes(name))],
-		blockNumber,
-		blockTag
-	});
-	return resolverAddress;
-}
-var init_getEnsResolver = __esmMin((() => {
-	init_getChainContractAddress();
-	init_toHex();
-	init_packetToBytes();
-	init_getAction();
-	init_readContract();
-}));
-
-// node_modules/.pnpm/viem@2.57.13_typescript@6.0.3/node_modules/viem/_esm/actions/public/createAccessList.js
-/**
-* Creates an EIP-2930 access list.
-*
-* - Docs: https://viem.sh/docs/actions/public/createAccessList
-* - JSON-RPC Methods: `eth_createAccessList`
-*
-* @param client - Client to use
-* @param parameters - {@link CreateAccessListParameters}
-* @returns The access list. {@link CreateAccessListReturnType}
-*
-* @example
-* import { createPublicClient, http } from 'viem'
-* import { mainnet } from 'viem/chains'
-* import { createAccessList } from 'viem/public'
-*
-* const client = createPublicClient({
-*   chain: mainnet,
-*   transport: http(),
-* })
-* const data = await createAccessList(client, {
-*   account: '0xf39fd6e51aad88f6f4ce6ab8827279cfffb92266',
-*   data: '0xc02aaa39b223fe8d0a0e5c4f27ead9083c756cc2',
-*   to: '0x70997970c51812dc3a010c7d01b50e0d17dc79c8',
-* })
-*/
-async function createAccessList(client, args) {
-	const { account: account_ = client.account, blockNumber, blockTag = "latest", blobs, data, gas, gasPrice, maxFeePerBlobGas, maxFeePerGas, maxPriorityFeePerGas, to, value, ...rest } = args;
-	const account = account_ ? parseAccount(account_) : void 0;
-	try {
-		assertRequest(args);
-		const block = (typeof blockNumber === "bigint" ? numberToHex(blockNumber) : void 0) || blockTag;
-		const chainFormat = client.chain?.formatters?.transactionRequest?.format;
-		const request = (chainFormat || formatTransactionRequest)({
-			...extract(rest, { format: chainFormat }),
-			account,
-			blobs,
-			data,
-			gas,
-			gasPrice,
-			maxFeePerBlobGas,
-			maxFeePerGas,
-			maxPriorityFeePerGas,
-			to,
-			value
-		}, "createAccessList");
-		const response = await client.request({
-			method: "eth_createAccessList",
-			params: [request, block]
-		});
-		if (response.error) throw new BaseError$1(response.error, { details: response.error });
-		return {
-			accessList: response.accessList,
-			gasUsed: BigInt(response.gasUsed)
-		};
-	} catch (err) {
-		throw getCallError(err, {
-			...args,
-			account,
-			chain: client.chain
-		});
-	}
-}
-var init_createAccessList = __esmMin((() => {
-	init_parseAccount();
-	init_base();
-	init_toHex();
-	init_getCallError();
-	init_extract();
-	init_transactionRequest();
-	init_assertRequest();
-}));
-
-// node_modules/.pnpm/viem@2.57.13_typescript@6.0.3/node_modules/viem/_esm/actions/public/createBlockFilter.js
-/**
-* Creates a [`Filter`](https://viem.sh/docs/glossary/types#filter) to listen for new block hashes that can be used with [`getFilterChanges`](https://viem.sh/docs/actions/public/getFilterChanges).
-*
-* - Docs: https://viem.sh/docs/actions/public/createBlockFilter
-* - JSON-RPC Methods: [`eth_newBlockFilter`](https://ethereum.org/en/developers/docs/apis/json-rpc/#eth_newBlockFilter)
-*
-* @param client - Client to use
-* @returns [`Filter`](https://viem.sh/docs/glossary/types#filter). {@link CreateBlockFilterReturnType}
-*
-* @example
-* import { createPublicClient, http } from 'viem'
-* import { mainnet } from 'viem/chains'
-* import { createBlockFilter } from 'viem/public'
-*
-* const client = createPublicClient({
-*   chain: mainnet,
-*   transport: http(),
-* })
-* const filter = await createBlockFilter(client)
-* // { id: "0x345a6572337856574a76364e457a4366", type: 'block' }
-*/
-async function createBlockFilter(client) {
-	const getRequest = createFilterRequestScope(client, { method: "eth_newBlockFilter" });
-	const id = await client.request({ method: "eth_newBlockFilter" });
-	return {
-		id,
-		request: getRequest(id),
-		type: "block"
-	};
-}
-var init_createBlockFilter = __esmMin((() => {
-	init_createFilterRequestScope();
-}));
-
-// node_modules/.pnpm/viem@2.57.13_typescript@6.0.3/node_modules/viem/_esm/actions/public/createEventFilter.js
-/**
-* Creates a [`Filter`](https://viem.sh/docs/glossary/types#filter) to listen for new events that can be used with [`getFilterChanges`](https://viem.sh/docs/actions/public/getFilterChanges).
-*
-* - Docs: https://viem.sh/docs/actions/public/createEventFilter
-* - JSON-RPC Methods: [`eth_newFilter`](https://ethereum.org/en/developers/docs/apis/json-rpc/#eth_newfilter)
-*
-* @param client - Client to use
-* @param parameters - {@link CreateEventFilterParameters}
-* @returns [`Filter`](https://viem.sh/docs/glossary/types#filter). {@link CreateEventFilterReturnType}
-*
-* @example
-* import { createPublicClient, http } from 'viem'
-* import { mainnet } from 'viem/chains'
-* import { createEventFilter } from 'viem/public'
-*
-* const client = createPublicClient({
-*   chain: mainnet,
-*   transport: http(),
-* })
-* const filter = await createEventFilter(client, {
-*   address: '0xfba3912ca04dd458c843e2ee08967fc04f3579c2',
-* })
-*/
-async function createEventFilter(client, { address, args, event, events: events_, fromBlock, strict, toBlock } = {}) {
-	const events = events_ ?? (event ? [event] : void 0);
-	const getRequest = createFilterRequestScope(client, { method: "eth_newFilter" });
-	let topics = [];
-	if (events) {
-		topics = [events.flatMap((event) => encodeEventTopics({
-			abi: [event],
-			eventName: event.name,
-			args
-		}))];
-		if (event) topics = topics[0];
-	}
-	const id = await client.request({
-		method: "eth_newFilter",
-		params: [{
-			address,
-			fromBlock: typeof fromBlock === "bigint" ? numberToHex(fromBlock) : fromBlock,
-			toBlock: typeof toBlock === "bigint" ? numberToHex(toBlock) : toBlock,
-			...topics.length ? { topics } : {}
-		}]
-	});
-	return {
-		abi: events,
-		args,
-		eventName: event ? event.name : void 0,
-		fromBlock,
-		id,
-		request: getRequest(id),
-		strict: Boolean(strict),
-		toBlock,
-		type: "event"
-	};
-}
-var init_createEventFilter = __esmMin((() => {
-	init_encodeEventTopics();
-	init_toHex();
-	init_createFilterRequestScope();
-}));
-
-// node_modules/.pnpm/viem@2.57.13_typescript@6.0.3/node_modules/viem/_esm/actions/public/createPendingTransactionFilter.js
-/**
-* Creates a Filter to listen for new pending transaction hashes that can be used with [`getFilterChanges`](https://viem.sh/docs/actions/public/getFilterChanges).
-*
-* - Docs: https://viem.sh/docs/actions/public/createPendingTransactionFilter
-* - JSON-RPC Methods: [`eth_newPendingTransactionFilter`](https://ethereum.org/en/developers/docs/apis/json-rpc/#eth_newpendingtransactionfilter)
-*
-* @param client - Client to use
-* @returns [`Filter`](https://viem.sh/docs/glossary/types#filter). {@link CreateBlockFilterReturnType}
-*
-* @example
-* import { createPublicClient, http } from 'viem'
-* import { mainnet } from 'viem/chains'
-* import { createPendingTransactionFilter } from 'viem/public'
-*
-* const client = createPublicClient({
-*   chain: mainnet,
-*   transport: http(),
-* })
-* const filter = await createPendingTransactionFilter(client)
-* // { id: "0x345a6572337856574a76364e457a4366", type: 'transaction' }
-*/
-async function createPendingTransactionFilter(client) {
-	const getRequest = createFilterRequestScope(client, { method: "eth_newPendingTransactionFilter" });
-	const id = await client.request({ method: "eth_newPendingTransactionFilter" });
-	return {
-		id,
-		request: getRequest(id),
-		type: "transaction"
-	};
-}
-var init_createPendingTransactionFilter = __esmMin((() => {
-	init_createFilterRequestScope();
-}));
-
-// node_modules/.pnpm/viem@2.57.13_typescript@6.0.3/node_modules/viem/_esm/actions/public/getBalance.js
-/**
-* Returns the balance of an address in wei.
-*
-* - Docs: https://viem.sh/docs/actions/public/getBalance
-* - JSON-RPC Methods: [`eth_getBalance`](https://ethereum.org/en/developers/docs/apis/json-rpc/#eth_getbalance)
-*
-* You can convert the balance to ether units with [`formatEther`](https://viem.sh/docs/utilities/formatEther).
-*
-* ```ts
-* const balance = await getBalance(client, {
-*   address: '0xA0Cf798816D4b9b9866b5330EEa46a18382f251e',
-*   blockTag: 'safe'
-* })
-* const balanceAsEther = formatEther(balance)
-* // "6.942"
-* ```
-*
-* @param client - Client to use
-* @param parameters - {@link GetBalanceParameters}
-* @returns The balance of the address in wei. {@link GetBalanceReturnType}
-*
-* @example
-* import { createPublicClient, http } from 'viem'
-* import { mainnet } from 'viem/chains'
-* import { getBalance } from 'viem/public'
-*
-* const client = createPublicClient({
-*   chain: mainnet,
-*   transport: http(),
-* })
-* const balance = await getBalance(client, {
-*   address: '0xA0Cf798816D4b9b9866b5330EEa46a18382f251e',
-* })
-* // 10000000000000000000000n (wei)
-*/
-async function getBalance$1(client, { address, blockHash, blockNumber, blockTag = client.experimental_blockTag ?? "latest", requireCanonical }) {
-	const block = formatBlockParameter({
-		blockHash,
-		blockNumber,
-		blockTag,
-		requireCanonical
-	});
-	if (client.batch?.multicall && client.chain?.contracts?.multicall3) {
-		const multicall3Address = client.chain.contracts.multicall3.address;
-		const calldata = encodeFunctionData({
-			abi: multicall3Abi,
-			functionName: "getEthBalance",
-			args: [address]
-		});
-		const { data } = await getAction(client, call$1, "call")({
-			to: multicall3Address,
-			data: calldata,
-			blockHash,
-			blockNumber,
-			blockTag,
-			requireCanonical
-		});
-		return decodeFunctionResult({
-			abi: multicall3Abi,
-			functionName: "getEthBalance",
-			args: [address],
-			data: data || "0x"
-		});
-	}
-	const balance = await client.request({
-		method: "eth_getBalance",
-		params: [address, block]
-	});
-	return BigInt(balance);
-}
-var init_getBalance$1 = __esmMin((() => {
-	init_abis();
-	init_decodeFunctionResult();
-	init_encodeFunctionData();
-	init_formatBlockParameter();
-	init_getAction();
-	init_call();
-}));
-
-// node_modules/.pnpm/viem@2.57.13_typescript@6.0.3/node_modules/viem/_esm/actions/public/getBlobBaseFee.js
-/**
-* Returns the base fee per blob gas in wei.
-*
-* - Docs: https://viem.sh/docs/actions/public/getBlobBaseFee
-* - JSON-RPC Methods: [`eth_blobBaseFee`](https://ethereum.org/en/developers/docs/apis/json-rpc/#eth_blobBaseFee)
-*
-* @param client - Client to use
-* @returns The blob base fee (in wei). {@link GetBlobBaseFeeReturnType}
-*
-* @example
-* import { createPublicClient, http } from 'viem'
-* import { mainnet } from 'viem/chains'
-* import { getBlobBaseFee } from 'viem/public'
-*
-* const client = createPublicClient({
-*   chain: mainnet,
-*   transport: http(),
-* })
-* const blobBaseFee = await getBlobBaseFee(client)
-*/
-async function getBlobBaseFee(client) {
-	const baseFee = await client.request({ method: "eth_blobBaseFee" });
-	return BigInt(baseFee);
-}
-var init_getBlobBaseFee = __esmMin((() => {}));
-
-// node_modules/.pnpm/viem@2.57.13_typescript@6.0.3/node_modules/viem/_esm/actions/public/getBlockReceipts.js
-/**
-* Returns the transaction receipts of a block at a block number, hash, or tag.
-*
-* - Docs: https://viem.sh/docs/actions/public/getBlockReceipts
-* - JSON-RPC Methods: [`eth_getBlockReceipts`](https://ethereum.github.io/execution-apis/api/methods/eth_getBlockReceipts/)
-*
-* @param client - Client to use
-* @param parameters - {@link GetBlockReceiptsParameters}
-* @returns The transaction receipts. {@link GetBlockReceiptsReturnType}
-*
-* @example
-* import { createPublicClient, http } from 'viem'
-* import { mainnet } from 'viem/chains'
-* import { getBlockReceipts } from 'viem/public'
-*
-* const client = createPublicClient({
-*   chain: mainnet,
-*   transport: http(),
-* })
-* const receipts = await getBlockReceipts(client, {
-*   blockNumber: 69420n,
-* })
-*/
-async function getBlockReceipts(client, { blockHash, blockNumber, blockTag = client.experimental_blockTag ?? "latest" } = {}) {
-	const blockNumberHex = blockNumber !== void 0 ? numberToHex(blockNumber) : void 0;
-	const receipts = await client.request({
-		method: "eth_getBlockReceipts",
-		params: [blockHash || blockNumberHex || blockTag]
-	}, { dedupe: Boolean(blockHash || blockNumberHex) });
-	if (!receipts) throw new BlockNotFoundError({
-		blockHash,
-		blockNumber
-	});
-	const format = client.chain?.formatters?.transactionReceipt?.format || formatTransactionReceipt;
-	return receipts.map((receipt) => format(receipt, "getBlockReceipts"));
-}
-var init_getBlockReceipts = __esmMin((() => {
-	init_block$1();
-	init_toHex();
-	init_transactionReceipt();
-}));
-
-// node_modules/.pnpm/viem@2.57.13_typescript@6.0.3/node_modules/viem/_esm/actions/public/getBlockTransactionCount.js
-/**
-* Returns the number of Transactions at a block number, hash, or tag.
-*
-* - Docs: https://viem.sh/docs/actions/public/getBlockTransactionCount
-* - JSON-RPC Methods:
-*   - Calls [`eth_getBlockTransactionCountByNumber`](https://ethereum.org/en/developers/docs/apis/json-rpc/#eth_getblocktransactioncountbynumber) for `blockNumber` & `blockTag`.
-*   - Calls [`eth_getBlockTransactionCountByHash`](https://ethereum.org/en/developers/docs/apis/json-rpc/#eth_getblocktransactioncountbyhash) for `blockHash`.
-*
-* @param client - Client to use
-* @param parameters - {@link GetBlockTransactionCountParameters}
-* @returns The block transaction count. {@link GetBlockTransactionCountReturnType}
-*
-* @example
-* import { createPublicClient, http } from 'viem'
-* import { mainnet } from 'viem/chains'
-* import { getBlockTransactionCount } from 'viem/public'
-*
-* const client = createPublicClient({
-*   chain: mainnet,
-*   transport: http(),
-* })
-* const count = await getBlockTransactionCount(client)
-*/
-async function getBlockTransactionCount(client, { blockHash, blockNumber, blockTag = "latest" } = {}) {
-	const blockNumberHex = blockNumber !== void 0 ? numberToHex(blockNumber) : void 0;
-	let count;
-	if (blockHash) count = await client.request({
-		method: "eth_getBlockTransactionCountByHash",
-		params: [blockHash]
-	}, { dedupe: true });
-	else count = await client.request({
-		method: "eth_getBlockTransactionCountByNumber",
-		params: [blockNumberHex || blockTag]
-	}, { dedupe: Boolean(blockNumberHex) });
-	return hexToNumber$1(count);
-}
-var init_getBlockTransactionCount = __esmMin((() => {
-	init_fromHex();
-	init_toHex();
-}));
-
-// node_modules/.pnpm/viem@2.57.13_typescript@6.0.3/node_modules/viem/_esm/actions/public/getCode.js
-/**
-* Retrieves the bytecode at an address.
-*
-* - Docs: https://viem.sh/docs/contract/getCode
-* - JSON-RPC Methods: [`eth_getCode`](https://ethereum.org/en/developers/docs/apis/json-rpc/#eth_getcode)
-*
-* @param client - Client to use
-* @param parameters - {@link GetCodeParameters}
-* @returns The contract's bytecode. {@link GetCodeReturnType}
-*
-* @example
-* import { createPublicClient, http } from 'viem'
-* import { mainnet } from 'viem/chains'
-* import { getCode } from 'viem/contract'
-*
-* const client = createPublicClient({
-*   chain: mainnet,
-*   transport: http(),
-* })
-* const code = await getCode(client, {
-*   address: '0xFBA3912Ca04dd458c843e2EE08967fC04f3579c2',
-* })
-*/
-async function getCode(client, { address, blockHash, blockNumber, blockTag = "latest", requireCanonical }) {
-	const block = formatBlockParameter({
-		blockHash,
-		blockNumber,
-		blockTag,
-		requireCanonical
-	});
-	const hex = await client.request({
-		method: "eth_getCode",
-		params: [address, block]
-	}, { dedupe: typeof blockNumber === "bigint" || blockHash !== void 0 });
-	if (hex === "0x") return void 0;
-	return hex;
-}
-var init_getCode = __esmMin((() => {
-	init_formatBlockParameter();
-}));
-
-// node_modules/.pnpm/viem@2.57.13_typescript@6.0.3/node_modules/viem/_esm/actions/public/getDelegation.js
-/**
-* Returns the address that an account has delegated to via EIP-7702.
-*
-* - Docs: https://viem.sh/docs/actions/public/getDelegation
-*
-* @param client - Client to use
-* @param parameters - {@link GetDelegationParameters}
-* @returns The delegated address, or undefined if not delegated. {@link GetDelegationReturnType}
-*
-* @example
-* import { createPublicClient, http } from 'viem'
-* import { mainnet } from 'viem/chains'
-* import { getDelegation } from 'viem/actions'
-*
-* const client = createPublicClient({
-*   chain: mainnet,
-*   transport: http(),
-* })
-* const delegation = await getDelegation(client, {
-*   address: '0xA0Cf798816D4b9b9866b5330EEa46a18382f251e',
-* })
-*/
-async function getDelegation(client, { address, blockNumber, blockTag = "latest" }) {
-	const code = await getCode(client, {
-		address,
-		...blockNumber !== void 0 ? { blockNumber } : { blockTag }
-	});
-	if (!code) return void 0;
-	if (size$3(code) !== 23) return void 0;
-	if (!code.startsWith("0xef0100")) return void 0;
-	return getAddress(slice$2(code, 3, 23));
-}
-var init_getDelegation = __esmMin((() => {
-	init_getAddress();
-	init_size();
-	init_slice();
-	init_getCode();
-}));
-
-// node_modules/.pnpm/viem@2.57.13_typescript@6.0.3/node_modules/viem/_esm/errors/eip712.js
-var Eip712DomainNotFoundError;
-var init_eip712$1 = __esmMin((() => {
-	init_base();
-	Eip712DomainNotFoundError = class extends BaseError$1 {
-		constructor({ address }) {
-			super(`No EIP-712 domain found on contract "${address}".`, {
-				metaMessages: [
-					"Ensure that:",
-					`- The contract is deployed at the address "${address}".`,
-					"- `eip712Domain()` function exists on the contract.",
-					"- `eip712Domain()` function matches signature to ERC-5267 specification."
-				],
-				name: "Eip712DomainNotFoundError"
-			});
-		}
-	};
-}));
-
-// node_modules/.pnpm/viem@2.57.13_typescript@6.0.3/node_modules/viem/_esm/actions/public/getEip712Domain.js
-/**
-* Reads the EIP-712 domain from a contract, based on the ERC-5267 specification.
-*
-* @param client - A {@link Client} instance.
-* @param parameters - The parameters of the action. {@link GetEip712DomainParameters}
-* @returns The EIP-712 domain, fields, and extensions. {@link GetEip712DomainReturnType}
-*
-* @example
-* ```ts
-* import { createPublicClient, http, getEip712Domain } from 'viem'
-* import { mainnet } from 'viem/chains'
-*
-* const client = createPublicClient({
-*   chain: mainnet,
-*   transport: http(),
-* })
-*
-* const domain = await getEip712Domain(client, {
-*   address: '0xA0b86991c6218b36c1d19D4a2e9Eb0cE3606eB48',
-* })
-* // {
-* //   domain: {
-* //     name: 'ExampleContract',
-* //     version: '1',
-* //     chainId: 1,
-* //     verifyingContract: '0xA0b86991c6218b36c1d19D4a2e9Eb0cE3606eB48',
-* //   },
-* //   fields: '0x0f',
-* //   extensions: [],
-* // }
-* ```
-*/
-async function getEip712Domain(client, parameters) {
-	const { address, factory, factoryData } = parameters;
-	try {
-		const [fields, name, version, chainId, verifyingContract, salt, extensions] = await getAction(client, readContract, "readContract")({
-			abi,
-			address,
-			functionName: "eip712Domain",
-			factory,
-			factoryData
-		});
-		return {
-			domain: {
-				name,
-				version,
-				chainId: Number(chainId),
-				verifyingContract,
-				salt
-			},
-			extensions,
-			fields
-		};
-	} catch (e) {
-		const error = e;
-		if (error.name === "ContractFunctionExecutionError" && error.cause.name === "ContractFunctionZeroDataError") throw new Eip712DomainNotFoundError({ address });
-		throw error;
-	}
-}
-var abi;
-var init_getEip712Domain = __esmMin((() => {
-	init_eip712$1();
-	init_getAction();
-	init_readContract();
-	abi = [{
-		inputs: [],
-		name: "eip712Domain",
-		outputs: [
-			{
-				name: "fields",
-				type: "bytes1"
-			},
-			{
-				name: "name",
-				type: "string"
-			},
-			{
-				name: "version",
-				type: "string"
-			},
-			{
-				name: "chainId",
-				type: "uint256"
-			},
-			{
-				name: "verifyingContract",
-				type: "address"
-			},
-			{
-				name: "salt",
-				type: "bytes32"
-			},
-			{
-				name: "extensions",
-				type: "uint256[]"
-			}
-		],
-		stateMutability: "view",
-		type: "function"
-	}];
-}));
-
-// node_modules/.pnpm/viem@2.57.13_typescript@6.0.3/node_modules/viem/_esm/utils/formatters/feeHistory.js
-function formatFeeHistory(feeHistory) {
-	return {
-		baseFeePerGas: feeHistory.baseFeePerGas.map((value) => BigInt(value)),
-		gasUsedRatio: feeHistory.gasUsedRatio,
-		oldestBlock: BigInt(feeHistory.oldestBlock),
-		reward: feeHistory.reward?.map((reward) => reward.map((value) => BigInt(value)))
-	};
-}
-var init_feeHistory = __esmMin((() => {}));
-
-// node_modules/.pnpm/viem@2.57.13_typescript@6.0.3/node_modules/viem/_esm/actions/public/getFeeHistory.js
-/**
-* Returns a collection of historical gas information.
-*
-* - Docs: https://viem.sh/docs/actions/public/getFeeHistory
-* - JSON-RPC Methods: [`eth_feeHistory`](https://docs.alchemy.com/reference/eth-feehistory)
-*
-* @param client - Client to use
-* @param parameters - {@link GetFeeHistoryParameters}
-* @returns The gas estimate (in wei). {@link GetFeeHistoryReturnType}
-*
-* @example
-* import { createPublicClient, http } from 'viem'
-* import { mainnet } from 'viem/chains'
-* import { getFeeHistory } from 'viem/public'
-*
-* const client = createPublicClient({
-*   chain: mainnet,
-*   transport: http(),
-* })
-* const feeHistory = await getFeeHistory(client, {
-*   blockCount: 4,
-*   rewardPercentiles: [25, 75],
-* })
-*/
-async function getFeeHistory(client, { blockCount, blockNumber, blockTag = "latest", rewardPercentiles }) {
-	const blockNumberHex = typeof blockNumber === "bigint" ? numberToHex(blockNumber) : void 0;
-	const feeHistory = await client.request({
-		method: "eth_feeHistory",
-		params: [
-			numberToHex(blockCount),
-			blockNumberHex || blockTag,
-			rewardPercentiles
-		]
-	}, { dedupe: Boolean(blockNumberHex) });
-	return formatFeeHistory(feeHistory);
-}
-var init_getFeeHistory = __esmMin((() => {
-	init_toHex();
-	init_feeHistory();
-}));
-
-// node_modules/.pnpm/viem@2.57.13_typescript@6.0.3/node_modules/viem/_esm/actions/public/getFilterLogs.js
-/**
-* Returns a list of event logs since the filter was created.
-*
-* - Docs: https://viem.sh/docs/actions/public/getFilterLogs
-* - JSON-RPC Methods: [`eth_getFilterLogs`](https://ethereum.org/en/developers/docs/apis/json-rpc/#eth_getfilterlogs)
-*
-* `getFilterLogs` is only compatible with **event filters**.
-*
-* @param client - Client to use
-* @param parameters - {@link GetFilterLogsParameters}
-* @returns A list of event logs. {@link GetFilterLogsReturnType}
-*
-* @example
-* import { createPublicClient, http, parseAbiItem } from 'viem'
-* import { mainnet } from 'viem/chains'
-* import { createEventFilter, getFilterLogs } from 'viem/public'
-*
-* const client = createPublicClient({
-*   chain: mainnet,
-*   transport: http(),
-* })
-* const filter = await createEventFilter(client, {
-*   address: '0xa0b86991c6218b36c1d19d4a2e9eb0ce3606eb48',
-*   event: parseAbiItem('event Transfer(address indexed, address indexed, uint256)'),
-* })
-* const logs = await getFilterLogs(client, { filter })
-*/
-async function getFilterLogs(_client, { filter }) {
-	const strict = filter.strict ?? false;
-	const formattedLogs = (await filter.request({
-		method: "eth_getFilterLogs",
-		params: [filter.id]
-	})).map((log) => formatLog(log));
-	if (!filter.abi) return formattedLogs;
-	return parseEventLogs({
-		abi: filter.abi,
-		logs: formattedLogs,
-		strict
-	});
-}
-var init_getFilterLogs = __esmMin((() => {
-	init_parseEventLogs();
-	init_log$1();
-}));
-
 // node_modules/.pnpm/viem@2.57.13_typescript@6.0.3/node_modules/viem/_esm/utils/abi/encodePacked.js
-function encodePacked$1(types, values) {
+function encodePacked(types, values) {
 	if (types.length !== values.length) throw new AbiEncodingLengthMismatchError({
 		expectedLength: types.length,
 		givenLength: values.length
@@ -15889,20 +7135,20 @@ function encodePacked$1(types, values) {
 	for (let i = 0; i < types.length; i++) {
 		const type = types[i];
 		const value = values[i];
-		data.push(encode$3(type, value));
+		data.push(encode(type, value));
 	}
 	return concatHex(data);
 }
-function encode$3(type, value, isArray = false) {
+function encode(type, value, isArray = false) {
 	if (type === "address") {
 		const address = value;
-		if (!isAddress(address)) throw new InvalidAddressError$1({ address });
-		return pad$2(address.toLowerCase(), { size: isArray ? 32 : null });
+		if (!isAddress(address)) throw new InvalidAddressError({ address });
+		return pad(address.toLowerCase(), { size: isArray ? 32 : null });
 	}
 	if (type === "string") return stringToHex(value);
 	if (type === "bytes") return value;
-	if (type === "bool") return pad$2(boolToHex(value), { size: isArray ? 32 : 1 });
-	const intMatch = type.match(integerRegex$1);
+	if (type === "bool") return pad(boolToHex(value), { size: isArray ? 32 : 1 });
+	const intMatch = type.match(integerRegex);
 	if (intMatch) {
 		const [_type, baseType, bits = "256"] = intMatch;
 		const size = Number.parseInt(bits, 10) / 8;
@@ -15911,23 +7157,23 @@ function encode$3(type, value, isArray = false) {
 			signed: baseType === "int"
 		});
 	}
-	const bytesMatch = type.match(bytesRegex$1);
+	const bytesMatch = type.match(bytesRegex);
 	if (bytesMatch) {
 		const [_type, size] = bytesMatch;
-		if (Number.parseInt(size, 10) !== (value.length - 2) / 2) throw new BytesSizeMismatchError$1({
+		if (Number.parseInt(size, 10) !== (value.length - 2) / 2) throw new BytesSizeMismatchError({
 			expectedSize: Number.parseInt(size, 10),
 			givenSize: (value.length - 2) / 2
 		});
-		return pad$2(value, {
+		return pad(value, {
 			dir: "right",
 			size: isArray ? 32 : null
 		});
 	}
-	const arrayMatch = type.match(arrayRegex$1);
+	const arrayMatch = type.match(arrayRegex);
 	if (arrayMatch && Array.isArray(value)) {
 		const [_type, childType] = arrayMatch;
 		const data = [];
-		for (let i = 0; i < value.length; i++) data.push(encode$3(childType, value[i], true));
+		for (let i = 0; i < value.length; i++) data.push(encode(childType, value[i], true));
 		if (data.length === 0) return "0x";
 		return concatHex(data);
 	}
@@ -15935,7 +7181,7 @@ function encode$3(type, value, isArray = false) {
 }
 var init_encodePacked = __esmMin((() => {
 	init_abi();
-	init_address$1();
+	init_address();
 	init_isAddress();
 	init_concat();
 	init_pad();
@@ -15958,23 +7204,23 @@ function getContractAddress(opts) {
 	return getCreateAddress(opts);
 }
 function getCreateAddress(opts) {
-	const from = toBytes$2(getAddress(opts.from));
-	let nonce = toBytes$2(opts.nonce);
+	const from = toBytes$1(getAddress(opts.from));
+	let nonce = toBytes$1(opts.nonce);
 	if (nonce[0] === 0) nonce = new Uint8Array([]);
-	return getAddress(`0x${keccak256$1(toRlp([from, nonce], "bytes")).slice(26)}`);
+	return getAddress(`0x${keccak256(toRlp([from, nonce], "bytes")).slice(26)}`);
 }
 function getCreate2Address(opts) {
-	const from = toBytes$2(getAddress(opts.from));
-	const salt = pad$2(isBytes(opts.salt) ? opts.salt : toBytes$2(opts.salt), { size: 32 });
+	const from = toBytes$1(getAddress(opts.from));
+	const salt = pad(isBytes(opts.salt) ? opts.salt : toBytes$1(opts.salt), { size: 32 });
 	const bytecodeHash = (() => {
 		if ("bytecodeHash" in opts) {
 			if (isBytes(opts.bytecodeHash)) return opts.bytecodeHash;
-			return toBytes$2(opts.bytecodeHash);
+			return toBytes$1(opts.bytecodeHash);
 		}
-		return keccak256$1(opts.bytecode, "bytes");
+		return keccak256(opts.bytecode, "bytes");
 	})();
-	return getAddress(slice$2(keccak256$1(concat$1([
-		toBytes$2("0xff"),
+	return getAddress(slice(keccak256(concat([
+		toBytes$1("0xff"),
 		from,
 		salt,
 		bytecodeHash
@@ -15997,7 +7243,7 @@ function assertTransactionEIP7702(transaction) {
 	if (authorizationList) for (const authorization of authorizationList) {
 		const { chainId } = authorization;
 		const address = authorization.address;
-		if (!isAddress(address)) throw new InvalidAddressError$1({ address });
+		if (!isAddress(address)) throw new InvalidAddressError({ address });
 		if (chainId < 0) throw new InvalidChainIdError({ chainId });
 	}
 	assertTransactionEIP1559(transaction);
@@ -16007,8 +7253,8 @@ function assertTransactionEIP4844(transaction) {
 	if (blobVersionedHashes) {
 		if (blobVersionedHashes.length === 0) throw new EmptyBlobError();
 		for (const hash of blobVersionedHashes) {
-			const size_ = size$3(hash);
-			const version = hexToNumber$1(slice$2(hash, 0, 1));
+			const size_ = size(hash);
+			const version = hexToNumber$1(slice(hash, 0, 1));
 			if (size_ !== 32) throw new InvalidVersionedHashSizeError({
 				hash,
 				size: size_
@@ -16024,8 +7270,8 @@ function assertTransactionEIP4844(transaction) {
 function assertTransactionEIP1559(transaction) {
 	const { chainId, maxPriorityFeePerGas, maxFeePerGas, to } = transaction;
 	if (chainId <= 0) throw new InvalidChainIdError({ chainId });
-	if (to && !isAddress(to)) throw new InvalidAddressError$1({ address: to });
-	if (maxFeePerGas && maxFeePerGas > maxUint256$1) throw new FeeCapTooHighError({ maxFeePerGas });
+	if (to && !isAddress(to)) throw new InvalidAddressError({ address: to });
+	if (maxFeePerGas && maxFeePerGas > maxUint256) throw new FeeCapTooHighError({ maxFeePerGas });
 	if (maxPriorityFeePerGas && maxFeePerGas && maxPriorityFeePerGas > maxFeePerGas) throw new TipAboveFeeCapError({
 		maxFeePerGas,
 		maxPriorityFeePerGas
@@ -16034,21 +7280,21 @@ function assertTransactionEIP1559(transaction) {
 function assertTransactionEIP2930(transaction) {
 	const { chainId, maxPriorityFeePerGas, gasPrice, maxFeePerGas, to } = transaction;
 	if (chainId <= 0) throw new InvalidChainIdError({ chainId });
-	if (to && !isAddress(to)) throw new InvalidAddressError$1({ address: to });
-	if (maxPriorityFeePerGas || maxFeePerGas) throw new BaseError$1("`maxFeePerGas`/`maxPriorityFeePerGas` is not a valid EIP-2930 Transaction attribute.");
-	if (gasPrice && gasPrice > maxUint256$1) throw new FeeCapTooHighError({ maxFeePerGas: gasPrice });
+	if (to && !isAddress(to)) throw new InvalidAddressError({ address: to });
+	if (maxPriorityFeePerGas || maxFeePerGas) throw new BaseError("`maxFeePerGas`/`maxPriorityFeePerGas` is not a valid EIP-2930 Transaction attribute.");
+	if (gasPrice && gasPrice > maxUint256) throw new FeeCapTooHighError({ maxFeePerGas: gasPrice });
 }
 function assertTransactionLegacy(transaction) {
 	const { chainId, maxPriorityFeePerGas, gasPrice, maxFeePerGas, to } = transaction;
-	if (to && !isAddress(to)) throw new InvalidAddressError$1({ address: to });
+	if (to && !isAddress(to)) throw new InvalidAddressError({ address: to });
 	if (typeof chainId !== "undefined" && chainId <= 0) throw new InvalidChainIdError({ chainId });
-	if (maxPriorityFeePerGas || maxFeePerGas) throw new BaseError$1("`maxFeePerGas`/`maxPriorityFeePerGas` is not a valid Legacy Transaction attribute.");
-	if (gasPrice && gasPrice > maxUint256$1) throw new FeeCapTooHighError({ maxFeePerGas: gasPrice });
+	if (maxPriorityFeePerGas || maxFeePerGas) throw new BaseError("`maxFeePerGas`/`maxPriorityFeePerGas` is not a valid Legacy Transaction attribute.");
+	if (gasPrice && gasPrice > maxUint256) throw new FeeCapTooHighError({ maxFeePerGas: gasPrice });
 }
 var init_assertTransaction = __esmMin((() => {
 	init_kzg();
 	init_number();
-	init_address$1();
+	init_address();
 	init_base();
 	init_blob();
 	init_chain$1();
@@ -16066,14 +7312,14 @@ function serializeAccessList(accessList) {
 	for (let i = 0; i < accessList.length; i++) {
 		const { address, storageKeys } = accessList[i];
 		for (let j = 0; j < storageKeys.length; j++) if (storageKeys[j].length - 2 !== 64) throw new InvalidStorageKeySizeError({ storageKey: storageKeys[j] });
-		if (!isAddress(address, { strict: false })) throw new InvalidAddressError$1({ address });
+		if (!isAddress(address, { strict: false })) throw new InvalidAddressError({ address });
 		serializedAccessList.push([address, storageKeys]);
 	}
 	return serializedAccessList;
 }
 var init_serializeAccessList = __esmMin((() => {
-	init_address$1();
-	init_transaction$1();
+	init_address();
+	init_transaction();
 	init_isAddress();
 }));
 
@@ -16219,8 +7465,8 @@ function serializeTransactionLegacy(transaction, signature) {
 			if (signature.v !== v) throw new InvalidLegacyVError({ v: signature.v });
 			return v;
 		})();
-		const r = trim$1(signature.r);
-		const s = trim$1(signature.s);
+		const r = trim(signature.r);
+		const s = trim(signature.s);
 		serializedTransaction = [
 			...serializedTransaction,
 			numberToHex(v),
@@ -16241,8 +7487,8 @@ function toYParitySignatureArray(transaction, signature_) {
 	if (typeof signature.r === "undefined") return [];
 	if (typeof signature.s === "undefined") return [];
 	if (typeof v === "undefined" && typeof yParity === "undefined") return [];
-	const r = trim$1(signature.r);
-	const s = trim$1(signature.s);
+	const r = trim(signature.r);
+	const s = trim(signature.s);
 	return [
 		(() => {
 			if (typeof yParity === "number") return yParity ? numberToHex(1) : "0x";
@@ -16255,7 +7501,7 @@ function toYParitySignatureArray(transaction, signature_) {
 	];
 }
 var init_serializeTransaction = __esmMin((() => {
-	init_transaction$1();
+	init_transaction();
 	init_serializeAuthorizationList();
 	init_blobsToCommitments();
 	init_blobsToProofs();
@@ -16293,196 +7539,11 @@ var init_serializeAuthorizationList = __esmMin((() => {
 	init_serializeTransaction();
 }));
 
-// node_modules/.pnpm/viem@2.57.13_typescript@6.0.3/node_modules/viem/_esm/utils/authorization/verifyAuthorization.js
-/**
-* Verify that an Authorization object was signed by the provided address.
-*
-* - Docs {@link https://viem.sh/docs/utilities/verifyAuthorization}
-*
-* @param parameters - {@link VerifyAuthorizationParameters}
-* @returns Whether or not the signature is valid. {@link VerifyAuthorizationReturnType}
-*/
-async function verifyAuthorization({ address, authorization, signature }) {
-	return isAddressEqual(getAddress(address), await recoverAuthorizationAddress({
-		authorization,
-		signature
-	}));
-}
-var init_verifyAuthorization = __esmMin((() => {
-	init_getAddress();
-	init_isAddressEqual();
-	init_recoverAuthorizationAddress();
-}));
-
-// node_modules/.pnpm/viem@2.57.13_typescript@6.0.3/node_modules/viem/_esm/utils/promise/withDedupe.js
-/** Deduplicates in-flight promises. */
-function withDedupe(fn, { enabled = true, id }) {
-	if (!enabled || !id) return fn();
-	if (promiseCache.get(id)) return promiseCache.get(id);
-	const promise = fn().finally(() => promiseCache.delete(id));
-	promiseCache.set(id, promise);
-	return promise;
-}
-var promiseCache;
-var init_withDedupe = __esmMin((() => {
-	init_lru$1();
-	promiseCache = /*#__PURE__*/ new LruMap$1(8192);
-}));
-
-// node_modules/.pnpm/viem@2.57.13_typescript@6.0.3/node_modules/viem/_esm/utils/buildRequest.js
-function buildRequest(request, options = {}) {
-	return async (args, overrideOptions = {}) => {
-		const { dedupe = false, methods, retryDelay = 150, retryCount = 3, signal, uid } = {
-			...options,
-			...overrideOptions
-		};
-		const { method } = args;
-		if (methods?.exclude?.includes(method)) throw new MethodNotSupportedRpcError(/* @__PURE__ */ new Error("method not supported"), { method });
-		if (methods?.include && !methods.include.includes(method)) throw new MethodNotSupportedRpcError(/* @__PURE__ */ new Error("method not supported"), { method });
-		if (signal?.aborted) throw getAbortError(signal);
-		const requestId = dedupe ? hashString(`${uid}.${stringify$2(args)}`) : void 0;
-		return withDedupe(() => withRetry(async () => {
-			try {
-				return await request(args, signal ? { signal } : void 0);
-			} catch (err_) {
-				if (signal?.aborted) throw getAbortError(signal);
-				if (isAbortError(err_)) throw err_;
-				const err = err_;
-				switch (err.code) {
-					case ParseRpcError.code: throw new ParseRpcError(err);
-					case InvalidRequestRpcError.code: throw new InvalidRequestRpcError(err);
-					case MethodNotFoundRpcError.code: throw new MethodNotFoundRpcError(err, { method: args.method });
-					case InvalidParamsRpcError.code: throw new InvalidParamsRpcError(err);
-					case InternalRpcError.code: throw new InternalRpcError(err);
-					case InvalidInputRpcError.code: throw new InvalidInputRpcError(err);
-					case ResourceNotFoundRpcError.code: throw new ResourceNotFoundRpcError(err);
-					case ResourceUnavailableRpcError.code: throw new ResourceUnavailableRpcError(err);
-					case TransactionRejectedRpcError.code: throw new TransactionRejectedRpcError(err);
-					case MethodNotSupportedRpcError.code: throw new MethodNotSupportedRpcError(err, { method: args.method });
-					case LimitExceededRpcError.code: throw new LimitExceededRpcError(err);
-					case JsonRpcVersionUnsupportedError.code: throw new JsonRpcVersionUnsupportedError(err);
-					case UserRejectedRequestError.code: throw new UserRejectedRequestError(err);
-					case UnauthorizedProviderError.code: throw new UnauthorizedProviderError(err);
-					case UnsupportedProviderMethodError.code: throw new UnsupportedProviderMethodError(err);
-					case ProviderDisconnectedError.code: throw new ProviderDisconnectedError(err);
-					case ChainDisconnectedError.code: throw new ChainDisconnectedError(err);
-					case SwitchChainError.code: throw new SwitchChainError(err);
-					case UnsupportedNonOptionalCapabilityError.code: throw new UnsupportedNonOptionalCapabilityError(err);
-					case UnsupportedChainIdError.code: throw new UnsupportedChainIdError(err);
-					case DuplicateIdError.code: throw new DuplicateIdError(err);
-					case UnknownBundleIdError.code: throw new UnknownBundleIdError(err);
-					case BundleTooLargeError.code: throw new BundleTooLargeError(err);
-					case AtomicReadyWalletRejectedUpgradeError.code: throw new AtomicReadyWalletRejectedUpgradeError(err);
-					case AtomicityNotSupportedError.code: throw new AtomicityNotSupportedError(err);
-					case 5e3: throw new UserRejectedRequestError(err);
-					case WalletConnectSessionSettlementError.code: throw new WalletConnectSessionSettlementError(err);
-					default:
-						if (err_ instanceof BaseError$1) throw err_;
-						throw new UnknownRpcError(err);
-				}
-			}
-		}, {
-			delay: ({ count, error }) => {
-				const retryAfter = getHttpError(error)?.headers?.get("Retry-After");
-				if (retryAfter) {
-					const seconds = Number.parseInt(retryAfter, 10);
-					if (!Number.isNaN(seconds)) return seconds * 1e3;
-					const delay = Date.parse(retryAfter) - Date.now();
-					if (delay > 0) return delay;
-				}
-				return ~~(1 << count) * retryDelay;
-			},
-			retryCount,
-			signal,
-			shouldRetry: ({ error }) => shouldRetry(error)
-		}), {
-			enabled: dedupe,
-			id: requestId
-		});
-	};
-}
-/** @internal */
-function shouldRetry(error) {
-	if (isAbortError(error)) return false;
-	const status = getHttpError(error)?.status;
-	if ("code" in error && typeof error.code === "number") {
-		if (error.code === -1) return true;
-		if (error.code === LimitExceededRpcError.code) return true;
-		if (error.code === InternalRpcError.code) return true;
-		if (error.code === 429) return true;
-		if (error.code === -32007) return true;
-		if (!status) return false;
-	}
-	if (status) {
-		if (status === 403) return true;
-		if (status === 408) return true;
-		if (status === 413) return true;
-		if (status === 429) return true;
-		if (status === 500) return true;
-		if (status === 502) return true;
-		if (status === 503) return true;
-		if (status === 504) return true;
-		return false;
-	}
-	return true;
-}
-/** Returns the error in the cause chain that carries the HTTP response. */
-function getHttpError(error) {
-	if (!(error instanceof BaseError$1)) return void 0;
-	return error.walk((err) => err instanceof HttpRequestError || err instanceof RpcRequestError);
-}
-/** @internal cyrb53 – fast, non-cryptographic 53-bit string hash */
-function hashString(str, seed = 0) {
-	let h1 = 3735928559 ^ seed;
-	let h2 = 1103547991 ^ seed;
-	for (let i = 0; i < str.length; i++) {
-		const ch = str.charCodeAt(i);
-		h1 = Math.imul(h1 ^ ch, 2654435761);
-		h2 = Math.imul(h2 ^ ch, 1597334677);
-	}
-	h1 = Math.imul(h1 ^ h1 >>> 16, 2246822507);
-	h1 ^= Math.imul(h2 ^ h2 >>> 16, 3266489909);
-	h2 = Math.imul(h2 ^ h2 >>> 16, 2246822507);
-	h2 ^= Math.imul(h1 ^ h1 >>> 16, 3266489909);
-	return (4294967296 * (2097151 & h2) + (h1 >>> 0)).toString(36);
-}
-var init_buildRequest = __esmMin((() => {
-	init_base();
-	init_request();
-	init_rpc();
-	init_utils$3();
-	init_withDedupe();
-	init_withRetry();
-	init_stringify$1();
-}));
-
-// node_modules/.pnpm/viem@2.57.13_typescript@6.0.3/node_modules/viem/_esm/utils/chain/defineChain.js
-function defineChain(chain) {
-	const chainInstance = {
-		formatters: void 0,
-		fees: void 0,
-		serializers: void 0,
-		...chain
-	};
-	function extend(base) {
-		return (fnOrExtended) => {
-			const properties = typeof fnOrExtended === "function" ? fnOrExtended(base) : fnOrExtended;
-			const combined = {
-				...base,
-				...properties
-			};
-			return Object.assign(combined, { extend: extend(combined) });
-		};
-	}
-	return Object.assign(chainInstance, { extend: extend(chainInstance) });
-}
-var init_defineChain = __esmMin((() => {}));
-
 // node_modules/.pnpm/viem@2.57.13_typescript@6.0.3/node_modules/viem/_esm/utils/encoding/fromRlp.js
 function fromRlp(value, to = "hex") {
 	const bytes = (() => {
 		if (typeof value === "string") {
-			if (value.length > 3 && value.length % 2 !== 0) throw new InvalidHexValueError$1(value);
+			if (value.length > 3 && value.length % 2 !== 0) throw new InvalidHexValueError(value);
 			return hexToBytes$1(value);
 		}
 		return value;
@@ -16511,7 +7572,7 @@ function readLength(cursor, prefix, offset) {
 	if (prefix === offset + 55 + 2) return cursor.readUint16();
 	if (prefix === offset + 55 + 3) return cursor.readUint24();
 	if (prefix === offset + 55 + 4) return cursor.readUint32();
-	throw new BaseError$1("Invalid RLP prefix");
+	throw new BaseError("Invalid RLP prefix");
 }
 function readList(cursor, length, to, recursiveDepth) {
 	const position = cursor.position;
@@ -16527,7 +7588,7 @@ var rlpDepthLimit;
 var init_fromRlp = __esmMin((() => {
 	init_base();
 	init_encoding();
-	init_cursor$1();
+	init_cursor();
 	init_toBytes();
 	init_toHex();
 	rlpDepthLimit = 1024;
@@ -16539,263 +7600,6 @@ function isHash(hash) {
 }
 var init_isHash = __esmMin((() => {
 	init_isHex();
-}));
-
-// node_modules/.pnpm/viem@2.57.13_typescript@6.0.3/node_modules/viem/_esm/utils/promise/withTimeout.js
-function withTimeout(fn, { errorInstance = /* @__PURE__ */ new Error("timed out"), timeout, signal }) {
-	return new Promise((resolve, reject) => {
-		(async () => {
-			let timeoutId;
-			const controller = new AbortController();
-			try {
-				if (timeout > 0) timeoutId = setTimeout(() => {
-					if (signal) controller.abort();
-					else reject(errorInstance);
-				}, timeout);
-				resolve(await fn({ signal: controller?.signal || null }));
-			} catch (err) {
-				if (controller?.signal.aborted && isAbortError(err)) {
-					reject(errorInstance);
-					return;
-				}
-				reject(err);
-			} finally {
-				clearTimeout(timeoutId);
-			}
-		})();
-	});
-}
-var init_withTimeout = __esmMin((() => {
-	init_utils$3();
-}));
-
-// node_modules/.pnpm/viem@2.57.13_typescript@6.0.3/node_modules/viem/_esm/utils/rpc/id.js
-function createIdStore() {
-	return {
-		current: 0,
-		take() {
-			return this.current++;
-		},
-		reset() {
-			this.current = 0;
-		}
-	};
-}
-var idCache;
-var init_id = __esmMin((() => {
-	idCache = /*#__PURE__*/ createIdStore();
-}));
-
-// node_modules/.pnpm/viem@2.57.13_typescript@6.0.3/node_modules/viem/_esm/utils/rpc/http.js
-function getHttpRpcClient(url_, options = {}) {
-	const { url, headers: headers_url } = parseUrl(url_);
-	return { async request(params) {
-		const { body, fetchFn = options.fetchFn ?? fetch, maxResponseBodySize = options.maxResponseBodySize ?? defaultMaxResponseBodySize, onRequest = options.onRequest, onResponse = options.onResponse, timeout = options.timeout ?? 1e4 } = params;
-		const fetchOptions = {
-			...options.fetchOptions ?? {},
-			...params.fetchOptions ?? {}
-		};
-		const { headers, method, signal: signal_ } = fetchOptions;
-		try {
-			const { response, responseBody } = await withTimeout(async ({ signal: timeoutSignal }) => {
-				const { signal, cleanup } = anySignal([signal_, timeout > 0 ? timeoutSignal : null]);
-				try {
-					const init = {
-						...fetchOptions,
-						body: Array.isArray(body) ? stringify$2(body.map((body) => ({
-							jsonrpc: "2.0",
-							id: body.id ?? idCache.take(),
-							...body
-						}))) : stringify$2({
-							jsonrpc: "2.0",
-							id: body.id ?? idCache.take(),
-							...body
-						}),
-						headers: {
-							...headers_url,
-							"Content-Type": "application/json",
-							...headers
-						},
-						method: method || "POST",
-						signal
-					};
-					const request = new Request(url, init);
-					const args = await onRequest?.(request, init) ?? {
-						...init,
-						url
-					};
-					const response = await fetchFn(args.url ?? url, args);
-					if (onResponse) await onResponse(response);
-					return {
-						response,
-						responseBody: await readResponseBody(response, { maxResponseBodySize })
-					};
-				} finally {
-					cleanup();
-				}
-			}, {
-				errorInstance: new TimeoutError({
-					body,
-					url
-				}),
-				timeout,
-				signal: true
-			});
-			let data;
-			if (response.headers.get("Content-Type")?.startsWith("application/json")) data = JSON.parse(responseBody);
-			else {
-				data = responseBody;
-				try {
-					data = JSON.parse(data || "{}");
-				} catch (err) {
-					if (response.ok) throw err;
-					data = { error: data };
-				}
-			}
-			const error = Array.isArray(body) && Array.isArray(data) && data.length === 1 ? data[0] : data;
-			if (!response.ok) {
-				if (isRpcError(error)) throw new RpcRequestError({
-					body,
-					error: error.error,
-					headers: response.headers,
-					status: response.status,
-					url
-				});
-				throw new HttpRequestError({
-					body,
-					details: stringify$2(data.error) || response.statusText,
-					headers: response.headers,
-					status: response.status,
-					url
-				});
-			}
-			if (!Array.isArray(body) || !body.length) return data;
-			if (Array.isArray(data) && data.length >= body.length) return data;
-			if (!isRpcError(error)) throw new Error(`Expected ${body.length} responses to batch request.`);
-			return body.map(() => error);
-		} catch (err) {
-			if (signal_?.aborted) throw getAbortError(signal_);
-			if (isAbortError(err)) throw err;
-			if (err instanceof HttpRequestError) throw err;
-			if (err instanceof ResponseBodyTooLargeError) throw err;
-			if (err instanceof RpcRequestError) throw err;
-			if (err instanceof TimeoutError) throw err;
-			throw new HttpRequestError({
-				body,
-				cause: err,
-				url
-			});
-		}
-	} };
-}
-/**
-* Returns a signal that aborts as soon as any of `signals` aborts, and a
-* `cleanup` function that detaches the listeners added to `signals`.
-*/
-function anySignal(signals) {
-	const signals_ = signals.filter((signal) => !!signal);
-	if (signals_.length < 2) return {
-		signal: signals_[0] ?? null,
-		cleanup: () => {}
-	};
-	const controller = new AbortController();
-	const onAbort = () => {
-		cleanup();
-		controller.abort(signals_.find((signal) => signal.aborted)?.reason);
-	};
-	const cleanup = () => {
-		for (const signal of signals_) signal.removeEventListener("abort", onAbort);
-	};
-	for (const signal of signals_) {
-		if (signal.aborted) {
-			cleanup();
-			controller.abort(signal.reason);
-			break;
-		}
-		signal.addEventListener("abort", onAbort);
-	}
-	return {
-		signal: controller.signal,
-		cleanup
-	};
-}
-async function readResponseBody(response, { maxResponseBodySize }) {
-	if (maxResponseBodySize === false) return response.text();
-	const contentLength = response.headers.get("Content-Length");
-	if (contentLength) {
-		const size = Number(contentLength);
-		if (size > maxResponseBodySize) throw new ResponseBodyTooLargeError({
-			maxSize: maxResponseBodySize,
-			size
-		});
-	}
-	if (!response.body) {
-		const body = await response.text();
-		const size = new TextEncoder().encode(body).length;
-		if (size > maxResponseBodySize) throw new ResponseBodyTooLargeError({
-			maxSize: maxResponseBodySize,
-			size
-		});
-		return body;
-	}
-	const reader = response.body.getReader();
-	const decoder = new TextDecoder();
-	let body = "";
-	let size = 0;
-	try {
-		while (true) {
-			const { done, value } = await reader.read();
-			if (done) break;
-			size += value.byteLength;
-			if (size > maxResponseBodySize) {
-				await reader.cancel();
-				throw new ResponseBodyTooLargeError({
-					maxSize: maxResponseBodySize,
-					size
-				});
-			}
-			body += decoder.decode(value, { stream: true });
-		}
-		body += decoder.decode();
-		return body;
-	} finally {
-		reader.releaseLock();
-	}
-}
-function isRpcError(data) {
-	return typeof data?.error?.code === "number" && typeof data?.error?.message === "string";
-}
-/** @internal */
-function parseUrl(url_) {
-	try {
-		const url = new URL(url_);
-		const result = (() => {
-			if (url.username) {
-				const credentials = `${decodeURIComponent(url.username)}:${decodeURIComponent(url.password)}`;
-				url.username = "";
-				url.password = "";
-				return {
-					url: url.toString(),
-					headers: { Authorization: `Basic ${btoa(credentials)}` }
-				};
-			}
-		})();
-		return {
-			url: url.toString(),
-			...result
-		};
-	} catch {
-		return { url: url_ };
-	}
-}
-var defaultMaxResponseBodySize;
-var init_http$1 = __esmMin((() => {
-	init_request();
-	init_utils$3();
-	init_withTimeout();
-	init_stringify$1();
-	init_id();
-	defaultMaxResponseBodySize = 10485760;
 }));
 
 // node_modules/.pnpm/viem@2.57.13_typescript@6.0.3/node_modules/viem/_esm/constants/strings.js
@@ -16811,8 +7615,8 @@ function toPrefixedMessage(message_) {
 		if (typeof message_.raw === "string") return message_.raw;
 		return bytesToHex$1(message_.raw);
 	})();
-	const prefix = stringToHex(`${presignMessagePrefix}${size$3(message)}`);
-	return concat$1([prefix, message]);
+	const prefix = stringToHex(`${presignMessagePrefix}${size(message)}`);
+	return concat([prefix, message]);
 }
 var init_toPrefixedMessage = __esmMin((() => {
 	init_strings();
@@ -16823,7 +7627,7 @@ var init_toPrefixedMessage = __esmMin((() => {
 
 // node_modules/.pnpm/viem@2.57.13_typescript@6.0.3/node_modules/viem/_esm/utils/signature/hashMessage.js
 function hashMessage(message, to_) {
-	return keccak256$1(toPrefixedMessage(message), to_);
+	return keccak256(toPrefixedMessage(message), to_);
 }
 var init_hashMessage = __esmMin((() => {
 	init_keccak256();
@@ -16835,12 +7639,12 @@ var InvalidDomainError, InvalidPrimaryTypeError, InvalidStructTypeError, Invalid
 var init_typedData$1 = __esmMin((() => {
 	init_stringify$1();
 	init_base();
-	InvalidDomainError = class extends BaseError$1 {
+	InvalidDomainError = class extends BaseError {
 		constructor({ domain }) {
-			super(`Invalid domain "${stringify$2(domain)}".`, { metaMessages: ["Must be a valid EIP-712 domain."] });
+			super(`Invalid domain "${stringify$1(domain)}".`, { metaMessages: ["Must be a valid EIP-712 domain."] });
 		}
 	};
-	InvalidPrimaryTypeError = class extends BaseError$1 {
+	InvalidPrimaryTypeError = class extends BaseError {
 		constructor({ primaryType, types }) {
 			super(`Invalid primary type \`${primaryType}\` must be one of \`${JSON.stringify(Object.keys(types))}\`.`, {
 				docsPath: "/api/glossary/Errors#typeddatainvalidprimarytypeerror",
@@ -16848,7 +7652,7 @@ var init_typedData$1 = __esmMin((() => {
 			});
 		}
 	};
-	InvalidStructTypeError = class extends BaseError$1 {
+	InvalidStructTypeError = class extends BaseError {
 		constructor({ type }) {
 			super(`Struct type "${type}" is invalid.`, {
 				metaMessages: ["Struct type must contain only letters, digits, \"_\" and \"$\", and must not be a Solidity type."],
@@ -16856,7 +7660,7 @@ var init_typedData$1 = __esmMin((() => {
 			});
 		}
 	};
-	InvalidTypedDataTypeError = class extends BaseError$1 {
+	InvalidTypedDataTypeError = class extends BaseError {
 		constructor({ type }) {
 			const canonicalType = type.replace(/^(u?int)/, "$&256");
 			super(`Type "${type}" is not a valid EIP-712 type.`, {
@@ -16868,32 +7672,6 @@ var init_typedData$1 = __esmMin((() => {
 }));
 
 // node_modules/.pnpm/viem@2.57.13_typescript@6.0.3/node_modules/viem/_esm/utils/typedData.js
-function serializeTypedData(parameters) {
-	const { domain: domain_, message: message_, primaryType, types } = parameters;
-	const normalizeData = (struct, data_) => {
-		const data = { ...data_ };
-		for (const param of struct) {
-			const { name, type } = param;
-			if (type === "address") data[name] = data[name].toLowerCase();
-		}
-		return data;
-	};
-	const domain = (() => {
-		if (!types.EIP712Domain) return {};
-		if (!domain_) return {};
-		return normalizeData(types.EIP712Domain, domain_);
-	})();
-	const message = (() => {
-		if (primaryType === "EIP712Domain") return void 0;
-		return normalizeData(types[primaryType], message_);
-	})();
-	return stringify$2({
-		domain,
-		message,
-		primaryType,
-		types
-	});
-}
 function validateTypedData(parameters) {
 	const { domain, message, primaryType, types } = parameters;
 	const validateData = (struct, data) => {
@@ -16902,7 +7680,7 @@ function validateTypedData(parameters) {
 			const value = data[name];
 			const baseType = type.replace(/(\[[0-9]*\])+$/, "");
 			if (baseType === "int" || baseType === "uint") throw new InvalidTypedDataTypeError({ type });
-			const integerMatch = type.match(integerRegex$1);
+			const integerMatch = type.match(integerRegex);
 			if (integerMatch && (typeof value === "number" || typeof value === "bigint")) {
 				const [_type, base, size_] = integerMatch;
 				numberToHex(value, {
@@ -16910,13 +7688,13 @@ function validateTypedData(parameters) {
 					size: Number.parseInt(size_, 10) / 8
 				});
 			}
-			if (type === "address" && typeof value === "string" && !isAddress(value)) throw new InvalidAddressError$1({ address: value });
-			const bytesMatch = type.match(bytesRegex$1);
+			if (type === "address" && typeof value === "string" && !isAddress(value)) throw new InvalidAddressError({ address: value });
+			const bytesMatch = type.match(bytesRegex);
 			if (bytesMatch) {
 				const [_type, size_] = bytesMatch;
-				if (size_ && size$3(value) !== Number.parseInt(size_, 10)) throw new BytesSizeMismatchError$1({
+				if (size_ && size(value) !== Number.parseInt(size_, 10)) throw new BytesSizeMismatchError({
 					expectedSize: Number.parseInt(size_, 10),
-					givenSize: size$3(value)
+					givenSize: size(value)
 				});
 			}
 			const struct = types[type];
@@ -16972,14 +7750,13 @@ function validateReference(type) {
 }
 var init_typedData = __esmMin((() => {
 	init_abi();
-	init_address$1();
+	init_address();
 	init_typedData$1();
 	init_isAddress();
 	init_size();
 	init_toHex();
 	init_regex();
 	init_hashTypedData();
-	init_stringify$1();
 }));
 
 // node_modules/.pnpm/viem@2.57.13_typescript@6.0.3/node_modules/viem/_esm/utils/signature/hashTypedData.js
@@ -17005,7 +7782,7 @@ function hashTypedData(parameters) {
 		primaryType,
 		types
 	}));
-	return keccak256$1(concat$1(parts));
+	return keccak256(concat(parts));
 }
 function hashDomain({ domain, types }) {
 	return hashStruct({
@@ -17015,14 +7792,14 @@ function hashDomain({ domain, types }) {
 	});
 }
 function hashStruct({ data, primaryType, types }) {
-	const encoded = encodeData$1({
+	const encoded = encodeData({
 		data,
 		primaryType,
 		types
 	});
-	return keccak256$1(encoded);
+	return keccak256(encoded);
 }
-function encodeData$1({ data, primaryType, types }) {
+function encodeData({ data, primaryType, types }) {
 	const encodedTypes = [{ type: "bytes32" }];
 	const encodedValues = [hashType({
 		primaryType,
@@ -17045,7 +7822,7 @@ function hashType({ primaryType, types }) {
 		primaryType,
 		types
 	}));
-	return keccak256$1(encodedHashType);
+	return keccak256(encodedHashType);
 }
 function encodeType({ primaryType, types }) {
 	let result = "";
@@ -17069,13 +7846,13 @@ function findTypeDependencies({ primaryType: primaryType_, types }, results = /*
 	return results;
 }
 function encodeField({ types, name, type, value }) {
-	if (types[type] !== void 0) return [{ type: "bytes32" }, keccak256$1(encodeData$1({
+	if (types[type] !== void 0) return [{ type: "bytes32" }, keccak256(encodeData({
 		data: value,
 		primaryType: type,
 		types
 	}))];
-	if (type === "bytes") return [{ type: "bytes32" }, keccak256$1(value)];
-	if (type === "string") return [{ type: "bytes32" }, keccak256$1(toHex(value))];
+	if (type === "bytes") return [{ type: "bytes32" }, keccak256(value)];
+	if (type === "string") return [{ type: "bytes32" }, keccak256(toHex(value))];
 	if (type.lastIndexOf("]") === type.length - 1) {
 		const parsedType = type.slice(0, type.lastIndexOf("["));
 		const typeValuePairs = value.map((item) => encodeField({
@@ -17084,7 +7861,7 @@ function encodeField({ types, name, type, value }) {
 			types,
 			value: item
 		}));
-		return [{ type: "bytes32" }, keccak256$1(encodeAbiParameters(typeValuePairs.map(([t]) => t), typeValuePairs.map(([, v]) => v)))];
+		return [{ type: "bytes32" }, keccak256(encodeAbiParameters(typeValuePairs.map(([t]) => t), typeValuePairs.map(([, v]) => v)))];
 	}
 	return [{ type }, value];
 }
@@ -17094,1616 +7871,6 @@ var init_hashTypedData = __esmMin((() => {
 	init_toHex();
 	init_keccak256();
 	init_typedData();
-}));
-
-// node_modules/.pnpm/ox@0.14.59_typescript@6.0.3/node_modules/ox/_esm/core/internal/lru.js
-var LruMap;
-var init_lru = __esmMin((() => {
-	LruMap = class extends Map {
-		constructor(size) {
-			super();
-			Object.defineProperty(this, "maxSize", {
-				enumerable: true,
-				configurable: true,
-				writable: true,
-				value: void 0
-			});
-			this.maxSize = size;
-		}
-		get(key) {
-			const value = super.get(key);
-			if (super.has(key) && value !== void 0) {
-				this.delete(key);
-				super.set(key, value);
-			}
-			return value;
-		}
-		set(key, value) {
-			super.set(key, value);
-			if (this.maxSize && this.size > this.maxSize) {
-				const firstKey = this.keys().next().value;
-				if (firstKey) this.delete(firstKey);
-			}
-			return this;
-		}
-	};
-}));
-
-// node_modules/.pnpm/ox@0.14.59_typescript@6.0.3/node_modules/ox/_esm/core/Caches.js
-var caches, checksum$1;
-var init_Caches = __esmMin((() => {
-	init_lru();
-	caches = { checksum: /*#__PURE__*/ new LruMap(8192) };
-	checksum$1 = caches.checksum;
-}));
-
-// node_modules/.pnpm/ox@0.14.59_typescript@6.0.3/node_modules/ox/_esm/core/Hash.js
-/**
-* Calculates the [Keccak256](https://en.wikipedia.org/wiki/SHA-3) hash of a {@link ox#Bytes.Bytes} or {@link ox#Hex.Hex} value.
-*
-* This function is a re-export of `keccak_256` from [`@noble/hashes`](https://github.com/paulmillr/noble-hashes), an audited & minimal JS hashing library.
-*
-* @example
-* ```ts twoslash
-* import { Hash } from 'ox'
-*
-* Hash.keccak256('0xdeadbeef')
-* // @log: '0xd4fd4e189132273036449fc9e11198c739161b4c0116a9a2dccdfa1c492006f1'
-* ```
-*
-* @example
-* ### Calculate Hash of a String
-*
-* ```ts twoslash
-* import { Hash, Hex } from 'ox'
-*
-* Hash.keccak256(Hex.fromString('hello world'))
-* // @log: '0x3ea2f1d0abf3fc66cf29eebb70cbd4e7fe762ef8a09bcc06c8edf641230afec0'
-* ```
-*
-* @example
-* ### Configure Return Type
-*
-* ```ts twoslash
-* import { Hash } from 'ox'
-*
-* Hash.keccak256('0xdeadbeef', { as: 'Bytes' })
-* // @log: Uint8Array [...]
-* ```
-*
-* @param value - {@link ox#Bytes.Bytes} or {@link ox#Hex.Hex} value.
-* @param options - Options.
-* @returns Keccak256 hash.
-*/
-function keccak256(value, options = {}) {
-	const { as = typeof value === "string" ? "Hex" : "Bytes" } = options;
-	const bytes = keccak_256(from$7(value));
-	if (as === "Bytes") return bytes;
-	return fromBytes$1(bytes);
-}
-var init_Hash = __esmMin((() => {
-	init_sha3();
-	init_Bytes();
-	init_Hex();
-}));
-
-// node_modules/.pnpm/ox@0.14.59_typescript@6.0.3/node_modules/ox/_esm/core/Address.js
-/**
-* Asserts that the given value is a valid {@link ox#Address.Address}.
-*
-* @example
-* ```ts twoslash
-* import { Address } from 'ox'
-*
-* Address.assert('0xA0Cf798816D4b9b9866b5330EEa46a18382f251e')
-* ```
-*
-* @example
-* ```ts twoslash
-* import { Address } from 'ox'
-*
-* Address.assert('0xdeadbeef')
-* // @error: InvalidAddressError: Address "0xdeadbeef" is invalid.
-* ```
-*
-* @param value - Value to assert if it is a valid address.
-* @param options - Assertion options.
-*/
-function assert$3(value, options = {}) {
-	const { strict = true } = options;
-	if (!addressRegex.test(value)) throw new InvalidAddressError({
-		address: value,
-		cause: new InvalidInputError()
-	});
-	if (strict) {
-		if (value.toLowerCase() === value) return;
-		if (checksum(value) !== value) throw new InvalidAddressError({
-			address: value,
-			cause: new InvalidChecksumError()
-		});
-	}
-}
-/**
-* Computes the checksum address for the given {@link ox#Address.Address}.
-*
-* @example
-* ```ts twoslash
-* import { Address } from 'ox'
-*
-* Address.checksum('0xa0cf798816d4b9b9866b5330eea46a18382f251e')
-* // @log: '0xA0Cf798816D4b9b9866b5330EEa46a18382f251e'
-* ```
-*
-* @param address - The address to compute the checksum for.
-* @returns The checksummed address.
-*/
-function checksum(address) {
-	if (checksum$1.has(address)) return checksum$1.get(address);
-	assert$3(address, { strict: false });
-	const hexAddress = address.substring(2).toLowerCase();
-	const hash = keccak256(fromString$2(hexAddress), { as: "Bytes" });
-	const characters = hexAddress.split("");
-	for (let i = 0; i < 40; i += 2) {
-		if (hash[i >> 1] >> 4 >= 8 && characters[i]) characters[i] = characters[i].toUpperCase();
-		if ((hash[i >> 1] & 15) >= 8 && characters[i + 1]) characters[i + 1] = characters[i + 1].toUpperCase();
-	}
-	const result = `0x${characters.join("")}`;
-	checksum$1.set(address, result);
-	return result;
-}
-/**
-* Checks if the given address is a valid {@link ox#Address.Address}.
-*
-* @example
-* ```ts twoslash
-* import { Address } from 'ox'
-*
-* Address.validate('0xA0Cf798816D4b9b9866b5330EEa46a18382f251e')
-* // @log: true
-* ```
-*
-* @example
-* ```ts twoslash
-* import { Address } from 'ox'
-*
-* Address.validate('0xdeadbeef')
-* // @log: false
-* ```
-*
-* @param address - Value to check if it is a valid address.
-* @param options - Check options.
-* @returns Whether the address is a valid address.
-*/
-function validate$2(address, options = {}) {
-	const { strict = true } = options ?? {};
-	try {
-		assert$3(address, { strict });
-		return true;
-	} catch {
-		return false;
-	}
-}
-var addressRegex, InvalidAddressError, InvalidInputError, InvalidChecksumError;
-var init_Address = __esmMin((() => {
-	init_Bytes();
-	init_Caches();
-	init_Errors();
-	init_Hash();
-	addressRegex = /^0x[a-fA-F0-9]{40}$/;
-	InvalidAddressError = class extends BaseError {
-		constructor({ address, cause }) {
-			super(`Address "${address}" is invalid.`, { cause });
-			Object.defineProperty(this, "name", {
-				enumerable: true,
-				configurable: true,
-				writable: true,
-				value: "Address.InvalidAddressError"
-			});
-		}
-	};
-	InvalidInputError = class extends BaseError {
-		constructor() {
-			super("Address is not a 20 byte (40 hexadecimal character) value.");
-			Object.defineProperty(this, "name", {
-				enumerable: true,
-				configurable: true,
-				writable: true,
-				value: "Address.InvalidInputError"
-			});
-		}
-	};
-	InvalidChecksumError = class extends BaseError {
-		constructor() {
-			super("Address does not match its checksum counterpart.");
-			Object.defineProperty(this, "name", {
-				enumerable: true,
-				configurable: true,
-				writable: true,
-				value: "Address.InvalidChecksumError"
-			});
-		}
-	};
-}));
-
-// node_modules/.pnpm/ox@0.14.59_typescript@6.0.3/node_modules/ox/_esm/core/Solidity.js
-var arrayRegex, bytesRegex, integerRegex, maxInt8, maxInt16, maxInt24, maxInt32, maxInt40, maxInt48, maxInt56, maxInt64, maxInt72, maxInt80, maxInt88, maxInt96, maxInt104, maxInt112, maxInt120, maxInt128, maxInt136, maxInt144, maxInt152, maxInt160, maxInt168, maxInt176, maxInt184, maxInt192, maxInt200, maxInt208, maxInt216, maxInt224, maxInt232, maxInt240, maxInt248, maxInt256, minInt8, minInt16, minInt24, minInt32, minInt40, minInt48, minInt56, minInt64, minInt72, minInt80, minInt88, minInt96, minInt104, minInt112, minInt120, minInt128, minInt136, minInt144, minInt152, minInt160, minInt168, minInt176, minInt184, minInt192, minInt200, minInt208, minInt216, minInt224, minInt232, minInt240, minInt248, minInt256, maxUint256;
-var init_Solidity = __esmMin((() => {
-	arrayRegex = /^(.*)\[([0-9]*)\]$/;
-	bytesRegex = /^bytes([1-9]|1[0-9]|2[0-9]|3[0-2])?$/;
-	integerRegex = /^(u?int)(8|16|24|32|40|48|56|64|72|80|88|96|104|112|120|128|136|144|152|160|168|176|184|192|200|208|216|224|232|240|248|256)?$/;
-	maxInt8 = 2n ** (8n - 1n) - 1n;
-	maxInt16 = 2n ** (16n - 1n) - 1n;
-	maxInt24 = 2n ** (24n - 1n) - 1n;
-	maxInt32 = 2n ** (32n - 1n) - 1n;
-	maxInt40 = 2n ** (40n - 1n) - 1n;
-	maxInt48 = 2n ** (48n - 1n) - 1n;
-	maxInt56 = 2n ** (56n - 1n) - 1n;
-	maxInt64 = 2n ** (64n - 1n) - 1n;
-	maxInt72 = 2n ** (72n - 1n) - 1n;
-	maxInt80 = 2n ** (80n - 1n) - 1n;
-	maxInt88 = 2n ** (88n - 1n) - 1n;
-	maxInt96 = 2n ** (96n - 1n) - 1n;
-	maxInt104 = 2n ** (104n - 1n) - 1n;
-	maxInt112 = 2n ** (112n - 1n) - 1n;
-	maxInt120 = 2n ** (120n - 1n) - 1n;
-	maxInt128 = 2n ** (128n - 1n) - 1n;
-	maxInt136 = 2n ** (136n - 1n) - 1n;
-	maxInt144 = 2n ** (144n - 1n) - 1n;
-	maxInt152 = 2n ** (152n - 1n) - 1n;
-	maxInt160 = 2n ** (160n - 1n) - 1n;
-	maxInt168 = 2n ** (168n - 1n) - 1n;
-	maxInt176 = 2n ** (176n - 1n) - 1n;
-	maxInt184 = 2n ** (184n - 1n) - 1n;
-	maxInt192 = 2n ** (192n - 1n) - 1n;
-	maxInt200 = 2n ** (200n - 1n) - 1n;
-	maxInt208 = 2n ** (208n - 1n) - 1n;
-	maxInt216 = 2n ** (216n - 1n) - 1n;
-	maxInt224 = 2n ** (224n - 1n) - 1n;
-	maxInt232 = 2n ** (232n - 1n) - 1n;
-	maxInt240 = 2n ** (240n - 1n) - 1n;
-	maxInt248 = 2n ** (248n - 1n) - 1n;
-	maxInt256 = 2n ** (256n - 1n) - 1n;
-	minInt8 = -(2n ** (8n - 1n));
-	minInt16 = -(2n ** (16n - 1n));
-	minInt24 = -(2n ** (24n - 1n));
-	minInt32 = -(2n ** (32n - 1n));
-	minInt40 = -(2n ** (40n - 1n));
-	minInt48 = -(2n ** (48n - 1n));
-	minInt56 = -(2n ** (56n - 1n));
-	minInt64 = -(2n ** (64n - 1n));
-	minInt72 = -(2n ** (72n - 1n));
-	minInt80 = -(2n ** (80n - 1n));
-	minInt88 = -(2n ** (88n - 1n));
-	minInt96 = -(2n ** (96n - 1n));
-	minInt104 = -(2n ** (104n - 1n));
-	minInt112 = -(2n ** (112n - 1n));
-	minInt120 = -(2n ** (120n - 1n));
-	minInt128 = -(2n ** (128n - 1n));
-	minInt136 = -(2n ** (136n - 1n));
-	minInt144 = -(2n ** (144n - 1n));
-	minInt152 = -(2n ** (152n - 1n));
-	minInt160 = -(2n ** (160n - 1n));
-	minInt168 = -(2n ** (168n - 1n));
-	minInt176 = -(2n ** (176n - 1n));
-	minInt184 = -(2n ** (184n - 1n));
-	minInt192 = -(2n ** (192n - 1n));
-	minInt200 = -(2n ** (200n - 1n));
-	minInt208 = -(2n ** (208n - 1n));
-	minInt216 = -(2n ** (216n - 1n));
-	minInt224 = -(2n ** (224n - 1n));
-	minInt232 = -(2n ** (232n - 1n));
-	minInt240 = -(2n ** (240n - 1n));
-	minInt248 = -(2n ** (248n - 1n));
-	minInt256 = -(2n ** (256n - 1n));
-	maxUint256 = 2n ** 256n - 1n;
-}));
-
-// node_modules/.pnpm/ox@0.14.59_typescript@6.0.3/node_modules/ox/_esm/core/internal/abiParameters.js
-/** @internal */
-function decodeParameter(cursor, param, options) {
-	const { checksumAddress, staticPosition } = options;
-	const arrayComponents = getArrayComponents(param.type);
-	if (arrayComponents) {
-		const [length, type] = arrayComponents;
-		return decodeArray(cursor, {
-			...param,
-			type
-		}, {
-			checksumAddress,
-			length,
-			staticPosition
-		});
-	}
-	if (param.type === "tuple") return decodeTuple(cursor, param, {
-		checksumAddress,
-		staticPosition
-	});
-	if (param.type === "address") return decodeAddress(cursor, { checksum: checksumAddress });
-	if (param.type === "bool") return decodeBool(cursor);
-	if (param.type.startsWith("bytes")) return decodeBytes(cursor, param, { staticPosition });
-	if (param.type.startsWith("uint") || param.type.startsWith("int")) return decodeNumber(cursor, param);
-	if (param.type === "string") return decodeString(cursor, { staticPosition });
-	throw new InvalidTypeError(param.type);
-}
-/** @internal */
-function decodeAddress(cursor, options = {}) {
-	const { checksum: checksum$2 = false } = options;
-	const value = cursor.readBytes(32);
-	const wrap = (address) => checksum$2 ? checksum(address) : address;
-	return [wrap(fromBytes$1(slice$1(value, -20))), 32];
-}
-/** @internal */
-function decodeArray(cursor, param, options) {
-	const { checksumAddress, length, staticPosition } = options;
-	if (length === null) {
-		const start = staticPosition + toNumber$1(cursor.readBytes(sizeOfOffset));
-		const startOfData = start + sizeOfLength;
-		cursor.setPosition(start);
-		const length = toNumber$1(cursor.readBytes(sizeOfLength));
-		const dynamicChild = hasDynamicChild(param);
-		let consumed = 0;
-		const value = [];
-		for (let i = 0; i < length; ++i) {
-			cursor.setPosition(startOfData + (dynamicChild ? i * 32 : consumed));
-			const [data, consumed_] = decodeParameter(cursor, param, {
-				checksumAddress,
-				staticPosition: startOfData
-			});
-			consumed += consumed_;
-			value.push(data);
-			if (consumed_ === 0) {
-				cursor.assertReadLimit();
-				cursor._touch();
-			}
-		}
-		cursor.setPosition(staticPosition + 32);
-		return [value, 32];
-	}
-	if (hasDynamicChild(param)) {
-		const start = staticPosition + toNumber$1(cursor.readBytes(sizeOfOffset));
-		const value = [];
-		for (let i = 0; i < length; ++i) {
-			cursor.setPosition(start + i * 32);
-			const [data] = decodeParameter(cursor, param, {
-				checksumAddress,
-				staticPosition: start
-			});
-			value.push(data);
-		}
-		cursor.setPosition(staticPosition + 32);
-		return [value, 32];
-	}
-	let consumed = 0;
-	const value = [];
-	for (let i = 0; i < length; ++i) {
-		const [data, consumed_] = decodeParameter(cursor, param, {
-			checksumAddress,
-			staticPosition: staticPosition + consumed
-		});
-		consumed += consumed_;
-		value.push(data);
-		if (consumed_ === 0) {
-			cursor.assertReadLimit();
-			cursor._touch();
-		}
-	}
-	return [value, consumed];
-}
-/** @internal */
-function decodeBool(cursor) {
-	return [toBoolean(cursor.readBytes(32), { size: 32 }), 32];
-}
-/** @internal */
-function decodeBytes(cursor, param, { staticPosition }) {
-	const [_, size] = param.type.split("bytes");
-	if (!size) {
-		const offset = toNumber$1(cursor.readBytes(32));
-		cursor.setPosition(staticPosition + offset);
-		const length = toNumber$1(cursor.readBytes(32));
-		if (length === 0) {
-			cursor.setPosition(staticPosition + 32);
-			return ["0x", 32];
-		}
-		const data = cursor.readBytes(length);
-		cursor.setPosition(staticPosition + 32);
-		return [fromBytes$1(data), 32];
-	}
-	return [fromBytes$1(cursor.readBytes(Number.parseInt(size, 10), 32)), 32];
-}
-/** @internal */
-function decodeNumber(cursor, param) {
-	const signed = param.type.startsWith("int");
-	const size = Number.parseInt(param.type.split("int")[1] || "256", 10);
-	const value = cursor.readBytes(32);
-	return [size > 48 ? toBigInt$2(value, { signed }) : toNumber$1(value, { signed }), 32];
-}
-/** @internal */
-function decodeTuple(cursor, param, options) {
-	const { checksumAddress, staticPosition } = options;
-	const hasUnnamedChild = param.components.length === 0 || param.components.some(({ name }) => !name);
-	const value = hasUnnamedChild ? [] : {};
-	let consumed = 0;
-	if (hasDynamicChild(param)) {
-		const start = staticPosition + toNumber$1(cursor.readBytes(sizeOfOffset));
-		for (let i = 0; i < param.components.length; ++i) {
-			const component = param.components[i];
-			cursor.setPosition(start + consumed);
-			const [data, consumed_] = decodeParameter(cursor, component, {
-				checksumAddress,
-				staticPosition: start
-			});
-			consumed += consumed_;
-			value[hasUnnamedChild ? i : component?.name] = data;
-		}
-		cursor.setPosition(staticPosition + 32);
-		return [value, 32];
-	}
-	for (let i = 0; i < param.components.length; ++i) {
-		const component = param.components[i];
-		const [data, consumed_] = decodeParameter(cursor, component, {
-			checksumAddress,
-			staticPosition
-		});
-		value[hasUnnamedChild ? i : component?.name] = data;
-		consumed += consumed_;
-	}
-	return [value, consumed];
-}
-/** @internal */
-function decodeString(cursor, { staticPosition }) {
-	const start = staticPosition + toNumber$1(cursor.readBytes(32));
-	cursor.setPosition(start);
-	const length = toNumber$1(cursor.readBytes(32));
-	if (length === 0) {
-		cursor.setPosition(staticPosition + 32);
-		return ["", 32];
-	}
-	const data = cursor.readBytes(length, 32);
-	const value = toString$1(trimLeft(data));
-	cursor.setPosition(staticPosition + 32);
-	return [value, 32];
-}
-/** @internal */
-function prepareParameters({ checksumAddress, parameters, values }) {
-	const preparedParameters = [];
-	for (let i = 0; i < parameters.length; i++) preparedParameters.push(prepareParameter({
-		checksumAddress,
-		parameter: parameters[i],
-		value: values[i]
-	}));
-	return preparedParameters;
-}
-/** @internal */
-function prepareParameter({ checksumAddress = false, parameter: parameter_, value }) {
-	const parameter = parameter_;
-	const arrayComponents = getArrayComponents(parameter.type);
-	if (arrayComponents) {
-		const [length, type] = arrayComponents;
-		return encodeArray(value, {
-			checksumAddress,
-			length,
-			parameter: {
-				...parameter,
-				type
-			}
-		});
-	}
-	if (parameter.type === "tuple") return encodeTuple(value, {
-		checksumAddress,
-		parameter
-	});
-	if (parameter.type === "address") return encodeAddress(value, { checksum: checksumAddress });
-	if (parameter.type === "bool") return encodeBoolean(value);
-	if (parameter.type.startsWith("uint") || parameter.type.startsWith("int")) {
-		const signed = parameter.type.startsWith("int");
-		const [, , size = "256"] = integerRegex.exec(parameter.type) ?? [];
-		return encodeNumber(value, {
-			signed,
-			size: Number(size)
-		});
-	}
-	if (parameter.type.startsWith("bytes")) return encodeBytes(value, { type: parameter.type });
-	if (parameter.type === "string") return encodeString(value);
-	throw new InvalidTypeError(parameter.type);
-}
-/** @internal */
-function encode$2(preparedParameters) {
-	let staticSize = 0;
-	for (let i = 0; i < preparedParameters.length; i++) {
-		const { dynamic, encoded } = preparedParameters[i];
-		if (dynamic) staticSize += 32;
-		else staticSize += size$1(encoded);
-	}
-	const staticParameters = [];
-	const dynamicParameters = [];
-	let dynamicSize = 0;
-	for (let i = 0; i < preparedParameters.length; i++) {
-		const { dynamic, encoded } = preparedParameters[i];
-		if (dynamic) {
-			staticParameters.push(fromNumber(staticSize + dynamicSize, { size: 32 }));
-			dynamicParameters.push(encoded);
-			dynamicSize += size$1(encoded);
-		} else staticParameters.push(encoded);
-	}
-	return concat(...staticParameters, ...dynamicParameters);
-}
-/** @internal */
-function encodeAddress(value, options) {
-	const { checksum = false } = options;
-	assert$3(value, { strict: checksum });
-	return {
-		dynamic: false,
-		encoded: padLeft(value.toLowerCase())
-	};
-}
-/** @internal */
-function encodeArray(value, options) {
-	const { checksumAddress, length, parameter } = options;
-	const dynamic = length === null;
-	if (!Array.isArray(value)) throw new InvalidArrayError(value);
-	if (!dynamic && value.length !== length) throw new ArrayLengthMismatchError({
-		expectedLength: length,
-		givenLength: value.length,
-		type: `${parameter.type}[${length}]`
-	});
-	let dynamicChild = value.length === 0 && hasDynamicChild(parameter);
-	const preparedParameters = [];
-	for (let i = 0; i < value.length; i++) {
-		const preparedParam = prepareParameter({
-			checksumAddress,
-			parameter,
-			value: value[i]
-		});
-		if (preparedParam.dynamic) dynamicChild = true;
-		preparedParameters.push(preparedParam);
-	}
-	if (dynamic || dynamicChild) {
-		const data = encode$2(preparedParameters);
-		if (dynamic) {
-			const length = fromNumber(preparedParameters.length, { size: 32 });
-			return {
-				dynamic: true,
-				encoded: preparedParameters.length > 0 ? concat(length, data) : length
-			};
-		}
-		if (dynamicChild) return {
-			dynamic: true,
-			encoded: data
-		};
-	}
-	return {
-		dynamic: false,
-		encoded: concat(...preparedParameters.map(({ encoded }) => encoded))
-	};
-}
-/** @internal */
-function encodeBytes(value, { type }) {
-	const [, parametersize] = type.split("bytes");
-	const bytesSize = size$1(value);
-	if (!parametersize) {
-		let value_ = value;
-		if (bytesSize % 32 !== 0) value_ = padRight(value_, Math.ceil((value.length - 2) / 2 / 32) * 32);
-		return {
-			dynamic: true,
-			encoded: concat(padLeft(fromNumber(bytesSize, { size: 32 })), value_)
-		};
-	}
-	if (bytesSize !== Number.parseInt(parametersize, 10)) throw new BytesSizeMismatchError({
-		expectedSize: Number.parseInt(parametersize, 10),
-		value
-	});
-	return {
-		dynamic: false,
-		encoded: padRight(value)
-	};
-}
-/** @internal */
-function encodeBoolean(value) {
-	if (typeof value !== "boolean") throw new BaseError(`Invalid boolean value: "${value}" (type: ${typeof value}). Expected: \`true\` or \`false\`.`);
-	return {
-		dynamic: false,
-		encoded: padLeft(fromBoolean(value))
-	};
-}
-/** @internal */
-function encodeNumber(value, { signed, size }) {
-	if (typeof size === "number") {
-		const max = 2n ** (BigInt(size) - (signed ? 1n : 0n)) - 1n;
-		const min = signed ? -max - 1n : 0n;
-		if (value > max || value < min) throw new IntegerOutOfRangeError({
-			max: max.toString(),
-			min: min.toString(),
-			signed,
-			size: size / 8,
-			value: value.toString()
-		});
-	}
-	return {
-		dynamic: false,
-		encoded: fromNumber(value, {
-			size: 32,
-			signed
-		})
-	};
-}
-/** @internal */
-function encodeString(value) {
-	const hexValue = fromString$1(value);
-	const partsLength = Math.ceil(size$1(hexValue) / 32);
-	const parts = [];
-	for (let i = 0; i < partsLength; i++) parts.push(padRight(slice(hexValue, i * 32, (i + 1) * 32)));
-	return {
-		dynamic: true,
-		encoded: concat(padRight(fromNumber(size$1(hexValue), { size: 32 })), ...parts)
-	};
-}
-/** @internal */
-function encodeTuple(value, options) {
-	const { checksumAddress, parameter } = options;
-	let dynamic = false;
-	const preparedParameters = [];
-	for (let i = 0; i < parameter.components.length; i++) {
-		const param_ = parameter.components[i];
-		const preparedParam = prepareParameter({
-			checksumAddress,
-			parameter: param_,
-			value: value[Array.isArray(value) ? i : param_.name]
-		});
-		preparedParameters.push(preparedParam);
-		if (preparedParam.dynamic) dynamic = true;
-	}
-	return {
-		dynamic,
-		encoded: dynamic ? encode$2(preparedParameters) : concat(...preparedParameters.map(({ encoded }) => encoded))
-	};
-}
-/** @internal */
-function getArrayComponents(type) {
-	const matches = type.match(/^(.*)\[(\d+)?\]$/);
-	return matches ? [matches[2] ? Number(matches[2]) : null, matches[1]] : void 0;
-}
-/** @internal */
-function hasDynamicChild(param) {
-	const { type } = param;
-	if (type === "string") return true;
-	if (type === "bytes") return true;
-	if (type.endsWith("[]")) return true;
-	if (type === "tuple") return param.components?.some(hasDynamicChild);
-	const arrayComponents = getArrayComponents(param.type);
-	if (arrayComponents && hasDynamicChild({
-		...param,
-		type: arrayComponents[1]
-	})) return true;
-	return false;
-}
-var sizeOfLength, sizeOfOffset;
-var init_abiParameters = __esmMin((() => {
-	init_AbiParameters();
-	init_Address();
-	init_Bytes();
-	init_Errors();
-	init_Hex();
-	init_Solidity();
-	sizeOfLength = 32;
-	sizeOfOffset = 32;
-}));
-
-// node_modules/.pnpm/ox@0.14.59_typescript@6.0.3/node_modules/ox/_esm/core/internal/cursor.js
-/** @internal */
-function create(bytes, { recursiveReadLimit = 8192 } = {}) {
-	const cursor = Object.create(staticCursor);
-	cursor.bytes = bytes;
-	cursor.dataView = new DataView(bytes.buffer, bytes.byteOffset, bytes.byteLength);
-	cursor.positionReadCount = /* @__PURE__ */ new Map();
-	cursor.recursiveReadLimit = recursiveReadLimit;
-	return cursor;
-}
-var staticCursor, NegativeOffsetError, PositionOutOfBoundsError, RecursiveReadLimitExceededError;
-var init_cursor = __esmMin((() => {
-	init_Errors();
-	staticCursor = {
-		bytes: /* @__PURE__ */ new Uint8Array(),
-		dataView: /* @__PURE__ */ new DataView(/* @__PURE__ */ new ArrayBuffer(0)),
-		position: 0,
-		positionReadCount: /* @__PURE__ */ new Map(),
-		recursiveReadCount: 0,
-		recursiveReadLimit: Number.POSITIVE_INFINITY,
-		assertReadLimit() {
-			if (this.recursiveReadCount >= this.recursiveReadLimit) throw new RecursiveReadLimitExceededError({
-				count: this.recursiveReadCount + 1,
-				limit: this.recursiveReadLimit
-			});
-		},
-		assertPosition(position) {
-			if (position < 0 || position > this.bytes.length - 1) throw new PositionOutOfBoundsError({
-				length: this.bytes.length,
-				position
-			});
-		},
-		decrementPosition(offset) {
-			if (offset < 0) throw new NegativeOffsetError({ offset });
-			const position = this.position - offset;
-			this.assertPosition(position);
-			this.position = position;
-		},
-		getReadCount(position) {
-			return this.positionReadCount.get(position || this.position) || 0;
-		},
-		incrementPosition(offset) {
-			if (offset < 0) throw new NegativeOffsetError({ offset });
-			const position = this.position + offset;
-			this.assertPosition(position);
-			this.position = position;
-		},
-		inspectByte(position_) {
-			const position = position_ ?? this.position;
-			this.assertPosition(position);
-			return this.bytes[position];
-		},
-		inspectBytes(length, position_) {
-			const position = position_ ?? this.position;
-			this.assertPosition(position + length - 1);
-			return this.bytes.subarray(position, position + length);
-		},
-		inspectUint8(position_) {
-			const position = position_ ?? this.position;
-			this.assertPosition(position);
-			return this.bytes[position];
-		},
-		inspectUint16(position_) {
-			const position = position_ ?? this.position;
-			this.assertPosition(position + 1);
-			return this.dataView.getUint16(position);
-		},
-		inspectUint24(position_) {
-			const position = position_ ?? this.position;
-			this.assertPosition(position + 2);
-			return (this.dataView.getUint16(position) << 8) + this.dataView.getUint8(position + 2);
-		},
-		inspectUint32(position_) {
-			const position = position_ ?? this.position;
-			this.assertPosition(position + 3);
-			return this.dataView.getUint32(position);
-		},
-		pushByte(byte) {
-			this.assertPosition(this.position);
-			this.bytes[this.position] = byte;
-			this.position++;
-		},
-		pushBytes(bytes) {
-			this.assertPosition(this.position + bytes.length - 1);
-			this.bytes.set(bytes, this.position);
-			this.position += bytes.length;
-		},
-		pushUint8(value) {
-			this.assertPosition(this.position);
-			this.bytes[this.position] = value;
-			this.position++;
-		},
-		pushUint16(value) {
-			this.assertPosition(this.position + 1);
-			this.dataView.setUint16(this.position, value);
-			this.position += 2;
-		},
-		pushUint24(value) {
-			this.assertPosition(this.position + 2);
-			this.dataView.setUint16(this.position, value >> 8);
-			this.dataView.setUint8(this.position + 2, value & 255);
-			this.position += 3;
-		},
-		pushUint32(value) {
-			this.assertPosition(this.position + 3);
-			this.dataView.setUint32(this.position, value);
-			this.position += 4;
-		},
-		readByte() {
-			this.assertReadLimit();
-			this._touch();
-			const value = this.inspectByte();
-			this.position++;
-			return value;
-		},
-		readBytes(length, size) {
-			this.assertReadLimit();
-			this._touch();
-			const value = this.inspectBytes(length);
-			this.position += size ?? length;
-			return value;
-		},
-		readUint8() {
-			this.assertReadLimit();
-			this._touch();
-			const value = this.inspectUint8();
-			this.position += 1;
-			return value;
-		},
-		readUint16() {
-			this.assertReadLimit();
-			this._touch();
-			const value = this.inspectUint16();
-			this.position += 2;
-			return value;
-		},
-		readUint24() {
-			this.assertReadLimit();
-			this._touch();
-			const value = this.inspectUint24();
-			this.position += 3;
-			return value;
-		},
-		readUint32() {
-			this.assertReadLimit();
-			this._touch();
-			const value = this.inspectUint32();
-			this.position += 4;
-			return value;
-		},
-		get remaining() {
-			return this.bytes.length - this.position;
-		},
-		setPosition(position) {
-			const oldPosition = this.position;
-			this.assertPosition(position);
-			this.position = position;
-			return () => this.position = oldPosition;
-		},
-		_touch() {
-			if (this.recursiveReadLimit === Number.POSITIVE_INFINITY) return;
-			const count = this.getReadCount();
-			this.positionReadCount.set(this.position, count + 1);
-			if (count > 0) this.recursiveReadCount++;
-		}
-	};
-	NegativeOffsetError = class extends BaseError {
-		constructor({ offset }) {
-			super(`Offset \`${offset}\` cannot be negative.`);
-			Object.defineProperty(this, "name", {
-				enumerable: true,
-				configurable: true,
-				writable: true,
-				value: "Cursor.NegativeOffsetError"
-			});
-		}
-	};
-	PositionOutOfBoundsError = class extends BaseError {
-		constructor({ length, position }) {
-			super(`Position \`${position}\` is out of bounds (\`0 < position < ${length}\`).`);
-			Object.defineProperty(this, "name", {
-				enumerable: true,
-				configurable: true,
-				writable: true,
-				value: "Cursor.PositionOutOfBoundsError"
-			});
-		}
-	};
-	RecursiveReadLimitExceededError = class extends BaseError {
-		constructor({ count, limit }) {
-			super(`Recursive read limit of \`${limit}\` exceeded (recursive read count: \`${count}\`).`);
-			Object.defineProperty(this, "name", {
-				enumerable: true,
-				configurable: true,
-				writable: true,
-				value: "Cursor.RecursiveReadLimitExceededError"
-			});
-		}
-	};
-}));
-
-// node_modules/.pnpm/ox@0.14.59_typescript@6.0.3/node_modules/ox/_esm/core/AbiParameters.js
-function decode(parameters, data, options = {}) {
-	const { as = "Array", checksumAddress = false } = options;
-	const bytes = typeof data === "string" ? fromHex(data) : data;
-	const cursor = create(bytes);
-	if (size$2(bytes) === 0 && parameters.length > 0) throw new ZeroDataError();
-	if (size$2(bytes) && size$2(bytes) < 32) throw new DataSizeTooSmallError({
-		data: typeof data === "string" ? data : fromBytes$1(data),
-		parameters,
-		size: size$2(bytes)
-	});
-	let consumed = 0;
-	const values = as === "Array" ? [] : {};
-	for (let i = 0; i < parameters.length; ++i) {
-		const param = parameters[i];
-		if (consumed < bytes.length) cursor.setPosition(consumed);
-		const [data, consumed_] = decodeParameter(cursor, param, {
-			checksumAddress,
-			staticPosition: 0
-		});
-		consumed += consumed_;
-		if (as === "Array") values.push(data);
-		else values[param.name ?? i] = data;
-	}
-	return values;
-}
-/**
-* Encodes primitive values into ABI encoded data as per the [Application Binary Interface (ABI) Specification](https://docs.soliditylang.org/en/latest/abi-spec).
-*
-* @example
-* ```ts twoslash
-* import { AbiParameters } from 'ox'
-*
-* const data = AbiParameters.encode(
-*   AbiParameters.from(['string', 'uint', 'bool']),
-*   ['wagmi', 420n, true],
-* )
-* ```
-*
-* @example
-* ### JSON Parameters
-*
-* Specify **JSON ABI** Parameters as schema:
-*
-* ```ts twoslash
-* import { AbiParameters } from 'ox'
-*
-* const data = AbiParameters.encode(
-*   [
-*     { type: 'string', name: 'name' },
-*     { type: 'uint', name: 'age' },
-*     { type: 'bool', name: 'isOwner' },
-*   ],
-*   ['wagmi', 420n, true],
-* )
-* ```
-*
-* @param parameters - The set of ABI parameters to encode, in the shape of the `inputs` or `outputs` attribute of an ABI Item. These parameters must include valid [ABI types](https://docs.soliditylang.org/en/latest/types.html).
-* @param values - The set of primitive values that correspond to the ABI types defined in `parameters`.
-* @returns ABI encoded data.
-*/
-function encode$1(parameters, values, options) {
-	const { checksumAddress = false } = options ?? {};
-	if (parameters.length !== values.length) throw new LengthMismatchError({
-		expectedLength: parameters.length,
-		givenLength: values.length
-	});
-	const preparedParameters = prepareParameters({
-		checksumAddress,
-		parameters,
-		values
-	});
-	const data = encode$2(preparedParameters);
-	if (data.length === 0) return "0x";
-	return data;
-}
-/**
-* Encodes an array of primitive values to a [packed ABI encoding](https://docs.soliditylang.org/en/latest/abi-spec.html#non-standard-packed-mode).
-*
-* @example
-* ```ts twoslash
-* import { AbiParameters } from 'ox'
-*
-* const encoded = AbiParameters.encodePacked(
-*   ['address', 'string'],
-*   ['0xd8da6bf26964af9d7eed9e03e53415d37aa96045', 'hello world'],
-* )
-* // @log: '0xd8da6bf26964af9d7eed9e03e53415d37aa9604568656c6c6f20776f726c64'
-* ```
-*
-* @param types - Set of ABI types to pack encode.
-* @param values - The set of primitive values that correspond to the ABI types defined in `types`.
-* @returns The encoded packed data.
-*/
-function encodePacked(types, values) {
-	if (types.length !== values.length) throw new LengthMismatchError({
-		expectedLength: types.length,
-		givenLength: values.length
-	});
-	const data = [];
-	for (let i = 0; i < types.length; i++) {
-		const type = types[i];
-		const value = values[i];
-		data.push(encodePacked.encode(type, value));
-	}
-	return concat(...data);
-}
-/**
-* Formats {@link ox#AbiParameters.AbiParameters} into **Human Readable ABI Parameters**.
-*
-* @example
-* ```ts twoslash
-* import { AbiParameters } from 'ox'
-*
-* const formatted = AbiParameters.format([
-*   {
-*     name: 'spender',
-*     type: 'address',
-*   },
-*   {
-*     name: 'amount',
-*     type: 'uint256',
-*   },
-* ])
-*
-* formatted
-* //    ^?
-*
-*
-* ```
-*
-* @param parameters - The ABI Parameters to format.
-* @returns The formatted ABI Parameters  .
-*/
-function format$1(parameters) {
-	return formatAbiParameters(parameters);
-}
-/**
-* Parses arbitrary **JSON ABI Parameters** or **Human Readable ABI Parameters** into typed {@link ox#AbiParameters.AbiParameters}.
-*
-* @example
-* ### JSON Parameters
-*
-* ```ts twoslash
-* import { AbiParameters } from 'ox'
-*
-* const parameters = AbiParameters.from([
-*   {
-*     name: 'spender',
-*     type: 'address',
-*   },
-*   {
-*     name: 'amount',
-*     type: 'uint256',
-*   },
-* ])
-*
-* parameters
-* //^?
-*
-*
-*
-*
-*
-*
-*
-* ```
-*
-* @example
-* ### Human Readable Parameters
-*
-* Human Readable ABI Parameters can be parsed into a typed {@link ox#AbiParameters.AbiParameters}:
-*
-* ```ts twoslash
-* import { AbiParameters } from 'ox'
-*
-* const parameters = AbiParameters.from('address spender, uint256 amount')
-*
-* parameters
-* //^?
-*
-*
-*
-*
-*
-*
-*
-* ```
-*
-* @example
-* It is possible to specify `struct`s along with your definitions:
-*
-* ```ts twoslash
-* import { AbiParameters } from 'ox'
-*
-* const parameters = AbiParameters.from([
-*   'struct Foo { address spender; uint256 amount; }', // [!code hl]
-*   'Foo foo, address bar',
-* ])
-*
-* parameters
-* //^?
-*
-*
-*
-*
-*
-*
-*
-*
-*
-*
-*
-*
-* ```
-*
-*
-*
-* @param parameters - The ABI Parameters to parse.
-* @returns The typed ABI Parameters.
-*/
-function from$5(parameters) {
-	if (Array.isArray(parameters) && typeof parameters[0] === "string") return parseAbiParameters(parameters);
-	if (typeof parameters === "string") return parseAbiParameters(parameters);
-	return parameters;
-}
-var DataSizeTooSmallError, ZeroDataError, ArrayLengthMismatchError, BytesSizeMismatchError, LengthMismatchError, InvalidArrayError, InvalidTypeError;
-var init_AbiParameters = __esmMin((() => {
-	init_exports();
-	init_Address();
-	init_Bytes();
-	init_Errors();
-	init_Hex();
-	init_abiParameters();
-	init_cursor();
-	init_Solidity();
-	(function(encodePacked) {
-		function encode(type, value, isArray = false) {
-			if (type === "address") {
-				const address = value;
-				assert$3(address);
-				return padLeft(address.toLowerCase(), isArray ? 32 : 0);
-			}
-			if (type === "string") return fromString$1(value);
-			if (type === "bytes") return value;
-			if (type === "bool") return padLeft(fromBoolean(value), isArray ? 32 : 1);
-			const intMatch = type.match(integerRegex);
-			if (intMatch) {
-				const [_type, baseType, bits = "256"] = intMatch;
-				const size = Number.parseInt(bits, 10) / 8;
-				return fromNumber(value, {
-					size: isArray ? 32 : size,
-					signed: baseType === "int"
-				});
-			}
-			const bytesMatch = type.match(bytesRegex);
-			if (bytesMatch) {
-				const [_type, size] = bytesMatch;
-				if (Number.parseInt(size, 10) !== (value.length - 2) / 2) throw new BytesSizeMismatchError({
-					expectedSize: Number.parseInt(size, 10),
-					value
-				});
-				return padRight(value, isArray ? 32 : 0);
-			}
-			const arrayMatch = type.match(arrayRegex);
-			if (arrayMatch && Array.isArray(value)) {
-				const [_type, childType] = arrayMatch;
-				const data = [];
-				for (let i = 0; i < value.length; i++) data.push(encode(childType, value[i], true));
-				if (data.length === 0) return "0x";
-				return concat(...data);
-			}
-			throw new InvalidTypeError(type);
-		}
-		encodePacked.encode = encode;
-	})(encodePacked || (encodePacked = {}));
-	DataSizeTooSmallError = class extends BaseError {
-		constructor({ data, parameters, size }) {
-			super(`Data size of ${size} bytes is too small for given parameters.`, { metaMessages: [`Params: (${formatAbiParameters(parameters)})`, `Data:   ${data} (${size} bytes)`] });
-			Object.defineProperty(this, "name", {
-				enumerable: true,
-				configurable: true,
-				writable: true,
-				value: "AbiParameters.DataSizeTooSmallError"
-			});
-		}
-	};
-	ZeroDataError = class extends BaseError {
-		constructor() {
-			super("Cannot decode zero data (\"0x\") with ABI parameters.");
-			Object.defineProperty(this, "name", {
-				enumerable: true,
-				configurable: true,
-				writable: true,
-				value: "AbiParameters.ZeroDataError"
-			});
-		}
-	};
-	ArrayLengthMismatchError = class extends BaseError {
-		constructor({ expectedLength, givenLength, type }) {
-			super(`Array length mismatch for type \`${type}\`. Expected: \`${expectedLength}\`. Given: \`${givenLength}\`.`);
-			Object.defineProperty(this, "name", {
-				enumerable: true,
-				configurable: true,
-				writable: true,
-				value: "AbiParameters.ArrayLengthMismatchError"
-			});
-		}
-	};
-	BytesSizeMismatchError = class extends BaseError {
-		constructor({ expectedSize, value }) {
-			super(`Size of bytes "${value}" (bytes${size$1(value)}) does not match expected size (bytes${expectedSize}).`);
-			Object.defineProperty(this, "name", {
-				enumerable: true,
-				configurable: true,
-				writable: true,
-				value: "AbiParameters.BytesSizeMismatchError"
-			});
-		}
-	};
-	LengthMismatchError = class extends BaseError {
-		constructor({ expectedLength, givenLength }) {
-			super([
-				"ABI encoding parameters/values length mismatch.",
-				`Expected length (parameters): ${expectedLength}`,
-				`Given length (values): ${givenLength}`
-			].join("\n"));
-			Object.defineProperty(this, "name", {
-				enumerable: true,
-				configurable: true,
-				writable: true,
-				value: "AbiParameters.LengthMismatchError"
-			});
-		}
-	};
-	InvalidArrayError = class extends BaseError {
-		constructor(value) {
-			super(`Value \`${value}\` is not a valid array.`);
-			Object.defineProperty(this, "name", {
-				enumerable: true,
-				configurable: true,
-				writable: true,
-				value: "AbiParameters.InvalidArrayError"
-			});
-		}
-	};
-	InvalidTypeError = class extends BaseError {
-		constructor(type) {
-			super(`Type \`${type}\` is not a valid ABI Type.`);
-			Object.defineProperty(this, "name", {
-				enumerable: true,
-				configurable: true,
-				writable: true,
-				value: "AbiParameters.InvalidTypeError"
-			});
-		}
-	};
-}));
-
-// node_modules/.pnpm/ox@0.14.59_typescript@6.0.3/node_modules/ox/_esm/core/Signature.js
-/**
-* Asserts that a Signature is valid.
-*
-* @example
-* ```ts twoslash
-* import { Signature } from 'ox'
-*
-* Signature.assert({
-*   r: -49782753348462494199823712700004552394425719014458918871452329774910450607807n,
-*   s: 33726695977844476214676913201140481102225469284307016937915595756355928419768n,
-*   yParity: 1,
-* })
-* // @error: InvalidSignatureRError:
-* // @error: Value `-549...n` is an invalid r value.
-* // @error: r must be a positive integer less than 2^256.
-* ```
-*
-* @param signature - The signature object to assert.
-*/
-function assert$2(signature, options = {}) {
-	const { recovered } = options;
-	if (typeof signature.r === "undefined") throw new MissingPropertiesError({ signature });
-	if (typeof signature.s === "undefined") throw new MissingPropertiesError({ signature });
-	if (recovered && typeof signature.yParity === "undefined") throw new MissingPropertiesError({ signature });
-	if (signature.r < 0n || signature.r > maxUint256) throw new InvalidRError({ value: signature.r });
-	if (signature.s < 0n || signature.s > maxUint256) throw new InvalidSError({ value: signature.s });
-	if (typeof signature.yParity === "number" && signature.yParity !== 0 && signature.yParity !== 1) throw new InvalidYParityError({ value: signature.yParity });
-}
-/**
-* Converts a {@link ox#Signature.Rpc} into a {@link ox#Signature.Signature}.
-*
-* @example
-* ```ts twoslash
-* import { Signature } from 'ox'
-*
-* const signature = Signature.fromRpc({
-*   r: '0x635dc2033e60185bb36709c29c75d64ea51dfbd91c32ef4be198e4ceb169fb4d',
-*   s: '0x50c2667ac4c771072746acfdcf1f1483336dcca8bd2df47cd83175dbe60f0540',
-*   yParity: '0x0',
-* })
-* ```
-*
-* @param signature - The {@link ox#Signature.Rpc} to convert.
-* @returns The converted {@link ox#Signature.Signature}.
-*/
-function fromRpc$1(signature) {
-	const yParity = (() => {
-		const v = signature.v ? Number(signature.v) : void 0;
-		let yParity = signature.yParity ? Number(signature.yParity) : void 0;
-		if (typeof v === "number" && typeof yParity !== "number") yParity = vToYParity(v);
-		if (typeof yParity !== "number") throw new InvalidYParityError({ value: signature.yParity });
-		return yParity;
-	})();
-	return {
-		r: BigInt(signature.r),
-		s: BigInt(signature.s),
-		yParity
-	};
-}
-/**
-* Converts a ECDSA `v` value to a `yParity` value.
-*
-* @example
-* ```ts twoslash
-* import { Signature } from 'ox'
-*
-* const yParity = Signature.vToYParity(28)
-* // @log: 1
-* ```
-*
-* @param v - The ECDSA `v` value to convert.
-* @returns The `yParity` value.
-*/
-function vToYParity(v) {
-	if (v === 0 || v === 27) return 0;
-	if (v === 1 || v === 28) return 1;
-	if (v >= 35) return v % 2 === 0 ? 1 : 0;
-	throw new InvalidVError({ value: v });
-}
-var InvalidSerializedSizeError, MissingPropertiesError, InvalidRError, InvalidSError, InvalidYParityError, InvalidVError;
-var init_Signature = __esmMin((() => {
-	init_Errors();
-	init_Hex();
-	init_Json();
-	init_Solidity();
-	InvalidSerializedSizeError = class extends BaseError {
-		constructor({ signature }) {
-			super(`Value \`${signature}\` is an invalid signature size.`, { metaMessages: ["Expected: 64 bytes or 65 bytes.", `Received ${size$1(from$6(signature))} bytes.`] });
-			Object.defineProperty(this, "name", {
-				enumerable: true,
-				configurable: true,
-				writable: true,
-				value: "Signature.InvalidSerializedSizeError"
-			});
-		}
-	};
-	MissingPropertiesError = class extends BaseError {
-		constructor({ signature }) {
-			super(`Signature \`${stringify$1(signature)}\` is missing either an \`r\`, \`s\`, or \`yParity\` property.`);
-			Object.defineProperty(this, "name", {
-				enumerable: true,
-				configurable: true,
-				writable: true,
-				value: "Signature.MissingPropertiesError"
-			});
-		}
-	};
-	InvalidRError = class extends BaseError {
-		constructor({ value }) {
-			super(`Value \`${value}\` is an invalid r value. r must be a positive integer less than 2^256.`);
-			Object.defineProperty(this, "name", {
-				enumerable: true,
-				configurable: true,
-				writable: true,
-				value: "Signature.InvalidRError"
-			});
-		}
-	};
-	InvalidSError = class extends BaseError {
-		constructor({ value }) {
-			super(`Value \`${value}\` is an invalid s value. s must be a positive integer less than 2^256.`);
-			Object.defineProperty(this, "name", {
-				enumerable: true,
-				configurable: true,
-				writable: true,
-				value: "Signature.InvalidSError"
-			});
-		}
-	};
-	InvalidYParityError = class extends BaseError {
-		constructor({ value }) {
-			super(`Value \`${value}\` is an invalid y-parity value. Y-parity must be 0 or 1.`);
-			Object.defineProperty(this, "name", {
-				enumerable: true,
-				configurable: true,
-				writable: true,
-				value: "Signature.InvalidYParityError"
-			});
-		}
-	};
-	InvalidVError = class extends BaseError {
-		constructor({ value }) {
-			super(`Value \`${value}\` is an invalid v value. v must be 27, 28 or >=35.`);
-			Object.defineProperty(this, "name", {
-				enumerable: true,
-				configurable: true,
-				writable: true,
-				value: "Signature.InvalidVError"
-			});
-		}
-	};
-}));
-
-// node_modules/.pnpm/ox@0.14.59_typescript@6.0.3/node_modules/ox/_esm/core/Authorization.js
-/**
-* Converts an [EIP-7702](https://eips.ethereum.org/EIPS/eip-7702) Authorization object into a typed {@link ox#Authorization.Authorization}.
-*
-* @example
-* An Authorization can be instantiated from an [EIP-7702](https://eips.ethereum.org/EIPS/eip-7702) Authorization tuple in object format.
-*
-* ```ts twoslash
-* import { Authorization } from 'ox'
-*
-* const authorization = Authorization.from({
-*   address: '0x1234567890abcdef1234567890abcdef12345678',
-*   chainId: 1,
-*   nonce: 69n,
-* })
-* ```
-*
-* @example
-* ### Attaching Signatures
-*
-* A {@link ox#Signature.Signature} can be attached with the `signature` option. The example below demonstrates signing
-* an Authorization with {@link ox#Secp256k1.(sign:function)}.
-*
-* ```ts twoslash
-* import { Authorization, Secp256k1 } from 'ox'
-*
-* const authorization = Authorization.from({
-*   address: '0xbe95c3f554e9fc85ec51be69a3d807a0d55bcf2c',
-*   chainId: 1,
-*   nonce: 40n,
-* })
-*
-* const signature = Secp256k1.sign({
-*   payload: Authorization.getSignPayload(authorization),
-*   privateKey: '0x...',
-* })
-*
-* const authorization_signed = Authorization.from(authorization, { signature }) // [!code focus]
-* ```
-*
-* @param authorization - An [EIP-7702](https://eips.ethereum.org/EIPS/eip-7702) Authorization tuple in object format.
-* @param options - Authorization options.
-* @returns The {@link ox#Authorization.Authorization}.
-*/
-function from$4(authorization, options = {}) {
-	if (typeof authorization.chainId === "string") return fromRpc(authorization);
-	return {
-		...authorization,
-		...options.signature
-	};
-}
-/**
-* Converts an {@link ox#Authorization.Rpc} to an {@link ox#Authorization.Authorization}.
-*
-* @example
-* ```ts twoslash
-* import { Authorization } from 'ox'
-*
-* const authorization = Authorization.fromRpc({
-*   address: '0x0000000000000000000000000000000000000000',
-*   chainId: '0x1',
-*   nonce: '0x1',
-*   r: '0x635dc2033e60185bb36709c29c75d64ea51dfbd91c32ef4be198e4ceb169fb4d',
-*   s: '0x50c2667ac4c771072746acfdcf1f1483336dcca8bd2df47cd83175dbe60f0540',
-*   yParity: '0x0',
-* })
-* ```
-*
-* @param authorization - The RPC-formatted Authorization.
-* @returns A signed {@link ox#Authorization.Authorization}.
-*/
-function fromRpc(authorization) {
-	const { address, chainId, nonce } = authorization;
-	const signature = fromRpc$1(authorization);
-	assert$2({
-		r: signature.r,
-		s: signature.s
-	});
-	assertYParity(signature.yParity);
-	return {
-		address,
-		chainId: Number(chainId),
-		nonce: BigInt(nonce),
-		...signature
-	};
-}
-function assertYParity(yParity) {
-	if (Number.isInteger(yParity) && yParity >= 0 && yParity < 256) return;
-	throw new IntegerOutOfRangeError({
-		max: "255",
-		min: "0",
-		signed: false,
-		size: 1,
-		value: `${yParity}`
-	});
-}
-var init_Authorization = __esmMin((() => {
-	init_Hex();
-	init_Signature();
-}));
-
-// node_modules/.pnpm/ox@0.14.59_typescript@6.0.3/node_modules/ox/_esm/erc8010/SignatureErc8010.js
-/**
-* Asserts that the wrapped signature is valid.
-*
-* @example
-* ```ts twoslash
-* import { SignatureErc8010 } from 'ox/erc8010'
-*
-* SignatureErc8010.assert('0xdeadbeef')
-* // @error: InvalidWrappedSignatureError: Value `0xdeadbeef` is an invalid ERC-8010 wrapped signature.
-* ```
-*
-* @param value - The value to assert.
-*/
-function assert$1(value) {
-	if (typeof value === "string") {
-		if (slice(value, -32) !== "0x8010801080108010801080108010801080108010801080108010801080108010") throw new InvalidWrappedSignatureError$1(value);
-	} else assert$2(value.authorization);
-}
-/**
-* Unwraps an [ERC-8010 wrapped signature](https://github.com/jxom/ERCs/blob/16f7e3891fff2e1e9c25dea0485497739db8a816/ERCS/erc-8010.md) into its constituent parts.
-*
-* @example
-* ```ts twoslash
-* import { SignatureErc8010 } from 'ox/erc8010'
-*
-* const { authorization, data, signature } = SignatureErc8010.unwrap('0x...')
-* ```
-*
-* @param wrapped - Wrapped signature to unwrap.
-* @returns Unwrapped signature.
-*/
-function unwrap(wrapped) {
-	assert$1(wrapped);
-	const suffixLength = toNumber(slice(wrapped, -64, -32));
-	const suffix = slice(wrapped, -suffixLength - 64, -64);
-	const signature = slice(wrapped, 0, -suffixLength - 64);
-	const [auth, to, data] = decode(suffixParameters, suffix);
-	return {
-		authorization: from$4({
-			address: auth.delegation,
-			chainId: Number(auth.chainId),
-			nonce: auth.nonce,
-			yParity: auth.yParity,
-			r: auth.r,
-			s: auth.s
-		}),
-		signature,
-		...data && data !== "0x" ? {
-			data,
-			to
-		} : {}
-	};
-}
-/**
-* Validates a wrapped signature. Returns `true` if the wrapped signature is valid, `false` otherwise.
-*
-* @example
-* ```ts twoslash
-* import { SignatureErc8010 } from 'ox/erc8010'
-*
-* const valid = SignatureErc8010.validate('0xdeadbeef')
-* // @log: false
-* ```
-*
-* @param value - The value to validate.
-* @returns `true` if the value is valid, `false` otherwise.
-*/
-function validate$1(value) {
-	try {
-		assert$1(value);
-		return true;
-	} catch {
-		return false;
-	}
-}
-var magicBytes$1, suffixParameters, InvalidWrappedSignatureError$1;
-var init_SignatureErc8010 = __esmMin((() => {
-	init_AbiParameters();
-	init_Authorization();
-	init_Errors();
-	init_Hex();
-	init_Signature();
-	magicBytes$1 = "0x8010801080108010801080108010801080108010801080108010801080108010";
-	suffixParameters = from$5("(uint256 chainId, address delegation, uint256 nonce, uint8 yParity, uint256 r, uint256 s), address to, bytes data");
-	InvalidWrappedSignatureError$1 = class extends BaseError {
-		constructor(wrapped) {
-			super(`Value \`${wrapped}\` is an invalid ERC-8010 wrapped signature.`);
-			Object.defineProperty(this, "name", {
-				enumerable: true,
-				configurable: true,
-				writable: true,
-				value: "SignatureErc8010.InvalidWrappedSignatureError"
-			});
-		}
-	};
-}));
-
-// node_modules/.pnpm/ox@0.14.59_typescript@6.0.3/node_modules/ox/_esm/erc8010/index.js
-var init_erc8010 = __esmMin((() => {
-	init_SignatureErc8010();
 }));
 
 // node_modules/.pnpm/viem@2.57.13_typescript@6.0.3/node_modules/viem/_esm/utils/signature/recoverMessageAddress.js
@@ -18749,13 +7916,13 @@ var init_recoverTypedDataAddress = __esmMin((() => {
 * @param parameters - {@link VerifyMessageParameters}
 * @returns Whether or not the signature is valid. {@link VerifyMessageReturnType}
 */
-async function verifyMessage$2({ address, message, signature }) {
+async function verifyMessage$1({ address, message, signature }) {
 	return isAddressEqual(getAddress(address), await recoverMessageAddress({
 		message,
 		signature
 	}));
 }
-var init_verifyMessage$1 = __esmMin((() => {
+var init_verifyMessage = __esmMin((() => {
 	init_getAddress();
 	init_isAddressEqual();
 	init_recoverMessageAddress();
@@ -18772,7 +7939,7 @@ function getSerializedTransactionType(serializedTransaction) {
 	throw new InvalidSerializedTransactionTypeError({ serializedType });
 }
 var init_getSerializedTransactionType = __esmMin((() => {
-	init_transaction$1();
+	init_transaction();
 	init_slice();
 	init_fromHex();
 }));
@@ -19012,10 +8179,10 @@ function parseAccessList(accessList_) {
 	const accessList = [];
 	for (let i = 0; i < accessList_.length; i++) {
 		const [address, storageKeys] = accessList_[i];
-		if (!isAddress(address, { strict: false })) throw new InvalidAddressError$1({ address });
+		if (!isAddress(address, { strict: false })) throw new InvalidAddressError({ address });
 		accessList.push({
 			address,
-			storageKeys: storageKeys.map((key) => isHash(key) ? key : trim$1(key))
+			storageKeys: storageKeys.map((key) => isHash(key) ? key : trim(key))
 		});
 	}
 	return accessList;
@@ -19040,7 +8207,7 @@ function parseAuthorizationList(serializedAuthorizationList) {
 function parseEIP155Signature(transactionArray) {
 	const signature = transactionArray.slice(-3);
 	const yParity = signature[0] === "0x" ? 0n : hexToBigInt(signature[0]);
-	if (yParity !== 0n && yParity !== 1n) throw new InvalidYParityError$1({ yParity });
+	if (yParity !== 0n && yParity !== 1n) throw new InvalidYParityError({ yParity });
 	const v = yParity === 0n ? 27n : 28n;
 	return {
 		r: padHex(signature[1], { size: 32 }),
@@ -19050,8 +8217,8 @@ function parseEIP155Signature(transactionArray) {
 	};
 }
 var init_parseTransaction = __esmMin((() => {
-	init_address$1();
-	init_transaction$1();
+	init_address();
+	init_transaction();
 	init_isAddress();
 	init_toBlobSidecars();
 	init_isHex();
@@ -19062,2185 +8229,6 @@ var init_parseTransaction = __esmMin((() => {
 	init_isHash();
 	init_assertTransaction();
 	init_getSerializedTransactionType();
-}));
-
-// node_modules/.pnpm/viem@2.57.13_typescript@6.0.3/node_modules/viem/_esm/utils/unit/formatUnits.js
-/**
-*  Divides a number by a given exponent of base 10 (10exponent), and formats it into a string representation of the number..
-*
-* - Docs: https://viem.sh/docs/utilities/formatUnits
-*
-* @example
-* import { formatUnits } from 'viem'
-*
-* formatUnits(420000000000n, 9)
-* // '420'
-*/
-function formatUnits(value, decimals) {
-	return format$2(value, decimals);
-}
-var init_formatUnits = __esmMin((() => {
-	init_Value();
-}));
-
-// node_modules/.pnpm/viem@2.57.13_typescript@6.0.3/node_modules/viem/_esm/utils/unit/parseUnits.js
-/**
-* Multiplies a string representation of a number by a given exponent of base 10 (10exponent).
-*
-* - Docs: https://viem.sh/docs/utilities/parseUnits
-*
-* @example
-* import { parseUnits } from 'viem'
-*
-* parseUnits('420', 9)
-* // 420000000000n
-*/
-function parseUnits(value, decimals) {
-	return from$8(value, decimals);
-}
-var init_parseUnits = __esmMin((() => {
-	init_Value();
-}));
-
-// node_modules/.pnpm/viem@2.57.13_typescript@6.0.3/node_modules/viem/_esm/utils/index.js
-var init_utils = __esmMin((() => {
-	init_exports();
-	/* @__PURE__ */ init_parseAccount();
-	init_publicKeyToAddress();
-	init_decodeAbiParameters();
-	init_decodeErrorResult();
-	init_decodeEventLog();
-	init_decodeFunctionData();
-	init_decodeFunctionResult();
-	init_encodeAbiParameters();
-	init_encodeDeployData();
-	init_encodeErrorResult();
-	init_encodeEventTopics();
-	init_encodeFunctionData();
-	init_encodeFunctionResult();
-	init_encodePacked();
-	init_formatAbiItem();
-	init_formatAbiItemWithArgs();
-	init_getAbiItem();
-	init_parseEventLogs();
-	init_getAddress();
-	init_getContractAddress();
-	init_isAddress();
-	init_isAddressEqual();
-	init_hashAuthorization();
-	init_recoverAuthorizationAddress();
-	init_serializeAuthorizationList();
-	init_verifyAuthorization();
-	init_buildRequest();
-	init_ccip();
-	init_abis();
-	init_solidity();
-	init_request();
-	init_localBatchGatewayRequest();
-	init_assertCurrentChain();
-	/* @__PURE__ */ init_defineChain();
-	init_getChainContractAddress();
-	/* @__PURE__ */ init_concat();
-	/* @__PURE__ */ init_isBytes();
-	/* @__PURE__ */ init_isHex();
-	init_pad();
-	init_size();
-	init_slice();
-	/* @__PURE__ */ init_trim$1();
-	init_fromBytes();
-	init_fromHex();
-	init_fromRlp();
-	init_toBytes();
-	init_toHex();
-	init_toRlp();
-	init_getCallError();
-	init_getContractError();
-	init_getEstimateGasError();
-	init_getNodeError();
-	init_getTransactionError();
-	init_block();
-	/* @__PURE__ */ init_extract();
-	/* @__PURE__ */ init_log$1();
-	init_transaction();
-	init_transactionReceipt();
-	init_transactionRequest();
-	/* @__PURE__ */ init_getAction();
-	init_isHash();
-	init_keccak256();
-	init__md();
-	init_utils$4();
-	init_sha256();
-	init_toSignatureHash();
-	init_toEventSelector();
-	init_toSignature();
-	init_toFunctionSelector();
-	init_getTransactionCount();
-	init_lru$1();
-	init_regex();
-	init_http$1();
-	init_createBatchScheduler();
-	init_withTimeout();
-	init_id();
-	init_hashMessage();
-	init_hashTypedData();
-	init_erc8010();
-	init_recoverAddress();
-	init_recoverMessageAddress();
-	init_recoverPublicKey();
-	init_recoverTypedDataAddress();
-	init_verifyMessage$1();
-	init_stringify$1();
-	init_assertRequest();
-	init_assertTransaction();
-	init_getSerializedTransactionType();
-	init_getTransactionType();
-	init_parseTransaction();
-	init_serializeAccessList();
-	init_serializeTransaction();
-	init_typedData();
-	init_formatEther();
-	init_formatGwei();
-	init_formatUnits();
-	init_Value();
-	init_parseUnits();
-}));
-
-// node_modules/.pnpm/viem@2.57.13_typescript@6.0.3/node_modules/viem/_esm/utils/formatters/proof.js
-function formatStorageProof(storageProof) {
-	return storageProof.map((proof) => ({
-		...proof,
-		value: BigInt(proof.value)
-	}));
-}
-function formatProof(proof) {
-	return {
-		...proof,
-		balance: proof.balance ? BigInt(proof.balance) : void 0,
-		nonce: proof.nonce ? hexToNumber$1(proof.nonce) : void 0,
-		storageProof: proof.storageProof ? formatStorageProof(proof.storageProof) : void 0
-	};
-}
-var init_proof = __esmMin((() => {
-	init_utils();
-}));
-
-// node_modules/.pnpm/viem@2.57.13_typescript@6.0.3/node_modules/viem/_esm/actions/public/getProof.js
-/**
-* Returns the account and storage values of the specified account including the Merkle-proof.
-*
-* - Docs: https://viem.sh/docs/actions/public/getProof
-* - JSON-RPC Methods:
-*   - Calls [`eth_getProof`](https://eips.ethereum.org/EIPS/eip-1186)
-*
-* @param client - Client to use
-* @param parameters - {@link GetProofParameters}
-* @returns Proof data. {@link GetProofReturnType}
-*
-* @example
-* import { createPublicClient, http } from 'viem'
-* import { mainnet } from 'viem/chains'
-* import { getProof } from 'viem/public'
-*
-* const client = createPublicClient({
-*   chain: mainnet,
-*   transport: http(),
-* })
-* const block = await getProof(client, {
-*  address: '0x...',
-*  storageKeys: ['0x...'],
-* })
-*/
-async function getProof(client, { address, blockHash, blockNumber, blockTag = "latest", requireCanonical, storageKeys }) {
-	const block = formatBlockParameter({
-		blockHash,
-		blockNumber,
-		blockTag,
-		requireCanonical
-	});
-	const proof = await client.request({
-		method: "eth_getProof",
-		params: [
-			address,
-			storageKeys,
-			block
-		]
-	});
-	return formatProof(proof);
-}
-var init_getProof = __esmMin((() => {
-	init_formatBlockParameter();
-	init_proof();
-}));
-
-// node_modules/.pnpm/viem@2.57.13_typescript@6.0.3/node_modules/viem/_esm/actions/public/getRawTransaction.js
-/**
-* Returns the raw, serialized [Transaction](https://viem.sh/docs/glossary/terms#transaction) given a hash.
-*
-* - Docs: https://viem.sh/docs/actions/public/getRawTransaction
-* - JSON-RPC Methods: `eth_getRawTransactionByHash`
-*
-* @param client - Client to use
-* @param parameters - {@link GetRawTransactionParameters}
-* @returns The raw, serialized transaction. {@link GetRawTransactionReturnType}
-*
-* @example
-* import { createPublicClient, http } from 'viem'
-* import { mainnet } from 'viem/chains'
-* import { getRawTransaction } from 'viem/public'
-*
-* const client = createPublicClient({
-*   chain: mainnet,
-*   transport: http(),
-* })
-* const rawTransaction = await getRawTransaction(client, {
-*   hash: '0x4ca7ee652d57678f26e887c149ab0735f41de37bcad58c9f6d3ed5824f15b74d',
-* })
-*/
-async function getRawTransaction(client, { hash }) {
-	const rawTransaction = await client.request({
-		method: "eth_getRawTransactionByHash",
-		params: [hash]
-	}, { dedupe: true });
-	if (!rawTransaction) throw new TransactionNotFoundError({ hash });
-	return rawTransaction;
-}
-var init_getRawTransaction = __esmMin((() => {
-	init_transaction$1();
-}));
-
-// node_modules/.pnpm/viem@2.57.13_typescript@6.0.3/node_modules/viem/_esm/actions/public/getStorageAt.js
-/**
-* Returns the value from a storage slot at a given address.
-*
-* - Docs: https://viem.sh/docs/contract/getStorageAt
-* - JSON-RPC Methods: [`eth_getStorageAt`](https://ethereum.org/en/developers/docs/apis/json-rpc/#eth_getstorageat)
-*
-* @param client - Client to use
-* @param parameters - {@link GetStorageAtParameters}
-* @returns The value of the storage slot. {@link GetStorageAtReturnType}
-*
-* @example
-* import { createPublicClient, http } from 'viem'
-* import { mainnet } from 'viem/chains'
-* import { getStorageAt } from 'viem/contract'
-*
-* const client = createPublicClient({
-*   chain: mainnet,
-*   transport: http(),
-* })
-* const code = await getStorageAt(client, {
-*   address: '0xFBA3912Ca04dd458c843e2EE08967fC04f3579c2',
-*   slot: toHex(0),
-* })
-*/
-async function getStorageAt(client, { address, blockHash, blockNumber, blockTag = "latest", requireCanonical, slot }) {
-	const block = formatBlockParameter({
-		blockHash,
-		blockNumber,
-		blockTag,
-		requireCanonical
-	});
-	return await client.request({
-		method: "eth_getStorageAt",
-		params: [
-			address,
-			slot,
-			block
-		]
-	});
-}
-var init_getStorageAt = __esmMin((() => {
-	init_formatBlockParameter();
-}));
-
-// node_modules/.pnpm/viem@2.57.13_typescript@6.0.3/node_modules/viem/_esm/actions/public/getStorageValues.js
-/**
-* Returns values from multiple storage slots for multiple adddresses at a given block.
-*
-* - Docs: https://viem.sh/docs/actions/public/getStorageValues
-* - JSON-RPC Methods: [`eth_getStorageValues`](https://github.com/ethereum/execution-apis/issues/752)
-*
-* @param client - Client to use
-* @param parameters - {@link GetStorageValuesParameters}
-* @returns The values of the requested storage slots. {@link GetStorageValuesReturnType}
-*
-* @example
-* import { createPublicClient, http, toHex } from 'viem'
-* import { mainnet } from 'viem/chains'
-* import { getStorageValues } from 'viem/actions'
-*
-* const client = createPublicClient({ chain: mainnet, transport: http() })
-* const values = await getStorageValues(client, {
-*   requests: {
-*     '0xFBA3912Ca04dd458c843e2EE08967fC04f3579c2': [
-*       toHex(0, { size: 32 }),
-*       toHex(1, { size: 32 }),
-*     ],
-*   },
-* })
-*/
-async function getStorageValues(client, { blockHash, blockNumber, blockTag = "latest", requireCanonical, requests }) {
-	const block = formatBlockParameter({
-		blockHash,
-		blockNumber,
-		blockTag,
-		requireCanonical
-	});
-	return client.request({
-		method: "eth_getStorageValues",
-		params: [requests, block]
-	});
-}
-var init_getStorageValues = __esmMin((() => {
-	init_formatBlockParameter();
-}));
-
-// node_modules/.pnpm/viem@2.57.13_typescript@6.0.3/node_modules/viem/_esm/actions/public/getTransaction.js
-/**
-* Returns information about a [Transaction](https://viem.sh/docs/glossary/terms#transaction) given a hash or block identifier.
-*
-* - Docs: https://viem.sh/docs/actions/public/getTransaction
-* - Example: https://stackblitz.com/github/wevm/viem/tree/main/examples/transactions_fetching-transactions
-* - JSON-RPC Methods: [`eth_getTransactionByHash`](https://ethereum.org/en/developers/docs/apis/json-rpc/#eth_getTransactionByHash)
-*
-* @param client - Client to use
-* @param parameters - {@link GetTransactionParameters}
-* @returns The transaction information. {@link GetTransactionReturnType}
-*
-* @example
-* import { createPublicClient, http } from 'viem'
-* import { mainnet } from 'viem/chains'
-* import { getTransaction } from 'viem/public'
-*
-* const client = createPublicClient({
-*   chain: mainnet,
-*   transport: http(),
-* })
-* const transaction = await getTransaction(client, {
-*   hash: '0x4ca7ee652d57678f26e887c149ab0735f41de37bcad58c9f6d3ed5824f15b74d',
-* })
-*/
-async function getTransaction(client, { blockHash, blockNumber, blockTag: blockTag_, hash, index, sender, nonce }) {
-	const blockTag = blockTag_ || "latest";
-	const blockNumberHex = blockNumber !== void 0 ? numberToHex(blockNumber) : void 0;
-	let transaction = null;
-	if (hash) transaction = await client.request({
-		method: "eth_getTransactionByHash",
-		params: [hash]
-	}, { dedupe: true });
-	else if (blockHash) transaction = await client.request({
-		method: "eth_getTransactionByBlockHashAndIndex",
-		params: [blockHash, numberToHex(index)]
-	}, { dedupe: true });
-	else if ((blockNumberHex || blockTag) && typeof index === "number") transaction = await client.request({
-		method: "eth_getTransactionByBlockNumberAndIndex",
-		params: [blockNumberHex || blockTag, numberToHex(index)]
-	}, { dedupe: Boolean(blockNumberHex) });
-	else if (sender && typeof nonce === "number") transaction = await client.request({
-		method: "eth_getTransactionBySenderAndNonce",
-		params: [sender, numberToHex(nonce)]
-	}, { dedupe: true });
-	if (!transaction) throw new TransactionNotFoundError({
-		blockHash,
-		blockNumber,
-		blockTag,
-		hash,
-		index
-	});
-	return (client.chain?.formatters?.transaction?.format || formatTransaction)(transaction, "getTransaction");
-}
-var init_getTransaction = __esmMin((() => {
-	init_transaction$1();
-	init_toHex();
-	init_transaction();
-}));
-
-// node_modules/.pnpm/viem@2.57.13_typescript@6.0.3/node_modules/viem/_esm/actions/public/getTransactionConfirmations.js
-/**
-* Returns the number of blocks passed (confirmations) since the transaction was processed on a block.
-*
-* - Docs: https://viem.sh/docs/actions/public/getTransactionConfirmations
-* - Example: https://stackblitz.com/github/wevm/viem/tree/main/examples/transactions_fetching-transactions
-* - JSON-RPC Methods: [`eth_getTransactionConfirmations`](https://ethereum.org/en/developers/docs/apis/json-rpc/#eth_getTransactionConfirmations)
-*
-* @param client - Client to use
-* @param parameters - {@link GetTransactionConfirmationsParameters}
-* @returns The number of blocks passed since the transaction was processed. If confirmations is 0, then the Transaction has not been confirmed & processed yet. {@link GetTransactionConfirmationsReturnType}
-*
-* @example
-* import { createPublicClient, http } from 'viem'
-* import { mainnet } from 'viem/chains'
-* import { getTransactionConfirmations } from 'viem/public'
-*
-* const client = createPublicClient({
-*   chain: mainnet,
-*   transport: http(),
-* })
-* const confirmations = await getTransactionConfirmations(client, {
-*   hash: '0x4ca7ee652d57678f26e887c149ab0735f41de37bcad58c9f6d3ed5824f15b74d',
-* })
-*/
-async function getTransactionConfirmations(client, { hash, transactionReceipt }) {
-	const [blockNumber, transaction] = await Promise.all([getAction(client, getBlockNumber, "getBlockNumber")({}), hash ? getAction(client, getTransaction, "getTransaction")({ hash }) : void 0]);
-	const transactionBlockNumber = transactionReceipt?.blockNumber || transaction?.blockNumber;
-	if (!transactionBlockNumber) return 0n;
-	const headBlockNumber = blockNumber < transactionBlockNumber ? await getAction(client, getBlockNumber, "getBlockNumber")({ cacheTime: 0 }) : blockNumber;
-	if (headBlockNumber < transactionBlockNumber) return 1n;
-	return headBlockNumber - transactionBlockNumber + 1n;
-}
-var init_getTransactionConfirmations = __esmMin((() => {
-	init_getAction();
-	init_getBlockNumber();
-	init_getTransaction();
-}));
-
-// node_modules/.pnpm/viem@2.57.13_typescript@6.0.3/node_modules/viem/_esm/actions/public/getTransactionReceipt.js
-/**
-* Returns the [Transaction Receipt](https://viem.sh/docs/glossary/terms#transaction-receipt) given a [Transaction](https://viem.sh/docs/glossary/terms#transaction) hash.
-*
-* - Docs: https://viem.sh/docs/actions/public/getTransactionReceipt
-* - Example: https://stackblitz.com/github/wevm/viem/tree/main/examples/transactions_fetching-transactions
-* - JSON-RPC Methods: [`eth_getTransactionReceipt`](https://ethereum.org/en/developers/docs/apis/json-rpc/#eth_gettransactionreceipt)
-*
-* @param client - Client to use
-* @param parameters - {@link GetTransactionReceiptParameters}
-* @returns The transaction receipt. {@link GetTransactionReceiptReturnType}
-*
-* @example
-* import { createPublicClient, http } from 'viem'
-* import { mainnet } from 'viem/chains'
-* import { getTransactionReceipt } from 'viem/public'
-*
-* const client = createPublicClient({
-*   chain: mainnet,
-*   transport: http(),
-* })
-* const transactionReceipt = await getTransactionReceipt(client, {
-*   hash: '0x4ca7ee652d57678f26e887c149ab0735f41de37bcad58c9f6d3ed5824f15b74d',
-* })
-*/
-async function getTransactionReceipt(client, { hash }) {
-	const receipt = await client.request({
-		method: "eth_getTransactionReceipt",
-		params: [hash]
-	}, { dedupe: true });
-	if (!receipt) throw new TransactionReceiptNotFoundError({ hash });
-	return (client.chain?.formatters?.transactionReceipt?.format || formatTransactionReceipt)(receipt, "getTransactionReceipt");
-}
-var init_getTransactionReceipt = __esmMin((() => {
-	init_transaction$1();
-	init_transactionReceipt();
-}));
-
-// node_modules/.pnpm/viem@2.57.13_typescript@6.0.3/node_modules/viem/_esm/actions/public/multicall.js
-/**
-* Similar to [`readContract`](https://viem.sh/docs/contract/readContract), but batches up multiple functions on a contract in a single RPC call via the [`multicall3` contract](https://github.com/mds1/multicall).
-*
-* - Docs: https://viem.sh/docs/contract/multicall
-*
-* @param client - Client to use
-* @param parameters - {@link MulticallParameters}
-* @returns An array of results with accompanying status. {@link MulticallReturnType}
-*
-* @example
-* import { createPublicClient, http, parseAbi } from 'viem'
-* import { mainnet } from 'viem/chains'
-* import { multicall } from 'viem/contract'
-*
-* const client = createPublicClient({
-*   chain: mainnet,
-*   transport: http(),
-* })
-* const abi = parseAbi([
-*   'function balanceOf(address) view returns (uint256)',
-*   'function totalSupply() view returns (uint256)',
-* ])
-* const results = await multicall(client, {
-*   contracts: [
-*     {
-*       address: '0xFBA3912Ca04dd458c843e2EE08967fC04f3579c2',
-*       abi,
-*       functionName: 'balanceOf',
-*       args: ['0xA0Cf798816D4b9b9866b5330EEa46a18382f251e'],
-*     },
-*     {
-*       address: '0xFBA3912Ca04dd458c843e2EE08967fC04f3579c2',
-*       abi,
-*       functionName: 'totalSupply',
-*     },
-*   ],
-* })
-* // [{ result: 424122n, status: 'success' }, { result: 1000000n, status: 'success' }]
-*/
-async function multicall(client, parameters) {
-	const { account, authorizationList, allowFailure = true, blockHash, blockNumber, blockOverrides, blockTag, requireCanonical, stateOverride } = parameters;
-	const contracts = parameters.contracts;
-	const batch = typeof client.batch?.multicall === "object" ? client.batch.multicall : {};
-	const batchSize = parameters.batchSize ?? batch.batchSize ?? 1024;
-	const deployless = parameters.deployless ?? batch.deployless ?? false;
-	const multicallAddress = (() => {
-		if (parameters.multicallAddress) return parameters.multicallAddress;
-		if (deployless) return null;
-		if (client.chain) return getChainContractAddress({
-			blockNumber,
-			chain: client.chain,
-			contract: "multicall3"
-		});
-		throw new Error("client chain not configured. multicallAddress is required.");
-	})();
-	const chunkedCalls = [[]];
-	let currentChunk = 0;
-	let currentChunkSize = 0;
-	for (let i = 0; i < contracts.length; i++) {
-		const { abi, address, args, functionName } = contracts[i];
-		try {
-			const callData = encodeFunctionData({
-				abi,
-				args,
-				functionName
-			});
-			currentChunkSize += (callData.length - 2) / 2;
-			if (batchSize > 0 && currentChunkSize > batchSize && chunkedCalls[currentChunk].length > 0) {
-				currentChunk++;
-				currentChunkSize = (callData.length - 2) / 2;
-				chunkedCalls[currentChunk] = [];
-			}
-			chunkedCalls[currentChunk] = [...chunkedCalls[currentChunk], {
-				allowFailure: true,
-				callData,
-				target: address
-			}];
-		} catch (err) {
-			const error = getContractError(err, {
-				abi,
-				address,
-				args,
-				docsPath: "/docs/contract/multicall",
-				functionName,
-				sender: account
-			});
-			if (!allowFailure) throw error;
-			chunkedCalls[currentChunk] = [...chunkedCalls[currentChunk], {
-				allowFailure: true,
-				callData: "0x",
-				target: address
-			}];
-		}
-	}
-	const batching = Boolean(client.batch?.multicall);
-	const batches = batching ? chunkedCalls.flatMap((calls) => calls.map((call) => [call])) : chunkedCalls;
-	const aggregate3Results = await Promise.allSettled(batches.map((calls) => {
-		if (batching) return scheduleMulticall(client, {
-			account,
-			authorizationList,
-			batchSize,
-			blockHash,
-			blockNumber,
-			blockOverrides,
-			blockTag,
-			call: calls[0],
-			multicallAddress,
-			requireCanonical,
-			stateOverride
-		}).then((result) => [result]);
-		return getAction(client, readContract, "readContract")({
-			...multicallAddress === null ? { code: multicall3Bytecode } : { address: multicallAddress },
-			abi: multicall3Abi,
-			account,
-			args: [calls],
-			authorizationList,
-			blockHash,
-			blockNumber,
-			blockOverrides,
-			blockTag,
-			functionName: "aggregate3",
-			requireCanonical,
-			stateOverride
-		});
-	}));
-	const results = [];
-	for (let i = 0; i < aggregate3Results.length; i++) {
-		const result = aggregate3Results[i];
-		if (result.status === "rejected") {
-			if (!allowFailure) throw result.reason;
-			for (let j = 0; j < batches[i].length; j++) results.push({
-				status: "failure",
-				error: result.reason,
-				result: void 0
-			});
-			continue;
-		}
-		const aggregate3Result = result.value;
-		for (let j = 0; j < aggregate3Result.length; j++) {
-			const { returnData, success } = aggregate3Result[j];
-			const { callData } = batches[i][j];
-			const { abi, address, functionName, args } = contracts[results.length];
-			try {
-				if (callData === "0x") throw new AbiDecodingZeroDataError();
-				if (!success) throw new RawContractError({ data: returnData });
-				const result = decodeFunctionResult({
-					abi,
-					args,
-					data: returnData,
-					functionName
-				});
-				results.push(allowFailure ? {
-					result,
-					status: "success"
-				} : result);
-			} catch (err) {
-				const error = getContractError(err, {
-					abi,
-					address,
-					args,
-					docsPath: "/docs/contract/multicall",
-					functionName
-				});
-				if (!allowFailure) throw error;
-				results.push({
-					error,
-					result: void 0,
-					status: "failure"
-				});
-			}
-		}
-	}
-	if (results.length !== contracts.length) throw new BaseError$1("multicall results mismatch");
-	return results;
-}
-async function scheduleMulticall(client, parameters) {
-	const { batchSize, call, multicallAddress, ...rest } = parameters;
-	const { wait = 0 } = typeof client.batch?.multicall === "object" ? client.batch.multicall : {};
-	const { schedule } = createBatchScheduler({
-		id: stringify$2([
-			"multicall",
-			client.uid,
-			batchSize,
-			multicallAddress,
-			rest
-		]),
-		wait,
-		shouldSplitBatch(calls) {
-			if (batchSize === 0) return false;
-			return calls.reduce((size, { callData }) => size + (callData.length - 2) / 2, 0) > batchSize;
-		},
-		fn: (calls) => getAction(client, readContract, "readContract")({
-			...multicallAddress === null ? { code: multicall3Bytecode } : { address: multicallAddress },
-			...rest,
-			abi: multicall3Abi,
-			args: [calls],
-			functionName: "aggregate3"
-		})
-	});
-	const [result] = await schedule(call);
-	return result;
-}
-var init_multicall = __esmMin((() => {
-	init_abis();
-	init_contracts();
-	init_abi();
-	init_base();
-	init_contract$1();
-	init_decodeFunctionResult();
-	init_encodeFunctionData();
-	init_getChainContractAddress();
-	init_getContractError();
-	init_getAction();
-	init_createBatchScheduler();
-	init_stringify$1();
-	init_readContract();
-}));
-
-// node_modules/.pnpm/viem@2.57.13_typescript@6.0.3/node_modules/viem/_esm/actions/public/simulateBlocks.js
-/**
-* Simulates a set of calls on block(s) with optional block and state overrides.
-*
-* @example
-* ```ts
-* import { createClient, http, parseEther } from 'viem'
-* import { simulate } from 'viem/actions'
-* import { mainnet } from 'viem/chains'
-*
-* const client = createClient({
-*   chain: mainnet,
-*   transport: http(),
-* })
-*
-* const result = await simulate(client, {
-*   blocks: [{
-*     blockOverrides: {
-*       number: 69420n,
-*     },
-*     calls: [{
-*       {
-*         account: '0x5a0b54d5dc17e482fe8b0bdca5320161b95fb929',
-*         data: '0xdeadbeef',
-*         to: '0x70997970c51812dc3a010c7d01b50e0d17dc79c8',
-*       },
-*       {
-*         account: '0x5a0b54d5dc17e482fe8b0bdca5320161b95fb929',
-*         to: '0x70997970c51812dc3a010c7d01b50e0d17dc79c8',
-*         value: parseEther('1'),
-*       },
-*     }],
-*     stateOverrides: [{
-*       address: '0x5a0b54d5dc17e482fe8b0bdca5320161b95fb929',
-*       balance: parseEther('10'),
-*     }],
-*   }]
-* })
-* ```
-*
-* @param client - Client to use.
-* @param parameters - {@link SimulateBlocksParameters}
-* @returns Simulated blocks. {@link SimulateBlocksReturnType}
-*/
-async function simulateBlocks(client, parameters) {
-	const { blockNumber, blockTag = client.experimental_blockTag ?? "latest", blocks, returnFullTransactions, traceTransfers, validation } = parameters;
-	try {
-		const blockStateCalls = [];
-		for (const block of blocks) {
-			const blockOverrides = block.blockOverrides ? toRpc(block.blockOverrides) : void 0;
-			const calls = block.calls.map((call_) => {
-				const call = call_;
-				const account = call.account ? parseAccount(call.account) : void 0;
-				const data = call.abi ? encodeFunctionData(call) : call.data;
-				const request = {
-					...call,
-					account,
-					data: call.dataSuffix ? concat$1([data || "0x", call.dataSuffix]) : data,
-					from: call.from ?? account?.address
-				};
-				assertRequest(request);
-				return formatTransactionRequest(request);
-			});
-			const stateOverrides = block.stateOverrides ? serializeStateOverride(block.stateOverrides) : void 0;
-			blockStateCalls.push({
-				blockOverrides,
-				calls,
-				stateOverrides
-			});
-		}
-		const block = (typeof blockNumber === "bigint" ? numberToHex(blockNumber) : void 0) || blockTag;
-		return (await client.request({
-			method: "eth_simulateV1",
-			params: [{
-				blockStateCalls,
-				returnFullTransactions,
-				traceTransfers,
-				validation
-			}, block]
-		})).map((block, i) => ({
-			...formatBlock(block),
-			calls: block.calls.map((call, j) => {
-				const { abi, args, functionName, to } = blocks[i].calls[j];
-				const data = call.error?.data ?? call.returnData;
-				const gasUsed = BigInt(call.gasUsed);
-				const maxUsedGas = call.maxUsedGas === void 0 ? void 0 : BigInt(call.maxUsedGas);
-				const logs = call.logs?.map((log) => formatLog(log));
-				const status = call.status === "0x1" ? "success" : "failure";
-				const result = abi && status === "success" && data !== "0x" ? decodeFunctionResult({
-					abi,
-					data,
-					functionName
-				}) : null;
-				const error = (() => {
-					if (status === "success") return void 0;
-					let error;
-					if (data === "0x") error = new AbiDecodingZeroDataError();
-					else if (data) error = new RawContractError({ data });
-					if (!error) return void 0;
-					return getContractError(error, {
-						abi: abi ?? [],
-						address: to ?? "0x",
-						args,
-						functionName: functionName ?? "<unknown>"
-					});
-				})();
-				return {
-					data,
-					gasUsed,
-					logs,
-					...maxUsedGas === void 0 ? {} : { maxUsedGas },
-					status,
-					...status === "success" ? { result } : { error }
-				};
-			})
-		}));
-	} catch (e) {
-		const cause = e;
-		const error = getNodeError(cause, {});
-		if (error instanceof UnknownNodeError) throw cause;
-		throw error;
-	}
-}
-var init_simulateBlocks = __esmMin((() => {
-	init_BlockOverrides();
-	init_parseAccount();
-	init_abi();
-	init_contract$1();
-	init_node();
-	init_decodeFunctionResult();
-	init_encodeFunctionData();
-	init_concat();
-	init_toHex();
-	init_getContractError();
-	init_getNodeError();
-	init_block();
-	init_log$1();
-	init_transactionRequest();
-	init_stateOverride();
-	init_assertRequest();
-}));
-
-// node_modules/.pnpm/ox@0.14.59_typescript@6.0.3/node_modules/ox/_esm/core/internal/abiItem.js
-/** @internal */
-function normalizeSignature(signature) {
-	let active = true;
-	let current = "";
-	let level = 0;
-	let result = "";
-	let valid = false;
-	for (let i = 0; i < signature.length; i++) {
-		const char = signature[i];
-		if ([
-			"(",
-			")",
-			","
-		].includes(char)) active = true;
-		if (char === "(") level++;
-		if (char === ")") level--;
-		if (!active) continue;
-		if (level === 0) {
-			if (char === " " && [
-				"event",
-				"function",
-				"error",
-				""
-			].includes(result)) result = "";
-			else {
-				result += char;
-				if (char === ")") {
-					valid = true;
-					break;
-				}
-			}
-			continue;
-		}
-		if (char === " ") {
-			if (!current.endsWith(",") && !current.endsWith("(")) {
-				current = "";
-				active = false;
-			}
-			continue;
-		}
-		result += char;
-		current += char;
-	}
-	if (!valid) throw new BaseError("Unable to normalize signature.");
-	return result;
-}
-/** @internal */
-function isArgOfType(arg, abiParameter) {
-	const argType = typeof arg;
-	const abiParameterType = abiParameter.type;
-	switch (abiParameterType) {
-		case "address": return validate$2(arg, { strict: false });
-		case "bool": return argType === "boolean";
-		case "function": return argType === "string";
-		case "string": return argType === "string";
-		default: {
-			if (abiParameterType === "tuple" && "components" in abiParameter) return Object.values(abiParameter.components).every((component, index) => {
-				return argType === "object" && isArgOfType(getComponentValue(arg, component, index), component);
-			});
-			if (/^u?int(8|16|24|32|40|48|56|64|72|80|88|96|104|112|120|128|136|144|152|160|168|176|184|192|200|208|216|224|232|240|248|256)?$/.test(abiParameterType)) return argType === "number" || argType === "bigint";
-			if (/^bytes([1-9]|1[0-9]|2[0-9]|3[0-2])?$/.test(abiParameterType)) return argType === "string" || arg instanceof Uint8Array;
-			const arrayComponents = getArrayComponents(abiParameterType);
-			if (arrayComponents) {
-				const [length, type] = arrayComponents;
-				return Array.isArray(arg) && (length === null || arg.length === length) && arg.every((x) => isArgOfType(x, {
-					...abiParameter,
-					type
-				}));
-			}
-			return false;
-		}
-	}
-}
-/** @internal */
-function getAmbiguousTypes(sourceParameters, targetParameters, args) {
-	for (const parameterIndex in sourceParameters) {
-		const sourceParameter = sourceParameters[parameterIndex];
-		const targetParameter = targetParameters[parameterIndex];
-		if (!targetParameter) continue;
-		if (sourceParameter.type === "tuple" && targetParameter.type === "tuple" && "components" in sourceParameter && "components" in targetParameter) {
-			const value = args[parameterIndex];
-			const types = getAmbiguousTypes(sourceParameter.components, targetParameter.components, sourceParameter.components.map((component, index) => getComponentValue(value, component, index)));
-			if (types) return types;
-			continue;
-		}
-		const sourceArray = getArrayComponents(sourceParameter.type);
-		const targetArray = getArrayComponents(targetParameter.type);
-		if (sourceArray && targetArray) {
-			const types = getAmbiguousTypes([{
-				...sourceParameter,
-				type: sourceArray[1]
-			}], [{
-				...targetParameter,
-				type: targetArray[1]
-			}], [args[parameterIndex]?.[0]]);
-			if (types) return types;
-			continue;
-		}
-		const types = [sourceParameter.type, targetParameter.type];
-		const value = args[parameterIndex];
-		if ((() => {
-			if (types.includes("address") && types.includes("bytes20")) return true;
-			if (types.includes("address") && (types.includes("string") || types.includes("bytes"))) return value === void 0 || validate$2(value, { strict: false });
-			return false;
-		})()) return types;
-	}
-}
-function getComponentValue(arg, component, index) {
-	if (Array.isArray(arg)) return arg[index];
-	return arg?.[component.name];
-}
-var init_abiItem = __esmMin((() => {
-	init_Address();
-	init_Errors();
-	init_abiParameters();
-}));
-
-// node_modules/.pnpm/ox@0.14.59_typescript@6.0.3/node_modules/ox/_esm/core/AbiItem.js
-/**
-* Parses an arbitrary **JSON ABI Item** or **Human Readable ABI Item** into a typed {@link ox#AbiItem.AbiItem}.
-*
-* @example
-* ### JSON ABIs
-*
-* ```ts twoslash
-* import { AbiItem } from 'ox'
-*
-* const abiItem = AbiItem.from({
-*   type: 'function',
-*   name: 'approve',
-*   stateMutability: 'nonpayable',
-*   inputs: [
-*     {
-*       name: 'spender',
-*       type: 'address',
-*     },
-*     {
-*       name: 'amount',
-*       type: 'uint256',
-*     },
-*   ],
-*   outputs: [{ type: 'bool' }],
-* })
-*
-* abiItem
-* //^?
-*
-*
-*
-*
-*
-*
-*
-*
-*
-*
-*
-*
-* ```
-*
-* @example
-* ### Human Readable ABIs
-*
-* A Human Readable ABI can be parsed into a typed ABI object:
-*
-* ```ts twoslash
-* import { AbiItem } from 'ox'
-*
-* const abiItem = AbiItem.from(
-*   'function approve(address spender, uint256 amount) returns (bool)' // [!code hl]
-* )
-*
-* abiItem
-* //^?
-*
-*
-*
-*
-*
-*
-*
-*
-*
-*
-*
-*
-*
-* ```
-*
-* @example
-* It is possible to specify `struct`s along with your definitions:
-*
-* ```ts twoslash
-* import { AbiItem } from 'ox'
-*
-* const abiItem = AbiItem.from([
-*   'struct Foo { address spender; uint256 amount; }', // [!code hl]
-*   'function approve(Foo foo) returns (bool)',
-* ])
-*
-* abiItem
-* //^?
-*
-*
-*
-*
-*
-*
-*
-*
-*
-*
-*
-*
-* ```
-*
-*
-*
-* @param abiItem - The ABI Item to parse.
-* @returns The typed ABI Item.
-*/
-function from$3(abiItem, options = {}) {
-	const { prepare = true } = options;
-	const item = (() => {
-		if (Array.isArray(abiItem)) return parseAbiItem(abiItem);
-		if (typeof abiItem === "string") return parseAbiItem(abiItem);
-		return abiItem;
-	})();
-	return {
-		...item,
-		...prepare ? { hash: getSignatureHash(item) } : {}
-	};
-}
-/**
-* Extracts an {@link ox#AbiItem.AbiItem} from an {@link ox#Abi.Abi} given a name and optional arguments.
-*
-* @example
-* ABI Items can be extracted by their name using the `name` option:
-*
-* ```ts twoslash
-* import { Abi, AbiItem } from 'ox'
-*
-* const abi = Abi.from([
-*   'function foo()',
-*   'event Transfer(address owner, address to, uint256 tokenId)',
-*   'function bar(string a) returns (uint256 x)',
-* ])
-*
-* const item = AbiItem.fromAbi(abi, 'Transfer') // [!code focus]
-* //    ^?
-*
-*
-*
-*
-*
-*
-* ```
-*
-* @example
-* ### Extracting by Selector
-*
-* ABI Items can be extract by their selector when {@link ox#Hex.Hex} is provided to `name`.
-*
-* ```ts twoslash
-* import { Abi, AbiItem } from 'ox'
-*
-* const abi = Abi.from([
-*   'function foo()',
-*   'event Transfer(address owner, address to, uint256 tokenId)',
-*   'function bar(string a) returns (uint256 x)',
-* ])
-* const item = AbiItem.fromAbi(abi, '0x095ea7b3') // [!code focus]
-* //    ^?
-*
-*
-*
-*
-*
-*
-*
-*
-*
-*
-*
-*
-*
-* ```
-*
-* :::note
-*
-* Extracting via a hex selector is useful when extracting an ABI Item from an `eth_call` RPC response,
-* a Transaction `input`, or from Event Log `topics`.
-*
-* :::
-*
-* @param abi - The ABI to extract from.
-* @param name - The name (or selector) of the ABI item to extract.
-* @param options - Extraction options.
-* @returns The ABI item.
-*/
-function fromAbi$2(abi, name, options) {
-	const { args = [], prepare = true } = options ?? {};
-	const isSelector = validate$3(name, { strict: false });
-	const abiItems = abi.filter((abiItem) => {
-		if (isSelector) {
-			if (abiItem.type === "function" || abiItem.type === "error") return getSelector$2(abiItem) === slice(name, 0, 4);
-			if (abiItem.type === "event") return getSignatureHash(abiItem) === name;
-			return false;
-		}
-		return "name" in abiItem && abiItem.name === name;
-	});
-	if (abiItems.length === 0) throw new NotFoundError({ name });
-	if (abiItems.length === 1) return {
-		...abiItems[0],
-		...prepare ? { hash: getSignatureHash(abiItems[0]) } : {}
-	};
-	let matchedAbiItem;
-	for (const abiItem of abiItems) {
-		if (!("inputs" in abiItem)) continue;
-		if (!args || args.length === 0) {
-			if (!abiItem.inputs || abiItem.inputs.length === 0) return {
-				...abiItem,
-				...prepare ? { hash: getSignatureHash(abiItem) } : {}
-			};
-			continue;
-		}
-		if (!abiItem.inputs) continue;
-		if (abiItem.inputs.length === 0) continue;
-		if (abiItem.inputs.length !== args.length) continue;
-		if (args.every((arg, index) => {
-			const abiParameter = "inputs" in abiItem && abiItem.inputs[index];
-			if (!abiParameter) return false;
-			return isArgOfType(arg, abiParameter);
-		})) {
-			if (matchedAbiItem && "inputs" in matchedAbiItem && matchedAbiItem.inputs) {
-				const ambiguousTypes = getAmbiguousTypes(abiItem.inputs, matchedAbiItem.inputs, args);
-				if (ambiguousTypes) throw new AmbiguityError({
-					abiItem,
-					type: ambiguousTypes[0]
-				}, {
-					abiItem: matchedAbiItem,
-					type: ambiguousTypes[1]
-				});
-			}
-			matchedAbiItem = abiItem;
-		}
-	}
-	const abiItem = (() => {
-		if (matchedAbiItem) return matchedAbiItem;
-		const [abiItem, ...overloads] = abiItems;
-		return {
-			...abiItem,
-			overloads
-		};
-	})();
-	if (!abiItem) throw new NotFoundError({ name });
-	return {
-		...abiItem,
-		...prepare ? { hash: getSignatureHash(abiItem) } : {}
-	};
-}
-function getSelector$2(...parameters) {
-	const abiItem = (() => {
-		if (Array.isArray(parameters[0])) {
-			const [abi, name] = parameters;
-			return fromAbi$2(abi, name);
-		}
-		return parameters[0];
-	})();
-	return slice(getSignatureHash(abiItem), 0, 4);
-}
-function getSignature(...parameters) {
-	const abiItem = (() => {
-		if (Array.isArray(parameters[0])) {
-			const [abi, name] = parameters;
-			return fromAbi$2(abi, name);
-		}
-		return parameters[0];
-	})();
-	const signature = (() => {
-		if (typeof abiItem === "string") return abiItem;
-		return formatAbiItem$1(abiItem);
-	})();
-	return normalizeSignature(signature);
-}
-function getSignatureHash(...parameters) {
-	const abiItem = (() => {
-		if (Array.isArray(parameters[0])) {
-			const [abi, name] = parameters;
-			return fromAbi$2(abi, name);
-		}
-		return parameters[0];
-	})();
-	if (typeof abiItem !== "string" && "hash" in abiItem && abiItem.hash) return abiItem.hash;
-	return keccak256(fromString$1(getSignature(abiItem)));
-}
-var AmbiguityError, NotFoundError, InvalidSelectorSizeError;
-var init_AbiItem = __esmMin((() => {
-	init_exports();
-	init_Errors();
-	init_Hash();
-	init_Hex();
-	init_abiItem();
-	AmbiguityError = class extends BaseError {
-		constructor(x, y) {
-			super("Found ambiguous types in overloaded ABI Items.", { metaMessages: [
-				`\`${x.type}\` in \`${normalizeSignature(formatAbiItem$1(x.abiItem))}\`, and`,
-				`\`${y.type}\` in \`${normalizeSignature(formatAbiItem$1(y.abiItem))}\``,
-				"",
-				"These types encode differently and cannot be distinguished at runtime.",
-				"Remove one of the ambiguous items in the ABI."
-			] });
-			Object.defineProperty(this, "name", {
-				enumerable: true,
-				configurable: true,
-				writable: true,
-				value: "AbiItem.AmbiguityError"
-			});
-		}
-	};
-	NotFoundError = class extends BaseError {
-		constructor({ name, data, type = "item" }) {
-			const selector = (() => {
-				if (name) return ` with name "${name}"`;
-				if (data) return ` with data "${data}"`;
-				return "";
-			})();
-			super(`ABI ${type}${selector} not found.`);
-			Object.defineProperty(this, "name", {
-				enumerable: true,
-				configurable: true,
-				writable: true,
-				value: "AbiItem.NotFoundError"
-			});
-		}
-	};
-	InvalidSelectorSizeError = class extends BaseError {
-		constructor({ data }) {
-			super(`Selector size is invalid. Expected 4 bytes. Received ${size$1(data)} bytes ("${data}").`);
-			Object.defineProperty(this, "name", {
-				enumerable: true,
-				configurable: true,
-				writable: true,
-				value: "AbiItem.InvalidSelectorSizeError"
-			});
-		}
-	};
-}));
-
-// node_modules/.pnpm/ox@0.14.59_typescript@6.0.3/node_modules/ox/_esm/core/AbiConstructor.js
-function encode(...parameters) {
-	const [abiConstructor, options] = (() => {
-		if (Array.isArray(parameters[0])) {
-			const [abi, options] = parameters;
-			return [fromAbi$1(abi), options];
-		}
-		return parameters;
-	})();
-	const { bytecode, args } = options;
-	return concat(bytecode, abiConstructor.inputs?.length && args?.length ? encode$1(abiConstructor.inputs, args) : "0x");
-}
-/** @internal */
-function from$2(abiConstructor) {
-	return from$3(abiConstructor);
-}
-/** @internal */
-function fromAbi$1(abi) {
-	const item = abi.find((item) => item.type === "constructor");
-	if (!item) throw new NotFoundError({ name: "constructor" });
-	return item;
-}
-var init_AbiConstructor = __esmMin((() => {
-	init_AbiItem();
-	init_AbiParameters();
-	init_Hex();
-}));
-
-// node_modules/.pnpm/ox@0.14.59_typescript@6.0.3/node_modules/ox/_esm/core/AbiEvent.js
-/**
-* Formats an {@link ox#AbiEvent.AbiEvent} into a **Human Readable ABI Error**.
-*
-* @example
-* ```ts twoslash
-* import { AbiEvent } from 'ox'
-*
-* const formatted = AbiEvent.format({
-*   type: 'event',
-*   name: 'Transfer',
-*   inputs: [
-*     { name: 'from', type: 'address', indexed: true },
-*     { name: 'to', type: 'address', indexed: true },
-*     { name: 'value', type: 'uint256' },
-*   ],
-* })
-*
-* formatted
-* //    ^?
-*
-*
-* ```
-*
-* @param abiEvent - The ABI Event to format.
-* @returns The formatted ABI Event.
-*/
-function format(abiEvent) {
-	return formatAbiItem$1(abiEvent);
-}
-/**
-* Parses an arbitrary **JSON ABI Event** or **Human Readable ABI Event** into a typed {@link ox#AbiEvent.AbiEvent}.
-*
-* @example
-* ### JSON ABIs
-*
-* ```ts twoslash
-* import { AbiEvent } from 'ox'
-*
-* const transfer = AbiEvent.from({
-*   name: 'Transfer',
-*   type: 'event',
-*   inputs: [
-*     { name: 'from', type: 'address', indexed: true },
-*     { name: 'to', type: 'address', indexed: true },
-*     { name: 'value', type: 'uint256' },
-*   ],
-* })
-*
-* transfer
-* //^?
-*
-*
-*
-*
-*
-*
-*
-*
-*
-*
-*
-*
-* ```
-*
-* @example
-* ### Human Readable ABIs
-*
-* A Human Readable ABI can be parsed into a typed ABI object:
-*
-* ```ts twoslash
-* import { AbiEvent } from 'ox'
-*
-* const transfer = AbiEvent.from(
-*   'event Transfer(address indexed from, address indexed to, uint256 value)' // [!code hl]
-* )
-*
-* transfer
-* //^?
-*
-*
-*
-*
-*
-*
-*
-*
-*
-*
-*
-*
-*
-* ```
-*
-* @param abiEvent - The ABI Event to parse.
-* @returns Typed ABI Event.
-*/
-function from$1(abiEvent, options = {}) {
-	return from$3(abiEvent, options);
-}
-/**
-* Computes the event selector (hash of event signature) for an {@link ox#AbiEvent.AbiEvent}.
-*
-* @example
-* ```ts twoslash
-* import { AbiEvent } from 'ox'
-*
-* const selector = AbiEvent.getSelector('event Transfer(address indexed from, address indexed to, uint256 value)')
-* // @log: '0xddf252ad1be2c89b69c2b068fc378daa952ba7f163c4a11628f556a2'
-* ```
-*
-* @example
-* ```ts twoslash
-* import { AbiEvent } from 'ox'
-*
-* const selector = AbiEvent.getSelector({
-*   name: 'Transfer',
-*   type: 'event',
-*   inputs: [
-*     { name: 'from', type: 'address', indexed: true },
-*     { name: 'to', type: 'address', indexed: true },
-*     { name: 'value', type: 'uint256' }
-*   ]
-* })
-* // @log: '0xddf252ad1be2c89b69c2b068fc378daa952ba7f163c4a11628f556a2'
-* ```
-*
-* @param abiItem - The ABI event to compute the selector for.
-* @returns The {@link ox#Hash.(keccak256:function)} hash of the event signature.
-*/
-function getSelector$1(abiItem) {
-	return getSignatureHash(abiItem);
-}
-var ArgsMismatchError, InputNotFoundError, DataMismatchError, TopicsMismatchError, SelectorTopicMismatchError, FilterTypeNotSupportedError;
-var init_AbiEvent = __esmMin((() => {
-	init_exports();
-	init_AbiItem();
-	init_AbiParameters();
-	init_Errors();
-	init_errors$4();
-	ArgsMismatchError = class extends BaseError {
-		constructor({ abiEvent, expected, given }) {
-			super("Given arguments do not match the expected arguments.", { metaMessages: [
-				`Event: ${format(abiEvent)}`,
-				`Expected Arguments: ${!expected ? "None" : ""}`,
-				expected ? prettyPrint(expected) : void 0,
-				`Given Arguments: ${!given ? "None" : ""}`,
-				given ? prettyPrint(given) : void 0
-			] });
-			Object.defineProperty(this, "name", {
-				enumerable: true,
-				configurable: true,
-				writable: true,
-				value: "AbiEvent.ArgsMismatchError"
-			});
-		}
-	};
-	InputNotFoundError = class extends BaseError {
-		constructor({ abiEvent, name }) {
-			super(`Parameter "${name}" not found on \`${format(abiEvent)}\`.`);
-			Object.defineProperty(this, "name", {
-				enumerable: true,
-				configurable: true,
-				writable: true,
-				value: "AbiEvent.InputNotFoundError"
-			});
-		}
-	};
-	DataMismatchError = class extends BaseError {
-		constructor({ abiEvent, data, parameters, size }) {
-			super([`Data size of ${size} bytes is too small for non-indexed event parameters.`].join("\n"), { metaMessages: [`Non-indexed Parameters: (${format$1(parameters)})`, `Data:   ${data} (${size} bytes)`] });
-			Object.defineProperty(this, "name", {
-				enumerable: true,
-				configurable: true,
-				writable: true,
-				value: "AbiEvent.DataMismatchError"
-			});
-			Object.defineProperty(this, "abiEvent", {
-				enumerable: true,
-				configurable: true,
-				writable: true,
-				value: void 0
-			});
-			Object.defineProperty(this, "data", {
-				enumerable: true,
-				configurable: true,
-				writable: true,
-				value: void 0
-			});
-			Object.defineProperty(this, "parameters", {
-				enumerable: true,
-				configurable: true,
-				writable: true,
-				value: void 0
-			});
-			Object.defineProperty(this, "size", {
-				enumerable: true,
-				configurable: true,
-				writable: true,
-				value: void 0
-			});
-			this.abiEvent = abiEvent;
-			this.data = data;
-			this.parameters = parameters;
-			this.size = size;
-		}
-	};
-	TopicsMismatchError = class extends BaseError {
-		constructor({ abiEvent, param }) {
-			super([`Expected a topic for indexed event parameter${param.name ? ` "${param.name}"` : ""} for "${format(abiEvent)}".`].join("\n"));
-			Object.defineProperty(this, "name", {
-				enumerable: true,
-				configurable: true,
-				writable: true,
-				value: "AbiEvent.TopicsMismatchError"
-			});
-			Object.defineProperty(this, "abiEvent", {
-				enumerable: true,
-				configurable: true,
-				writable: true,
-				value: void 0
-			});
-			this.abiEvent = abiEvent;
-		}
-	};
-	SelectorTopicMismatchError = class extends BaseError {
-		constructor({ abiEvent, actual, expected }) {
-			super(`topics[0]="${actual}" does not match the expected topics[0]="${expected}".`, { metaMessages: [`Event: ${format(abiEvent)}`, `Selector: ${expected}`] });
-			Object.defineProperty(this, "name", {
-				enumerable: true,
-				configurable: true,
-				writable: true,
-				value: "AbiEvent.SelectorTopicMismatchError"
-			});
-		}
-	};
-	FilterTypeNotSupportedError = class extends BaseError {
-		constructor(type) {
-			super(`Filter type "${type}" is not supported.`);
-			Object.defineProperty(this, "name", {
-				enumerable: true,
-				configurable: true,
-				writable: true,
-				value: "AbiEvent.FilterTypeNotSupportedError"
-			});
-		}
-	};
-}));
-
-// node_modules/.pnpm/ox@0.14.59_typescript@6.0.3/node_modules/ox/_esm/core/AbiFunction.js
-function decodeResult(...parameters) {
-	const [abiFunction, data, options = {}] = (() => {
-		if (Array.isArray(parameters[0])) {
-			const [abi, name, data, options] = parameters;
-			return [
-				fromAbi(abi, name),
-				data,
-				options
-			];
-		}
-		return parameters;
-	})();
-	const values = decode(abiFunction.outputs, data, options);
-	if (values && Object.keys(values).length === 0) return void 0;
-	if (values && Object.keys(values).length === 1) {
-		if (Array.isArray(values)) return values[0];
-		return Object.values(values)[0];
-	}
-	return values;
-}
-function encodeData(...parameters) {
-	const [abiFunction, args = []] = (() => {
-		if (Array.isArray(parameters[0])) {
-			const [abi, name, args] = parameters;
-			return [fromAbi(abi, name, { args }), args];
-		}
-		const [abiFunction, args] = parameters;
-		return [abiFunction, args];
-	})();
-	const { overloads } = abiFunction;
-	const item = overloads ? fromAbi([abiFunction, ...overloads], abiFunction.name, { args }) : abiFunction;
-	const selector = getSelector(item);
-	const data = args.length > 0 ? encode$1(item.inputs, args) : void 0;
-	return data ? concat(selector, data) : selector;
-}
-/**
-* Parses an arbitrary **JSON ABI Function** or **Human Readable ABI Function** into a typed {@link ox#AbiFunction.AbiFunction}.
-*
-* @example
-* ### JSON ABIs
-*
-* ```ts twoslash
-* import { AbiFunction } from 'ox'
-*
-* const approve = AbiFunction.from({
-*   type: 'function',
-*   name: 'approve',
-*   stateMutability: 'nonpayable',
-*   inputs: [
-*     {
-*       name: 'spender',
-*       type: 'address',
-*     },
-*     {
-*       name: 'amount',
-*       type: 'uint256',
-*     },
-*   ],
-*   outputs: [{ type: 'bool' }],
-* })
-*
-* approve
-* //^?
-*
-*
-*
-*
-*
-*
-*
-*
-*
-*
-*
-*
-* ```
-*
-* @example
-* ### Human Readable ABIs
-*
-* A Human Readable ABI can be parsed into a typed ABI object:
-*
-* ```ts twoslash
-* import { AbiFunction } from 'ox'
-*
-* const approve = AbiFunction.from(
-*   'function approve(address spender, uint256 amount) returns (bool)' // [!code hl]
-* )
-*
-* approve
-* //^?
-*
-*
-*
-*
-*
-*
-*
-*
-*
-*
-*
-*
-*
-* ```
-*
-* @example
-* It is possible to specify `struct`s along with your definitions:
-*
-* ```ts twoslash
-* import { AbiFunction } from 'ox'
-*
-* const approve = AbiFunction.from([
-*   'struct Foo { address spender; uint256 amount; }', // [!code hl]
-*   'function approve(Foo foo) returns (bool)',
-* ])
-*
-* approve
-* //^?
-*
-*
-*
-*
-*
-*
-*
-*
-*
-*
-*
-*
-* ```
-*
-*
-*
-* @param abiFunction - The ABI Function to parse.
-* @returns Typed ABI Function.
-*/
-function from(abiFunction, options = {}) {
-	return from$3(abiFunction, options);
-}
-/**
-* Extracts an {@link ox#AbiFunction.AbiFunction} from an {@link ox#Abi.Abi} given a name and optional arguments.
-*
-* @example
-* ### Extracting by Name
-*
-* ABI Functions can be extracted by their name using the `name` option:
-*
-* ```ts twoslash
-* import { Abi, AbiFunction } from 'ox'
-*
-* const abi = Abi.from([
-*   'function foo()',
-*   'event Transfer(address owner, address to, uint256 tokenId)',
-*   'function bar(string a) returns (uint256 x)',
-* ])
-*
-* const item = AbiFunction.fromAbi(abi, 'foo') // [!code focus]
-* //    ^?
-*
-*
-*
-*
-*
-*
-* ```
-*
-* @example
-* ### Extracting by Selector
-*
-* ABI Functions can be extract by their selector when {@link ox#Hex.Hex} is provided to `name`.
-*
-* ```ts twoslash
-* import { Abi, AbiFunction } from 'ox'
-*
-* const abi = Abi.from([
-*   'function foo()',
-*   'event Transfer(address owner, address to, uint256 tokenId)',
-*   'function bar(string a) returns (uint256 x)',
-* ])
-* const item = AbiFunction.fromAbi(abi, '0x095ea7b3') // [!code focus]
-* //    ^?
-*
-*
-*
-*
-*
-*
-*
-*
-*
-* ```
-*
-* :::note
-*
-* Extracting via a hex selector is useful when extracting an ABI Function from an `eth_call` RPC response or
-* from a Transaction `input`.
-*
-* :::
-*
-* @param abi - The ABI to extract from.
-* @param name - The name (or selector) of the ABI item to extract.
-* @param options - Extraction options.
-* @returns The ABI item.
-*/
-function fromAbi(abi, name, options) {
-	const item = fromAbi$2(abi, name, options);
-	if (item.type !== "function") throw new NotFoundError({
-		name,
-		type: "function"
-	});
-	return item;
-}
-/**
-* Computes the [4-byte selector](https://solidity-by-example.org/function-selector/) for an {@link ox#AbiFunction.AbiFunction}.
-*
-* Useful for computing function selectors for calldata.
-*
-* @example
-* ```ts twoslash
-* import { AbiFunction } from 'ox'
-*
-* const selector = AbiFunction.getSelector('function ownerOf(uint256 tokenId)')
-* // @log: '0x6352211e'
-* ```
-*
-* @example
-* ```ts twoslash
-* import { AbiFunction } from 'ox'
-*
-* const selector = AbiFunction.getSelector({
-*   inputs: [{ type: 'uint256' }],
-*   name: 'ownerOf',
-*   outputs: [],
-*   stateMutability: 'view',
-*   type: 'function'
-* })
-* // @log: '0x6352211e'
-* ```
-*
-* @param abiItem - The ABI item to compute the selector for.
-* @returns The first 4 bytes of the {@link ox#Hash.(keccak256:function)} hash of the function signature.
-*/
-function getSelector(abiItem) {
-	return getSelector$2(abiItem);
-}
-var init_AbiFunction = __esmMin((() => {
-	init_AbiItem();
-	init_AbiParameters();
-	init_Hex();
-}));
-
-// node_modules/.pnpm/viem@2.57.13_typescript@6.0.3/node_modules/viem/_esm/constants/address.js
-var ethAddress, zeroAddress;
-var init_address = __esmMin((() => {
-	ethAddress = "0xeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeee";
-	zeroAddress = "0x0000000000000000000000000000000000000000";
-}));
-
-// node_modules/.pnpm/viem@2.57.13_typescript@6.0.3/node_modules/viem/_esm/actions/public/simulateCalls.js
-/**
-* Simulates execution of a batch of calls.
-*
-* @param client - Client to use
-* @param parameters - {@link SimulateCallsParameters}
-* @returns Results. {@link SimulateCallsReturnType}
-*
-* @example
-* ```ts
-* import { createPublicClient, http, parseEther } from 'viem'
-* import { mainnet } from 'viem/chains'
-* import { simulateCalls } from 'viem/actions'
-*
-* const client = createPublicClient({
-*   chain: mainnet,
-*   transport: http(),
-* })
-*
-* const result = await simulateCalls(client, {
-*   account: '0x5a0b54d5dc17e482fe8b0bdca5320161b95fb929',
-*   calls: [{
-*     {
-*       data: '0xdeadbeef',
-*       to: '0x70997970c51812dc3a010c7d01b50e0d17dc79c8',
-*     },
-*     {
-*       to: '0x70997970c51812dc3a010c7d01b50e0d17dc79c8',
-*       value: parseEther('1'),
-*     },
-*   ]
-* })
-* ```
-*/
-async function simulateCalls(client, parameters) {
-	const { blockNumber, blockTag, calls, stateOverrides, traceAssetChanges, traceTransfers, validation } = parameters;
-	const account = parameters.account ? parseAccount(parameters.account) : void 0;
-	if (traceAssetChanges && !account) throw new BaseError$1("`account` is required when `traceAssetChanges` is true");
-	const getBalanceData = account ? encode(from$2("constructor(bytes, bytes)"), {
-		bytecode: deploylessCallViaBytecodeBytecode,
-		args: [getBalanceCode, encodeData(from("function getBalance(address)"), [account.address])]
-	}) : void 0;
-	const blockTag_ = blockTag ?? client.experimental_blockTag ?? "latest";
-	let baseBlockNumber = blockNumber;
-	if (traceAssetChanges && typeof baseBlockNumber !== "bigint" && blockTag_ !== "earliest" && blockTag_ !== "pending") {
-		if (blockTag_ === "latest") baseBlockNumber = await getBlockNumber(client, { cacheTime: 0 });
-		else {
-			const block = await getBlock(client, { blockTag: blockTag_ });
-			if (typeof block.number !== "bigint") throw new BaseError$1(`Block tag \`${blockTag_}\` did not resolve to a number.`);
-			baseBlockNumber = block.number;
-		}
-	}
-	const block_ = typeof baseBlockNumber === "bigint" ? { blockNumber: baseBlockNumber } : { blockTag: blockTag_ };
-	const discovery = traceAssetChanges ? await simulateBlocks(client, {
-		...block_,
-		blocks: [{
-			calls: calls.map((call) => ({
-				...call,
-				from: account.address
-			})),
-			stateOverrides
-		}],
-		traceTransfers,
-		validation
-	}) : void 0;
-	const assetAddresses = discovery ? [.../* @__PURE__ */ new Set([...tokensFromLogs(discovery[0].calls.flatMap((call) => call.logs ?? []), account.address), ...parameters.calls.map((call) => call.to?.toLowerCase())])].filter((address) => Boolean(address) && address !== "0xeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeee" && address !== "0x0000000000000000000000000000000000000000") : [];
-	const staticCallAddress = getStaticCallAddress([
-		...account ? [account.address] : [],
-		...assetAddresses,
-		...stateOverrides?.map(({ address }) => address) ?? []
-	]);
-	const staticCallStateOverrides = [{
-		address: staticCallAddress,
-		code: staticCallCode
-	}];
-	const [balanceCallsPre, blocks] = await Promise.all([traceAssetChanges ? Promise.all([readBalance(client, {
-		account: account.address,
-		...block_,
-		data: getBalanceData,
-		stateOverride: stateOverrides
-	}), ...assetAddresses.map((address) => readBalance(client, {
-		account: account.address,
-		address,
-		...block_,
-		data: encodeData(balanceOfFunction, [account.address]),
-		staticCallAddress,
-		stateOverride: stateOverrides
-	}))]) : [], simulateBlocks(client, {
-		...block_,
-		blocks: [{
-			calls: [...calls, { to: zeroAddress }].map((call) => ({
-				...call,
-				from: account?.address
-			})),
-			stateOverrides
-		}, ...traceAssetChanges ? [
-			{ calls: [{ data: getBalanceData }] },
-			{
-				calls: assetAddresses.map((address) => ({
-					to: staticCallAddress,
-					gas: assetProbeGas,
-					data: encodeStaticCall(address, encodeData(balanceOfFunction, [account.address]))
-				})),
-				stateOverrides: staticCallStateOverrides
-			},
-			{
-				calls: assetAddresses.map((address) => ({
-					to: staticCallAddress,
-					gas: assetProbeGas,
-					data: encodeStaticCall(address, encodeData(decimalsFunction))
-				})),
-				stateOverrides: staticCallStateOverrides
-			},
-			{
-				calls: assetAddresses.map((address) => ({
-					to: staticCallAddress,
-					gas: assetProbeGas,
-					data: encodeStaticCall(address, encodeData(tokenUriFunction, [0n]))
-				})),
-				stateOverrides: staticCallStateOverrides
-			},
-			{
-				calls: assetAddresses.map((address) => ({
-					to: staticCallAddress,
-					gas: assetProbeGas,
-					data: encodeStaticCall(address, encodeData(symbolFunction))
-				})),
-				stateOverrides: staticCallStateOverrides
-			}
-		] : []],
-		traceTransfers,
-		validation
-	})]);
-	const block_results = blocks[0];
-	const [block_ethPost, block_assetsPost, block_decimals, block_tokenURI, block_symbols] = traceAssetChanges ? blocks.slice(1) : [];
-	const { calls: block_calls, ...block } = block_results;
-	const results = block_calls.slice(0, -1);
-	const balancesPre = balanceCallsPre.map((call) => isBalance(call) ? hexToBigInt(call.data) : null);
-	const ethPost = block_ethPost?.calls ?? [];
-	const assetsPost = block_assetsPost?.calls ?? [];
-	const balancesPost = [...ethPost, ...assetsPost].map((call) => isBalance(call) ? hexToBigInt(call.data) : null);
-	const decimals = (block_decimals?.calls ?? []).map((call) => decodeAssetResult(call, decimalsFunction));
-	const symbols = (block_symbols?.calls ?? []).map((call) => decodeAssetResult(call, symbolFunction));
-	const tokenURI = (block_tokenURI?.calls ?? []).map((call) => decodeAssetResult(call, tokenUriFunction));
-	const changes = [];
-	for (const [i, balancePost] of balancesPost.entries()) {
-		const balancePre_ = balancesPre[i];
-		const preCall = balanceCallsPre[i];
-		const balancePre = typeof balancePre_ === "bigint" ? balancePre_ : i > 0 && preCall?.status === "success" && preCall.data === "0x" ? 0n : null;
-		if (typeof balancePost !== "bigint") continue;
-		if (typeof balancePre !== "bigint") continue;
-		const decimals_ = decimals[i - 1];
-		const symbol_ = symbols[i - 1];
-		const tokenURI_ = tokenURI[i - 1];
-		const token = (() => {
-			if (i === 0) return {
-				address: ethAddress,
-				decimals: 18,
-				symbol: "ETH"
-			};
-			return {
-				address: assetAddresses[i - 1],
-				decimals: tokenURI_ || decimals_ ? Number(decimals_ ?? 1) : void 0,
-				symbol: symbol_ ?? void 0
-			};
-		})();
-		changes.push({
-			token,
-			value: {
-				pre: balancePre,
-				post: balancePost,
-				diff: balancePost - balancePre
-			}
-		});
-	}
-	return {
-		assetChanges: changes,
-		block,
-		results
-	};
-}
-function encodeStaticCall(address, data) {
-	return encodeData(staticCallFunction, [address, data]);
-}
-function tokensFromLogs(logs, account) {
-	const account_ = pad$2(account.toLowerCase(), { size: 32 });
-	return logs.filter((log) => {
-		if (log.topics[0]?.toLowerCase() !== transferEventSelector) return false;
-		if (log.address.toLowerCase() === "0xeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeee") return false;
-		return log.topics[1]?.toLowerCase() === account_ || log.topics[2]?.toLowerCase() === account_;
-	}).map((log) => log.address.toLowerCase());
-}
-function isBalance(call) {
-	return call.status === "success" && /^0x[\da-f]{64}$/i.test(call.data);
-}
-function decodeAssetResult(call, abiFunction) {
-	if (call.status === "failure" || call.data === "0x") return null;
-	try {
-		return decodeResult(abiFunction, call.data);
-	} catch {
-		return null;
-	}
-}
-async function readBalance(client, parameters) {
-	const { account, address, blockNumber, blockTag, data, staticCallAddress, stateOverride } = parameters;
-	try {
-		return {
-			data: (await call$1({
-				...client,
-				ccipRead: false
-			}, {
-				account: address ? "0x0000000000000000000000000000000000000000" : account,
-				data: address ? encodeStaticCall(address, data) : data,
-				stateOverride: address && staticCallAddress ? [...stateOverride ?? [], {
-					address: staticCallAddress,
-					code: staticCallCode
-				}] : stateOverride,
-				...address ? {
-					gas: assetProbeGas,
-					to: staticCallAddress
-				} : {},
-				...typeof blockNumber === "bigint" ? { blockNumber } : { blockTag }
-			})).data ?? "0x",
-			status: "success"
-		};
-	} catch (error) {
-		if (!(error instanceof CallExecutionError) || !(error.cause instanceof ExecutionRevertedError)) throw error;
-		return {
-			data: "0x",
-			status: "failure"
-		};
-	}
-}
-function getStaticCallAddress(addresses) {
-	const occupied = new Set(addresses.map((address) => address.toLowerCase()));
-	let value = staticCallAddressBase;
-	while (occupied.has(`0x${value.toString(16).padStart(40, "0")}`)) value++;
-	return `0x${value.toString(16).padStart(40, "0")}`;
-}
-var getBalanceCode, staticCallCode, assetProbeGas, staticCallAddressBase, transferEventSelector, balanceOfFunction, decimalsFunction, tokenUriFunction, symbolFunction, staticCallFunction;
-var init_simulateCalls = __esmMin((() => {
-	init_AbiConstructor();
-	init_AbiEvent();
-	init_AbiFunction();
-	init_parseAccount();
-	init_address();
-	init_contracts();
-	init_base();
-	init_contract$1();
-	init_node();
-	init_pad();
-	init_fromHex();
-	init_call();
-	init_getBlock();
-	init_getBlockNumber();
-	init_simulateBlocks();
-	getBalanceCode = "0x6080604052348015600e575f80fd5b5061016d8061001c5f395ff3fe608060405234801561000f575f80fd5b5060043610610029575f3560e01c8063f8b2cb4f1461002d575b5f80fd5b610047600480360381019061004291906100db565b61005d565b604051610054919061011e565b60405180910390f35b5f8173ffffffffffffffffffffffffffffffffffffffff16319050919050565b5f80fd5b5f73ffffffffffffffffffffffffffffffffffffffff82169050919050565b5f6100aa82610081565b9050919050565b6100ba816100a0565b81146100c4575f80fd5b50565b5f813590506100d5816100b1565b92915050565b5f602082840312156100f0576100ef61007d565b5b5f6100fd848285016100c7565b91505092915050565b5f819050919050565b61011881610106565b82525050565b5f6020820190506101315f83018461010f565b9291505056fea26469706673582212203b9fe929fe995c7cf9887f0bdba8a36dd78e8b73f149b17d2d9ad7cd09d2dc6264736f6c634300081a0033";
-	staticCallCode = "0x608060405234801561000f575f5ffd5b5060043610610029575f3560e01c8063fd00430c1461002d575b5f5ffd5b6100476004803603810190610042919061012b565b610049565b005b80825f375f5f825f865afa610060573d5f5f3e3d5ffd5b3d5f5f3e3d5ff35b5f5ffd5b5f5ffd5b5f73ffffffffffffffffffffffffffffffffffffffff82169050919050565b5f61009982610070565b9050919050565b6100a98161008f565b81146100b3575f5ffd5b50565b5f813590506100c4816100a0565b92915050565b5f5ffd5b5f5ffd5b5f5ffd5b5f5f83601f8401126100eb576100ea6100ca565b5b8235905067ffffffffffffffff811115610108576101076100ce565b5b602083019150836001820283011115610124576101236100d2565b5b9250929050565b5f5f5f6040848603121561014257610141610068565b5b5f61014f868287016100b6565b935050602084013567ffffffffffffffff8111156101705761016f61006c565b5b61017c868287016100d6565b9250925050925092509256fea2646970667358221220635ed99185cacf3f2acba6921f23687c969cec2bbaf5f9ad599f507e6e105e6964736f6c63430008230033";
-	assetProbeGas = 1000000n;
-	staticCallAddressBase = 3735928559n;
-	transferEventSelector = getSelector$1(from$1("event Transfer(address indexed from, address indexed to, uint256 value)"));
-	balanceOfFunction = from("function balanceOf(address) returns (uint256)");
-	decimalsFunction = from("function decimals() returns (uint256)");
-	tokenUriFunction = from("function tokenURI(uint256) returns (string)");
-	symbolFunction = from("function symbol() returns (string)");
-	staticCallFunction = from("function query(address target, bytes data)");
-}));
-
-// node_modules/.pnpm/ox@0.14.59_typescript@6.0.3/node_modules/ox/_esm/erc6492/SignatureErc6492.js
-/**
-* Asserts that the wrapped signature is valid.
-*
-* @example
-* ```ts twoslash
-* import { SignatureErc6492 } from 'ox/erc6492'
-*
-* SignatureErc6492.assert('0xdeadbeef')
-* // @error: InvalidWrappedSignatureError: Value `0xdeadbeef` is an invalid ERC-6492 wrapped signature.
-* ```
-*
-* @param wrapped - The wrapped signature to assert.
-*/
-function assert(wrapped) {
-	if (slice(wrapped, -32) !== "0x6492649264926492649264926492649264926492649264926492649264926492") throw new InvalidWrappedSignatureError(wrapped);
-}
-/**
-* Serializes an [ERC-6492 wrapped signature](https://eips.ethereum.org/EIPS/eip-6492#specification).
-*
-* @example
-* ```ts twoslash
-* import { Secp256k1, Signature } from 'ox'
-* import { SignatureErc6492 } from 'ox/erc6492' // [!code focus]
-*
-* const signature = Secp256k1.sign({
-*   payload: '0x...',
-*   privateKey: '0x...',
-* })
-*
-* const wrapped = SignatureErc6492.wrap({ // [!code focus]
-*   data: '0xdeadbeef', // [!code focus]
-*   signature: Signature.toHex(signature), // [!code focus]
-*   to: '0x00000000219ab540356cBB839Cbe05303d7705Fa', // [!code focus]
-* }) // [!code focus]
-* ```
-*
-* @param value - Wrapped signature to serialize.
-* @returns Serialized wrapped signature.
-*/
-function wrap(value) {
-	const { data, signature, to } = value;
-	return concat(encode$1(from$5("address, bytes, bytes"), [
-		to,
-		data,
-		signature
-	]), magicBytes);
-}
-/**
-* Validates a wrapped signature. Returns `true` if the wrapped signature is valid, `false` otherwise.
-*
-* @example
-* ```ts twoslash
-* import { SignatureErc6492 } from 'ox/erc6492'
-*
-* const valid = SignatureErc6492.validate('0xdeadbeef')
-* // @log: false
-* ```
-*
-* @param wrapped - The wrapped signature to validate.
-* @returns `true` if the wrapped signature is valid, `false` otherwise.
-*/
-function validate(wrapped) {
-	try {
-		assert(wrapped);
-		return true;
-	} catch {
-		return false;
-	}
-}
-var magicBytes, InvalidWrappedSignatureError;
-var init_SignatureErc6492 = __esmMin((() => {
-	init_AbiParameters();
-	init_Errors();
-	init_Hex();
-	magicBytes = "0x6492649264926492649264926492649264926492649264926492649264926492";
-	InvalidWrappedSignatureError = class extends BaseError {
-		constructor(wrapped) {
-			super(`Value \`${wrapped}\` is an invalid ERC-6492 wrapped signature.`);
-			Object.defineProperty(this, "name", {
-				enumerable: true,
-				configurable: true,
-				writable: true,
-				value: "SignatureErc6492.InvalidWrappedSignatureError"
-			});
-		}
-	};
-}));
-
-// node_modules/.pnpm/ox@0.14.59_typescript@6.0.3/node_modules/ox/_esm/erc6492/index.js
-var init_erc6492 = __esmMin((() => {
-	init_SignatureErc6492();
 }));
 
 // node_modules/.pnpm/viem@2.57.13_typescript@6.0.3/node_modules/viem/_esm/utils/signature/serializeSignature.js
@@ -21274,3669 +8262,6 @@ var init_serializeSignature = __esmMin((() => {
 	init_toBytes();
 }));
 
-// node_modules/.pnpm/viem@2.57.13_typescript@6.0.3/node_modules/viem/_esm/actions/public/verifyHash.js
-/**
-* Verifies a message hash onchain using ERC-6492.
-*
-* @param client - Client to use.
-* @param parameters - {@link VerifyHashParameters}
-* @returns Whether or not the signature is valid. {@link VerifyHashReturnType}
-*/
-async function verifyHash(client, parameters) {
-	const { address, chain = client.chain, hash, erc6492VerifierAddress: verifierAddress = parameters.universalSignatureVerifierAddress ?? chain?.contracts?.erc6492Verifier?.address, multicallAddress = parameters.multicallAddress ?? chain?.contracts?.multicall3?.address, mode = "auto" } = parameters;
-	if (chain?.verifyHash) return await chain.verifyHash(client, parameters);
-	const signature = (() => {
-		const signature = parameters.signature;
-		if (isHex(signature)) return signature;
-		if (typeof signature === "object" && "r" in signature && "s" in signature) return serializeSignature(signature);
-		return bytesToHex$1(signature);
-	})();
-	try {
-		if (mode === "eoa") try {
-			if (isAddressEqual(getAddress(address), await recoverAddress({
-				hash,
-				signature
-			}))) return true;
-		} catch {}
-		if (validate$1(signature)) return await verifyErc8010(client, {
-			...parameters,
-			multicallAddress,
-			signature
-		});
-		return await verifyErc6492(client, {
-			...parameters,
-			verifierAddress,
-			signature
-		});
-	} catch (error) {
-		if (mode !== "eoa") try {
-			if (isAddressEqual(getAddress(address), await recoverAddress({
-				hash,
-				signature
-			}))) return true;
-		} catch {}
-		if (error instanceof VerificationError) return false;
-		throw error;
-	}
-}
-/** @internal */
-async function verifyErc8010(client, parameters) {
-	const { address, blockHash, blockNumber, blockTag, hash, multicallAddress, requireCanonical } = parameters;
-	const { authorization: authorization_ox, data: initData, signature, to } = unwrap(parameters.signature);
-	if (await getCode(client, {
-		address,
-		blockHash,
-		blockNumber,
-		blockTag,
-		requireCanonical
-	}) === concatHex(["0xef0100", authorization_ox.address])) return await verifyErc1271(client, {
-		...parameters,
-		signature
-	});
-	const authorization = {
-		address: authorization_ox.address,
-		chainId: Number(authorization_ox.chainId),
-		nonce: Number(authorization_ox.nonce),
-		r: numberToHex(authorization_ox.r, { size: 32 }),
-		s: numberToHex(authorization_ox.s, { size: 32 }),
-		yParity: authorization_ox.yParity
-	};
-	if (!await verifyAuthorization({
-		address,
-		authorization
-	})) throw new VerificationError();
-	const results = await getAction(client, readContract, "readContract")({
-		...multicallAddress ? { address: multicallAddress } : { code: multicall3Bytecode },
-		authorizationList: [authorization],
-		abi: multicall3Abi,
-		blockHash,
-		blockNumber,
-		blockTag: "pending",
-		functionName: "aggregate3",
-		requireCanonical,
-		args: [[...initData ? [{
-			allowFailure: true,
-			target: to ?? address,
-			callData: initData
-		}] : [], {
-			allowFailure: true,
-			target: address,
-			callData: encodeFunctionData({
-				abi: erc1271Abi,
-				functionName: "isValidSignature",
-				args: [hash, signature]
-			})
-		}]]
-	});
-	if ((results[results.length - 1]?.returnData)?.startsWith("0x1626ba7e")) return true;
-	throw new VerificationError();
-}
-/** @internal */
-async function verifyErc6492(client, parameters) {
-	const { address, factory, factoryData, hash, signature, verifierAddress, ...rest } = parameters;
-	const wrappedSignature = await (async () => {
-		if (!factory && !factoryData) return signature;
-		if (validate(signature)) return signature;
-		return wrap({
-			data: factoryData,
-			signature,
-			to: factory
-		});
-	})();
-	const args = verifierAddress ? {
-		to: verifierAddress,
-		data: encodeFunctionData({
-			abi: erc6492SignatureValidatorAbi,
-			functionName: "isValidSig",
-			args: [
-				address,
-				hash,
-				wrappedSignature
-			]
-		}),
-		...rest
-	} : {
-		data: encodeDeployData({
-			abi: erc6492SignatureValidatorAbi,
-			args: [
-				address,
-				hash,
-				wrappedSignature
-			],
-			bytecode: erc6492SignatureValidatorByteCode
-		}),
-		...rest
-	};
-	const { data } = await getAction(client, call$1, "call")(args).catch((error) => {
-		if (error instanceof CallExecutionError) throw new VerificationError();
-		throw error;
-	});
-	if (hexToBool(data ?? "0x0")) return true;
-	throw new VerificationError();
-}
-/** @internal */
-async function verifyErc1271(client, parameters) {
-	const { address, blockHash, blockNumber, blockTag, hash, requireCanonical, signature } = parameters;
-	if ((await getAction(client, readContract, "readContract")({
-		address,
-		abi: erc1271Abi,
-		args: [hash, signature],
-		blockHash,
-		blockNumber,
-		blockTag,
-		functionName: "isValidSignature",
-		requireCanonical
-	}).catch((error) => {
-		if (error instanceof ContractFunctionExecutionError) throw new VerificationError();
-		throw error;
-	})).startsWith("0x1626ba7e")) return true;
-	throw new VerificationError();
-}
-var VerificationError;
-var init_verifyHash = __esmMin((() => {
-	init_erc6492();
-	init_erc8010();
-	init_abis();
-	init_contracts();
-	init_contract$1();
-	init_encodeDeployData();
-	init_encodeFunctionData();
-	init_getAddress();
-	init_isAddressEqual();
-	init_verifyAuthorization();
-	init_concat();
-	init_isHex();
-	init_fromHex();
-	init_toHex();
-	init_getAction();
-	init_recoverAddress();
-	init_serializeSignature();
-	init_call();
-	init_getCode();
-	init_readContract();
-	VerificationError = class extends Error {};
-}));
-
-// node_modules/.pnpm/viem@2.57.13_typescript@6.0.3/node_modules/viem/_esm/actions/public/verifyMessage.js
-/**
-* Verify that a message was signed by the provided address.
-*
-* Compatible with Smart Contract Accounts & Externally Owned Accounts via [ERC-6492](https://eips.ethereum.org/EIPS/eip-6492).
-*
-* - Docs {@link https://viem.sh/docs/actions/public/verifyMessage}
-*
-* @param client - Client to use.
-* @param parameters - {@link VerifyMessageParameters}
-* @returns Whether or not the signature is valid. {@link VerifyMessageReturnType}
-*/
-async function verifyMessage$1(client, { address, message, factory, factoryData, signature, ...callRequest }) {
-	const hash = hashMessage(message);
-	return getAction(client, verifyHash, "verifyHash")({
-		address,
-		factory,
-		factoryData,
-		hash,
-		signature,
-		...callRequest
-	});
-}
-var init_verifyMessage = __esmMin((() => {
-	init_getAction();
-	init_hashMessage();
-	init_verifyHash();
-}));
-
-// node_modules/.pnpm/viem@2.57.13_typescript@6.0.3/node_modules/viem/_esm/actions/public/verifyTypedData.js
-/**
-* Verify that typed data was signed by the provided address.
-*
-* - Docs {@link https://viem.sh/docs/actions/public/verifyTypedData}
-*
-* @param client - Client to use.
-* @param parameters - {@link VerifyTypedDataParameters}
-* @returns Whether or not the signature is valid. {@link VerifyTypedDataReturnType}
-*/
-async function verifyTypedData(client, parameters) {
-	const { address, factory, factoryData, signature, message, primaryType, types, domain, ...callRequest } = parameters;
-	const hash = hashTypedData({
-		message,
-		primaryType,
-		types,
-		domain
-	});
-	return getAction(client, verifyHash, "verifyHash")({
-		address,
-		factory,
-		factoryData,
-		hash,
-		signature,
-		...callRequest
-	});
-}
-var init_verifyTypedData = __esmMin((() => {
-	init_getAction();
-	init_hashTypedData();
-	init_verifyHash();
-}));
-
-// node_modules/.pnpm/viem@2.57.13_typescript@6.0.3/node_modules/viem/_esm/actions/public/watchBlockNumber.js
-/**
-* Watches and returns incoming block numbers.
-*
-* - Docs: https://viem.sh/docs/actions/public/watchBlockNumber
-* - Examples: https://stackblitz.com/github/wevm/viem/tree/main/examples/blocks_watching-blocks
-* - JSON-RPC Methods:
-*   - When `poll: true`, calls [`eth_blockNumber`](https://ethereum.org/en/developers/docs/apis/json-rpc/#eth_blocknumber) on a polling interval.
-*   - When `poll: false` & WebSocket Transport, uses a WebSocket subscription via [`eth_subscribe`](https://docs.alchemy.com/reference/eth-subscribe-polygon) and the `"newHeads"` event.
-*
-* @param client - Client to use
-* @param parameters - {@link WatchBlockNumberParameters}
-* @returns A function that can be invoked to stop watching for new block numbers. {@link WatchBlockNumberReturnType}
-*
-* @example
-* import { createPublicClient, watchBlockNumber, http } from 'viem'
-* import { mainnet } from 'viem/chains'
-*
-* const client = createPublicClient({
-*   chain: mainnet,
-*   transport: http(),
-* })
-* const unwatch = watchBlockNumber(client, {
-*   onBlockNumber: (blockNumber) => console.log(blockNumber),
-* })
-*/
-function watchBlockNumber(client, { emitOnBegin = false, emitMissed = false, onBlockNumber, onError, poll: poll_, pollingInterval = client.pollingInterval }) {
-	const enablePolling = (() => {
-		if (typeof poll_ !== "undefined") return poll_;
-		if (client.transport.type === "webSocket" || client.transport.type === "ipc") return false;
-		if (client.transport.type === "fallback" && (client.transport.transports[0].config.type === "webSocket" || client.transport.transports[0].config.type === "ipc")) return false;
-		return true;
-	})();
-	let prevBlockNumber;
-	const pollBlockNumber = () => {
-		const observerId = stringify$2([
-			"watchBlockNumber",
-			client.uid,
-			emitOnBegin,
-			emitMissed,
-			pollingInterval
-		]);
-		return observe(observerId, {
-			onBlockNumber,
-			onError
-		}, (emit) => poll(async () => {
-			try {
-				const blockNumber = await getAction(client, getBlockNumber, "getBlockNumber")({ cacheTime: 0 });
-				if (prevBlockNumber !== void 0) {
-					if (blockNumber === prevBlockNumber) return;
-					if (blockNumber - prevBlockNumber > 1 && emitMissed) for (let i = prevBlockNumber + 1n; i < blockNumber; i++) {
-						emit.onBlockNumber(i, prevBlockNumber);
-						prevBlockNumber = i;
-					}
-				}
-				if (prevBlockNumber === void 0 || blockNumber > prevBlockNumber) {
-					emit.onBlockNumber(blockNumber, prevBlockNumber);
-					prevBlockNumber = blockNumber;
-				}
-			} catch (err) {
-				emit.onError?.(err);
-			}
-		}, {
-			emitOnBegin,
-			interval: pollingInterval
-		}));
-	};
-	const subscribeBlockNumber = () => {
-		const observerId = stringify$2([
-			"watchBlockNumber",
-			client.uid,
-			emitOnBegin,
-			emitMissed
-		]);
-		return observe(observerId, {
-			onBlockNumber,
-			onError
-		}, (emit) => {
-			let active = true;
-			let unsubscribe = () => active = false;
-			(async () => {
-				try {
-					const { unsubscribe: unsubscribe_ } = await (() => {
-						if (client.transport.type === "fallback") {
-							const transport = client.transport.transports.find((transport) => transport.config.type === "webSocket" || transport.config.type === "ipc");
-							if (!transport) return client.transport;
-							return transport.value;
-						}
-						return client.transport;
-					})().subscribe({
-						params: ["newHeads"],
-						onData(data) {
-							if (!active) return;
-							const blockNumber = hexToBigInt(data.result?.number);
-							emit.onBlockNumber(blockNumber, prevBlockNumber);
-							prevBlockNumber = blockNumber;
-						},
-						onError(error) {
-							emit.onError?.(error);
-						}
-					});
-					unsubscribe = unsubscribe_;
-					if (!active) unsubscribe();
-				} catch (err) {
-					onError?.(err);
-				}
-			})();
-			return () => unsubscribe();
-		});
-	};
-	return enablePolling ? pollBlockNumber() : subscribeBlockNumber();
-}
-var init_watchBlockNumber = __esmMin((() => {
-	init_fromHex();
-	init_getAction();
-	init_observe();
-	init_poll();
-	init_stringify$1();
-	init_getBlockNumber();
-}));
-
-// node_modules/.pnpm/viem@2.57.13_typescript@6.0.3/node_modules/viem/_esm/actions/public/waitForTransactionReceipt.js
-/**
-* Waits for the [Transaction](https://viem.sh/docs/glossary/terms#transaction) to be included on a [Block](https://viem.sh/docs/glossary/terms#block) (one confirmation), and then returns the [Transaction Receipt](https://viem.sh/docs/glossary/terms#transaction-receipt).
-*
-* - Docs: https://viem.sh/docs/actions/public/waitForTransactionReceipt
-* - Example: https://stackblitz.com/github/wevm/viem/tree/main/examples/transactions_sending-transactions
-* - JSON-RPC Methods:
-*   - Polls [`eth_getTransactionReceipt`](https://ethereum.org/en/developers/docs/apis/json-rpc/#eth_getTransactionReceipt) on each block until it has been processed.
-*   - If a Transaction has been replaced:
-*     - Calls [`eth_getBlockByNumber`](https://ethereum.org/en/developers/docs/apis/json-rpc/#eth_getblockbynumber) and extracts the transactions
-*     - Checks if one of the Transactions is a replacement
-*     - If so, calls [`eth_getTransactionReceipt`](https://ethereum.org/en/developers/docs/apis/json-rpc/#eth_getTransactionReceipt).
-*   - If the Transaction is not found and `replacement` is provided:
-*     - Calls `eth_getTransactionBySenderAndNonce` to find the Transaction in its nonce slot
-*     - If it is a replacement, calls [`eth_getTransactionReceipt`](https://ethereum.org/en/developers/docs/apis/json-rpc/#eth_getTransactionReceipt).
-*
-* The `waitForTransactionReceipt` action additionally supports Replacement detection (e.g. sped up Transactions).
-*
-* Transactions can be replaced when a user modifies their transaction in their wallet (to speed up or cancel). Transactions are replaced when they are sent from the same nonce.
-*
-* There are 3 types of Transaction Replacement reasons:
-*
-* - `repriced`: The gas price has been modified (e.g. different `maxFeePerGas`)
-* - `cancelled`: The Transaction has been cancelled (e.g. `value === 0n`)
-* - `replaced`: The Transaction has been replaced (e.g. different `value` or `data`)
-*
-* @param client - Client to use
-* @param parameters - {@link WaitForTransactionReceiptParameters}
-* @returns The transaction receipt. {@link WaitForTransactionReceiptReturnType}
-*
-* @example
-* import { createPublicClient, waitForTransactionReceipt, http } from 'viem'
-* import { mainnet } from 'viem/chains'
-*
-* const client = createPublicClient({
-*   chain: mainnet,
-*   transport: http(),
-* })
-* const transactionReceipt = await waitForTransactionReceipt(client, {
-*   hash: '0x4ca7ee652d57678f26e887c149ab0735f41de37bcad58c9f6d3ed5824f15b74d',
-* })
-*/
-async function waitForTransactionReceipt(client, parameters) {
-	const { checkReplacement = client.chain?.supportsTransactionReplacementDetection ?? true, confirmations = 1, hash, onReplaced, retryCount = 6, retryDelay = ({ count }) => ~~(1 << count) * 200, timeout = 18e4 } = parameters;
-	const replacement = client.chain?.transactionReplacement?.getKey ? void 0 : parameters.replacement;
-	const getReplacementKey = (transaction) => client.chain?.transactionReplacement?.getKey?.(transaction) ?? String(transaction.nonce);
-	const pollingInterval = (() => {
-		if (parameters.pollingInterval) return parameters.pollingInterval;
-		if (client.chain?.experimental_preconfirmationTime) return client.chain.experimental_preconfirmationTime;
-		return client.pollingInterval;
-	})();
-	const observerId = stringify$2([
-		"waitForTransactionReceipt",
-		client.uid,
-		hash,
-		{
-			checkReplacement,
-			confirmations,
-			pollingInterval,
-			replacement,
-			retryCount,
-			timeout
-		}
-	]);
-	let transaction;
-	let receipt;
-	let replacementResponse;
-	let retrying = false;
-	let _unobserve;
-	let _unwatch;
-	const { promise, resolve, reject } = withResolvers();
-	const timer = timeout ? setTimeout(() => {
-		_unwatch?.();
-		_unobserve?.();
-		reject(new WaitForTransactionReceiptTimeoutError({ hash }));
-	}, timeout) : void 0;
-	_unobserve = observe(observerId, {
-		onReplaced,
-		resolve,
-		reject
-	}, async (emit) => {
-		receipt = await getAction(client, getTransactionReceipt, "getTransactionReceipt")({ hash }).catch(() => void 0);
-		if (receipt && confirmations <= 1) {
-			clearTimeout(timer);
-			emit.resolve(receipt);
-			_unobserve?.();
-			return;
-		}
-		_unwatch = getAction(client, watchBlockNumber, "watchBlockNumber")({
-			emitMissed: true,
-			emitOnBegin: true,
-			poll: true,
-			pollingInterval,
-			async onBlockNumber(blockNumber_) {
-				const done = (fn) => {
-					clearTimeout(timer);
-					_unwatch?.();
-					fn();
-					_unobserve?.();
-				};
-				let blockNumber = blockNumber_;
-				if (retrying) return;
-				try {
-					if (receipt) {
-						if (confirmations > 1 && (!receipt.blockNumber || blockNumber - receipt.blockNumber + 1n < confirmations)) return;
-						done(() => {
-							if (replacementResponse) emit.onReplaced?.(replacementResponse);
-							emit.resolve(receipt);
-						});
-						return;
-					}
-					if (checkReplacement && !transaction) {
-						retrying = true;
-						await withRetry(async () => {
-							transaction = await getAction(client, getTransaction, "getTransaction")({ hash });
-							if (transaction.blockNumber) blockNumber = transaction.blockNumber;
-						}, {
-							delay: retryDelay,
-							retryCount,
-							shouldRetry: ({ error }) => !(replacement && error instanceof TransactionNotFoundError)
-						});
-						retrying = false;
-					}
-					receipt = await getAction(client, getTransactionReceipt, "getTransactionReceipt")({ hash });
-					if (confirmations > 1 && (!receipt.blockNumber || blockNumber - receipt.blockNumber + 1n < confirmations)) return;
-					done(() => emit.resolve(receipt));
-				} catch (err) {
-					if (err instanceof TransactionNotFoundError || err instanceof TransactionReceiptNotFoundError) {
-						retrying = false;
-						const replaced = transaction ?? (checkReplacement && replacement ? {
-							...replacement,
-							hash: hash.toLowerCase()
-						} : void 0);
-						if (!replaced) return;
-						if (replaced.blockNumber) return;
-						try {
-							if (!transaction) {
-								retrying = true;
-								const found = await getAction(client, getTransaction, "getTransaction")({
-									nonce: replaced.nonce,
-									sender: replaced.from
-								}).catch((error) => {
-									if (error instanceof MethodNotFoundRpcError || error instanceof MethodNotSupportedRpcError) transaction = replaced;
-								});
-								retrying = false;
-								if (found?.hash.toLowerCase() === replaced.hash) {
-									transaction = found;
-									return;
-								}
-								if (found) {
-									const replacementReceipt = await getAction(client, getTransactionReceipt, "getTransactionReceipt")({ hash: found.hash }).catch((error) => {
-										if (error instanceof TransactionReceiptNotFoundError) return void 0;
-										throw error;
-									});
-									if (!replacementReceipt) return;
-									receipt = replacementReceipt;
-									replacementResponse = {
-										reason: client.chain?.transactionReplacement?.getReason?.({
-											replaced,
-											replacement: found
-										}) ?? getReplacementReason(replaced, found),
-										replacedTransaction: replaced,
-										transaction: found,
-										transactionReceipt: receipt
-									};
-									if (confirmations > 1 && (!receipt.blockNumber || blockNumber - receipt.blockNumber + 1n < confirmations)) return;
-									done(() => {
-										emit.onReplaced?.(replacementResponse);
-										emit.resolve(receipt);
-									});
-									return;
-								}
-							}
-							retrying = true;
-							const block = await withRetry(() => getAction(client, getBlock, "getBlock")({
-								blockNumber,
-								includeTransactions: true
-							}), {
-								delay: retryDelay,
-								retryCount,
-								shouldRetry: ({ error }) => error instanceof BlockNotFoundError
-							});
-							retrying = false;
-							const replacedKey = getReplacementKey(replaced);
-							const replacementTransaction = block.transactions.find((candidate) => isAddressEqual(candidate.from, replaced.from) && candidate.hash !== replaced.hash && getReplacementKey(candidate) === replacedKey);
-							if (!replacementTransaction) return;
-							receipt = await getAction(client, getTransactionReceipt, "getTransactionReceipt")({ hash: replacementTransaction.hash });
-							replacementResponse = {
-								reason: client.chain?.transactionReplacement?.getReason?.({
-									replaced,
-									replacement: replacementTransaction
-								}) ?? getReplacementReason(replaced, replacementTransaction),
-								replacedTransaction: replaced,
-								transaction: replacementTransaction,
-								transactionReceipt: receipt
-							};
-							if (confirmations > 1 && (!receipt.blockNumber || blockNumber - receipt.blockNumber + 1n < confirmations)) return;
-							done(() => {
-								emit.onReplaced?.(replacementResponse);
-								emit.resolve(receipt);
-							});
-						} catch (err_) {
-							done(() => emit.reject(err_));
-						}
-					} else done(() => emit.reject(err));
-				}
-			}
-		});
-	});
-	return promise.finally(() => {
-		clearTimeout(timer);
-		_unobserve?.();
-	});
-}
-function getReplacementReason(replaced, replacement) {
-	if ((replacement.to && replaced.to ? isAddressEqual(replacement.to, replaced.to) : replacement.to === replaced.to) && replacement.value === replaced.value && replacement.input === replaced.input) return "repriced";
-	if (replacement.from === replacement.to && replacement.value === 0n) return "cancelled";
-	return "replaced";
-}
-var init_waitForTransactionReceipt = __esmMin((() => {
-	init_block$1();
-	init_rpc();
-	init_transaction$1();
-	init_isAddressEqual();
-	init_getAction();
-	init_observe();
-	init_withResolvers();
-	init_withRetry();
-	init_stringify$1();
-	init_getBlock();
-	init_getTransaction();
-	init_getTransactionReceipt();
-	init_watchBlockNumber();
-}));
-
-// node_modules/.pnpm/viem@2.57.13_typescript@6.0.3/node_modules/viem/_esm/actions/public/watchBlockHeaders.js
-/**
-* Watches and returns incoming block headers.
-*
-* - Docs: https://viem.sh/docs/actions/public/watchBlockHeaders
-* - JSON-RPC Methods: Uses a WebSocket or IPC subscription via [`eth_subscribe`](https://ethereum.org/en/developers/docs/apis/json-rpc/#eth_subscribe) and the `"newHeads"` event.
-*
-* @param client - Client to use
-* @param parameters - {@link WatchBlockHeadersParameters}
-* @returns A function that can be invoked to stop watching for new block headers. {@link WatchBlockHeadersReturnType}
-*
-* @example
-* import { createPublicClient, webSocket } from 'viem'
-* import { watchBlockHeaders } from 'viem/actions'
-* import { mainnet } from 'viem/chains'
-*
-* const client = createPublicClient({
-*   chain: mainnet,
-*   transport: webSocket(),
-* })
-* const unwatch = watchBlockHeaders(client, {
-*   onBlockHeader: (blockHeader) => console.log(blockHeader),
-* })
-*/
-function watchBlockHeaders(client, { onBlockHeader, onError }) {
-	let prevBlockHeader;
-	const observerId = stringify$2(["watchBlockHeaders", client.uid]);
-	return observe(observerId, {
-		onBlockHeader,
-		onError
-	}, (emit) => {
-		let active = true;
-		let subscribed = false;
-		let unsubscribe = () => active = false;
-		(async () => {
-			try {
-				const { unsubscribe: unsubscribe_ } = await (() => {
-					if (client.transport.type === "fallback") {
-						const transport = client.transport.transports.find((transport) => transport.config.type === "webSocket" || transport.config.type === "ipc");
-						if (!transport) return client.transport;
-						return transport.value;
-					}
-					return client.transport;
-				})().subscribe({
-					params: ["newHeads"],
-					onData(data) {
-						if (!active) return;
-						const blockHeader = (client.chain?.formatters?.block?.format || formatBlock)(data.result, "watchBlockHeaders");
-						for (const field of blockFields) delete blockHeader[field];
-						emit.onBlockHeader(blockHeader, prevBlockHeader);
-						prevBlockHeader = blockHeader;
-					},
-					onError(error) {
-						if (subscribed) emit.onError?.(error);
-					}
-				});
-				subscribed = true;
-				unsubscribe = unsubscribe_;
-				if (!active) unsubscribe();
-			} catch (err) {
-				emit.onError?.(err);
-			}
-		})();
-		return () => unsubscribe();
-	});
-}
-var blockFields;
-var init_watchBlockHeaders = __esmMin((() => {
-	init_block();
-	init_observe();
-	init_stringify$1();
-	blockFields = [
-		"size",
-		"totalDifficulty",
-		"transactions",
-		"uncles",
-		"withdrawals"
-	];
-}));
-
-// node_modules/.pnpm/viem@2.57.13_typescript@6.0.3/node_modules/viem/_esm/actions/public/watchBlocks.js
-/**
-* Watches and returns information for incoming blocks.
-*
-* - Docs: https://viem.sh/docs/actions/public/watchBlocks
-* - Examples: https://stackblitz.com/github/wevm/viem/tree/main/examples/blocks_watching-blocks
-* - JSON-RPC Methods:
-*   - When `poll: true`, calls [`eth_getBlockByNumber`](https://ethereum.org/en/developers/docs/apis/json-rpc/#eth_getBlockByNumber) on a polling interval.
-*   - When `poll: false` & WebSocket Transport, uses a WebSocket subscription via [`eth_subscribe`](https://docs.alchemy.com/reference/eth-subscribe-polygon) and the `"newHeads"` event.
-*
-* @param client - Client to use
-* @param parameters - {@link WatchBlocksParameters}
-* @returns A function that can be invoked to stop watching for new block numbers. {@link WatchBlocksReturnType}
-*
-* @example
-* import { createPublicClient, watchBlocks, http } from 'viem'
-* import { mainnet } from 'viem/chains'
-*
-* const client = createPublicClient({
-*   chain: mainnet,
-*   transport: http(),
-* })
-* const unwatch = watchBlocks(client, {
-*   onBlock: (block) => console.log(block),
-* })
-*/
-function watchBlocks(client, { blockTag = client.experimental_blockTag ?? "latest", emitMissed = false, emitOnBegin = false, onBlock, onError, includeTransactions: includeTransactions_, poll: poll_, pollingInterval = client.pollingInterval }) {
-	const enablePolling = (() => {
-		if (typeof poll_ !== "undefined") return poll_;
-		if (client.transport.type === "webSocket" || client.transport.type === "ipc") return false;
-		if (client.transport.type === "fallback" && (client.transport.transports[0].config.type === "webSocket" || client.transport.transports[0].config.type === "ipc")) return false;
-		return true;
-	})();
-	const includeTransactions = includeTransactions_ ?? false;
-	let prevBlock;
-	const pollBlocks = () => {
-		const observerId = stringify$2([
-			"watchBlocks",
-			client.uid,
-			blockTag,
-			emitMissed,
-			emitOnBegin,
-			includeTransactions,
-			pollingInterval
-		]);
-		return observe(observerId, {
-			onBlock,
-			onError
-		}, (emit) => poll(async () => {
-			try {
-				const block = await getAction(client, getBlock, "getBlock")({
-					blockTag,
-					includeTransactions
-				});
-				if (block.number !== null && prevBlock?.number != null) {
-					if (block.number === prevBlock.number) return;
-					if (block.number - prevBlock.number > 1 && emitMissed) for (let i = prevBlock?.number + 1n; i < block.number; i++) {
-						const block = await getAction(client, getBlock, "getBlock")({
-							blockNumber: i,
-							includeTransactions
-						});
-						emit.onBlock(block, prevBlock);
-						prevBlock = block;
-					}
-				}
-				if (prevBlock?.number == null || blockTag === "pending" && block?.number == null || block.number !== null && block.number > prevBlock.number) {
-					emit.onBlock(block, prevBlock);
-					prevBlock = block;
-				}
-			} catch (err) {
-				emit.onError?.(err);
-			}
-		}, {
-			emitOnBegin,
-			interval: pollingInterval
-		}));
-	};
-	const subscribeBlocks = () => {
-		let active = true;
-		let emitFetched = true;
-		let unsubscribe = () => active = false;
-		(async () => {
-			try {
-				if (emitOnBegin) getAction(client, getBlock, "getBlock")({
-					blockTag,
-					includeTransactions
-				}).then((block) => {
-					if (!active) return;
-					if (!emitFetched) return;
-					onBlock(block, void 0);
-					emitFetched = false;
-				}).catch(onError);
-				const { unsubscribe: unsubscribe_ } = await (() => {
-					if (client.transport.type === "fallback") {
-						const transport = client.transport.transports.find((transport) => transport.config.type === "webSocket" || transport.config.type === "ipc");
-						if (!transport) return client.transport;
-						return transport.value;
-					}
-					return client.transport;
-				})().subscribe({
-					params: ["newHeads"],
-					async onData(data) {
-						if (!active) return;
-						const block = await getAction(client, getBlock, "getBlock")({
-							blockNumber: data.result?.number,
-							includeTransactions
-						}).catch(() => {});
-						if (!active) return;
-						onBlock(block, prevBlock);
-						emitFetched = false;
-						prevBlock = block;
-					},
-					onError(error) {
-						onError?.(error);
-					}
-				});
-				unsubscribe = unsubscribe_;
-				if (!active) unsubscribe();
-			} catch (err) {
-				onError?.(err);
-			}
-		})();
-		return () => unsubscribe();
-	};
-	return enablePolling ? pollBlocks() : subscribeBlocks();
-}
-var init_watchBlocks = __esmMin((() => {
-	init_getAction();
-	init_observe();
-	init_poll();
-	init_stringify$1();
-	init_getBlock();
-}));
-
-// node_modules/.pnpm/viem@2.57.13_typescript@6.0.3/node_modules/viem/_esm/actions/public/watchEvent.js
-/**
-* Watches and returns emitted [Event Logs](https://viem.sh/docs/glossary/terms#event-log).
-*
-* - Docs: https://viem.sh/docs/actions/public/watchEvent
-* - JSON-RPC Methods:
-*   - **RPC Provider supports `eth_newFilter`:**
-*     - Calls [`eth_newFilter`](https://ethereum.org/en/developers/docs/apis/json-rpc/#eth_newfilter) to create a filter (called on initialize).
-*     - On a polling interval, it will call [`eth_getFilterChanges`](https://ethereum.org/en/developers/docs/apis/json-rpc/#eth_getfilterchanges).
-*   - **RPC Provider does not support `eth_newFilter`:**
-*     - Calls [`eth_getLogs`](https://ethereum.org/en/developers/docs/apis/json-rpc/#eth_getlogs) for each block between the polling interval.
-*
-* This Action will batch up all the Event Logs found within the [`pollingInterval`](https://viem.sh/docs/actions/public/watchEvent#pollinginterval-optional), and invoke them via [`onLogs`](https://viem.sh/docs/actions/public/watchEvent#onLogs).
-*
-* `watchEvent` will attempt to create an [Event Filter](https://viem.sh/docs/actions/public/createEventFilter) and listen to changes to the Filter per polling interval, however, if the RPC Provider does not support Filters (e.g. `eth_newFilter`), then `watchEvent` will fall back to using [`getLogs`](https://viem.sh/docs/actions/public/getLogs) instead. If `getLogs` fails for a block range, `watchEvent` will retry with smaller block ranges and may call `onLogs` more than once per polling interval.
-*
-* @param client - Client to use
-* @param parameters - {@link WatchEventParameters}
-* @returns A function that can be invoked to stop watching for new Event Logs. {@link WatchEventReturnType}
-*
-* @example
-* import { createPublicClient, http } from 'viem'
-* import { mainnet } from 'viem/chains'
-* import { watchEvent } from 'viem/public'
-*
-* const client = createPublicClient({
-*   chain: mainnet,
-*   transport: http(),
-* })
-* const unwatch = watchEvent(client, {
-*   onLogs: (logs) => console.log(logs),
-* })
-*/
-function watchEvent(client, { address, args, batch = true, event, events, fromBlock, onError, onLogs, poll: poll_, pollingInterval = client.pollingInterval, strict: strict_ }) {
-	const enablePolling = (() => {
-		if (typeof poll_ !== "undefined") return poll_;
-		if (typeof fromBlock === "bigint") return true;
-		if (client.transport.type === "webSocket" || client.transport.type === "ipc") return false;
-		if (client.transport.type === "fallback" && (client.transport.transports[0].config.type === "webSocket" || client.transport.transports[0].config.type === "ipc")) return false;
-		return true;
-	})();
-	const strict = strict_ ?? false;
-	const pollEvent = () => {
-		const observerId = stringify$2([
-			"watchEvent",
-			address,
-			args,
-			batch,
-			client.uid,
-			event,
-			events,
-			pollingInterval,
-			strict,
-			fromBlock
-		]);
-		return observe(observerId, {
-			onLogs,
-			onError
-		}, (emit) => {
-			let active = true;
-			let previousBlockNumber = fromBlock === void 0 ? void 0 : fromBlock - 1n;
-			let filter;
-			let initialized = false;
-			const emitLogs = (logs) => {
-				if (logs.length === 0) return;
-				if (batch) emit.onLogs(logs);
-				else for (const log of logs) emit.onLogs([log]);
-			};
-			const getLogsInRange = (from, to) => getAction(client, getLogs, "getLogs")({
-				address,
-				args,
-				event,
-				events,
-				fromBlock: from,
-				strict,
-				toBlock: to
-			});
-			const unwatch = poll(async () => {
-				if (!initialized) {
-					try {
-						filter = await getAction(client, createEventFilter, "createEventFilter")({
-							address,
-							args,
-							event,
-							events,
-							strict,
-							fromBlock
-						});
-					} catch {}
-					initialized = true;
-					if (filter) return;
-				}
-				try {
-					if (filter) {
-						const logs = await getAction(client, getFilterChanges, "getFilterChanges")({ filter });
-						emitLogs(logs);
-						return;
-					}
-					const blockNumber = await getAction(client, getBlockNumber, "getBlockNumber")({});
-					previousBlockNumber ??= blockNumber;
-					let size = blockNumber - previousBlockNumber;
-					while (previousBlockNumber < blockNumber) {
-						const from = previousBlockNumber + 1n;
-						const end = previousBlockNumber + size;
-						const to = end < blockNumber ? end : blockNumber;
-						const logs = await getLogsInRange(from, to).catch((error) => {
-							if (from === to || !isRangeError(error)) throw error;
-						});
-						if (!active) return;
-						if (!logs) {
-							size = (to - from + 1n) / 2n;
-							continue;
-						}
-						previousBlockNumber = to;
-						emitLogs(logs);
-					}
-				} catch (err) {
-					if (filter && err instanceof InvalidInputRpcError) initialized = false;
-					emit.onError?.(err);
-				}
-			}, {
-				emitOnBegin: true,
-				interval: pollingInterval
-			});
-			return async () => {
-				active = false;
-				if (filter) await getAction(client, uninstallFilter, "uninstallFilter")({ filter });
-				unwatch();
-			};
-		});
-	};
-	const subscribeEvent = () => {
-		let active = true;
-		let unsubscribe = () => active = false;
-		(async () => {
-			try {
-				const transport = (() => {
-					if (client.transport.type === "fallback") {
-						const transport = client.transport.transports.find((transport) => transport.config.type === "webSocket" || transport.config.type === "ipc");
-						if (!transport) return client.transport;
-						return transport.value;
-					}
-					return client.transport;
-				})();
-				const events_ = events ?? (event ? [event] : void 0);
-				let topics = [];
-				if (events_) {
-					topics = [events_.flatMap((event) => encodeEventTopics({
-						abi: [event],
-						eventName: event.name,
-						args
-					}))];
-					if (event) topics = topics[0];
-				}
-				const { unsubscribe: unsubscribe_ } = await transport.subscribe({
-					params: ["logs", {
-						address,
-						topics
-					}],
-					onData(data) {
-						if (!active) return;
-						const log = data.result;
-						try {
-							const { eventName, args } = decodeEventLog({
-								abi: events_ ?? [],
-								data: log.data,
-								topics: log.topics,
-								strict
-							});
-							onLogs([formatLog(log, {
-								args,
-								eventName
-							})]);
-						} catch (err) {
-							let eventName;
-							let isUnnamed;
-							if (err instanceof DecodeLogDataMismatch || err instanceof DecodeLogTopicsMismatch) {
-								if (strict_) return;
-								eventName = err.abiItem.name;
-								isUnnamed = err.abiItem.inputs?.some((x) => !("name" in x && x.name));
-							}
-							onLogs([formatLog(log, {
-								args: isUnnamed ? [] : {},
-								eventName
-							})]);
-						}
-					},
-					onError(error) {
-						onError?.(error);
-					}
-				});
-				unsubscribe = unsubscribe_;
-				if (!active) unsubscribe();
-			} catch (err) {
-				onError?.(err);
-			}
-		})();
-		return () => unsubscribe();
-	};
-	return enablePolling ? pollEvent() : subscribeEvent();
-}
-/** Returns whether a failed `eth_getLogs` request may succeed with a smaller block range. */
-function isRangeError(error) {
-	if (!(error instanceof BaseError$1)) return true;
-	const cause = error.walk((err) => err instanceof HttpRequestError || err instanceof RpcRequestError);
-	if (!cause) return true;
-	if (cause instanceof RpcRequestError && cause.code === 429) return false;
-	if (cause instanceof HttpRequestError && cause.status === void 0) return false;
-	return cause.status !== 401 && cause.status !== 403 && cause.status !== 429;
-}
-var init_watchEvent = __esmMin((() => {
-	init_abi();
-	init_base();
-	init_request();
-	init_rpc();
-	init_decodeEventLog();
-	init_encodeEventTopics();
-	init_log$1();
-	init_getAction();
-	init_observe();
-	init_poll();
-	init_stringify$1();
-	init_createEventFilter();
-	init_getBlockNumber();
-	init_getFilterChanges();
-	init_getLogs();
-	init_uninstallFilter();
-}));
-
-// node_modules/.pnpm/viem@2.57.13_typescript@6.0.3/node_modules/viem/_esm/actions/public/watchPendingTransactions.js
-/**
-* Watches and returns pending transaction hashes.
-*
-* - Docs: https://viem.sh/docs/actions/public/watchPendingTransactions
-* - JSON-RPC Methods:
-*   - When `poll: true`
-*     - Calls [`eth_newPendingTransactionFilter`](https://ethereum.org/en/developers/docs/apis/json-rpc/#eth_newpendingtransactionfilter) to initialize the filter.
-*     - Calls [`eth_getFilterChanges`](https://ethereum.org/en/developers/docs/apis/json-rpc/#eth_getFilterChanges) on a polling interval.
-*   - When `poll: false` & WebSocket Transport, uses a WebSocket subscription via [`eth_subscribe`](https://docs.alchemy.com/reference/eth-subscribe-polygon) and the `"newPendingTransactions"` event.
-*
-* This Action will batch up all the pending transactions found within the [`pollingInterval`](https://viem.sh/docs/actions/public/watchPendingTransactions#pollinginterval-optional), and invoke them via [`onTransactions`](https://viem.sh/docs/actions/public/watchPendingTransactions#ontransactions).
-*
-* @param client - Client to use
-* @param parameters - {@link WatchPendingTransactionsParameters}
-* @returns A function that can be invoked to stop watching for new pending transaction hashes. {@link WatchPendingTransactionsReturnType}
-*
-* @example
-* import { createPublicClient, http } from 'viem'
-* import { mainnet } from 'viem/chains'
-* import { watchPendingTransactions } from 'viem/public'
-*
-* const client = createPublicClient({
-*   chain: mainnet,
-*   transport: http(),
-* })
-* const unwatch = await watchPendingTransactions(client, {
-*   onTransactions: (hashes) => console.log(hashes),
-* })
-*/
-function watchPendingTransactions(client, { batch = true, onError, onTransactions, poll: poll_, pollingInterval = client.pollingInterval }) {
-	const enablePolling = typeof poll_ !== "undefined" ? poll_ : client.transport.type !== "webSocket" && client.transport.type !== "ipc";
-	const pollPendingTransactions = () => {
-		const observerId = stringify$2([
-			"watchPendingTransactions",
-			client.uid,
-			batch,
-			pollingInterval
-		]);
-		return observe(observerId, {
-			onTransactions,
-			onError
-		}, (emit) => {
-			let filter;
-			const unwatch = poll(async () => {
-				try {
-					if (!filter) try {
-						filter = await getAction(client, createPendingTransactionFilter, "createPendingTransactionFilter")({});
-						return;
-					} catch (err) {
-						unwatch();
-						throw err;
-					}
-					const hashes = await getAction(client, getFilterChanges, "getFilterChanges")({ filter });
-					if (hashes.length === 0) return;
-					if (batch) emit.onTransactions(hashes);
-					else for (const hash of hashes) emit.onTransactions([hash]);
-				} catch (err) {
-					emit.onError?.(err);
-				}
-			}, {
-				emitOnBegin: true,
-				interval: pollingInterval
-			});
-			return async () => {
-				if (filter) await getAction(client, uninstallFilter, "uninstallFilter")({ filter });
-				unwatch();
-			};
-		});
-	};
-	const subscribePendingTransactions = () => {
-		let active = true;
-		let unsubscribe = () => active = false;
-		(async () => {
-			try {
-				const { unsubscribe: unsubscribe_ } = await client.transport.subscribe({
-					params: ["newPendingTransactions"],
-					onData(data) {
-						if (!active) return;
-						const transaction = data.result;
-						onTransactions([transaction]);
-					},
-					onError(error) {
-						onError?.(error);
-					}
-				});
-				unsubscribe = unsubscribe_;
-				if (!active) unsubscribe();
-			} catch (err) {
-				onError?.(err);
-			}
-		})();
-		return () => unsubscribe();
-	};
-	return enablePolling ? pollPendingTransactions() : subscribePendingTransactions();
-}
-var init_watchPendingTransactions = __esmMin((() => {
-	init_getAction();
-	init_observe();
-	init_poll();
-	init_stringify$1();
-	init_createPendingTransactionFilter();
-	init_getFilterChanges();
-	init_uninstallFilter();
-}));
-
-// node_modules/.pnpm/viem@2.57.13_typescript@6.0.3/node_modules/viem/_esm/utils/siwe/parseSiweMessage.js
-function isValidSiweDateTime(value) {
-	if (!siweDateTimeRegex.test(value)) return false;
-	return !Number.isNaN(new Date(value).getTime());
-}
-function parseSiweDateTime(value) {
-	if (!isValidSiweDateTime(value)) return /* @__PURE__ */ new Date(NaN);
-	return new Date(value);
-}
-/**
-* @description Parses EIP-4361 formatted message into message fields object.
-*
-* @see https://eips.ethereum.org/EIPS/eip-4361
-*
-* @returns EIP-4361 fields object
-*/
-function parseSiweMessage(message) {
-	const { scheme, statement, ...prefix } = message.match(prefixRegex)?.groups ?? {};
-	const { chainId, expirationTime, issuedAt, notBefore, requestId, resources: resources_, ...suffix } = message.match(suffixRegex)?.groups ?? {};
-	const resources = resources_?.split("\n- ").slice(1);
-	return {
-		...prefix,
-		...suffix,
-		...chainId ? { chainId: Number(chainId) } : {},
-		...expirationTime ? { expirationTime: parseSiweDateTime(expirationTime) } : {},
-		...issuedAt ? { issuedAt: parseSiweDateTime(issuedAt) } : {},
-		...notBefore ? { notBefore: parseSiweDateTime(notBefore) } : {},
-		...requestId ? { requestId } : {},
-		...resources ? { resources } : {},
-		...scheme ? { scheme } : {},
-		...statement ? { statement } : {}
-	};
-}
-var siweDateTimeRegex, prefixRegex, suffixRegex;
-var init_parseSiweMessage = __esmMin((() => {
-	siweDateTimeRegex = /^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}(\.\d+)?(Z|[+-]\d{2}:\d{2})$/;
-	prefixRegex = /^(?:(?<scheme>[a-zA-Z][a-zA-Z0-9+\-.]*):\/\/)?(?<domain>[a-zA-Z0-9+-.]*(?::[0-9]{1,5})?) (?:wants you to sign in with your Ethereum account:\n)(?<address>0x[a-fA-F0-9]{40})\n\n(?:(?<statement>.*)\n\n)?/;
-	suffixRegex = /(?:URI: (?<uri>.+))\n(?:Version: (?<version>.+))\n(?:Chain ID: (?<chainId>\d+))\n(?:Nonce: (?<nonce>[a-zA-Z0-9]+))\n(?:Issued At: (?<issuedAt>.+))(?:\nExpiration Time: (?<expirationTime>.+))?(?:\nNot Before: (?<notBefore>.+))?(?:\nRequest ID: (?<requestId>.*))?(?:\nResources:(?<resources>(?:\n- .+)*))?/;
-}));
-
-// node_modules/.pnpm/viem@2.57.13_typescript@6.0.3/node_modules/viem/_esm/utils/siwe/validateSiweMessage.js
-/**
-* @description Validates EIP-4361 message.
-*
-* @see https://eips.ethereum.org/EIPS/eip-4361
-*/
-function validateSiweMessage(parameters) {
-	const { address, domain, message, nonce, scheme, time = /* @__PURE__ */ new Date() } = parameters;
-	if (domain && message.domain !== domain) return false;
-	if (nonce && message.nonce !== nonce) return false;
-	if (scheme && message.scheme !== scheme) return false;
-	if (Number.isNaN(time.getTime())) return false;
-	if (message.expirationTime) {
-		if (Number.isNaN(message.expirationTime.getTime())) return false;
-		if (time >= message.expirationTime) return false;
-	}
-	if (message.notBefore) {
-		if (Number.isNaN(message.notBefore.getTime())) return false;
-		if (time < message.notBefore) return false;
-	}
-	try {
-		if (!message.address) return false;
-		if (!isAddress(message.address, { strict: false })) return false;
-		if (address && !isAddressEqual(message.address, address)) return false;
-	} catch {
-		return false;
-	}
-	return true;
-}
-var init_validateSiweMessage = __esmMin((() => {
-	init_isAddress();
-	init_isAddressEqual();
-}));
-
-// node_modules/.pnpm/viem@2.57.13_typescript@6.0.3/node_modules/viem/_esm/actions/siwe/verifySiweMessage.js
-/**
-* Verifies [EIP-4361](https://eips.ethereum.org/EIPS/eip-4361) formatted message was signed.
-*
-* Compatible with Smart Contract Accounts & Externally Owned Accounts via [ERC-6492](https://eips.ethereum.org/EIPS/eip-6492).
-*
-* - Docs {@link https://viem.sh/docs/siwe/actions/verifySiweMessage}
-*
-* @param client - Client to use.
-* @param parameters - {@link VerifySiweMessageParameters}
-* @returns Whether or not the signature is valid. {@link VerifySiweMessageReturnType}
-*/
-async function verifySiweMessage(client, parameters) {
-	const { address, domain, message, nonce, scheme, signature, time = /* @__PURE__ */ new Date(), ...callRequest } = parameters;
-	const parsed = parseSiweMessage(message);
-	if (!parsed.address) return false;
-	if (!validateSiweMessage({
-		address,
-		domain,
-		message: parsed,
-		nonce,
-		scheme,
-		time
-	})) return false;
-	const hash = hashMessage(message);
-	return verifyHash(client, {
-		address: parsed.address,
-		hash,
-		signature,
-		...callRequest
-	});
-}
-var init_verifySiweMessage = __esmMin((() => {
-	init_hashMessage();
-	init_parseSiweMessage();
-	init_validateSiweMessage();
-	init_verifyHash();
-}));
-
-// node_modules/.pnpm/viem@2.57.13_typescript@6.0.3/node_modules/viem/_esm/actions/token/internal.js
-/**
-* Shapes a base-unit value into an {@link Amount} (base units, `decimals`, and
-* human-readable `formatted` string).
-*
-* @param amount - Amount in base units.
-* @param decimals - Token decimals used to format the amount.
-* @returns The {@link Amount}.
-*/
-function toAmount(amount, decimals) {
-	return {
-		amount,
-		decimals,
-		formatted: formatUnits(amount, decimals)
-	};
-}
-/**
-* Resolves a write amount to base units.
-*
-* @param amount - Base-unit amount, or formatted helper.
-* @param decimals - Token decimals used to parse formatted amounts.
-* @returns Amount in base units.
-*/
-function toBaseUnits(amount, decimals) {
-	if (typeof amount === "bigint") return amount;
-	const resolved = amount.decimals ?? decimals;
-	return parseUnits(amount.formatted, requireTokenDecimals(resolved));
-}
-/**
-* Requires resolved token decimals for parsing or formatting amounts.
-*
-* @param decimals - Token decimals.
-* @returns Token decimals.
-* @internal
-*/
-function requireTokenDecimals(decimals) {
-	if (decimals === void 0) throw new Error("Token decimals are required. Pass `amount.decimals` or select a declared token.");
-	return decimals;
-}
-/**
-* Resolves the decimals used for formatting a write amount.
-*
-* @param amount - Base-unit amount, or formatted helper.
-* @param decimals - Token decimals.
-* @returns Token decimals, overridden by the formatted helper when present.
-*/
-function resolveAmountDecimals(amount, decimals) {
-	if (typeof amount === "bigint") return decimals;
-	return amount.decimals ?? decimals;
-}
-/**
-* Resolves the token contract `address` and `decimals` from a `token`, which is
-* either the symbol of a token declared on the client's `tokens` array or a
-* contract `address`.
-*
-* When `token` is a declared symbol, the `address` and `decimals` are resolved
-* from the Client's `tokens` array for the Client's `chain.id` (`decimals` can
-* be overridden via the explicit `decimals`). When `token` is an address, its
-* `decimals` is inferred from the Client's `tokens` array when the address
-* matches a declared token, otherwise taken from the explicit `decimals`.
-*
-* @param client - Client.
-* @param parameters - Parameters.
-* @returns The resolved `address` and `decimals`.
-*/
-function resolveToken(client, parameters) {
-	const { decimals, token } = parameters;
-	const declared = findDeclaredToken(client, token);
-	if (declared) return {
-		address: declared.address,
-		decimals: decimals ?? declared.decimals
-	};
-	if (isAddress(token, { strict: false })) return {
-		address: token,
-		decimals: decimals ?? inferDecimals(client, token)
-	};
-	throw new Error(`Token "${token}" is not a declared ERC-20 token on the client's \`tokens\` array (with an address for the client's chain), and is not a valid address.`);
-}
-/**
-* Finds the declared token on the Client's `tokens` array matching `token`
-* (either a token symbol or contract `address`), resolved to a {@link ResolvedToken}
-* for the Client's `chain.id`. Returns `undefined` when no declared token
-* matches, or the matching token has no address for the Client's chain.
-*
-* @param client - Client.
-* @param token - Token symbol (declared on the client's `tokens` array) or contract address.
-* @returns The matching resolved token config, or `undefined`.
-*/
-function findDeclaredToken(client, token) {
-	const tokens = client.tokens;
-	const chainId = client.chain?.id;
-	if (!tokens || chainId === void 0) return void 0;
-	const bySymbol = findTokenBySymbol(tokens, token);
-	if (bySymbol) return resolveTokenForChain(bySymbol, chainId);
-	if (isAddress(token, { strict: false })) for (const token_ of tokens) {
-		const resolved = resolveTokenForChain(token_, chainId);
-		if (resolved && isAddressEqual(resolved.address, token)) return resolved;
-	}
-}
-/**
-* Resolves a {@link Token} to a {@link ResolvedToken} for `chainId`, or
-* `undefined` when the token has no address for `chainId`. @internal
-*/
-function resolveTokenForChain(token, chainId) {
-	const address = token.addresses[chainId];
-	if (!address) return void 0;
-	return {
-		address,
-		currency: token.currency,
-		decimals: token.decimals,
-		name: token.name,
-		popular: token.popular,
-		symbol: token.symbol
-	};
-}
-/** Finds a {@link Token} by symbol (case-insensitively) on a `tokens` array. @internal */
-function findTokenBySymbol(tokens, symbol) {
-	const lowerSymbol = symbol.toLowerCase();
-	for (const token of tokens) if (token.symbol?.toLowerCase() === lowerSymbol) return token;
-}
-/**
-* Infers a token's `decimals` from the Client's `tokens` array by matching
-* `address` against each token's address for the Client's `chain.id`.
-* @internal
-*/
-function inferDecimals(client, address) {
-	const tokens = client.tokens;
-	const chainId = client.chain?.id;
-	if (tokens && chainId !== void 0) for (const token of tokens) {
-		const resolved = resolveTokenForChain(token, chainId);
-		if (resolved && isAddressEqual(resolved.address, address)) return resolved.decimals;
-	}
-}
-/**
-* Resolves token decimals, fetching from the token contract when they are not
-* provided explicitly or declared on the client.
-* @internal
-*/
-async function resolveTokenWithDecimals(client, parameters) {
-	const { address, decimals } = resolveToken(client, parameters);
-	if (decimals !== void 0) return {
-		address,
-		decimals
-	};
-	return {
-		address,
-		decimals: await readContract(client, {
-			abi: erc20Abi,
-			address,
-			functionName: "decimals"
-		})
-	};
-}
-/**
-* Picks the transaction-override fields shared by write actions, so the
-* action-specific args (`token`, `amount`, `to`, etc.) don't leak into
-* `estimateContractGas` / `simulateContract` requests. @internal
-*/
-function pickWriteParameters(parameters) {
-	const { account, chain, gas, maxFeePerGas, maxPriorityFeePerGas, nonce } = parameters;
-	return {
-		account,
-		chain,
-		gas,
-		maxFeePerGas,
-		maxPriorityFeePerGas,
-		nonce
-	};
-}
-function defineCall(call) {
-	return {
-		...call,
-		data: encodeFunctionData(call),
-		to: call.address
-	};
-}
-var init_internal = __esmMin((() => {
-	init_abis();
-	init_isAddress();
-	init_isAddressEqual();
-	init_utils();
-	init_formatUnits();
-	init_parseUnits();
-	init_readContract();
-}));
-
-// node_modules/.pnpm/viem@2.57.13_typescript@6.0.3/node_modules/viem/_esm/actions/token/approve.js
-/**
-* Approves a spender to transfer ERC-20 tokens on behalf of the caller.
-*
-* @example
-* ```ts
-* import { createClient, http } from 'viem'
-* import { mainnet } from 'viem/chains'
-* import { privateKeyToAccount } from 'viem/accounts'
-* import { token } from 'viem/actions'
-*
-* const client = createClient({
-*   account: privateKeyToAccount('0x...'),
-*   chain: mainnet,
-*   transport: http(),
-* })
-*
-* const hash = await token.approve(client, {
-*   amount: 100000000n,
-*   spender: '0x...',
-*   token: '0x...',
-* })
-* ```
-*
-* @param client - Client.
-* @param parameters - Parameters.
-* @returns The transaction hash.
-*/
-async function approve(client, parameters) {
-	return approve.inner(writeContract, client, parameters);
-}
-/** Builds the underlying `approve` contract call. @internal */
-function getCall$1(client, parameters) {
-	const { amount, spender, token } = parameters;
-	const { address, decimals } = resolveToken(client, { token });
-	return {
-		abi: erc20Abi,
-		address,
-		args: [spender, toBaseUnits(amount, decimals)],
-		functionName: "approve"
-	};
-}
-var init_approve = __esmMin((() => {
-	init_abis();
-	init_parseEventLogs();
-	init_estimateContractGas();
-	init_simulateContract();
-	init_writeContract();
-	init_internal();
-	(function(approve) {
-		/** @internal */
-		async function inner(action, client, parameters) {
-			return await action(client, {
-				...parameters,
-				...approve.call(client, parameters)
-			});
-		}
-		approve.inner = inner;
-		/**
-		* Defines a call to the `approve` function.
-		*
-		* Can be passed as a parameter to `estimateContractGas`, `simulateContract`,
-		* `sendCalls`, `sendTransaction` (`calls`), or `multicall`. The token is
-		* selected by `token`, which is either a token symbol (resolved from the
-		* client's `tokens` array) or a contract `address`; `amount.decimals`
-		* is inferred from declared client tokens when omitted.
-		*
-		* @param client - Client.
-		* @param parameters - Parameters.
-		* @returns The call.
-		*/
-		function call(client, parameters) {
-			return defineCall(getCall$1(client, parameters));
-		}
-		Object.defineProperty(approve, "call", {
-			configurable: true,
-			enumerable: true,
-			value: call,
-			writable: true
-		});
-		/**
-		* Estimates the gas required to approve a spender. `amount.decimals` is
-		* inferred from declared client tokens when omitted.
-		*
-		* @param client - Client.
-		* @param parameters - Parameters.
-		* @returns The gas estimate.
-		*/
-		async function estimateGas(client, parameters) {
-			return estimateContractGas(client, {
-				...pickWriteParameters(parameters),
-				...approve.call(client, parameters)
-			});
-		}
-		approve.estimateGas = estimateGas;
-		/**
-		* Simulates an approval of a spender. `amount.decimals` is inferred from
-		* declared client tokens when omitted.
-		*
-		* @param client - Client.
-		* @param parameters - Parameters.
-		* @returns The simulation result and write request.
-		*/
-		async function simulate(client, parameters) {
-			return simulateContract(client, {
-				...pickWriteParameters(parameters),
-				...approve.call(client, parameters)
-			});
-		}
-		approve.simulate = simulate;
-		/**
-		* Extracts the `Approval` event from logs.
-		*
-		* @param logs - The logs.
-		* @returns The `Approval` event.
-		*/
-		function extractEvent(logs) {
-			const [log] = parseEventLogs({
-				abi: erc20Abi,
-				logs,
-				eventName: "Approval",
-				strict: true
-			});
-			if (!log) throw new Error("`Approval` event not found.");
-			return log;
-		}
-		approve.extractEvent = extractEvent;
-	})(approve || (approve = {}));
-}));
-
-// node_modules/.pnpm/viem@2.57.13_typescript@6.0.3/node_modules/viem/_esm/actions/wallet/sendRawTransactionSync.js
-/**
-* Sends a **signed** transaction to the network synchronously,
-* and waits for the transaction to be included in a block.
-*
-* - Docs: https://viem.sh/docs/actions/wallet/sendRawTransactionSync
-* - JSON-RPC Method: [`eth_sendRawTransactionSync`](https://eips.ethereum.org/EIPS/eip-7966)
-*
-* @param client - Client to use
-* @param parameters - {@link SendRawTransactionParameters}
-* @returns The transaction receipt. {@link SendRawTransactionSyncReturnType}
-*
-* @example
-* import { createWalletClient, custom } from 'viem'
-* import { mainnet } from 'viem/chains'
-* import { sendRawTransactionSync } from 'viem/wallet'
-*
-* const client = createWalletClient({
-*   chain: mainnet,
-*   transport: custom(window.ethereum),
-* })
-*
-* const receipt = await sendRawTransactionSync(client, {
-*   serializedTransaction: '0x02f850018203118080825208808080c080a04012522854168b27e5dc3d5839bab5e6b39e1a0ffd343901ce1622e3d64b48f1a04e00902ae0502c4728cbf12156290df99c3ed7de85b1dbfe20b5c36931733a33'
-* })
-*/
-async function sendRawTransactionSync(client, { serializedTransaction, throwOnReceiptRevert, timeout }) {
-	const receipt = await client.request({
-		method: "eth_sendRawTransactionSync",
-		params: timeout ? [serializedTransaction, timeout] : [serializedTransaction]
-	}, { retryCount: 0 });
-	const formatted = (client.chain?.formatters?.transactionReceipt?.format || formatTransactionReceipt)(receipt);
-	if (formatted.status === "reverted" && throwOnReceiptRevert) throw new TransactionReceiptRevertedError({ receipt: formatted });
-	return formatted;
-}
-var init_sendRawTransactionSync = __esmMin((() => {
-	init_transaction$1();
-	init_transactionReceipt();
-}));
-
-// node_modules/.pnpm/viem@2.57.13_typescript@6.0.3/node_modules/viem/_esm/actions/wallet/sendTransactionSync.js
-/**
-* Creates, signs, and sends a new transaction to the network synchronously.
-* Returns the transaction receipt.
-*
-* @param client - Client to use
-* @param parameters - {@link SendTransactionSyncParameters}
-* @returns The transaction receipt. {@link SendTransactionSyncReturnType}
-*
-* @example
-* import { createWalletClient, custom } from 'viem'
-* import { mainnet } from 'viem/chains'
-* import { sendTransactionSync } from 'viem/wallet'
-*
-* const client = createWalletClient({
-*   chain: mainnet,
-*   transport: custom(window.ethereum),
-* })
-* const receipt = await sendTransactionSync(client, {
-*   account: '0xA0Cf798816D4b9b9866b5330EEa46a18382f251e',
-*   to: '0x70997970c51812dc3a010c7d01b50e0d17dc79c8',
-*   value: 1000000000000000000n,
-* })
-*
-* @example
-* // Account Hoisting
-* import { createWalletClient, http } from 'viem'
-* import { privateKeyToAccount } from 'viem/accounts'
-* import { mainnet } from 'viem/chains'
-* import { sendTransactionSync } from 'viem/wallet'
-*
-* const client = createWalletClient({
-*   account: privateKeyToAccount('0x…'),
-*   chain: mainnet,
-*   transport: http(),
-* })
-* const receipt = await sendTransactionSync(client, {
-*   to: '0x70997970c51812dc3a010c7d01b50e0d17dc79c8',
-*   value: 1000000000000000000n,
-* })
-*/
-async function sendTransactionSync(client, parameters) {
-	const { account: account_ = client.account, assertChainId = true, chain = client.chain, accessList, authorizationList, blobs, data, dataSuffix = typeof client.dataSuffix === "string" ? client.dataSuffix : client.dataSuffix?.value, gas, gasPrice, maxFeePerBlobGas, maxFeePerGas, maxPriorityFeePerGas, nonce, pollingInterval, throwOnReceiptRevert, type, value, ...rest } = parameters;
-	const timeout = parameters.timeout ?? Math.max((chain?.blockTime ?? 0) * 3, 5e3);
-	if (typeof account_ === "undefined") throw new AccountNotFoundError({ docsPath: "/docs/actions/wallet/sendTransactionSync" });
-	const account = account_ ? parseAccount(account_) : null;
-	let nonceManagerParameters;
-	try {
-		assertRequest(parameters);
-		const to = await (async () => {
-			if (parameters.to) return parameters.to;
-			if (parameters.to === null) return void 0;
-			if (authorizationList && authorizationList.length > 0) return await recoverAuthorizationAddress({ authorization: authorizationList[0] }).catch(() => {
-				throw new BaseError$1("`to` is required. Could not infer from `authorizationList`.");
-			});
-		})();
-		if (account?.type === "json-rpc" || account === null) {
-			let chainId;
-			if (chain !== null) {
-				chainId = await getAction(client, getChainId, "getChainId")({});
-				if (assertChainId) assertCurrentChain({
-					currentChainId: chainId,
-					chain
-				});
-			}
-			const chainFormat = client.chain?.formatters?.transactionRequest?.format;
-			const request = (chainFormat || formatTransactionRequest)({
-				...extract(rest, { format: chainFormat }),
-				accessList,
-				account,
-				authorizationList,
-				blobs,
-				chainId,
-				data: dataSuffix ? concat$1([data ?? "0x", dataSuffix]) : data,
-				gas,
-				gasPrice,
-				maxFeePerBlobGas,
-				maxFeePerGas,
-				maxPriorityFeePerGas,
-				nonce,
-				to,
-				type,
-				value
-			}, "sendTransaction");
-			const isWalletNamespaceSupported = supportsWalletNamespace.get(client.uid);
-			const method = isWalletNamespaceSupported ? "wallet_sendTransaction" : "eth_sendTransaction";
-			const hash = await (async () => {
-				try {
-					return await client.request({
-						method,
-						params: [request]
-					}, { retryCount: 0 });
-				} catch (e) {
-					if (isWalletNamespaceSupported === false) throw e;
-					const error = e;
-					if (error.name === "InvalidInputRpcError" || error.name === "InvalidParamsRpcError" || error.name === "MethodNotFoundRpcError" || error.name === "MethodNotSupportedRpcError") return await client.request({
-						method: "wallet_sendTransaction",
-						params: [request]
-					}, { retryCount: 0 }).then((hash) => {
-						supportsWalletNamespace.set(client.uid, true);
-						return hash;
-					}).catch((e) => {
-						const walletNamespaceError = e;
-						if (walletNamespaceError.name === "MethodNotFoundRpcError" || walletNamespaceError.name === "MethodNotSupportedRpcError") {
-							supportsWalletNamespace.set(client.uid, false);
-							throw error;
-						}
-						throw walletNamespaceError;
-					});
-					throw error;
-				}
-			})();
-			const receipt = await getAction(client, waitForTransactionReceipt, "waitForTransactionReceipt")({
-				checkReplacement: false,
-				hash,
-				pollingInterval,
-				timeout
-			});
-			if (throwOnReceiptRevert && receipt.status === "reverted") throw new TransactionReceiptRevertedError({ receipt });
-			return receipt;
-		}
-		if (account?.type === "local") {
-			const nonceManager = (() => {
-				if (!account.nonceManager || typeof nonce !== "undefined") return account.nonceManager;
-				const nonceManager = account.nonceManager;
-				return {
-					consume(parameters) {
-						nonceManagerParameters = {
-							address: parameters.address,
-							chainId: parameters.chainId
-						};
-						return nonceManager.consume(parameters);
-					},
-					get(parameters) {
-						return nonceManager.get(parameters);
-					},
-					increment(parameters) {
-						return nonceManager.increment(parameters);
-					},
-					reset(parameters) {
-						return nonceManager.reset(parameters);
-					}
-				};
-			})();
-			const request = await getAction(client, prepareTransactionRequest, "prepareTransactionRequest")({
-				account,
-				accessList,
-				authorizationList,
-				blobs,
-				chain,
-				data: dataSuffix ? concat$1([data ?? "0x", dataSuffix]) : data,
-				gas,
-				gasPrice,
-				maxFeePerBlobGas,
-				maxFeePerGas,
-				maxPriorityFeePerGas,
-				nonce,
-				nonceManager,
-				parameters: [...defaultParameters, "sidecars"],
-				type,
-				value,
-				...rest,
-				to
-			});
-			const serializer = chain?.serializers?.transaction;
-			const signedTransaction = await account.signTransaction(request, { serializer });
-			const transactionEnvelope = (chain ?? client.chain)?.serializers?.transactionEnvelope;
-			const serializedTransaction = transactionEnvelope ? await transactionEnvelope({
-				serializedTransaction: signedTransaction,
-				transaction: request
-			}) : signedTransaction;
-			return await getAction(client, sendRawTransactionSync, "sendRawTransactionSync")({
-				serializedTransaction,
-				throwOnReceiptRevert,
-				timeout: parameters.timeout
-			});
-		}
-		if (account?.type === "smart") throw new AccountTypeNotSupportedError({
-			metaMessages: ["Consider using the `sendUserOperation` Action instead."],
-			docsPath: "/docs/actions/bundler/sendUserOperation",
-			type: "smart"
-		});
-		throw new AccountTypeNotSupportedError({
-			docsPath: "/docs/actions/wallet/sendTransactionSync",
-			type: account?.type
-		});
-	} catch (err) {
-		if (err instanceof AccountTypeNotSupportedError) throw err;
-		if (nonceManagerParameters && !(err instanceof TransactionReceiptRevertedError)) account?.nonceManager?.reset(nonceManagerParameters);
-		throw getTransactionError(err, {
-			...parameters,
-			account,
-			chain: parameters.chain || void 0
-		});
-	}
-}
-var supportsWalletNamespace;
-var init_sendTransactionSync = __esmMin((() => {
-	init_parseAccount();
-	init_account();
-	init_base();
-	init_transaction$1();
-	init_recoverAuthorizationAddress();
-	init_assertCurrentChain();
-	init_concat();
-	init_getTransactionError();
-	init_extract();
-	init_transactionRequest();
-	init_getAction();
-	init_lru$1();
-	init_assertRequest();
-	init_getChainId();
-	init_waitForTransactionReceipt();
-	init_prepareTransactionRequest();
-	init_sendRawTransactionSync();
-	supportsWalletNamespace = new LruMap$1(128);
-}));
-
-// node_modules/.pnpm/viem@2.57.13_typescript@6.0.3/node_modules/viem/_esm/actions/wallet/writeContractSync.js
-/**
-* Executes a write function on a contract synchronously.
-* Returns the transaction receipt.
-*
-* - Docs: https://viem.sh/docs/contract/writeContractSync
-*
-* A "write" function on a Solidity contract modifies the state of the blockchain. These types of functions require gas to be executed, and hence a [Transaction](https://viem.sh/docs/glossary/terms) is needed to be broadcast in order to change the state.
-*
-* Internally, uses a [Wallet Client](https://viem.sh/docs/clients/wallet) to call the [`sendTransaction` action](https://viem.sh/docs/actions/wallet/sendTransaction) with [ABI-encoded `data`](https://viem.sh/docs/contract/encodeFunctionData).
-*
-* __Warning: The `write` internally sends a transaction – it does not validate if the contract write will succeed (the contract may throw an error). It is highly recommended to [simulate the contract write with `contract.simulate`](https://viem.sh/docs/contract/writeContract#usage) before you execute it.__
-*
-* @param client - Client to use
-* @param parameters - {@link WriteContractParameters}
-* @returns A [Transaction Hash](https://viem.sh/docs/glossary/terms#hash). {@link WriteContractReturnType}
-*
-* @example
-* import { createWalletClient, custom, parseAbi } from 'viem'
-* import { mainnet } from 'viem/chains'
-* import { writeContract } from 'viem/contract'
-*
-* const client = createWalletClient({
-*   chain: mainnet,
-*   transport: custom(window.ethereum),
-* })
-* const receipt = await writeContractSync(client, {
-*   address: '0xFBA3912Ca04dd458c843e2EE08967fC04f3579c2',
-*   abi: parseAbi(['function mint(uint32 tokenId) nonpayable']),
-*   functionName: 'mint',
-*   args: [69420],
-* })
-*/
-async function writeContractSync(client, parameters) {
-	return writeContract.internal(client, sendTransactionSync, "sendTransactionSync", parameters);
-}
-var init_writeContractSync = __esmMin((() => {
-	init_sendTransactionSync();
-	init_writeContract();
-}));
-
-// node_modules/.pnpm/viem@2.57.13_typescript@6.0.3/node_modules/viem/_esm/actions/token/approveSync.js
-/**
-* Approves a spender to transfer ERC-20 tokens on behalf of the caller, and
-* waits for the transaction to be confirmed.
-*
-* @example
-* ```ts
-* import { createClient, http } from 'viem'
-* import { mainnet } from 'viem/chains'
-* import { privateKeyToAccount } from 'viem/accounts'
-* import { token } from 'viem/actions'
-*
-* const client = createClient({
-*   account: privateKeyToAccount('0x...'),
-*   chain: mainnet,
-*   transport: http(),
-* })
-*
-* const { receipt, ...event } = await token.approveSync(client, {
-*   amount: 100000000n,
-*   spender: '0x...',
-*   token: '0x...',
-* })
-* ```
-*
-* @param client - Client.
-* @param parameters - Parameters.
-* @returns The transaction receipt and event data.
-*/
-async function approveSync(client, parameters) {
-	const { amount, token, throwOnReceiptRevert = true } = parameters;
-	const { decimals } = resolveToken(client, { token });
-	const resolved = resolveAmountDecimals(amount, decimals);
-	const receipt = await approve.inner(writeContractSync, client, {
-		...parameters,
-		throwOnReceiptRevert
-	});
-	const { args } = approve.extractEvent(receipt.logs);
-	return {
-		...args,
-		...resolved === void 0 ? {} : {
-			decimals: resolved,
-			formatted: formatUnits(args.value, resolved)
-		},
-		receipt
-	};
-}
-var init_approveSync = __esmMin((() => {
-	init_formatUnits();
-	init_writeContractSync();
-	init_approve();
-	init_internal();
-}));
-
-// node_modules/.pnpm/viem@2.57.13_typescript@6.0.3/node_modules/viem/_esm/actions/token/getAllowance.js
-/**
-* Gets the ERC-20 allowance a spender has over an account's tokens.
-*
-* @example
-* ```ts
-* import { createClient, http } from 'viem'
-* import { mainnet } from 'viem/chains'
-* import { token } from 'viem/actions'
-*
-* const client = createClient({ chain: mainnet, transport: http() })
-*
-* const allowance = await token.getAllowance(client, {
-*   account: '0x...',
-*   spender: '0x...',
-*   token: '0x...',
-* })
-* ```
-*
-* @param client - Client.
-* @param parameters - Parameters.
-* @returns The allowance, in base units and human-readable form.
-*/
-async function getAllowance(client, parameters) {
-	const { account, decimals, spender, token, ...rest } = parameters;
-	const [amount, { decimals: resolved }] = await Promise.all([readContract(client, {
-		...rest,
-		...getAllowance.call(client, {
-			account,
-			spender,
-			token
-		})
-	}), resolveTokenWithDecimals(client, {
-		decimals,
-		token
-	})]);
-	return toAmount(amount, resolved);
-}
-var init_getAllowance = __esmMin((() => {
-	init_abis();
-	init_readContract();
-	init_internal();
-	(function(getAllowance) {
-		/**
-		* Defines a call to the `allowance` function.
-		*
-		* Can be passed as a parameter to `multicall`, `simulateContract`, or any
-		* other action that accepts a contract call. The token is selected by `token`
-		* symbol (resolved from the client's `tokens` array) or contract address.
-		*
-		* @param client - Client.
-		* @param args - Arguments.
-		* @returns The call.
-		*/
-		function call(client, args) {
-			return defineCall({
-				address: resolveToken(client, args).address,
-				abi: erc20Abi,
-				functionName: "allowance",
-				args: [args.account, args.spender]
-			});
-		}
-		Object.defineProperty(getAllowance, "call", {
-			configurable: true,
-			enumerable: true,
-			value: call,
-			writable: true
-		});
-	})(getAllowance || (getAllowance = {}));
-}));
-
-// node_modules/.pnpm/viem@2.57.13_typescript@6.0.3/node_modules/viem/_esm/actions/token/getBalance.js
-/**
-* Gets the ERC-20 token balance of an account.
-*
-* @example
-* ```ts
-* import { createClient, http } from 'viem'
-* import { mainnet } from 'viem/chains'
-* import { token } from 'viem/actions'
-*
-* const client = createClient({ chain: mainnet, transport: http() })
-*
-* const balance = await token.getBalance(client, {
-*   account: '0x...',
-*   token: '0x...',
-* })
-* ```
-*
-* @param client - Client.
-* @param parameters - Parameters.
-* @returns The token balance, in base units and human-readable form.
-*/
-async function getBalance(client, parameters) {
-	const { account: account_ = client.account, decimals, token, ...rest } = parameters;
-	if (!account_) throw new AccountNotFoundError();
-	const account = parseAccount(account_).address;
-	const [amount, { decimals: resolved }] = await Promise.all([readContract(client, {
-		...rest,
-		...getBalance.call(client, {
-			account,
-			token
-		})
-	}), resolveTokenWithDecimals(client, {
-		decimals,
-		token
-	})]);
-	return toAmount(amount, resolved);
-}
-var init_getBalance = __esmMin((() => {
-	init_parseAccount();
-	init_abis();
-	init_account();
-	init_readContract();
-	init_internal();
-	(function(getBalance) {
-		/**
-		* Defines a call to the `balanceOf` function.
-		*
-		* Can be passed as a parameter to `multicall`, `simulateContract`, or any
-		* other action that accepts a contract call. The token is selected by `token`
-		* symbol (resolved from the client's `tokens` array) or contract address.
-		*
-		* @param client - Client.
-		* @param args - Arguments.
-		* @returns The call.
-		*/
-		function call(client, args) {
-			const account_ = args.account ?? client.account;
-			if (!account_) throw new AccountNotFoundError();
-			const account = parseAccount(account_).address;
-			return defineCall({
-				address: resolveToken(client, args).address,
-				abi: erc20Abi,
-				functionName: "balanceOf",
-				args: [account]
-			});
-		}
-		Object.defineProperty(getBalance, "call", {
-			configurable: true,
-			enumerable: true,
-			value: call,
-			writable: true
-		});
-	})(getBalance || (getBalance = {}));
-}));
-
-// node_modules/.pnpm/viem@2.57.13_typescript@6.0.3/node_modules/viem/_esm/actions/token/getMetadata.js
-/**
-* Gets the metadata (`decimals`, `name`, `symbol`) of an ERC-20 token.
-*
-* Fields declared on the Client's `tokens` array are used as-is; any missing
-* field is fetched from the token contract.
-*
-* @example
-* ```ts
-* import { createClient, http } from 'viem'
-* import { mainnet } from 'viem/chains'
-* import { token } from 'viem/actions'
-*
-* const client = createClient({ chain: mainnet, transport: http() })
-*
-* const metadata = await token.getMetadata(client, {
-*   token: '0x...',
-* })
-* ```
-*
-* @param client - Client.
-* @param parameters - Parameters.
-* @returns The token metadata (`decimals`, `name`, `symbol`).
-*/
-async function getMetadata(client, parameters) {
-	const { token, ...rest } = parameters;
-	const { address } = resolveToken(client, { token });
-	const declared = findDeclaredToken(client, token);
-	const [decimals_, name, symbol] = await Promise.all([
-		declared?.decimals ?? readContract(client, {
-			...rest,
-			abi: erc20Abi,
-			address,
-			functionName: "decimals"
-		}),
-		declared?.name ?? readContract(client, {
-			...rest,
-			abi: erc20Abi,
-			address,
-			functionName: "name"
-		}),
-		declared?.symbol ?? readContract(client, {
-			...rest,
-			abi: erc20Abi,
-			address,
-			functionName: "symbol"
-		})
-	]);
-	return {
-		decimals: decimals_,
-		name,
-		symbol
-	};
-}
-var init_getMetadata = __esmMin((() => {
-	init_abis();
-	init_readContract();
-	init_internal();
-}));
-
-// node_modules/.pnpm/viem@2.57.13_typescript@6.0.3/node_modules/viem/_esm/actions/token/getTotalSupply.js
-/**
-* Gets the total supply of an ERC-20 token.
-*
-* @example
-* ```ts
-* import { createClient, http } from 'viem'
-* import { mainnet } from 'viem/chains'
-* import { token } from 'viem/actions'
-*
-* const client = createClient({ chain: mainnet, transport: http() })
-*
-* const totalSupply = await token.getTotalSupply(client, {
-*   token: '0x...',
-* })
-* ```
-*
-* @param client - Client.
-* @param parameters - Parameters.
-* @returns The token total supply, in base units and human-readable form.
-*/
-async function getTotalSupply(client, parameters) {
-	const { decimals, token, ...rest } = parameters;
-	const [amount, { decimals: resolved }] = await Promise.all([readContract(client, {
-		...rest,
-		...getTotalSupply.call(client, { token })
-	}), resolveTokenWithDecimals(client, {
-		decimals,
-		token
-	})]);
-	return toAmount(amount, resolved);
-}
-var init_getTotalSupply = __esmMin((() => {
-	init_abis();
-	init_readContract();
-	init_internal();
-	(function(getTotalSupply) {
-		/**
-		* Defines a call to the `totalSupply` function.
-		*
-		* Can be passed as a parameter to `multicall`, `simulateContract`, or any
-		* other action that accepts a contract call. The token is selected by `token`
-		* symbol (resolved from the client's `tokens` array) or contract address.
-		*
-		* @param client - Client.
-		* @param args - Arguments.
-		* @returns The call.
-		*/
-		function call(client, args) {
-			return defineCall({
-				address: resolveToken(client, args).address,
-				abi: erc20Abi,
-				args: [],
-				functionName: "totalSupply"
-			});
-		}
-		Object.defineProperty(getTotalSupply, "call", {
-			configurable: true,
-			enumerable: true,
-			value: call,
-			writable: true
-		});
-	})(getTotalSupply || (getTotalSupply = {}));
-}));
-
-// node_modules/.pnpm/viem@2.57.13_typescript@6.0.3/node_modules/viem/_esm/actions/token/transfer.js
-/**
-* Transfers ERC-20 tokens to another address.
-*
-* Pass `from` to transfer on behalf of another address using an allowance
-* (calls `transferFrom`); otherwise transfers from the caller (calls
-* `transfer`).
-*
-* @example
-* ```ts
-* import { createClient, http } from 'viem'
-* import { mainnet } from 'viem/chains'
-* import { privateKeyToAccount } from 'viem/accounts'
-* import { token } from 'viem/actions'
-*
-* const client = createClient({
-*   account: privateKeyToAccount('0x...'),
-*   chain: mainnet,
-*   transport: http(),
-* })
-*
-* const hash = await token.transfer(client, {
-*   amount: 100000000n,
-*   to: '0x...',
-*   token: '0x...',
-* })
-* ```
-*
-* @example
-* ```ts
-* // Transfer on behalf of another address (via an allowance).
-* const hash = await token.transfer(client, {
-*   amount: 100000000n,
-*   from: '0x...',
-*   to: '0x...',
-*   token: '0x...',
-* })
-* ```
-*
-* @param client - Client.
-* @param parameters - Parameters.
-* @returns The transaction hash.
-*/
-async function transfer(client, parameters) {
-	return transfer.inner(writeContract, client, parameters);
-}
-/** Builds the underlying `transfer`/`transferFrom` contract call. @internal */
-function getCall(client, parameters) {
-	const { amount, from, to, token } = parameters;
-	const { address, decimals } = resolveToken(client, { token });
-	const value = toBaseUnits(amount, decimals);
-	if (from) return {
-		abi: erc20Abi,
-		address,
-		args: [
-			from,
-			to,
-			value
-		],
-		functionName: "transferFrom"
-	};
-	return {
-		abi: erc20Abi,
-		address,
-		args: [to, value],
-		functionName: "transfer"
-	};
-}
-var init_transfer = __esmMin((() => {
-	init_abis();
-	init_parseEventLogs();
-	init_estimateContractGas();
-	init_simulateContract();
-	init_writeContract();
-	init_internal();
-	(function(transfer) {
-		/** @internal */
-		async function inner(action, client, parameters) {
-			return await action(client, {
-				...parameters,
-				...transfer.call(client, parameters)
-			});
-		}
-		transfer.inner = inner;
-		/**
-		* Defines a call to the `transfer` (or `transferFrom`, when `from` is given)
-		* function.
-		*
-		* Can be passed as a parameter to `estimateContractGas`, `simulateContract`,
-		* `sendCalls`, `sendTransaction` (`calls`), or `multicall`. The token is
-		* selected by `token`, which is either a token symbol (resolved from the
-		* client's `tokens` array) or a contract `address`; `amount.decimals`
-		* is inferred from declared client tokens when omitted.
-		*
-		* @param client - Client.
-		* @param parameters - Parameters.
-		* @returns The call.
-		*/
-		function call(client, parameters) {
-			return defineCall(getCall(client, parameters));
-		}
-		Object.defineProperty(transfer, "call", {
-			configurable: true,
-			enumerable: true,
-			value: call,
-			writable: true
-		});
-		/**
-		* Estimates the gas required to transfer ERC-20 tokens. `amount.decimals` is
-		* inferred from declared client tokens when omitted.
-		*
-		* @param client - Client.
-		* @param parameters - Parameters.
-		* @returns The gas estimate.
-		*/
-		async function estimateGas(client, parameters) {
-			return estimateContractGas(client, {
-				...pickWriteParameters(parameters),
-				...transfer.call(client, parameters)
-			});
-		}
-		transfer.estimateGas = estimateGas;
-		/**
-		* Simulates a transfer of ERC-20 tokens. `amount.decimals` is inferred from
-		* declared client tokens when omitted.
-		*
-		* @param client - Client.
-		* @param parameters - Parameters.
-		* @returns The simulation result and write request.
-		*/
-		async function simulate(client, parameters) {
-			return simulateContract(client, {
-				...pickWriteParameters(parameters),
-				...transfer.call(client, parameters)
-			});
-		}
-		transfer.simulate = simulate;
-		/**
-		* Extracts the `Transfer` event from logs.
-		*
-		* @param logs - The logs.
-		* @returns The `Transfer` event.
-		*/
-		function extractEvent(logs) {
-			const [log] = parseEventLogs({
-				abi: erc20Abi,
-				logs,
-				eventName: "Transfer",
-				strict: true
-			});
-			if (!log) throw new Error("`Transfer` event not found.");
-			return log;
-		}
-		transfer.extractEvent = extractEvent;
-	})(transfer || (transfer = {}));
-}));
-
-// node_modules/.pnpm/viem@2.57.13_typescript@6.0.3/node_modules/viem/_esm/actions/token/transferSync.js
-/**
-* Transfers ERC-20 tokens to another address, and waits for the transaction to
-* be confirmed.
-*
-* Pass `from` to transfer on behalf of another address using an allowance
-* (calls `transferFrom`); otherwise transfers from the caller (calls
-* `transfer`).
-*
-* @example
-* ```ts
-* import { createClient, http } from 'viem'
-* import { mainnet } from 'viem/chains'
-* import { privateKeyToAccount } from 'viem/accounts'
-* import { token } from 'viem/actions'
-*
-* const client = createClient({
-*   account: privateKeyToAccount('0x...'),
-*   chain: mainnet,
-*   transport: http(),
-* })
-*
-* const { receipt, ...event } = await token.transferSync(client, {
-*   amount: 100000000n,
-*   to: '0x...',
-*   token: '0x...',
-* })
-* ```
-*
-* @param client - Client.
-* @param parameters - Parameters.
-* @returns The transaction receipt and event data.
-*/
-async function transferSync(client, parameters) {
-	const { amount, token, throwOnReceiptRevert = true } = parameters;
-	const { decimals } = resolveToken(client, { token });
-	const resolved = resolveAmountDecimals(amount, decimals);
-	const receipt = await transfer.inner(writeContractSync, client, {
-		...parameters,
-		throwOnReceiptRevert
-	});
-	const { args } = transfer.extractEvent(receipt.logs);
-	return {
-		...args,
-		...resolved === void 0 ? {} : {
-			decimals: resolved,
-			formatted: formatUnits(args.value, resolved)
-		},
-		receipt
-	};
-}
-var init_transferSync = __esmMin((() => {
-	init_formatUnits();
-	init_writeContractSync();
-	init_internal();
-	init_transfer();
-}));
-
-// node_modules/.pnpm/viem@2.57.13_typescript@6.0.3/node_modules/viem/_esm/actions/token/index.js
-var init_token = __esmMin((() => {
-	init_approve();
-	init_approveSync();
-	init_getAllowance();
-	init_getBalance();
-	init_getMetadata();
-	init_getTotalSupply();
-	init_transfer();
-	init_transferSync();
-}));
-
-// node_modules/.pnpm/viem@2.57.13_typescript@6.0.3/node_modules/viem/_esm/clients/decorators/public.js
-function publicActions(client) {
-	return {
-		call: (args) => call$1(client, args),
-		createAccessList: (args) => createAccessList(client, args),
-		createBlockFilter: () => createBlockFilter(client),
-		createContractEventFilter: (args) => createContractEventFilter(client, args),
-		createEventFilter: (args) => createEventFilter(client, args),
-		createPendingTransactionFilter: () => createPendingTransactionFilter(client),
-		estimateContractGas: (args) => estimateContractGas(client, args),
-		estimateGas: (args) => estimateGas(client, args),
-		getBalance: (args) => getBalance$1(client, args),
-		getBlobBaseFee: () => getBlobBaseFee(client),
-		getBlock: (args) => getBlock(client, args),
-		getBlockNumber: (args) => getBlockNumber(client, args),
-		getBlockReceipts: (args) => getBlockReceipts(client, args),
-		getBlockTransactionCount: (args) => getBlockTransactionCount(client, args),
-		getBytecode: (args) => getCode(client, args),
-		getChainId: () => getChainId(client),
-		getCode: (args) => getCode(client, args),
-		getContractEvents: (args) => getContractEvents(client, args),
-		getDelegation: (args) => getDelegation(client, args),
-		getEip712Domain: (args) => getEip712Domain(client, args),
-		getEnsAddress: (args) => getEnsAddress(client, args),
-		getEnsAvatar: (args) => getEnsAvatar(client, args),
-		getEnsName: (args) => getEnsName(client, args),
-		getEnsResolver: (args) => getEnsResolver(client, args),
-		getEnsText: (args) => getEnsText(client, args),
-		getFeeHistory: (args) => getFeeHistory(client, args),
-		estimateFeesPerGas: (args) => estimateFeesPerGas(client, args),
-		getFilterChanges: (args) => getFilterChanges(client, args),
-		getFilterLogs: (args) => getFilterLogs(client, args),
-		getGasPrice: () => getGasPrice(client),
-		getLogs: (args) => getLogs(client, args),
-		getProof: (args) => getProof(client, args),
-		estimateMaxPriorityFeePerGas: (args) => estimateMaxPriorityFeePerGas(client, args),
-		fillTransaction: (args) => fillTransaction(client, args),
-		getRawTransaction: (args) => getRawTransaction(client, args),
-		getStorageAt: (args) => getStorageAt(client, args),
-		getStorageValues: (args) => getStorageValues(client, args),
-		getTransaction: (args) => getTransaction(client, args),
-		getTransactionConfirmations: (args) => getTransactionConfirmations(client, args),
-		getTransactionCount: (args) => getTransactionCount(client, args),
-		getTransactionReceipt: (args) => getTransactionReceipt(client, args),
-		multicall: (args) => multicall(client, args),
-		prepareTransactionRequest: (args) => prepareTransactionRequest(client, args),
-		readContract: (args) => readContract(client, args),
-		sendRawTransaction: (args) => sendRawTransaction(client, args),
-		sendRawTransactionSync: (args) => sendRawTransactionSync(client, args),
-		simulate: (args) => simulateBlocks(client, args),
-		simulateBlocks: (args) => simulateBlocks(client, args),
-		simulateCalls: (args) => simulateCalls(client, args),
-		simulateContract: (args) => simulateContract(client, args),
-		verifyHash: (args) => verifyHash(client, args),
-		verifyMessage: (args) => verifyMessage$1(client, args),
-		verifySiweMessage: (args) => verifySiweMessage(client, args),
-		verifyTypedData: (args) => verifyTypedData(client, args),
-		uninstallFilter: (args) => uninstallFilter(client, args),
-		waitForTransactionReceipt: (args) => waitForTransactionReceipt(client, args),
-		watchBlockHeaders: (args) => watchBlockHeaders(client, args),
-		watchBlocks: (args) => watchBlocks(client, args),
-		watchBlockNumber: (args) => watchBlockNumber(client, args),
-		watchContractEvent: (args) => watchContractEvent(client, args),
-		watchEvent: (args) => watchEvent(client, args),
-		watchPendingTransactions: (args) => watchPendingTransactions(client, args),
-		token: bindPublicToken(client)
-	};
-}
-/**
-* Binds the read-only ERC-20 actions (and their `.call` helpers) to `client`.
-* Merged with the write actions from {@link walletActions} (when present) by the
-* Client's `extend`, which shallow-merges conflicting plain-object namespaces.
-* @internal
-*/
-function bindPublicToken(client) {
-	return {
-		getAllowance: bindActionDecorators(client, getAllowance),
-		getBalance: bindActionDecorators(client, getBalance),
-		getMetadata: bindActionDecorators(client, getMetadata),
-		getTotalSupply: bindActionDecorators(client, getTotalSupply)
-	};
-}
-var init_public = __esmMin((() => {
-	init_getEnsAddress();
-	init_getEnsAvatar();
-	init_getEnsName();
-	init_getEnsResolver();
-	init_getEnsText();
-	init_call();
-	init_createAccessList();
-	init_createBlockFilter();
-	init_createContractEventFilter();
-	init_createEventFilter();
-	init_createPendingTransactionFilter();
-	init_estimateContractGas();
-	init_estimateFeesPerGas();
-	init_estimateGas();
-	init_estimateMaxPriorityFeePerGas();
-	init_fillTransaction();
-	init_getBalance$1();
-	init_getBlobBaseFee();
-	init_getBlock();
-	init_getBlockNumber();
-	init_getBlockReceipts();
-	init_getBlockTransactionCount();
-	init_getChainId();
-	init_getCode();
-	init_getContractEvents();
-	init_getDelegation();
-	init_getEip712Domain();
-	init_getFeeHistory();
-	init_getFilterChanges();
-	init_getFilterLogs();
-	init_getGasPrice();
-	init_getLogs();
-	init_getProof();
-	init_getRawTransaction();
-	init_getStorageAt();
-	init_getStorageValues();
-	init_getTransaction();
-	init_getTransactionConfirmations();
-	init_getTransactionCount();
-	init_getTransactionReceipt();
-	init_multicall();
-	init_readContract();
-	init_simulateBlocks();
-	init_simulateCalls();
-	init_simulateContract();
-	init_uninstallFilter();
-	init_verifyHash();
-	init_verifyMessage();
-	init_verifyTypedData();
-	init_waitForTransactionReceipt();
-	init_watchBlockHeaders();
-	init_watchBlockNumber();
-	init_watchBlocks();
-	init_watchContractEvent();
-	init_watchEvent();
-	init_watchPendingTransactions();
-	init_verifySiweMessage();
-	init_token();
-	init_prepareTransactionRequest();
-	init_sendRawTransaction();
-	init_sendRawTransactionSync();
-	init_createClient();
-}));
-
-// node_modules/.pnpm/viem@2.57.13_typescript@6.0.3/node_modules/viem/_esm/clients/createPublicClient.js
-/**
-* Creates a Public Client with a given [Transport](https://viem.sh/docs/clients/intro) configured for a [Chain](https://viem.sh/docs/clients/chains).
-*
-* - Docs: https://viem.sh/docs/clients/public
-*
-* A Public Client is an interface to "public" [JSON-RPC API](https://ethereum.org/en/developers/docs/apis/json-rpc/) methods such as retrieving block numbers, transactions, reading from smart contracts, etc through [Public Actions](/docs/actions/public/introduction).
-*
-* @param config - {@link PublicClientConfig}
-* @returns A Public Client. {@link PublicClient}
-*
-* @example
-* import { createPublicClient, http } from 'viem'
-* import { mainnet } from 'viem/chains'
-*
-* const client = createPublicClient({
-*   chain: mainnet,
-*   transport: http(),
-* })
-*/
-function createPublicClient(parameters) {
-	const { key = "public", name = "Public Client" } = parameters;
-	return createClient({
-		...parameters,
-		key,
-		name,
-		type: "publicClient"
-	}).extend(publicActions);
-}
-var init_createPublicClient = __esmMin((() => {
-	init_createClient();
-	init_public();
-}));
-
-// node_modules/.pnpm/viem@2.57.13_typescript@6.0.3/node_modules/viem/_esm/actions/wallet/addChain.js
-/**
-* Adds an EVM chain to the wallet.
-*
-* - Docs: https://viem.sh/docs/actions/wallet/addChain
-* - JSON-RPC Methods: [`eth_addEthereumChain`](https://eips.ethereum.org/EIPS/eip-3085)
-*
-* @param client - Client to use
-* @param parameters - {@link AddChainParameters}
-*
-* @example
-* import { createWalletClient, custom } from 'viem'
-* import { optimism } from 'viem/chains'
-* import { addChain } from 'viem/wallet'
-*
-* const client = createWalletClient({
-*   transport: custom(window.ethereum),
-* })
-* await addChain(client, { chain: optimism })
-*/
-async function addChain(client, { chain }) {
-	const { id, name, nativeCurrency, rpcUrls, blockExplorers } = chain;
-	await client.request({
-		method: "wallet_addEthereumChain",
-		params: [{
-			chainId: numberToHex(id),
-			chainName: name,
-			nativeCurrency,
-			rpcUrls: rpcUrls.default.http,
-			blockExplorerUrls: blockExplorers ? Object.values(blockExplorers).map(({ url }) => url) : void 0
-		}]
-	}, {
-		dedupe: true,
-		retryCount: 0
-	});
-}
-var init_addChain = __esmMin((() => {
-	init_toHex();
-}));
-
-// node_modules/.pnpm/viem@2.57.13_typescript@6.0.3/node_modules/viem/_esm/actions/wallet/deployContract.js
-/**
-* Deploys a contract to the network, given bytecode and constructor arguments.
-*
-* - Docs: https://viem.sh/docs/contract/deployContract
-* - Examples: https://stackblitz.com/github/wevm/viem/tree/main/examples/contracts_deploying-contracts
-*
-* @param client - Client to use
-* @param parameters - {@link DeployContractParameters}
-* @returns The [Transaction](https://viem.sh/docs/glossary/terms#transaction) hash. {@link DeployContractReturnType}
-*
-* @example
-* import { createWalletClient, http } from 'viem'
-* import { privateKeyToAccount } from 'viem/accounts'
-* import { mainnet } from 'viem/chains'
-* import { deployContract } from 'viem/contract'
-*
-* const client = createWalletClient({
-*   account: privateKeyToAccount('0x…'),
-*   chain: mainnet,
-*   transport: http(),
-* })
-* const hash = await deployContract(client, {
-*   abi: [],
-*   account: '0x…,
-*   bytecode: '0x608060405260405161083e38038061083e833981016040819052610...',
-* })
-*/
-function deployContract(walletClient, parameters) {
-	const { abi, args, bytecode, ...request } = parameters;
-	const calldata = encodeDeployData({
-		abi,
-		args,
-		bytecode
-	});
-	return sendTransaction(walletClient, {
-		...request,
-		...request.authorizationList ? { to: null } : {},
-		data: calldata
-	});
-}
-var init_deployContract = __esmMin((() => {
-	init_encodeDeployData();
-	init_sendTransaction();
-}));
-
-// node_modules/.pnpm/viem@2.57.13_typescript@6.0.3/node_modules/viem/_esm/actions/wallet/getAddresses.js
-/**
-* Returns a list of account addresses owned by the wallet or client.
-*
-* - Docs: https://viem.sh/docs/actions/wallet/getAddresses
-* - JSON-RPC Methods: [`eth_accounts`](https://ethereum.org/en/developers/docs/apis/json-rpc/#eth_accounts)
-*
-* @param client - Client to use
-* @returns List of account addresses owned by the wallet or client. {@link GetAddressesReturnType}
-*
-* @example
-* import { createWalletClient, custom } from 'viem'
-* import { mainnet } from 'viem/chains'
-* import { getAddresses } from 'viem/wallet'
-*
-* const client = createWalletClient({
-*   chain: mainnet,
-*   transport: custom(window.ethereum),
-* })
-* const accounts = await getAddresses(client)
-*/
-async function getAddresses(client) {
-	if (client.account?.type === "local") return [client.account.address];
-	return (await client.request({ method: "eth_accounts" }, { dedupe: true })).map((address) => checksumAddress(address));
-}
-var init_getAddresses = __esmMin((() => {
-	init_getAddress();
-}));
-
-// node_modules/.pnpm/viem@2.57.13_typescript@6.0.3/node_modules/viem/_esm/actions/wallet/getCapabilities.js
-/**
-* Extract capabilities that a connected wallet supports (e.g. paymasters, session keys, etc).
-*
-* - Docs: https://viem.sh/docs/actions/wallet/getCapabilities
-* - JSON-RPC Methods: [`wallet_getCapabilities`](https://eips.ethereum.org/EIPS/eip-5792)
-*
-* @param client - Client to use
-* @returns The wallet's capabilities. {@link GetCapabilitiesReturnType}
-*
-* @example
-* import { createWalletClient, custom } from 'viem'
-* import { mainnet } from 'viem/chains'
-* import { getCapabilities } from 'viem/actions'
-*
-* const client = createWalletClient({
-*   chain: mainnet,
-*   transport: custom(window.ethereum),
-* })
-* const capabilities = await getCapabilities(client)
-*/
-async function getCapabilities(client, parameters = {}) {
-	const { account = client.account, chainId } = parameters;
-	const account_ = account ? parseAccount(account) : void 0;
-	const params = chainId ? [account_?.address, [numberToHex(chainId)]] : [account_?.address];
-	const capabilities_raw = await client.request({
-		method: "wallet_getCapabilities",
-		params
-	});
-	const capabilities = {};
-	for (const [chainId, capabilities_] of Object.entries(capabilities_raw)) {
-		capabilities[Number(chainId)] = {};
-		for (let [key, value] of Object.entries(capabilities_)) {
-			if (key === "addSubAccount") key = "unstable_addSubAccount";
-			capabilities[Number(chainId)][key] = value;
-		}
-	}
-	return typeof chainId === "number" ? capabilities[chainId] : capabilities;
-}
-var init_getCapabilities = __esmMin((() => {
-	init_parseAccount();
-	init_toHex();
-}));
-
-// node_modules/.pnpm/viem@2.57.13_typescript@6.0.3/node_modules/viem/_esm/actions/wallet/getPermissions.js
-/**
-* Gets the wallets current permissions.
-*
-* - Docs: https://viem.sh/docs/actions/wallet/getPermissions
-* - JSON-RPC Methods: [`wallet_getPermissions`](https://eips.ethereum.org/EIPS/eip-2255)
-*
-* @param client - Client to use
-* @returns The wallet permissions. {@link GetPermissionsReturnType}
-*
-* @example
-* import { createWalletClient, custom } from 'viem'
-* import { mainnet } from 'viem/chains'
-* import { getPermissions } from 'viem/wallet'
-*
-* const client = createWalletClient({
-*   chain: mainnet,
-*   transport: custom(window.ethereum),
-* })
-* const permissions = await getPermissions(client)
-*/
-async function getPermissions(client) {
-	return await client.request({ method: "wallet_getPermissions" }, { dedupe: true });
-}
-var init_getPermissions = __esmMin((() => {}));
-
-// node_modules/.pnpm/viem@2.57.13_typescript@6.0.3/node_modules/viem/_esm/actions/wallet/prepareAuthorization.js
-/**
-* Prepares an [EIP-7702 Authorization](https://eips.ethereum.org/EIPS/eip-7702) object for signing.
-* This Action will fill the required fields of the Authorization object if they are not provided (e.g. `nonce` and `chainId`).
-*
-* With the prepared Authorization object, you can use [`signAuthorization`](https://viem.sh/docs/eip7702/signAuthorization) to sign over the Authorization object.
-*
-* @param client - Client to use
-* @param parameters - {@link PrepareAuthorizationParameters}
-* @returns The prepared Authorization object. {@link PrepareAuthorizationReturnType}
-*
-* @example
-* import { createClient, http } from 'viem'
-* import { privateKeyToAccount } from 'viem/accounts'
-* import { mainnet } from 'viem/chains'
-* import { prepareAuthorization } from 'viem/experimental'
-*
-* const client = createClient({
-*   chain: mainnet,
-*   transport: http(),
-* })
-* const authorization = await prepareAuthorization(client, {
-*   account: privateKeyToAccount('0x..'),
-*   contractAddress: '0xA0Cf798816D4b9b9866b5330EEa46a18382f251e',
-* })
-*
-* @example
-* // Account Hoisting
-* import { createClient, http } from 'viem'
-* import { privateKeyToAccount } from 'viem/accounts'
-* import { mainnet } from 'viem/chains'
-* import { prepareAuthorization } from 'viem/experimental'
-*
-* const client = createClient({
-*   account: privateKeyToAccount('0x…'),
-*   chain: mainnet,
-*   transport: http(),
-* })
-* const authorization = await prepareAuthorization(client, {
-*   contractAddress: '0xA0Cf798816D4b9b9866b5330EEa46a18382f251e',
-* })
-*/
-async function prepareAuthorization(client, parameters) {
-	const { account: account_ = client.account, chainId, nonce } = parameters;
-	if (!account_) throw new AccountNotFoundError({ docsPath: "/docs/eip7702/prepareAuthorization" });
-	const account = parseAccount(account_);
-	const executor = (() => {
-		if (!parameters.executor) return void 0;
-		if (parameters.executor === "self") return parameters.executor;
-		return parseAccount(parameters.executor);
-	})();
-	const authorization = {
-		address: parameters.contractAddress ?? parameters.address,
-		chainId,
-		nonce
-	};
-	if (typeof authorization.chainId === "undefined") authorization.chainId = client.chain?.id ?? await getAction(client, getChainId, "getChainId")({});
-	if (typeof authorization.nonce === "undefined") {
-		authorization.nonce = await getAction(client, getTransactionCount, "getTransactionCount")({
-			address: account.address,
-			blockTag: "pending"
-		});
-		if (executor === "self" || executor?.address && isAddressEqual(executor.address, account.address)) authorization.nonce += 1;
-	}
-	return authorization;
-}
-var init_prepareAuthorization = __esmMin((() => {
-	init_parseAccount();
-	init_account();
-	init_isAddressEqual();
-	init_getAction();
-	init_getChainId();
-	init_getTransactionCount();
-}));
-
-// node_modules/.pnpm/viem@2.57.13_typescript@6.0.3/node_modules/viem/_esm/actions/wallet/requestAddresses.js
-/**
-* Requests a list of accounts managed by a wallet.
-*
-* - Docs: https://viem.sh/docs/actions/wallet/requestAddresses
-* - JSON-RPC Methods: [`eth_requestAccounts`](https://eips.ethereum.org/EIPS/eip-1102)
-*
-* Sends a request to the wallet, asking for permission to access the user's accounts. After the user accepts the request, it will return a list of accounts (addresses).
-*
-* This API can be useful for dapps that need to access the user's accounts in order to execute transactions or interact with smart contracts.
-*
-* @param client - Client to use
-* @returns List of accounts managed by a wallet {@link RequestAddressesReturnType}
-*
-* @example
-* import { createWalletClient, custom } from 'viem'
-* import { mainnet } from 'viem/chains'
-* import { requestAddresses } from 'viem/wallet'
-*
-* const client = createWalletClient({
-*   chain: mainnet,
-*   transport: custom(window.ethereum),
-* })
-* const accounts = await requestAddresses(client)
-*/
-async function requestAddresses(client) {
-	return (await client.request({ method: "eth_requestAccounts" }, {
-		dedupe: true,
-		retryCount: 0
-	})).map((address) => getAddress(address));
-}
-var init_requestAddresses = __esmMin((() => {
-	init_getAddress();
-}));
-
-// node_modules/.pnpm/viem@2.57.13_typescript@6.0.3/node_modules/viem/_esm/actions/wallet/requestPermissions.js
-/**
-* Requests permissions for a wallet.
-*
-* - Docs: https://viem.sh/docs/actions/wallet/requestPermissions
-* - JSON-RPC Methods: [`wallet_requestPermissions`](https://eips.ethereum.org/EIPS/eip-2255)
-*
-* @param client - Client to use
-* @param parameters - {@link RequestPermissionsParameters}
-* @returns The wallet permissions. {@link RequestPermissionsReturnType}
-*
-* @example
-* import { createWalletClient, custom } from 'viem'
-* import { mainnet } from 'viem/chains'
-* import { requestPermissions } from 'viem/wallet'
-*
-* const client = createWalletClient({
-*   chain: mainnet,
-*   transport: custom(window.ethereum),
-* })
-* const permissions = await requestPermissions(client, {
-*   eth_accounts: {}
-* })
-*/
-async function requestPermissions(client, permissions) {
-	return client.request({
-		method: "wallet_requestPermissions",
-		params: [permissions]
-	}, { retryCount: 0 });
-}
-var init_requestPermissions = __esmMin((() => {}));
-
-// node_modules/.pnpm/viem@2.57.13_typescript@6.0.3/node_modules/viem/_esm/actions/wallet/sendCallsSync.js
-/**
-* Requests the connected wallet to send a batch of calls, and waits for the calls to be included in a block.
-*
-* - Docs: https://viem.sh/docs/actions/wallet/sendCallsSync
-* - JSON-RPC Methods: [`wallet_sendCalls`](https://eips.ethereum.org/EIPS/eip-5792)
-*
-* @param client - Client to use
-* @returns Calls status. {@link SendCallsSyncReturnType}
-*
-* @example
-* import { createWalletClient, custom } from 'viem'
-* import { mainnet } from 'viem/chains'
-* import { sendCalls } from 'viem/actions'
-*
-* const client = createWalletClient({
-*   chain: mainnet,
-*   transport: custom(window.ethereum),
-* })
-* const status = await sendCallsSync(client, {
-*   account: '0xA0Cf798816D4b9b9866b5330EEa46a18382f251e',
-*   calls: [
-*     {
-*       data: '0xdeadbeef',
-*       to: '0x70997970c51812dc3a010c7d01b50e0d17dc79c8',
-*     },
-*     {
-*       to: '0x70997970c51812dc3a010c7d01b50e0d17dc79c8',
-*       value: 69420n,
-*     },
-*   ],
-* })
-*/
-async function sendCallsSync(client, parameters) {
-	const { chain = client.chain } = parameters;
-	const timeout = parameters.timeout ?? Math.max((chain?.blockTime ?? 0) * 3, 5e3);
-	const result = await getAction(client, sendCalls, "sendCalls")(parameters);
-	return await getAction(client, waitForCallsStatus, "waitForCallsStatus")({
-		...parameters,
-		id: result.id,
-		timeout
-	});
-}
-var init_sendCallsSync = __esmMin((() => {
-	init_getAction();
-	init_sendCalls();
-	init_waitForCallsStatus();
-}));
-
-// node_modules/.pnpm/viem@2.57.13_typescript@6.0.3/node_modules/viem/_esm/actions/wallet/showCallsStatus.js
-/**
-* Requests for the wallet to show information about a call batch
-* that was sent via `sendCalls`.
-*
-* - Docs: https://viem.sh/docs/actions/wallet/showCallsStatus
-* - JSON-RPC Methods: [`wallet_showCallsStatus`](https://eips.ethereum.org/EIPS/eip-5792)
-*
-* @param client - Client to use
-* @returns Status of the calls. {@link ShowCallsStatusReturnType}
-*
-* @example
-* import { createWalletClient, custom } from 'viem'
-* import { mainnet } from 'viem/chains'
-* import { showCallsStatus } from 'viem/actions'
-*
-* const client = createWalletClient({
-*   chain: mainnet,
-*   transport: custom(window.ethereum),
-* })
-* await showCallsStatus(client, { id: '0xdeadbeef' })
-*/
-async function showCallsStatus(client, parameters) {
-	const { id } = parameters;
-	await client.request({
-		method: "wallet_showCallsStatus",
-		params: [id]
-	});
-}
-var init_showCallsStatus = __esmMin((() => {}));
-
-// node_modules/.pnpm/viem@2.57.13_typescript@6.0.3/node_modules/viem/_esm/actions/wallet/signAuthorization.js
-/**
-* Signs an [EIP-7702 Authorization](https://eips.ethereum.org/EIPS/eip-7702) object.
-*
-* With the calculated signature, you can:
-* - use [`verifyAuthorization`](https://viem.sh/docs/eip7702/verifyAuthorization) to verify the signed Authorization object,
-* - use [`recoverAuthorizationAddress`](https://viem.sh/docs/eip7702/recoverAuthorizationAddress) to recover the signing address from the signed Authorization object.
-*
-* @param client - Client to use
-* @param parameters - {@link SignAuthorizationParameters}
-* @returns The signed Authorization object. {@link SignAuthorizationReturnType}
-*
-* @example
-* import { createClient, http } from 'viem'
-* import { privateKeyToAccount } from 'viem/accounts'
-* import { mainnet } from 'viem/chains'
-* import { signAuthorization } from 'viem/experimental'
-*
-* const client = createClient({
-*   chain: mainnet,
-*   transport: http(),
-* })
-* const signature = await signAuthorization(client, {
-*   account: privateKeyToAccount('0x..'),
-*   contractAddress: '0xA0Cf798816D4b9b9866b5330EEa46a18382f251e',
-* })
-*
-* @example
-* // Account Hoisting
-* import { createClient, http } from 'viem'
-* import { privateKeyToAccount } from 'viem/accounts'
-* import { mainnet } from 'viem/chains'
-* import { signAuthorization } from 'viem/experimental'
-*
-* const client = createClient({
-*   account: privateKeyToAccount('0x…'),
-*   chain: mainnet,
-*   transport: http(),
-* })
-* const signature = await signAuthorization(client, {
-*   contractAddress: '0xA0Cf798816D4b9b9866b5330EEa46a18382f251e',
-* })
-*/
-async function signAuthorization$1(client, parameters) {
-	const { account: account_ = client.account } = parameters;
-	if (!account_) throw new AccountNotFoundError({ docsPath: "/docs/eip7702/signAuthorization" });
-	const account = parseAccount(account_);
-	if (!account.signAuthorization) throw new AccountTypeNotSupportedError({
-		docsPath: "/docs/eip7702/signAuthorization",
-		metaMessages: ["The `signAuthorization` Action does not support JSON-RPC Accounts."],
-		type: account.type
-	});
-	const authorization = await prepareAuthorization(client, parameters);
-	return account.signAuthorization(authorization);
-}
-var init_signAuthorization$1 = __esmMin((() => {
-	init_parseAccount();
-	init_account();
-	init_prepareAuthorization();
-}));
-
-// node_modules/.pnpm/viem@2.57.13_typescript@6.0.3/node_modules/viem/_esm/actions/wallet/signMessage.js
-/**
-* Calculates an Ethereum-specific signature in [EIP-191 format](https://eips.ethereum.org/EIPS/eip-191): `keccak256("\x19Ethereum Signed Message:\n" + len(message) + message))`.
-*
-* - Docs: https://viem.sh/docs/actions/wallet/signMessage
-* - JSON-RPC Methods:
-*   - JSON-RPC Accounts: [`personal_sign`](https://docs.metamask.io/guide/signing-data#personal-sign)
-*   - Local Accounts: Signs locally. No JSON-RPC request.
-*
-* With the calculated signature, you can:
-* - use [`verifyMessage`](https://viem.sh/docs/utilities/verifyMessage) to verify the signature,
-* - use [`recoverMessageAddress`](https://viem.sh/docs/utilities/recoverMessageAddress) to recover the signing address from a signature.
-*
-* @param client - Client to use
-* @param parameters - {@link SignMessageParameters}
-* @returns The signed message. {@link SignMessageReturnType}
-*
-* @example
-* import { createWalletClient, custom } from 'viem'
-* import { mainnet } from 'viem/chains'
-* import { signMessage } from 'viem/wallet'
-*
-* const client = createWalletClient({
-*   chain: mainnet,
-*   transport: custom(window.ethereum),
-* })
-* const signature = await signMessage(client, {
-*   account: '0xA0Cf798816D4b9b9866b5330EEa46a18382f251e',
-*   message: 'hello world',
-* })
-*
-* @example
-* // Account Hoisting
-* import { createWalletClient, custom } from 'viem'
-* import { privateKeyToAccount } from 'viem/accounts'
-* import { mainnet } from 'viem/chains'
-* import { signMessage } from 'viem/wallet'
-*
-* const client = createWalletClient({
-*   account: privateKeyToAccount('0x…'),
-*   chain: mainnet,
-*   transport: custom(window.ethereum),
-* })
-* const signature = await signMessage(client, {
-*   message: 'hello world',
-* })
-*/
-async function signMessage$2(client, { account: account_ = client.account, message }) {
-	if (!account_) throw new AccountNotFoundError({ docsPath: "/docs/actions/wallet/signMessage" });
-	const account = parseAccount(account_);
-	if (account.signMessage) return account.signMessage({ message });
-	const message_ = (() => {
-		if (typeof message === "string") return stringToHex(message);
-		if (message.raw instanceof Uint8Array) return toHex(message.raw);
-		return message.raw;
-	})();
-	return client.request({
-		method: "personal_sign",
-		params: [message_, account.address]
-	}, { retryCount: 0 });
-}
-var init_signMessage$1 = __esmMin((() => {
-	init_parseAccount();
-	init_account();
-	init_toHex();
-}));
-
-// node_modules/.pnpm/viem@2.57.13_typescript@6.0.3/node_modules/viem/_esm/actions/wallet/signTransaction.js
-/**
-* Signs a transaction.
-*
-* - Docs: https://viem.sh/docs/actions/wallet/signTransaction
-* - JSON-RPC Methods:
-*   - JSON-RPC Accounts: [`eth_signTransaction`](https://ethereum.github.io/execution-apis/api-documentation/)
-*   - Local Accounts: Signs locally. No JSON-RPC request.
-*
-* @param args - {@link SignTransactionParameters}
-* @returns The signed serialized transaction. {@link SignTransactionReturnType}
-*
-* @example
-* import { createWalletClient, custom } from 'viem'
-* import { mainnet } from 'viem/chains'
-* import { signTransaction } from 'viem/actions'
-*
-* const client = createWalletClient({
-*   chain: mainnet,
-*   transport: custom(window.ethereum),
-* })
-* const signature = await signTransaction(client, {
-*   account: '0xA0Cf798816D4b9b9866b5330EEa46a18382f251e',
-*   to: '0x0000000000000000000000000000000000000000',
-*   value: 1n,
-* })
-*
-* @example
-* // Account Hoisting
-* import { createWalletClient, http } from 'viem'
-* import { privateKeyToAccount } from 'viem/accounts'
-* import { mainnet } from 'viem/chains'
-* import { signTransaction } from 'viem/actions'
-*
-* const client = createWalletClient({
-*   account: privateKeyToAccount('0x…'),
-*   chain: mainnet,
-*   transport: custom(window.ethereum),
-* })
-* const signature = await signTransaction(client, {
-*   to: '0x0000000000000000000000000000000000000000',
-*   value: 1n,
-* })
-*/
-async function signTransaction$1(client, parameters) {
-	const { account: account_ = client.account, chain = client.chain, ...transaction } = parameters;
-	if (!account_) throw new AccountNotFoundError({ docsPath: "/docs/actions/wallet/signTransaction" });
-	const account = parseAccount(account_);
-	assertRequest({
-		account,
-		...parameters
-	});
-	const chainId = await getAction(client, getChainId, "getChainId")({});
-	if (chain !== null) assertCurrentChain({
-		currentChainId: chainId,
-		chain
-	});
-	const format = (chain?.formatters || client.chain?.formatters)?.transactionRequest?.format || formatTransactionRequest;
-	if (account.signTransaction) return account.signTransaction({
-		...transaction,
-		account,
-		chainId
-	}, { serializer: client.chain?.serializers?.transaction });
-	return await client.request({
-		method: "eth_signTransaction",
-		params: [{
-			...format({
-				...transaction,
-				account
-			}, "signTransaction"),
-			chainId: numberToHex(chainId),
-			from: account.address
-		}]
-	}, { retryCount: 0 });
-}
-var init_signTransaction$1 = __esmMin((() => {
-	init_parseAccount();
-	init_account();
-	init_assertCurrentChain();
-	init_toHex();
-	init_transactionRequest();
-	init_getAction();
-	init_assertRequest();
-	init_getChainId();
-}));
-
-// node_modules/.pnpm/viem@2.57.13_typescript@6.0.3/node_modules/viem/_esm/actions/wallet/signTypedData.js
-/**
-* Signs typed data and calculates an Ethereum-specific signature in [https://eips.ethereum.org/EIPS/eip-712](https://eips.ethereum.org/EIPS/eip-712): `sign(keccak256("\x19\x01" ‖ domainSeparator ‖ hashStruct(message)))`
-*
-* - Docs: https://viem.sh/docs/actions/wallet/signTypedData
-* - JSON-RPC Methods:
-*   - JSON-RPC Accounts: [`eth_signTypedData_v4`](https://docs.metamask.io/guide/signing-data#signtypeddata-v4)
-*   - Local Accounts: Signs locally. No JSON-RPC request.
-*
-* @param client - Client to use
-* @param parameters - {@link SignTypedDataParameters}
-* @returns The signed data. {@link SignTypedDataReturnType}
-*
-* @example
-* import { createWalletClient, custom } from 'viem'
-* import { mainnet } from 'viem/chains'
-* import { signTypedData } from 'viem/wallet'
-*
-* const client = createWalletClient({
-*   chain: mainnet,
-*   transport: custom(window.ethereum),
-* })
-* const signature = await signTypedData(client, {
-*   account: '0xA0Cf798816D4b9b9866b5330EEa46a18382f251e',
-*   domain: {
-*     name: 'Ether Mail',
-*     version: '1',
-*     chainId: 1,
-*     verifyingContract: '0xCcCCccccCCCCcCCCCCCcCcCccCcCCCcCcccccccC',
-*   },
-*   types: {
-*     Person: [
-*       { name: 'name', type: 'string' },
-*       { name: 'wallet', type: 'address' },
-*     ],
-*     Mail: [
-*       { name: 'from', type: 'Person' },
-*       { name: 'to', type: 'Person' },
-*       { name: 'contents', type: 'string' },
-*     ],
-*   },
-*   primaryType: 'Mail',
-*   message: {
-*     from: {
-*       name: 'Cow',
-*       wallet: '0xCD2a3d9F938E13CD947Ec05AbC7FE734Df8DD826',
-*     },
-*     to: {
-*       name: 'Bob',
-*       wallet: '0xbBbBBBBbbBBBbbbBbbBbbbbBBbBbbbbBbBbbBBbB',
-*     },
-*     contents: 'Hello, Bob!',
-*   },
-* })
-*
-* @example
-* // Account Hoisting
-* import { createWalletClient, http } from 'viem'
-* import { privateKeyToAccount } from 'viem/accounts'
-* import { mainnet } from 'viem/chains'
-* import { signTypedData } from 'viem/wallet'
-*
-* const client = createWalletClient({
-*   account: privateKeyToAccount('0x…'),
-*   chain: mainnet,
-*   transport: http(),
-* })
-* const signature = await signTypedData(client, {
-*   domain: {
-*     name: 'Ether Mail',
-*     version: '1',
-*     chainId: 1,
-*     verifyingContract: '0xCcCCccccCCCCcCCCCCCcCcCccCcCCCcCcccccccC',
-*   },
-*   types: {
-*     Person: [
-*       { name: 'name', type: 'string' },
-*       { name: 'wallet', type: 'address' },
-*     ],
-*     Mail: [
-*       { name: 'from', type: 'Person' },
-*       { name: 'to', type: 'Person' },
-*       { name: 'contents', type: 'string' },
-*     ],
-*   },
-*   primaryType: 'Mail',
-*   message: {
-*     from: {
-*       name: 'Cow',
-*       wallet: '0xCD2a3d9F938E13CD947Ec05AbC7FE734Df8DD826',
-*     },
-*     to: {
-*       name: 'Bob',
-*       wallet: '0xbBbBBBBbbBBBbbbBbbBbbbbBBbBbbbbBbBbbBBbB',
-*     },
-*     contents: 'Hello, Bob!',
-*   },
-* })
-*/
-async function signTypedData$1(client, parameters) {
-	const { account: account_ = client.account, domain, message, primaryType } = parameters;
-	if (!account_) throw new AccountNotFoundError({ docsPath: "/docs/actions/wallet/signTypedData" });
-	const account = parseAccount(account_);
-	const types = {
-		EIP712Domain: getTypesForEIP712Domain({ domain }),
-		...parameters.types
-	};
-	validateTypedData({
-		domain,
-		message,
-		primaryType,
-		types
-	});
-	if (account.signTypedData) return account.signTypedData({
-		domain,
-		message,
-		primaryType,
-		types
-	});
-	const typedData = serializeTypedData({
-		domain,
-		message,
-		primaryType,
-		types
-	});
-	return client.request({
-		method: "eth_signTypedData_v4",
-		params: [account.address, typedData]
-	}, { retryCount: 0 });
-}
-var init_signTypedData$1 = __esmMin((() => {
-	init_parseAccount();
-	init_account();
-	init_typedData();
-}));
-
-// node_modules/.pnpm/viem@2.57.13_typescript@6.0.3/node_modules/viem/_esm/actions/wallet/switchChain.js
-/**
-* Switch the target chain in a wallet.
-*
-* - Docs: https://viem.sh/docs/actions/wallet/switchChain
-* - JSON-RPC Methods: [`wallet_switchEthereumChain`](https://eips.ethereum.org/EIPS/eip-3326)
-*
-* @param client - Client to use
-* @param parameters - {@link SwitchChainParameters}
-*
-* @example
-* import { createWalletClient, custom } from 'viem'
-* import { mainnet, optimism } from 'viem/chains'
-* import { switchChain } from 'viem/wallet'
-*
-* const client = createWalletClient({
-*   chain: mainnet,
-*   transport: custom(window.ethereum),
-* })
-* await switchChain(client, { id: optimism.id })
-*/
-async function switchChain(client, { id }) {
-	await client.request({
-		method: "wallet_switchEthereumChain",
-		params: [{ chainId: numberToHex(id) }]
-	}, { retryCount: 0 });
-}
-var init_switchChain = __esmMin((() => {
-	init_toHex();
-}));
-
-// node_modules/.pnpm/viem@2.57.13_typescript@6.0.3/node_modules/viem/_esm/actions/wallet/watchAsset.js
-/**
-* Adds an EVM chain to the wallet.
-*
-* - Docs: https://viem.sh/docs/actions/wallet/watchAsset
-* - JSON-RPC Methods: [`eth_switchEthereumChain`](https://eips.ethereum.org/EIPS/eip-747)
-*
-* @param client - Client to use
-* @param parameters - {@link WatchAssetParameters}
-* @returns Boolean indicating if the token was successfully added. {@link WatchAssetReturnType}
-*
-* @example
-* import { createWalletClient, custom } from 'viem'
-* import { mainnet } from 'viem/chains'
-* import { watchAsset } from 'viem/wallet'
-*
-* const client = createWalletClient({
-*   chain: mainnet,
-*   transport: custom(window.ethereum),
-* })
-* const success = await watchAsset(client, {
-*   type: 'ERC20',
-*   options: {
-*     address: '0xc02aaa39b223fe8d0a0e5c4f27ead9083c756cc2',
-*     decimals: 18,
-*     symbol: 'WETH',
-*   },
-* })
-*/
-async function watchAsset(client, params) {
-	return await client.request({
-		method: "wallet_watchAsset",
-		params
-	}, { retryCount: 0 });
-}
-var init_watchAsset = __esmMin((() => {}));
-
-// node_modules/.pnpm/viem@2.57.13_typescript@6.0.3/node_modules/viem/_esm/clients/decorators/wallet.js
-function walletActions(client) {
-	return {
-		addChain: (args) => addChain(client, args),
-		deployContract: (args) => deployContract(client, args),
-		fillTransaction: (args) => fillTransaction(client, args),
-		getAddresses: () => getAddresses(client),
-		getCallsStatus: (args) => getCallsStatus(client, args),
-		getCapabilities: (args) => getCapabilities(client, args),
-		getChainId: () => getChainId(client),
-		getPermissions: () => getPermissions(client),
-		prepareAuthorization: (args) => prepareAuthorization(client, args),
-		prepareTransactionRequest: (args) => prepareTransactionRequest(client, args),
-		requestAddresses: () => requestAddresses(client),
-		requestPermissions: (args) => requestPermissions(client, args),
-		sendCalls: (args) => sendCalls(client, args),
-		sendCallsSync: (args) => sendCallsSync(client, args),
-		sendRawTransaction: (args) => sendRawTransaction(client, args),
-		sendRawTransactionSync: (args) => sendRawTransactionSync(client, args),
-		sendTransaction: (args) => sendTransaction(client, args),
-		sendTransactionSync: (args) => sendTransactionSync(client, args),
-		showCallsStatus: (args) => showCallsStatus(client, args),
-		signAuthorization: (args) => signAuthorization$1(client, args),
-		signMessage: (args) => signMessage$2(client, args),
-		signTransaction: (args) => signTransaction$1(client, args),
-		signTypedData: (args) => signTypedData$1(client, args),
-		switchChain: (args) => switchChain(client, args),
-		waitForCallsStatus: (args) => waitForCallsStatus(client, args),
-		watchAsset: (args) => watchAsset(client, args),
-		writeContract: (args) => writeContract(client, args),
-		writeContractSync: (args) => writeContractSync(client, args),
-		token: {
-			approve: bindActionDecorators(client, approve),
-			approveSync: bindActionDecorators(client, approveSync),
-			transfer: bindActionDecorators(client, transfer),
-			transferSync: bindActionDecorators(client, transferSync)
-		}
-	};
-}
-var init_wallet = __esmMin((() => {
-	init_fillTransaction();
-	init_getChainId();
-	init_token();
-	init_addChain();
-	init_deployContract();
-	init_getAddresses();
-	init_getCallsStatus();
-	init_getCapabilities();
-	init_getPermissions();
-	init_prepareAuthorization();
-	init_prepareTransactionRequest();
-	init_requestAddresses();
-	init_requestPermissions();
-	init_sendCalls();
-	init_sendCallsSync();
-	init_sendRawTransaction();
-	init_sendRawTransactionSync();
-	init_sendTransaction();
-	init_sendTransactionSync();
-	init_showCallsStatus();
-	init_signAuthorization$1();
-	init_signMessage$1();
-	init_signTransaction$1();
-	init_signTypedData$1();
-	init_switchChain();
-	init_waitForCallsStatus();
-	init_watchAsset();
-	init_writeContract();
-	init_writeContractSync();
-	init_createClient();
-}));
-
-// node_modules/.pnpm/viem@2.57.13_typescript@6.0.3/node_modules/viem/_esm/clients/createWalletClient.js
-function createWalletClient(parameters) {
-	const { key = "wallet", name = "Wallet Client", transport } = parameters;
-	return createClient({
-		...parameters,
-		key,
-		name,
-		transport,
-		type: "walletClient"
-	}).extend(walletActions);
-}
-var init_createWalletClient = __esmMin((() => {
-	init_createClient();
-	init_wallet();
-}));
-
-// node_modules/.pnpm/viem@2.57.13_typescript@6.0.3/node_modules/viem/_esm/clients/transports/createTransport.js
-/**
-* @description Creates an transport intended to be used with a client.
-*/
-function createTransport({ key, methods, name, request, retryCount = 3, retryDelay = 150, timeout, type }, value) {
-	const uid$1 = uid();
-	return {
-		config: {
-			key,
-			methods,
-			name,
-			request,
-			retryCount,
-			retryDelay,
-			timeout,
-			type
-		},
-		request: buildRequest(request, {
-			methods,
-			retryCount,
-			retryDelay,
-			uid: uid$1
-		}),
-		value
-	};
-}
-var init_createTransport = __esmMin((() => {
-	init_buildRequest();
-	init_uid();
-}));
-
-// node_modules/.pnpm/viem@2.57.13_typescript@6.0.3/node_modules/viem/_esm/errors/transport.js
-var UrlRequiredError;
-var init_transport = __esmMin((() => {
-	init_base();
-	UrlRequiredError = class extends BaseError$1 {
-		constructor() {
-			super("No URL was provided to the Transport. Please provide a valid RPC URL to the Transport.", {
-				docsPath: "/docs/clients/intro",
-				name: "UrlRequiredError"
-			});
-		}
-	};
-}));
-
-// node_modules/.pnpm/viem@2.57.13_typescript@6.0.3/node_modules/viem/_esm/clients/transports/http.js
-function getSignalId(signal) {
-	if (!signal) return "default";
-	const id = signalIds.get(signal);
-	if (id !== void 0) return id;
-	const nextId = signalId++;
-	signalIds.set(signal, nextId);
-	return nextId;
-}
-/**
-* @description Creates a HTTP transport that connects to a JSON-RPC API.
-*/
-function http(url, config = {}) {
-	const { batch, fetchFn, fetchOptions, key = "http", maxResponseBodySize, methods, name = "HTTP JSON-RPC", onFetchRequest, onFetchResponse, retryDelay, raw } = config;
-	return ({ chain, retryCount: retryCount_, timeout: timeout_ }) => {
-		const { batchSize = 1e3, wait = 0 } = typeof batch === "object" ? batch : {};
-		const retryCount = config.retryCount ?? retryCount_;
-		const timeout = timeout_ ?? config.timeout ?? 1e4;
-		const url_ = url || chain?.rpcUrls.default.http[0];
-		if (!url_) throw new UrlRequiredError();
-		const rpcClient = getHttpRpcClient(url_, {
-			fetchFn,
-			fetchOptions,
-			maxResponseBodySize,
-			onRequest: onFetchRequest,
-			onResponse: onFetchResponse,
-			timeout
-		});
-		return createTransport({
-			key,
-			methods,
-			name,
-			async request({ method, params }, options) {
-				const body = {
-					method,
-					params
-				};
-				const fetchOptions = options?.signal ? { signal: options.signal } : void 0;
-				const { schedule } = createBatchScheduler({
-					id: `${url_}.${getSignalId(options?.signal)}`,
-					wait,
-					shouldSplitBatch(requests) {
-						return requests.length > batchSize;
-					},
-					fn: (body) => rpcClient.request({
-						body,
-						fetchOptions
-					}),
-					sort: (a, b) => a.id - b.id
-				});
-				const fn = async (body) => batch ? schedule(body) : [await rpcClient.request({
-					body,
-					fetchOptions
-				})];
-				const [{ error, result }] = await fn(body).catch((err) => {
-					if (raw && err instanceof RpcRequestError) return [{
-						error: err.cause,
-						result: void 0
-					}];
-					throw err;
-				});
-				if (raw) return {
-					error,
-					result
-				};
-				if (error) throw new RpcRequestError({
-					body,
-					error,
-					url: url_
-				});
-				return result;
-			},
-			retryCount,
-			retryDelay,
-			timeout,
-			type: "http"
-		}, {
-			fetchOptions,
-			url: url_
-		});
-	};
-}
-var signalId, signalIds;
-var init_http = __esmMin((() => {
-	init_request();
-	init_transport();
-	init_createBatchScheduler();
-	init_http$1();
-	init_createTransport();
-	signalId = 0;
-	signalIds = /* @__PURE__ */ new WeakMap();
-}));
-
 // node_modules/.pnpm/viem@2.57.13_typescript@6.0.3/node_modules/viem/_esm/utils/signature/compactSignatureToSignature.js
 /**
 * @description Converts an [EIP-2098 compact signature](https://eips.ethereum.org/EIPS/eip-2098) into signature format.
@@ -24956,12 +8281,12 @@ var init_http = __esmMin((() => {
 * // }
 */
 function compactSignatureToSignature({ r, yParityAndS }) {
-	const yParityAndS_bytes = hexToBytes$1(pad$2(yParityAndS));
+	const yParityAndS_bytes = hexToBytes$1(pad(yParityAndS));
 	const yParity = yParityAndS_bytes[0] & 128 ? 1 : 0;
 	const s = yParityAndS_bytes;
 	if (yParity === 1) s[0] &= 127;
 	return {
-		r: pad$2(r),
+		r: pad(r),
 		s: bytesToHex$1(s),
 		yParity
 	};
@@ -24998,146 +8323,94 @@ var init_parseCompactSignature = __esmMin((() => {
 // node_modules/.pnpm/viem@2.57.13_typescript@6.0.3/node_modules/viem/_esm/index.js
 var init__esm = __esmMin((() => {
 	init_exports();
-	/* @__PURE__ */ init_getAction();
-	init_createContractEventFilter();
-	init_estimateContractGas();
-	init_getContractEvents();
-	init_readContract();
-	init_simulateContract();
-	init_watchContractEvent();
-	init_writeContract();
-	init_waitForCallsStatus();
-	init_createClient();
-	init_base();
-	init_createPublicClient();
-	init_fromHex();
-	init_toHex();
-	/* @__PURE__ */ init_extract();
-	init_transactionRequest();
-	init_createWalletClient();
-	init_public();
-	init_wallet();
-	init_createTransport();
-	init_node();
-	init_rpc();
-	init_wait();
-	init_http();
-	init_request();
-	init_transport();
-	init_http$1();
-	init_createBatchScheduler();
-	init_withTimeout();
-	init_id();
-	init_abis();
-	init_address();
-	init_contracts();
-	init_number();
-	init_strings();
 	init_abi();
-	init_address$1();
-	init_block$1();
-	init_calls();
-	init_chain$1();
-	init_contract$1();
-	init_data();
-	init_encoding();
-	init_ens();
-	init_estimateGas$1();
-	init_fee$1();
-	init_log$2();
-	init_stateOverride$1();
-	init_transaction$1();
-	init_typedData$1();
-	init_decodeAbiParameters();
-	init_decodeErrorResult();
-	init_decodeEventLog();
-	init_decodeFunctionData();
-	init_decodeFunctionResult();
+	init_base();
+	init_toBytes();
+	init_keccak256();
+	init_toEventSelector();
 	init_encodeAbiParameters();
-	init_encodeDeployData();
-	init_encodeErrorResult();
-	init_encodeEventTopics();
-	init_encodeFunctionData();
-	init_encodeFunctionResult();
-	init_encodePacked();
+	init_formatAbiItem();
 	init_getAbiItem();
-	init_parseEventLogs();
-	init_prepareEncodeFunctionData();
-	init_getAddress();
-	init_getContractAddress();
+	init_toHex();
+	init_encodeFunctionData();
+	init_solidity();
+	init_decodeErrorResult();
+	init_stringify$1();
+	init_Value();
+	init_formatGwei();
+	init_transaction();
+	init_recoverAddress();
+	init_hashAuthorization();
+	init_node();
+	init_address();
+	init_data();
 	init_isAddress();
-	init_isAddressEqual();
+	init_number();
+	init_fromHex();
 	init_blobsToCommitments();
 	init_blobsToProofs();
 	init_commitmentsToVersionedHashes();
-	init_commitmentToVersionedHash();
-	init_cursor$1();
-	init_toBytes();
 	init_toBlobSidecars();
-	init_toBlobs();
-	init_ccip();
-	init_solidity();
-	init_localBatchGatewayRequest();
-	init_assertCurrentChain();
-	/* @__PURE__ */ init_defineChain();
-	init_getChainContractAddress();
-	init_concat();
-	/* @__PURE__ */ init_isBytes();
+	init_lru();
+	init_getTransactionType();
+	init_isAddressEqual();
+	init_regex();
+	init_decodeEventLog();
+	init_decodeAbiParameters();
+	init_utils();
+	init_chain$1();
+	/* @__PURE__ */ init_concat();
 	/* @__PURE__ */ init_isHex();
-	init_pad();
-	init_size();
+	init_decodeFunctionData();
+	init_toFunctionSelector();
 	init_slice();
 	/* @__PURE__ */ init_trim$1();
+	init_getAddress();
+	init_size();
+	init_publicKeyToAddress();
+	init_encodePacked();
+	init_getContractAddress();
+	init_serializeAuthorizationList();
+	/* @__PURE__ */ init_isBytes();
+	init_pad();
 	init_fromBytes();
 	init_fromRlp();
 	init_toRlp();
-	init_labelhash();
-	init_namehash();
-	init_getContractError();
-	init_block();
-	/* @__PURE__ */ init_log$1();
-	init_transaction();
-	init_transactionReceipt();
 	init_isHash();
-	init_keccak256();
 	init__md();
-	init_utils$4();
+	init_utils$1();
 	init_sha256();
 	init_toSignatureHash();
-	init_toEventSelector();
 	init_toSignature();
-	init_toFunctionSelector();
-	init_getTransactionCount();
-	init_lru$1();
-	init_withCache();
-	init_withRetry();
-	init_compactSignatureToSignature();
 	init_hashMessage();
 	init_hashTypedData();
-	init_erc8010();
-	init_parseCompactSignature();
+	init_hmac();
+	init_sha3();
+	init_sha256$1();
 	init_secp256k1();
-	init_recoverAddress();
+	init_modular();
+	init_sha2();
 	init_recoverMessageAddress();
 	init_recoverPublicKey();
-	init_parseTransaction();
-	init_serializeTransaction();
 	init_recoverTypedDataAddress();
-	init_serializeSignature();
-	init_toPrefixedMessage();
-	init_verifyMessage$1();
-	init_stringify$1();
-	init_assertRequest();
+	init_verifyMessage();
 	init_assertTransaction();
 	init_getSerializedTransactionType();
-	init_getTransactionType();
+	init_parseTransaction();
 	init_serializeAccessList();
+	init_serializeTransaction();
 	init_typedData();
-	init_formatEther();
-	init_formatGwei();
-	init_formatUnits();
-	init_Value();
-	init_parseUnits();
+	init_serializeSignature();
+	init_strings();
+	init_encoding();
+	init_typedData$1();
+	init_prepareEncodeFunctionData();
+	init_commitmentToVersionedHash();
+	init_cursor();
+	init_toBlobs();
+	init_compactSignatureToSignature();
+	init_parseCompactSignature();
+	init_toPrefixedMessage();
 }));
 
 // node_modules/.pnpm/viem@2.57.13_typescript@6.0.3/node_modules/viem/_esm/accounts/generatePrivateKey.js
@@ -25162,13 +8435,13 @@ var init_generatePrivateKey = __esmMin((() => {
 */
 function toAccount(source) {
 	if (typeof source === "string") {
-		if (!isAddress(source, { strict: false })) throw new InvalidAddressError$1({ address: source });
+		if (!isAddress(source, { strict: false })) throw new InvalidAddressError({ address: source });
 		return {
 			address: source,
 			type: "json-rpc"
 		};
 	}
-	if (!isAddress(source.address, { strict: false })) throw new InvalidAddressError$1({ address: source.address });
+	if (!isAddress(source.address, { strict: false })) throw new InvalidAddressError({ address: source.address });
 	return {
 		address: source.address,
 		nonceManager: source.nonceManager,
@@ -25182,7 +8455,7 @@ function toAccount(source) {
 	};
 }
 var init_toAccount = __esmMin((() => {
-	init_address$1();
+	init_address();
 	init_isAddress();
 }));
 
@@ -25283,7 +8556,7 @@ async function signTransaction(parameters) {
 		return transaction;
 	})();
 	return await serializer(transaction, await sign$1({
-		hash: keccak256$1(await serializer(signableTransaction)),
+		hash: keccak256(await serializer(signableTransaction)),
 		privateKey
 	}));
 }
@@ -25382,16 +8655,16 @@ var init_accounts = __esmMin((() => {
 	init_secp256k1();
 	init_hmac();
 	init__md();
-	init_utils$4();
+	init_utils$1();
 	init_sha2();
-	init_getTransactionCount();
-	init_lru$1();
+	init_base();
+	init_toHex();
+	init_fromHex();
+	init_lru();
 	init_serializeSignature();
 	init_generatePrivateKey();
-	init_toHex();
 	init_privateKeyToAccount();
 	init_toAccount();
-	/* @__PURE__ */ init_parseAccount();
 	init_publicKeyToAddress();
 	init_sign();
 	init_signAuthorization();
@@ -28178,7 +11451,7 @@ function canonicalJson(value) {
 	throw new TypeError(`canonical JSON: unsupported ${typeof value}`);
 }
 function canonicalKeccak(value) {
-	return keccak256$1(stringToBytes(canonicalJson(value)));
+	return keccak256(stringToBytes(canonicalJson(value)));
 }
 var LONE_SURROGATE$1, policyHash, rulebookHash;
 var init_canonical = __esmMin((() => {
@@ -28190,7 +11463,7 @@ var init_canonical = __esmMin((() => {
 
 // packages/core/dist/chains.js
 var MAINNET_CHAIN_IDS;
-var init_chains$1 = __esmMin((() => {
+var init_chains = __esmMin((() => {
 	MAINNET_CHAIN_IDS = Object.freeze([
 		1,
 		10,
@@ -65516,7 +48789,7 @@ var init_private = __esmMin((() => {
 */
 async function recoversFrom(digest, signature, signer) {
 	try {
-		const n = size$3(signature);
+		const n = size(signature);
 		const v = n === 65 ? parseInt(signature.slice(130, 132), 16) : 27;
 		if (v !== 27 && v !== 28) return false;
 		const full = n === 64 ? serializeSignature(compactSignatureToSignature(parseCompactSignature(signature))) : n === 65 ? signature : null;
@@ -65534,7 +48807,7 @@ function contractSignerRule(reads) {
 	return async (digest, signature, signer) => {
 		if (!/^0x([0-9a-fA-F]{2})+$/.test(signature)) return false;
 		if (await reads.code(signer) !== "0x") return reads.isValidSignature(signer, digest, signature);
-		const n = size$3(signature);
+		const n = size(signature);
 		if (n === 64 || n === 65) return recoversFrom(digest, signature, signer);
 		const planned = await reads.plannedCode?.(signer, signature);
 		return planned !== void 0 && planned !== "0x" ? reads.isValidSignature(signer, digest, signature, planned) : false;
@@ -65678,8 +48951,8 @@ function decodeStandingSignature(signature) {
 */
 function templateHashOfView(o) {
 	if (o.delivery.length > 1) throw new RangeError("a template carries at most one standing delivery");
-	const tokenHash = keccak256$1(stringToBytes(o.token.toLowerCase()));
-	const amount = (v) => keccak256$1(enc$1([
+	const tokenHash = keccak256(stringToBytes(o.token.toLowerCase()));
+	const amount = (v) => keccak256(enc$1([
 		"bytes32",
 		"bytes32",
 		"uint256"
@@ -65688,7 +48961,7 @@ function templateHashOfView(o) {
 		tokenHash,
 		v
 	]));
-	const adjudication = keccak256$1(enc$1([
+	const adjudication = keccak256(enc$1([
 		"bytes32",
 		"address",
 		"address",
@@ -65708,7 +48981,7 @@ function templateHashOfView(o) {
 		o.policyHash
 	]));
 	const t = o.timing;
-	const timing = keccak256$1(enc$1([
+	const timing = keccak256(enc$1([
 		"bytes32",
 		"uint64",
 		"uint64",
@@ -65736,7 +49009,7 @@ function templateHashOfView(o) {
 		t.disputeFallbackSec
 	]));
 	const d = o.delivery[0];
-	const deliveries = d ? keccak256$1(keccak256$1(enc$1([
+	const deliveries = d ? keccak256(keccak256(enc$1([
 		"bytes32",
 		"bytes32",
 		"bytes32",
@@ -65750,9 +49023,9 @@ function templateHashOfView(o) {
 		d.plaintextMimeHash,
 		d.encryptedKeysHash,
 		d.submittedAt
-	]))) : keccak256$1("0x");
+	]))) : keccak256("0x");
 	const offerType = typeHash(TYPE.standingOffer, TYPE.adjudication, TYPE.ciphertext, TYPE.encryptedKey, TYPE.keyUnlock, "Remedy(string onReject)", TYPE.standingDelivery, TYPE.timingOffsets, TYPE.tokenAmount);
-	return keccak256$1(enc$1([
+	return keccak256(enc$1([
 		"bytes32",
 		"address",
 		"uint64",
@@ -65796,7 +49069,7 @@ async function standingKeyOf(signature, sellerContract, chainId) {
 	const b = decodeStandingSignature(signature);
 	if (!b) return null;
 	try {
-		const digest = keccak256$1(concat$1([
+		const digest = keccak256(concat([
 			"0x1901",
 			domainSeparator({ domain: {
 				...STANDING_SELLER_DOMAIN,
@@ -65819,7 +49092,7 @@ async function standingKeyOf(signature, sellerContract, chainId) {
 }
 function decodeSim(blob) {
 	try {
-		const v = JSON.parse(fromHex$1(blob, "string"));
+		const v = JSON.parse(fromHex(blob, "string"));
 		if (v.sim !== SIM_TAG || v.kind !== 1 && v.kind !== 2 || !v.offer || !v.keySignature || !v.fill) return null;
 		return {
 			kind: v.kind,
@@ -65991,7 +49264,7 @@ var init_standing = __esmMin((() => {
 		primaryType: "StandingOffer",
 		message: standingOfferMessage(o)
 	});
-	takeNonce = (th, seed) => keccak256$1(encodeAbiParameters([{ type: "bytes32" }, { type: "bytes32" }], [th, seed]));
+	takeNonce = (th, seed) => keccak256(encodeAbiParameters([{ type: "bytes32" }, { type: "bytes32" }], [th, seed]));
 	STANDING_OFFER_ABI = {
 		type: "tuple",
 		components: [
@@ -66184,7 +49457,7 @@ var init_standing = __esmMin((() => {
 		standingDelivery: "StandingDelivery(Ciphertext ciphertext,string plaintextSha256,string plaintextMime,EncryptedKey[] encryptedKeys,uint64 submittedAt)",
 		standingOffer: "StandingOffer(address rules,uint64 expiresAt,string offerId,string schemaVersion,string clubId,bytes32 rulebookHash,address sellerPayoutAddress,bytes32 deliverableHash,bytes32 acceptanceHash,TokenAmount price,Adjudication adjudication,TimingOffsets timing,Remedy remedy,StandingDelivery[] delivery)"
 	};
-	typeHash = (...parts) => keccak256$1(stringToBytes(parts.join("")));
+	typeHash = (...parts) => keccak256(stringToBytes(parts.join("")));
 	enc$1 = (types, values) => encodeAbiParameters(types.map((type) => ({ type })), values);
 	SIM_TAG = "holdback-standing-sim-1";
 }));
@@ -66411,7 +49684,7 @@ function beaconRoundFor(s, role, marginSec = 0) {
 }
 /** panelSeed(role) = keccak256(commitmentId ‖ role ‖ attempt ‖ beaconValue(round)) (ADR-0018). */
 function panelSeed(id, role, attempt, beaconValue) {
-	return keccak256$1(encodePacked$1([
+	return keccak256(encodePacked([
 		"bytes32",
 		"string",
 		"uint8",
@@ -66484,7 +49757,7 @@ function firstInstance(s, m, at, beacon, profile, marginSec) {
 	if (carriesAppealGround(m)) return fail$4("invalid_terms", APPEAL_GROUND_APPEAL_ONLY);
 	const signed = profile === "phase_one" ? phaseOneDecisionProblem(m, false) : void 0;
 	if (signed) return fail$4("invalid_terms", signed);
-	if (role === "primary" && keccak256$1(m.seed) !== s.acceptance.seedCommitment) return fail$4("seed_mismatch", "seed does not hash to the acceptance seedCommitment");
+	if (role === "primary" && keccak256(m.seed) !== s.acceptance.seedCommitment) return fail$4("seed_mismatch", "seed does not hash to the acceptance seedCommitment");
 	const seeded = beaconSeed(s, m, beacon, marginSec);
 	if (!seeded.ok) return seeded;
 	const base = {
@@ -66881,7 +50154,7 @@ var init_trim = __esmMin((() => {}));
 var init_dist$3 = __esmMin((() => {
 	init_beacon();
 	init_canonical();
-	init_chains$1();
+	init_chains();
 	init_eip712();
 	init_fee();
 	init_money();
@@ -69126,12 +52399,12 @@ var init_stride_0 = __esmMin((() => {
 */
 function seededIndex(seed, label, i, range) {
 	if (!Number.isSafeInteger(range) || range <= 0) throw new RangeError("range must be a positive integer");
-	const h = keccak256$1(concat$1([
-		toBytes$2(seed),
+	const h = keccak256(concat([
+		toBytes$1(seed),
 		stringToBytes(label),
 		numberToBytes(BigInt(i), { size: 8 })
 	]));
-	return Number(bytesToBigInt(toBytes$2(h)) % BigInt(range));
+	return Number(bytesToBigInt(toBytes$1(h)) % BigInt(range));
 }
 /**
 * Splits CSV text into records at line breaks outside double quotes (RFC 4180 quoting), keeping each
@@ -70553,8 +53826,8 @@ var init_panel = __esmMin((() => {
 	init_dist$3();
 	init_sample();
 	PANEL_VERSION = "panel-1";
-	panelKey = (seed, commitmentId) => keccak256$1(concat$1([toBytes$2(seed), toBytes$2(commitmentId)]));
-	derive = (seed, commitmentId, label) => keccak256$1(concat$1([toBytes$2(panelKey(seed, commitmentId)), stringToBytes(label)]));
+	panelKey = (seed, commitmentId) => keccak256(concat([toBytes$1(seed), toBytes$1(commitmentId)]));
+	derive = (seed, commitmentId, label) => keccak256(concat([toBytes$1(panelKey(seed, commitmentId)), stringToBytes(label)]));
 	criteriaOrder = (seed, commitmentId, judgeId, criteria) => shuffle(criteria, panelKey(seed, commitmentId), `${PANEL_VERSION}:criteria:${judgeId}`);
 	sampleSeedFor = (seed, commitmentId, judgeId) => derive(seed, commitmentId, `${PANEL_VERSION}:sample:${judgeId}`);
 }));
@@ -70797,8 +54070,7 @@ const SEPOLIA = {
 			address: "0x7FaE06D96c739F6DA6F40610b34998d8cf83D5d9",
 			tx: "0x9a2d7c626ad686bdfb5f261aca70648be3dae4135a6937ea023572ddf693960b",
 			block: 12169902,
-			args: [],
-			tokenStoreImplementation: "0xD6F3C4Be99Bbf5064FBBC4853A4B7F5b15156BDA"
+			args: []
 		},
 		ERC3009PaymentCollector: {
 			address: "0x54169Df23Be4B7De17dc6b7B47B9B09394443D8A",
@@ -70927,7 +54199,7 @@ const ERC3009 = [
 	type: s.split(":")[1]
 }));
 const ZERO_ADDRESS$1 = `0x${"0".repeat(40)}`;
-const PAYMENT_INFO_TYPEHASH$1 = keccak256$1(toBytes$2("PaymentInfo(address operator,address payer,address receiver,address token,uint120 maxAmount,uint48 preApprovalExpiry,uint48 authorizationExpiry,uint48 refundExpiry,uint16 minFeeBps,uint16 maxFeeBps,address feeReceiver,uint256 salt)"));
+const PAYMENT_INFO_TYPEHASH$1 = keccak256(toBytes$1("PaymentInfo(address operator,address payer,address receiver,address token,uint120 maxAmount,uint48 preApprovalExpiry,uint48 authorizationExpiry,uint48 refundExpiry,uint16 minFeeBps,uint16 maxFeeBps,address feeReceiver,uint256 salt)"));
 /**
 * The funding nonce on a chain (ADR-0025): CPP's PaymentInfo hash with the payer zeroed. Every field comes from the
 * terms and the pinned deployment (operator = the rules contract, receiver = the seller's payout address (ADR-0033), maxAmount = price + fee,
@@ -70936,7 +54208,7 @@ const PAYMENT_INFO_TYPEHASH$1 = keccak256$1(toBytes$2("PaymentInfo(address opera
 function fundingNonceOf(t, id, c) {
 	const total = BigInt(t.price.amount) + BigInt(t.adjudication.fee.amount);
 	const expiry = Number(secs$1(t.timing.fallbackBy)) + Number(t.timing.appealDecideSec) + c.expiryMarginSec;
-	const inner = keccak256$1(encodeAbiParameters(parseAbiParameters("bytes32, address, address, address, address, uint120, uint48, uint48, uint48, uint16, uint16, address, uint256"), [
+	const inner = keccak256(encodeAbiParameters(parseAbiParameters("bytes32, address, address, address, address, uint120, uint48, uint48, uint48, uint16, uint16, address, uint256"), [
 		PAYMENT_INFO_TYPEHASH$1,
 		c.rules,
 		ZERO_ADDRESS$1,
@@ -70951,14 +54223,14 @@ function fundingNonceOf(t, id, c) {
 		ZERO_ADDRESS$1,
 		BigInt(id)
 	]));
-	return keccak256$1(encodeAbiParameters(parseAbiParameters("uint256, address, bytes32"), [
+	return keccak256(encodeAbiParameters(parseAbiParameters("uint256, address, bytes32"), [
 		BigInt(c.tokenDomain.chainId),
 		c.escrow,
 		inner
 	]));
 }
 /** The operator fee's ERC-3009 nonce: keccak256(abi.encode(commitmentId, "operator_fee")) (ADR-0023 amendment). */
-const operatorFeeNonceOf = (id) => keccak256$1(encodeAbiParameters(parseAbiParameters("bytes32, string"), [id, "operator_fee"]));
+const operatorFeeNonceOf = (id) => keccak256(encodeAbiParameters(parseAbiParameters("bytes32, string"), [id, "operator_fee"]));
 const erc3009Typed$1 = (primaryType, c, m) => ({
 	domain: c.tokenDomain,
 	types: { [primaryType]: ERC3009 },
@@ -71191,7 +54463,7 @@ const refuse$1 = (why) => {
 };
 /** RFC 8785 JSON for plain JSON values, and its keccak256 (how the terms bind deliverable, acceptance, policy). */
 const jcs = (v) => Array.isArray(v) ? `[${v.map(jcs).join(",")}]` : v && typeof v === "object" ? `{${Object.keys(v).filter((k) => v[k] !== void 0).sort().map((k) => `${JSON.stringify(k)}:${jcs(v[k])}`).join(",")}}` : JSON.stringify(v);
-const jcsHash = (v) => keccak256$1(toBytes$2(jcs(v)));
+const jcsHash = (v) => keccak256(toBytes$1(jcs(v)));
 const lower = (v) => typeof v === "string" && /^0x[0-9a-fA-F]+$/.test(v) ? v.toLowerCase() : Array.isArray(v) ? v.map(lower) : v && typeof v === "object" ? Object.fromEntries(Object.entries(v).map(([k, x]) => [k, lower(x)])) : v;
 const secs$1 = (ts) => BigInt(Date.parse(ts) / 1e3);
 const iso = (ms) => new Date(ms).toISOString().replace(".000Z", "Z");
@@ -79806,7 +63078,7 @@ async function runJudgment(input, judges) {
 		beaconRound: input.beaconRound,
 		seedCommitment: input.seedCommitment,
 		seed: input.seed,
-		seedMatches: input.seedCommitment === null ? null : keccak256$1(input.seed) === input.seedCommitment
+		seedMatches: input.seedCommitment === null ? null : keccak256(input.seed) === input.seedCommitment
 	};
 	const intakeView = {
 		plaintextSha256: input.delivery.plaintextSha256,
@@ -80657,7 +63929,7 @@ var init_simchain = __esmMin((() => {
 		/** The sim beacon's value for a round, or null until the clock reaches it (ADR-0018). */
 		beacon(round) {
 			if (!Number.isSafeInteger(round) || round < 0 || round > Math.floor(this.clockMs / 1e3)) return null;
-			return keccak256$1(encodePacked$1(["bytes32", "uint64"], [this.genesis.simSeed, BigInt(round)]));
+			return keccak256(encodePacked(["bytes32", "uint64"], [this.genesis.simSeed, BigInt(round)]));
 		}
 		escrowState(id) {
 			return this.w.recs.get(id)?.state ?? null;
@@ -82062,7 +65334,7 @@ function paymentInfo(t, rules, commitmentId, expiryMargin) {
 }
 /** AuthCaptureEscrow.getHash: the key of CPP's paymentState. */
 function paymentHash(p, chainId, escrow) {
-	const inner = keccak256$1(encodeAbiParameters(PAYMENT_INFO_FIELDS, [
+	const inner = keccak256(encodeAbiParameters(PAYMENT_INFO_FIELDS, [
 		PAYMENT_INFO_TYPEHASH,
 		p.operator,
 		p.payer,
@@ -82077,7 +65349,7 @@ function paymentHash(p, chainId, escrow) {
 		p.feeReceiver,
 		p.salt
 	]));
-	return keccak256$1(encodeAbiParameters([
+	return keccak256(encodeAbiParameters([
 		{ type: "uint256" },
 		{ type: "address" },
 		{ type: "bytes32" }
@@ -82091,7 +65363,7 @@ var str$1, struct, enc, ROLE, OUTCOME, keyHash, keysHash, NO_DELIVERY, NO_KEY, a
 var init_encode = __esmMin((() => {
 	init_dist$3();
 	init__esm();
-	str$1 = (s) => keccak256$1(stringToBytes(s));
+	str$1 = (s) => keccak256(stringToBytes(s));
 	struct = (primaryType, data) => hashStruct({
 		primaryType,
 		types: eip712Types,
@@ -82117,7 +65389,7 @@ var init_encode = __esmMin((() => {
 			round: BigInt(k.unlock?.round ?? 0)
 		}
 	});
-	keysHash = (keys) => keccak256$1(keys.length ? concat$1(keys.map(keyHash)) : "0x");
+	keysHash = (keys) => keccak256(keys.length ? concat(keys.map(keyHash)) : "0x");
 	NO_DELIVERY = {
 		attempt: 0,
 		ciphertextHash: `0x${"00".repeat(32)}`,
@@ -82184,10 +65456,10 @@ var init_encode = __esmMin((() => {
 		{ type: "uint256" },
 		{ type: "bytes32" }
 	];
-	authDigest = (typehash, domainSeparator, a) => keccak256$1(concat$1([
+	authDigest = (typehash, domainSeparator, a) => keccak256(concat([
 		"0x1901",
 		domainSeparator,
-		keccak256$1(encodeAbiParameters(AUTH_FIELDS, [
+		keccak256(encodeAbiParameters(AUTH_FIELDS, [
 			typehash,
 			a.from,
 			a.to,
@@ -82199,7 +65471,7 @@ var init_encode = __esmMin((() => {
 	]));
 	receiveDigest = (domainSeparator, a) => authDigest(RECEIVE_WITH_AUTHORIZATION_TYPEHASH, domainSeparator, a);
 	transferDigest = (domainSeparator, a) => authDigest(TRANSFER_WITH_AUTHORIZATION_TYPEHASH, domainSeparator, a);
-	operatorFeeNonce = (commitmentId) => keccak256$1(encodeAbiParameters([{ type: "bytes32" }, { type: "string" }], [commitmentId, "operator_fee"]));
+	operatorFeeNonce = (commitmentId) => keccak256(encodeAbiParameters([{ type: "bytes32" }, { type: "string" }], [commitmentId, "operator_fee"]));
 }));
 
 // packages/settlement/dist/evm/errors.js
@@ -82327,25 +65599,8 @@ function assertSafeChain(chainId) {
 	const id = Number(chainId);
 	if (MAINNET_CHAIN_IDS.includes(id)) throw new RangeError(`the EVM settlement adapter refuses mainnet chain id ${id} (hard rule: no real money)`);
 }
-/** `kind: 'local'` talks to this machine only: no public RPC. */
-function assertLocalRpc(url) {
-	let host;
-	try {
-		host = new URL(url).hostname;
-	} catch {
-		throw new RangeError(`${url} is not a URL`);
-	}
-	if (!LOCAL_HOSTS.has(host)) throw new RangeError(`${url} is not a local RPC; kind local runs against anvil on this machine only`);
-}
-var LOCAL_HOSTS;
 var init_guard = __esmMin((() => {
 	init_dist$3();
-	LOCAL_HOSTS = /* @__PURE__ */ new Set([
-		"127.0.0.1",
-		"localhost",
-		"[::1]",
-		"::1"
-	]);
 }));
 
 // packages/settlement/dist/evm/signer-reads.js
@@ -82379,7 +65634,7 @@ function chainSignerCheck(client, ctx, at = {}) {
 			const tx = {
 				from: ctx.from,
 				to: ctx.rules,
-				data: concat$1([pad$2(address), ask]),
+				data: concat([pad(address), ask]),
 				gas: CHECK_GAS,
 				gasPrice: await ctx.gasPrice(),
 				overrides: [
@@ -82419,22 +65674,6 @@ function chainSignerCheck(client, ctx, at = {}) {
 		...ctx.plannedCode ? { plannedCode: (address, signature) => ctx.plannedCode(address, signature) } : {}
 	});
 }
-/** `tx` as anvil's raw `eth_call` takes it: the call object and the state override set. */
-function rawCheckCall(tx) {
-	const overrides = {};
-	for (const o of tx.overrides) overrides[o.address] = {
-		...overrides[o.address] ?? {},
-		...o.code ? { code: o.code } : {},
-		...o.balance ? { balance: o.balance } : {}
-	};
-	return [{
-		from: tx.from,
-		to: tx.to,
-		data: tx.data,
-		gas: toHex(tx.gas),
-		gasPrice: toHex(tx.gasPrice)
-	}, overrides];
-}
 var ERC1271, YES_WORD, EXECUTION, RULES_CHECKER, CHECK_GAS, CHECK_BALANCE;
 var init_signer_reads = __esmMin((() => {
 	init_dist$3();
@@ -82456,7 +65695,7 @@ var init_standing_seller_code = __esmMin((() => {
 // packages/settlement/dist/evm/standing-seller.js
 /** The init code for `key`: the creation code and the constructor's one argument. */
 function standingInitCode(key) {
-	return concat$1([STANDING_SELLER_CREATION_CODE, encodeAbiParameters([{ type: "address" }], [key])]);
+	return concat([STANDING_SELLER_CREATION_CODE, encodeAbiParameters([{ type: "address" }], [key])]);
 }
 /** The seller contract's address for `key`, at salt 0 through the deterministic deployer. */
 function standingSellerAddress(key) {
@@ -82471,7 +65710,7 @@ function standingSellerAddress(key) {
 function standingDeployment(key) {
 	return {
 		to: CREATE2_DEPLOYER,
-		data: concat$1([STANDING_SALT, standingInitCode(key)])
+		data: concat([STANDING_SALT, standingInitCode(key)])
 	};
 }
 /**
@@ -82490,7 +65729,7 @@ var init_standing_seller = __esmMin((() => {
 	init_standing_seller_code();
 	CREATE2_DEPLOYER = "0x4e59b44847b379578588920cA78FbF26c0B4956C";
 	STANDING_SALT = `0x${"00".repeat(32)}`;
-	STANDING_SELLER_CREATION_CODE_HASH = keccak256$1(STANDING_SELLER_CREATION_CODE);
+	STANDING_SELLER_CREATION_CODE_HASH = keccak256(STANDING_SELLER_CREATION_CODE);
 }));
 
 // packages/settlement/dist/evm/sync.js
@@ -82951,7 +66190,7 @@ var init_evm_settlement = __esmMin((() => {
 		"early_accept",
 		"mutual settlement"
 	];
-	str = (s) => keccak256$1(stringToBytes(s));
+	str = (s) => keccak256(stringToBytes(s));
 	APPEAL_GROUNDS = [
 		"wrong-outcome",
 		"missing-or-wrong-key",
@@ -83179,7 +66418,7 @@ var init_evm_settlement = __esmMin((() => {
 		/** The sim beacon (same values as SimChain's); the rules contract asks the deployed SimBeacon for the same value. */
 		beacon(round) {
 			if (!Number.isSafeInteger(round) || round < 0 || round > Math.floor(Date.parse(this.now()) / 1e3)) return null;
-			return keccak256$1(encodePacked$1(["bytes32", "uint64"], [this.genesis.simSeed, BigInt(round)]));
+			return keccak256(encodePacked(["bytes32", "uint64"], [this.genesis.simSeed, BigInt(round)]));
 		}
 		escrowState(id) {
 			return this.books.get(id)?.state ?? null;
@@ -86125,453 +69364,18 @@ var init_live_entry = __esmMin((() => {
 	init_timeouts();
 }));
 
-// \0crow-no-child_process
-var none;
-var init__crow_no_child_process = __esmMin((() => {
-	none = () => {
-		throw new Error("a Worker starts no process");
-	};
-}));
-
-// \0crow-no-net
-function createServer() {
-	throw new Error("a Worker opens no port");
-}
-var init__crow_no_net = __esmMin((() => {}));
-
-// node_modules/.pnpm/viem@2.57.13_typescript@6.0.3/node_modules/viem/_esm/chains/definitions/foundry.js
-var foundry;
-var init_foundry = __esmMin((() => {
-	init_defineChain();
-	foundry = /*#__PURE__*/ defineChain({
-		id: 31337,
-		name: "Foundry",
-		nativeCurrency: {
-			decimals: 18,
-			name: "Ether",
-			symbol: "ETH"
-		},
-		rpcUrls: { default: {
-			http: ["http://127.0.0.1:8545"],
-			webSocket: ["ws://127.0.0.1:8545"]
-		} }
-	});
-}));
-
-// node_modules/.pnpm/viem@2.57.13_typescript@6.0.3/node_modules/viem/_esm/chains/index.js
-var init_chains = __esmMin((() => {
-	/* @__PURE__ */ init_defineChain();
-	init_fromHex();
-	init_toBytes();
-	init_toHex();
-	init_block();
-	/* @__PURE__ */ init_log$1();
-	init_transaction();
-	init_transactionReceipt();
-	init_transactionRequest();
-	init_number();
-	/* @__PURE__ */ init_concat();
-	init_toRlp();
-	init_serializeTransaction();
-	init_address$1();
-	init_base();
-	init_chain$1();
-	init_isAddress();
-	init_pad();
-	init_sha256();
-	/* @__PURE__ */ init_trim$1();
-	init_node();
-	init_serializeAccessList();
-	init_assertCurrentChain();
-	init_getChainContractAddress();
-	init_foundry();
-	/* @__PURE__ */ init_parseAccount();
-	init_account();
-	init_getCallError();
-	/* @__PURE__ */ init_extract();
-	init_stateOverride();
-	init_assertRequest();
-	init_Hex();
-	init_Address();
-	init_Errors();
-	init_Hash();
-	init_AbiItem();
-	init_Bytes();
-	init_cursor();
-	init_Json();
-	init_hash_to_curve();
-	init_sha2();
-	init__shortw_utils();
-	init_modular();
-	init_weierstrass();
-	init_secp256k1();
-	init_hmac();
-	init__md();
-	init_utils$4();
-	init_Signature();
-	init_Base64();
-	init_AbiParameters();
-	init_AbiEvent();
-	init_Authorization();
-	init_sha3();
-	init_getCode();
-	init_getTransaction();
-	init_readContract();
-	init_verifyHash();
-	init_contract$1();
-	init_isAddressEqual();
-	/* @__PURE__ */ init_getAction();
-	init_keccak256();
-	init_watchContractEvent();
-	init_sendTransaction();
-	init_sendTransactionSync();
-	init_writeContract();
-	init_writeContractSync();
-	init_rpc();
-	init_formatAbiItem();
-	init_parseEventLogs();
-	init_hashAuthorization();
-	init_hashMessage();
-	init_hashTypedData();
-	init_getTransactionType();
-	init_parseTransaction();
-	init_transaction$1();
-	init_formatUnits();
-	init_call();
-	init_multicall();
-	init_encodeFunctionData();
-	init_toFunctionSelector();
-	init_utils();
-	init_address();
-	init_estimateContractGas();
-	init_simulateContract();
-	init_internal();
-	init_decodeErrorResult();
-}));
-
 // packages/settlement/dist/evm/world.js
-/** Reads a forge artifact from contracts/out. */
-function artifact(root, file, name) {
-	const path = join(root, "contracts", "out", file, `${name}.json`);
-	if (!existsSync(path)) throw new Error(`no artifact ${path}: run \`forge build\` in contracts/ first`);
-	const json = JSON.parse(readFileSync(path, "utf8"));
-	return {
-		abi: json.abi,
-		bytecode: json.bytecode.object
-	};
-}
-async function freePort() {
-	return new Promise((resolve, reject) => {
-		const s = createServer();
-		s.unref();
-		s.on("error", reject);
-		s.listen(0, "127.0.0.1", () => {
-			const port = s.address().port;
-			s.close(() => resolve(port));
-		});
-	});
-}
-async function waitFor(client) {
-	for (let i = 0; i < 100; i++) try {
-		await client.getBlockNumber();
-		return;
-	} catch {
-		await new Promise((r) => setTimeout(r, 100));
-	}
-	throw new Error("anvil did not start within 10 s");
-}
-/**
-* Polls eth_getTransactionReceipt until the receipt is there (T-035). Not viem's waitForTransactionReceipt: after a
-* missed first check it asks again only when a block-number poller shared by every wait on the client sees a higher
-* block. Anvil in automine mines no block while a test waits, and evm_revert moves the head below a poller another
-* wait left running, so one missed check slept until viem's 180 s timeout and stalled the tests after it.
-*/
-async function receiptOf(client, hash, timeoutMs) {
-	const deadline = Date.now() + timeoutMs;
-	for (;;) {
-		const r = await client.getTransactionReceipt({ hash }).catch((e) => {
-			if (e instanceof TransactionReceiptNotFoundError) return null;
-			throw e;
-		});
-		if (r) return r;
-		if (Date.now() >= deadline) throw new Error(`anvil returned no receipt for ${hash} within ${timeoutMs / 1e3} s: ${await unmined(client, hash)}`);
-		await new Promise((resolve) => setTimeout(resolve, RECEIPT_POLL_MS));
-	}
-}
-/** What anvil knows of a transaction that has no receipt, for the error. */
-async function unmined(client, hash) {
-	const ask = (method) => client.request({
-		method,
-		params: []
-	}).catch(() => void 0);
-	const tx = await client.getTransaction({ hash }).catch(() => null);
-	const state = !tx ? "unknown to anvil" : tx.blockNumber === null ? "pending" : `in block ${tx.blockNumber}`;
-	const automine = await ask("anvil_getAutomine");
-	return `the transaction is ${state}; automine ${automine === true ? "on" : automine === false ? "off" : "unknown"}; txpool ${JSON.stringify(await ask("txpool_status") ?? "unknown")}`;
-}
-async function deploy(root, rpcUrl, client, tokenArtifact, receiptTimeoutMs, beaconMarginSec) {
-	const wallet = createWalletClient({
-		account: privateKeyToAccount(ANVIL_DEPLOYER_KEY),
-		chain: foundry,
-		transport: http(rpcUrl)
-	});
-	const one = async (a, args = []) => {
-		const hash = await wallet.deployContract({
-			abi: a.abi,
-			bytecode: a.bytecode,
-			args
-		});
-		const r = await receiptOf(client, hash, receiptTimeoutMs);
-		if (r.status !== "success" || !r.contractAddress) throw new Error(`deployment failed: ${hash}`);
-		return r.contractAddress;
-	};
-	const token = artifact(root, ...tokenArtifact);
-	const escrowA = artifact(root, "AuthCaptureEscrow.sol", "AuthCaptureEscrow");
-	const c3009 = artifact(root, "ERC3009PaymentCollector.sol", "ERC3009PaymentCollector");
-	const multicallA = artifact(root, "LocalMulticall3.sol", "LocalMulticall3");
-	const rulesA = artifact(root, "HoldbackRules.sol", "HoldbackRules");
-	const beaconA = artifact(root, "SimBeacon.sol", "SimBeacon");
-	const tokenAddr = await one(token);
-	const escrow = await one(escrowA);
-	const multicall = await one(multicallA);
-	const erc3009Collector = await one(c3009, [escrow, multicall]);
-	const deployRules = async (simSeed) => {
-		const beacon = await one(beaconA, [simSeed]);
-		return {
-			rules: await one(rulesA, [
-				escrow,
-				erc3009Collector,
-				EXPIRY_MARGIN,
-				beacon,
-				tokenAddr,
-				BigInt(beaconMarginSec)
-			]),
-			beacon,
-			fromBlock: await client.getBlockNumber() + 1n
-		};
-	};
-	return {
-		base: {
-			token: tokenAddr,
-			escrow,
-			erc3009Collector,
-			multicall
-		},
-		abis: {
-			rules: rulesA.abi,
-			token: token.abi,
-			escrow: escrowA.abi,
-			multicall: multicallA.abi,
-			collector: c3009.abi
-		},
-		deployRules
-	};
-}
-var LOCAL_CHAIN_ID, ANVIL_DEPLOYER_KEY, ANVIL_GENESIS_TIME, EXPIRY_MARGIN, BOOT_SIM_SEED, TX_GAS, RECEIPT_POLL_MS, RECEIPT_TIMEOUT_MS, RECEIPT_TIMEOUT_BLOCKS, EvmWorld;
+var none, EvmWorld;
 var init_world = __esmMin((() => {
-	init__crow_no_child_process();
-	init__crow_no_net();
-	init__esm();
-	init_accounts();
-	init_chains();
-	init_guard();
-	init_signer_reads();
-	LOCAL_CHAIN_ID = 31337;
-	ANVIL_DEPLOYER_KEY = "0xac0974bec39a17e36ba4a6b4d238ff944bacb478cbed5efcae784d7bf4f2ff80";
-	ANVIL_GENESIS_TIME = 17e8;
-	EXPIRY_MARGIN = 86400n;
-	BOOT_SIM_SEED = `0x${"00".repeat(32)}`;
-	TX_GAS = 3000000n;
-	RECEIPT_POLL_MS = 25;
-	RECEIPT_TIMEOUT_MS = 1e4;
-	RECEIPT_TIMEOUT_BLOCKS = 3;
-	EvmWorld = class EvmWorld {
-		rpcUrl;
-		publicClient;
-		deployment;
-		abis;
-		tokenDomain;
-		proc;
-		deployRules;
-		receiptTimeoutMs;
-		chainId = LOCAL_CHAIN_ID;
-		clock = "scenario";
-		relayer = privateKeyToAccount(ANVIL_DEPLOYER_KEY).address;
-		expiryMargin = EXPIRY_MARGIN;
-		beaconMarginSec;
-		snapshotId = null;
-		constructor(rpcUrl, publicClient, deployment, abis, tokenDomain, proc, deployRules, receiptTimeoutMs, beaconMarginSec) {
-			this.rpcUrl = rpcUrl;
-			this.publicClient = publicClient;
-			this.deployment = deployment;
-			this.abis = abis;
-			this.tokenDomain = tokenDomain;
-			this.proc = proc;
-			this.deployRules = deployRules;
-			this.receiptTimeoutMs = receiptTimeoutMs;
-			this.beaconMarginSec = beaconMarginSec;
+	none = () => {
+		throw new Error("a Worker runs no local chain");
+	};
+	EvmWorld = class {
+		constructor() {
+			none();
 		}
-		/**
-		* Starts anvil on a free localhost port and deploys. `root` is the repository root (for contracts/out).
-		* `blockTimeSec`: mine a block every so many seconds at wall-clock time instead of one per transaction at the
-		* scenario's second, so anvil stands in for a testnet (a LiveChain over `rpcUrl`, ADR-0028). `token`: LocalUSDC
-		* (the fixtures') or TestUSDC (the Sepolia demo's tUSDC, D42). `receiptTimeoutMs`: how long a send waits for its
-		* receipt before it throws (10 s, or three blocks if `blockTimeSec` makes that longer). `beaconMarginSec`: the rules
-		* contract's `BEACON_MARGIN` (ADR-0032), 0 unless a test asks for the margin of a shared chain.
-		*/
-		static async start(root, options = {}) {
-			let proc = null;
-			let rpcUrl = options.rpcUrl;
-			if (!rpcUrl) {
-				const port = await freePort();
-				const clock = options.blockTimeSec ? ["--block-time", String(options.blockTimeSec)] : ["--timestamp", String(ANVIL_GENESIS_TIME)];
-				proc = none("anvil", [
-					"--chain-id",
-					String(LOCAL_CHAIN_ID),
-					"--host",
-					"127.0.0.1",
-					"--port",
-					String(port),
-					...clock,
-					"--hardfork",
-					"prague",
-					"--silent"
-				], { stdio: "ignore" });
-				rpcUrl = `http://127.0.0.1:${port}`;
-			}
-			assertLocalRpc(rpcUrl);
-			const publicClient = createPublicClient({
-				chain: foundry,
-				transport: http(rpcUrl),
-				cacheTime: 0
-			});
-			const receiptTimeoutMs = options.receiptTimeoutMs ?? Math.max(RECEIPT_TIMEOUT_MS, RECEIPT_TIMEOUT_BLOCKS * 1e3 * (options.blockTimeSec ?? 0));
-			try {
-				await waitFor(publicClient);
-				const chainId = await publicClient.getChainId();
-				assertSafeChain(chainId);
-				if (chainId !== 31337) throw new RangeError(`kind local expects anvil chain id ${LOCAL_CHAIN_ID}, got ${chainId}`);
-				const testUsdc = options.token === "test-usdc";
-				const beaconMarginSec = options.beaconMarginSec ?? 0;
-				const { base, abis, deployRules } = await deploy(root, rpcUrl, publicClient, testUsdc ? ["TestUSDC.sol", "TestUSDC"] : ["LocalUSDC.sol", "LocalUSDC"], receiptTimeoutMs, beaconMarginSec);
-				const snapshotId = await publicClient.request({
-					method: "evm_snapshot",
-					params: []
-				});
-				const rules = await deployRules(BOOT_SIM_SEED);
-				const tokenDomain = testUsdc ? {
-					name: "Crow Test USDC",
-					version: "1"
-				} : {
-					name: "USD Coin",
-					version: "1"
-				};
-				const world = new EvmWorld(rpcUrl, publicClient, {
-					...base,
-					...rules
-				}, abis, tokenDomain, proc, deployRules, receiptTimeoutMs, beaconMarginSec);
-				world.snapshotId = snapshotId;
-				return world;
-			} catch (e) {
-				proc?.kill();
-				throw e;
-			}
-		}
-		async rpc(method, params) {
-			return await this.publicClient.request({
-				method,
-				params
-			});
-		}
-		/**
-		* Reverts the chain to just before the beacon and rules deployment and redeploys both, the sim beacon seeded with
-		* `simSeed` (the genesis seed, as SimChain's beacon), so each settlement starts from the same state and addresses.
-		*/
-		async fresh(simSeed = BOOT_SIM_SEED) {
-			if (!this.snapshotId) throw new Error("EvmWorld has no snapshot");
-			if (!await this.rpc("evm_revert", [this.snapshotId])) throw new Error("anvil refused evm_revert");
-			this.snapshotId = await this.rpc("evm_snapshot", []);
-			const d = await this.deployRules(simSeed);
-			if (d.rules !== this.deployment.rules || d.beacon !== this.deployment.beacon || d.fromBlock !== this.deployment.fromBlock) throw new Error(`the rules redeployment moved: ${JSON.stringify({
-				...d,
-				fromBlock: String(d.fromBlock)
-			})}`);
-		}
-		wallet(key) {
-			return createWalletClient({
-				account: privateKeyToAccount(key),
-				chain: foundry,
-				transport: http(this.rpcUrl)
-			});
-		}
-		senderFor() {
-			return this.relayer;
-		}
-		/** Simulates on the pending block, mined at the scenario second `at`, at the gas price a send pays (T-549 red team, M2). */
-		async simulate(tx, at) {
-			if (at !== void 0) await this.rpc("evm_setNextBlockTimestamp", [at]);
-			const call = {
-				from: tx.from,
-				to: tx.to,
-				data: tx.data,
-				gas: toHex(TX_GAS),
-				gasPrice: toHex(await this.gasPrice())
-			};
-			await this.rpc("eth_call", tx.overrides?.length ? [
-				call,
-				"pending",
-				Object.fromEntries(tx.overrides.map((o) => [o.address, { code: o.code }]))
-			] : [call, "pending"]);
-		}
-		async callAt(tx, at) {
-			await this.rpc("evm_setNextBlockTimestamp", [at]);
-			const [call, overrides] = rawCheckCall(tx);
-			return await this.rpc("eth_call", [
-				call,
-				"pending",
-				overrides
-			]);
-		}
-		/** Twice the node's gas price: above the pending block's base fee, as a send's fee is. */
-		async gasPrice() {
-			return 2n * await this.publicClient.getGasPrice();
-		}
-		/** Mines the transaction at the scenario second `at`, from `key` or the deployer. */
-		async send(tx, at) {
-			if (at !== void 0) await this.rpc("evm_setNextBlockTimestamp", [at]);
-			const wallet = this.wallet(tx.key ?? "0xac0974bec39a17e36ba4a6b4d238ff944bacb478cbed5efcae784d7bf4f2ff80");
-			const hash = await wallet.sendTransaction({
-				account: wallet.account,
-				chain: wallet.chain,
-				to: tx.to,
-				data: tx.data,
-				gas: TX_GAS,
-				...tx.value ? { value: tx.value } : {}
-			});
-			const r = await this.receipt(hash);
-			const timestamp = at ?? Number((await this.publicClient.getBlock({ blockNumber: r.blockNumber })).timestamp);
-			return {
-				hash,
-				from: wallet.account.address,
-				status: r.status,
-				gasUsed: r.gasUsed,
-				blockNumber: r.blockNumber,
-				timestamp,
-				logs: r.logs
-			};
-		}
-		/** The receipt of `hash` once anvil has it; throws, naming the hash and what anvil knows of it, after the deadline. */
-		receipt(hash) {
-			return receiptOf(this.publicClient, hash, this.receiptTimeoutMs);
-		}
-		async stop() {
-			if (!this.proc) return;
-			const p = this.proc;
-			await new Promise((resolve) => {
-				p.once("exit", () => resolve());
-				p.kill();
-				setTimeout(resolve, 2e3).unref();
-			});
+		static start() {
+			none();
 		}
 	};
 }));
@@ -86636,7 +69440,7 @@ function checkInvariants(v) {
 }
 /** Test keys derived from the public fixture seed and the actor name. They guard no value. */
 function testKey(seed, name) {
-	return keccak256$1(stringToBytes(`holdback/testkit/v0/${seed}/${name}`));
+	return keccak256(stringToBytes(`holdback/testkit/v0/${seed}/${name}`));
 }
 var ESCROW, APPEAL_HOLD, GENESIS, ZERO32, SETTLED_STATES, DAY, OUTSIDE, topUpCall, MAX_SCOPE, plus, TIMEOUTS, StubSettlement;
 var init_stub_settlement = __esmMin((() => {
@@ -86819,7 +69623,7 @@ var init_stub_settlement = __esmMin((() => {
 						maxDaily: this.money(MAX_SCOPE.amount),
 						expiresAt: plus(at, 365 * DAY)
 					},
-					nonce: keccak256$1(stringToBytes(`mandate/${name}`)),
+					nonce: keccak256(stringToBytes(`mandate/${name}`)),
 					issuedAt: at
 				};
 				const signature = await signMessage(principalKey, this.domain, {
@@ -86833,7 +69637,7 @@ var init_stub_settlement = __esmMin((() => {
 			}
 			this.genesis = {
 				start: at,
-				simSeed: keccak256$1(stringToBytes(`holdback/sim-beacon/v0/${ctx.seed}`)),
+				simSeed: keccak256(stringToBytes(`holdback/sim-beacon/v0/${ctx.seed}`)),
 				chainId: SIM_CHAIN_ID,
 				token: this.token,
 				clubs: [club],
@@ -87326,7 +70130,7 @@ var init_stub_settlement = __esmMin((() => {
 				type: "AdjudicatorAcceptance",
 				commitmentId: this.tamperable("wrong_commitment_id", c.id),
 				adjudicator: this.address(name),
-				seedCommitment: this.tamperable("wrong_seed_commitment", keccak256$1(seed)),
+				seedCommitment: this.tamperable("wrong_seed_commitment", keccak256(seed)),
 				policyHash: this.tamperable("wrong_policy_hash", c.terms.adjudication.policyHash),
 				registryHash: this.tamperable("wrong_registry_hash", c.terms.adjudication.registryHash),
 				fee: c.terms.adjudication.fee,
@@ -87580,7 +70384,7 @@ var init_stub_settlement = __esmMin((() => {
 					plaintext: d.plaintext,
 					source: d.source,
 					seed,
-					seedCommitment: role === "primary" ? keccak256$1(this.seed) : null,
+					seedCommitment: role === "primary" ? keccak256(this.seed) : null,
 					beaconRound: round,
 					registry: boundRegistry,
 					policy: bound,
@@ -90859,7 +73663,7 @@ const SECP256K1_ORDER = 11579208923731619542357098500868790785283756427907490438
 * of HOLDBACK_KEY can derive it, and two keys derived from it share nothing a stranger can see.
 */
 function derivedKey(key, label, nonce) {
-	const k = keccak256$1(concat$1([
+	const k = keccak256(concat([
 		key,
 		stringToHex(label),
 		...nonce === void 0 ? [] : [nonce]
@@ -92623,8 +75427,12 @@ function journalStore(storage, log) {
 
 // apps/own-seller/src/worker.ts
 init__esm();
+init_accounts();
 /** The text a `leave` signs to read the journal: the Worker's host and the time in whole seconds. */
 const exportMessage = (host, time) => `crow own-seller export ${host} ${time}`;
+/** What the owner signs to ask for a proof, and what the Worker's own key signs in answer. */
+const proofRequestMessage = (host, time, nonce) => `crow own-seller proof ${host} ${time} ${nonce}`;
+const proofMessage = (host, nonce) => `crow own-seller worker ${host} ${nonce}`;
 /** How far the export's time may be from the Worker's clock, in seconds. */
 const EXPORT_WINDOW_SEC = 300;
 /** Hosts Crow serves from: a party's Worker never takes an address there. */
@@ -92769,32 +75577,48 @@ var OwnSellerObject = class {
 			testTokensOnly: true
 		};
 	}
-	/** GET /export: the journal, to a signature of the owner's key over this host and a time within 300 s. */
-	async export(request) {
+	/** Whether the request carries the owner's signature over `message(host, time)`, with the time within 300 s. */
+	async ownerSigned(request, message) {
 		const time = Number(request.headers.get("x-crow-owner-time"));
 		const signature = request.headers.get("x-crow-owner-signature") ?? "";
-		const refused = json(401, {
-			type: "unauthorized",
-			detail: "GET /export takes a signature of the owner's key: run setup.mjs leave from the folder"
-		});
-		if (!Number.isSafeInteger(time) || Math.abs(Date.now() / 1e3 - time) > 300 || !/^0x[0-9a-fA-F]{130}$/.test(signature)) return refused;
-		const host = new URL(request.url).host;
-		let ok = false;
+		if (this.setup.owner === void 0 || !Number.isSafeInteger(time) || Math.abs(Date.now() / 1e3 - time) > 300 || !/^0x[0-9a-fA-F]{130}$/.test(signature)) return false;
 		try {
-			ok = await verifyMessage$2({
+			return await verifyMessage$1({
 				address: this.setup.owner,
-				message: exportMessage(host, time),
+				message: message(new URL(request.url).host, time),
 				signature
 			});
 		} catch {
-			ok = false;
+			return false;
 		}
-		if (!ok) return refused;
-		if (this.setup.owner === void 0) return refused;
+	}
+	/** GET /proof: the Worker's own key signs the host and the owner's nonce, to the owner's signed request. */
+	async proof(request) {
+		const nonce = request.headers.get("x-crow-proof-nonce") ?? "";
+		if (!/^[0-9a-f]{64}$/.test(nonce) || !await this.ownerSigned(request, (host, time) => proofRequestMessage(host, time, nonce))) return json(401, {
+			type: "unauthorized",
+			detail: "GET /proof takes a nonce and a signature of the owner's key: run setup.mjs check --published from the folder"
+		});
+		if (typeof this.env.HOLDBACK_KEY !== "string" || !/^0x[0-9a-f]{64}$/.test(this.env.HOLDBACK_KEY)) return json(503, {
+			type: "unavailable",
+			detail: "this Worker has no signing key yet"
+		});
+		const account = privateKeyToAccount(this.env.HOLDBACK_KEY);
+		return json(200, {
+			address: account.address.toLowerCase(),
+			signature: await account.signMessage({ message: proofMessage(new URL(request.url).host, nonce) })
+		});
+	}
+	/** GET /export: the journal, to a signature of the owner's key over this host and a time within 300 s. */
+	async export(request) {
+		if (!await this.ownerSigned(request, exportMessage)) return json(401, {
+			type: "unauthorized",
+			detail: "GET /export takes a signature of the owner's key: run setup.mjs leave from the folder"
+		});
 		const journal = await journalStore(this.state.storage, () => void 0).load();
 		return json(200, {
 			type: "crow-own-seller-export",
-			host,
+			host: new URL(request.url).host,
 			exportedAt: (/* @__PURE__ */ new Date()).toISOString(),
 			journal: journal ?? {
 				deals: {},
@@ -92807,6 +75631,7 @@ var OwnSellerObject = class {
 		const path = new URL(request.url).pathname;
 		const sub = path === "/" ? "" : path;
 		if (sub === "/export" && request.method === "GET") return this.export(request);
+		if (sub === "/proof" && request.method === "GET") return this.proof(request);
 		if (!seller) return json(503, {
 			type: "unavailable",
 			detail: "this seller is not set up"
@@ -92920,7 +75745,7 @@ ${seller.card.description === void 0 ? "" : `<p>${escapeHtml(seller.card.descrip
 */
 function workerFor(setup) {
 	return { async fetch(request, env) {
-		const exporting = new URL(request.url).pathname === "/export" && setup.owner !== void 0;
+		const exporting = ["/export", "/proof"].includes(new URL(request.url).pathname) && setup.owner !== void 0;
 		if (!setup.seller && !exporting) return json(503, {
 			type: "unavailable",
 			detail: "this seller is not set up; its log says why"

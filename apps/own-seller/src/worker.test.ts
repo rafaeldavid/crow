@@ -9,7 +9,8 @@ import { startSimWorld, type SimWorld } from '@holdback/operator';
 import { afterAll, afterEach, beforeAll, describe, expect, it, vi } from 'vitest';
 import { Agent } from '../../../examples/agent.ts';
 import { jobStubSellerApi, startJobStub, type JobStub } from '../../../examples/seller-adapter-job-stub.ts';
-import { baseOf, exportMessage, OwnSellerObject, setupOf, workerFor, type Env, type OwnBundle } from './worker.ts';
+import { verifyMessage } from 'viem';
+import { baseOf, exportMessage, OwnSellerObject, proofMessage, proofRequestMessage, setupOf, workerFor, type Env, type OwnBundle } from './worker.ts';
 
 type J = any; // eslint-disable-line @typescript-eslint/no-explicit-any
 const SECRETS = { JOBS_API_KEY: 'own-api-key-5e1c', QUOTE_CREDENTIALS: 'own-quote-cred-8d02' };
@@ -164,6 +165,23 @@ describe("a seller's own Worker (T-478): the day's cap", () => {
     expect(over.status).toBe(429);
     expect(over.body.detail).toMatch(/at most 2 offers a UTC day/);
   }, 45_000);
+});
+
+describe("a seller's own Worker (T-478): the proof", () => {
+  it("signs the owner's nonce with its own key, and answers 401 to a request the owner did not sign", async () => {
+    const { object, env } = await seller();
+    const nonce = 'c'.repeat(64);
+    const time = Math.floor(Date.now() / 1000);
+    const host = new URL(BASE).host;
+    const signed = { 'x-crow-owner-time': String(time), 'x-crow-owner-signature': await OWNER.signMessage({ message: proofRequestMessage(host, time, nonce) }), 'x-crow-proof-nonce': nonce };
+    const res = await get(object, '/proof', signed);
+    expect(res.status).toBe(200);
+    const body = (await res.json()) as J;
+    const worker = privateKeyToAccount(env.HOLDBACK_KEY as Hex).address;
+    expect(await verifyMessage({ address: worker, message: proofMessage(host, nonce), signature: body.signature })).toBe(true);
+    expect((await get(object, '/proof', { ...signed, 'x-crow-proof-nonce': 'd'.repeat(64) })).status).toBe(401); // the owner signed another nonce
+    expect((await get(object, '/proof', { 'x-crow-proof-nonce': nonce })).status).toBe(401);
+  }, 30_000);
 });
 
 describe("a seller's own Worker (T-478): the export", () => {

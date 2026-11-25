@@ -7,8 +7,9 @@ import { join } from 'node:path';
 import { describe, expect, it } from 'vitest';
 import { bundleFrom, sellerSha256, wranglerConfigFor } from '../../../examples/setup-cloudflare.ts';
 import { exportMessage as leaveMessage } from '../../../examples/setup-leave.ts';
+import { proofMessage as checkProof, proofRequestMessage as checkProofRequest } from '../../../examples/setup-published.ts';
 import { bundleSha256, checkBundle } from '../../hosted-sellers/src/bundle.ts';
-import { exportMessage, setupOf } from './worker.ts';
+import { exportMessage, proofMessage, proofRequestMessage, setupOf } from './worker.ts';
 
 describe('T-478: the setup writes what the Worker takes', () => {
   it("bundleFrom's bundle passes checkBundle and the Worker's own setup, with the SHA-256 bundleSha256 gives", () => {
@@ -29,5 +30,7 @@ describe('T-478: the setup writes what the Worker takes', () => {
     expect(cfg.durable_objects.bindings).toEqual([{ name: 'SELLER', class_name: 'OwnSeller' }]);
     expect(cfg.migrations[0]!.new_sqlite_classes).toEqual(['OwnSeller']);
     expect(leaveMessage('r.x.workers.dev', 1_764_000_000)).toBe(exportMessage('r.x.workers.dev', 1_764_000_000));
+    expect(checkProofRequest('r.x.workers.dev', 1, 'ab')).toBe(proofRequestMessage('r.x.workers.dev', 1, 'ab'));
+    expect(checkProof('r.x.workers.dev', 'ab')).toBe(proofMessage('r.x.workers.dev', 'ab'));
   });
 });

@@ -101,12 +101,12 @@ const EXPECTED: Record<string, Omit<Contents, 'loads'>> = {
     hosts: ['(joined at run time)', '127.0.0.1', 'abitype.dev', 'adapter', 'api.crow.direct', 'api2.crow.direct', 'crow.direct', 'docs.soliditylang.org', 'holdback.dev', 'join.crow.direct', 'json-schema.org', 'sample', 'seller.example', 'sepolia.etherscan.io', 'viem.sh', 'your-site.example'],
   },
   // T-478: a seller's own Worker. It runs in Cloudflare's runtime on the party's account, never with Node on a machine.
-  // Its hosts are the demo's, the schema IDs, and the documentation hosts viem and ox name in their messages.
+  // Its hosts are the demo's, the schema IDs, and the documentation hosts viem names in its messages.
   'seller-worker.mjs': {
     imports: ['./seller-bundle.txt', 'node:crypto', 'node:fs', 'node:path', 'node:url'],
     requires: [],
     process: ['argv', 'cwd', 'env', 'exit', 'stdout'],
-    hosts: ['127.0.0.1', '4byte.sourcify.dev', 'abitype.dev', 'arweave.net', 'crow.direct', 'docs.soliditylang.org', 'holdback.dev', 'ipfs.io', 'json-schema.org', 'oxlib.sh', 'rolldown.rs', 'seller.example', 'sepolia.etherscan.io', 'viem.sh'],
+    hosts: ['127.0.0.1', '4byte.sourcify.dev', 'abitype.dev', 'crow.direct', 'docs.soliditylang.org', 'holdback.dev', 'json-schema.org', 'rolldown.rs', 'seller.example', 'sepolia.etherscan.io', 'viem.sh'],
   },
   // T-551: it reads the card at a URL the person gives, so its hosts are the demo's, the schema IDs and viem's docs.
   'take.mjs': {
@@ -141,10 +141,16 @@ describe('the published bundles (T-496)', () => {
 
   it('setup.mjs starts one child process: npx with the pinned Wrangler, and the arguments its command gives', () => {
     const code = readFileSync(site('setup.mjs'), 'utf8');
+    // The import is pinned, not only the call: one import of node:child_process, which names spawn and nothing else,
+    // so no execFileSync, exec or fork can be called through it.
+    const imports = [...code.matchAll(/^import\s+(.+?)\s+from\s+["'](?:node:)?child_process["'];?$/gm)].map((m) => m[1]);
+    expect(imports).toEqual(['{ spawn }']);
+    expect(code).not.toMatch(/require\(["'](?:node:)?child_process["']\)/);
     const calls = [...code.matchAll(/\bspawn\(/g)];
     expect(calls).toHaveLength(1);
     expect(code).toContain('spawn("npx", [...WRANGLER, ...args],');
-    expect(code).toMatch(/const WRANGLER = \["--yes", `wrangler@\$\{WRANGLER_VERSION\}`\];/);
+    expect(code).toMatch(/const WRANGLER = \[`wrangler@\$\{WRANGLER_VERSION\}`\];/); // no --yes: npx installs nothing
+    expect(code).toContain('npm_config_yes: "false"');
     expect(code).toMatch(/const WRANGLER_VERSION = "4\.151\.3";/);
   });
 

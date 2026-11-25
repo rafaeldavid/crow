@@ -6,8 +6,9 @@
 //       tunnel to reach from Cloudflare. It writes adapter.json and template.json for `setup.mjs cloudflare --config`
 //       into reports/rehearsal/ once it is told the tunnel's https address (--public <URL>). For each request it
 //       prints the method, the path, the CF-Worker header and the CF-Connecting-IP header: the measurement of what
-//       Cloudflare tells the hosts a Worker calls, and of the address the operators would count a faucet grant by. It prints the stand-in API's key once, for the
-//       person to type at Wrangler's prompt; it is a throwaway key of this stand-in, not a secret of anyone's.
+//       Cloudflare tells the hosts a Worker calls, and of the address the operators would count a faucet grant by.
+//       The stand-in API's throwaway key goes to reports/rehearsal/api-key (mode 0600), never to a printed line:
+//       the person pipes it to `wrangler secret put JOBS_API_KEY` on standard input.
 //   node apps/own-seller/scripts/rehearse.ts deal --at https://<the Worker's address>/
 //       one deal with Crow's test buyer: reads its card, asks the Worker for a quote naming the buyer (an open quote
 //       address: prepare the Worker with --open for the rehearsal), posts the commitment ID to the buyer's intake, and
@@ -48,7 +49,9 @@ async function api(): Promise<void> {
   delete apiConfig.result.files;
   writeFileSync(join(dir, 'template.json'), `${JSON.stringify({ deliverable: { kind: 'document', description: 'A review of {{target}} to depth {{depth}}.', format: 'application/json' }, checks: [{ id: 'report', type: 'json_schema', required: true, schema: { type: 'object', required: ['summary', 'target'] } }] }, null, 2)}\n`);
   writeFileSync(join(dir, 'adapter.json'), `${JSON.stringify({ template: 'template.json', scope: { target: { type: 'string', pattern: '^[a-z0-9-]{1,40}$' }, depth: { type: 'integer', min: 1, max: 3 } }, pollMs: 3000, timing: { offerExpiresInSec: 600, fundWithinSec: 900, deliverWithinSec: 3600, judgeWithinSec: 60, fallbackWithinSec: 60, appealWindowSec: 0, appealDecideSec: 60 }, sellerApi: apiConfig }, null, 2)}\n`);
-  console.log(JSON.stringify({ listening: `http://127.0.0.1:${port}`, config: join(dir, 'adapter.json'), apiKeyName: 'JOBS_API_KEY', apiKey: key, note: 'The stand-in API\'s throwaway key: type it at the prompt of wrangler secret put JOBS_API_KEY. Stop with Ctrl-C after the deal.' }));
+  const keyFile = join(dir, 'api-key');
+  writeFileSync(keyFile, key, { mode: 0o600 });
+  console.log(JSON.stringify({ listening: `http://127.0.0.1:${port}`, config: join(dir, 'adapter.json'), apiKeyFile: keyFile, note: `The stand-in API's throwaway key is in ${keyFile}: from the deploy folder, npx wrangler@4.151.3 secret put JOBS_API_KEY --config wrangler.json < ${keyFile}. Stop with Ctrl-C after the deal.` }));
 }
 
 async function deal(): Promise<void> {

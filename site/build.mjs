@@ -409,35 +409,33 @@ export async function setupBundle(p = pins(), { keepOwnMains = false } = {}) {
 }
 
 /**
- * A seller's own Worker (T-478): apps/own-seller/src/entry.ts bundled as one ESM file, not minified, for
- * `setup.mjs cloudflare` to put beside the seller's bundle on the party's own Cloudflare account. Its node: imports
- * and the bundle's text module, ./seller-bundle.txt, stay imports: the party's pinned Wrangler resolves them with the
- * Worker's nodejs_compat flag. Deterministic. setup.mjs carries its sha256 (examples/seller-worker-pin.ts).
+ * packages/settlement's local-chain world (evm/world.js), which the Worker reaches only through `export *` and never
+ * calls, replaced by a module whose functions throw: the bundle then carries no anvil runner, no child process, and
+ * not anvil's well-known deployer key, which a secret scanner reads as a key (gitleaks, PR 800).
  */
-/**
- * The two Node modules the Worker's bundle names and Cloudflare's runtime does not have: a local chain's runner in
- * packages/settlement imports them, and the Worker never calls it. Each becomes a module whose functions throw, so the
- * party's Wrangler uploads the pinned bytes as they are (no_bundle) and nothing in them can start a process.
- */
-const NO_PROCESS = {
-  name: 'crow-worker-no-process',
-  resolveId: (id) => (id === 'node:child_process' || id === 'node:net' ? `\0crow-no-${id.slice(5)}` : null),
+const NO_LOCAL_CHAIN = {
+  name: 'crow-worker-no-local-chain',
   load: (id) =>
-    id === '\0crow-no-child_process'
-      ? "const none = () => { throw new Error('a Worker starts no process'); }; export { none as spawn, none as spawnSync };"
-      : id === '\0crow-no-net'
-        ? "export function createServer() { throw new Error('a Worker opens no port'); }"
-        : null,
+    id.endsWith('/packages/settlement/dist/evm/world.js')
+      ? "const none = () => { throw new Error('a Worker runs no local chain'); }; export const LOCAL_CHAIN_ID = 31337; export const EXPIRY_MARGIN = 86400n; export { none as artifact, none as anvilAvailable }; export class EvmWorld { constructor() { none(); } static start() { none(); } }"
+      : null,
 };
 
+/**
+ * A seller's own Worker (T-478): apps/own-seller/src/entry.ts bundled as one ESM file, not minified, for
+ * `setup.mjs cloudflare` to put beside the seller's bundle on the party's own Cloudflare account. Its node: imports
+ * and the bundle's text module, ./seller-bundle.txt, stay imports: the party's pinned Wrangler uploads the file as it
+ * is (no_bundle), and Cloudflare's runtime provides those modules with the nodejs_compat flag. Deterministic. setup.mjs
+ * carries its sha256 (examples/seller-worker-pin.ts).
+ */
 export async function sellerWorkerBundle() {
   const root = fileURLToPath(here('../'));
   const bundle = await rolldown({
-    plugins: [NO_PROCESS],
+    plugins: [DROP_TOKEN_STORE, NO_LOCAL_CHAIN],
     cwd: root,
     input: fileURLToPath(here('../apps/own-seller/src/entry.ts')),
     platform: 'browser',
-    external: [/^node:(?!child_process$|net$)/, './seller-bundle.txt'],
+    external: [/^node:/, './seller-bundle.txt'],
     // As in setupBundle: the built files of packages/settlement and packages/testkit run nothing when they load, and the
     // Worker calls few of them, so the bundler leaves out the ones no code reaches (with them, a local chain's runner
     // that imports a child process).

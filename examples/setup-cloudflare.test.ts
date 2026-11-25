@@ -65,6 +65,8 @@ async function party(over: { config?: J } = {}) {
   return { dir, bin, folder, card: `${folder}-card`, config: join(own, 'adapter.json') };
 }
 const prepared = (p: Awaited<ReturnType<typeof party>>, extra: string[] = []) => ['cloudflare', '--folder', p.folder, '--config', p.config, '--account', ACCOUNT, '--at', 'reviews.party-example.workers.dev', '--quote-credential', '--quotes-per-day', '100', '--worker-file', workerFile, ...extra];
+/** What the person's deploy writes to WRANGLER_OUTPUT_FILE_PATH: one `deploy` line with the Worker's name and targets. */
+const deployed = (p: { folder: string }, targets = ['https://reviews.party-example.workers.dev'], name = 'reviews') => writeFileSync(join(p.folder, 'cloudflare', 'deploy-output.ndjson'), `${JSON.stringify({ type: 'wrangler-session', version: 1 })}\n${JSON.stringify({ type: 'deploy', version: 1, worker_name: name, targets })}\n`);
 const readJson = (p: string) => JSON.parse(readFileSync(p, 'utf8'));
 const argsOf = (dir: string) => (existsSync(join(dir, 'args.log')) ? readFileSync(join(dir, 'args.log'), 'utf8').split('\n').filter(Boolean) : []);
 
@@ -116,7 +118,8 @@ describe('T-478: the prepared deploy', () => {
     expect(r.code, r.out + r.err).toBe(0);
     const line = r.lines.at(-1);
     expect(line).toMatchObject({ step: 'cloudflare', ok: true, address: 'https://reviews.party-example.workers.dev/', worker: 'reviews', account: ACCOUNT });
-    expect(line.next.join('\n')).toContain(`npx --yes wrangler@${WRANGLER_VERSION} deploy --config`);
+    expect(line.next.join('\n')).toContain(`WRANGLER_OUTPUT_FILE_PATH=deploy-output.ndjson npx wrangler@${WRANGLER_VERSION} deploy --config`);
+    expect(line.next[0]).toContain(`npx --yes wrangler@${WRANGLER_VERSION} --version`); // the one install, the person's own step
     expect(line.next.join('\n')).toContain('secret put PARTY_API_KEY');
     expect(line.dropped.map((d: string) => d.split(':')[0])).toEqual(['port', 'journal', 'events']);
     const cfg = readJson(join(p.folder, 'cloudflare', 'wrangler.json'));
@@ -134,11 +137,8 @@ describe('T-478: the prepared deploy', () => {
     expect(bundle.seller.config).toMatchObject({ payoutAddress: state.payout.address, signingKey: 'per-deal', quoteAuth: { kind: 'bearer', env: 'QUOTE_CREDENTIALS' }, quoteRateLimit: { overall: { requests: 100, windowSec: 86_400 } } });
     expect(checkSeller(bundle.seller).sort()).toEqual(['PARTY_API_KEY', 'QUOTE_CREDENTIALS']); // the Worker's own check: apps/own-seller/src/setup.test.ts
     expect(readFileSync(join(p.folder, 'cloudflare', 'worker.mjs')).equals(readFileSync(workerFile))).toBe(true);
-    // The card's quote entry, for the person's own site.
-    const card = readJson(join(p.card, 'agent.json'));
-    expect(card.status).toBeUndefined();
-    expect(card.offers).toContainEqual({ id: 'reviews', pricing: { kind: 'quoted', quote: 'https://reviews.party-example.workers.dev/quote', defaults: 'https://reviews.party-example.workers.dev/defaults' } });
-    expect(card.configSha256).toMatch(/^[0-9a-f]{64}$/);
+    // The card keeps its draft: the quote entry waits until the deploy shows the address.
+    expect(readJson(join(p.card, 'agent.json')).status).toMatch(/^draft/);
     // Run again: the same bytes, nothing written.
     const again = await run(prepared(p), { bin: p.bin });
     expect(again.code).toBe(0);
@@ -194,6 +194,7 @@ describe("T-478: the Worker's key reaches the secret store on standard input onl
   it('sets one key, checks before it creates, and the key is in no printed line, argument or file outside keys/', async () => {
     const p = await party();
     expect((await run(prepared(p), { bin: p.bin })).code).toBe(0);
+    deployed(p);
     writeFileSync(join(p.dir, 'fail-bulk'), ''); // the first bulk fails: a rerun continues
     const failed = await run(['cloudflare', '--key', '--folder', p.folder], { bin: p.bin });
     expect(failed.code).toBe(1);
@@ -203,9 +204,15 @@ describe("T-478: the Worker's key reaches the secret store on standard input onl
     expect(first.lines.at(-1).next.join('\n')).toContain('secret put PARTY_API_KEY');
     const again = await run(['cloudflare', '--key', '--folder', p.folder], { bin: p.bin });
     expect(again.lines.at(-1)).toMatchObject({ ok: true, set: false });
+    // The card's quote entry is written once the deploy showed the address.
+    const card = readJson(join(p.card, 'agent.json'));
+    expect(card.status).toBeUndefined();
+    expect(card.offers).toContainEqual({ id: 'reviews', pricing: { kind: 'quoted', quote: 'https://reviews.party-example.workers.dev/quote', defaults: 'https://reviews.party-example.workers.dev/defaults' } });
+    expect(card.configSha256).toMatch(/^[0-9a-f]{64}$/);
+    expect(readJson(join(p.folder, 'crow.json')).cloudflare.workerAddress).toMatch(/^0x[0-9a-f]{40}$/);
     const args = argsOf(p.dir);
     expect(args.filter((a) => a.includes('secret bulk'))).toHaveLength(2); // the failed one and the one that set it
-    expect(args.every((a) => a.startsWith(`--yes wrangler@${WRANGLER_VERSION} `))).toBe(true);
+    expect(args.every((a) => a.startsWith(`wrangler@${WRANGLER_VERSION} `))).toBe(true); // no --yes: npx installs nothing
     expect(args.every((a) => a.includes(`--config ${join(realpathSync(p.folder), 'cloudflare', 'wrangler.json')}`))).toBe(true);
     // The key, as the stand-in read it on standard input.
     const inputs = readFileSync(join(p.dir, 'stdin.log'), 'utf8').split('\n').filter((l) => l.startsWith('{'));
@@ -220,6 +227,7 @@ describe("T-478: the Worker's key reaches the secret store on standard input onl
   it('refuses a Worker that holds secrets its bundle does not name: another program\'s Worker of the same name', async () => {
     const p = await party();
     expect((await run(prepared(p), { bin: p.bin })).code).toBe(0);
+    deployed(p);
     writeFileSync(join(p.dir, 'store'), '[{"name":"STRIPE_KEY","type":"secret_text"}]');
     const r = await run(['cloudflare', '--key', '--folder', p.folder], { bin: p.bin });
     expect(r.code).toBe(1);
@@ -230,6 +238,7 @@ describe("T-478: the Worker's key reaches the secret store on standard input onl
   it('runs Wrangler in the deploy folder, and not at all while a .env file is there for it to load', async () => {
     const p = await party();
     expect((await run(prepared(p), { bin: p.bin })).code).toBe(0);
+    deployed(p);
     writeFileSync(join(p.folder, 'cloudflare', '.env'), 'X=1\n');
     const r = await run(['cloudflare', '--key', '--folder', p.folder], { bin: p.bin });
     expect(r.code).toBe(1);
@@ -252,16 +261,19 @@ describe("T-478: the Worker's key reaches the secret store on standard input onl
   it('gives Wrangler only the variables it needs, a sanitized log in a folder of its own, and the deploy folder as its working directory', async () => {
     const p = await party();
     expect((await run(prepared(p), { bin: p.bin })).code).toBe(0);
+    deployed(p);
     const r = await run(['cloudflare', '--key', '--folder', p.folder], { bin: p.bin, env: { PLANTED_TOKEN: 'planted-value-77' } });
     expect(r.code, r.out).toBe(0);
     const env = readFileSync(join(p.dir, 'env.log'), 'utf8');
     expect(env).not.toContain('planted-value-77');
     expect(env).toMatch(/^WRANGLER_LOG_SANITIZE=true$/m);
+    expect(env).toMatch(/^npm_config_yes=false$/m);
+    expect(env).not.toMatch(/^npm_config_registry=/m);
     const logPath = /^WRANGLER_LOG_PATH=(.*)$/m.exec(env)![1]!;
     expect(existsSync(logPath)).toBe(false); // removed when the run ended
     expect(readFileSync(join(p.dir, 'cwd.log'), 'utf8').trim()).toBe(join(realpathSync(p.folder), 'cloudflare'));
     for (const name of ['CLOUDFLARE_API_BASE_URL', 'WRANGLER_LOG_SANITIZE']) {
-      const refused = await run(['cloudflare', '--key', '--folder', p.folder], { bin: p.bin, env: { [name]: 'x' } });
+      const refused = await run(['cloudflare', '--key', '--folder', p.folder], { bin: p.bin, env: { [name]: 'x', npm_config_registry: 'https://registry.example' } });
       expect(refused.code, name).toBe(1);
     }
   }, 90_000);
@@ -281,9 +293,29 @@ describe("T-478: the Worker's key reaches the secret store on standard input onl
     expect(existsSync(join(p.folder, 'cloudflare'))).toBe(false);
   }, 90_000);
 
+  it('makes no key until the deploy shows the Worker at the address the person typed', async () => {
+    const p = await party();
+    expect((await run(prepared(p), { bin: p.bin })).code).toBe(0);
+    const none = await run(['cloudflare', '--key', '--folder', p.folder], { bin: p.bin });
+    expect(none.code).toBe(1);
+    expect(none.lines.at(-1).detail).toMatch(/deploy-output\.ndjson, is not there/);
+    deployed(p, ['https://reviews.someone-else.workers.dev']);
+    const wrong = await run(['cloudflare', '--key', '--folder', p.folder], { bin: p.bin });
+    expect(wrong.code).toBe(1);
+    expect(wrong.lines.at(-1).detail).toMatch(/at reviews\.someone-else\.workers\.dev, not at reviews\.party-example\.workers\.dev/);
+    expect(argsOf(p.dir)).toEqual([]); // no Wrangler run, no key
+    expect(readJson(join(p.card, 'agent.json')).status).toMatch(/^draft/);
+    writeFileSync(join(p.folder, 'cloudflare', '.npmrc'), 'registry=https://registry.example\n');
+    deployed(p);
+    const npmrc = await run(['cloudflare', '--key', '--folder', p.folder], { bin: p.bin });
+    expect(npmrc.code).toBe(1);
+    expect(npmrc.lines.at(-1).detail).toMatch(/\.npmrc is there, and npx would load it/);
+  }, 90_000);
+
   it('refuses a Worker whose key this folder did not set', async () => {
     const p = await party();
     expect((await run(prepared(p), { bin: p.bin })).code).toBe(0);
+    deployed(p);
     writeFileSync(join(p.dir, 'store'), '[{"name":"HOLDBACK_KEY","type":"secret_text"}]');
     const r = await run(['cloudflare', '--key', '--folder', p.folder], { bin: p.bin });
     expect(r.code).toBe(1);

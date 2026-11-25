@@ -22,7 +22,7 @@ import { createHash } from 'node:crypto';
 import { existsSync, mkdirSync, mkdtempSync, readdirSync, readFileSync, rmSync, statSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { dirname, isAbsolute, join, resolve } from 'node:path';
-import { generatePrivateKey } from 'viem/accounts';
+import { generatePrivateKey, privateKeyToAccount } from 'viem/accounts';
 import { configFrom } from './seller-adapter-core.ts';
 import { plain as plainLine } from './plain.ts';
 import { holdingKeyOf } from './seller-adapter.ts';
@@ -35,9 +35,15 @@ const plain = (s: unknown, max = 300) => plainLine(String(s ?? '')).slice(0, max
 
 /** The one Wrangler version every run uses: the repository's pin, since the key travels through it to the secret store. */
 export const WRANGLER_VERSION = '4.151.3';
-export const WRANGLER = ['--yes', `wrangler@${WRANGLER_VERSION}`];
+// No --yes, and npm_config_yes=false in the child's environment: npx runs a Wrangler the person installed and never
+// resolves or installs a package at run time (Decision 8, as the journeys session adopted it on 2026-11-25).
+export const WRANGLER = [`wrangler@${WRANGLER_VERSION}`];
 /** How a printed command runs Wrangler: the pinned version, through npx. */
 export const WRANGLER_LINE = `npx ${WRANGLER.join(' ')}`;
+/** How the person installs the pinned Wrangler once, before the first command that runs it. */
+export const WRANGLER_INSTALL = `npx --yes wrangler@${WRANGLER_VERSION} --version`;
+/** The file the person's deploy writes Wrangler's output to, in the deploy folder: the deployed addresses. */
+export const DEPLOY_OUTPUT = 'deploy-output.ndjson';
 /** Where the prebuilt Worker is published; the command takes its bytes only with the SHA-256 setup.mjs carries. */
 export const SELLER_WORKER_URL = 'https://crow.direct/seller-worker.mjs';
 /** The folder's directory for the deploy, and its three files. */
@@ -54,7 +60,7 @@ export const ACCOUNT_VARIABLES: readonly string[] = ['CLOUDFLARE_API_TOKEN', 'CL
  * themselves, the npm cache and the person's login. Anything else, such as a variable that names another API host,
  * stays out (red team, T-478).
  */
-const PASSED = ['PATH', 'HOME', 'USER', 'LOGNAME', 'SHELL', 'TMPDIR', 'LANG', 'LC_ALL', 'TERM', 'XDG_CONFIG_HOME', 'XDG_CACHE_HOME', 'npm_config_cache', 'npm_config_registry', 'APPDATA', 'LOCALAPPDATA', 'USERPROFILE', 'SystemRoot'];
+const PASSED = ['PATH', 'HOME', 'USER', 'LOGNAME', 'SHELL', 'TMPDIR', 'LANG', 'LC_ALL', 'TERM', 'XDG_CONFIG_HOME', 'XDG_CACHE_HOME', 'npm_config_cache', 'APPDATA', 'LOCALAPPDATA', 'USERPROFILE', 'SystemRoot'];
 /** Crow's own zones: no address, route or zone the command writes is under one. */
 export const CROW_ZONES: readonly string[] = ['crow.direct', 'escrow.stream'];
 /** The configuration fields the Node adapter uses and the Worker has no use for: it opens no port and keeps no file. */
@@ -83,6 +89,8 @@ export interface CloudflareRecord {
   /** Set before the key is made, so a run that stopped after the secret store took it knows the key is its own. */
   keyStartedAt?: string;
   keySetAt?: string;
+  /** The Worker's own key's address, public: `check --published` checks the Worker's signature against it. */
+  workerAddress?: string;
   leftAt?: string;
 }
 type WithCloudflare = State & { cloudflare?: CloudflareRecord };
@@ -97,12 +105,12 @@ export type Tool = (args: string[], o?: { input?: string }) => Promise<{ code: n
  */
 export const npxWrangler = (cwd: string): Tool => (args, o = {}) =>
   new Promise((done) => {
-    const dotenv = readdirSync(cwd).find((n) => /^\.env/.test(n) || n === '.dev.vars');
-    if (dotenv) return done({ code: 2, stdout: '', stderr: `${join(cwd, dotenv)} is there, and Wrangler would load it: remove it` });
+    const dotenv = readdirSync(cwd).find((n) => /^\.env/.test(n) || n === '.dev.vars' || n === '.npmrc');
+    if (dotenv) return done({ code: 2, stdout: '', stderr: `${join(cwd, dotenv)} is there, and ${dotenv === '.npmrc' ? 'npx' : 'Wrangler'} would load it: remove it` });
     // Wrangler logs each request whole to a file unless it sanitizes its log: it sanitizes, and logs into a folder of
     // this run's own that is removed when the run ends, so no request body that carries a secret stays on disk.
     const logs = mkdtempSync(join(tmpdir(), 'crow-wrangler-'));
-    const env: Record<string, string> = { WRANGLER_LOG_SANITIZE: 'true', WRANGLER_LOG_PATH: logs, WRANGLER_SEND_METRICS: 'false' };
+    const env: Record<string, string> = { WRANGLER_LOG_SANITIZE: 'true', WRANGLER_LOG_PATH: logs, WRANGLER_SEND_METRICS: 'false', npm_config_yes: 'false' };
     for (const name of PASSED) if (process.env[name] !== undefined) env[name] = process.env[name]!;
     const child = spawn('npx', [...WRANGLER, ...args], { cwd, env, stdio: ['pipe', 'pipe', 'pipe'] });
     child.on('close', () => rmSync(logs, { recursive: true, force: true }));
@@ -360,25 +368,25 @@ async function prepare(c: Call, state: WithCloudflare): Promise<number> {
     writeWhole(path, bytes, 0o600);
     changed.push(name);
   }
-  const card = writeCard(state, offerId, where.url, made.configSha256);
   state.cloudflare = { ...(was?.leftAt ? {} : was), config: config!, account: account!, at: where.host, name: where.name, workersDev: where.workersDev, access: access as 'credential' | 'open', quotesPerDay: perDay, offerId, preparedAt: new Date().toISOString() };
   if (was?.leftAt) delete state.cloudflare.leftAt;
   writeState(c.folder, state);
 
   const secrets = made.credentialVars.filter((v) => v !== QUOTE_ENV);
   c.say({
-    step: 'cloudflare', ok: true, dir, written: changed, address: where.url, worker: where.name, account: account!, card,
+    step: 'cloudflare', ok: true, dir, written: changed, address: where.url, worker: where.name, account: account!,
     ...(made.dropped.length ? { dropped: made.dropped.map((k) => `${k}: the Worker keeps its journal in its Durable Object and opens no port`) } : {}),
     quotes: access === 'open'
       ? `Open: anyone who reaches ${where.url}quote may ask. Each quote asks your API for a price and spends one of the Worker's faucet grants, so one caller can use them up, and each funded deal starts a job at your API, paid with test tokens. At most ${perDay} offers a UTC day over all callers, counted in the Worker's storage.`
       : `Credential: a buyer sends Authorization: Bearer <credential>. You choose the credentials and hand each to a buyer yourself, never through this chat. At most ${perDay} offers a UTC day over all callers, counted in the Worker's storage.`,
     binding: where.workersDev
-      ? `A workers.dev address proves a Cloudflare account, not your domain. A buyer that starts from the card on your own site has your domain's word for the address: publish ${card} there, beside the page.`
+      ? `A workers.dev address proves a Cloudflare account, not your domain. A buyer that starts from the card on your own site has your domain's word for the address: cloudflare --key writes its quote entry into ${join(state.card!, CARD_FILE)} once the deploy shows the address, and you publish that file there, beside the page.`
       : `TLS at ${where.host} binds the quote address to your domain.`,
     sent: 'nothing to the account: the person runs the login and the deploy.',
     next: [
+      `The person installs the pinned Wrangler once, if it is not installed: ${WRANGLER_INSTALL}`,
       `The person, in a terminal: ${WRANGLER_LINE} login`,
-      `The person: cd ${dir} && ${WRANGLER_LINE} deploy --config ${CF_FILES.config}`,
+      `The person: cd ${dir} && WRANGLER_OUTPUT_FILE_PATH=${DEPLOY_OUTPUT} ${WRANGLER_LINE} deploy --config ${CF_FILES.config}`,
       `Then: node ~/.crow/setup.mjs cloudflare --key${c.folder.endsWith('/.crow/seller') ? '' : ` --folder ${c.folder}`}`,
       ...secrets.map((v) => `The person types the value of ${v} at Wrangler's hidden prompt: cd ${dir} && ${WRANGLER_LINE} secret put ${v} --config ${CF_FILES.config}`),
       ...(access === 'credential' ? [`The person types the quote credentials, comma-separated, at Wrangler's hidden prompt: cd ${dir} && ${WRANGLER_LINE} secret put ${QUOTE_ENV} --config ${CF_FILES.config}`] : []),
@@ -396,10 +404,16 @@ async function setKey(c: Call, state: WithCloudflare, tool: Tool): Promise<numbe
     c.say({ step: 'cloudflare-key', ok: false, detail: 'this folder has no prepared Worker: run cloudflare first. Nothing was sent.' });
     return 1;
   }
+  // The deploy's own record of where it put the Worker: the address the person typed must be one of its targets.
+  const deployed = deployedAt(join(c.folder, CF_DIR, DEPLOY_OUTPUT), rec);
+  if (deployed) {
+    c.say({ step: 'cloudflare-key', ok: false, detail: `${deployed} The person deploys with: cd ${dirname(cfg)} && WRANGLER_OUTPUT_FILE_PATH=${DEPLOY_OUTPUT} ${WRANGLER_LINE} deploy --config ${CF_FILES.config}. Nothing was set.` });
+    return 1;
+  }
   // Check before create: the account's secret store, by name only (Wrangler shows no value).
   const list = await tool(['secret', 'list', '--config', cfg, '--format', 'json']);
   if (list.code !== 0) {
-    c.say({ step: 'cloudflare-key', ok: false, detail: `${WRANGLER_LINE} secret list exited with ${list.code}: ${plain(list.stderr, 300)}. The person logs in (${WRANGLER_LINE} login) and deploys (${WRANGLER_LINE} deploy --config ${cfg}) first. Nothing was set.` });
+    c.say({ step: 'cloudflare-key', ok: false, detail: `${WRANGLER_LINE} secret list exited with ${list.code}: ${plain(list.stderr, 300)}. The person installs the pinned Wrangler if it is missing (${WRANGLER_INSTALL}), logs in (${WRANGLER_LINE} login) and deploys first. Nothing was set.` });
     return 1;
   }
   let names: string[];
@@ -419,7 +433,8 @@ async function setKey(c: Call, state: WithCloudflare, tool: Tool): Promise<numbe
     }
     rec.keySetAt ??= new Date().toISOString();
     writeState(c.folder, state);
-    c.say({ step: 'cloudflare-key', ok: true, set: false, detail: `The Worker's key is set already; no second key was made.`, next: [...remaining, `Then: node ~/.crow/setup.mjs check --published https://${rec.at}/`] });
+    const card = cardOf(c.folder, state, rec);
+    c.say({ step: 'cloudflare-key', ok: true, set: false, card, detail: `The Worker's key is set already; no second key was made.`, next: [...remaining, `Then: node ~/.crow/setup.mjs check --published https://${rec.at}/`] });
     return 0;
   }
   const strange = names.filter((n) => n !== 'HOLDBACK_KEY' && !(bundleVars(c.folder) ?? []).includes(n));
@@ -427,11 +442,13 @@ async function setKey(c: Call, state: WithCloudflare, tool: Tool): Promise<numbe
     c.say({ step: 'cloudflare-key', ok: false, detail: `The Worker ${rec.name} holds secrets this folder's bundle does not name (${strange.slice(0, 5).map((n) => plain(n, 40)).join(', ')}): it is another program's Worker, which the deploy replaced. Choose another address with cloudflare --at. Nothing was set.` });
     return 1;
   }
-  rec.keyStartedAt = new Date().toISOString();
-  writeState(c.folder, state); // first: a stop after the store took the key leaves a folder that knows the key is its own
   const key = generatePrivateKey();
   c.hide(key);
   c.hide(holdingKeyOf(key));
+  rec.keyStartedAt = new Date().toISOString();
+  // The key's address is public: `check --published` asks the Worker to sign with the key and checks it against this.
+  rec.workerAddress = privateKeyToAccount(key).address.toLowerCase();
+  writeState(c.folder, state); // first: a stop after the store took the key leaves a folder that knows the key is its own
   const put = await tool(['secret', 'bulk', '--config', cfg], { input: JSON.stringify({ HOLDBACK_KEY: key }) });
   if (put.code !== 0) {
     c.say({ step: 'cloudflare-key', ok: false, detail: `${WRANGLER_LINE} secret bulk exited with ${put.code}: ${plain(put.stderr, 300)}. Run the same command again: it checks the store first.` });
@@ -439,12 +456,46 @@ async function setKey(c: Call, state: WithCloudflare, tool: Tool): Promise<numbe
   }
   rec.keySetAt = new Date().toISOString();
   writeState(c.folder, state);
+  const card = cardOf(c.folder, state, rec);
   c.say({
-    step: 'cloudflare-key', ok: true, set: true,
+    step: 'cloudflare-key', ok: true, set: true, card,
     detail: "The Worker's own signing key is in the account's secret store, piped on standard input. Nobody is shown it again. Whoever holds the account's login can replace it, or deploy code that reads it. This folder never held it.",
     next: [...remaining, `Then: node ~/.crow/setup.mjs check --published https://${rec.at}/`, `When an assistant shares this machine: ${WRANGLER_LINE} logout`],
   });
   return 0;
+}
+
+/**
+ * Why the deploy's output does not show the Worker at the address the person typed, or '' when it does. The deploy
+ * writes one JSON line per event to WRANGLER_OUTPUT_FILE_PATH; a `deploy` line names the Worker and its targets, the
+ * workers.dev address as https://<host> and a custom domain as "<host> (custom domain)".
+ */
+export function deployedAt(file: string, rec: CloudflareRecord): string {
+  let text: string;
+  try {
+    text = readFileSync(file, 'utf8');
+  } catch {
+    return `The deploy's output, ${file}, is not there: run the deploy with WRANGLER_OUTPUT_FILE_PATH, so the address it used can be checked before the key is made.`;
+  }
+  const hosts = new Set<string>();
+  for (const line of text.split('\n')) {
+    let e: { type?: unknown; worker_name?: unknown; targets?: unknown };
+    try {
+      e = JSON.parse(line) as typeof e;
+    } catch {
+      continue;
+    }
+    if (e?.type !== 'deploy' || e.worker_name !== rec.name || !Array.isArray(e.targets)) continue;
+    for (const t of e.targets) hosts.add(String(t).trim().split(/\s/)[0]!.replace(/^https:\/\//, '').replace(/\/$/, '').toLowerCase());
+  }
+  if (hosts.has(rec.at)) return '';
+  return hosts.size === 0 ? `The deploy's output names no deploy of the Worker ${rec.name}.` : `The deploy put the Worker ${rec.name} at ${[...hosts].slice(0, 3).map((h) => plain(h, 120)).join(', ')}, not at ${rec.at}, the address this folder was given: check the account's workers.dev subdomain, then run cloudflare --at with the address the deploy shows.`;
+}
+
+/** The card's quote entry, written once the deploy shows the address: from the folder's bundle, whose SHA-256 the Worker shows. */
+function cardOf(folder: string, state: State, rec: CloudflareRecord): string {
+  const b = JSON.parse(readFileSync(join(folder, CF_DIR, CF_FILES.bundle), 'utf8')) as { seller: { slug: string; card: unknown; config: unknown; files: unknown } };
+  return writeCard(state, rec.offerId, `https://${rec.at}/`, sellerSha256(b.seller));
 }
 
 /** The credential variables the prepared bundle names, or undefined when there is no bundle. */

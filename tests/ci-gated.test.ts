@@ -20,6 +20,9 @@ const EXEMPT: Record<string, string> = {
   // Round 1's driver against the demo world on anvil. Each file's other suites run in the test shards. The anvil
   // halves take minutes, and one check is sensitive to machine load (docs/team.md, the row from T-231), so a job that
   // must not skip would fail on a slow runner. They run locally, with Foundry, in `pnpm test`.
+  // T-478: reads the branch's diff from main's history, which CI's shallow checkout of the pull request does not have;
+  // the frozen paths are a review rule there, and the test runs locally.
+  'apps/own-seller/src/frozen.test.ts': "needs main's history, which CI's shallow checkout does not fetch; runs locally",
   'examples/e2e-round.test.ts': "the round driver's anvil half: minutes long and load-sensitive; runs locally",
   'examples/e2e-scenarios-direct.test.ts': "the round driver's anvil half: minutes long and load-sensitive; runs locally",
   'examples/e2e-scenarios-escalation.test.ts': "the round driver's anvil half: minutes long and load-sensitive; runs locally",

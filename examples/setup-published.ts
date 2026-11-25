@@ -16,6 +16,8 @@
 import { lookup as dnsLookup } from 'node:dns';
 import { request } from 'node:https';
 import { BlockList, isIP } from 'node:net';
+import { randomBytes } from 'node:crypto';
+import { recoverMessageAddress, type Hex } from 'viem';
 import type { CheckResult } from './setup-check.ts';
 
 /** The most bytes of a card or a defaults answer the check reads (T-474: a reading agent caps a whole card). */
@@ -64,7 +66,7 @@ function expand(ip: string): number[] | undefined {
 /** Why a GET was refused or failed, from a fixed list; or the answer. */
 export type Got = { ok: true; status: number; location: boolean; contentType: string; body: Buffer } | { ok: false; reason: string };
 /** How the check reads an address. The default resolves, refuses a non-public address, and connects to the one it checked. */
-export type Getter = (url: URL) => Promise<Got>;
+export type Getter = (url: URL, headers?: Record<string, string>) => Promise<Got>;
 
 const REASONS = {
   private: 'resolves to a loopback, private, link-local or other non-public address',
@@ -81,7 +83,7 @@ const REASONS = {
  */
 export function makeGetter(o: { request?: typeof request; allow?: (ip: string) => boolean } = {}): Getter {
   const send = o.request ?? request, allow = o.allow ?? isPublicAddress;
-  return (url) => new Promise((resolveGot) => {
+  return (url, extra = {}) => new Promise((resolveGot) => {
     let settled = false;
     // The whole exchange, not only each wait for a byte, ends at TIMEOUT_MS.
     const timer = setTimeout(() => {
@@ -105,7 +107,7 @@ export function makeGetter(o: { request?: typeof request; allow?: (ip: string) =
         path: `${url.pathname}${url.search}`,
         method: 'GET',
         agent: false,
-        headers: { accept: 'application/json', 'user-agent': 'crow-setup-check' },
+        headers: { ...extra, accept: 'application/json', 'user-agent': 'crow-setup-check' },
         // Called by the connection itself: the address checked is the address connected to.
         // Node asks for every address (`all`) when it tries both families; the answer keeps the shape it asked for.
         lookup: ((host: string, opts: { all?: boolean }, cb: (err: Error | null, address: unknown, family?: number) => void) =>
@@ -154,8 +156,8 @@ export function cardUrlOf(target: string): URL | string {
 }
 
 /** One JSON object from a GET: the fixed reason it is not one, or the value. */
-async function jsonAt(get: Getter, url: URL): Promise<{ value?: unknown; reason?: string }> {
-  const got = await get(url);
+async function jsonAt(get: Getter, url: URL, headers?: Record<string, string>): Promise<{ value?: unknown; reason?: string }> {
+  const got = await get(url, headers);
   if (!got.ok) return { reason: got.reason };
   if (got.status >= 300 && got.status < 400) return { reason: `redirects (status ${got.status}): the check follows no redirect, and a buyer's agent should not either` };
   if (got.status !== 200) return { reason: `answered status ${got.status}, not 200` };
@@ -188,7 +190,23 @@ export function otherOriginsOf(text: string | undefined): string[] {
 }
 
 /** The checks of a live card, each with a reason from a fixed list. */
-export async function checkPublished(target: string, o: { otherOrigins?: string[]; get?: Getter; ours?: { origin: string; configSha256: string } } = {}): Promise<CheckResult[]> {
+/** What the folder's key signs to ask its Worker for a proof, and what the Worker's own key signs back (apps/own-seller/src/worker.ts). */
+export const proofRequestMessage = (host: string, time: number, nonce: string) => `crow own-seller proof ${host} ${time} ${nonce}`;
+export const proofMessage = (host: string, nonce: string) => `crow own-seller worker ${host} ${nonce}`;
+
+/**
+ * The folder's own Worker, for `check --published` run from the folder: its origin, its bundle's SHA-256, the address
+ * of the key `cloudflare --key` set, and a signer with the folder's key. A public value such as the bundle's SHA-256 can
+ * be echoed by anyone; a signature of the Worker's key over a fresh nonce cannot.
+ */
+export interface OwnWorker {
+  origin: string;
+  configSha256: string;
+  workerAddress: string | undefined;
+  sign(message: string): Promise<string>;
+}
+
+export async function checkPublished(target: string, o: { otherOrigins?: string[]; get?: Getter; ours?: OwnWorker } = {}): Promise<CheckResult[]> {
   const get = o.get ?? safeGet;
   const out: CheckResult[] = [];
   const say = (check: string, ok: boolean, detail: string, advisory = false) => out.push({ check, ok, detail, ...(advisory ? { advisory: true as const } : {}) });
@@ -233,12 +251,25 @@ export async function checkPublished(target: string, o: { otherOrigins?: string[
     const d = await jsonAt(get, defaults);
     say('published-defaults', d.value !== undefined, d.value !== undefined ? `${at}: the defaults address answers one JSON object.` : `${at}: the defaults address ${d.reason}.`);
   }
-  // From a folder with a Worker: the live Worker must be this folder's, the bundle it runs this folder's bundle.
+  // From a folder with a Worker: the Worker at the card's quote address must be this folder's, proved by its own key,
+  // and must run this folder's bundle.
   if (o.ours) {
-    const live = await jsonAt(get, new URL('/agent.json', o.ours.origin));
-    const named = quoted.some(({ x }) => https((x.pricing as Record<string, unknown>).quote)?.origin === o.ours!.origin);
-    const same = (live.value as Record<string, unknown> | undefined)?.configSha256 === o.ours.configSha256;
-    say('published-folder', named && same, !named ? "The card names no quote address on this folder's Worker." : live.value === undefined ? `This folder's Worker's agent.json ${live.reason}.` : same ? "This folder's Worker answers with this folder's bundle." : "The Worker at this folder's address runs another bundle than this folder's: it is not this folder's Worker, or the deploy is older than the last cloudflare run.");
+    const ours = o.ours;
+    const named = quoted.some(({ x }) => https((x.pricing as Record<string, unknown>).quote)?.origin === ours.origin);
+    const host = new URL(ours.origin).host;
+    const nonce = randomBytes(32).toString('hex');
+    const time = Math.floor(Date.now() / 1000);
+    const proof = ours.workerAddress === undefined ? { reason: 'cannot be asked: this folder set no key (run cloudflare --key)' } : await jsonAt(get, new URL('/proof', ours.origin), { 'x-crow-owner-time': String(time), 'x-crow-owner-signature': await ours.sign(proofRequestMessage(host, time, nonce)), 'x-crow-proof-nonce': nonce });
+    const p = proof.value as { signature?: unknown } | undefined;
+    let proved = false;
+    try {
+      proved = typeof p?.signature === 'string' && (await recoverMessageAddress({ message: proofMessage(host, nonce), signature: p.signature as Hex })).toLowerCase() === ours.workerAddress;
+    } catch {
+      proved = false;
+    }
+    const live = await jsonAt(get, new URL('/agent.json', ours.origin));
+    const same = (live.value as Record<string, unknown> | undefined)?.configSha256 === ours.configSha256;
+    say('published-folder', named && proved && same, !named ? "The card names no quote address on this folder's Worker." : !proved ? (p === undefined ? `The proof from this folder's Worker ${proof.reason}.` : "The Worker at this folder's address did not sign the nonce with the key this folder set: it is not this folder's Worker.") : same ? "This folder's Worker signed a fresh nonce with its own key, and runs this folder's bundle." : "This folder's Worker runs another bundle than this folder's: the deploy is older than the last cloudflare run. Deploy again.");
   }
   say('published-quote', true, 'Not sent: asking for a price makes an offer and spends a faucet grant. Run first-deal for a deal.', true);
   return out;
@@ -246,11 +277,11 @@ export async function checkPublished(target: string, o: { otherOrigins?: string[
 
 /**
  * The card's local check (T-477's criterion 4, taken over here): the card file in the card's folder, before it goes on
- * the party's site. A draft passes with advice; a published card must be a crow-agent card, under the size cap, whose
- * every quoted offer names https quote and defaults addresses. It reads nothing over the network.
+ * the party's site. A published card must be a crow-agent card, under the size cap, whose
+ * every quoted offer names https quote and defaults addresses. A draft passes. It reads nothing over the network.
  */
 export function checkCardFile(text: string | undefined): CheckResult {
-  if (text === undefined) return { check: 'card', ok: true, advisory: true, detail: 'The card folder holds no agent.json yet.' };
+  if (text === undefined) return { check: 'card', ok: true, detail: 'The card folder holds no agent.json yet.' };
   if (Buffer.byteLength(text) > PUBLISHED_MAX_BYTES) return { check: 'card', ok: false, detail: `agent.json ${REASONS.big}: a buyer's agent reads no more.` };
   let c: Record<string, unknown>;
   try {
@@ -259,7 +290,7 @@ export function checkCardFile(text: string | undefined): CheckResult {
     return { check: 'card', ok: false, detail: 'agent.json is not JSON.' };
   }
   if (c?.type !== 'crow-agent') return { check: 'card', ok: false, detail: 'agent.json is not a crow-agent card.' };
-  if (String(c.status ?? '').startsWith('draft')) return { check: 'card', ok: true, advisory: true, detail: 'agent.json is the setup\'s draft: it names no quote address yet.' };
+  if (String(c.status ?? '').startsWith('draft')) return { check: 'card', ok: true, detail: 'agent.json is the setup\'s draft: it names no quote address yet.' };
   const offers = Array.isArray(c.offers) ? c.offers : [];
   const bad = offers.findIndex((x) => {
     const p = (x as Record<string, unknown>)?.pricing as Record<string, unknown> | undefined;

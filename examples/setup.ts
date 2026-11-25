@@ -85,7 +85,8 @@ import { deliver } from './setup-deliver.ts';
 import { publish } from './setup-publish.ts';
 import { CF_DIR, CF_FILES, cloudflare, recordOf, sellerSha256 } from './setup-cloudflare.ts';
 import { leave } from './setup-leave.ts';
-import { checkCardFile, checkPublished, otherOriginsOf } from './setup-published.ts';
+import { checkCardFile, checkPublished, otherOriginsOf, type OwnWorker } from './setup-published.ts';
+import { privateKeyToAccount } from 'viem/accounts';
 import { startWorkApi, WORK_CREDENTIAL_ENV, workFor, workPath } from './setup-work-api.ts';
 import { addressOf, FILES, formsOf, holdingAddressOf, locked, pinnedReader, readKey, readState, realPath, seller, writeState, writeWhole, type Call, type FirstDeal, type J, type State } from './setup-seller.ts';
 import { commitmentIdOf, jcs } from './verify.ts';
@@ -264,12 +265,13 @@ async function listStep(c: Call): Promise<number> {
 }
 
 /** The folder's own Worker, when it has one: its origin and its bundle's SHA-256, for `check --published` to compare. */
-function oursOf(folder: string): { ours?: { origin: string; configSha256: string } } {
+function oursOf(folder: string): { ours?: OwnWorker } {
   try {
     const rec = recordOf(readState(folder));
     if (!rec || rec.leftAt) return {};
     const b = JSON.parse(readFileSync(join(folder, CF_DIR, CF_FILES.bundle), 'utf8')) as { seller: { slug: string; card: unknown; config: unknown; files: unknown } };
-    return { ours: { origin: `https://${rec.at}`, configSha256: sellerSha256(b.seller) } };
+    const key = readKey(folder);
+    return { ours: { origin: `https://${rec.at}`, configSha256: sellerSha256(b.seller), workerAddress: rec.workerAddress, sign: (message) => privateKeyToAccount(key).signMessage({ message }) } };
   } catch {
     return {};
   }

@@ -31,7 +31,7 @@ Ask the person one question first: "Where are you paid?" The answer is an addres
 {{SETUP_COMMAND}}
 ```
 
-Add `--payout <address>` or `--payout this-key` at the end. Without it the command makes nothing and exits 3. It needs Node 22.18 or later and curl, and installs nothing; `cloudflare` and `leave` run a pinned Wrangler. It keeps `setup.mjs` in `~/.crow` only when its SHA-256 is the one in the command. Every later command names that file: `node ~/.crow/setup.mjs`.
+Add `--payout <address>` or `--payout this-key` at the end. Without it the command makes nothing and exits 3. It needs Node 22.18 or later and curl, and installs nothing; `cloudflare --key` and `leave` run Wrangler 4.151.3, installed first. It keeps `setup.mjs` in `~/.crow` only when its SHA-256 is the one in the command. Every later command names that file: `node ~/.crow/setup.mjs`.
 
 ## As a seller
 
@@ -42,7 +42,7 @@ Add `--payout <address>` or `--payout this-key` at the end. Without it the comma
 - `template.json`, the deal template, and `crow.json`, the state.
 - A draft card in `~/.crow/seller-card`.
 
-It sends nothing. It takes an empty folder only, and refuses a folder inside a git work tree or a synced folder, and names the flag that overrides each; it knows common names only. Run again after a stop, it continues with no second key. It ends with the check: one line per check, `"ok": true` on each.
+It sends nothing. It takes an empty folder only, and refuses a folder inside a git work tree or a synced folder, and names the flag that overrides each; it knows common names only. Run again after a stop, it continues with no second key. It ends with the check, `"ok": true` on each line.
 
 `check` runs that check alone. `status` prints the folder's state and open deals. The sample: `squares.csv`, 1 tUSDC.
 
