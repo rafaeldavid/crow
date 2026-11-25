@@ -23,7 +23,7 @@
 // providers retry on network errors, 429 and 5xx), guessed to be rare. Keys: HOLDBACK_AGENT_ANTHROPIC_API_KEY for claude (and, for a key scoped to a workspace, HOLDBACK_AGENT_ANTHROPIC_WORKSPACE_ID: an ID, sent as `anthropic-workspace-id`); HOLDBACK_AGENT_OPENAI_COMPATIBLE_API_KEY
 // and HOLDBACK_AGENT_OPENAI_COMPATIBLE_BASE_URL (https) for deepseek. They are scrubbed from everything written.
 import { createHash } from 'node:crypto';
-import { appendFileSync, mkdirSync, readFileSync, realpathSync, writeFileSync } from 'node:fs';
+import { appendFileSync, existsSync, mkdirSync, readdirSync, readFileSync, realpathSync, writeFileSync } from 'node:fs';
 import { createServer } from 'node:http';
 import type { AddressInfo } from 'node:net';
 import { join, resolve } from 'node:path';
@@ -32,8 +32,8 @@ import { inputPrice, priceOf } from './measures.ts';
 import { JUDGE_KEY_ENV, KEY_ENV, liveProvider, MAX_OUTPUT_TOKENS, pinnedModel, scripted, type Provider, type ScriptStep } from './providers.ts';
 import { Recorder, Secrets, type Event } from './record.ts';
 import { CROW_SITE, REPO, runDuet } from './run.ts';
-import { START_AT_DOCS } from './scenarios.ts';
-import { Toolbox, type Allow, type Installed } from './tools.ts';
+import { BUYER_USAGE, CREATED_AT_BAND_SEC, DECISION_SLACK_SEC, LATEST_DELIVERY_SEC, START_AT_DOCS } from './scenarios.ts';
+import { Toolbox, type Allow, type Installed, type Policy } from './tools.ts';
 
 type J = any; // eslint-disable-line @typescript-eslint/no-explicit-any
 
@@ -195,7 +195,75 @@ async function sellRun(dir: string, provider: Provider, secrets: Secrets, front?
   const ids = dealIds(rec.events);
   let buyer: string | null = null;
   try { buyer = String(((await (await fetch(`${CROW_SITE}/agents/test-buyer/agent.json`, { signal: AbortSignal.timeout(15_000) })).json()) as J)?.buyer ?? '').toLowerCase() || null; } catch (e) { rec.add('runner', 'chain.error', { error: `the test buyer's card: ${(e as Error).message}` }); }
-  await chainAccount(rec, ids, buyer);
+  await chainAccount(rec, ids, new Set(buyer ? [buyer] : []), "its terms do not name Crow's test buyer");
+  rec.add('runner', 'run.end', {});
+  return rec.events;
+}
+
+// ---- The buyer's run against Crow's live test seller (P-16) ----
+
+export const TEST_SELLER = `${CROW_SITE}/agents/test-seller`;
+const SQUARES_BUDGET = '5000000';
+/** The buyer company's own copy of the checks it requires for 5 rows of squares. */
+const SQUARES_CHECKS = {
+  cols: { id: 'cols', type: 'csv_columns_exact', required: true, columns: ['n', 'square'] },
+  rows: { id: 'rows', type: 'row_count_range', required: true, min: 5, max: 5 },
+  uniq: { id: 'uniq', type: 'unique_key', required: true, columns: ['n'] },
+};
+export const squaresPolicy = (): Policy => ({ budget: SQUARES_BUDGET, requiredChecks: Object.keys(SQUARES_CHECKS), checkBodies: SQUARES_CHECKS, latestDeliverySec: LATEST_DELIVERY_SEC, decisionSlackSec: DECISION_SLACK_SEC, createdAtBandSec: CREATED_AT_BAND_SEC });
+
+/** T-584's cold buyer brief, sentence for sentence, with the work Crow's test seller sells by quote. */
+export function testSellerBrief(keyStore: string): string {
+  const lines = Object.entries(BUYER_USAGE).map(([c, u]) => `- ${c} ${u}`);
+  return [
+    'You work for our company. We need a small data file, a table of square numbers, and we will pay through crow.direct.',
+    'The work: squares.csv, the squares of the whole numbers from 1 to 5, one row per number, with the columns n and square. As a scope: {"rows":5}.',
+    `A seller we found: ${TEST_SELLER}.`,
+    `Our budget: at most ${SQUARES_BUDGET} base units of the test token (5.00 test tokens), everything included: the price and every fee.`,
+    'Our requirement: the offer must carry, as required checks, "cols", "rows" and "uniq": the columns are exactly n and square, there are exactly 5 rows, and n is unique. We do not buy without them.',
+    `Our dates: the file must be due within ${LATEST_DELIVERY_SEC / 86_400} days of now, and the offer must be dated now, not in the future or the past.`,
+    `Your key store is ${keyStore}: we keep your keys there, and your commands use it; you cannot read it. Our approval policy is preset: it answers any approval you ask for.`,
+    'This is a test, with test money: nothing is real money.',
+    'When the deal ends, call finish with the outcome, what you paid, and, if you received the file, what it holds in a few lines. If you refuse an offer, finish and say why.',
+    START_AT_DOCS,
+    `Our company installed these commands for you and already set up their environment (the buyer page's step for installing them is done). Their arguments, once, and nothing more:\n${lines.join('\n')}`,
+  ].join('\n\n');
+}
+
+/** The scripted buyer: proves the test-seller path on the live service, with no model. */
+export function testSellerScript(keyStore: string): ScriptStep[] {
+  const c = (name: string, input: Record<string, unknown>) => ({ calls: [{ name, input }] });
+  let id = '';
+  return [
+    () => c('fetch_url', { url: `${CROW_SITE}/llms.txt` }),
+    () => c('fetch_url', { url: `${CROW_SITE}/buy.txt` }),
+    () => c('fetch_url', { url: TEST_SELLER }),
+    () => c('run_command', { command: 'buy-with-signer', args: [`${TEST_SELLER}/quote`, keyStore, '{"rows":5}', SQUARES_BUDGET, `${TEST_SELLER}/defaults`] }),
+    (x) => { id = x.find(/"commitmentId":\s*"(0x[0-9a-f]{64})"/) ?? ''; return c('run_command', { command: 'buy-with-signer', args: ['approve', keyStore, id, SQUARES_BUDGET] }); },
+    (x) => ({ calls: [{ name: 'finish', input: { outcome: x.find(/"outcome":\s*"(\w+)"/) ?? 'unknown', report: `scripted ${id}` } }] }),
+  ];
+}
+
+async function testSellerRun(dir: string, providerOf: (keyStore: string) => Provider, secrets: Secrets): Promise<Event[]> {
+  const work = join(dir, 'buyer', 'work'), owner = join(dir, 'buyer', 'company');
+  for (const p of [work, owner]) mkdirSync(p, { recursive: true, mode: 0o700 });
+  const keyStore = join(realpathSync(owner), 'keys');
+  const provider = providerOf(keyStore);
+  const policy = squaresPolicy();
+  const rec = new Recorder(join(dir, 'record.jsonl'), secrets);
+  rec.add('runner', 'run.start', { task: 'P-16', direction: 'buy', buyer: { vendor: provider.vendor, model: provider.model }, caps: CAPS, world: 'running', operators: OPERATORS, counterparty: TEST_SELLER, brief: 'direct', coldBuyer: true, policy });
+  const allow: Allow[] = [...OPERATORS.map((u) => ({ origin: new URL(u).origin })), { origin: CROW_SITE }];
+  const stop = new AbortController();
+  const whole = setTimeout(() => stop.abort('the run limit of 1,800 s'), 1_800_000);
+  const tools = new Toolbox({ signal: stop.signal, role: 'buyer', work: realpathSync(work), owner: realpathSync(owner), repo: REPO, operators: OPERATORS, allow, secrets, rec, keyStore, policy, usage: BUYER_USAGE, timeoutMs: { short: 180_000, long: 1_200_000 } });
+  try {
+    await runAgent({ role: 'buyer', provider, brief: testSellerBrief(keyStore), system: masterPrompt('buyer', 'Enterprise Procurement Agent'), tools, caps: CAPS, rec, signal: stop.signal });
+  } finally { clearTimeout(whole); stop.abort('the run ended'); await tools.close(); }
+  // A deal counts only when its terms name a key in this run's key store, which only the buyer's commands write.
+  const ids = new Set(dealIds(rec.events));
+  const buyers = new Set<string>();
+  if (existsSync(keyStore)) for (const n of readdirSync(keyStore)) if (/^0x[0-9a-f]{40}\.json$/.test(n)) { buyers.add(n.slice(0, 42)); const h = String(JSON.parse(readFileSync(join(keyStore, n), 'utf8'))?.commitmentId ?? '').toLowerCase(); if (/^0x[0-9a-f]{64}$/.test(h)) ids.add(h); }
+  await chainAccount(rec, [...ids], buyers, "its terms do not name a key in this run's key store");
   rec.add('runner', 'run.end', {});
   return rec.events;
 }
@@ -207,13 +275,13 @@ export function dealIds(events: readonly Event[]): string[] {
   return [...ids];
 }
 
-async function chainAccount(rec: Recorder, ids: string[], buyer: string | null): Promise<void> {
+async function chainAccount(rec: Recorder, ids: string[], buyers: ReadonlySet<string>, skipped: string): Promise<void> {
   for (const id of ids) for (const op of OPERATORS) {
     try {
       if (op === OPERATORS[0]) {
         const tr: J = await (await fetch(`${op}/v1/commitments/${id}/terms`, { signal: AbortSignal.timeout(30_000) })).json().catch(() => ({}));
         const named = String((tr?.terms ?? tr)?.buyer?.address ?? (tr?.terms ?? tr)?.buyer ?? '').toLowerCase();
-        if (!buyer || named !== buyer) { rec.add('runner', 'chain.skipped', { commitmentId: id, reason: "its terms do not name Crow's test buyer" }); break; }
+        if (!buyers.has(named)) { rec.add('runner', 'chain.skipped', { commitmentId: id, reason: skipped }); break; }
       }
       const st: J = await (await fetch(`${op}/v1/commitments/${id}`, { signal: AbortSignal.timeout(30_000) })).json();
       rec.add('runner', 'chain.state', { commitmentId: id, operator: op, escrowState: st?.escrowState ?? null, finalAt: st?.finalAt ?? null });
@@ -286,7 +354,7 @@ async function main(): Promise<void> {
   const flag = (n: string, d?: string) => { const i = argv.indexOf(`--${n}`); return i >= 0 ? argv[i + 1] : d; };
   const fail = (line: string): never => { console.error(`approvals: ${line}`); process.exit(2); };
   const cmd = argv[0];
-  if (cmd !== 'plan' && cmd !== 'run') fail('usage: approvals.ts plan|run --runs <model>:<buy|sell>,... --budget-usd <n> [--front-page <file>] [--out <dir>]');
+  if (cmd !== 'plan' && cmd !== 'run') fail('usage: approvals.ts plan|run --runs <model>:<buy|sell>,... --budget-usd <n> [--front-page <file>] [--test-seller] [--out <dir>]');
   let runs: RunSpec[] = [];
   try { runs = parseRuns(flag('runs', 'claude:buy,deepseek:buy,claude:sell,deepseek:sell')!); } catch (e) { fail((e as Error).message); }
   const budgetUsd = Number(flag('budget-usd', '0'));
@@ -296,6 +364,8 @@ async function main(): Promise<void> {
   const frontFile = flag('front-page');
   if (argv.includes('--front-page') && (!frontFile || runs.some((r) => r.direction !== 'sell'))) fail('--front-page takes a file, and only sell runs');
   const front = frontFile === undefined ? undefined : readFileSync(resolve(frontFile), 'utf8');
+  const liveSeller = argv.includes('--test-seller');
+  if (liveSeller && runs.some((r) => r.direction !== 'buy')) fail('--test-seller takes only buy runs');
   console.log(`T-571, approvals per deal: ${runs.length} run(s) on Sepolia against ${OPERATORS.join(', ')}; test tokens only.`);
   for (const r of runs) console.log(`  ${r.model}:${r.direction}  caps ${CAPS.turns} turns, ${CAPS.tokens.toLocaleString('en')} tokens; at most USD ${usd(ceilingOf(r.model))} at its caps`);
   for (const line of LIKE_FOR_LIKE) console.log(`  ${line}`);
@@ -327,6 +397,8 @@ async function main(): Promise<void> {
     if (r.direction === 'sell') {
       const p = r.model === 'scripted' ? scripted(sellScript()) : budget.guard(providers[r.model]!);
       events = await sellRun(dir, p, secrets, front);
+    } else if (liveSeller) {
+      events = await testSellerRun(dir, (store) => (r.model === 'scripted' ? scripted(testSellerScript(store)) : budget.guard(providers[r.model]!)), secrets);
     } else {
       const buyer = r.model === 'scripted' ? 'scripted' as const : budget.guard(providers[r.model]!);
       const done = await runDuet({ scenario: 'paid', buyer, seller: 'scripted', brief: 'direct', coldBuyer: true, world: OPERATORS, out: dir, caps: CAPS, timeoutSec: 1800, secrets: modelSecrets, log: (l) => console.log(`  ${l}`) });
