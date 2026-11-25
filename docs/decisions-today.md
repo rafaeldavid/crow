@@ -1803,3 +1803,41 @@ The build is not started; it opens as its own task on Rafa's word.
 **Dropped:** a compile-time bound on how deep optional groups nest, alone or with counting. It refuses before signing, but it would refuse patterns the tests use and still miss shapes that cost as much without nesting (measured). A larger or smaller budget: the size is not the defect.
 
 **Litmus tests.** Neutrality: unchanged. The hold: unchanged. Defended judgment: strengthened; stage 1's work bound now holds for every pattern a party can write.
+
+## D96. The hidden-character count reads decoded JSON strings (T-608)
+
+**Status:** adopted, 2026-11-25.
+
+**Who decided.** The session `hidden-and-ids`, under the in-repository autonomy rule. Rafa may overrule any line.
+
+**Why.** The count a buyer writes into a required check should match what the buyer's own reader sees in the delivery. For JSON, that reader sees decoded strings.
+
+**Decided:**
+
+- **Count raw text and decoded strings, once each.** For `application/json`, the count reads the delivery with its string escapes decoded. A character written literally counts once; a decoded one counts once. Keys count as well as values.
+- **Other formats** are unchanged.
+- **Charge.** The decode runs once per delivery, shared by every hidden-character check, and is not charged to the budget: it is linear and bounded by the store limit (measured 0.6 to 1.1 s on 10 MiB), like the JSON parse. Charging it (measured) made a required result flip to escalate on a large delivery that cost the budget elsewhere, so it waits for the work-budget change to charge it with the rest. The change is `hiddenText` in `checks/index.ts` and one line in the check's branch of `evaluate`.
+- **Version.** The checks are not a kept version (`packages/judgment/src/kept/`), so the rule belongs to the build. The primary and the fallback adjudicator deploy from one build.
+- **Effect** (measured): no judgment result on the tests and snapshots changes.
+
+**Dropped:** counting the parsed value instead of the text (it counts fewer characters on some inputs, and a delivery that does not parse has no value).
+
+**Litmus tests.** Neutrality: unchanged. The hold: unchanged. Defended judgment: strengthened.
+
+## D97. Check ids are unique within the terms (T-608)
+
+**Status:** adopted, 2026-11-25.
+
+**Who decided.** The session `hidden-and-ids`, under the in-repository autonomy rule. Rafa may overrule any line.
+
+**Why.** An id names one check. Terms in which two checks share an id are self-contradictory (D31), and a result keyed by id should have one meaning.
+
+**Decided:**
+
+- **Refuse repeated ids before signing.** `parseCommitment` and `parseAnyCommitment` refuse a plaintext commitment whose `acceptance.deterministicChecks` repeat an id. The rule lives in the parser's rules, so the schema and its version do not change. `examples/check-terms.ts` warns about the repeat.
+- **Keep every result apart.** `runChecks` reports each check under its own id (the first use of an id keeps it; a later repeat gets `id-2`, `id-3`, skipping ids the terms use), in the outcome and in the inconclusive list. Terms signed before the rule, and the opened body of a private commitment, run through it. Aggregation is untouched: it is a kept version (ADR-0036), and changing it would need a new version.
+- **Effect** (measured): no result on the tests and snapshots changes.
+
+**Dropped:** a schema rule (a change needs an ADR and a version bump); matching by position inside `aggregate` (a new aggregation version).
+
+**Litmus tests.** Neutrality: unchanged. The hold: unchanged. Defended judgment: unchanged.

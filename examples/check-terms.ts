@@ -125,7 +125,12 @@ function schemaPatterns(schema: J, path: string, out: Warning[]): void {
 
 function checkPatterns(checks: J, path: string, out: Warning[], isTemplate: boolean): void {
   if (!Array.isArray(checks)) return;
+  const ids = new Set<string>();
   checks.forEach((c: J, i) => {
+    if (typeof c?.id === 'string') {
+      if (ids.has(c.id)) out.push({ kind: 'check', path: `${path}[${i}].id`, found: `the check id ${quote(c.id)} is used again`, why: 'Crow refuses terms in which two checks share an id, so these cannot be signed' });
+      ids.add(c.id);
+    }
     const before = out.length;
     if (c?.type === 'regex_match_rate_min' && typeof c.pattern === 'string') pattern(c.pattern, `${path}[${i}].pattern`, out);
     if (c?.type === 'json_schema') schemaPatterns(c.schema, `${path}[${i}].schema`, out);
