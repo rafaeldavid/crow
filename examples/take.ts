@@ -320,15 +320,20 @@ function timeline(terms: CommitmentTerms, nowMs: number): Record<string, { at: s
 
 const say = (x: unknown) => console.error(printable(JSON.stringify(x)));
 
+/** With CROW_SELLER set, refuses a standing entry at any other seller address (D101). show and approve both call it. */
+export function expectedSeller(seller: Address): void {
+  const expected = process.env['CROW_SELLER'];
+  if (expected && !isAddressText(expected)) refuse('CROW_SELLER is not an address: 0x and 40 hex characters, with a valid checksum if in mixed case');
+  if (expected && lc(expected) !== seller) refuse(`seller is ${seller}, not the expected ${shown(expected)} (CROW_SELLER): another key signed this standing offer, so it is not the seller you named`);
+}
+
 /** Reads the card, checks the standing entry, fills a take with fresh keys and shows it. Signs and pays nothing. */
 async function show(cardUrl: string, offerId: string, store: string, budget: string): Promise<number> {
   if (printable(store) !== store) throw new Error('the key store path holds a control or invisible character: pick a path the approve line can carry');
   const { origin, card } = await fetchCard(cardUrl);
   const entry = entryOf(card, offerId);
   if (card.seller !== undefined && lc(card.seller) !== entry.seller) refuse(`the card's seller is ${shown(card.seller)}, and its standing entry names ${entry.seller}`);
-  const expected = process.env['CROW_SELLER'];
-  if (expected && !isAddressText(expected)) refuse('CROW_SELLER is not an address: 0x and 40 hex characters, with a valid checksum if in mixed case');
-  if (expected && lc(expected) !== entry.seller) refuse(`seller is ${entry.seller}, not the expected ${shown(expected)} (CROW_SELLER): another key signed this standing offer, so it is not the seller you named`);
+  expectedSeller(entry.seller);
   const signer = await makeKeys(store, {});
   const keys = keyFileOf(store, signer.address);
   const { agent, pin } = await connect(keys.privateKey, keys.encryptionSecretKey);
@@ -384,6 +389,8 @@ async function waitState(agent: Agent, id: Hex32, states: string[], until: numbe
 /** The principal's yes: checks the shown take again, posts it, waits for the acceptance, funds, delivers, opens. */
 async function approve(store: string, id: Hex32, budget: string, stopAfterFunding: boolean): Promise<number> {
   const r = readRecord(store, id);
+  // CROW_SELLER again, before any key is read or anything is signed: the shown take names its seller (D101).
+  expectedSeller(r.entry.seller);
   const keys = keyFileOf(store, r.address);
   const { agent, pin } = await connect(keys.privateKey, keys.encryptionSecretKey);
   // Funded by an earlier run: the checks before funding are behind it (the offer may have expired since), so only the
