@@ -1,0 +1,118 @@
+# Crow reference: standing offers over HTTP
+
+For a client of your own that publishes or takes a standing offer; `take.mjs` (`ref/take.txt`) and `setup.mjs publish` already do both. A seller's key signs a template once for its seller contract, `HoldbackStandingSeller`; any buyer fills it and funds it with no seller program running. Read `ref/http.txt` and `ref/signing.txt` first: their conventions, retry key and encodings hold here. Every take is public. Test tokens only.
+
+## Seller contract
+
+- `key`: the address of the seller's signing key (secp256k1), the contract's one constructor argument.
+- Creation code: https://crow.direct/standing-seller.hex, one line of `0x` hex (also the string in `examples/standing-seller-code.ts` in the repository). Use it only if keccak256 of the decoded bytes is `0x0366811eb16ccee06c5c7ad013a8f23dd1086d0378ee50ade9e1c2ab7d2537c9`.
+- `initCode` = creation code followed by `abi.encode(address key)`. `salt` is 32 zero bytes: the operators check and deploy a contract with no code at salt 0 only.
+- `seller` = CREATE2 address: the last 20 bytes of `keccak256(0xff ++ deployer ++ salt ++ keccak256(initCode))`, where `deployer` is the public deterministic deployer `0x4e59b44847b379578588920cA78FbF26c0B4956C`. The address proves the code and the key.
+- EIP-712 domain of the contract: `{"name": "HoldbackStandingSeller", "version": "1", "chainId": <your pinned chain>, "verifyingContract": <seller>}`. It signs the template and a revocation only; terms and deliveries stay under the Holdback domain.
+
+## Card entry
+
+The seller's `agent.json` (https, no redirect; https://crow.direct/card.schema.json):
+
+```json
+{"type": "crow-agent", "name": "<name>", "seller": "<seller>", "testTokensOnly": true,
+ "offers": [{"id": "<offerId>", "description": "<what it is, at most 500 characters>",
+   "standing": {"chainId": 11155111, "seller": "<seller>", "key": "<key>", "salt": "0x<64 zeros>", "template": {}, "signature": "0x<65 bytes>"}}]}
+```
+
+A page may carry the same JSON in one `<script type="application/json" id="crow-agent">` block.
+
+## Template
+
+`template` holds exactly these fields:
+
+- `rules`: your pinned `verifyingContract`; `expiresAt`: no take from this time on; `offerId`: the card offer's `id`.
+- `terms`: `schemaVersion` "0.8", `clubId`, `rulebookHash`, `sellerPayoutAddress` (not the seller contract, which cannot move money out), `deliverable`, `acceptance` (`{"deterministicChecks": [...], "rubric": {"criteria": [], "passThreshold": 0}}` for checks alone), `price`, `adjudication`, `remedy`, `timing`. The rest is as in an offer (`ref/http-seller.txt`, "Offer").
+- `terms.timing`: `offerExpiresAt`, `fundBy`, `deliverBy`, `judgeBy`, `fallbackBy` are JSON numbers, seconds after the take's `createdAt`; `appealWindowSec` (0), `appealDecideSec` and `maxSubmissions` (1) are as in the terms. Leave `disputeBy`, `disputeJudgeSec` and `disputeFallbackSec` out.
+- `delivery`, only for one fixed file: `ciphertext` `{uri, sha256, bytes, cipher: "aes-256-gcm"}`, `plaintextSha256`, `plaintextMime`, `encryptedKeys` (three envelopes), `submittedAt`. Without it the seller delivers each take after funding.
+
+### Types and hash
+
+`TokenAmount`, `Adjudication`, `Remedy`, `Ciphertext`, `EncryptedKey` and `KeyUnlock` are as in `ref/signing.txt`, "EIP-712 types". `TimingOffsets` has `Timing`'s fields under its own name. There is no settlement or disclosure field: the contract fixes both.
+
+```json
+{
+  "TimingOffsets": [{"name":"offerExpiresAt","type":"uint64"},{"name":"fundBy","type":"uint64"},{"name":"deliverBy","type":"uint64"},{"name":"judgeBy","type":"uint64"},{"name":"fallbackBy","type":"uint64"},{"name":"appealWindowSec","type":"uint64"},{"name":"appealDecideSec","type":"uint64"},{"name":"maxSubmissions","type":"uint8"},{"name":"disputeBy","type":"uint64"},{"name":"disputeJudgeSec","type":"uint64"},{"name":"disputeFallbackSec","type":"uint64"}],
+  "StandingDelivery": [{"name":"ciphertext","type":"Ciphertext"},{"name":"plaintextSha256","type":"string"},{"name":"plaintextMime","type":"string"},{"name":"encryptedKeys","type":"EncryptedKey[]"},{"name":"submittedAt","type":"uint64"}],
+  "StandingOffer": [{"name":"rules","type":"address"},{"name":"expiresAt","type":"uint64"},{"name":"offerId","type":"string"},{"name":"schemaVersion","type":"string"},{"name":"clubId","type":"string"},{"name":"rulebookHash","type":"bytes32"},{"name":"sellerPayoutAddress","type":"address"},{"name":"deliverableHash","type":"bytes32"},{"name":"acceptanceHash","type":"bytes32"},{"name":"price","type":"TokenAmount"},{"name":"adjudication","type":"Adjudication"},{"name":"timing","type":"TimingOffsets"},{"name":"remedy","type":"Remedy"},{"name":"delivery","type":"StandingDelivery[]"}],
+  "Revoke": [{"name":"templateHash","type":"bytes32"}]
+}
+```
+
+The typed message: `rules` and `offerId`; `expiresAt` in Unix seconds; the template's `terms` fields under the same names, with `deliverableHash` and `acceptanceHash` = keccak256 of the canonical JSON of `deliverable` and `acceptance`; `timing` with the offsets as they are and 0 for the three dispute fields; `delivery` = `[]`, or one `StandingDelivery` whose `submittedAt` is Unix seconds and whose every `encryptedKeys` entry adds `"unlock": {"kind": "", "round": 0}`.
+
+- `templateHash` = `hashStruct("StandingOffer", message)`, no domain.
+- `signature` = the key's EIP-712 signature of `StandingOffer` under the contract's domain, 65 bytes with v 27 or 28.
+
+## Contract signature
+
+The contract is `seller` on chain, so the seller's signature on a take, and on its standing delivery, is one ABI blob: `abi.encode(uint8 kind, StandingOffer offer, bytes keySignature, Fill fill)`. `kind` is 1 for the terms and 2 for the standing delivery; `keySignature` is the template's `signature`.
+
+```solidity
+struct TimingOffsets { uint64 offerExpiresAt; uint64 fundBy; uint64 deliverBy; uint64 judgeBy; uint64 fallbackBy; uint64 appealWindowSec; uint64 appealDecideSec; uint8 maxSubmissions; uint64 disputeBy; uint64 disputeJudgeSec; uint64 disputeFallbackSec; }
+struct StandingDelivery { bytes32 ciphertextHash; bytes32 plaintextSha256Hash; bytes32 plaintextMimeHash; bytes32 encryptedKeysHash; uint64 submittedAt; }
+struct StandingOffer { address rules; uint64 expiresAt; bytes32 offerIdHash; bytes32 schemaVersionHash; bytes32 clubIdHash; bytes32 rulebookHash; address sellerPayoutAddress; bytes32 deliverableHash; bytes32 acceptanceHash; address token; uint256 price; address adjudicator; address fallbackAdjudicator; address appealAdjudicator; bytes32 policyIdHash; uint256 fee; bytes32 registryHash; bytes32 policyHash; TimingOffsets timing; bytes32 remedyHash; StandingDelivery[] delivery; }
+struct Fill { address buyer; address buyerPaymentAddress; bytes32 buyerKeyHash; bytes32 nonceSeed; uint64 createdAt; }
+```
+
+- An `...Hash` of a string is keccak256 of its UTF-8 bytes (`buyerKeyHash`: of `buyerEncryptionPublicKey`). `deliverableHash`, `acceptanceHash`, `registryHash`, `policyHash` and `rulebookHash` are the template's values above.
+- `remedyHash` and `ciphertextHash` are `hashStruct` of `Remedy` and `Ciphertext`; `encryptedKeysHash` is keccak256 of the concatenated `hashStruct("EncryptedKey", ...)` of each entry in order, with the empty `unlock`.
+- `delivery` is empty or has one element. `token` is the price token; `price` and `fee` are the amounts.
+
+## Check your code
+
+The example under `$defs.standing.examples[0]` of https://crow.direct/card.schema.json (chain 31337, placeholder addresses, no delivery) must give: `seller` as it states; `templateHash` `0xc7939b4d5eff4668992b69decec78d243ab555573ec40c3901dd491fa065497b`; digest under the contract's domain `0xf0605f1c3b48ec7cbf17b40fc6fdf41e7c71eda4f626e58ef349f0445f1103bc`, to which `signature` recovers `key`. Fill it with `buyer` and `buyerPaymentAddress` `0x3c44cdddb6a900fa2b585dd299e03d12fa4293bc`, `buyerEncryptionPublicKey` `pOCSkrZRwni5dyxWn1-puxPZBrRqtoyd-dwrRAn4ogk`, `nonceSeed` 32 bytes of `0x07`, `createdAt` `2026-12-01T00:00:00Z`:
+
+- commitment ID `0x082f0e906c001f6fa55fa6751af5cd5885d09b2228c907008b41a1aca10262e6`;
+- the kind 1 blob is 1408 bytes, keccak256 `0x18e3715da17c668cd49cccae0c32df92bdfce04752be2c188f07b00d97894b03`.
+
+For the delivery encodings, add to its template this `delivery`: `ciphertext` `{"uri": "https://api.example/v1/ciphertext/<sha256>", "sha256": "<sha256>", "bytes": 43, "cipher": "aes-256-gcm"}`, where `<sha256>` is the "ciphertext sha256" and `plaintextSha256` the value in the vectors of `ref/http-seller.txt`, "Encrypt and deliver"; `plaintextMime` "text/csv"; `submittedAt` "2026-11-30T00:00:00Z"; and for the primary, fallback and appeal adjudicators in order, that table's envelope. `templateHash` is then `0x8de847e22db9b79fc4f87a9959264f60789d4517627a29f6234be547eaa0d7e6`, and the same fill and `signature` bytes (an encoding check: they do not verify over this template) give a kind 2 blob of 1568 bytes, keccak256 `0xe96c2d8d0537c80771ba431e69aac7c4a50922c21439268ee94a632d8be866b9`.
+
+## Take
+
+1. **Check the card entry** before you show or sign anything; refuse on any difference:
+   - `chainId`, `template.rules`, and the token of `price` and `adjudication.fee` are your pinned ones; amounts are decimal strings;
+   - `seller` follows from `key` and `salt`, and `signature` recovers to `key`;
+   - the template has no other field, `offerId` is the offer's `id`, and `expiresAt` is ahead of settlement time;
+   - `clubId` is discovery's `demo.clubId`; `rulebookHash`, `policyId`, `policyHash`, `registryHash` and a fee of at least `fee.min` are what both operators serve (`ref/http.txt`, "Read what you bind to, from both operators"). An adjudicator that `demo.adjudicators` does not list is the seller's choice: tell your principal;
+   - with a `delivery`: `uri` is on an operator's origin, its bytes have that length and SHA-256, and the envelopes' recipients are the three adjudicators, one each. Pay only for a `plaintextMime` you can open.
+2. **Fill:** `buyer`, `buyerPaymentAddress`, `buyerEncryptionPublicKey` (yours), `nonceSeed` (32 random bytes), `createdAt`: **settlement time minus 24 s**. The contract refuses a take dated after the chain's newest block, which lags the clock.
+3. **Terms:** the template's `terms` with each of the five offsets replaced by the time `createdAt` + offset, plus `seller`, `buyer`, `buyerPaymentAddress`, `buyerEncryptionPublicKey`, `createdAt`, `"settlement": {"mode": "guaranteed_on_decision", "token": <price.token>}`, `"disclosure": {"level": "public"}` and `nonce` = `keccak256(abi.encode(bytes32 templateHash, bytes32 nonceSeed))`. The commitment ID follows from them (`ref/signing.txt`, "Encodings"). Show your principal the price and fees, the deliverable, checks, deadlines, adjudicators and payout address; get the yes before `offerExpiresAt`.
+4. **Funds:** `POST /v1/faucet` with your address and `amount` = price + adjudication fee + any operator fee (`ref/http.txt`, "Discover and get test tUSDC"). It also grants the mandate you need to agree.
+5. **Post the take** (no prepare step): `POST $OP1/v1/commitments`, with an `Idempotency-Key`. The body is the terms plus `"id"` and `"signatures": {"seller": <kind 1 blob>, "buyer": <your signature of CommitmentTerms under the Holdback domain>}`; `signatures.buyer` is required, and the write counts against you. Answer: `"escrowState": "Offered"`. Poll `GET /v1/commitments/<id>` on both operators until `"AcceptedByAdjudicator"`, within seconds.
+6. **Agree and fund** as in `ref/http-buyer.txt`, "Check the offer, agree and fund" (here the seller's signature is the blob, which you made yourself). On the contract's first take, this POST makes the operator send the deployment, alone, before the funding. **Set the request timeout to 180 s or more.**
+7. **Standing delivery,** once both read `Held`: `POST /v1/commitments/<id>/deliveries` with `{"commitmentId": <id>, "attempt": 1, <the five fields of template.delivery>, "signature": <kind 2 blob>}`. Anyone may send it. Until each operator's `/events` lists `delivery.submitted`, send it to the other operator too: one operator's answer is not proof.
+8. **Outcome and work:** `ref/http.txt`, "Read the result", then `ref/http-buyer.txt`, "Open the work": the primary's accept wraps the content key to your key. A `plaintextSha256` other than the template's means the seller's key delivered another file first. With no `delivery` in the template, wait for the seller's. Past `deliverBy` with none, reclaim (`ref/after-funding.txt`, "Your own trigger (anyone, no signature)").
+
+## Publish
+
+You need no ETH and no running program for a fixed file.
+
+1. Make the signing key; compute `seller` ("Seller contract").
+2. Build `terms` from what both operators serve: the club and rulebook hash, three adjudicators from `demo.adjudicators`, and the primary's `policy.id`, `policyHash`, `registry.hash` and `fee.min`. Give `offerExpiresAt` room for a buyer's yes (600 or more; the take is already 24 s old), `fundBy` after it, then `deliverBy`, `judgeBy` and `fallbackBy`, each later than the one before (`demo.minWindowSec` or more for judging, fallback and `appealDecideSec`).
+3. **Fixed file:** check it with your checks, then encrypt and upload it as in `ref/http-seller.txt`, "Encrypt and deliver", with three envelopes only (primary, fallback, appeal; none for a buyer) and no `unlock` in the JSON. Keep that `uri`; drop the content key. `plaintextMime` is the deliverable's `format`.
+4. Sign the template. It binds you to every take until `expiresAt`.
+5. **Mandate for the contract:** `POST /v1/faucet` with `{"address": <seller>, "amount": "1", "paymentAddress": <an address you control, never the contract>}`. It lasts 30 days: repeat before it ends. Wait until `GET /v1/agents/<seller>` on both operators lists a mandate with role `seller`. Without one the operators refuse your takes.
+6. Serve the card entry. To test it live and free: fill a take with throwaway buyer keys and post it (step 5 of "Take"). `Offered` means the operator ran your contract's code on your blob; unfunded, it expires.
+
+Without a `delivery`, watch `GET /v1/commitments?party=<seller>&role=seller` and deliver each `Held` take before `deliverBy` as in `ref/http-seller.txt`, "Encrypt and deliver" (four envelopes). The prepared slot names `seller` as signer: sign its digest with your key; the contract takes the 65 bytes.
+
+**Revoke:** sign `Revoke(templateHash)` under the contract's domain; any account sends `revoke(bytes32 templateHash, bytes keySignature)` to `seller`. A call to an address with no code does nothing and still succeeds: deploy first (below). A revocation stops new takes only; a funded one runs to its end.
+
+## Errors and retries
+
+Branch on the problem `type` (`ref/http.txt`, "Conventions").
+
+- `invalid_signature` on the post: the blob or your signature does not check. Read `detail`: it names a `createdAt` after the chain's newest block (date a new take), or a contract with no code whose seller holds no mandate there ("Publish", step 5). Also a revoked or expired template. Check your vectors first.
+- `invalid_terms`: `field` names the input. `signatures.buyer` is missing, or the disclosure is not `public`.
+- `scope_exceeded`, `mandate_expired`: the named address has no mandate in force for this price and role; ask the faucet for it.
+- `deadline_passed`: this take is dead. Make a new one (new fill, ID and yes).
+- `rate_limited`: wait `retryAfterSec`.
+- `relay_refused`, mostly on a first take: this operator will not or cannot send the transaction now (its relayer is short of test ETH, its deployment budget is spent, no mandate). `detail` says which. Nothing is paid. Wait a minute and send the same signed body again, to either operator; both may share one relayer. Stop at `offerExpiresAt`.
+- `internal`, a timeout or a lost answer on the funding: the transaction may be on its way. **Allow 3 minutes for a first take.** Read `escrowState` on both: `Held` means funded, go on. Otherwise send the same body with the same `Idempotency-Key`. Never sign a second take while the first can still fund.
+- **Deploy it yourself** (any account with ETH, who gains nothing): only when `eth_getCode(seller)` is `0x`, send one transaction to the deployer with data `salt ++ initCode` and no value, alone; estimate its gas, which is far above a funding's. Then fund.
