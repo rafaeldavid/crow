@@ -1,0 +1,47 @@
+# Crow reference: run the seller adapter from one pinned file
+
+For a seller whose work depends on the buyer's order, which a standing offer (`ref/take.txt`) does not cover. `serve.mjs` is the adapter of `ref/seller-adapter.txt` in one file, with its packages inside: you need Node 22.18 or later, with no Git, no clone and no build. Test tokens only.
+
+## Install
+
+Run the line for your shell. It makes the folder `crow-serve`, and names the download `serve.mjs` only when its SHA-256 is this one.
+
+macOS or Linux:
+```sh
+{{SERVE_INSTALL}}
+```
+
+Windows PowerShell:
+```powershell
+{{SERVE_INSTALL_WINDOWS}}
+```
+
+On an error, stop: a `serve.mjs` left from before is not the file this page names.
+
+## Start
+
+In `crow-serve`: `node serve.mjs <path to seller.json>`. Set these in the environment first, never in a file you share:
+
+- `HOLDBACK_KEY`, your signing key, or `CROW_SIGNER_URL` with the key unset.
+- `HOLDBACK_OPERATORS`, two or more, comma-separated: `https://api.crow.direct,https://api2.crow.direct` here.
+- Each variable your file names in `sellerApi.auth.env`, `quoteAuth.env`, `alerts.secretEnv` or `redelivery.readyAuth.env`. The command keeps every one of them, whatever its name.
+
+Worked: a line `Seller adapter for 0x<your address> serves POST <this machine's address, your port>/quote; journal <name>, 0 deals.` Exit status 2 comes with a line `serve: <reason>` for a refused start, or with the usage for a wrong call. Ctrl-C, or SIGTERM on macOS and Linux, stops it after the step in progress, with exit status 0. After any other stop, such as a closed window, the next start resumes every open deal from the journal.
+
+## Your configuration file
+
+It takes the fields, defaults and checks of `ref/seller-adapter.txt`, with these differences:
+
+- `template` is required, and so `scope`: the file carries no deal template.
+- There is no `--sim`.
+- `reportSalt` is off unless you set it.
+- `template` and `reportMapping` are read beside the configuration file. `journal` (default `seller-adapter.journal.json`) and `events` are relative to the folder you start in. The journal holds every open deal: start in the same folder each time, and run one adapter per journal. Coming from a clone, copy the journal over, or name its path in `journal`.
+
+When the adapter holds a refused result, `redelivery` makes it fetch your fixed one (by default every 600 s), so leave a way to fetch in it: without one, the log names a `node examples/...` command, which needs a checkout of the repository.
+
+## What it adds and what it reaches
+
+- It refuses to start when any settlement layer it knows is not on Sepolia or a local chain. `HOLDBACK_DEPLOYMENT` pins a local chain, as for the adapter.
+- It removes `NODE_TLS_REJECT_UNAUTHORIZED` from its environment, so each host's certificate is checked.
+- It listens on this machine's loopback address only. It calls the operators, your `sellerApi` addresses, and your `alerts.callback` and `CROW_SIGNER_URL` when set. With `sellerApi` as three plain addresses, it follows their redirects to other hosts; under a `baseUrl` it follows none.
+- It loads no code at run time. It is not minified: read it before you run it, beside your key. The SHA-256 shows that the file is the one this page names, not that the file is safe.

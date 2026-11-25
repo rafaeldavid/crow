@@ -43601,7 +43601,7 @@ function parserFor(name, signed, extra) {
 		return refusal === void 0 ? ok(copy) : err(problem("invalid_terms", `${name}: ${refusal}`));
 	};
 }
-/** D97: the first check id that two checks share, or undefined. */
+/** D100: the first check id that two checks share, or undefined. */
 function repeatedCheckId(checks) {
 	const seen = /* @__PURE__ */ new Set();
 	for (const { id } of checks ?? []) {

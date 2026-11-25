@@ -114,7 +114,7 @@ function parserFor<T>(name: string, signed: boolean, extra?: (value: T) => strin
   };
 }
 
-/** D97: the first check id that two checks share, or undefined. */
+/** D100: the first check id that two checks share, or undefined. */
 export function repeatedCheckId(checks: ReadonlyArray<{ id: string }> | undefined): string | undefined {
   const seen = new Set<string>();
   for (const { id } of checks ?? []) {

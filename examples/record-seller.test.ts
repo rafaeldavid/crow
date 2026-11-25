@@ -142,7 +142,7 @@ describe('Crow sells the record of a public deal, through the adapter and its si
     expect(accept(of(ID, { terms: 'not checked' }), ID)).toBe('reject');
   });
 
-  it('a record that quotes a hidden character from the deal is refused by the terms\' hidden-character limit, however the bytes write it (D96)', () => {
+  it('a record that quotes a hidden character from the deal is refused by the terms\' hidden-character limit, however the bytes write it (D99)', () => {
     const t = loadTermsFile(TERMS_FILE);
     const r = { record: 'holdback-deal-record/1', commitmentId: ID, party: 'seller', writtenAt: '2026-11-14T20:00:00Z', operators: [{}, {}], terms: { signed: { deliverable: { description: 'rows \u{FE0F}\u{200B} é' } } }, outcome: {}, steps: [], delivery: null, judgment: null, settlement: null, balances: {}, checks: [{ check: 'commitment ID', ok: true }], disagreements: [], row: { commitmentId: ID } };
     const accept = (bytes: Uint8Array) => preflightDelivery({ plaintext: bytes, mime: 'application/json', format: 'application/json', acceptance: fill(t.acceptance, { deal: ID }) as J }).result;

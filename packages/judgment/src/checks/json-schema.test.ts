@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { compileJsonSchema } from './json-schema.js';
+import { compileJsonSchema, MAX_SCHEMA_STATES } from './json-schema.js';
 
 const v = (schema: unknown) => {
   const r = compileJsonSchema(schema);
@@ -72,5 +72,21 @@ describe('declarative JSON Schema subset', () => {
     expect(compileJsonSchema('x').ok).toBe(false);
     expect(compileJsonSchema({ required: 'a' }).ok).toBe(false);
     expect(compileJsonSchema({ type: 'tuple' }).ok).toBe(false);
+  });
+});
+
+describe('json_schema limits', () => {
+  it(`refuses a schema whose patterns hold more than ${MAX_SCHEMA_STATES} states together`, () => {
+    const pattern = '[a-z]{1,999}';
+    const fits = compileJsonSchema({ anyOf: Array.from({ length: 2 }, () => ({ pattern })) });
+    expect(fits.ok).toBe(true);
+    const over = compileJsonSchema({ anyOf: Array.from({ length: 30 }, () => ({ pattern })) });
+    expect(over.ok).toBe(false);
+    if (!over.ok) expect(over.error).toMatch(/states in total/);
+  });
+
+  it('keeps the first missing name of required, duplicates and all', () => {
+    const r = compileJsonSchema({ required: ['a', 'b', 'a', 'c'] });
+    expect(r.ok && r.value({ a: 1 })).toBe('missing b');
   });
 });

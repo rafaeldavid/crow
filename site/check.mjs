@@ -62,6 +62,9 @@
 // 22. The take (T-551): site/take.mjs is the current bundle of site/take-entry.mjs, imports only Node's own modules,
 //    names its one command before any module runs, and ref/take.txt carries its one install command with the file's
 //    current sha256; site/buy.mjs and site/try.mjs stay pinned by their own groups (13 and 7).
+// 23. The seller command (T-606): site/serve.mjs is the current bundle of site/serve-entry.mjs, imports only Node's own
+//    modules, removes one variable (NODE_TLS_REJECT_UNAUTHORIZED) and names its one command before any module runs, and
+//    ref/serve.txt carries its two install lines (a POSIX shell's and Windows PowerShell's) with the current sha256.
 // 12. The budget (T-393): each role's first-deal path, the front door plus its page, is within FIRST_DEAL_BUDGET
 //    (site/guides.mjs). With HOLDBACK_AGENT_ANTHROPIC_API_KEY set it counts with Anthropic's count_tokens for the
 //    pinned model; without it, bytes divided by four. It says which.
@@ -72,7 +75,7 @@ import { fileURLToPath } from 'node:url';
 import { OG_IMAGE } from './footer.ts';
 import { trustFacts } from './trust.mjs';
 import { ICON_FILES } from './brand/kit.mjs';
-import { GOALS, goalBundle, goalCommand, goalSha256, goalUrl, NODE_MIN, NODE_PERMISSION, PREFLIGHT, preflightCommand, REFERENCE_PATH, referenceText, SETUP_MJS_URL, setupBundle, setupCommand, setupSha256, TAKE_COMMANDS, TAKE_MJS_URL, takeBundle, takeInstall, takeSha256 } from './build.mjs';
+import { GOALS, goalBundle, goalCommand, goalSha256, goalUrl, NODE_MIN, NODE_PERMISSION, PREFLIGHT, preflightCommand, REFERENCE_PATH, referenceText, SETUP_MJS_URL, setupBundle, setupCommand, setupSha256, TAKE_COMMANDS, TAKE_MJS_URL, takeBundle, takeInstall, takeSha256, serveBundle, serveInstall, serveInstallWindows, serveSha256, SERVE_MJS_URL, STANDING_CODE_FILE, standingCodeText } from './build.mjs';
 import { ASSETS, BASE, BUY_COMMANDS, CARD_SCHEMA, HOME_CSS, HOME_JS, notFoundPage, BUY_MJS_URL, BUY_URL, buyBundle, buyInstall, buySha256, filled, page, pins, problemPages, publishedGuides, SELL_URL, SITE_URL, sourceCommitOf, strip, TEST_SELLER_URL, tryBundle, tryCommand, trySha256, TRY_URL } from './build.mjs';
 import { STATUS_PATH } from '../apps/site/status.js';
 import { apiRoutes, citedSections, duplicateSentences, hasSection, FIRST_DEAL_BUDGET, guideFiles, guideSource, measurePaths, namedCalls, namedReferences, referenceFiles, nonAscii, routeKnown, SETUP_MAX_BYTES } from './guides.mjs';
@@ -356,7 +359,7 @@ const roles = sectionOf(md, 'Read one page for your role');
 expect(roles.includes(BUY_URL) && roles.includes(SELL_URL), `llms.txt has a "Read one page for your role" section that links ${BUY_URL} and ${SELL_URL}`);
 
 // 11. The guides together (T-393).
-const published = new Set(['index.html', '404.html', 'home.css', 'home.js', 'try.mjs', 'buy.mjs', 'setup.mjs', 'take.mjs', `${PREFLIGHT.name}.mjs`, ...Object.keys(GOALS).map((n) => `${n}.mjs`), REFERENCE_PATH, 'version.json', CARD_SCHEMA, ...ASSETS]);
+const published = new Set(['index.html', '404.html', 'home.css', 'home.js', 'try.mjs', 'buy.mjs', 'setup.mjs', 'take.mjs', 'serve.mjs', `${PREFLIGHT.name}.mjs`, ...Object.keys(GOALS).map((n) => `${n}.mjs`), REFERENCE_PATH, 'version.json', CARD_SCHEMA, STANDING_CODE_FILE, ...ASSETS]);
 const scripts = JSON.parse(read('../package.json')).scripts;
 const refs = referenceFiles();
 // T-469: the front door's "Reference" points to the one reference file and names every part it holds, by the ref
@@ -729,6 +732,26 @@ if (existsSync(here('../reports/site-out/llms.txt'))) expect(existsSync(here('..
   const blockBack = /export const BLOCK_BACK_SEC = (\d+);/.exec(read('../examples/take.ts'))?.[1];
   expect(blockBack !== undefined && takeTxt.includes(`dated ${blockBack} s before the operators' time`), `ref/take.txt must say a take is dated ${blockBack} s before the operators' time, as BLOCK_BACK_SEC in examples/take.ts`);
   if (existsSync(here('../reports/site-out/llms.txt'))) expect(existsSync(here('../reports/site-out/take.mjs')) && read('../reports/site-out/take.mjs') === takeFile, 'reports/site-out/take.mjs is missing or differs from site/take.mjs: build with --out again');
+  // T-605: the creation code ref/standing.txt sends a client to, served as its own file.
+  if (existsSync(here('../reports/site-out/llms.txt'))) expect(existsSync(here(`../reports/site-out/${STANDING_CODE_FILE}`)) && read(`../reports/site-out/${STANDING_CODE_FILE}`) === standingCodeText(), `reports/site-out/${STANDING_CODE_FILE} is missing or differs from examples/standing-seller-code.ts: build with --out again`);
+}
+
+// 23. The seller command (T-606).
+{
+  const serveFile = read('serve.mjs');
+  expect(serveFile === (await serveBundle()), 'site/serve.mjs is stale against examples/: run node site/build.mjs');
+  const serveImports = [...new Set([...serveFile.matchAll(/^import .* from "([^"]+)";$/gm)].map((m) => m[1]))];
+  expect(serveImports.every((m) => m.startsWith('node:')) && !/\bimport\(/.test(serveFile), `site/serve.mjs must import only Node's own modules, and nothing dynamically (it imports ${serveImports.join(', ')})`);
+  expect(JSON.stringify(serveFile.match(/delete (process\.)?env\b[^;\n]*/g)) === JSON.stringify(['delete process.env.NODE_TLS_REJECT_UNAUTHORIZED']), 'site/serve.mjs must remove one variable only, NODE_TLS_REJECT_UNAUTHORIZED: a configuration may name any other for a credential');
+  for (const line of ['delete process.env.NODE_TLS_REJECT_UNAUTHORIZED;', "Object.defineProperty(globalThis, 'crowEntry', { value: 'serve',"]) {
+    expect(serveFile.indexOf(line) > 0 && serveFile.indexOf(line) < serveFile.indexOf('\nimport '), `site/serve.mjs's banner must run \`${line}\` before any module`);
+  }
+  const serveTxt = ref('serve.txt'), serveOut = (filledGuides.get('ref/serve.txt') ?? '').split('\n');
+  for (const [placeholder, fence, line] of [['{{SERVE_INSTALL}}', 'sh', serveInstall()], ['{{SERVE_INSTALL_WINDOWS}}', 'powershell', serveInstallWindows()]]) {
+    expect(count(serveTxt, placeholder) === 1 && serveTxt.includes(`\`\`\`${fence}\n${placeholder}\n\`\`\``), `ref/serve.txt must carry ${placeholder} once, alone in a ${fence} block`);
+    expect(line.includes(serveSha256()) && line.includes(`${SERVE_MJS_URL} -o serve.mjs.part`) && !/npm/.test(line) && serveOut.includes(line), `the published ref/serve.txt does not carry the line that fetches ${SERVE_MJS_URL} as serve.mjs.part and checks its current sha256 before naming it serve.mjs`);
+  }
+  if (existsSync(here('../reports/site-out/llms.txt'))) expect(existsSync(here('../reports/site-out/serve.mjs')) && read('../reports/site-out/serve.mjs') === serveFile, 'reports/site-out/serve.mjs is missing or differs from site/serve.mjs: build with --out again');
 }
 
 // 19. The card's schema (T-474, D74): site/card.schema.json is a JSON Schema 2020-12 document that Ajv compiles in strict

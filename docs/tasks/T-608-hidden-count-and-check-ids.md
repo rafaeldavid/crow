@@ -12,7 +12,7 @@
 
 ## Intent
 
-The hidden-character count reads decoded JSON strings, as a buyer's own reader does (D96). Check ids are unique within the terms, and each check's result stays under its own id (D97).
+The hidden-character count reads decoded JSON strings, as a buyer's own reader does (D99). Check ids are unique within the terms, and each check's result stays under its own id (D100).
 
 ## Changes
 

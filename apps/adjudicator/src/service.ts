@@ -630,12 +630,15 @@ export class Adjudicator {
   }
 
   /**
-   * ADR-0036 section 5: why this build cannot judge a deal on these terms in `role`, from the terms alone: the bound
-   * policy (carried, not withdrawn), the bound registry and a panel the role can seat; the questions `declines` asks of
-   * the build, without consent, bond or clock. The public state read shows it as a notice. null: it can judge the deal.
+   * ADR-0036 section 5: why this build cannot judge a deal on these terms in `role`, from the terms alone: the check
+   * kinds (D92), the bound policy (carried, not withdrawn), the bound registry and a panel the role can seat; the
+   * questions `declines` asks of the build, without consent, bond, clock or store. The public state read shows it as a
+   * notice. null: it can judge the deal.
    */
-  async cannotJudge(c: Pick<DecisionTask['commitment'], 'adjudication'>, role: DecisionTask['role']): Promise<Problem | null> {
+  async cannotJudge(c: Pick<DecisionTask['commitment'], 'adjudication'> & Partial<Pick<DecisionTask['commitment'], 'acceptance'>>, role: DecisionTask['role']): Promise<Problem | null> {
     const terms = c as DecisionTask['commitment'];
+    const unrun = this.#checkKindProblem(terms, role);
+    if (unrun) return unrun;
     const policy = await this.#boundPolicy(terms);
     if (!policy.ok) return policy.error;
     const judges = this.#boundRegistry(terms);
