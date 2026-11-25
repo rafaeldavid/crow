@@ -47,7 +47,7 @@ Built on `origin/main` `4f8aacf8`, which holds N216 (PR 783, the first take depl
 - **Criterion 4, the guide** [measured, `site/check.mjs` PASS]: `site/sell.txt` "Standing offers" says a standing seller is one address across its takes and how to revoke. `site/setup.txt` publishes at 9,996 of 10,000 bytes; the seller's first-deal path is 4,920 of 5,000 tokens (bytes divided by four).
 - **Work after funding** [measured]: a folder without `--file` publishes; a take funded with `--stop-after-funding` is listed by `deliver` under the contract (exit 4, the work's path), delivered once the work is there (exit 0), not delivered twice, and `take.mjs resume` ends `Released` with the file.
 - **Revocation** [measured]: `--revoke` prints the signed `revoke`, which an unrelated anvil account sends; `revoked(templateHash)` is then true. Before any take it prints the deployment first; deployment then revocation end the template. `--replace` leaves one card entry, which `take.mjs` takes.
-- **Pinned files** [measured, `shasum -a 256`]: `site/take.mjs` `01a171a2…5984`, `site/buy.mjs` `b87e478b…02ee`, `site/try.mjs` `71634a90…dfa3`, the same before and after. `site/setup.mjs` moved from `e422f778…c09d630` to `b38dbf9d…3ed3e98` and grew from 2,437,507 to about 2,546,000 bytes.
+- **Pinned files** [measured, `shasum -a 256`]: `site/take.mjs` `01a171a2…5984`, `site/buy.mjs` `b87e478b…02ee`, `site/try.mjs` `71634a90…dfa3`, the same before and after. `site/setup.mjs` moved from `e422f778…c09d630` to `a2f3c6e5…50eadd2` (after the merge of `origin/main` `2b764b12`) and grew from 2,437,507 to about 2,546,000 bytes.
 - **Local checks for kinds 4 and 1** [measured]: `vitest run` on the setup files, `examples/take.test.ts` and `apps/test-agents/src/setup*.test.ts`: every file passed; `tsc -p examples` and `eslint` on the changed files clean; `node site/build.mjs && node site/check.mjs` PASS. No snapshot ran, so none changed.
 - **Not run:** Sepolia. The publish step needs no ETH there, and the first take's deployment gas was measured by N216 (18,295,444 gas by `cast estimate` against Sepolia's own RPC).
 
@@ -65,7 +65,7 @@ Built on `origin/main` `4f8aacf8`, which holds N216 (PR 783, the first take depl
 
 **Done:** the code, the tests and the two guides, on branch `t-552-publish-standing-offer`.
 
-**For Rafa: the site deploy.** It publishes `site/setup.mjs` (sha256 `b38dbf9d6fb3f3fab7de088fe74a37ac0c5b9dc667343ecaeef78af365ed3e98` at the last build here; the merge's build is the one to read) with `setup.txt` and `sell.txt`. Until then crow.direct serves the earlier setup, which has no `publish`.
+**For Rafa: the site deploy.** It publishes `site/setup.mjs` (sha256 `a2f3c6e5af1f6588cab82812dddfc590e8f92ac8fbfa7cdc25fa1c3df50eadd2` at the last build here; the merge's build is the one to read) with `setup.txt` and `sell.txt`. Until then crow.direct serves the earlier setup, which has no `publish`.
 
 **Paths beyond the task's list:** `.github/workflows/ci.yml` (one test path in the anvil world's list, so the done-when runs in CI) and the built `site/setup.mjs`.
 
