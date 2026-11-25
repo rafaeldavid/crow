@@ -57,7 +57,7 @@ All measured on 2026-11-25 on main at `91430b55` (PR 795 merged) plus this branc
 
 ## Follow-up: a signal at the ready line killed the process
 
-Branch `t-606-signal-before-ready`, 2026-11-25. All items measured, unless labeled otherwise, on main at `ae327a9a`.
+2026-11-25, in two pull requests: `t-606-signal-before-ready` (`serve.mjs`, merged as PR 813) and `t-606-adapter-signal` (the repo adapter). All items measured, unless labeled otherwise; the first on main at `ae327a9a`, the second at `b02ccd8a`.
 
 - **Symptom:** on PR 812's CI (shard 1 of 4), the shipped-template-name test got exit code `null` after 429 ms. PR 812 touches none of this code.
 - **Cause:** `startSellerAdapter` prints the ready line (`serves POST`) and more log lines before it returns, and `serve.ts` installed its handlers after the return. A signal in between took the operating system's default action. The order dates from the first version of `serve.ts`, not from a later merge.
@@ -67,7 +67,7 @@ Branch `t-606-signal-before-ready`, 2026-11-25. All items measured, unless label
 - **After:** the same script: SIGTERM 300 of 300 and SIGINT 100 of 100 ran the graceful stop, exit code 0; the paused case 5 of 5 for each signal.
 - **Tests:** two new ones in `examples/serve.test.ts`, for both signals: at the ready line with the child paused there, and during a start that waits on a silent operator. Both failed before the fix. A failed exit check now names the signal.
 - **The repo adapter had the same order** (`examples/seller-adapter.ts`, its own command line). Both commands now call one function there, `stopOnSignals`, before the start. The same script, before and after, on the adapter: SIGTERM 269 of 300 killed, then 0; SIGINT 92 of 100 killed, then 0; paused, 5 of 5 killed for each signal, then 0. On the rebuilt `serve.mjs` after the change: 0 killed in the same 410 runs. Two tests of the same two cases are in `examples/seller-adapter.test.ts`; both failed before the fix.
-- **Hash:** `site/serve.mjs` is `0b9687dbbeb14b9c0c1bc6a29f3597a70c66d3569d8001b3d94b35f94ff25f96` on main at `ae327a9a`. It is the only pinned file this follow-up changes: `setup.mjs`, which carries `seller-adapter.ts`, is byte for byte main's, since it never calls the new function.
+- **Hash:** `site/serve.mjs` is `0b9687dbbeb14b9c0c1bc6a29f3597a70c66d3569d8001b3d94b35f94ff25f96` with the repo adapter's fix (`772c81b5...` with PR 813 alone). It is the only pinned file this follow-up changes: `setup.mjs`, which carries `seller-adapter.ts`, is byte for byte main's, since it never calls the new function.
 - **Checks:** `pnpm typecheck` and `pnpm lint` exit 0; `node site/build.mjs && node site/check.mjs` PASS; the adapter, signer, setup, audit-deal and bundle test files: 418 passed, 4 skipped. The signal and command-line tests of both files passed 20 runs in a row. The full suite did not run here; CI is the gate.
 - **Live:** during this fix, on 2026-11-25, https://crow.direct/serve.mjs served the first build (`faf1df13`), which has the race, until the next site deploy.
 
