@@ -63018,15 +63018,38 @@ const PROMPT_TEMPLATE_HASH = sha256Hex(PROMPT_TEMPLATE);
 */
 const APPEAL_PROMPT_TEMPLATE = ["You are one judge on an appeal panel deciding afresh whether delivered work meets an agreed specification.", ...PROMPT_TEMPLATE.split("\n").slice(1)].join("\n");
 const APPEAL_PROMPT_TEMPLATE_HASH = sha256Hex(APPEAL_PROMPT_TEMPLATE);
+/**
+* Rule 5 of template pair 2. Pair 1 states the verdict schema's caps only as `string<=300` and `string<=600` inside a
+* type sketch, and judges wrote past them: on 2026-11-25 four of eight seats over one deal's two panels abstained on
+* the schema filter, and the appeal refunded an honest delivery (D27a). Pair 2 states each limit in words, with a
+* target well under it, so a judge that overshoots its target still fits judge-verdict.schema.json. The caps and the
+* filter do not change: output over a cap still abstains. The rationale's limit is the policy's rationaleMaxChars (at
+* most the schema's 600), filled in as a number, and its target two thirds of it, at most 400.
+*/
+const RULE_5_PAIR_2 = "5. Reply with exactly one JSON object and nothing else, with no code fence: {\"criteria\":[{\"id\":string,\"score\":integer 0-4,\"evidence\":string}],\"overall\":\"pass\"|\"fail\"|\"abstain\",\"injectionSuspected\":boolean,\"injectionEvidence\"?:string,\"rationale\":string}. Keep each \"evidence\" and the \"injectionEvidence\" under 200 characters, one or two short sentences, and the \"rationale\" under {{rationale_target}} characters. The limits are 300 characters for each \"evidence\" and for \"injectionEvidence\" and {{rationale_max}} for \"rationale\"; a reply over any limit is discarded and counts as no verdict.";
+const withRule5 = (t) => t.split("\n").map((l) => l.startsWith("5. ") ? RULE_5_PAIR_2 : l).join("\n");
+/** Template pair 2, first instance: pair 1 with rule 5 replaced. */
+const PROMPT_TEMPLATE_2 = withRule5(PROMPT_TEMPLATE);
+const PROMPT_TEMPLATE_2_HASH = sha256Hex(PROMPT_TEMPLATE_2);
+/** Template pair 2, appeal: pair 1's appeal template with rule 5 replaced. */
+const APPEAL_PROMPT_TEMPLATE_2 = withRule5(APPEAL_PROMPT_TEMPLATE);
+const APPEAL_PROMPT_TEMPLATE_2_HASH = sha256Hex(APPEAL_PROMPT_TEMPLATE_2);
 const DEFAULT_MAX_DATA_CHARS = 1e5;
 /** Every Unicode line break a model may render as a new line. */
 const LINE_BREAK = /\r\n|[\n\r\u000b\u000c\u001c\u001d\u001e\u0085\u2028\u2029]/;
-/** This build's newest pair. */
+/** Template pair 1, the pair every released default names; buildPrompt's default. */
 const TEMPLATE_PAIR = {
 	first: PROMPT_TEMPLATE,
 	appeal: APPEAL_PROMPT_TEMPLATE,
 	firstHash: PROMPT_TEMPLATE_HASH,
 	appealHash: APPEAL_PROMPT_TEMPLATE_HASH
+};
+/** Template pair 2: the verdict limits in words (RULE_5_PAIR_2). Carried beside pair 1; a policy names it to use it. */
+const TEMPLATE_PAIR_2 = {
+	first: PROMPT_TEMPLATE_2,
+	appeal: APPEAL_PROMPT_TEMPLATE_2,
+	firstHash: PROMPT_TEMPLATE_2_HASH,
+	appealHash: APPEAL_PROMPT_TEMPLATE_2_HASH
 };
 const NONCE = /^[0-9a-f]{32,64}$/;
 /** Draws fresh nonces. `fill` defaults to Web Crypto; tests inject a deterministic source. */
@@ -63146,13 +63169,17 @@ function buildPrompt(input) {
 	if (terms.includes(boundary)) return err("agreed terms contain the boundary; draw new nonces");
 	const appeal = input.template === "appeal";
 	const pair = input.templates ?? TEMPLATE_PAIR;
+	const cap = input.rationaleMaxChars ?? 600;
+	const rationaleMax = Number.isSafeInteger(cap) ? Math.min(600, Math.max(1, cap)) : 600;
 	const [systemTemplate, userTemplate] = (appeal ? pair.appeal : pair.first).split(USER_SPLIT);
 	const system = render(systemTemplate, {
 		boundary,
 		datamark: datamark.trim(),
 		canary,
 		terms,
-		criterion_ids: criteria.map((c) => c.id).join(", ") || "(none)"
+		criterion_ids: criteria.map((c) => c.id).join(", ") || "(none)",
+		rationale_max: String(rationaleMax),
+		rationale_target: String(Math.max(1, Math.min(400, Math.floor(rationaleMax * 2 / 3))))
 	});
 	const user = render(userTemplate, {
 		boundary,
@@ -63797,6 +63824,76 @@ function echoesCanary(raw, parsed, canary) {
 	for (const t of [raw, ...texts]) for (const m of t.matchAll(/[A-Za-z0-9+/_=-]{16,4096}/g)) if (squash(Buffer.from(m[0], /[-_]/.test(m[0]) ? "base64url" : "base64").toString("latin1")).includes(c)) return true;
 	return false;
 }
+/**
+* Which verdict-schema rule an output broke, as metadata only: a field path built from the schema's own names and
+* array indices, the limit, and the actual length, count or JSON type. Never a value, a key or text from the output:
+* a judge's text quotes the delivery, which is untrusted and private to the deal. Lengths count code points, as the
+* schema's maxLength does. The pipeline puts this detail in the judgment record, so a filter abstention names its rule.
+*/
+function schemaFault(json) {
+	const typeOf = (v) => v === null ? "null" : Array.isArray(v) ? "array" : typeof v === "number" && !Number.isFinite(v) ? "non-finite number" : typeof v;
+	const isObject = (v) => typeOf(v) === "object";
+	const extra = (o, allowed) => Object.keys(o).filter((k) => !allowed.includes(k)).length;
+	const length = (n, max) => n > 2 * max ? `more than ${2 * max}` : String(n);
+	const keys = (n) => n === 1 ? "1 unexpected key" : `${n > 9 ? "more than 9" : n} unexpected keys`;
+	const text = (v, path, max) => {
+		if (typeof v !== "string") return `${path}: ${typeOf(v)}, not a string`;
+		const n = [...v].length;
+		return n > max ? `${path}: ${length(n, max)} > ${max}` : void 0;
+	};
+	if (!isObject(json)) return `the output is a JSON ${typeOf(json)}, not an object`;
+	const top = [
+		"criteria",
+		"overall",
+		"injectionSuspected",
+		"injectionEvidence",
+		"rationale"
+	];
+	for (const k of [
+		"criteria",
+		"overall",
+		"injectionSuspected",
+		"rationale"
+	]) if (!Object.hasOwn(json, k)) return `${k}: missing`;
+	const unexpected = extra(json, top);
+	if (unexpected) return `top level: ${keys(unexpected)}`;
+	const cs = json["criteria"];
+	if (!Array.isArray(cs)) return `criteria: ${typeOf(cs)}, not an array`;
+	if (cs.length > 12) return `criteria: ${cs.length > 24 ? "more than 24" : cs.length} items > 12`;
+	for (const [i, c] of cs.entries()) {
+		const at = `criteria[${i}]`;
+		if (!isObject(c)) return `${at}: ${typeOf(c)}, not an object`;
+		for (const k of [
+			"id",
+			"score",
+			"evidence"
+		]) if (!Object.hasOwn(c, k)) return `${at}.${k}: missing`;
+		const more = extra(c, [
+			"id",
+			"score",
+			"evidence"
+		]);
+		if (more) return `${at}: ${keys(more)}`;
+		if (typeof c["id"] !== "string" || !/^[a-z0-9_-]{1,40}$/.test(c["id"])) return `${at}.id: not a criterion id`;
+		const score = c["score"];
+		if (typeof score !== "number" || !Number.isFinite(score)) return `${at}.score: ${typeOf(score)}, not an integer`;
+		if (!Number.isInteger(score)) return `${at}.score: not an integer`;
+		if (score < 0 || score > 4) return `${at}.score: outside 0 to 4`;
+		const e = text(c["evidence"], `${at}.evidence`, 300);
+		if (e) return e;
+	}
+	if (![
+		"pass",
+		"fail",
+		"abstain"
+	].includes(json["overall"])) return `overall: not pass, fail or abstain`;
+	if (typeof json["injectionSuspected"] !== "boolean") return `injectionSuspected: ${typeOf(json["injectionSuspected"])}, not a boolean`;
+	if (Object.hasOwn(json, "injectionEvidence")) {
+		const e = text(json["injectionEvidence"], "injectionEvidence", 300);
+		if (e) return e;
+	}
+	return text(json["rationale"], "rationale", 600) ?? "another schema rule";
+}
 function parseVerdict(raw, opts) {
 	if (raw.length > 65536) return abstain("too_long", `output is ${raw.length} characters`);
 	let json;
@@ -63807,16 +63904,16 @@ function parseVerdict(raw, opts) {
 		jsonOk = false;
 	}
 	if (echoesCanary(raw, jsonOk ? json : void 0, opts.canary)) return abstain("canary_echo", "output contains the canary");
-	if (!jsonOk) return abstain("not_json", "output is not a single JSON value");
+	if (!jsonOk) return abstain("not_json", `output is not a single JSON value${/^\s*```/.test(raw) ? " (it starts with a code fence)" : ""}`);
 	let parsed;
 	try {
 		parsed = parseJudgeVerdict(json);
 	} catch {
 		return abstain("schema", "output could not be validated");
 	}
-	if (!parsed.ok) return abstain("schema", parsed.error.detail.slice(0, 200));
+	if (!parsed.ok) return abstain("schema", schemaFault(json));
 	const verdict = parsed.value;
-	if (verdict.rationale.length > opts.rationaleMaxChars) return abstain("schema", `rationale exceeds the policy cap of ${opts.rationaleMaxChars}`);
+	if (verdict.rationale.length > opts.rationaleMaxChars) return abstain("schema", `rationale: ${verdict.rationale.length > 1200 ? "more than 1200" : verdict.rationale.length} > ${opts.rationaleMaxChars} (the policy cap, in UTF-16 units)`);
 	const want = new Set(opts.criterionIds);
 	const got = verdict.criteria.map((c) => c.id);
 	if (got.length !== want.size || new Set(got).size !== got.length || !got.every((id) => want.has(id))) return abstain("criteria_mismatch", "criterion ids differ from the rubric");
@@ -63870,10 +63967,13 @@ const KEPT = {
 		[SCREEN_VERSION$1, SCREEN_1],
 		[SCREEN_VERSION, SCREEN_2]
 	]),
-	templatePairs: [TEMPLATE_PAIR],
+	templatePairs: [TEMPLATE_PAIR, TEMPLATE_PAIR_2],
 	aggregations: /* @__PURE__ */ new Map([[AGGREGATION_VERSION, AGG_3], [AGGREGATION_VERSION$1, AGG_4]])
 };
-/** The newest version of each: what a new build offers as its default unless its kept-policies file says otherwise. */
+/**
+* The newest version of each: what a new build offers as its default unless its kept-policies file says otherwise. The
+* template pair stays pair 1 until a default names pair 2: pair 2 changes the prompt every recording was taken under.
+*/
 const NEWEST_VERSIONS = {
 	screenVersion: SCREEN_VERSION,
 	promptTemplateHash: TEMPLATE_PAIR.firstHash,
