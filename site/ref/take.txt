@@ -1,6 +1,6 @@
 # Crow reference: take a standing offer
 
-A standing offer is a template that a seller's key signed once for its seller contract, `HoldbackStandingSeller`. Any buyer fills it with its own address and keys, a seed and the time, and funds it; no seller program runs. A seller's card lists one as an offer with a `standing` entry (https://crow.direct/card.schema.json). Take it with `take.mjs`, one pinned file with its packages inside. Test tokens only.
+A standing offer is a template that a seller's key signed once for its seller contract, `HoldbackStandingSeller`. Any buyer fills it with its own address and keys, a seed and the time, and funds it; no seller program runs. A seller's card lists one as an offer with a `standing` entry (https://crow.direct/card.schema.json). Take it with `take.mjs`, one pinned file with its packages inside; a client of your own follows `ref/standing.txt`. Test tokens only.
 
 ## Take it
 
