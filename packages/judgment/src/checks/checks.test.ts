@@ -1,12 +1,14 @@
 import { readFileSync } from 'node:fs';
 import type { MimeType } from '@holdback/core';
 import type { JudgmentCheck as DeterministicCheck } from '../terms.js';
+import fc from 'fast-check';
 import { describe, expect, it } from 'vitest';
 import { GOOD_CSV, sha256, utf8 } from '../_helpers.js';
 import { UntrustedData } from '../untrusted.js';
-import { CHECK_TYPES, evaluateChecks, validateCheck } from './index.js';
+import { CHECK_TYPES, evaluateChecks, isNullish, NULL_TOKENS, runChecks, validateCheck } from './index.js';
 import { isIso8601 } from './iso8601.js';
 import { parseCsv } from './csv.js';
+import { StepBudget } from './safe-regex.js';
 
 const csv = (text: string): { data: UntrustedData; mime: MimeType } => ({ data: UntrustedData.wrap(text), mime: 'text/csv' });
 const json = (value: unknown): { data: UntrustedData; mime: MimeType } => ({ data: UntrustedData.wrap(JSON.stringify(value)), mime: 'application/json' });
@@ -17,9 +19,9 @@ const one = (check: DeterministicCheck, input = csv(GOOD_CSV), references?: Read
 const base = { id: 'c', required: true } as const;
 
 describe('check registry', () => {
-  it('is a closed union of exactly the nine v0.5 check types', () => {
+  it('is a closed union of exactly the thirteen check types of schema v0.14', () => {
     expect([...CHECK_TYPES].sort()).toEqual(
-      ['csv_columns_exact', 'hidden_characters_max', 'iso8601_date_column', 'json_schema', 'null_rate_max', 'reference_row_match_min', 'regex_match_rate_min', 'row_count_range', 'unique_key'].sort(),
+      ['csv_columns_exact', 'hidden_characters_max', 'iso8601_date_column', 'json_schema', 'null_rate_max', 'reference_row_match_min', 'regex_match_rate_min', 'row_count_range', 'signature_valid', 'unique_key', 'passes_through', 'monotonic_column', 'equal_lengths'].sort(),
     );
   });
 
@@ -68,7 +70,7 @@ describe('check robustness', () => {
 describe('csv parser', () => {
   it('parses quoted fields, escaped quotes, CRLF and embedded newlines', () => {
     const r = parseCsv('a,b\r\n"x, y","say ""hi"""\r\n"multi\nline",2\r\n');
-    expect(r).toEqual({ ok: true, value: { header: ['a', 'b'], rows: [['x, y', 'say "hi"'], ['multi\nline', '2']] } });
+    expect(r).toEqual({ ok: true, value: { header: ['a', 'b'], rows: 2, cells: ['x, y', 'say "hi"', 'multi\nline', '2'] } });
   });
 
   it('refuses ragged rows and unterminated quotes', () => {
@@ -78,6 +80,143 @@ describe('csv parser', () => {
 
   it('refuses a stray quote inside an unquoted field', () => {
     expect(parseCsv('a,b\n1x"y,2\n').ok).toBe(false);
+  });
+});
+
+// A character-by-character reading of RFC 4180, the parser's reference: same records, same errors.
+function referenceCsv(text: string): { ok: true; value: { header: string[]; rows: number; cells: Array<string | null> } } | { ok: false; error: string } {
+  const records: string[][] = [];
+  let field = '';
+  let record: string[] = [];
+  let quoted = false;
+  let started = false;
+  const endField = () => {
+    record.push(field);
+    field = '';
+    started = false;
+  };
+  const endRecord = () => {
+    endField();
+    records.push(record);
+    record = [];
+  };
+  for (let i = 0; i < text.length; ) {
+    const c = text[i]!;
+    if (quoted) {
+      if (c === '"' && text[i + 1] === '"') {
+        field += '"';
+        i += 2;
+      } else if (c === '"') {
+        quoted = false;
+        i++;
+        const n = text[i];
+        if (n !== undefined && n !== ',' && n !== '\n' && n !== '\r') return { ok: false, error: `line ${records.length + 1}: text after closing quote` };
+      } else {
+        field += c;
+        i++;
+      }
+    } else if (c === '"') {
+      if (started) return { ok: false, error: `line ${records.length + 1}: quote inside an unquoted field` };
+      quoted = started = true;
+      i++;
+    } else if (c === ',') {
+      endField();
+      i++;
+    } else if (c === '\r' || c === '\n') {
+      endRecord();
+      i += c === '\r' && text[i + 1] === '\n' ? 2 : 1;
+    } else {
+      field += c;
+      started = true;
+      i++;
+    }
+  }
+  if (quoted) return { ok: false, error: 'unterminated quoted field' };
+  if (started || record.length > 0) endRecord();
+  const [header, ...rows] = records;
+  if (!header) return { ok: false, error: 'empty CSV' };
+  for (const [n, r] of rows.entries()) if (r.length !== header.length) return { ok: false, error: `row ${n + 1} has ${r.length} fields; the header has ${header.length}` };
+  return { ok: true, value: { header, rows: rows.length, cells: rows.flat().map((v) => (v === '' ? null : v)) } };
+}
+
+describe('csv parser: agrees with a character-by-character reading', () => {
+  it('on random text over the characters that matter (property)', () => {
+    const text = fc.string({ unit: fc.constantFrom('a', 'b', ',', '"', '\n', '\r', ' '), maxLength: 30 });
+    fc.assert(fc.property(text, (t) => {
+      expect(parseCsv(t)).toEqual(referenceCsv(t));
+    }), { seed: 41, numRuns: 20_000 });
+  });
+});
+
+// The reading null_rate_max keeps: code points trimmed from both ends, then the token test.
+function referenceNullish(c: string): boolean {
+  const blank = /[\s\p{Cf}͏ᅟᅠ឴឵᠋-᠏⠀ㅤ︀-️ﾠ\u{E0100}-\u{E01EF}]/u;
+  const chars = [...c];
+  let start = 0;
+  let end = chars.length;
+  while (start < end && blank.test(chars[start]!)) start++;
+  while (end > start && blank.test(chars[end - 1]!)) end--;
+  if (start === end) return true;
+  return end - start <= 16 && NULL_TOKENS.has(chars.slice(start, end).join('').toLowerCase());
+}
+
+describe('isNullish: agrees with trimming code points', () => {
+  it('on random cells of blanks, format characters, surrogates and tokens (property)', () => {
+    const unit = fc.constantFrom(' ', '\t', ' ', '​', '⠀', '️', '\u{E0100}', '\uD800', '\uDC00', '\u{1F600}', 'a', 'N', 'n', '/', 'A', '-', '?', 'null', 'nan');
+    fc.assert(fc.property(fc.array(unit, { maxLength: 12 }).map((xs) => xs.join('')), (c) => {
+      expect(isNullish(c)).toBe(referenceNullish(c));
+    }), { seed: 9, numRuns: 20_000 });
+  });
+});
+
+describe('the check budget: every step is charged', () => {
+  const rows = (n: number) => csv(`k,v\n${Array.from({ length: n }, (_, i) => `k${i},${i}`).join('\n')}\n`);
+  const kinds: DeterministicCheck[] = [
+    { ...base, type: 'unique_key', columns: ['k'] },
+    { ...base, type: 'null_rate_max', column: 'v', maxBps: 10_000 },
+    { ...base, type: 'regex_match_rate_min', column: 'v', pattern: '\\d+', minBps: 0 },
+    { ...base, type: 'iso8601_date_column', column: 'v' },
+    { ...base, type: 'row_count_range', min: 0, max: 1_000_000 },
+    { ...base, type: 'hidden_characters_max', max: { total: 1_000_000 } },
+  ];
+  for (const check of kinds) {
+    it(`${check.type} is inconclusive when its work exceeds the budget`, () => {
+      const r = runChecks([check], rows(1_000), new StepBudget(100));
+      expect(r.inconclusive).toEqual(['c']);
+    });
+  }
+
+  it('json_schema keywords spend in proportion to what they read', () => {
+    const doc = json(Array.from({ length: 1_000 }, (_, i) => ({ id: i, name: `n${i}` })));
+    for (const schema of [{ const: [] }, { enum: [1, 2] }, { uniqueItems: true }, { items: { required: ['id', 'name'] } }, { items: { properties: { id: {}, name: {} } } }]) {
+      expect(runChecks([{ ...base, type: 'json_schema', schema }], doc, new StepBudget(100)).inconclusive, JSON.stringify(schema)).toEqual(['c']);
+      expect(runChecks([{ ...base, type: 'json_schema', schema }], doc).inconclusive, JSON.stringify(schema)).toEqual([]);
+    }
+    const long = json('x'.repeat(100_000));
+    expect(runChecks([{ ...base, type: 'json_schema', schema: { minLength: 60_000 } }], long, new StepBudget(100)).inconclusive).toEqual(['c']);
+  });
+
+  it('unique_key gives the same answer with a column named more than once', () => {
+    const data = csv('k,v\na,1\nb,1\na,2\n');
+    for (const columns of [['k'], ['v'], ['k', 'v']]) {
+      const once = one({ ...base, type: 'unique_key', columns }, data);
+      const twice = one({ ...base, type: 'unique_key', columns: [...columns, ...columns, columns[0]!] }, data);
+      expect(twice).toEqual(once);
+    }
+  });
+
+  it('reads a reference once per run, however many checks name it', () => {
+    const ref = utf8('k,v\nk1,1\nk2,2\n');
+    const hash = sha256(ref);
+    const check = (id: string): DeterministicCheck => ({ id, required: true, type: 'reference_row_match_min', reference: { uri: 'file:///ref.csv', sha256: hash }, keyColumn: 'k', minBps: 10_000 });
+    const spent = (n: number) => {
+      const b = new StepBudget(1_000_000);
+      runChecks(Array.from({ length: n }, (_, i) => check(`r${i}`)), { ...rows(2), references: new Map([[hash, ref]]) }, b);
+      return 1_000_000 - b.remaining;
+    };
+    const one = spent(1);
+    const second = spent(2) - one;
+    expect(second).toBeLessThan(one);
   });
 });
 

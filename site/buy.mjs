@@ -3006,6 +3006,16 @@ function save(store, s) {
 	renameSync(`${file}.tmp`, file);
 }
 /**
+* The seller's address a command was given (D101): from the environment (CROW_SELLER) or the buyer's terms file, the
+* same address if both, lowercase. Both are the buyer's own configuration; a mismatch between them is refused.
+*/
+function sellerOf(fromEnv, fromTerms) {
+	for (const [name, a] of [["CROW_SELLER", fromEnv], ["the terms file's seller", fromTerms]]) if (a !== void 0 && !isAddressText(a)) throw new Error(`${name} is not an address: 0x and 40 hex characters, with a valid checksum if in mixed case`);
+	const env = fromEnv?.toLowerCase(), terms = typeof fromTerms === "string" ? fromTerms.toLowerCase() : void 0;
+	if (env !== void 0 && terms !== void 0 && env !== terms) throw new Error(`CROW_SELLER is ${env} and the terms file's seller is ${terms}: name one seller`);
+	return env ?? terms;
+}
+/**
 * Every key file in `store` with a funded deal and no confirmed outcome in its watch file: what a restarted client
 * watches again. An outcome too few operators reported keeps the deal here.
 */
@@ -3024,8 +3034,9 @@ async function openDeals(store, options = {}) {
 * the price is on this key, so keep the file while the key holds anything.
 */
 async function makeKeys(store, options = {}) {
-	const { paymentAddress, ...rest } = options;
+	const { paymentAddress, seller, ...rest } = options;
 	if (paymentAddress !== void 0 && !isAddressText(paymentAddress)) throw new Error("paymentAddress must be an address: 0x and 40 hex characters, with a valid checksum if in mixed case");
+	if (seller !== void 0 && !isAddressText(seller)) throw new Error("seller must be the seller's address: 0x and 40 hex characters, with a valid checksum if in mixed case");
 	const privateKey = generatePrivateKey();
 	const address = privateKeyToAccount(privateKey).address.toLowerCase();
 	const paying = paymentAddress?.toLowerCase();
@@ -3035,7 +3046,8 @@ async function makeKeys(store, options = {}) {
 		privateKey,
 		encryptionSecretKey: Buffer.from(nacl.randomBytes(32)).toString("base64url"),
 		createdAt: (/* @__PURE__ */ new Date()).toISOString(),
-		...paying && paying !== address ? { paymentAddress: paying } : {}
+		...paying && paying !== address ? { paymentAddress: paying } : {},
+		...seller !== void 0 ? { seller: seller.toLowerCase() } : {}
 	};
 	save(store, saved);
 	return new BuyerSigner(store, saved, rest);
@@ -3049,7 +3061,7 @@ async function loadKeys(store, commitmentIdOrAddress, options = {}) {
 	}
 	throw new Error(`no key in ${store} for ${want}`);
 }
-var WINDOWS, watchFile, DEC, ID, EMPTY_RUBRIC, isMoney, lowerHex, same, refuse, HIDDEN, printable, shown, sleep, FaucetLimited, AGREE_PAUSES_MS, isRecord, PLACEHOLDER, WHOLE_PLACEHOLDER, CLOCK_FIELDS, OFFER_FIELDS, SIGNED_FIELDS, sha256, defaultOperators, EXPECT_KEYS, BuyerSigner;
+var WINDOWS, watchFile, DEC, ID, EMPTY_RUBRIC, isMoney, lowerHex, same, refuse, HIDDEN, printable, shown, sleep, FaucetLimited, AGREE_PAUSES_MS, isRecord, PLACEHOLDER, WHOLE_PLACEHOLDER, CLOCK_FIELDS, OFFER_FIELDS, SIGNED_FIELDS, sha256, defaultOperators, EXPECT_KEYS, sellerDiffers, BuyerSigner;
 var init_buyer_signer = __esmMin((() => {
 	init_agent();
 	init_entry();
@@ -3150,6 +3162,7 @@ var init_buyer_signer = __esmMin((() => {
 		"policyHash",
 		"registryHash"
 	];
+	sellerDiffers = (got, want) => `seller is ${shown(got)}, not the expected ${shown(want)}: another key signed this offer. The address you expect is the one the seller gave you by its own channel; an offer signed by any other key is a copy`;
 	BuyerSigner = class {
 		/** The buyer's address in this deal: the per-deal signing key's. */
 		address;
@@ -3183,6 +3196,10 @@ var init_buyer_signer = __esmMin((() => {
 		get paid() {
 			return this.#saved.paid;
 		}
+		/** The seller's signing address makeKeys was given (D101), lowercase; undefined when none was. */
+		get expectedSeller() {
+			return this.#saved.seller;
+		}
 		/** Use makeKeys, loadKeys or openDeals. */
 		constructor(store, saved, options = {}) {
 			const s = saved;
@@ -3197,6 +3214,7 @@ var init_buyer_signer = __esmMin((() => {
 			this.encryptionPublicKey = Buffer.from(nacl.box.keyPair.fromSecretKey(new Uint8Array(Buffer.from(s.encryptionSecretKey, "base64url"))).publicKey).toString("base64url");
 			if (s.version !== 1 || s.address !== this.address) throw new Error(`the key file for ${s.address} in ${store} is not one this file wrote`);
 			if (s.paymentAddress !== void 0 && !/^0x[0-9a-f]{40}$/.test(s.paymentAddress)) throw new Error(`the key file for ${s.address} in ${store} names a payment address that is not one`);
+			if (s.seller !== void 0 && !/^0x[0-9a-f]{40}$/.test(s.seller)) throw new Error(`the key file for ${s.address} in ${store} names a seller that is not an address`);
 		}
 		/**
 		* The agent for this key, under the settlement layer the operators serve, which must be one pinned in verify.ts.
@@ -3298,6 +3316,12 @@ var init_buyer_signer = __esmMin((() => {
 		*/
 		async quote(quoteUrl, scope, options) {
 			if (this.#saved.commitmentId) throw new Error(`this key already serves ${this.#saved.commitmentId}: one key, one deal. Call makeKeys for another deal`);
+			const u = new URL(quoteUrl);
+			if (u.protocol !== "https:" && !(u.protocol === "http:" && [
+				"127.0.0.1",
+				"localhost",
+				"[::1]"
+			].includes(u.hostname))) throw new Error(`the quote URL must be https (or http on this machine), not ${u.protocol}//${u.hostname}`);
 			const name = this.#quoteCredentialEnv;
 			const credential = name === void 0 ? void 0 : process.env[name];
 			if (name !== void 0 && !credential) throw new Error(`quoteCredentialEnv names ${name}, which is not set: set it to the seller's quote credential`);
@@ -3310,6 +3334,7 @@ var init_buyer_signer = __esmMin((() => {
 			save(this.store, this.#saved);
 			const res = await fetch(quoteUrl, {
 				method: "POST",
+				redirect: "manual",
 				headers: {
 					"content-type": "application/json",
 					"idempotency-key": this.#saved.quoteKey,
@@ -3324,6 +3349,7 @@ var init_buyer_signer = __esmMin((() => {
 				}),
 				signal: AbortSignal.timeout(12e4)
 			});
+			if (res.status >= 300 && res.status < 400) throw new Error(`the seller's quote route answered ${res.status}, a redirect: a quote comes from the URL you named only, so nothing is followed. Ask the seller for its quote URL`);
 			const q = await res.json().catch(() => null);
 			const why = typeof q?.detail === "string" ? `: ${q.detail.replace(/[^\x20-\x7e]/g, "?").slice(0, 200)}` : "";
 			if (!res.ok || q === null) throw new Error(`the seller's quote route answered ${res.status}${why}`);
@@ -3576,6 +3602,7 @@ var init_buyer_signer = __esmMin((() => {
 				defaults = fillWith(defaultsOf(given), this.#saved.scope);
 			}
 			const { offer } = await this.#served(id);
+			if (this.#saved.seller !== void 0 && offer.seller !== this.#saved.seller) refuse(sellerDiffers(offer.seller, this.#saved.seller));
 			const { pin, agent } = await this.#connect();
 			for (const w of [...moneyAddressWarnings("payout", offer.sellerPayoutAddress, pin, offer.adjudicators), ...moneyAddressWarnings("payment", offer.buyerPaymentAddress, pin, offer.adjudicators)]) this.#log(w);
 			const { clock, timeline } = await this.#clock(agent.sources(), offer);
@@ -3599,7 +3626,8 @@ var init_buyer_signer = __esmMin((() => {
 		* readOffer showed with this key, differences included (compared again with the same defaults), and what the buyer
 		* approved: the price, each fee, the deliverable, the checks, the rubric, the deadlines, the adjudicators, the
 		* differences when given, the seven signed fields of T-332 when given, and this key's own address and encryption key
-		* as the buyer. The seven are also checked against Options.expect and the operators, as readOffer does. Waits up to `timeoutMs` for
+		* as the buyer. The seller must be the one makeKeys was given; without one, only an offer this key asked for with
+		* quote passes (D101). The seven are also checked against Options.expect and the operators, as readOffer does. Waits up to `timeoutMs` for
 		* the primary adjudicator to take the deal. Once it passes, agreeAndFund signs exactly these terms.
 		*/
 		async checkOffer(commitmentId, approved, options = {}) {
@@ -3607,7 +3635,6 @@ var init_buyer_signer = __esmMin((() => {
 			if (!ID.test(id)) throw new Error("commitmentId is 0x and 64 hex characters");
 			const shownBefore = this.#saved.shown;
 			if (shownBefore?.commitmentId !== id) return refuse(`readOffer has not shown ${id} with this key: show the buyer's agent the offer first`);
-			this.#bind(id);
 			const { terms, offer: read } = await this.#served(id);
 			const clock = (shownBefore.offer.differences ?? []).filter((d) => CLOCK_FIELDS.includes(d.field));
 			const offer = {
@@ -3616,6 +3643,9 @@ var init_buyer_signer = __esmMin((() => {
 				...shownBefore.defaults || clock.length ? { differences: [...shownBefore.defaults ? differencesOf(shownBefore.defaults, read) : [], ...clock] } : {}
 			};
 			for (const [field, of] of OFFER_FIELDS) if (!same(of(offer), of(shownBefore.offer))) refuse(`${field} is ${shown(of(offer))}, not the shown ${shown(of(shownBefore.offer))}`);
+			if (this.#saved.seller !== void 0 && offer.seller !== this.#saved.seller) refuse(sellerDiffers(offer.seller, this.#saved.seller));
+			if (this.#saved.seller === void 0 && this.#saved.quote?.commitmentId !== id) refuse(`seller: this key did not ask for ${id} with quote, so nothing shows that ${offer.seller} is the seller you mean. Give makeKeys the seller's address as the seller gave it by its own channel ({seller}): anyone can copy a public offer and sign the copy`);
+			this.#bind(id);
 			const want = [
 				[
 					"buyer",
@@ -3682,10 +3712,10 @@ var init_buyer_signer = __esmMin((() => {
 					offer.adjudicators,
 					approved.adjudicators
 				],
-				...approved.seller ? [[
+				...approved.seller !== void 0 ? [[
 					"seller",
 					offer.seller,
-					approved.seller
+					String(approved.seller).toLowerCase()
 				]] : [],
 				...approved.commitmentId ? [[
 					"commitmentId",
@@ -4390,12 +4420,13 @@ var init_buy_with_signer = __esmMin((async () => {
 		const signer = await makeKeys(store, {
 			quoteCredentialEnv: process.env["CROW_QUOTE_CREDENTIAL"] ? "CROW_QUOTE_CREDENTIAL" : void 0,
 			paymentAddress: process.env["CROW_PAYMENT_ADDRESS"] || void 0,
+			seller: sellerOf(process.env["CROW_SELLER"] || void 0, own?.seller),
 			...expect()
 		});
 		if (own) own = await signer.inToken(own);
 		const quote = await signer.quote(first, JSON.parse(third), options ? JSON.parse(options) : void 0);
 		const offer = await signer.readOffer(quote.commitmentId, own ? { defaults: own } : defaults ? { defaults } : {});
-		const differences = [...offer.differences ?? [], ...["price", "seller"].filter((f) => own?.[f] !== void 0 && jcs(own[f]).toLowerCase() !== jcs(offer[f]).toLowerCase()).map((f) => ({
+		const differences = [...offer.differences ?? [], ...["price"].filter((f) => own?.[f] !== void 0 && jcs(own[f]).toLowerCase() !== jcs(offer[f]).toLowerCase()).map((f) => ({
 			field: f,
 			old: own[f],
 			new: offer[f]

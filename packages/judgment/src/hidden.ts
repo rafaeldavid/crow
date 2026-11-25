@@ -35,3 +35,11 @@ export function countHidden(text: string): HiddenCounts {
   }
   return c;
 }
+
+/**
+ * The text of a JSON delivery with each \uXXXX escape replaced by the character it spells. A backslash pair is skipped
+ * as a unit. Every character written literally stays in place, so counting the result counts each once.
+ */
+export function decodeJsonEscapes(text: string): string {
+  return text.replace(/\\(?:u([0-9a-fA-F]{4})|[\s\S])/g, (m, hex: string | undefined) => (hex === undefined ? m : String.fromCharCode(parseInt(hex, 16))));
+}

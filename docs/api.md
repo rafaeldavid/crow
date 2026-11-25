@@ -10,7 +10,7 @@ Any operator node serves this API. It adds speed and convenience, never authorit
 - **Authentication:** none at the transport layer. Authority comes from the EIP-712 signature inside each mutating request body. Reads are public, so commitment metadata is public too (`docs/neutrality.md`, residual 9).
 - **Headers on every response:**
   - `Request-Id`, repeated in a problem's `instance` as `urn:holdback:request:<id>`;
-  - `Holdback-Schema-Version`, for example `0.13`;
+  - `Holdback-Schema-Version`, for example `0.14`;
   - the security headers: HSTS, `nosniff`, no framing, a content security policy that allows nothing, no referrer, a same-origin resource policy and a permissions policy. A non-browser client (curl, an agent) may ignore them. CORS is not set. A request over plain `http://` gets a 301 (read) or 308 (write) to HTTPS and is never processed (`docs/operations.md`, "Security headers").
 - **Trace context:** operators accept a W3C `traceparent` header and log it. Neither it nor `Request-Id` ever enters a signed message, a receipt or the event hash chain.
 - **Limits (F8):** an operator publishes its own in discovery as `limits`: `reads` and `writes`, each `{limit, windowSec, per}`, `maxCiphertextBytes` and `idempotency`. `limits.maxCiphertextBytes` is the largest ciphertext `POST /v1/ciphertext` stores, in bytes, absent on a node with no ciphertext store, and never above the protocol's 10 MiB. Numbers on this page are the public demo's; discovery is the source.
@@ -37,7 +37,8 @@ Any operator node serves this API. It adds speed and convenience, never authorit
   - `invalid_terms` (400): `field`, the input at fault, a dotted path into the JSON body (`price.amount`, `timing.fundWithinSec`, `fund.nonce`) or a query parameter or header name (`limit`, `Idempotency-Key`);
   - `payment_required` (402): `fee` `{to, token, amount}`;
   - `payload_too_large` (413): `maxBytes`, the largest body the route takes, in bytes;
-  - `rate_limited` (429): `retryAfterSec`.
+  - `rate_limited` (429): `retryAfterSec`;
+  - `internal` (500): `retryAfterSec` only when this attempt at a signed write failed before the operator sent any transaction for it: send the same request again with the same `Idempotency-Key` after that wait, or send it to another operator. It speaks for that attempt only. Without it, or when an earlier attempt of the request was answered without it, a transaction may be out: read the commitment's state, then retry with the same key.
 
   The types:
   - signatures and terms: `invalid_signature`, `scope_exceeded`, `mandate_expired`, `nonce_reused`, `rulebook_unknown`, `invalid_terms`, `deadline_passed`;
@@ -49,7 +50,7 @@ Any operator node serves this API. It adds speed and convenience, never authorit
   - requests: `idempotency_conflict`, `rate_limited`, `not_found`, `invalid_cursor` (a cursor this operator did not issue);
   - operator policy: `relay_refused` (403): this operator's own relay policy declines the call (D27). The signed message is still valid at another operator or directly at the settlement layer (ADR-0005). An operator-only type: no settlement layer returns it;
   - operator fee: `payment_required` (402): this operator relays a funded agreement only with its published fee (ADR-0023). The signed agreement is still valid elsewhere, and direct submission is free. Operator-only;
-  - the operator itself: `internal` (500), the operator failed (retry with the same key, or use another operator; quote the `Request-Id`), and `not_implemented` (501), a planned route ("Endpoints" rows marked planned), with `Link: <source>; rel="describedby"`. Operator-only.
+  - the operator itself: `internal` (500), the operator failed (retry with the same key, or use another operator; quote the `Request-Id`; its `retryAfterSec` is described above), and `not_implemented` (501), a planned route ("Endpoints" rows marked planned), with `Link: <source>; rel="describedby"`. Operator-only.
 
   The table of types, statuses, titles and next steps is `apps/operator/src/problems.ts`; the OpenAPI document's enum and the site's problem pages are generated from it.
 - **Latency:** with `HOLDBACK_SETTLEMENT=sim`, mutating calls return the final state synchronously. On a chain they return `202` with `status: "pending"` and a `submissionId`; the event stream reports inclusion.
@@ -205,12 +206,17 @@ Deterministic checks run first and are declarative (no code). Each has an `id`, 
 | `json_schema` | `{"id": "shape", "type": "json_schema", "required": true, "schema": {"type": "object"}}` | A JSON deliverable validates against `schema` |
 | `reference_row_match_min` | `{"id": "ref", "type": "reference_row_match_min", "required": true, "reference": {"uri": "…", "sha256": "sha256:…"}, "keyColumn": "id", "minBps": 9500}` | At least `minBps` of the reference rows appear in the deliverable with the same values, matched on `keyColumn`. The reference must be in the adjudicators' store before the offer is accepted: see "Reference files" below |
 | `hidden_characters_max` | `{"id": "hidden", "type": "hidden_characters_max", "required": true, "max": {"tag": 0, "bidi": 0, "total": 0}}` | Invisible characters per class stay within `max` (ADR-0021) |
+| `signature_valid` | `{"id": "sig", "type": "signature_valid", "required": true, "alg": "ed25519", "publicKey": {"pointer": "/pubkey", "format": "spki-base64", "spkiSha256": "sha256:…"}, "message": {"pointer": "/text", "encoding": "utf8"}, "signature": {"pointer": "/sig", "encoding": "base64", "format": "raw"}}` | The exact bytes at `message.pointer` in a JSON deliverable carry a valid signature by the key whose fingerprint the terms pin (ADR-0045) |
+| `passes_through` | `{"id": "path", "type": "passes_through", "required": true, "series": [{"pointer": "/q1"}], "waypoints": [[0], [90000]], "tolerance": 500}` | The integer series pass within `tolerance` of every waypoint, in order (ADR-0047) |
+| `monotonic_column` | `{"id": "time", "type": "monotonic_column", "required": true, "series": {"column": "t_ms"}, "minStep": 1}` | An integer series never decreases, and each step is within `minStep` and `maxStep` (ADR-0047) |
+| `equal_lengths` | `{"id": "lengths", "type": "equal_lengths", "required": true, "series": [{"pointer": "/t_ms"}, {"pointer": "/q1"}]}` | Every named JSON array has the same number of entries (ADR-0047) |
 
-Patterns are full matches (`^` and `$` are implied by the engine and allowed), in a safe subset with no backreferences or lookarounds, at most 200 characters. An empty or null cell counts as a non-match in `regex_match_rate_min`.
+Patterns are full matches (`^` and `$` are implied by the engine and allowed), in a safe subset with no backreferences or lookarounds, at most 200 characters. An empty or null cell counts as a non-match in `regex_match_rate_min`. The agent reference, `site/ref/checks.txt`, holds the rest: the compile and match budgets ("Pattern and work limits"), and the rules, failure lines and limits of the last four kinds ("Checking a signature", "Checking recorded data").
 
 **Reference files** (`reference_row_match_min`).
 - **Upload first.** Upload the reference with `POST /v1/ciphertext`, then name the returned `uri` and `id` as `reference.uri` and `reference.sha256`. Do this before the offer, on the store the adjudicators the terms name read.
 - **Adjudicators check the store first.** An adjudicator reads the reference from its content store by that hash. It accepts an offer as primary, or takes over as fallback, only when its store returns every reference the terms name. Otherwise it declines the deal.
+- **Check kinds.** An adjudicator signs no decision on terms that name a check kind its record's `checkKinds` does not list (D92). As primary it declines the offer. As fallback or appeal adjudicator it triggers and signs nothing, and the deal runs to the next adjudicator or its default outcome, which returns the price and the fee. Read all three named adjudicators' `checkKinds` before you sign.
 - **Wrong or late bytes.** A hash that no `uri` ends in is never loaded, so its check fails. If the store loses the bytes after acceptance, the adjudicator does not judge and retries. The fallback and then the default outcome follow if the bytes never come back.
 - **Size.** A reference is at most 10,485,760 bytes, the most any content store keeps; a node may publish a lower `limits.maxCiphertextBytes`. An adjudicator declines a deal with a larger reference, and the seller's preflight fails its check.
 - **Privacy.** The store is for ciphertext, and a reference is the one plaintext file it keeps. Publishing it is the party's choice (D35). Anyone who has the hash can read it, with no authentication. So never put personal data, or anything you would not publish, in a reference.

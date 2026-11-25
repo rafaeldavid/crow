@@ -9,12 +9,12 @@
 //       signer to sign it, funds, and follows the deal to its outcome. --expect-terms: a terms file in buy-with-signer.ts's
 //       format, checked as that command checks it (no unknown key, every window named); any difference stops the run.
 //       The signer's rules decide; this command's own checks are the agent's, and an agent that is taken over skips them.
-// Env: HOLDBACK_OPERATORS, CROW_EXPECT as for buy-with-signer.ts. Exit status 0 when done, 2 on a wrong call, 3 when
+// Env: HOLDBACK_OPERATORS, CROW_EXPECT and CROW_SELLER (the seller's address, D101) as for buy-with-signer.ts. Exit status 0 when done, 2 on a wrong call, 3 when
 // the signer or a check refused (nothing is paid), 1 on an error.
 import { readFileSync, writeFileSync } from 'node:fs';
 import { join } from 'node:path';
 import { isMain } from './entry.ts';
-import { makeKeys, printable } from './buyer-signer.ts';
+import { makeKeys, printable, sellerOf } from './buyer-signer.ts';
 import { commitmentIdOf, digestOfFile, jcs, Refusal } from './verify.ts';
 
 type J = any; // eslint-disable-line @typescript-eslint/no-explicit-any
@@ -44,18 +44,20 @@ const sh = (s: string) => (/^[\w@%+=:,./-]+$/.test(s) ? s : `'${s.replace(/'/g, 
 export type Bought = { commitmentId: string; paid: string; from: string; outcome?: string; work?: J };
 
 /** One purchase through Crow's signer. Throws Refusal when the signer or a check refuses; nothing is paid then. */
-export async function buyThroughSigner(o: { quoteUrl: string; store: string; scope: J; most: string; signer: string; operators?: string[]; expectTerms?: J; stopAfterFunding?: boolean; log?: (l: string) => void }): Promise<Bought> {
+export async function buyThroughSigner(o: { quoteUrl: string; store: string; scope: J; most: string; signer: string; seller?: string; operators?: string[]; expectTerms?: J; stopAfterFunding?: boolean; log?: (l: string) => void }): Promise<Bought> {
   const status = await ask(o.signer, '/v1/status');
   const float = String(status.body?.floatAddress ?? '');
   if (status.status !== 200 || !ADDRESS.test(float)) throw new Refusal(`refusing: the signer at ${printable(o.signer)} answered no float address (status ${status.status}): nothing is paid`);
   if (status.body.state !== 'running') throw new Refusal(`refusing: the signer's state is "${printable(String(status.body.state))}", not running: nothing is asked or paid`);
   if (o.expectTerms !== undefined) checkTermsFile(o.expectTerms);
   const operators = operatorsOf(o.operators);
-  const buyer = await makeKeys(o.store, { paymentAddress: float, operators, ...(o.log ? { log: o.log } : {}), expect: JSON.parse(process.env['CROW_EXPECT'] || '{}') });
+  // D101: the seller's address as the seller gave it, from CROW_SELLER or the terms file; another key's offer is refused.
+  const seller = sellerOf(o.seller ?? (process.env['CROW_SELLER'] || undefined), o.expectTerms?.seller);
+  const buyer = await makeKeys(o.store, { paymentAddress: float, operators, seller, ...(o.log ? { log: o.log } : {}), expect: JSON.parse(process.env['CROW_EXPECT'] || '{}') });
   const own = o.expectTerms ? await buyer.inToken(o.expectTerms) : undefined;
   const quote = await buyer.quote(o.quoteUrl, o.scope);
   const offer = await buyer.readOffer(quote.commitmentId, own ? { defaults: own } : {});
-  const differences = [...(offer.differences ?? []), ...(['price', 'seller'] as const).filter((f) => own?.[f] !== undefined && jcs(own[f]).toLowerCase() !== jcs((offer as J)[f]).toLowerCase()).map((f) => ({ field: f }))];
+  const differences = [...(offer.differences ?? []), ...(['price'] as const).filter((f) => own?.[f] !== undefined && jcs(own[f]).toLowerCase() !== jcs((offer as J)[f]).toLowerCase()).map((f) => ({ field: f }))];
   if (own && differences.length) throw new Refusal(`refusing: the offer differs from the expected terms in ${differences.map((d) => d.field).join(', ')}: nothing is signed or paid`);
   if (BigInt(offer.fees.total.amount) > BigInt(o.most)) throw new Refusal(`refusing: the offer costs ${offer.fees.total.amount} base units, above ${o.most}: nothing is signed or paid`);
   // B14 at the signer: no fee message is signed. Said here first, before the faucet or the signer is asked.

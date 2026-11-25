@@ -2,7 +2,7 @@
 
 Documents signed in Python, each with the result the `signature_valid` check must give. A standalone Node script verifies them.
 
-**State:** the check kind is not built. [ADR-0045](../../../docs/decisions/ADR-0045-signature-valid-check.md) decides its rules. Its status is Proposed, and Rafa can overrule it. These vectors follow it. They are not part of the API contract in `spec/schemas/`.
+**State:** the evaluator is built (T-597, `packages/judgment/src/checks/signature-valid.ts`) and runs every vector here (`signature-valid.test.ts` beside it). [ADR-0045](../../../docs/decisions/ADR-0045-signature-valid-check.md) decides its rules. Its status is Proposed, and Rafa can overrule it. These vectors follow it. They are not part of the API contract in `spec/schemas/`.
 
 **A float in the signed bytes passes** (ADR-0045, section 2). The check hashes the delivered bytes and never prints a number, so a signed part may hold decimals. The integers-only rule (ADR-0022) covers the terms, which are hashed. It does not cover the delivered document. An earlier plan line said a float in the signed part must fail; it came before the record.
 

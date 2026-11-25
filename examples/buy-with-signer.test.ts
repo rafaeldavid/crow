@@ -56,8 +56,8 @@ const collect = (child: ReturnType<typeof spawn>) =>
     child.on('exit', (code) => resolve({ code, out, err }));
   });
 /** The command from the repository root, with `operators` as HOLDBACK_OPERATORS. */
-const buy = (args: string[], operators = world.info.operators) =>
-  collect(spawn(process.execPath, ['examples/buy-with-signer.ts', ...args], { cwd: root, env: { ...process.env, HOLDBACK_OPERATORS: operators.join(',') } }));
+const buy = (args: string[], operators = world.info.operators, env: Record<string, string> = {}) =>
+  collect(spawn(process.execPath, ['examples/buy-with-signer.ts', ...args], { cwd: root, env: { ...process.env, HOLDBACK_OPERATORS: operators.join(','), ...env } }));
 /** A line the command printed for the buyer to run, run as written by a shell, with this node first on PATH. */
 const shell = (line: string) => collect(spawn('sh', ['-c', line], { cwd: root, env: { ...process.env, HOLDBACK_OPERATORS: '', PATH: `${dirname(process.execPath)}:${process.env['PATH']}` } }));
 const quoteUrl = () => `${adapter.url}/quote`;
@@ -182,6 +182,22 @@ describe('buy-with-signer.ts: the approval stop', () => {
     expect(refused.code).toBe(1);
     expect(refused.err).toContain('do not name adjudicators.primary, adjudicators.fallback, adjudicators.appeal');
   }, 120_000);
+
+  it('D101: with CROW_SELLER or a terms file seller, refuses an offer another key signed, naming seller; the named seller stops for approval', async () => {
+    const other = `0x${'ab'.repeat(20)}`;
+    const refused = await buy([quoteUrl(), dir(), SCOPE, BUDGET], undefined, { CROW_SELLER: other });
+    expect(refused.code).toBe(1);
+    expect(refused.err).toContain(`refusing to sign: seller is "`);
+    expect(refused.err).toContain(`not the expected "${other}": another key signed this offer`);
+    expect(refused.out).toBe('');
+    const seen = stopped(await buy([quoteUrl(), dir(), SCOPE, BUDGET], undefined, { CROW_SELLER: refused.err.match(/seller is "(0x[0-9a-f]{40})"/)![1]! }));
+    // The terms file's seller and CROW_SELLER must name one seller.
+    const file = join(dir(), 'terms.json');
+    writeFileSync(file, JSON.stringify({ deliverable: seen.deliverable, checks: seen.checks, rubric: seen.rubric, timing: seen.windows, fee: seen.fees.adjudication, adjudicators: seen.adjudicators, maxSubmissions: seen.maxSubmissions, seller: other }));
+    const two = await buy([quoteUrl(), dir(), SCOPE, BUDGET, '--expect-terms', file], undefined, { CROW_SELLER: seen.seller });
+    expect(two.code).toBe(1);
+    expect(two.err).toContain(`CROW_SELLER is ${seen.seller} and the terms file's seller is ${other}: name one seller`);
+  }, 60_000);
 
   it('shows an offer above the budget and stops with no approve line; refuses a misspelt term and a missing terms file', async () => {
     const store = dir();

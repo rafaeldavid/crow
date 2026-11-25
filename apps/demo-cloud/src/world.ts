@@ -1085,6 +1085,8 @@ export class PublicWorld {
           rateLimit: rate,
           notes: notesFor(club.id, m, { amount: faucetAmount, maxAmount: faucetMaxAmount, windowSec: faucetWindowSec }, panel, operatorFee, chainFacts),
           demo: () => demo(i === 1 ? 1 : 0),
+          // T-609: the cause of each 500, in Workers Logs under the Request-Id the caller was answered with.
+          onInternal: (f) => o.onError?.(new Error(`internal on ${f.method} ${f.route} (Request-Id ${f.requestId}, node ${i + 1}${f.nothingSent ? ', nothing sent' : ''}): ${f.cause}`)),
           notices,
           ...(feedback ? { feedback } : {}),
           // The fields the request log keeps, picked here: the path and traceparent never reach telemetry.
@@ -1406,7 +1408,20 @@ export class PublicWorld {
     return n;
   }
 
+  /**
+   * One pass. A pass that throws counts as one that changed nothing, so a request does not bring the alarm forward of
+   * the Durable Object's doubling retry (worker.ts, alarm; T-604).
+   */
   async work(): Promise<void> {
+    try {
+      await this.pass();
+    } catch (e) {
+      this.idlePasses++;
+      throw e;
+    }
+  }
+
+  private async pass(): Promise<void> {
     // A broken world takes no new work: the stored write failure, before an adjudicator acts or a transaction goes out.
     if (this.failed) await this.persisting;
     this.telemetry.invoked();

@@ -1731,7 +1731,7 @@ The build is not started; it opens as its own task on Rafa's word.
 - **Built-in code only,** on `@noble/curves` at the exact version the adjudicator app pins. No network, no clock, no code from the delivery. The work budget is the only time limit.
 - **A bad or malformed signature fails the check;** a required failed check refunds the buyer, as today. Budget exhaustion escalates.
 - **Schema v0.13** adds the kind and a `checkKinds` list on each adjudicator's record, beside `policy`. No signed type and no contract changes (inferred).
-- **An adjudicator declines an offer with a kind it does not run,** so the offer expires unfunded. The parties' tools read the three named adjudicators' lists before signing (D32). At judging time an unknown kind still fails closed.
+- **An adjudicator declines an offer with a kind it does not run,** so the offer expires unfunded. The parties' tools read the three named adjudicators' lists before signing (D32). At a later turn it signs nothing (D92); stage 1 still fails an unknown kind closed as the last guard.
 
 **Open for Rafa:** whether `jsonEquals` stays in the first version, and whether the laboratory's export will write the signed text beside its manifest object.
 
@@ -1768,6 +1768,22 @@ The build is not started; it opens as its own task on Rafa's word.
 **Dropped:** a signed flag from the decider; a bare hash-locked content key, which would publish the work; a zero-knowledge proof checked on chain; the commitment as a top-level delivery field; the in-place amendment in the same version; and a release in two amounts, which the row does not ask for and no deal has asked for (research note section 13).
 
 **Litmus tests.** Neutrality: holds; the verifier is built-in code in every decider, the contract's check is a hash comparison, and six fixtures show a deal under the rule ending by its terms when the primary, both first deciders, every operator, the seller or the buyer is gone, or an adjudicator lacks the kind. The hold: no stage or timeout changes, and nothing new is stored. Defended judgment: strengthened; the key check is one more deterministic check before the panel, and a decider's wrong seal can no longer pay the seller.
+
+## D92. An adjudicator signs no decision on a check kind it does not run (ADR-0045 amended, T-597)
+
+**Status:** needs Rafa, 2026-11-25.
+
+**Adopted** (Rafa may overrule) by the coordinator from a Fable research note of 2026-11-25 (`reports/crow-private/roadmap/triage/2026-11-25-fallback-unrun-kind.md`), built with the evaluator in T-597.
+
+**Why.** ADR-0045 had a fallback that lacks a kind fail the check and sign a final reject, on the reading that the money moves the same way as an undecided deal. It does not: a reject pays the fee to the adjudicator that decided, and a default returns price and fee to the buyer. The reference fallback already signs nothing for a policy, registry, panel, reference file or envelope it cannot run (ADR-0036 section 3, D81, D21: no judgment, no fee).
+
+**Rule.** An adjudicator signs no decision on a deal whose terms name a check kind outside its `checkKinds`, in a required or an optional check, at any role. As primary it declines the offer. A fallback triggers no takeover and signs nothing if someone else triggers one. An appeal adjudicator signs nothing on an escalation. So does a primary whose build lost the kind. The deal runs to the next adjudicator or to its default outcome. The refusal comes before stage 1, and a turn whose result is already kept still completes (ADR-0036 section 2).
+
+**Built:** `apps/adjudicator/src/service.ts` (the check in `#runnable` and `#preflight`), the scenario runner, the fixture `neutrality.fallback-lacks-check-kind` (SimChain only, bonds), tests in `apps/adjudicator/src/check-kinds.test.ts`, and an operator notice (D31: warn, never refuse) for each named adjudicator whose registered `checkKinds` lacks a kind the terms name (`apps/operator/src/prepare.ts`, `checkKindNotices`). The seller's own offline preflight, which reads no adjudicator records, is not changed: it would alter the pinned `buy.mjs` and `try.mjs`.
+
+**Amended:** ADR-0045 (Summary point 8, section 10, the rejected-alternatives row). D90's last proposed bullet reads as this rule.
+
+**Litmus tests.** Neutrality: holds; a refused turn is a case the default already covers. The hold: unchanged. Defended judgment: strengthened; no decision rests on a check that did not run.
 
 ## D93. The match budget counts every engine step (T-599)
 
@@ -1822,3 +1838,157 @@ The build is not started; it opens as its own task on Rafa's word.
 
 **Litmus tests.** Neutrality: the party's own account and address, chosen by the party; no Crow account, zone or route. The hold and defended judgment: unchanged.
 
+## D96. Every judgment step is charged to the check budget (T-607)
+
+**Status:** adopted, 2026-11-25.
+
+**Who decided.** The session for T-607, under the in-repository autonomy rule. Rafa may overrule any line.
+
+**Why.** Stage 1 bounds the work of a delivery's checks by one count, 50,000,000 units (`CHECK_BUDGET`). D93 made one unit stand for about the same work on every pattern. Outside the pattern engine, several steps did work on a party's delivery or terms that the budget did not count, so a delivery could take far longer to judge, or hold far more memory, than its size and its terms suggest (measured in the task).
+
+**Decided:**
+
+- **Charge every step.** The column checks charge one unit per cell they read, the JSON Schema keywords one per name they look up, and every scan one per 16 characters. Building a set entry costs `SET_UNITS`. `enum`, `const` and `uniqueItems` charge the canonical form of the value they compare. Building the table charges its length and its cells. The cost model is in `packages/judgment/src/checks/cost.ts`.
+- **Do repeated work once.** A run builds the table, counts hidden characters and reads each reference once, and every check that needs them shares the result. A reference is kept only until the last check that names it, and the JSON table reads the run's one JSON parse (T-597), which stays uncharged because `signature_valid`'s charges are part of its kind. Terms constants (`enum`, `const`, `type`, `required`) are prepared when the schema compiles, and each check compiles once per run.
+- **A fixed depth for canonical forms.** `enum`, `const`, `uniqueItems` and a JSON table cell refuse a value nested deeper than `MAX_CANONICAL_DEPTH` (1,000), as they refuse other values canonical form cannot write. Before, the limit was the engine's stack, which depends on the moment, so two adjudicators could disagree.
+- **Bound compiled patterns before signing.** A JSON schema's patterns together hold at most `MAX_SCHEMA_STATES` (20,000) NFA states; `validateCheck` refuses a schema over it, as it refuses one over `MAX_SCHEMA_NODES`.
+- **Bind the anchors as RegExp does.** In a `json_schema` `pattern`, a leading `^` binds to the first top-level alternative and a trailing `$` to the last: `^a|b` finds the `b` in "xb". Whole-cell matches (`regex_match_rate_min`) do not change.
+- **Counts, not timers,** so the primary and the fallback adjudicator on one build reach the same result.
+- **Effect** (measured): no check result changes on any check and delivery the tests and snapshots use, and none in 20,000 random checks on random deliveries run against the old code. The largest conclusive run in the tests spends 2.1% of the budget (1.4% before). The table of a delivery takes one array instead of one per row.
+- **Cost.** A check near the budget may now run out and escalate where it passed or failed before. A schema whose patterns exceed 20,000 states is refused at offer time, and an already signed one fails as invalid. A `pattern` with an anchor beside top-level alternation may now pass where it failed. A value nested deeper than 1,000 now fails those checks every time. No shipped template or fixture meets any of these cases.
+- **Version.** The checks are not a kept version (`packages/judgment/src/kept/`), so the primary and the fallback adjudicator deploy from one build, as for D93.
+
+**Dropped:** caps on the size of `enum`, `const`, `type` and `required` in the terms (D31: parametrize, don't restrict); charging the cost once it is known, by time; refusing an anchor beside top-level alternation, which `RegExp` accepts; charging the run's one JSON parse, which would change `signature_valid`'s pinned charges.
+
+**Litmus tests.** Neutrality: strengthened; no party can make a judging pass much slower than the budget allows. The hold: unchanged. Defended judgment: strengthened; stage 1's work bound now holds for every check a party can write.
+
+## D98. Three check kinds read the recorded data (ADR-0047, T-610)
+
+**Status:** adopted, 2026-11-25.
+
+**Who decided.** The session for T-610 (plan item P-04, row N225), under the in-repository autonomy rule. Rafa may overrule any line.
+
+**Why.** `signature_valid` (D90) proves that a pinned key signed a recording, not what the recording shows. A robot deal needs the delivery held to the buyer's order: the arm passed through its waypoints, in time order, with one value per sample in every column. No kind of schema v0.13 holds rows in time order, compares columns row by row, or counts entries of a JSON array.
+
+**Decided:**
+
+- **`passes_through`:** rows r1 < r2 < ... exist such that at row rk every series is within an integer `tolerance` of waypoint k, per axis. Up to 32 series and 1,024 waypoints.
+- **`monotonic_column`:** each step between consecutive rows lies between `minStep` (default 0) and `maxStep` (default none). `minStep` 1 is strict; `minStep` equal to `maxStep` holds a fixed rate.
+- **`equal_lengths`:** 2 to 32 JSON arrays, by pointer, have one length.
+- **A series** is a JSON array at a pointer or a column of the tabular view. Every entry must be an integer; a decimal sample fails the check, and nothing is rounded.
+- **Every bound is an integer** with the safe range as its limits, in the schema and in `validateCheck` (ADR-0022).
+- **Work:** from the shared budget, charged as D96 charges every step: 1 unit per series and for the pointer it walks or the header it searches, 1 per entry read, 1 per coordinate or step compared. No clock.
+- **Schema v0.14,** additive. The EIP-712 domain version and `commitment.schemaVersion` stay 0.8.
+
+**Left out:** an unordered `passes_through`, one tolerance per series, a decreasing variant and a Euclidean distance. Each is one optional parameter or kind later, when a deal needs it.
+
+**Litmus tests.** Neutrality: holds; built-in code, the same result at every adjudicator (`neutrality.data-checks-primary-offline`). The hold: unchanged. Defended judgment: strengthened; stage 1 can hold a recording to the buyer's order.
+
+## D99. The hidden-character count reads decoded JSON strings (T-608)
+
+**Status:** adopted, 2026-11-25.
+
+**Who decided.** The session `hidden-and-ids`, under the in-repository autonomy rule. Rafa may overrule any line.
+
+**Why.** The count a buyer writes into a required check should match what the buyer's own reader sees in the delivery. For JSON, that reader sees decoded strings.
+
+**Decided:**
+
+- **Count raw text and decoded strings, once each.** For `application/json`, the count reads the delivery with its string escapes decoded. A character written literally counts once; a decoded one counts once. Keys count as well as values.
+- **Other formats** are unchanged.
+- **Charge.** The decode runs once per delivery, shared by every hidden-character check, and is not charged to the budget: it is linear and bounded by the store limit (measured 0.6 to 1.1 s on 10 MiB), like the JSON parse. Charging it (measured) made a required result flip to escalate on a large delivery that cost the budget elsewhere, so it waits for the work-budget change to charge it with the rest. The change is `hiddenText` in `checks/index.ts` and one line in the check's branch of `evaluate`.
+- **Version.** The checks are not a kept version (`packages/judgment/src/kept/`), so the rule belongs to the build. The primary and the fallback adjudicator deploy from one build.
+- **Effect** (measured): no judgment result on the tests and snapshots changes.
+
+**Dropped:** counting the parsed value instead of the text (it counts fewer characters on some inputs, and a delivery that does not parse has no value).
+
+**Litmus tests.** Neutrality: unchanged. The hold: unchanged. Defended judgment: strengthened.
+
+## D100. Check ids are unique within the terms (T-608)
+
+**Status:** adopted, 2026-11-25.
+
+**Who decided.** The session `hidden-and-ids`, under the in-repository autonomy rule. Rafa may overrule any line.
+
+**Why.** An id names one check. Terms in which two checks share an id are self-contradictory (D31), and a result keyed by id should have one meaning.
+
+**Decided:**
+
+- **Refuse repeated ids before signing.** `parseCommitment` and `parseAnyCommitment` refuse a plaintext commitment whose `acceptance.deterministicChecks` repeat an id. The rule lives in the parser's rules, so the schema and its version do not change. `examples/check-terms.ts` warns about the repeat.
+- **Keep every result apart.** `runChecks` reports each check under its own id (the first use of an id keeps it; a later repeat gets `id-2`, `id-3`, skipping ids the terms use), in the outcome and in the inconclusive list. Terms signed before the rule, and the opened body of a private commitment, run through it. Aggregation is untouched: it is a kept version (ADR-0036), and changing it would need a new version.
+- **Effect** (measured): no result on the tests and snapshots changes.
+
+**Dropped:** a schema rule (a change needs an ADR and a version bump); matching by position inside `aggregate` (a new aggregation version).
+
+**Litmus tests.** Neutrality: unchanged. The hold: unchanged. Defended judgment: unchanged.
+
+## D101. The buyer's tools refuse an offer whose seller is not the one the buyer named (T-611)
+
+**Status:** adopted, 2026-11-25.
+
+**Who decided.** The session for T-611, under the in-repository autonomy rule, after a research pass. Rafa decided the same day that binding a seller's key to its published identity waits until after the case studies (roadmap row N228). He allowed this change to alter the pinned `site/buy.mjs`, so its buyers get the check too ("Yes, allow it", Rafa, 2026-11-25); for this change only, and the rule that `buy.mjs` stays pinned is otherwise unchanged. Rafa may overrule any line.
+
+**Why.** Terms are public once offered. Anyone can copy an offer, sign the copy with their own key and name the same buyer. Settlement binds a deal to the key that signed it and accepts a delivery only from that key (`contracts/src/HoldbackRules.sol`, `_acceptDelivery`), so the copier, not the seller the buyer meant, delivers and is paid. The buyer's tools checked that the signature recovers to `seller`, never that `seller` is the company the buyer meant. Only the buyer can know that, from the seller's own channel (D32).
+
+**Decided:**
+
+- **The address comes from the seller's own channel.** The seller's card at its own origin, or a message from it: never the offer, an operator or the quote answer's own claim. The buyer names it to `makeKeys` (`{seller}`), to `buy-with-signer.ts` and `own-buyer.ts` as `CROW_SELLER` or the terms file's `seller` (the same address if both), and to `take.ts` as `CROW_SELLER`. The key file keeps it, so the approve run checks it again.
+- **A named seller binds.** `readOffer` refuses an offer another key signed before it shows it, and `checkOffer` refuses it again, naming `seller`. `take.ts` refuses a standing offer at another seller address before it shows it.
+- **An offer the buyer did not ask for needs a name.** `checkOffer` refuses an offer this key did not ask for with `quote` unless `makeKeys` was given the seller. The approval's own `seller` does not count: an approval built from the shown offer carries the offer's seller.
+- **An offer the buyer asked for needs none.** `quote` binds the key to the commitment ID the seller's own quote route answered, at the URL the buyer chose, so a copy cannot take its place there. `quote` takes https, or http on this machine only, and follows no redirect, since that origin then stands for the seller. Naming the seller stays the buyer's option.
+- **Effect** (measured): the tests show a copy signed by another key refused, naming `seller`, and the real offer passing. Existing callers that quote first see no change. A library caller that reads an offer it found, with no seller named, is now refused.
+
+**Dropped:** refusing every offer without a named seller (it breaks the quoted path for no gain, D31); a warning only (an unattended agent does not read warnings); comparing the quote answer's claim (the commitment ID already binds it); any schema, signed type, route or contract change.
+
+**Later (N228).** The research recommends one rule as the foundation: a buyer funds only a fingerprint (the commitment ID, or a standing template) that reached it from the seller, fetched from an https origin the buyer named or checked against an address the buyer named. Settlement already binds that fingerprint to the seller's key. The durable upgrade is a long-lived root key that signs each seller key with the existing `Delegation` certificate, carried on the seller's channel. The options, and the small follow-ups, are in the task file (`docs/tasks/T-611-buyer-pins-the-seller.md`, Handoff). Nothing is built for N228 before the case studies.
+
+**Litmus tests.** Neutrality: unchanged; the check runs on the buyer's machine and stops no valid commitment. The hold: unchanged. Defended judgment: unchanged.
+
+## D102. The nesting cap is a count, not the stack (T-613)
+
+**Status:** adopted, 2026-11-25.
+
+**Who decided.** The session `column-depth-cap`, under the in-repository autonomy rule. Rafa may overrule any line.
+
+**Why.** D96 capped canonical forms at `MAX_CANONICAL_DEPTH` (1,000 levels), but `canonical` still walked a value by recursion, one call per level. A JSON-table cell under the cap could exhaust a small stack first: at `--stack-size=100` a cell 500 levels deep failed, while Node's default stack passed it (measured, T-613). The primary and the fallback adjudicator may run with different stacks, so they could disagree on one delivery, which the neutrality test forbids. Found by PR 809's red team (T-610).
+
+**Decided:**
+
+- **Walk without recursion.** `canonical` keeps its own stack of open arrays and objects, so its stack use does not grow with depth. It writes the same text and charges the same units in the same order as before (a property test checks both against the recursive walk). This covers every caller: a JSON-table cell, `enum`, `const` and `uniqueItems`.
+- **Keep 1,000 levels.** A value nested exactly 1,000 levels passes; one more is refused, at every stack size (a test runs the checks at `--stack-size=100` and `--stack-size=4000` and gets the same outcomes).
+- **Name the failure.** A JSON-table cell past the cap fails with `JSON row <n> has a cell nested deeper than 1000 levels` (`reference: ` before it for a reference table), not the generic `deliverable could not be read as a table`. The line names the row, never the column or the value (T-610). `enum`, `const` and `uniqueItems` on a value past the cap fail with `a value is nested deeper than 1000 levels`.
+- **Effect** (measured): no snapshot or other test result changes.
+
+**Dropped:** converting only the columns a check reads. It would still recurse on a column a check reads, and leaves `enum`, `const` and `uniqueItems` as they were.
+
+**Litmus tests.** Neutrality: stronger; two adjudicators reach the same result on a deeply nested delivery whatever their stack size. The hold: unchanged. Defended judgment: unchanged, apart from the detail line.
+
+## D103. A pattern that meets a string too long to match fails the check (T-614)
+
+**Status:** adopted, 2026-11-25.
+
+**Who decided.** The session `overlong-pattern`, under the in-repository autonomy rule. Rafa may overrule any line.
+
+**Why.** The pattern engine reads at most 10,000 code points of a string. It answered "no match" for a longer one. `not` turned that answer into a pass, so a required "must not contain" rule passed padded work, and on a checks-only deal the seller was paid (measured). `oneOf` could pass the same way. A string the engine does not read has no answer, so no result may rest on one.
+
+**Decided:**
+
+- **Fail the `json_schema` check.** The engine throws `SubjectTooLong` instead of answering. No schema keyword catches it, so the check fails wherever the pattern sits: under `not`, `anyOf`, `oneOf` and any nesting, and also where another branch would have passed. The line is `a pattern met a string over 10000 code points`. A required check rejects the delivery.
+- **Fail closed by default.** A new caller of the engine that does nothing gets a failed check.
+- **`regex_match_rate_min` is unchanged.** It does not count such a cell as a match. More matches only help that check, so the cell never helps it pass. It opts in by calling `countsAsMatch`.
+- **A pattern that is not read decides nothing.** A keyword that fails first still ends its schema object. So `"maxLength": 10000` beside a pattern in an `anyOf` branch is a definite failure for a long string, and a buyer can use it to let another branch accept long strings.
+- **One key order where order decides.** Key order can change pass or fail only under `not`, `anyOf` and `oneOf`: a keyword that fails first keeps a later pattern from being read, and elsewhere either way fails the check. The commitment ID hashes the terms with sorted keys, so two nodes may hold one deal's terms in two key orders. Under those three, `json_schema` reads keywords in a fixed order (tests of the value itself, then `pattern`, then keywords that hold subschemas) and property names sorted. Everywhere else it reads both as written, as before. So `maxLength` beside a pattern is read first under those three whatever the terms' order.
+- **Not changed:** outside those three, which failure line a check reports, and whether it runs out of budget before a failure, can still follow the key order, as before.
+- **Counts only.** No timer, and no step is charged more or less than before. A schema with no `not`, `anyOf` or `oneOf` whose patterns meet no over-long string gives the same result, line and charge as before.
+- **Version.** The checks are not a kept version (D99). The rule belongs to the build, so the primary, fallback and appeal adjudicators deploy from one build. A deal already signed is judged under the new rule after the deploy.
+- **Effect** (measured): no existing scenario snapshot changes. None of the 41 `json_schema` checks in the repository's data files before this change holds a pattern under `not`, `anyOf` or `oneOf`. Over 32,365 random schemas without those three, on strings under the cap and small budgets, results, lines and charges equal `main`'s.
+
+**Dropped:**
+
+- **Inconclusive.** It escalates, even for an optional check. The appeal adjudicator runs the same checks and signs nothing, so the seller could force the default outcome by padding.
+- **One sorted order for the whole schema** (the first build of this change). Sorting put `properties` ahead of `required` and `type`. A seller could then spend the budget before the cheap failure, and turn a reject into an escalation (red team, measured).
+- **A third answer, "unknown", carried through `not`, `anyOf`, `oneOf` and `allOf`.** It would keep a pass that another branch proves. Every keyword, now and later, would have to carry it, and one that did not would pass again.
+- **A larger cap.** Any cap leaves a longer string.
+- **Refusing a negated pattern at the offer.** D31: the terms are not wrong, and `oneOf` has the same problem.
+
+**Litmus tests.** Neutrality: unchanged. The hold: unchanged. Defended judgment: strengthened.

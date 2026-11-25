@@ -1,8 +1,6 @@
-// Hand-written types for spec/schemas v0.13 (signed encoding 0.8: the EIP-712 domain version in eip712.ts; ADR-0023,
+// Hand-written types for spec/schemas v0.14 (signed encoding 0.8: the EIP-712 domain version in eip712.ts; ADR-0023,
 // ADR-0024, ADR-0029, ADR-0033). Values reach these types only through the parsers in parse.ts, which validate against the
 // schema files. Phase 1 narrows the commitment to guaranteed_on_decision and maxSubmissions = 1 (ADR-0007).
-// One gap: DeterministicCheck lacks v0.13's `signature_valid` (ADR-0045). Its type arrives with its evaluator, because
-// stage 1's registry must name every kind in the union. Until then stage 1 reads it as unknown and fails it.
 import type { TokenAmount } from './money/index.js';
 
 export type { TokenAmount } from './money/index.js';
@@ -96,7 +94,26 @@ export type DeterministicCheck =
   | (CheckBase & { type: 'iso8601_date_column'; column: string })
   | (CheckBase & { type: 'json_schema'; schema: Record<string, unknown> })
   | (CheckBase & { type: 'reference_row_match_min'; reference: ContentRef; keyColumn: string; minBps: Bps })
-  | (CheckBase & { type: 'hidden_characters_max'; max: HiddenCharacterMax });
+  | (CheckBase & { type: 'hidden_characters_max'; max: HiddenCharacterMax })
+  | (CheckBase & SignatureValidParams)
+  | (CheckBase & { type: 'passes_through'; series: CheckSeries[]; waypoints: number[][]; tolerance: number })
+  | (CheckBase & { type: 'monotonic_column'; series: CheckSeries; minStep?: number; maxStep?: number })
+  | (CheckBase & { type: 'equal_lengths'; series: { pointer: string }[] });
+
+/**
+ * ADR-0047: a series of integers the data checks read. `pointer`: a JSON array at an RFC 6901 pointer in a JSON
+ * delivery. `column`: one column of the tabular view (CSV, or a JSON array of flat objects). Every bound is an integer.
+ */
+export type CheckSeries = { pointer: string } | { column: string };
+
+/** ADR-0045: every parameter is a string, so no number enters the hashed terms. */
+export interface SignatureValidParams {
+  type: 'signature_valid';
+  alg: 'ecdsa-p256-sha256' | 'ed25519';
+  publicKey: { pointer: string; format: 'spki-pem' | 'spki-base64'; spkiSha256: Sha256 };
+  message: { pointer: string; encoding: 'utf8' | 'base64'; jsonEquals?: string };
+  signature: { pointer: string; encoding: 'base64'; format: 'der' | 'raw' };
+}
 
 /** ADR-0021: maximum counts of invisible characters in the raw bytes, per class or in total. At least one is set. */
 export interface HiddenCharacterMax {

@@ -1,0 +1,47 @@
+# @settlement sim @judges recorded @mode guaranteed_on_decision @seed 74
+name: neutrality.fallback-lacks-check-kind
+description: >-
+  ADR-0045 section 10, D92. The terms name signature_valid. Bench A accepts, then goes offline after the delivery.
+  Bench B, the named fallback, does not run that check kind (`lacks_check_kinds`). Anyone triggers the takeover; Bench B
+  refuses the turn and signs nothing, so it earns no fee. After fallbackBy anyone triggers the default and applies the
+  default outcome: Atlas gets its $1,550 back, price and fee, and the defaulting adjudicators' bonds pay Tidewater $1,500.
+fails: bench-b
+lacks_check_kinds:
+  bench-b: [signature_valid]
+club: fixtures/clubs/data-services-v1.yaml
+terms: fixtures/terms/signed-manifest.yaml
+parties:
+  buyer: atlas-buyer
+  seller: tidewater-seller
+adjudicators:
+  primary: bench-a
+  fallback: bench-b
+  appeal: bench-c
+operators: [op-1, op-2]
+faucet:
+  atlas-buyer: "10000000000"
+  bench-a: "25000000000"
+  bench-b: "25000000000"
+  bench-c: "25000000000"
+steps:
+  - offer:                 { by: seller, via: op-1 }
+  - adjudicator_accept:    { via: op-1 }
+  - agree_and_fund:        { by: buyer, via: op-1 }
+  - deliver:               { by: seller, via: op-1, file: data/signed-manifest/episode.json }
+  - offline:               { actor: bench-a }
+  - judge:                 { adjudicator: bench-a }   # no call
+  - advance_clock:         { seconds: 604920 }        # past judgeBy (offer + 7 d + 120 s)
+  - trigger_fallback:      { via: op-2 }
+  - judge:                 { adjudicator: bench-b }   # refused: it does not run signature_valid
+  - advance_clock:         { seconds: 120 }           # past fallbackBy (judgeBy + 120 s)
+  - trigger_default:       { via: op-2 }
+  - apply_default_outcome: { via: op-2 }
+expect:
+  terminal: Refunded
+  balances:
+    atlas-buyer: "10000000000"        # price and fee returned
+    tidewater-seller: "1500000000"    # compensation from the two defaulting bonds (SimChain only)
+    bench-a: "24250000000"
+    bench-b: "24250000000"
+    bench-c: "25000000000"
+    escrow: "0"

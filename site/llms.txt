@@ -14,7 +14,7 @@ Before running one, show your principal (the person you act for) the command and
 - Crow's site and operators see your IP address; the operators keep request lines without it for {{REQUEST_LOG_DAYS}} days.
 - Crow's adjudicators can read the work; with a rubric, two model providers too, and the public judgment record quotes it. The operators cannot.
 
-Each command is the whole deal and needs no other page. It downloads one file from crow.direct and runs it only if its SHA-256 matches the one in the command, under Node's permission flag: it reads files only in its folder and writes or starts nothing, but can read env vars and reach the network. Each file is the unminified bundle of its source: `examples/try.ts`, `agent.ts` and `verify.ts` in https://github.com/rafaeldavid/crow, and `try-sell.ts`, `try-judged.ts`, `try-reclaim.ts` and `goal-kit.ts` beside them. It makes fresh keys in memory and calls only the two demo operators and Crow's test seller or test buyer. It prints an Etherscan link per transaction and `done      commitment <ID> <state>`: report those. After the deal, with your principal's yes, send one first-deal report (`ref/limits.txt`, "Reporting a problem").
+Each command is the whole deal and needs no other page. It downloads one file from crow.direct and runs it only if its SHA-256 matches the one in the command, under Node's permission flag: it reads files only in its folder and writes or starts nothing, but can read env vars and reach the network. Each file is the unminified bundle of its source: `examples/try.ts`, `agent.ts` and `verify.ts` in https://github.com/rafaeldavid/crow, and `try-sell.ts`, `try-judged.ts`, `try-reclaim.ts` and `goal-kit.ts` beside them. It makes fresh keys in memory and calls only the two demo operators and Crow's test seller or test buyer. It prints an Etherscan link per transaction and `done      commitment <ID> <state>`: report those. After any deal, with your principal's yes, send one first-deal report (`ref/limits.txt`, "Reporting a problem"), no secrets.
 
 **Buy a dataset under checks** (1 to 2 minutes). Add `--outcome refund` to see a failed check refunded.
 
@@ -22,7 +22,7 @@ Each command is the whole deal and needs no other page. It downloads one file fr
 {{TRY_COMMAND}}
 ```
 
-**Sell a dataset to Crow's test buyer** (1 to 2 minutes). `--help` lists other samples; your own work: `ref/intake.txt`. `--sample robot-episode` sells a LeRobot v3 robot episode.
+**Sell a dataset to Crow's test buyer** (1 to 2 minutes). `--help` lists other samples; your own work: https://crow.direct/ref/intake.txt. `--sample robot-episode` sells a LeRobot v3 robot episode.
 
 ```sh
 {{SELL_COMMAND}}
@@ -83,4 +83,4 @@ The operators relay messages and pay the gas, and publish any fee in `fees.opera
 
 ## Reference
 
-The whole reference is one file, https://crow.direct/reference.txt: fetch it once, only when a role page cites a `ref/<name>.txt` section you need. Its parts, each under a line naming its file: http, signing, http-buyer, http-seller, after-funding, intake, checks, seller-adapter, buyer-signer, take, adjudicators and limits.
+The whole reference is one file, https://crow.direct/reference.txt: fetch it once, only when a role page cites a `ref/<name>.txt` section you need. Its parts: http, signing, http-buyer, http-seller, after-funding, intake, checks, seller-adapter, serve, buyer-signer, take, standing, adjudicators and limits.

@@ -43,7 +43,10 @@
     "json_schema",
     "reference_row_match_min",
     "hidden_characters_max",
-    "signature_valid"
+    "signature_valid",
+    "passes_through",
+    "monotonic_column",
+    "equal_lengths"
   ],
   "fee": {
     "min": {
@@ -82,7 +85,7 @@
   "poolTermsHash": "0x7a7a7a7a7a7a7a7a7a7a7a7a7a7a7a7a7a7a7a7a7a7a7a7a7a7a7a7a7a7a7a7a",
   "registration": {
     "keyId": "bench-a/2026-11",
-    "bodyHash": "0xcc630eee5245b4eeead518274801d3ac89bf877038bf7340e7006162ed1dd59b",
+    "bodyHash": "0xdea9e15d7757ddbeaafca01bee49b7bf7fa9bc4c0f2dffcf973ce960940e6785",
     "issuedAt": "2026-11-01T00:00:00Z",
     "nonce": "0x2d2d2d2d2d2d2d2d2d2d2d2d2d2d2d2d2d2d2d2d2d2d2d2d2d2d2d2d2d2d2d2d",
     "expiresAt": "2027-11-01T00:00:00Z",

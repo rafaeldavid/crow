@@ -12,7 +12,7 @@ Validation as of November 3, 2026 (measured, `pnpm validate:spec`): all 33 examp
 - a model ID containing "latest";
 - an extra field in a judge verdict.
 
-The `$id` URLs (`https://holdback.dev/schemas/v0.13/…`) are namespaces for resolving `$ref` between files. They are not hosted. Replace the domain if the project gets one.
+The `$id` URLs (`https://holdback.dev/schemas/v0.14/…`) are namespaces for resolving `$ref` between files. They are not hosted. Replace the domain if the project gets one.
 
 ## Annotations
 
@@ -21,11 +21,18 @@ The `$id` URLs (`https://holdback.dev/schemas/v0.13/…`) are namespaces for res
 
 ## Changelog
 
+- **v0.14 (2026-11-25, D98, ADR-0047), additive:** every `$id`, the `Holdback-Schema-Version` header and the OpenAPI `x-holdback-schema-version` move to 0.14. No typed-data struct changes, so the EIP-712 domain version and `commitment.schemaVersion` stay 0.8, and no signature or commitment ID moves. Every document that passed v0.13 passes v0.14.
+  - **Three data check kinds:** `passes_through` (`series`, `waypoints`, `tolerance`), `monotonic_column` (`series`, optional `minStep` and `maxStep`) and `equal_lengths` (`series`, pointers only). Each branch is closed. Every number is an integer bounded by the safe range: no float enters the hashed terms (ADR-0022).
+  - **`$defs/Series`:** `{ pointer }`, a JSON array at an RFC 6901 pointer (`$defs/JsonPointer`), or `{ column }`, a column of the tabular view of at most 128 characters, marked `x-holdback-untrusted`. Limits: 1 to 32 series on a path, 1 to 1,024 waypoints, 2 to 32 arrays to compare. That each waypoint has one coordinate per series is `validateCheck`'s rule; the schema cannot express it.
+  - **The reference adjudicator runs the three kinds** and lists 13 in `checkKinds`. A build without them declines terms that name them (D92).
+  - **Examples:** new `commitment.data-checks`; `adjudicator.check-kinds` lists the new kinds, with its `registration.bodyHash` recomputed. `tests/spec.test.ts` holds the refused cases.
+  - **Old readers** refuse a v0.14 offer that names a new kind, since `DeterministicCheck` is closed.
+
 - **v0.13 (2026-11-25, D90, ADR-0045), additive:** every `$id`, the `Holdback-Schema-Version` header and the OpenAPI `x-holdback-schema-version` move to 0.13. No typed-data struct changes, so the EIP-712 domain version and `commitment.schemaVersion` stay 0.8, and no signature or commitment ID moves. Every document that passed v0.12 passes v0.13.
   - **`signature_valid`:** a tenth `DeterministicCheck` branch with `alg`, `publicKey {pointer, format, spkiSha256}`, `message {pointer, encoding, jsonEquals?}` and `signature {pointer, encoding, format}`. `alg` is a closed list, `ecdsa-p256-sha256` or `ed25519`; Ed25519 takes a `raw` signature only. Every parameter is a string. A pointer is an RFC 6901 JSON pointer of at most 512 characters (the new `$defs/JsonPointer`, marked `x-holdback-untrusted`). The limits on the strings the pointers resolve to are the evaluator's, not the schema's. A signed part may hold decimals: the schema never reads it.
   - **`checkKinds`:** an optional list on the adjudicator record, beside `policy`: unique names of the check kinds the adjudicator runs, at most 100 of at most 40 characters (`^[a-z0-9_]+$`). The names are a pattern, not an enum, so a reader accepts a record that lists a newer kind. `policyHash` does not cover it; `registration.bodyHash` does. An absent list means the nine kinds of v0.12.
-  - **No build evaluates `signature_valid` yet.** The reference adjudicator publishes `checkKinds` with the nine kinds it runs. As primary it declines an offer that names any other kind, in a required or an optional check, and the offer's `notices` say why (ADR-0045 section 10; `fixtures/scenarios/neutrality.adjudicator-lacks-check-kind`). So a deal it is primary for never reaches a hold on this kind.
-  - **At judging, as before:** stage 1 records a kind it does not run as a failed check. A required one rejects the delivery. An optional one does not, so the panel can still accept. A fallback or appeal adjudicator declines nothing for it, and a party reads all three lists before it signs.
+  - **The reference adjudicator evaluates `signature_valid` (P-03, ADR-0045).** It publishes `checkKinds` with the ten kinds it runs. As primary it declines an offer that names any kind outside its list, in a required or an optional check, and the offer's `notices` say why (ADR-0045 section 10; `apps/adjudicator/src/check-kinds.test.ts` holds the cases, with a kind a later schema may add). The scenario fixture for the decline went with the kind: no schema v0.13 kind is left that a build lacks.
+  - **At a later turn (D92):** an adjudicator signs no decision on terms that name a kind it does not run, at any role. A fallback triggers no takeover, an appeal adjudicator signs nothing on an escalation, and the deal runs to the next adjudicator or its default outcome, which returns price and fee. Stage 1 still records an unknown kind as a failed check, as the last guard. A party reads all three lists before it signs.
   - **Not built:** the other half of ADR-0045 section 10, a decline for a check that fails stage 1's static validation, and the parties' own preflight on `checkKinds`.
   - **Examples:** new `commitment.signature-valid` and `adjudicator.check-kinds` examples. `tests/spec.test.ts` holds the refused cases.
   - **Old readers** refuse a v0.13 offer that names the kind, and an adjudicator record that carries `checkKinds`, since both objects are closed.

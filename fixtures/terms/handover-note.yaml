@@ -1,0 +1,43 @@
+# Terms with three "must not contain" rules on one string (T-614, D103), written with `not`, `anyOf` and `oneOf`: the
+# handover note of a delivered job may carry no email address and no unfinished-work marker. The rubric is empty, so
+# acceptance rests on the checks alone and no panel sits. Field rules are as in clean-customers-2000.yaml.
+schemaVersion: "0.8"
+clubId: data-services-v1
+deliverable:
+  kind: document
+  description: "A handover report as one JSON document. `handover.note` is free text. It holds no email address (no `@`) and no `TODO` marker."
+  format: application/json
+acceptance:
+  deterministicChecks:
+    - id: no-address
+      type: json_schema
+      required: true
+      schema: { type: object, required: [handover], properties: { handover: { type: object, required: [note], properties: { note: { type: string, not: { pattern: "@" } } } } } }
+    - id: finished
+      type: json_schema
+      required: true
+      schema: { properties: { handover: { properties: { note: { anyOf: [{ const: "" }, { not: { pattern: TODO } }] } } } } }
+    - id: one-form
+      type: json_schema
+      required: true
+      # Exactly one branch: every note is a string, so a note that also holds "@" matches two and fails.
+      schema: { properties: { handover: { properties: { note: { oneOf: [{ pattern: "@" }, { type: string }] } } } } }
+  rubric:
+    passThreshold: 0
+    criteria: []
+price: { token: tUSD, amount: "1500000000" }
+adjudication:
+  policyId: bench-a/p1
+  fee: { token: tUSD, amount: "50000000" }
+timing:
+  offerExpiresInSec: 900
+  fundWithinSec: 1800
+  deliverWithinSec: 604800
+  judgeWithinSec: 120
+  fallbackWithinSec: 120
+  appealWindowSec: 0
+  appealDecideSec: 300
+  maxSubmissions: 1
+settlement: { mode: guaranteed_on_decision, token: tUSD }
+remedy: { onReject: full_refund }
+disclosure: { level: public }

@@ -5,7 +5,7 @@
 - **Depends on:** T-593 (merged)
 - **Paths this task may touch:** `packages/judgment/src/checks/safe-regex.ts`, `packages/judgment/src/checks/safe-regex.test.ts`, `site/setup.mjs` (rebuilt), `docs/decisions-today.md` (D93), `docs/tasks/T-599-match-budget-every-step.md`
 - **Human gate:** no (the deploys that carry it are Rafa's)
-- **Status:** review
+- **Status:** done (merged in pull request 799, 2026-11-25)
 - **Agent/session:** match-budget-fix
 - **Roadmap row:** none (security fix, 2026-11-25)
 

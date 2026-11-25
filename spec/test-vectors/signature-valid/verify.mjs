@@ -44,7 +44,8 @@ function hasShape(value, required, optional = []) {
   return required.every((k) => keys.includes(k)) && keys.every((k) => required.includes(k) || optional.includes(k));
 }
 
-const isPointer = (p) => typeof p === 'string' && p.length <= MAX.pointer && /^(\/([^~/]|~[01])*)*$/.test(p);
+// The 512 limit counts code points, as the schema's maxLength does.
+const isPointer = (p) => typeof p === 'string' && p.length <= 2 * MAX.pointer && [...p].length <= MAX.pointer && /^(\/([^~/]|~[01])*)*$/.test(p);
 
 /** Whether the check in the terms is well formed. A malformed check is refused at offer time and never passes. */
 function wellFormed(check) {

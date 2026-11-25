@@ -15,7 +15,7 @@ ADR-0045 section 10. Tidewater offers terms that name the signature_valid check 
 | Club | fixtures/clubs/data-services-v1.yaml (loaded) · rulebook 0xd9bc…492d |
 | Buyer | atlas-buyer 0xBe44…76f3 |
 | Seller | tidewater-seller 0x1864…5683 |
-| Terms | fixtures/terms/signed-manifest.yaml (loaded) · commitment 0xe4e8…3366 · price 1,500.000000 tUSD · fee 50.000000 tUSD |
+| Terms | fixtures/terms/signed-manifest.yaml (loaded) · commitment 0x7c9e…b11c · price 1,500.000000 tUSD · fee 50.000000 tUSD |
 | Adjudicators | primary bench-a 0x1B45…71eb · fallback bench-b 0x6eCc…8776 · appeal bench-c 0x6A66…3c4A |
 | Operators | op-1 · op-2 |
 
@@ -51,7 +51,7 @@ Outages:
 
 ## Receipts and log
 
-- Events 0–1. Chain head 0xc7f5…9198. Replay of 2 SimChain submissions from genesis matches the settlement state.
+- Events 0–1. Chain head 0x32e8…b22a. Replay of 2 SimChain submissions from genesis matches the settlement state.
 - Receipts from op-1: 1 (rcpt-0001–rcpt-0001). The runner labels them without signing; the operator API signs real receipts.
 - Receipts from op-2: 1 (rcpt-0002–rcpt-0002). The runner labels them without signing; the operator API signs real receipts.
 

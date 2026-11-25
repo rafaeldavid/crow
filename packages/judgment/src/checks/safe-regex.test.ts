@@ -1,12 +1,34 @@
+import { Script, createContext } from 'node:vm';
 import fc from 'fast-check';
 import { describe, expect, it } from 'vitest';
-import { BudgetExhausted, compileSafeRegex, MAX_SUBJECT_CHARS, StepBudget } from './safe-regex.js';
+import { BudgetExhausted, compileSafeRegex, MAX_SUBJECT_CHARS, StepBudget, SubjectTooLong } from './safe-regex.js';
 
 const compile = (p: string) => {
   const r = compileSafeRegex(p);
   if (!r.ok) throw new Error(r.error);
   return r.value;
 };
+
+/**
+ * Native RegExp as the oracle, with a time limit. Native RegExp backtracks, so a few random nested
+ * patterns take seconds on a subject that does not match (one pinned case takes about 7 s, while our
+ * engine takes under 1 ms). The limit is a vm timeout, which stops a running regex. A pattern that hits
+ * it is skipped, never compared, so load cannot turn a pass into a failure.
+ */
+const ORACLE_LIMIT_MS = 250;
+const oracleContext = createContext({ p: '', s: '' });
+const oracleScript = new Script("[new RegExp('^(?:' + p + ')$', 'u').test(s), new RegExp(p, 'u').test(s)]");
+function oracle(pattern: string, subject: string): { full: boolean; search: boolean } | undefined {
+  oracleContext.p = pattern;
+  oracleContext.s = subject;
+  try {
+    const [full, search] = oracleScript.runInContext(oracleContext, { timeout: ORACLE_LIMIT_MS }) as [boolean, boolean];
+    return { full, search };
+  } catch (e) {
+    if ((e as { code?: string }).code === 'ERR_SCRIPT_EXECUTION_TIMEOUT') return undefined;
+    throw e;
+  }
+}
 
 describe('safe regex: supported subset agrees with RegExp', () => {
   const cases: Array<[string, string[], string[]]> = [
@@ -94,8 +116,10 @@ describe('safe regex: supported subset agrees with RegExp', () => {
     fc.assert(
       fc.property(part.filter((p) => p.length <= 120), fc.string({ unit: fc.constantFrom('a', 'b', 'c'), maxLength: 8 }), (p, s) => {
         const m = compile(p);
-        expect(m.fullMatch(s)).toBe(new RegExp(`^(?:${p})$`, 'u').test(s));
-        expect(m.search(s)).toBe(new RegExp(p, 'u').test(s));
+        const native = oracle(p, s);
+        fc.pre(native !== undefined);
+        expect(m.fullMatch(s)).toBe(native!.full);
+        expect(m.search(s)).toBe(native!.search);
       }),
       { seed: 25, numRuns: 2000 },
     );
@@ -132,8 +156,8 @@ describe('safe regex: refusals', () => {
 
   it('refuses patterns longer than 200 characters', () => expect(compileSafeRegex('a'.repeat(201)).ok).toBe(false));
 
-  it('does not match subjects longer than the cap', () => {
-    expect(compile('a*').fullMatch('a'.repeat(MAX_SUBJECT_CHARS + 1))).toBe(false);
+  it('gives no answer for a subject longer than the cap', () => {
+    expect(() => compile('a*').fullMatch('a'.repeat(MAX_SUBJECT_CHARS + 1))).toThrow(SubjectTooLong);
     expect(compile('a*').fullMatch('a'.repeat(MAX_SUBJECT_CHARS))).toBe(true);
   });
 });
@@ -186,4 +210,29 @@ describe('safe regex: linear time on catastrophic patterns', () => {
       expect(performance.now() - started).toBeLessThan(1000);
     });
   }
+});
+
+describe('safe regex: anchors beside alternation', () => {
+  it('binds a leading ^ to the first alternative and a trailing $ to the last, as RegExp does (property)', () => {
+    const alt = fc.array(fc.constantFrom('a', 'b', 'ab', 'a*', '(?:b|a)', '[ab]c', ''), { minLength: 1, maxLength: 4 });
+    fc.assert(
+      fc.property(fc.boolean(), alt, fc.boolean(), fc.string({ unit: fc.constantFrom('a', 'b', 'c', 'x'), maxLength: 8 }), (start, options, end, s) => {
+        const p = `${start ? '^' : ''}${options.join('|')}${end ? '$' : ''}`;
+        const m = compile(p);
+        expect(m.search(s), `${p} on ${s}`).toBe(new RegExp(p, 'u').test(s));
+        expect(m.fullMatch(s), `${p} on ${s}`).toBe(new RegExp(`^(?:${p})$`, 'u').test(s));
+      }),
+      { seed: 31, numRuns: 3000 },
+    );
+  });
+});
+
+describe('safe regex: subject length', () => {
+  it('measures the cap in code points, surrogate pairs counted once', () => {
+    const wide = '\u{1F600}';
+    expect(compile('.*').fullMatch(wide.repeat(MAX_SUBJECT_CHARS))).toBe(true);
+    expect(() => compile('.*').fullMatch(`${wide.repeat(MAX_SUBJECT_CHARS)}a`)).toThrow(SubjectTooLong);
+    expect(() => compile('a').search(`${'\uD800'.repeat(MAX_SUBJECT_CHARS)}a`)).toThrow(SubjectTooLong);
+    expect(compile('a').search(`${'\uD800'.repeat(MAX_SUBJECT_CHARS - 1)}a`)).toBe(true);
+  });
 });
