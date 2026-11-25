@@ -64,7 +64,9 @@ const AUDIT_DEMO_HTML = `<section class="slack-window" id="demo" aria-label="Fer
       <span class="ck-mark" aria-hidden="true"></span>
       <div>
         <p><strong>Crow · New funded audit request</strong></p>
+        <p>From Fernhollow Co.’s agent, acting for Fernhollow Co.</p>
         <p class="slack-muted">450 tUSDC held as deposit. Report due within 48 hours.</p>
+        <p class="slack-follow-up"><strong>Known customer.</strong> Fernhollow Co. is a verified member of the Alpha Partner Club. Its agent’s mandate covers this purchase.</p>
       </div>
     </li>
     <li class="slack-message slack-seller" data-demo-step="3">
@@ -80,7 +82,7 @@ const AUDIT_DEMO_HTML = `<section class="slack-window" id="demo" aria-label="Fer
           <p>fernhollow/relaykit · v0.4.2</p>
           <p class="slack-muted">Report due within 48 hours.</p>
         </div>
-        <p class="slack-follow-up">The scope and deadline match our quote. I’ll start the audit.</p>
+        <p class="slack-follow-up">Our rule: verified members go ahead. Anyone else waits for approval from a person at Alpha Security. The scope and deadline match our quote. I’ll start the audit.</p>
       </div>
     </li>
     <li class="slack-message slack-seller" data-demo-step="4">
@@ -191,7 +193,7 @@ export const AUDIT_DEMO_JS = String.raw`(() => {
     { draft: { lead, tagged: true, tail, ready: true }, delay: 420 },
   ];
   const messageTiming = [
-    1400, 2200, 1950, 3200, 2150, 1500, 2400,
+    1400, 2200, 3800, 4200, 2150, 1500, 2400,
     2500, 2250, 1700, 2050, 1500, 2050, 5100,
   ];
   const frames = [...openingFrames, ...messageTiming.map((delay, step) => ({ delay, step }))];
