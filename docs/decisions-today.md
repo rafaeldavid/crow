@@ -1767,3 +1767,23 @@ The build is not started; it opens as its own task on Rafa's word.
 **Dropped:** a signed flag from the decider; a bare hash-locked content key, which would publish the work; a zero-knowledge proof checked on chain; the commitment as a top-level delivery field; the in-place amendment in the same version; and a release in two amounts, which the row does not ask for and no deal has asked for (research note section 13).
 
 **Litmus tests.** Neutrality: holds; the verifier is built-in code in every decider, the contract's check is a hash comparison, and six fixtures show a deal under the rule ending by its terms when the primary, both first deciders, every operator, the seller or the buyer is gone, or an adjudicator lacks the kind. The hold: no stage or timeout changes, and nothing new is stored. Defended judgment: strengthened; the key check is one more deterministic check before the panel, and a decider's wrong seal can no longer pay the seller.
+
+## D93. The match budget counts every engine step (T-599)
+
+**Status:** adopted, 2026-11-25.
+
+**Who decided.** The session for T-599, under the in-repository autonomy rule. Rafa may overrule any line.
+
+**Why.** The match budget bounds the work of a delivery's checks by a count, 50,000,000 units (`CHECK_BUDGET`). It charged each code point and each state in the current set, but not the empty moves the engine follows between code points. On some accepted patterns one unit stood for much more work than on ordinary ones, so a delivery could take far longer to judge than the budget implies (T-593, Handoff; measured in the task).
+
+**Decided:**
+
+- **Count the empty moves.** Each split state the engine visits costs one unit, beside the existing charges. The engine keeps one set of visit marks for every pattern, so a call allocates nothing of the pattern's size and a compiled pattern holds no marks of its own.
+- **A count, not a timer,** so the primary and the fallback adjudicator on one build reach the same result.
+- **Effect** (measured): no check result changes on the 1,288 patterns and every delivery the tests and snapshots use; the largest conclusive run spends 2.4% of the budget. The heaviest shapes measured now cost about as much per unit as an ordinary pattern.
+- **Cost.** A check whose pattern takes many empty moves, near the budget, may now run out and escalate where it passed or failed before. No shipped template or fixture is near that line.
+- **Version.** The checks are not a kept version (`packages/judgment/src/kept/`), so the budget's accounting belongs to the build. The primary and the fallback adjudicator deploy from one build, as for T-593.
+
+**Dropped:** a compile-time bound on how deep optional groups nest, alone or with counting. It refuses before signing, but it would refuse patterns the tests use and still miss shapes that cost as much without nesting (measured). A larger or smaller budget: the size is not the defect.
+
+**Litmus tests.** Neutrality: unchanged. The hold: unchanged. Defended judgment: strengthened; stage 1's work bound now holds for every pattern a party can write.
