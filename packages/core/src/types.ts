@@ -1,6 +1,8 @@
-// Hand-written types for spec/schemas v0.12 (signed encoding 0.8: the EIP-712 domain version in eip712.ts; ADR-0023,
+// Hand-written types for spec/schemas v0.13 (signed encoding 0.8: the EIP-712 domain version in eip712.ts; ADR-0023,
 // ADR-0024, ADR-0029, ADR-0033). Values reach these types only through the parsers in parse.ts, which validate against the
 // schema files. Phase 1 narrows the commitment to guaranteed_on_decision and maxSubmissions = 1 (ADR-0007).
+// One gap: DeterministicCheck lacks v0.13's `signature_valid` (ADR-0045). Its type arrives with its evaluator, because
+// stage 1's registry must name every kind in the union. Until then stage 1 reads it as unknown and fails it.
 import type { TokenAmount } from './money/index.js';
 
 export type { TokenAmount } from './money/index.js';
@@ -593,6 +595,8 @@ export interface AdjudicatorRegistration {
   policy: AdjudicatorPolicy;
   registry: { hash: Hex32; uri: string };
   policyHash: Hex32;
+  /** ADR-0045 §8: the check kinds this adjudicator runs, outside policyHash. Absent: the nine kinds of schema v0.12. */
+  checkKinds?: string[];
   fee: { min: TokenAmount };
   pool: AdjudicatorPool;
   poolTermsHash: Hex32;

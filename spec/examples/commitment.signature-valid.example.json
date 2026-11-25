@@ -1,0 +1,134 @@
+{
+  "schemaVersion": "0.8",
+  "id": "0x513fc6b56ac66da7506d2705202bbad4a5d35b47d42e1360727f97f3d42fb489",
+  "clubId": "data-services-v1",
+  "rulebookHash": "0xd9bc9c4961c67a80c4a1100bc5cb3345a70881b42725f7f84611d6a240f5492d",
+  "buyer": "0x04d6c65223896ba94e731bc9eb765c19bd289b0d",
+  "seller": "0x9ff412388f11e58327e71f841705dbc739c8cc46",
+  "buyerPaymentAddress": "0x04d6c65223896ba94e731bc9eb765c19bd289b0d",
+  "sellerPayoutAddress": "0x9ff412388f11e58327e71f841705dbc739c8cc46",
+  "deliverable": {
+    "kind": "dataset",
+    "description": "One recorded robot episode, delivered as one JSON document. `manifest` is the episode's manifest as an object. `manifest_text` is the exact text the recorder signed, and `manifest_sig` is its ECDSA P-256 signature over those bytes, in DER and base64. `pubkey_pem` is the recorder's public key. `receipt_b64` is the export station's receipt, `receipt_sig` is its Ed25519 signature over the decoded receipt, and `receipt_key` is the station's public key.",
+    "format": "application/json"
+  },
+  "acceptance": {
+    "deterministicChecks": [
+      {
+        "id": "order",
+        "type": "json_schema",
+        "required": true,
+        "schema": {
+          "type": "object",
+          "required": [
+            "manifest"
+          ],
+          "properties": {
+            "manifest": {
+              "type": "object",
+              "required": [
+                "buyer_nonce",
+                "status"
+              ],
+              "properties": {
+                "buyer_nonce": {
+                  "const": "order-7c1e4b9a"
+                },
+                "status": {
+                  "const": "complete"
+                }
+              }
+            }
+          }
+        }
+      },
+      {
+        "id": "manifest-signature",
+        "type": "signature_valid",
+        "required": true,
+        "alg": "ecdsa-p256-sha256",
+        "publicKey": {
+          "pointer": "/pubkey_pem",
+          "format": "spki-pem",
+          "spkiSha256": "sha256:63f498174c2952c0de5fcc070e642e39482848a7ea166feee4e15b799bffb802"
+        },
+        "message": {
+          "pointer": "/manifest_text",
+          "encoding": "utf8",
+          "jsonEquals": "/manifest"
+        },
+        "signature": {
+          "pointer": "/manifest_sig",
+          "encoding": "base64",
+          "format": "der"
+        }
+      },
+      {
+        "id": "receipt-signature",
+        "type": "signature_valid",
+        "required": true,
+        "alg": "ed25519",
+        "publicKey": {
+          "pointer": "/receipt_key",
+          "format": "spki-base64",
+          "spkiSha256": "sha256:75f92d998db1f51758ff3ab95f817a354d304df3b8b9239494ec2c5b0316aad2"
+        },
+        "message": {
+          "pointer": "/receipt_b64",
+          "encoding": "base64"
+        },
+        "signature": {
+          "pointer": "/receipt_sig",
+          "encoding": "base64",
+          "format": "raw"
+        }
+      }
+    ],
+    "rubric": {
+      "criteria": [],
+      "passThreshold": 0
+    }
+  },
+  "price": {
+    "token": "tUSD",
+    "amount": "1500000000"
+  },
+  "adjudication": {
+    "adjudicator": "0x5d10fecab9242e66cb134b77309a3566ed75e3dd",
+    "fallbackAdjudicator": "0xf9e6283d068ff7016653ab6d36a7fab0294f4b8a",
+    "appealAdjudicator": "0xc372bd536a0f63fe9fde6bca1db179ce93612520",
+    "policyId": "bench-a/p1",
+    "fee": {
+      "token": "tUSD",
+      "amount": "50000000"
+    },
+    "registryHash": "0x8aa41fa98b874dca122885418370c665a9ec04911d03dc7a877ccd2772274549",
+    "policyHash": "0x8cb8dea5cd6984958b3453d2e79ed3b72c41f6d110f7351b3c1f2c025ccfea79"
+  },
+  "timing": {
+    "offerExpiresAt": "2026-11-11T10:15:00Z",
+    "fundBy": "2026-11-11T10:30:00Z",
+    "deliverBy": "2026-11-18T10:00:00Z",
+    "judgeBy": "2026-11-18T10:02:00Z",
+    "fallbackBy": "2026-11-18T10:04:00Z",
+    "appealWindowSec": 0,
+    "appealDecideSec": 300,
+    "maxSubmissions": 1
+  },
+  "settlement": {
+    "mode": "guaranteed_on_decision",
+    "token": "tUSD"
+  },
+  "remedy": {
+    "onReject": "full_refund"
+  },
+  "disclosure": {
+    "level": "public"
+  },
+  "buyerEncryptionPublicKey": "AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA",
+  "nonce": "0x6ad97e914d9492d78e4afde362d5fa018b14fb25512cf0b9d55e6fb89012c38d",
+  "createdAt": "2026-11-11T10:00:00Z",
+  "signatures": {
+    "seller": "0xababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababab"
+  }
+}

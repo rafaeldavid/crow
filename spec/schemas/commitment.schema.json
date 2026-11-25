@@ -1,6 +1,6 @@
 {
   "$schema": "https://json-schema.org/draft/2020-12/schema",
-  "$id": "https://holdback.dev/schemas/v0.12/commitment.schema.json",
+  "$id": "https://holdback.dev/schemas/v0.13/commitment.schema.json",
   "title": "Commitment (terms + EIP-712 signatures)",
   "type": "object",
   "required": [
@@ -737,8 +737,149 @@
               }
             }
           }
+        },
+        {
+          "type": "object",
+          "additionalProperties": false,
+          "required": [
+            "id",
+            "type",
+            "required",
+            "alg",
+            "publicKey",
+            "message",
+            "signature"
+          ],
+          "description": "Passes when the exact bytes at message.pointer in a JSON delivery carry a valid signature by the key whose fingerprint is publicKey.spkiSha256 (ADR-0045). It proves that the key's holder signed those bytes, and nothing more. It canonicalizes nothing, and every parameter is a string.",
+          "properties": {
+            "id": {
+              "type": "string",
+              "pattern": "^[a-z0-9_-]{1,40}$"
+            },
+            "required": {
+              "type": "boolean"
+            },
+            "type": {
+              "const": "signature_valid"
+            },
+            "alg": {
+              "enum": [
+                "ecdsa-p256-sha256",
+                "ed25519"
+              ],
+              "description": "A closed list: ECDSA on P-256 with SHA-256, or Ed25519 (RFC 8032, no prehash, no context)"
+            },
+            "publicKey": {
+              "type": "object",
+              "additionalProperties": false,
+              "required": [
+                "pointer",
+                "format",
+                "spkiSha256"
+              ],
+              "properties": {
+                "pointer": {
+                  "$ref": "#/$defs/JsonPointer",
+                  "description": "Where the delivery holds the key: a string of at most 1,024 characters"
+                },
+                "format": {
+                  "enum": [
+                    "spki-pem",
+                    "spki-base64"
+                  ],
+                  "description": "The DER SubjectPublicKeyInfo, as a PEM block labelled PUBLIC KEY or as plain base64"
+                },
+                "spkiSha256": {
+                  "$ref": "common.schema.json#/$defs/Sha256",
+                  "description": "The pinned fingerprint: SHA-256 of the key's DER SubjectPublicKeyInfo"
+                }
+              }
+            },
+            "message": {
+              "type": "object",
+              "additionalProperties": false,
+              "required": [
+                "pointer",
+                "encoding"
+              ],
+              "properties": {
+                "pointer": {
+                  "$ref": "#/$defs/JsonPointer",
+                  "description": "Where the delivery holds the signed bytes, as a string"
+                },
+                "encoding": {
+                  "enum": [
+                    "utf8",
+                    "base64"
+                  ],
+                  "description": "utf8: the signed bytes are the UTF-8 encoding of the string. base64: they are the decoded string."
+                },
+                "jsonEquals": {
+                  "$ref": "#/$defs/JsonPointer",
+                  "description": "The signed bytes must parse as JSON to a value equal to the value at this pointer"
+                }
+              }
+            },
+            "signature": {
+              "type": "object",
+              "additionalProperties": false,
+              "required": [
+                "pointer",
+                "encoding",
+                "format"
+              ],
+              "properties": {
+                "pointer": {
+                  "$ref": "#/$defs/JsonPointer",
+                  "description": "Where the delivery holds the signature: a string of at most 256 characters"
+                },
+                "encoding": {
+                  "const": "base64",
+                  "description": "Standard alphabet with padding (RFC 4648, section 4)"
+                },
+                "format": {
+                  "enum": [
+                    "der",
+                    "raw"
+                  ],
+                  "description": "ECDSA: der, or raw (r then s, 64 bytes). Ed25519: raw only, 64 bytes."
+                }
+              }
+            }
+          },
+          "if": {
+            "type": "object",
+            "required": [
+              "alg"
+            ],
+            "properties": {
+              "alg": {
+                "const": "ed25519"
+              }
+            }
+          },
+          "then": {
+            "type": "object",
+            "properties": {
+              "signature": {
+                "type": "object",
+                "properties": {
+                  "format": {
+                    "const": "raw"
+                  }
+                }
+              }
+            }
+          }
         }
       ]
+    },
+    "JsonPointer": {
+      "type": "string",
+      "maxLength": 512,
+      "pattern": "^(/([^/~]|~[01])*)*$",
+      "x-holdback-untrusted": true,
+      "description": "An RFC 6901 JSON pointer into the delivered JSON document"
     },
     "Criterion": {
       "type": "object",
