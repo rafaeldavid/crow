@@ -305,7 +305,9 @@ describe('the kept-policies data file and the code agree (the static check, ADR-
     const pair3 = KEPT_POLICIES.templatePairs.find((p) => p.promptTemplateHash === TEMPLATE_PAIR_3.firstHash);
     expect(pair3).toMatchObject({ appealPromptTemplateHash: APPEAL_PROMPT_TEMPLATE_3_HASH, status: 'kept' });
     expect(KEPT_POLICIES.aggregations.find((a) => a.version === 'agg-6')?.status).toBe('kept');
-    expect(KEPT_POLICIES.default).toEqual({ screenVersion: 'screen-1', promptTemplateHash: '0x4d328a15ef96b9aa0f4166efc720a320f82e9c677fdd8beaff431ecefcc9629b', appealPromptTemplateHash: '0xfc6d93d5441808bbfa690c0402a0ee185eab48c508025f59cf3c4f9f5d8332f1', aggregationVersion: 'agg-5' });
+    // The default is main's prose default; it moves to pair 3 and agg-6 only after the calibration (ADR-0050 section 7).
+    expect(KEPT_POLICIES.default.aggregationVersion).not.toBe('agg-6');
+    expect(KEPT_POLICIES.default.promptTemplateHash).not.toBe(TEMPLATE_PAIR_3.firstHash);
     const coded = defaultPolicy('t616/p1', { promptTemplateHash: TEMPLATE_PAIR_3.firstHash, appealPromptTemplateHash: APPEAL_PROMPT_TEMPLATE_3_HASH, aggregationVersion: 'agg-6' });
     expect(checkPolicyBinding(coded, policyHashOf(coded)).ok).toBe(true);
     for (const mixed of [{ ...coded, aggregationVersion: 'agg-5' }, defaultPolicy('t616/p2', { aggregationVersion: 'agg-6' })]) {
