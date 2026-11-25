@@ -22,11 +22,8 @@ export const FLOOD_CEILING = { limit: 500, periodSec: 10 } as const;
 /** The daily caps' defaults: deals the relayer funds, and new ciphertext bytes stored, per client and operator a UTC day. */
 export const DEFAULT_DAILY_CAPS = { fundedDeals: 100, ciphertextBytes: 268_435_456, fundedDealsAll: 200 } as const;
 
-/**
- * T-581: judged deals Crow's adjudicators accept per buyer address a UTC day, by default. 3, so `pnpm demo:sepolia` plays
- * its three judged beats from one buyer (Rafa, 2026-11-24).
- */
-export const DEFAULT_JUDGED_DEALS_PER_BUYER = 3;
+/** T-581: judged deals Crow's adjudicators take per seller and buyer pair a UTC day, by default (Rafa, 2026-11-24: 3). */
+export const DEFAULT_JUDGED_DEALS_PER_PAIR = 3;
 
 /** The operator's read and write throttle's defaults, per 60 s (ADR-0017 §3). */
 export const DEFAULT_RATE = { reads: 1200, writes: 120 } as const;
@@ -173,6 +170,11 @@ export class DailyCaps {
     if (!row) {
       row = this.storage.get<CapRow>(key).then((r) => r ?? { funded: 0, seen: [], bytes: 0 });
       this.rows.set(key, row);
+      // A failed read is not kept: the next request reads again (Opus red team of 2026-11-25, L4).
+      const read = row;
+      read.catch(() => {
+        if (this.rows.get(key) === read) this.rows.delete(key);
+      });
     }
     return { key, row: await row };
   }
@@ -246,13 +248,22 @@ export class DailyCaps {
 }
 
 /**
- * T-581: the judged deals Crow's adjudicators accept per buyer address and UTC day (Rafa, 2026-11-24: one limit, at
- * acceptance, however the offer reached the settlement layer). One row per buyer and day, `ja:<YYYY-MM-DD>:<buyer hash>`,
- * holding the commitment IDs counted, so a pass that accepts the same offer again counts it once. The buyer is hashed
- * with the world's secret. Takes run one at a time, so concurrent acceptances cannot pass the limit together. The first
- * take of a new day deletes the rows of the days before it. An adjudicator's own choice of deals (D29), not a protocol rule.
+ * T-581: the judged deals Crow's adjudicators take per seller and buyer pair and UTC day: as primary at acceptance, or as
+ * fallback or appeal when an outside primary leaves Crow a panel to convene. Counted per pair, not per buyer, because
+ * the seller alone signs an offer: a stranger's offers naming a buyer spend the stranger's own count, never an honest
+ * seller's count with that buyer (Opus red team of 2026-11-25, H1). One row per pair and day,
+ * `ja:<YYYY-MM-DD>:<pair hash>`, holding the commitment IDs counted, so a deal is counted once whatever role or pass
+ * takes it. The addresses are hashed with the world's secret. Takes run one at a time, so concurrent passes cannot pass
+ * the limit together. The first take of a new day deletes the rows of the days before it. An adjudicator's own choice of
+ * deals (D29), not a protocol rule.
  */
-export class BuyerJudgedDeals {
+/** A deal's two parties, from its signed terms. */
+export interface Pair {
+  seller: string;
+  buyer: string;
+}
+
+export class JudgedDealsPerPair {
   private queue: Promise<unknown> = Promise.resolve();
   private day = '';
 
@@ -263,8 +274,8 @@ export class BuyerJudgedDeals {
     readonly perDay: number,
   ) {}
 
-  private keyOf(day: string, buyer: string): string {
-    return `ja:${day}:${canonicalKeccak({ judgedBuyer: buyer.toLowerCase(), secret: this.secret }).slice(2, 34)}`;
+  private keyOf(day: string, pair: Pair): string {
+    return `ja:${day}:${canonicalKeccak({ judgedSeller: pair.seller.toLowerCase(), judgedBuyer: pair.buyer.toLowerCase(), secret: this.secret }).slice(2, 34)}`;
   }
 
   private serial<T>(f: () => Promise<T>): Promise<T> {
@@ -273,29 +284,29 @@ export class BuyerJudgedDeals {
     return step;
   }
 
-  private async ids(buyer: string): Promise<{ key: string; ids: string[] }> {
+  private async ids(pair: Pair): Promise<{ key: string; ids: string[] }> {
     const today = dayOf(this.now());
     if (today !== this.day) {
       this.day = today;
       const old = [...(await this.storage.list({ prefix: 'ja:', end: `ja:${today}` })).keys()];
       for (let i = 0; i < old.length; i += 128) await this.storage.delete(old.slice(i, i + 128));
     }
-    const key = this.keyOf(today, buyer);
+    const key = this.keyOf(today, pair);
     return { key, ids: (await this.storage.get<string[]>(key)) ?? [] };
   }
 
-  /** Whether one more judged deal for `buyer` fits today, counting nothing: true when `id` is already counted. */
-  check(buyer: string, id: string): Promise<boolean> {
+  /** Whether one more judged deal for the pair fits today, counting nothing: true when `id` is already counted. */
+  check(pair: Pair, id: string): Promise<boolean> {
     return this.serial(async () => {
-      const { ids } = await this.ids(buyer);
+      const { ids } = await this.ids(pair);
       return ids.includes(id) || ids.length < this.perDay;
     });
   }
 
-  /** Counts `id` for `buyer` today, unless the day's limit is reached; an `id` already counted takes nothing more. */
-  take(buyer: string, id: string): Promise<boolean> {
+  /** Counts `id` for the pair today, unless the day's limit is reached; an `id` already counted takes nothing more. */
+  take(pair: Pair, id: string): Promise<boolean> {
     return this.serial(async () => {
-      const { key, ids } = await this.ids(buyer);
+      const { key, ids } = await this.ids(pair);
       if (ids.includes(id)) return true;
       if (ids.length >= this.perDay) return false;
       await this.storage.put({ [key]: [...ids, id] });
@@ -304,9 +315,9 @@ export class BuyerJudgedDeals {
   }
 
   /** Returns the count of an acceptance that was not submitted. */
-  giveBack(buyer: string, id: string): Promise<void> {
+  giveBack(pair: Pair, id: string): Promise<void> {
     return this.serial(async () => {
-      const { key, ids } = await this.ids(buyer);
+      const { key, ids } = await this.ids(pair);
       if (ids.includes(id)) await this.storage.put({ [key]: ids.filter((x) => x !== id) });
     });
   }

@@ -70,7 +70,7 @@ import type { TimeoutKind } from '@holdback/settlement';
 import { mandateFor, SIM_CHAIN_ID, SIM_RULEBOOK, simClub, SimChain, TOKEN, wideScope, type Genesis, type JournalEntry } from '@holdback/settlement/sim';
 import { panelConfig, type JudgeProvider, type PanelConfig } from './judges.js';
 import { StorageLanes } from './lanes.js';
-import { BuyerJudgedDeals, capOf, DailyCaps, DEFAULT_JUDGED_DEALS_PER_BUYER, secondsToUtcMidnight, MAX_BODY_BYTES, routedUrl, DEFAULT_DAILY_CAPS, DEFAULT_RATE, FLOOD_CEILING, problemResponse, wholeNumberVar } from './limits.js';
+import { JudgedDealsPerPair, capOf, DailyCaps, DEFAULT_JUDGED_DEALS_PER_PAIR, secondsToUtcMidnight, MAX_BODY_BYTES, routedUrl, DEFAULT_DAILY_CAPS, DEFAULT_RATE, FLOOD_CEILING, problemResponse, wholeNumberVar } from './limits.js';
 import type { WorldStorage } from './storage.js';
 import { dealFacts, Telemetry, type DayFacts, type TelemetryOptions } from './telemetry.js';
 
@@ -99,8 +99,8 @@ export interface PublicWorldOptions {
   fundedDealsPerClientPerDay?: number;
   /** T-422: new ciphertext bytes stored per client per UTC day, at each node. Default CIPHERTEXT_BYTES_PER_CLIENT_PER_DAY from `env`, else 256 MiB. */
   ciphertextBytesPerClientPerDay?: number;
-  /** T-581: judged deals Crow's adjudicators accept per buyer address per UTC day, while live. Default JUDGED_DEALS_PER_BUYER_PER_DAY from `env`, else 3. */
-  judgedDealsPerBuyerPerDay?: number;
+  /** T-581: judged deals Crow's adjudicators take per seller and buyer pair per UTC day, while live. Default JUDGED_DEALS_PER_PAIR_PER_DAY from `env`, else 3. */
+  judgedDealsPerPairPerDay?: number;
   /** T-581: deals the relayer funds per UTC day across all clients and both nodes. Default FUNDED_DEALS_PER_DAY from `env`, else 200. */
   fundedDealsPerDay?: number;
   /**
@@ -198,6 +198,39 @@ export async function judgedDealGate(panel: Pick<PanelConfig, 'live' | 'resumesA
   if (panel.budget.perDay < need) return problem('adjudicator_unavailable', `judge_budget_spent: this demo's live judge budget (${panel.budget.perDay} calls a day) cannot hold a panel of ${need / 2} seats on any day, so Crow's adjudicators accept no deal that can need one; ${offer}`);
   if ((await panel.budget.remaining()) - reserved >= need) return null;
   return problem('adjudicator_unavailable', `judge_budget_spent: this demo's live judge budget for today (${panel.budget.perDay} calls, UTC day) cannot hold another panel beside the judged deals already funded, so Crow's adjudicators accept no new deal that can need one; retry after ${panel.resumesAt()}, or ${offer}`);
+}
+
+type JudgedTerms = { id: string; buyer: string; seller: string; adjudication: { adjudicator: string } } & Parameters<typeof needsPanel>[0];
+
+/**
+ * T-581: the hooks behind the judged-deal limit per seller and buyer pair. `acceptLimit` counts when Crow accepts as
+ * primary (AdjudicatorConfig.acceptLimit). `turnLimit` counts a fallback or appeal turn of a deal whose primary is not one
+ * of Crow's adjudicators, before its panel is convened (Opus red team of 2026-11-25, M2): over the limit, the panel is not
+ * convened and the deal's own deadlines decide (D29). A deal is counted once, by its ID, whatever role takes it. Both
+ * count only while live judges run (`live`), since only they spend the budget.
+ */
+export function judgedDealLimits(o: { perPair: JudgedDealsPerPair; live: () => boolean; ours: () => ReadonlySet<string>; now: () => number }) {
+  const counts = (c: Parameters<typeof needsPanel>[0]) => o.live() && needsPanel(c);
+  const over = (when: 'accept' | 'panel') => {
+    const n = o.perPair.perDay;
+    const limit = `Crow's adjudicators take at most ${n} deal${n === 1 ? '' : 's'} a UTC day that can need a judge panel (a rubric, or an optional check) between one seller and one buyer, and this pair has reached it`;
+    const at = new Date(o.now() + secondsToUtcMidnight(o.now()) * 1000).toISOString();
+    return problem('adjudicator_unavailable', when === 'accept'
+      ? `judged_deals_per_pair: ${limit}. Nothing is held: the offer stays unaccepted and expires by its terms. Retry after ${at}, offer a deal decided by required checks alone, or name another adjudicator`
+      : `judged_deals_per_pair: ${limit}, so this panel is not convened and nothing is decided; the turn is tried again on each pass until its deadline, and if no panel runs by then the deal ends by its terms (its default outcome); retry after ${at}`);
+  };
+  return {
+    acceptLimit: {
+      check: async (c: JudgedTerms) => (counts(c) && !(await o.perPair.check(c, c.id)) ? over('accept') : null),
+      take: async (c: JudgedTerms) => (counts(c) && !(await o.perPair.take(c, c.id)) ? over('accept') : null),
+      giveBack: async (c: JudgedTerms) => (counts(c) ? o.perPair.giveBack(c, c.id) : undefined),
+    },
+    turnLimit: async (task: { role: string; commitment: JudgedTerms }): Promise<Problem | null> => {
+      if (task.role === 'primary' || !counts(task.commitment)) return null;
+      if (o.ours().has(lc(task.commitment.adjudication.adjudicator))) return null; // counted when Crow accepted
+      return (await o.perPair.take(task.commitment, task.commitment.id)) ? null : over('panel');
+    },
+  };
 }
 
 /**
@@ -883,20 +916,13 @@ export class PublicWorld {
       ciphertextBytes: o.ciphertextBytesPerClientPerDay ?? wholeNumberVar(o.env, 'CIPHERTEXT_BYTES_PER_CLIENT_PER_DAY', DEFAULT_DAILY_CAPS.ciphertextBytes),
       fundedDealsAll: o.fundedDealsPerDay ?? wholeNumberVar(o.env, 'FUNDED_DEALS_PER_DAY', DEFAULT_DAILY_CAPS.fundedDealsAll),
     };
-    // T-581 (Rafa, 2026-11-24): the judged deals Crow's adjudicators accept per buyer address a UTC day, counted at
-    // acceptance, so it holds however the offer reached the settlement layer; while live judges run, since only they
-    // spend the budget. One count for all three of Crow's adjudicators.
-    const judgedPerBuyer = new BuyerJudgedDeals(storage, now, secret, o.judgedDealsPerBuyerPerDay ?? wholeNumberVar(o.env, 'JUDGED_DEALS_PER_BUYER_PER_DAY', DEFAULT_JUDGED_DEALS_PER_BUYER));
-    const judgedCounts = (c: Parameters<typeof needsPanel>[0]) => panel.live && needsPanel(c);
-    const overJudged = () => {
-      const n = judgedPerBuyer.perDay;
-      return problem('adjudicator_unavailable', `judged_deals_per_buyer: Crow's adjudicators accept at most ${n} deal${n === 1 ? '' : 's'} a UTC day per buyer address that can need a judge panel (a rubric, or an optional check), and this buyer has reached it. Nothing is held: the offer stays unaccepted and expires by its terms. Retry after ${new Date(now() + secondsToUtcMidnight(now()) * 1000).toISOString()}, offer a deal decided by required checks alone, or name another adjudicator`);
-    };
-    const acceptLimit = {
-      check: async (c: { id: string; buyer: string } & Parameters<typeof needsPanel>[0]) => (judgedCounts(c) && !(await judgedPerBuyer.check(c.buyer, c.id)) ? overJudged() : null),
-      take: async (c: { id: string; buyer: string } & Parameters<typeof needsPanel>[0]) => (judgedCounts(c) && !(await judgedPerBuyer.take(c.buyer, c.id)) ? overJudged() : null),
-      giveBack: async (c: { id: string; buyer: string } & Parameters<typeof needsPanel>[0]) => (judgedCounts(c) ? judgedPerBuyer.giveBack(c.buyer, c.id) : undefined),
-    };
+    // T-581 (Rafa, 2026-11-24): the judged deals Crow's adjudicators take per seller and buyer pair a UTC day, counted
+    // when Crow accepts as primary, or when an outside primary leaves Crow a fallback or appeal panel to convene, so it
+    // holds however the deal reached the settlement layer; while live judges run, since only they spend the budget. One
+    // count for all three of Crow's adjudicators (limits.ts, JudgedDealsPerPair).
+    const judgedPerPair = new JudgedDealsPerPair(storage, now, secret, o.judgedDealsPerPairPerDay ?? wholeNumberVar(o.env, 'JUDGED_DEALS_PER_PAIR_PER_DAY', DEFAULT_JUDGED_DEALS_PER_PAIR));
+    let ourAddresses: ReadonlySet<string> = new Set();
+    const { acceptLimit, turnLimit } = judgedDealLimits({ perPair: judgedPerPair, live: () => panel.live, ours: () => ourAddresses, now });
     // Each node's deploy time, as the Worker in front last said (T-413); null until it does.
     const deployedAt: Array<string | null> = [null, null];
     const demo = async (node: 0 | 1 = 0): Promise<WorldDemoFacts> => {
@@ -1043,7 +1069,7 @@ export class PublicWorld {
         // T-581: judged deals per buyer address a day, counted when the acceptance is signed.
         acceptLimit,
         // T-574: past the budget, an appeal panel is not convened, so it signs nothing (red team M1).
-        judgeGate: async (task, size) => appealPanelGate(panel, task, size),
+        judgeGate: async (task, size) => (await appealPanelGate(panel, task, size)) ?? (await turnLimit(task)),
         registry: panel.registry,
         registryUri: panel.registryUri,
         keptRegistries: panel.kept,
@@ -1097,6 +1123,7 @@ export class PublicWorld {
     telemetry.rows('ar', registrations.count());
     if (registrations.policiesKept() > 0) telemetry.rows('ph', registrations.policiesKept());
     const keys = [principal, key('demo-club-operator'), ...adjKeys.map((a) => a.keys), key('demo-operator-1'), key('demo-operator-2')];
+    ourAddresses = new Set(Object.values(adjudicators).map((x) => lc(x.address)));
     const world = new PublicWorld(o, telemetry, secret, chain, keys, operators, adjudicators, panel, declined, turnsDeclined, waiting, journalLength, publicUrls, live);
     reservedJudgeCalls = () => world.reservedJudgeCalls();
     world.caps = new DailyCaps(storage, now, secret, capLimits);
