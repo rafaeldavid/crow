@@ -43,8 +43,8 @@ import { encodeFunctionData, keccak256, stringToBytes, type Hex } from 'viem';
 import { privateKeyToAccount, sign as signDigest } from 'viem/accounts';
 import type { SimContext } from './context.js';
 import { loadClubFile, loadTermsFile, termsFromTemplate, type TermsTemplate } from './fixture-files.js';
-import type { AdjudicatorPolicy } from '@holdback/core';
-import { CHECK_TYPES, type LoadedRegistry, type PolicyVersions } from '@holdback/judgment';
+import type { AdjudicatorPolicy, Commitment } from '@holdback/core';
+import { CHECK_TYPES, holdUntil, type LoadedRegistry, type PolicyVersions } from '@holdback/judgment';
 import { buildDefaultVersions, keptRegistryFiles, loadJudgeRegistry, REGISTRY_FILE, runnerPolicy } from './judges-config.js';
 import { runJudgment, type JudgmentView } from './judgment.js';
 import type { Outage, StepProblem } from './prefix.js';
@@ -253,6 +253,8 @@ export class StubSettlement {
   private current = 1;
   /** One judgment per commitment|role|attempt: a panel is never re-rolled. */
   private readonly judged = new Map<string, JudgmentView>();
+  /** ADR-0051: the sim time each judgment was first made (the record's decidedAt), by commitment|role|attempt. */
+  private readonly judgedAt = new Map<string, Timestamp>();
   /** The same judgments keyed by commitment number, role and attempt, which do not depend on the backend. */
   private readonly judgedBySlot = new Map<string, JudgmentView>();
   /** Registries by file, loaded on first use. */
@@ -1068,6 +1070,24 @@ export class StubSettlement {
     const outcome = view.outcome;
     if (outcome === null) {
       return this.row(name, `${call}: none`, 'direct', 'no decision: the appeal panel was inconclusive, so the default outcome applies');
+    }
+    // ADR-0051: Crow's reference adjudicators hold a rubric deal's reject until the turn's window less the margin, from
+    // the time it was first judged, as apps/adjudicator does (holdUntil, in @holdback/judgment, is the one rule both run). Nothing is signed meanwhile.
+    if (!this.judgedAt.has(key)) this.judgedAt.set(key, this.ctx.clock.now());
+    const st = c.state;
+    const heldUntil = holdUntil(
+      {
+        commitment: c.terms as unknown as Commitment,
+        role,
+        deadline: this.decisionDeadline(st, role),
+        ...(role === 'appeal' && (st.kind === 'Released' || st.kind === 'Refunded') && st.via.kind === 'first_instance' ? { firstOutcome: st.kind === 'Released' ? ('accept' as const) : ('reject' as const) } : {}),
+      },
+      outcome,
+      this.judgedAt.get(key)!,
+    );
+    if (heldUntil && Date.parse(this.ctx.clock.now()) < Date.parse(heldUntil)) {
+      const moves = st.kind === 'Delivered' ? 'the buyer may accept, or both parties may settle' : 'both parties may settle';
+      return this.row(name, `${call}: ${outcome} held until ${heldUntil}`, 'direct', `held (ADR-0051): nothing signed; the deal stays ${st.kind}, and until then ${moves}`);
     }
     const envelope = (recipient: Address) => ({ scheme: 'x25519-xsalsa20poly1305' as const, ciphertext: b64url(canonicalKeccak({ contentKey: d.contentKey, recipient })) });
     // T-206 H-1: with wrong_attempt the adjudicator signs another attempt and, for a beacon role, that attempt's seed.

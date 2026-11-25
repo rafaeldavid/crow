@@ -66074,6 +66074,10 @@ const DEFAULTS = {
 		appealWindowSec: 0,
 		appealDecideSec: 300
 	},
+	rubricTiming: {
+		judgeWithinSec: 87e3,
+		appealDecideSec: 87e3
+	},
 	journal: "seller-adapter.journal.json",
 	pollMs: 5e3,
 	redelivery: { refetchEverySec: 600 }
@@ -66095,6 +66099,7 @@ const FILE_KEYS = [
 	"signingKey",
 	"events",
 	"timing",
+	"rubricTiming",
 	"journal",
 	"pollMs",
 	"quoteAuth",
@@ -66172,11 +66177,12 @@ function configFrom(f, file, files) {
 	};
 	const own = f.template !== void 0;
 	if (own && f.scope === void 0) throw new Error(`${file}: scope is required with your own template: the fields a buyer's scope must have`);
-	if (f.timing !== void 0) {
-		if (!isRecord$1(f.timing)) throw new Error(`${file}: timing must be an object of windows`);
-		for (const [k, v] of Object.entries(f.timing)) {
-			if (!WINDOWS.includes(k)) throw new Error(`${file}: timing has a window the offer does not take: ${plain$8(k).slice(0, 60)}`);
-			if (!wholeAtLeast(v, 0)) throw new Error(`${file}: timing.${k} must be a whole number of seconds, 0 or more`);
+	for (const field of ["timing", "rubricTiming"]) {
+		if (f[field] === void 0) continue;
+		if (!isRecord$1(f[field])) throw new Error(`${file}: ${field} must be an object of windows`);
+		for (const [k, v] of Object.entries(f[field])) {
+			if (!WINDOWS.includes(k)) throw new Error(`${file}: ${field} has a window the offer does not take: ${plain$8(k).slice(0, 60)}`);
+			if (!wholeAtLeast(v, 0)) throw new Error(`${file}: ${field}.${k} must be a whole number of seconds, 0 or more`);
 		}
 	}
 	if (f.port !== void 0 && !(wholeAtLeast(f.port, 0) && f.port <= 65535)) throw new Error(`${file}: port must be a whole number from 0 to 65535`);
@@ -66222,6 +66228,7 @@ function configFrom(f, file, files) {
 			...DEFAULTS.timing,
 			...f.timing ?? {}
 		},
+		rubricTiming: { ...f.rubricTiming ?? DEFAULTS.rubricTiming },
 		journal: f.journal ?? DEFAULTS.journal,
 		...f.events === void 0 ? {} : { events: f.events },
 		pollMs: f.pollMs ?? DEFAULTS.pollMs,
@@ -66456,6 +66463,8 @@ function holds(w, scope, options) {
 	if ("equals" in w) return v === w.equals;
 	return typeof v === "number" && (w.atLeast === void 0 || v >= w.atLeast) && (w.atMost === void 0 || v <= w.atMost);
 }
+/** True when a rubric has at least one criterion, so a panel scores the work (ADR-0051). */
+const hasCriteria = (rubric) => isRecord$1(rubric) && Array.isArray(rubric.criteria) && rubric.criteria.length > 0;
 /**
 * The offer's deliverable, checks, rubric and windows for one quote: the template and `timing`, your API's window,
 * then each rule whose conditions hold, in order. A refusing rule throws 400 naming its fields.
@@ -66464,15 +66473,13 @@ function termsFor(c, template, scope, options, deliverWithinSec) {
 	const filled = fill(template, scope);
 	let checks = filled.checks;
 	const deliverable = { ...filled.deliverable };
-	const timing = {
-		...c.timing,
-		...deliverWithinSec === void 0 ? {} : { deliverWithinSec }
-	};
+	const timing = { ...c.timing };
+	const ruled = {};
 	let rubric = filled.rubric;
 	for (const r of c.termsRules ?? []) {
 		if (!r.when.every((w) => holds(w, scope, options))) continue;
 		if (r.refuse !== void 0) throw new Refused$1(400, "invalid_request", `${r.when.map((w) => w.field).join(" and ")}: ${r.refuse}`);
-		Object.assign(timing, r.timing);
+		Object.assign(ruled, r.timing);
 		if (r.dropChecks) checks = checks.filter((k) => !r.dropChecks.includes(k.id));
 		for (const k of fill(r.checks ?? [], scope)) {
 			const at = checks.findIndex((x) => x.id === k.id);
@@ -66481,6 +66488,9 @@ function termsFor(c, template, scope, options, deliverWithinSec) {
 		if (r.describe) deliverable.description = `${deliverable.description} ${fill(r.describe, scope)}`;
 		if (r.rubric !== void 0) rubric = r.rubric ? filled.optionalRubric : void 0;
 	}
+	if (hasCriteria(rubric)) Object.assign(timing, c.rubricTiming ?? {});
+	if (deliverWithinSec !== void 0) timing.deliverWithinSec = deliverWithinSec;
+	Object.assign(timing, ruled);
 	return {
 		deliverable,
 		checks,
@@ -67051,7 +67061,11 @@ async function createSellerAdapter(c, env, io) {
 		checks: template.checks,
 		...template.rubric === void 0 ? {} : { rubric: template.rubric },
 		...template.optionalRubric === void 0 ? {} : { optionalRubric: template.optionalRubric },
-		timing: c.timing,
+		timing: hasCriteria(template.rubric) ? {
+			...c.timing,
+			...c.rubricTiming ?? {}
+		} : c.timing,
+		...c.rubricTiming && Object.keys(c.rubricTiming).length ? { rubricTiming: c.rubricTiming } : {},
 		...template.fee === void 0 ? {} : { fee: template.fee },
 		scope: c.scope,
 		options: c.options ?? {}
@@ -71570,7 +71584,7 @@ async function run(c, state, offerId, given) {
 }
 
 // examples/seller-worker-pin.ts
-const SELLER_WORKER_SHA256 = "1b163543fa40da700734d0dcc7c2c3bf3778ea44987a3c460dd2dca7dabaa847";
+const SELLER_WORKER_SHA256 = "d409200baa800f122916482587db640fb086a575700c01437ed9fe2f215be2e1";
 
 // examples/setup-cloudflare.ts
 const plain$2 = (s, max = 300) => plain$8(String(s ?? "")).slice(0, max);
@@ -71934,7 +71948,7 @@ async function workerBytes(c) {
 		if (bytes.length > MAX_WORKER_BYTES) throw new Error(`${SELLER_WORKER_URL} is over ${MAX_WORKER_BYTES} bytes`);
 	}
 	const sha = createHash("sha256").update(bytes).digest("hex");
-	if (sha !== "1b163543fa40da700734d0dcc7c2c3bf3778ea44987a3c460dd2dca7dabaa847") throw new Error(`the Worker file's SHA-256 is ${sha}, not ${SELLER_WORKER_SHA256}, the one this setup.mjs carries: it is not the Worker this version writes`);
+	if (sha !== "d409200baa800f122916482587db640fb086a575700c01437ed9fe2f215be2e1") throw new Error(`the Worker file's SHA-256 is ${sha}, not ${SELLER_WORKER_SHA256}, the one this setup.mjs carries: it is not the Worker this version writes`);
 	return bytes;
 }
 /** The card's quote entry in the card's folder: other offers kept, the draft's marks dropped. */

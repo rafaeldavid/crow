@@ -174,7 +174,7 @@ describe('seller adapter: terms set per quote', () => {
     writeFileSync(file, JSON.stringify(own));
     const { running } = await adapter({ template: file });
     const published = await (await fetch(`${running.url}/defaults`)).json();
-    expect(published).toEqual({ version: 1, deliverable: own.deliverable, checks: own.checks, optionalRubric: own.optionalRubric, timing: shipped.timing, fee, scope: shipped.scope, options: RULES.options });
+    expect(published).toEqual({ version: 1, deliverable: own.deliverable, checks: own.checks, optionalRubric: own.optionalRubric, timing: shipped.timing, rubricTiming: { judgeWithinSec: 87_000, appealDecideSec: 87_000 }, fee, scope: shipped.scope, options: RULES.options });
     const q = await quoteFor(running, reader, SMALL);
     expect(q.status, JSON.stringify(q.body)).toBe(200);
     expect(q.body.fees.adjudication).toEqual(fee);

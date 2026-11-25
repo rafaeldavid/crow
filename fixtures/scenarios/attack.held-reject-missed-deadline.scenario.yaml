@@ -1,0 +1,38 @@
+# @settlement sim @judges recorded @mode guaranteed_on_decision @seed 608
+name: attack.held-reject-missed-deadline
+description: >-
+  ADR-0051 (T-619). Bench A holds its reject and is down at the hold's end, until past judgeBy, so the held
+  reject never lands. The turn passes to the fallback, as for any silent primary: from judgeBy anyone
+  triggers it, and Bench B judges the delivery again and signs at once. The cost of a missed held reject is
+  a second judgment (on a panel deal, a second panel), within the bound the terms set: fallbackBy.
+club: fixtures/clubs/data-services-v1.yaml
+terms: fixtures/terms/clean-customers-2000-held.yaml
+parties:
+  buyer: atlas-buyer
+  seller: tidewater-seller
+adjudicators:
+  primary: bench-a
+  fallback: bench-b
+  appeal: bench-c
+operators: [op-1, op-2]
+faucet:
+  atlas-buyer: "10000000000"
+  bench-a: "25000000000"
+  bench-b: "25000000000"
+  bench-c: "25000000000"
+steps:
+  - offer:              { by: seller, via: op-1 }
+  - adjudicator_accept: { via: op-1 }
+  - agree_and_fund:     { by: buyer, via: op-1 }
+  - deliver:            { by: seller, via: op-1, file: data/dataset-cleaning/customers.clean.row-drop.csv }
+  - advance_clock:      { seconds: 5 }
+  - judge:              { adjudicator: bench-a }
+  - advance_clock:      { seconds: 86395 }
+  - offline:            { actor: bench-a }
+  - advance_clock:      { seconds: 173400 }           # past judgeBy
+  - judge:              { adjudicator: bench-a }
+  - trigger_fallback:   { via: op-1 }
+  - judge:              { adjudicator: bench-b }
+  - settle:             { trigger: anyone }
+expect:
+  terminal: Refunded
