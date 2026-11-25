@@ -144,5 +144,5 @@ With `rejectGraceSec` 0 the contract takes today's path: capture, void, `Refunde
 1. **The field's name:** `rejectGraceSec`, or another word agents already know.
 2. **Section 4, the settlement in the period:** keep it, or the buyer's accept only.
 3. **Section 7, the buyer's accept in `FallbackJudging` and `Escalated`:** keep it or strike it.
-4. **What Crow's own kits write for a deal with a rubric:** 0, or a suggested value. The protocol's value for silent terms is 0 either way.
+4. **What Crow's own kits write for a deal with a rubric: decided (Rafa, 2026-11-25: "Default for rubric deals").** Crow's setup tools and templates write `rejectGraceSec: 86400` (one day) into every deal whose terms carry a rubric, so buyer and seller have a day to settle, or the buyer to accept, after a reject caused by the panel. Deals decided by checks alone get 0, so their release is never delayed for nothing. It is a default the parties can change, not a protocol minimum (D31): the protocol's value for silent terms stays 0, and the contract accepts any value the encoding can represent.
 5. **A buyer's early close of the period,** by a signed message that takes the refund at once: left out here to keep the surface small. Reopen it if buyers ask.
