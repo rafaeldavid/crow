@@ -264,6 +264,36 @@ export function migrateRecordings(dir: string): Migrated[] {
   return moved;
 }
 
+/**
+ * T-616 (ADR-0050): the recorded verdicts of a scenario, answered in codes, for a what-if run under template pair 3
+ * and agg-6. Each judge keeps its recorded score per criterion, its overall and its injection flag, and writes its
+ * recorded prose too, as unknown keys a judge used to prose might add: the coded filter drops and counts them. The
+ * bindings are not checked (the prompts differ by construction). A judge drawn into a panel it has no recording for
+ * answers as it did in the scenario's other role: judges read the work afresh in every role.
+ */
+export class CodedFromRecorded implements JudgeProvider {
+  readonly kind = 'recorded';
+  constructor(private readonly dir: string) {}
+
+  judge(request: JudgeRequest): JudgeResult {
+    const roles = [request.role, ...JUDGE_ROLES.filter((r) => r !== request.role)];
+    const role = roles.find((r) => existsSync(recordingPath(this.dir, request.scenario, r, request.judgeId)));
+    if (!role) throw new RecordingMissingError(recordingPath(this.dir, request.scenario, request.role, request.judgeId), request);
+    const rec = readRecording(recordingPath(this.dir, request.scenario, role, request.judgeId), { ...request, role });
+    const v = rec.verdict;
+    const coded = {
+      criteria: v.criteria.map((c) => ({ id: c.id, refs: [], reasons: [c.score >= 3 ? 'meets_terms' : 'incomplete'], score: c.score, evidence: c.evidence })),
+      overall: v.overall,
+      injectionSuspected: v.injectionSuspected,
+      injectionKinds: v.injectionSuspected ? ['other'] : [],
+      injectionRefs: [],
+      rationale: v.rationale,
+      ...(v.injectionEvidence !== undefined ? { injectionEvidence: v.injectionEvidence } : {}),
+    };
+    return { status: 'recorded', verdict: coded as unknown as CodedJudgeVerdict, capturedFrom: rec.capturedFrom };
+  }
+}
+
 /** Fake judges: a fixed passing verdict for every criterion. For stubs and for capturing stub recordings. */
 export class FakeJudges implements JudgeProvider {
   readonly kind = 'fake';

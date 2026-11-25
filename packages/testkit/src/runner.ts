@@ -12,6 +12,7 @@ import { renderErrorSnapshot, renderSnapshot } from './render.js';
 import { parseScenario } from './scenario.js';
 import { EvmWorld } from '@holdback/settlement/evm';
 import type { JudgmentView } from './judgment.js';
+import type { PolicyVersions } from '@holdback/judgment';
 import { StubSettlement, type StubRun } from './stub-settlement.js';
 import { STUB_ACCEPTANCE } from './stub-terms.js';
 
@@ -29,6 +30,11 @@ export interface RunOptions {
   contractsRoot?: string;
   /** --settlement local: reuse these judgments (from the SimChain run of the same fixture) instead of judging again. */
   judgments?: ReadonlyMap<string, JudgmentView>;
+  /**
+   * A what-if run: the adjudicators' default versions and the judges, in place of kept-policies.json's default and the
+   * fixture's judges pragma. T-616 replays the recorded attacks under template pair 3 and agg-6 this way.
+   */
+  whatIf?: { versions: PolicyVersions; judges: JudgeProvider };
 }
 
 export interface ScenarioRun {
@@ -221,13 +227,13 @@ async function runOnce(options: RunOptions): Promise<ScenarioRun> {
   if (refusal) throw new UsageError(refusal);
 
   const ctx = createContext({ seed: scenario.pragmas.seed });
-  const judges = provider(options.root, scenario.pragmas.judges, options.record ?? false, scenario.terms);
+  const judges = options.whatIf?.judges ?? provider(options.root, scenario.pragmas.judges, options.record ?? false, scenario.terms);
   const local = scenario.pragmas.settlement === 'local';
   const world = local ? (options.world ?? (await EvmWorld.start(options.contractsRoot ?? options.root))) : null;
   let run: StubRun;
   let driver: StubSettlement;
   try {
-    driver = new StubSettlement(ctx, scenario, judges, options.root, world ? { kind: 'local', world, ...(options.judgments ? { judgments: options.judgments } : {}) } : { kind: 'sim' });
+    driver = new StubSettlement(ctx, scenario, judges, options.root, world ? { kind: 'local', world, ...(options.judgments ? { judgments: options.judgments } : {}) } : { kind: 'sim' }, options.whatIf?.versions);
     run = await driver.run();
   } finally {
     if (world && !options.world) await world.stop();
