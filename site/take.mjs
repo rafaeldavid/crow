@@ -51115,6 +51115,7 @@ var BuyerSigner = class {
 		save(this.store, this.#saved);
 		const res = await fetch(quoteUrl, {
 			method: "POST",
+			redirect: "manual",
 			headers: {
 				"content-type": "application/json",
 				"idempotency-key": this.#saved.quoteKey,
@@ -51129,6 +51130,7 @@ var BuyerSigner = class {
 			}),
 			signal: AbortSignal.timeout(12e4)
 		});
+		if (res.status >= 300 && res.status < 400) throw new Error(`the seller's quote route answered ${res.status}, a redirect: a quote comes from the URL you named only, so nothing is followed. Ask the seller for its quote URL`);
 		const q = await res.json().catch(() => null);
 		const why = typeof q?.detail === "string" ? `: ${q.detail.replace(/[^\x20-\x7e]/g, "?").slice(0, 200)}` : "";
 		if (!res.ok || q === null) throw new Error(`the seller's quote route answered ${res.status}${why}`);
@@ -51414,7 +51416,6 @@ var BuyerSigner = class {
 		if (!ID.test(id)) throw new Error("commitmentId is 0x and 64 hex characters");
 		const shownBefore = this.#saved.shown;
 		if (shownBefore?.commitmentId !== id) return refuse$1(`readOffer has not shown ${id} with this key: show the buyer's agent the offer first`);
-		this.#bind(id);
 		const { terms, offer: read } = await this.#served(id);
 		const clock = (shownBefore.offer.differences ?? []).filter((d) => CLOCK_FIELDS.includes(d.field));
 		const offer = {
@@ -51425,6 +51426,7 @@ var BuyerSigner = class {
 		for (const [field, of] of OFFER_FIELDS) if (!same(of(offer), of(shownBefore.offer))) refuse$1(`${field} is ${shown$1(of(offer))}, not the shown ${shown$1(of(shownBefore.offer))}`);
 		if (this.#saved.seller !== void 0 && offer.seller !== this.#saved.seller) refuse$1(sellerDiffers(offer.seller, this.#saved.seller));
 		if (this.#saved.seller === void 0 && this.#saved.quote?.commitmentId !== id) refuse$1(`seller: this key did not ask for ${id} with quote, so nothing shows that ${offer.seller} is the seller you mean. Give makeKeys the seller's address as the seller gave it by its own channel ({seller}): anyone can copy a public offer and sign the copy`);
+		this.#bind(id);
 		const want = [
 			[
 				"buyer",
@@ -52448,7 +52450,7 @@ async function show(cardUrl, offerId, store, budget) {
 	const entry = entryOf(card, offerId);
 	if (card.seller !== void 0 && lc(card.seller) !== entry.seller) refuse(`the card's seller is ${shown(card.seller)}, and its standing entry names ${entry.seller}`);
 	const expected = process.env["CROW_SELLER"];
-	if (expected && !ADDRESS.test(lc(expected))) refuse("CROW_SELLER is not an address: 0x and 40 hex characters");
+	if (expected && !isAddressText(expected)) refuse("CROW_SELLER is not an address: 0x and 40 hex characters, with a valid checksum if in mixed case");
 	if (expected && lc(expected) !== entry.seller) refuse(`seller is ${entry.seller}, not the expected ${shown(expected)} (CROW_SELLER): another key signed this standing offer, so it is not the seller you named`);
 	const signer = await makeKeys(store, {});
 	const keys = keyFileOf(store, signer.address);

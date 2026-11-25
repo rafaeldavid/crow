@@ -712,12 +712,15 @@ export class BuyerSigner {
     if (options === undefined) delete this.#saved.options;
     else this.#saved.options = options;
     save(this.store, this.#saved);
+    // No redirect (PR 814 red team): the ID must come from the origin the buyer named, not one it points to.
     const res = await fetch(quoteUrl, {
       method: 'POST',
+      redirect: 'manual',
       headers: { 'content-type': 'application/json', 'idempotency-key': this.#saved.quoteKey, ...(credential ? { authorization: `Bearer ${credential}` } : {}) },
       body: JSON.stringify({ buyer: this.address, buyerEncryptionPublicKey: this.encryptionPublicKey, ...(this.#saved.paymentAddress === undefined ? {} : { buyerPaymentAddress: this.#saved.paymentAddress }), scope, ...(options === undefined ? {} : { options }) }),
       signal: AbortSignal.timeout(120_000),
     });
+    if (res.status >= 300 && res.status < 400) throw new Error(`the seller's quote route answered ${res.status}, a redirect: a quote comes from the URL you named only, so nothing is followed. Ask the seller for its quote URL`);
     const q = (await res.json().catch(() => null)) as J;
     // The seller's own words for a refusal, as printable text, at most 200 characters: untrusted, shown and never followed.
     const why = typeof q?.detail === 'string' ? `: ${q.detail.replace(/[^\x20-\x7e]/g, '?').slice(0, 200)}` : '';
@@ -938,7 +941,6 @@ export class BuyerSigner {
     if (!ID.test(id)) throw new Error('commitmentId is 0x and 64 hex characters');
     const shownBefore = this.#saved.shown;
     if (shownBefore?.commitmentId !== id) return refuse(`readOffer has not shown ${id} with this key: show the buyer's agent the offer first`);
-    this.#bind(id);
     const { terms, offer: read } = await this.#served(id);
     // The offer read again from every operator, compared with what the buyer's agent was shown.
     // The clock's verdict is the one made when the offer was shown (readOffer): createdAt grows older while it waits.
@@ -950,6 +952,8 @@ export class BuyerSigner {
     if (this.#saved.seller !== undefined && offer.seller !== this.#saved.seller) refuse(sellerDiffers(offer.seller, this.#saved.seller));
     // The approval's seller does not count here: an approval built from the shown offer carries the offer's own seller.
     if (this.#saved.seller === undefined && this.#saved.quote?.commitmentId !== id) refuse(`seller: this key did not ask for ${id} with quote, so nothing shows that ${offer.seller} is the seller you mean. Give makeKeys the seller's address as the seller gave it by its own channel ({seller}): anyone can copy a public offer and sign the copy`);
+    // Bound only once the seller checks pass, so a refused offer leaves no binding a later save could keep (PR 814 red team).
+    this.#bind(id);
     const want: Array<[string, J, J]> = [
       ['buyer', terms.buyer, this.address],
       ['buyerEncryptionPublicKey', terms.buyerEncryptionPublicKey, this.encryptionPublicKey],

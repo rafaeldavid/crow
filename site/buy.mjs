@@ -3334,6 +3334,7 @@ var init_buyer_signer = __esmMin((() => {
 			save(this.store, this.#saved);
 			const res = await fetch(quoteUrl, {
 				method: "POST",
+				redirect: "manual",
 				headers: {
 					"content-type": "application/json",
 					"idempotency-key": this.#saved.quoteKey,
@@ -3348,6 +3349,7 @@ var init_buyer_signer = __esmMin((() => {
 				}),
 				signal: AbortSignal.timeout(12e4)
 			});
+			if (res.status >= 300 && res.status < 400) throw new Error(`the seller's quote route answered ${res.status}, a redirect: a quote comes from the URL you named only, so nothing is followed. Ask the seller for its quote URL`);
 			const q = await res.json().catch(() => null);
 			const why = typeof q?.detail === "string" ? `: ${q.detail.replace(/[^\x20-\x7e]/g, "?").slice(0, 200)}` : "";
 			if (!res.ok || q === null) throw new Error(`the seller's quote route answered ${res.status}${why}`);
@@ -3633,7 +3635,6 @@ var init_buyer_signer = __esmMin((() => {
 			if (!ID.test(id)) throw new Error("commitmentId is 0x and 64 hex characters");
 			const shownBefore = this.#saved.shown;
 			if (shownBefore?.commitmentId !== id) return refuse(`readOffer has not shown ${id} with this key: show the buyer's agent the offer first`);
-			this.#bind(id);
 			const { terms, offer: read } = await this.#served(id);
 			const clock = (shownBefore.offer.differences ?? []).filter((d) => CLOCK_FIELDS.includes(d.field));
 			const offer = {
@@ -3644,6 +3645,7 @@ var init_buyer_signer = __esmMin((() => {
 			for (const [field, of] of OFFER_FIELDS) if (!same(of(offer), of(shownBefore.offer))) refuse(`${field} is ${shown(of(offer))}, not the shown ${shown(of(shownBefore.offer))}`);
 			if (this.#saved.seller !== void 0 && offer.seller !== this.#saved.seller) refuse(sellerDiffers(offer.seller, this.#saved.seller));
 			if (this.#saved.seller === void 0 && this.#saved.quote?.commitmentId !== id) refuse(`seller: this key did not ask for ${id} with quote, so nothing shows that ${offer.seller} is the seller you mean. Give makeKeys the seller's address as the seller gave it by its own channel ({seller}): anyone can copy a public offer and sign the copy`);
+			this.#bind(id);
 			const want = [
 				[
 					"buyer",
