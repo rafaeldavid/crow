@@ -404,10 +404,14 @@ export class LiveChain implements EvmChain {
   async simulate(tx: { from: Address; to: Address; data: Hex; overrides?: ReadonlyArray<{ address: Address; code: Hex }> }): Promise<void> {
     // At the fees the send pays (T-549 red team, M2): a contract party that answers yes only at gas price 0 is refused
     // here, not after the relayer paid for a revert. A relayer short of test ETH for them declines (D27).
-    const fee = await this.feesNow();
+    // A fee read that fails leaves the simulation unpriced: the send reads the fees again, and sends nothing without them.
+    const fee = await this.feesNow().catch((e: unknown) => {
+      if (e instanceof RelayRefused) throw e;
+      return null;
+    });
     // At the newest block this node knows of: a node a block behind still shows the deal before this node's last relay.
     const estimate = (blockNumber: bigint) =>
-      this.publicClient.estimateGas({ account: tx.from, to: tx.to, data: tx.data, blockNumber, maxFeePerGas: fee.max, maxPriorityFeePerGas: fee.tip, ...(tx.overrides?.length ? { stateOverride: tx.overrides.map((o) => ({ address: o.address, code: o.code })) } : {}) });
+      this.publicClient.estimateGas({ account: tx.from, to: tx.to, data: tx.data, blockNumber, ...(fee ? { maxFeePerGas: fee.max, maxPriorityFeePerGas: fee.tip } : {}), ...(tx.overrides?.length ? { stateOverride: tx.overrides.map((o) => ({ address: o.address, code: o.code })) } : {}) });
     let gas: bigint;
     try {
       gas = await this.pinned(estimate, (e) => askAgain(e) && !/insufficient funds/i.test(String((e as Error | undefined)?.message ?? e)), 'now');
