@@ -153,7 +153,9 @@ describe.skipIf(!ready)(`the fallback woken when its round is public (anvil, a 7
     const storage = new MemoryStorage();
     const chain = new LiveChain({ deployment, rpcUrls: [shim.url], relayerKey: RELAYER, pollMs: 200, rebroadcastMs: 10_000, mintBatchMs: 200 });
     const errors: string[] = [];
-    const world = await PublicWorld.open({ storage, env: ENV, live: { chain, beacon: 'sim' }, minWindowSec: 5, faucetPerClient: 100, onError: (e) => errors.push(e.message) });
+    // N222: keyless chain worlds fail closed on the live registry by default; the outsider here binds the scripted world's
+    // registry, which the demo fallback must carry to take over (red team of PR 797, M1).
+    const world = await PublicWorld.open({ storage, env: ENV, live: { chain, beacon: 'sim' }, requireLiveJudges: false, minWindowSec: 5, faucetPerClient: 100, onError: (e) => errors.push(e.message) });
     // Opening reads no chain: reseed the sim beacon now, before the world's first pass sends anything.
     const { start } = (await storage.get<{ start: string }>('meta'))!;
     await anvil.fresh(canonicalKeccak({ sim: 'holdback/demo-cloud/v1', start }));
