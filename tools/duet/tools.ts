@@ -417,8 +417,11 @@ export class Toolbox {
     const file = (a: string | undefined, what: string, mustExist = true) => {
       if (!a) throw new Refused(`${command} needs ${what}`);
       if (a.startsWith('-')) throw new Refused(`${what} is a file name, and a file name here does not start with "-": rename it`);
-      if (mustExist) this.readable(a, { mustExist });
-      else this.inside(a, { mustExist });
+      if (!mustExist) this.inside(a, { mustExist });
+      else {
+        const full = this.readable(a, { mustExist });
+        if (this.isSaved(full)) this.o.rec.add(this.o.role, 'file', { op: 'command-input', command, path: relative(this.o.work, full), saved: true });
+      }
       return a;
     };
     const once = (list: string[], names: string[]) => { for (const n of names) if (list.filter((a) => a === n).length > 1) throw new Refused(`${command} takes ${n} once`); };

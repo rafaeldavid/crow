@@ -310,8 +310,10 @@ export interface Result {
   help_probes: number; guide_reads: string[];
   /** The seller's address the agent gave the buy command as CROW_SELLER (T-611), or null. */
   seller_named: string | null;
-  /** Calls of the deal record command, the files the agent wrote itself, and the saved files it read (T-623). */
-  record_calls: number; files_written: string[]; saved_files_read: string[];
+  /** Calls of the record command, as `deal-record` or as the pages' `record` through the buy command, refused ones
+   *  included; the files the agent wrote, and the writes it tried and was refused; and the saved files it read itself
+   *  or gave a command (T-623). */
+  record_calls: number; files_written: string[]; writes_refused: string[]; saved_files_read: string[];
   /** Web reads of https://crow.direct, and the approvals if one approval allowed them all (P-15, N214). */
   site_reads: number; approvals_reads_once: number;
   final_state: string | null; final_state_op2: string | null; commitment_id: string | null; agent_end: string; refusals: number; failed_calls: number; date: string; run: string;
@@ -319,13 +321,24 @@ export interface Result {
 
 const short = (v: unknown) => JSON.stringify(v).slice(0, 160);
 const originOf = (u: unknown) => { try { return new URL(String(u)).origin; } catch { return ''; } };
+/** A run_command call's command and arguments as the toolbox reads them, with any leading NAME=value settings apart. */
+const commandOf = (e: Event) => String((e['input'] as J)?.command ?? '');
+const argsOf = (e: Event): string[] => {
+  const args: string[] = Array.isArray((e['input'] as J)?.args) ? (e['input'] as J).args.map(String) : [];
+  const at = args.findIndex((a) => !/^[A-Z][A-Z0-9_]*=/.test(a));
+  return at < 0 ? [] : args.slice(at);
+};
+/** The record command, as the runner installs it or as the guides name it (`node buy.mjs record`). */
+const asksForRecord = (e: Event) => commandOf(e) === 'deal-record' || (commandOf(e) === 'buy-with-signer' && argsOf(e).find((a) => a !== '--stop-after-funding') === 'record');
 
 /** The measures of one run, from its record alone. `role` is the outside agent's side. */
 export function measureRun(events: readonly Event[], role: 'buyer' | 'seller', direction: Direction, run: string): Result {
   const mine = events.filter((e) => e.role === role);
   const turns = mine.filter((e) => e.kind === 'model.turn');
   const tools = mine.filter((e) => e.kind === 'tool');
-  const asks = tools.filter((e) => ASKS[String(e['name'])] && !String(e['result'] ?? '').startsWith('Not run:'));
+  const ran = tools.filter((e) => !String(e['result'] ?? '').startsWith('Not run:'));
+  const asks = ran.filter((e) => ASKS[String(e['name'])]);
+  const written = (failed: boolean) => ran.filter((e) => e['name'] === 'write_file' && Boolean(e['isError']) === failed).map((e) => String((e['input'] as J)?.path));
   const model = String(mine.find((e) => e.kind === 'agent.start')?.['model'] ?? 'unknown');
   const cost = turns.reduce((s, t) => s + (priceOf(model, { input: Number(t['tokensIn']), output: Number(t['tokensOut']), cacheRead: Number(t['cacheRead'] ?? 0), cacheWrite: Number(t['cacheWrite'] ?? 0) }) ?? 0), 0);
   const states = events.filter((e) => e.kind === 'chain.state');
@@ -350,11 +363,13 @@ export function measureRun(events: readonly Event[], role: 'buyer' | 'seller', d
     cost_usd: Math.round(cost) / 1_000_000,
     seconds: Number.isFinite(first) && finalEvent !== undefined ? Math.round((finalEvent - first) / 1000) : null,
     // Calls that asked a command how to use it (no arguments, or --help or -h alone), and the Crow guide pages read.
-    help_probes: tools.filter((e) => e['name'] === 'run_command' && ((e['input'] as J)?.args?.length ?? 0) <= 1 && (((e['input'] as J)?.args ?? []).length === 0 || ['--help', '-h'].includes(String((e['input'] as J).args[0])))).length,
-    record_calls: tools.filter((e) => e['name'] === 'run_command' && (e['input'] as J)?.command === 'deal-record').length,
-    files_written: tools.filter((e) => e['name'] === 'write_file' && !e['isError']).map((e) => String((e['input'] as J)?.path)),
+    help_probes: ran.filter((e) => e['name'] === 'run_command' && argsOf(e).length <= 1 && (argsOf(e).length === 0 || ['--help', '-h'].includes(argsOf(e)[0]!))).length,
+    record_calls: ran.filter((e) => e['name'] === 'run_command' && asksForRecord(e)).length,
+    files_written: written(false),
+    writes_refused: written(true),
     saved_files_read: mine.filter((e) => e.kind === 'file' && e['saved'] === true).map((e) => String(e['path'])),
-    seller_named: (mine.find((e) => e.kind === 'command' && (e['settings'] as J)?.CROW_SELLER)?.['settings'] as J)?.CROW_SELLER ?? null,
+    // The seller named to the command whose answer carries this deal's ID: a setting on another call named no one for it.
+    seller_named: id === null ? null : (mine.find((e) => e.kind === 'command' && (e['settings'] as J)?.CROW_SELLER && String(e['stdout'] ?? '').toLowerCase().includes(id.toLowerCase()))?.['settings'] as J)?.CROW_SELLER ?? null,
     guide_reads: [...new Set(tools.filter((e) => e['name'] === 'fetch_url').map((e) => { try { const u = new URL(String((e['input'] as J)?.url)); return u.origin === CROW_SITE ? u.pathname : ''; } catch { return ''; } }).filter((p) => /\.txt$|^\/ref\//.test(p)))],
     final_state: stateAt(OPERATORS[0]!), final_state_op2: stateAt(OPERATORS[1]!), commitment_id: id,
     agent_end: String(end?.['outcome'] ?? '').includes(BUDGET_STOP) ? `stopped by the budget: ${String(end?.['outcome']).split(BUDGET_STOP)[1]!.trim().slice(0, 200)}` : `${String(end?.['status'] ?? 'none')}: ${String(end?.['outcome'] ?? '').slice(0, 200)}`,

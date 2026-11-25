@@ -33,7 +33,8 @@ Make the runner able to measure a buyer on the live pages: buy from Crow's live 
 
 ## Acceptance criteria
 
-- [x] `--test-seller` runs a buy run with the cold brief for the test seller's quoted product, under the same fences and the same count.
+- [x] `--test-seller` runs a buy run with the cold brief for the test seller's quoted product, under the same fences and the same count. Tested offline: the brief and the policy, whose checks equal the quote's. The run itself needs the live service.
+- [x] The record command is counted however a run asks for it, `record` through the buy command included, refused calls too; writes tried and refused are listed apart.
 - [x] A buyer may give `CROW_SELLER` before the buy command; every other setting is refused.
 - [x] A buyer reads and lists `<key store>-files/`, and a command may read a file there. The key store and the rest of the company stay out of reach, through a link, a `..` or another spelling too. Nothing is written there. A seller gets no such reach.
 - [x] On a local simulator world, the shipped buy command saves both files and the agent reads both by the paths the command prints.
@@ -46,13 +47,35 @@ Make the runner able to measure a buyer on the live pages: buy from Crow's live 
 
 ## Evidence
 
-To be filled after the review.
+All measured on 2026-11-25 on `main` at `e0957759`.
+
+- `pnpm exec vitest run tools/duet tests/id-check.test.ts`: 285 tests passed in 4 files. `pnpm typecheck` and `pnpm lint` pass.
+- One test runs a whole deal on a local simulator world: the shipped buy command saves the work and the record, and the scripted buyer reads both by the paths the command printed.
+- The new measures, run over the seven buyer records of the 2026-11-25 case study, give the hand count: one record call in each run, `squares.csv` written in four, the seller named in one, and no approval count changed.
+- Seven live runs of 2026-11-25 used the first two commits' `--test-seller` flag (private case study). No live run has used this branch yet.
+
+## Review
+
+One `reviewer` pass on the change: ISSUES. It found no way past the fence, for reads or writes, by `..`, links, other spellings, command arguments, settings or the draft server. Seven findings, all fixed, each with a test:
+
+| Finding | Severity |
+| --- | --- |
+| The guides' own `record` through the buy command was refused and not counted | Medium |
+| A command given in another shape ran uncounted; a call not run was counted | Low |
+| A write tried and refused left no trace in the measures | Low |
+| A saved file given to a command did not count as read | Low |
+| A help probe carrying a setting was not counted | Low |
+| `seller_named` could come from a call that did not make the deal | Low |
+| No test covered the test seller's brief or policy, and this file had no evidence | Low |
 
 ## Decisions
 
 - **The agent is told what it may read.** The two file tools say that a buyer may read a file a command says it saved for it, by that path. A buyer's own agent has such files in its folder; here they sit outside it, so without the sentence the agent might not try. It changes the harness, so counts before and after it are not like for like in this one sentence.
 - **Read-only.** The runner lets the agent read the saved files and never write there: a real buyer's copy is its evidence.
+- **The measures do not judge content.** They list what was written. Whether a write is the work file is read from the record.
 
 ## Handoff
 
-To be filled after the review.
+**Done:** the two flags, the setting, the read access, the measures and their tests. **Not done:** no live run on this branch; the runs and their results go to the private repository.
+
+**To resume:** branch `t-623-duet-test-seller-saved-files`.

@@ -10,11 +10,12 @@ import { runAgent } from './loop.ts';
 import { BUDGET, buyerBriefCold, BUYER_USAGE, scenario, SCOPE, START_AT_DOCS } from './scenarios.ts';
 import { REPO, runDuet } from './run.ts';
 import { saveWork } from '../../examples/deal-files.ts';
+import { quoteTerms } from '../../apps/test-agents/src/quote.ts';
 import { anthropic, KEY_ENV, liveProvider, scripted, WORKSPACE_ENV, type ScriptContext, type ScriptStep } from './providers.ts';
 import { Recorder, Secrets } from './record.ts';
 import { Toolbox } from './tools.ts';
 import { readFileSync } from 'node:fs';
-import { Budget, BUDGET_STOP, dealIds, draftPages, frontPage, measureRun, parseRuns, sellBrief, trySell } from './approvals.ts';
+import { Budget, BUDGET_STOP, dealIds, draftPages, frontPage, squaresPolicy, TEST_SELLER, testSellerBrief, measureRun, parseRuns, sellBrief, trySell } from './approvals.ts';
 import type { Provider } from './providers.ts';
 import type { Event } from './record.ts';
 import type { Fence } from './tools.ts';
@@ -375,17 +376,22 @@ describe("the buyer's NAME=value settings before a command (P-16, T-611's CROW_S
     expect(seller.specs.find((s) => s.name === 'run_command')!.description).not.toMatch(/NAME=value/);
   });
 
-  it('counts a command with a setting as one approval and says which seller the buyer named', () => {
+  it('counts a command with a setting as one approval and says which seller the buyer named for the deal it made', () => {
     const at = '2026-11-25T00:00:00Z';
+    const ID = `0x${'cd'.repeat(32)}`;
     const events = [
       { at, role: 'buyer', kind: 'agent.start', model: 'scripted', vendor: 'scripted' },
-      { at, role: 'buyer', kind: 'command', command: 'buy-with-signer', settings: { CROW_SELLER: SELLER } },
+      { at, role: 'runner', kind: 'chain.state', commitmentId: ID, operator: 'https://api.crow.direct', escrowState: 'Released' },
+      { at, role: 'buyer', kind: 'command', command: 'buy-with-signer', settings: { CROW_SELLER: SELLER }, stdout: `{"approval":"needed","commitmentId":"${ID}"}` },
       { at, role: 'buyer', kind: 'tool', name: 'run_command', turn: 1, input: { command: 'buy-with-signer', args: [`CROW_SELLER=${SELLER}`] }, result: 'exit 3' },
     ] as unknown as Event[];
     const m = measureRun(events, 'buyer', 'buy', 'x');
     expect(m.approvals).toBe(1);
     expect(m.seller_named).toBe(SELLER);
     expect(measureRun(events.filter((e) => e.kind !== 'command'), 'buyer', 'buy', 'x').seller_named).toBeNull();
+    // A setting on a command that did not open this deal names no seller for it.
+    const other = events.map((e) => (e.kind === 'command' ? { ...e, stdout: '', exit: 1 } : e)) as unknown as Event[];
+    expect(measureRun(other, 'buyer', 'buy', 'x').seller_named).toBeNull();
   });
 });
 
@@ -459,6 +465,7 @@ describe('the files the buying command saves beside the key store (T-617, T-623)
     writeFileSync(join(c.work, 'terms.json'), '{}');
     const ran = await c.tools.call('run_command', { command: 'check-delivery', args: ['terms.json', c.saved] });
     expect(ran.content).toMatch(/^exit /); // the command ran: it was given the saved file
+    expect(c.rec.events.filter((e) => e.kind === 'file' && e['saved'] === true)).toMatchObject([{ op: 'command-input', command: 'check-delivery', path: expect.stringContaining('keys-files') }]);
     expect((await c.tools.call('run_command', { command: 'check-delivery', args: ['terms.json', c.keyFile] })).content).toMatch(/^Refused: /);
   });
 
@@ -501,8 +508,35 @@ describe('a draft buy.txt (T-623)', () => {
 });
 
 describe("what a run did with the record and with files (T-623's pass rule)", () => {
+  const at = '2026-11-26T00:00:00Z';
+  const run = (command: unknown, args: string[], result = 'exit 0', isError = false) => ({ at, role: 'buyer', kind: 'tool', name: 'run_command', turn: 1, input: { command, args }, result, isError });
+  const start = { at, role: 'buyer', kind: 'agent.start', model: 'scripted', vendor: 'scripted' };
+  const measured = (...tools: object[]) => measureRun([start, ...tools] as unknown as Event[], 'buyer', 'buy', 'x');
+
+  it("counts the pages' own record command through the buy command, refused or not, with a setting or a flag before it", () => {
+    const ID = `0x${'ab'.repeat(32)}`;
+    for (const args of [['record', ID, '--as', 'buyer'], ['HOLDBACK_OPERATORS=$OP1,$OP2', 'record', ID], ['--stop-after-funding', 'record', ID], ['CROW_SELLER=0x1', '--stop-after-funding', 'record']]) {
+      expect(measured(run('buy-with-signer', args, 'Refused: "record" is not a URL', true)).record_calls, args.join(' ')).toBe(1);
+    }
+    expect(measured(run('buy-with-signer', ['approve', 'k', ID, '5']), run('buy-with-signer', ['https://x/quote', 'record', '{}', '5'])).record_calls).toBe(0);
+  });
+
+  it('counts a command given in another shape, and not a call the runner did not run', () => {
+    expect(measured(run(['deal-record'], ['x'])).record_calls).toBe(1);
+    expect(measured(run('deal-record', ['x'], 'Not run: you finished in this turn.', true)).record_calls).toBe(0);
+  });
+
+  it('lists the writes the agent tried and was refused apart from the writes it made, and neither for a call not run', () => {
+    const write = (path: string, result: string, isError: boolean) => ({ at, role: 'buyer', kind: 'tool', name: 'write_file', turn: 1, input: { path, content: 'x' }, result, isError });
+    expect(measured(write('a', 'Wrote 1 bytes to a.', false), write('/company/keys-files/b', 'Refused: outside your folder', true), write('c', 'Not run: you finished in this turn.', true))).toMatchObject({ files_written: ['a'], writes_refused: ['/company/keys-files/b'] });
+  });
+
+  it('counts a help probe that carries a setting', () => {
+    expect(measured(run('buy-with-signer', [`CROW_SELLER=0x${'ab'.repeat(20)}`, '--help'], 'Refused:', true)).help_probes).toBe(1);
+    expect(measured(run('buy-with-signer', ['HOLDBACK_OPERATORS=$OP1,$OP2'], 'Refused:', true)).help_probes).toBe(1);
+  });
+
   it('counts the record command, and names the files the agent wrote and the saved files it read', () => {
-    const at = '2026-11-26T00:00:00Z';
     const tool = (name: string, input: Record<string, unknown>) => ({ at, role: 'buyer', kind: 'tool', name, turn: 1, input, result: 'ok' });
     const events = [
       { at, role: 'buyer', kind: 'agent.start', model: 'scripted', vendor: 'scripted' },
@@ -547,4 +581,21 @@ describe('a whole local deal with the shipped buy command (T-623)', () => {
     expect(m.saved_files_read.map((p) => p.replace(/^.*keys-files\//, '').replace(/^0x[0-9a-f]{64}\./, ''))).toEqual(['work.json', 'record.json']);
     for (const text of read) expect(done.leaks(text)).toBe(false);
   }, 180_000);
+});
+
+describe("the test seller's brief and policy (P-16, T-623)", () => {
+  it("requires exactly the checks the test seller's quote offers for the brief's scope", () => {
+    const offered = quoteTerms({ rows: 5 }).checks;
+    const policy = squaresPolicy();
+    expect(policy.requiredChecks).toEqual(offered.map((c: { id: string }) => c.id));
+    expect(policy.checkBodies).toEqual(Object.fromEntries(offered.map((c: { id: string }) => [c.id, c])));
+    expect(policy.budget).toBe('5000000');
+  });
+
+  it("is T-584's cold brief: the work, the budget, the checks, the key store, the start and each command's usage once", () => {
+    const brief = testSellerBrief('/company/keys');
+    for (const part of [`A seller we found: ${TEST_SELLER}.`, '{"rows":5}', 'at most 5000000 base units', '"cols", "rows" and "uniq"', 'Your key store is /company/keys:', START_AT_DOCS]) expect(brief).toContain(part);
+    for (const [name, usage] of Object.entries(BUYER_USAGE)) expect(brief.split(`- ${name} ${usage}`)).toHaveLength(2);
+    expect(brief).not.toMatch(/buy\.txt|record\.json|saved/);
+  });
 });
