@@ -67,3 +67,42 @@ describe('the demo panel chooses live or scripted once (T-574)', () => {
     expect(await how(request('claude-a'))).toBe('abstain');
   });
 });
+
+describe('a chain world with an incomplete live configuration fails closed (N222)', () => {
+  const closed = (env: Record<string, string>, failClosed = true) =>
+    panelConfig({ env, storage: new MemoryStorage(), now: () => Date.parse('2026-11-25T12:00:00Z'), failClosed });
+
+  it('abstains on every call, in a panel or out of it, and never scripts a verdict', async () => {
+    const cfg = closed({ HOLDBACK_ANTHROPIC_API_KEY: 'k' });
+    cfg.allowLive = true;
+    expect(cfg).toMatchObject({ live: false, closed: true });
+    expect(cfg.missing).toEqual(['HOLDBACK_OPENAI_COMPATIBLE_API_KEY', 'HOLDBACK_OPENAI_COMPATIBLE_BASE_URL']);
+    for (const call of [() => cfg.provider.complete(request('claude-a')), () => cfg.panel(3, () => cfg.provider.complete(request('deepseek-a')))]) {
+      const a = await call();
+      expect(a).toMatchObject({ kind: 'error', transport: false });
+      expect(JSON.stringify(a)).not.toContain(FAKE_JUDGE_MARK);
+    }
+    expect(await cfg.canRunLive(3)).toBe(false);
+  });
+
+  it('without the flag (SimChain, the local demo) the scripted judges stay, marked', async () => {
+    const cfg = closed({}, false);
+    expect(cfg).toMatchObject({ live: false, closed: false });
+    const a = await cfg.provider.complete(request('claude-a'));
+    expect(a.kind === 'ok' && a.text.includes(FAKE_JUDGE_MARK)).toBe(true);
+  });
+
+  it('logs one line at start that names the missing variables and no value', () => {
+    const lines: string[] = [];
+    const orig = console.warn;
+    console.warn = (...a: unknown[]) => void lines.push(a.join(' '));
+    try {
+      closed({ HOLDBACK_ANTHROPIC_API_KEY: 'secret-value' });
+    } finally {
+      console.warn = orig;
+    }
+    expect(lines).toHaveLength(1);
+    expect(lines[0]).toMatch(/HOLDBACK_OPENAI_COMPATIBLE_API_KEY/);
+    expect(lines[0]).not.toContain('secret-value');
+  });
+});
