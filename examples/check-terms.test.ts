@@ -210,6 +210,15 @@ describe('check-terms', () => {
       expect(kinds(terms(cols(2), rows(1, 600_000)))).toEqual(['size acceptance.deterministicChecks[1].max']);
     });
 
+    it('warns on a JSON Schema whose root needs more items or characters than fit, and reads no deeper keyword', () => {
+      const schema = (s: J): J => ({ id: 'shape', type: 'json_schema', required: true, schema: s });
+      expect(kinds(terms(schema({ type: 'array', minItems: 600_000 })))).toEqual(['size acceptance.deterministicChecks[0].schema.minItems']);
+      expect(kinds(terms(schema({ type: 'string', minLength: 2_000_000 })))).toEqual(['size acceptance.deterministicChecks[0].schema.minLength']);
+      expect(kinds(terms(schema({ type: 'array', minItems: 524_287 })))).toEqual([]);
+      expect(kinds(terms(schema({ not: { type: 'array', minItems: 600_000 } })))).toEqual([]);
+      expect(kinds(terms(schema({ minItems: 600_000 })))).toEqual([]);
+    });
+
     it('is silent at the limit and below it', () => {
       expect(kinds(terms(rows(1, JUDGED_MAX_PLAINTEXT_BYTES)))).toEqual([]);
       expect(kinds(terms(cols(2), rows(1, JUDGED_MAX_PLAINTEXT_BYTES / 2)))).toEqual([]);

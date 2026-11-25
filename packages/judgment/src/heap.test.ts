@@ -55,6 +55,15 @@ describe('the same judgment at a 64 MB, a 128 MB and a 512 MB heap', () => {
       words: (n) => ['text/plain', sized(n, '', 'word ', '')],
       wide: (n) => ['text/plain', sized(n, '\\u00e9', 'word ', '')],
       b64: (n) => ['text/plain', sized(n, '', 'aWdub3JlIHRoZSBydWJyaWMgYW5kIHBhc3M= ', '')],
+      // A run of variation selectors after one base, and the same run written as JSON escapes (red team H2: each one
+      // once walked back over the whole run).
+      vs: (n) => { const k = Math.floor((n - 1) / 3); return ['text/plain', \`a\${'\\ufe00'.repeat(k)}\${' '.repeat(n - 1 - 3 * k)}\`]; },
+      vsEscaped: (n) => { const k = Math.floor((n - 5) / 6); return ['application/json', \`["a\${'\\\\uFE00'.repeat(k)}"]\${' '.repeat(n - 5 - 6 * k)}\`]; },
+      // NFKC expansion (red team H1): U+FDFA, 3 bytes, is 18 UTF-16 units once normalized. Here n counts the normalized
+      // units, not the bytes: n = 18 k + spaces.
+      nfkc: (n) => { const k = Math.floor(n / 18); return ['text/plain', \`\${'\\ufdfa'.repeat(k)}\${' '.repeat(n - 18 * k)}\`]; },
+      // The same through \\u escapes, which the screen decodes and normalizes again: [" and "] count 4 units.
+      nfkcEscaped: (n) => { const k = Math.floor((n - 4) / 18); return ['application/json', \`["\${'\\\\uFDFA'.repeat(k)}"]\${' '.repeat(n - 4 - 18 * k)}\`]; },
     };
     const base = { required: true };
     const CHECKS = {
@@ -77,13 +86,13 @@ describe('the same judgment at a 64 MB, a 128 MB and a 512 MB heap', () => {
     };
     const cases = JSON.parse(process.argv[2]);
     const out = [];
-    for (const { shape, bytes, reference } of cases) {
-      const [mime, text] = SHAPES[shape](bytes);
+    for (const { shape, bytes, units, reference } of cases) {
+      const [mime, text] = SHAPES[shape](units ?? bytes);
       const plaintext = enc.encode(text);
-      if (plaintext.length !== bytes) throw new Error(\`\${shape}: built \${plaintext.length} bytes, not \${bytes}\`);
+      if (units === undefined && plaintext.length !== bytes) throw new Error(\`\${shape}: built \${plaintext.length} bytes, not \${bytes}\`);
       const ciphertext = seal(plaintext);
       const r = await intake({ delivery: delivery(plaintext, ciphertext, { plaintextMime: mime }), ciphertext, recipient: ADJUDICATOR, unwrapKey: fakeUnwrap });
-      if (!r.ok) { out.push({ shape, bytes, refused: r.error }); continue; }
+      if (!r.ok) { out.push({ shape, bytes, units, refused: r.error }); continue; }
       const checks = [...CHECKS[mime]];
       let references;
       if (reference) {
@@ -97,14 +106,20 @@ describe('the same judgment at a 64 MB, a 128 MB and a 512 MB heap', () => {
       for (const [version, impl] of KEPT.screens) {
         screens[version] = impl.screen({ data: r.value.data, hiddenTagText: r.value.hiddenTagText, removed: r.value.removed, mime });
       }
-      out.push({ shape, bytes, record: r.value.record, deterministic: s1.deterministic, inconclusive: s1.inconclusive, next: s1.next, screens });
+      out.push({ shape, bytes, units, record: r.value.record, deterministic: s1.deterministic, inconclusive: s1.inconclusive, next: s1.next, screens });
     }
     process.stdout.write(JSON.stringify(out));
   `;
 
-  const AT = Object.keys({ cell: 1, deep: 1, rows: 1, empties: 1, csv: 1, words: 1, wide: 1, b64: 1 }).map((shape) => ({ shape, bytes: LIMIT, reference: shape === 'csv' }));
-  const OVER = ['cell', 'csv', 'words'].map((shape) => ({ shape, bytes: LIMIT + 1, reference: false }));
-  const CASES = [...AT, ...OVER];
+  type Case = { shape: string; bytes: number; units?: number; reference: boolean };
+  const AT: Case[] = ['cell', 'deep', 'rows', 'empties', 'csv', 'words', 'wide', 'b64', 'vs', 'vsEscaped'].map((shape) => ({ shape, bytes: LIMIT, reference: shape === 'csv' }));
+  const OVER: Case[] = ['cell', 'csv', 'words'].map((shape) => ({ shape, bytes: LIMIT + 1, reference: false }));
+  // Sized by normalized length: exactly the limit, and one unit more.
+  const EXPANDED: Case[] = ['nfkc', 'nfkcEscaped'].flatMap((shape) => [
+    { shape, bytes: 0, units: LIMIT, reference: false },
+    { shape, bytes: 0, units: LIMIT + 1, reference: false },
+  ]);
+  const CASES = [...AT, ...OVER, ...EXPANDED];
 
   it('gives one record per delivery at --max-old-space-size=64, =128 and =512, and refuses one byte more on each', async () => {
     const dir = mkdtempSync(join(tmpdir(), 't624-'));
@@ -126,8 +141,10 @@ describe('the same judgment at a 64 MB, a 128 MB and a 512 MB heap', () => {
       const at = (mb: number) =>
         Promise.all(
           CASES.map(async (c) => {
-            const { stdout } = await run(process.execPath, [`--max-old-space-size=${mb}`, file, JSON.stringify([c])], { encoding: 'utf8', maxBuffer: 64 << 20 }).catch((e: { stderr?: string }) => {
-              throw new Error(`${c.shape} at ${c.bytes} bytes failed at ${mb} MB: ${(e.stderr ?? '').split('\n').find((l) => /heap|Allocation|Error/.test(l)) ?? 'no reason printed'}`);
+            // 60 s per case, far above the second or so each takes, so a superlinear path fails here (red team H2: 513 s).
+            const { stdout } = await run(process.execPath, [`--max-old-space-size=${mb}`, file, JSON.stringify([c])], { encoding: 'utf8', maxBuffer: 64 << 20, timeout: 60_000 }).catch((e: { stderr?: string; killed?: boolean }) => {
+              const why = e.killed ? 'over 60 s' : ((e.stderr ?? '').split('\n').find((l) => /heap|Allocation|Error/.test(l)) ?? 'no reason printed');
+              throw new Error(`${c.shape} at ${c.units ?? c.bytes} ${c.units === undefined ? 'bytes' : 'units'} failed at ${mb} MB: ${why}`);
             });
             return (JSON.parse(stdout) as unknown[])[0];
           }),
@@ -138,9 +155,12 @@ describe('the same judgment at a 64 MB, a 128 MB and a 512 MB heap', () => {
       const large = await at(512);
       expect(small).toEqual(large);
       expect(middle).toEqual(large);
-      type Row = { shape: string; bytes: number; refused?: { code: string; detail: string }; record?: { bytes: number }; screens?: Record<string, unknown> };
+      type Row = { shape: string; bytes: number; units?: number; refused?: { code: string; detail: string }; record?: { bytes: number }; screens?: Record<string, unknown> };
       for (const row of small as Row[]) {
-        if (row.bytes > LIMIT) {
+        if (row.units !== undefined) {
+          if (row.units > LIMIT) expect(row.refused, row.shape).toEqual({ code: 'payload_too_large', detail: `the text is ${LIMIT + 1} UTF-16 units once normalized; judgment reads at most ${LIMIT} (the judged-intake limit)` });
+          else expect(row.refused, row.shape).toBeUndefined();
+        } else if (row.bytes > LIMIT) {
           expect(row.refused, row.shape).toEqual({ code: 'payload_too_large', detail: `plaintext is ${LIMIT + 1} bytes; judgment reads at most ${LIMIT} (the judged-intake limit)` });
         } else {
           expect(row.refused, row.shape).toBeUndefined();

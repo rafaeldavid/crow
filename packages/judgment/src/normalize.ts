@@ -41,18 +41,41 @@ export interface Normalized {
   hiddenTagText: string;
 }
 
-/** The code point before index i, skipping variation selectors. */
-function prevBase(s: string, i: number): string {
+/** The last answer of prevBase on one string: the code point before index `end`, skipping variation selectors. */
+type BaseMemo = { end: number; base: string };
+
+/**
+ * The code point before index i, skipping variation selectors. With `memo`, a walk that reaches the index the last call
+ * started from takes that call's answer, so a run of n variation selectors costs n steps, not n squared (T-624, red team
+ * H2: 1 MiB of them took 513 s). The answer is the same: the memo holds prevBase(s, memo.end) for the same `s`.
+ */
+function prevBase(s: string, i: number, memo?: BaseMemo): string {
   let j = i;
+  let base: string;
   for (;;) {
-    if (j <= 0) return '';
+    if (memo && j === memo.end && j !== i) {
+      base = memo.base;
+      break;
+    }
+    if (j <= 0) {
+      base = '';
+      break;
+    }
     const lo = s.charCodeAt(j - 1);
     const start = lo >= 0xdc00 && lo <= 0xdfff && j >= 2 ? j - 2 : j - 1;
     const ch = String.fromCodePoint(s.codePointAt(start)!);
     const cp = ch.codePointAt(0)!;
-    if (!((cp >= 0xfe00 && cp <= 0xfe0f) || (cp >= 0xe0100 && cp <= 0xe01ef))) return ch;
+    if (!((cp >= 0xfe00 && cp <= 0xfe0f) || (cp >= 0xe0100 && cp <= 0xe01ef))) {
+      base = ch;
+      break;
+    }
     j = start;
   }
+  if (memo) {
+    memo.end = i;
+    memo.base = base;
+  }
+  return base;
 }
 const nextChar = (s: string, i: number): string => (i < s.length ? String.fromCodePoint(s.codePointAt(i)!) : '');
 
@@ -69,6 +92,7 @@ export function normalizeText(raw: string): Normalized {
   let tagChars = 0;
   let zeroWidth = 0;
   const vsBytes: number[] = [];
+  const memo: BaseMemo = { end: -1, base: '' };
   const withoutFlags = raw.replace(EMOJI_TAG_SEQUENCE, (m) => {
     explained += [...m].length - 1;
     return '\u{1F3F4}';
@@ -82,7 +106,7 @@ export function normalizeText(raw: string): Normalized {
       if (a >= 0x20 && a <= 0x7e) tagText += String.fromCharCode(a);
       return '';
     }
-    const before = prevBase(s, offset);
+    const before = prevBase(s, offset, memo);
     const after = nextChar(s, offset + c.length);
     if ((cp === 0xfe0e || cp === 0xfe0f) && (PICTOGRAPHIC.test(before) || KEYCAP_BASE.test(before))) {
       explained++;

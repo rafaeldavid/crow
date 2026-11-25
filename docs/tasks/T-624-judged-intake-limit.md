@@ -3,7 +3,7 @@
 - **Lane:** judgment
 - **Kind:** 5, judgment change (`docs/team.md`, Change recipes)
 - **Depends on:** T-613 (PR 818, where the red team found this), T-607 (PR 807, the charged run), T-614 (PR 821, the long-string rule)
-- **Paths this task may touch:** `packages/judgment/src/intake.ts`, `packages/judgment/src/references.ts`, the reference-size line of `readReference` in `packages/judgment/src/checks/index.ts`, their tests, the tests that relied on 10 MiB deliveries (`pipeline.test.ts`, `preflight.test.ts`, `redteam.test.ts`, `references.test.ts`), a new test `packages/judgment/src/heap.test.ts`, `packages/judgment/scripts/mutants.mjs` (one mutant's text), `apps/operator/src/server.ts` (one discovery field) and its test, `apps/demo-cloud/src/world.test.ts`, `spec/openapi/paths.json` and the generated `spec/openapi.json`, `examples/check-terms.ts` and its test, `examples/check-delivery.test.ts` (one test's delivery size), `site/ref/limits.txt`, `site/ref/http-seller.txt`, `site/ref/checks.txt`, `docs/api.md`, `docs/judgment-and-defenses.md` (T17), the rebuilt bundles under `site/`, `docs/decisions-today.md` (D108), this file
+- **Paths this task may touch:** `packages/judgment/src/intake.ts`, `packages/judgment/src/normalize.ts` (the memo, red team H2) and a new `normalize.test.ts`, `packages/judgment/src/references.ts`, the reference-size line of `readReference` in `packages/judgment/src/checks/index.ts`, their tests, the tests that relied on 10 MiB deliveries (`pipeline.test.ts`, `preflight.test.ts`, `redteam.test.ts`, `references.test.ts`), a new test `packages/judgment/src/heap.test.ts`, `packages/judgment/scripts/mutants.mjs` (one mutant's text), `apps/operator/src/server.ts` (one discovery field) and its test, `apps/demo-cloud/src/world.test.ts`, `spec/openapi/paths.json` and the generated `spec/openapi.json`, `examples/check-terms.ts` and its test, `examples/check-delivery.test.ts` (one test's delivery size), `site/ref/limits.txt`, `site/ref/http-seller.txt`, `site/ref/checks.txt`, `docs/api.md`, `docs/judgment-and-defenses.md` (T17), the rebuilt bundles under `site/`, `docs/decisions-today.md` (D108), this file
 - **Human gate:** no. A deploy of the operators or the site waits for Rafa.
 - **Status:** review
 - **Agent/session:** heap-bound, 2026-11-25
@@ -29,7 +29,9 @@ A delivery's judgment must not depend on the adjudicator's memory. The primary o
 - [x] `examples/check-terms.ts` warns when a `row_count_range` check's rows cannot or may not fit the limit.
 - [x] 807's charged run, 818's depth cap and 821's long-string rule are unchanged.
 - [x] D108 recorded, with the measurements and when to raise the limit.
-- [ ] One Opus red team; findings fixed or recorded.
+- [x] Intake also refuses text longer than the limit in UTF-16 units once normalized, directly or with its `\u` escapes decoded (red team H1).
+- [x] Normalization takes linear time on a run of variation selectors, with output identical to the old walk (red team H2).
+- [x] One Opus red team; findings fixed or recorded.
 - [ ] The bundles rebuilt with `corepack pnpm build && node site/build.mjs`; `buy.mjs` and `try.mjs` unchanged; hashes listed.
 
 ## Decisions
@@ -51,8 +53,22 @@ Measured on 2026-11-25 on one Mac (Node 22.23.4), unless labelled. Probes in the
 - **Judgment package:** `corepack pnpm exec vitest run packages/judgment`, 31 files, 1,246 passed, 3 expected failures, 4 skipped. The tests that built deliveries over 1 MiB to exhaust the work budget now use 100 cells of 9,000 characters (900 kB) and still escalate.
 - **Operator and World:** `apps/demo-cloud/src/world.test.ts` and `apps/operator/src/agent-ready.test.ts`, 73 passed; `examples/check-terms.test.ts`, 51 passed.
 
+**Red team** (one Opus pass, given CLAUDE.md, ADR-0001, ADR-0006, the operator threat model and the threat table, not this session's conclusions; probes in the gitignored `reports/scratch/redteam-t624/`). Result: ISSUES, two High.
+
+| Finding | Severity | Status |
+| --- | --- | --- |
+| H1. NFKC expansion: 1 MiB of U+FDFA is 6,291,451 UTF-16 units once normalized; screen-1 ran out of memory at 256 MB, and at 1,048,548 bytes (Crow's store cap) it failed at 128 MB (measured) | High | Fixed: intake refuses normalized text over the limit, directly and with `\u` escapes decoded. `heap.test.ts` runs both at exactly the limit and one unit over |
+| H2. `prevBase` walked back over every earlier variation selector: 1 MiB took 513 s in intake, and about 85 s in each screen through JSON escapes (measured) | High | Fixed: a memo, output identical (`normalize.test.ts`, 5,000 random strings against the old walk; a wrong memo fails it). `heap.test.ts` adds both runs and caps each case at 60 s |
+| M1. The limit is the build's, not the signed policy's: builds can disagree on 1 to 10 MiB, and an upgrade changes in-flight deals with a third-party adjudicator that stores more (inferred) | Medium | Recorded in D108 as a residual; binding it needs the adjudicator schema (ADR) |
+| L1. `ref/http-seller.txt` said "on any node"; the T17 row claimed a worker with a time limit | Low | Fixed: both say what holds |
+| L2. check-terms read only `row_count_range` | Low | Fixed: a JSON Schema root's `minItems` (type array) or `minLength` (type string) that cannot fit warns too |
+| L3. 1 MiB of empty lines builds a 1,200,315-character prompt for a 100,000-character data cap (datamark per line); the same on every host | Low | Not this change: for the triage note (`prompt.ts` is T-616's) |
+
+What held (red team, measured): tag characters, 4-byte emoji, ZWJ runs, `uniqueItems`, `enum` and `pattern` JSON, the data kinds, twenty 1 MiB references at once, and the prompt with seeded sampling, all at 64 MB; every reader of a delivery passes the limit; `payload_too_large` rejects on the primary, the fallback and the appeal alike.
+
 ## Handoff
 
 - **Done in the repository:** intake and the reference cap read at most 1 MiB, discovery and the docs state it, check-terms warns, and the heap test holds it at three heap sizes.
 - **Not done:** a deploy of the operators and the site (Rafa's). Until then the live nodes publish no `maxJudgedPlaintextBytes`; their store already keeps no more than the limit.
+- **Follow-ups for the coordinator:** M1 (bind the limit to the policy, an ADR) and L3 (the prompt's datamark overhead) for the triage note. `apps/own-seller/src/frozen.test.ts` (T-478) fails locally on every branch that changes `packages/`, since CI's shallow checkout skips it; it is not this task's file.
 - **To raise the limit:** make the heavy screen passes lean with byte-identical output for every kept version, add a stage-1 JSON value bound, then raise the constant until `heap.test.ts` fails at 64 MB and keep the last size that passes.

@@ -157,16 +157,29 @@ function engine(check: J, path: string, out: Warning[]): void {
  * D108: judgment reads at most JUDGED_MAX_PLAINTEXT_BYTES, and a larger delivery is rejected before any check runs.
  * Terms state no size, but a row count does: a row of K columns takes at least K bytes in any format (K - 1 commas and
  * a line end in CSV, more in JSON), so N rows take at least N x K. It warns when the fewest rows a check accepts cannot
- * fit, and when the most it accepts may not.
+ * fit, and when the most it accepts may not. A JSON Schema's root minItems or minLength that cannot fit warns too.
  */
 function sizes(checks: J, path: string, out: Warning[]): void {
   if (!Array.isArray(checks)) return;
   const exact = checks.find((c: J) => c?.type === 'csv_columns_exact' && Array.isArray(c.columns));
   const columns = Math.max(1, exact ? exact.columns.length : 1);
   const per = columns === 1 ? 'a row takes at least 1 byte' : `a row of ${columns} columns takes at least ${columns} bytes`;
+  const limit = `the ${JUDGED_MAX_PLAINTEXT_BYTES.toLocaleString('en-US')} bytes Crow's adjudicators judge (limits.maxJudgedPlaintextBytes)`;
   checks.forEach((c: J, i) => {
+    // A JSON Schema's root binds every delivery that passes. With type array, n items take at least 2n + 1 bytes; with
+    // type string, n code points take at least n + 2. Without the type the keyword does not bind (an object passes
+    // minItems), and deeper keywords can sit under not or anyOf, so neither is read.
+    if (c?.type === 'json_schema' && isRecord(c.schema)) {
+      const { minItems, minLength } = c.schema;
+      if (c.schema.type === 'array' && Number.isSafeInteger(minItems) && 2 * minItems + 1 > JUDGED_MAX_PLAINTEXT_BYTES) {
+        out.push({ kind: 'size', path: `${path}[${i}].schema.minItems`, found: `at least ${minItems} items`, why: `an array of that many takes at least ${2 * minItems + 1} bytes, over ${limit}, and a larger delivery is rejected before any check runs` });
+      }
+      if (c.schema.type === 'string' && Number.isSafeInteger(minLength) && minLength + 2 > JUDGED_MAX_PLAINTEXT_BYTES) {
+        out.push({ kind: 'size', path: `${path}[${i}].schema.minLength`, found: `at least ${minLength} characters`, why: `a string that long takes at least ${minLength + 2} bytes, over ${limit}, and a larger delivery is rejected before any check runs` });
+      }
+      return;
+    }
     if (c?.type !== 'row_count_range') return;
-    const limit = `the ${JUDGED_MAX_PLAINTEXT_BYTES.toLocaleString('en-US')} bytes Crow's adjudicators judge (limits.maxJudgedPlaintextBytes)`;
     if (Number.isSafeInteger(c.min) && c.min * columns > JUDGED_MAX_PLAINTEXT_BYTES) {
       out.push({ kind: 'size', path: `${path}[${i}].min`, found: `at least ${c.min} rows`, why: `${per}, so every delivery the check accepts is over ${limit}, and a larger delivery is rejected before any check runs` });
     } else if (Number.isSafeInteger(c.max) && c.max * columns > JUDGED_MAX_PLAINTEXT_BYTES) {

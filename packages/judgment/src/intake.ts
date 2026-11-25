@@ -4,6 +4,7 @@
 import type { Address, Delivery, Judgment, MimeType } from '@holdback/core';
 import { err, ok, type Result } from '@holdback/core';
 import { sha256 } from '@holdback/core/crypto';
+import { decodeJsonEscapes } from './hidden.js';
 import { normalizeText } from './normalize.js';
 import { UntrustedData } from './untrusted.js';
 
@@ -111,6 +112,11 @@ export function decodePlaintext(plaintext: Uint8Array, mime: MimeType): Result<D
     return fail('not_utf8', 'plaintext is not valid UTF-8');
   }
   const n = normalizeText(raw);
+  // D108: NFKC can make text longer (U+FDFA, 3 bytes, is 18 UTF-16 units), and the screen normalizes the text again with
+  // its \u escapes decoded. Both views are bounded like the bytes, so no delivery under the limit grows past it in the
+  // screen (T-624, red team H1).
+  const units = Math.max(n.text.length, raw.includes('\\u') ? decodeJsonEscapes(raw).normalize('NFKC').length : 0);
+  if (units > JUDGED_MAX_PLAINTEXT_BYTES) return fail('payload_too_large', `the text is ${units} UTF-16 units once normalized; judgment reads at most ${JUDGED_MAX_PLAINTEXT_BYTES} (the judged-intake limit)`);
   return ok({
     raw: UntrustedData.wrap(raw),
     data: UntrustedData.wrap(n.text),
