@@ -61317,7 +61317,7 @@ function checkPlaceholders(where, node, scope, path = "") {
 		const shape = /^([A-Za-z][A-Za-z0-9]*)(\.length)?$/.exec(inner);
 		const at = path ? ` at ${path}` : "";
 		const fields = Object.keys(scope).join(", ");
-		if (!shape) throw new Error(`${where}: {{${plain$5(inner).slice(0, 60)}}}${at} is not a placeholder the filler can read: a name of letters and digits, with or without .length (scope fields: ${fields})`);
+		if (!shape) throw new Error(`${where}: {{${plain$6(inner).slice(0, 60)}}}${at} is not a placeholder the filler can read: a name of letters and digits, with or without .length (scope fields: ${fields})`);
 		const [, name, length] = shape;
 		const rule = scope[name];
 		if (!rule) throw new Error(`${where}: {{${name}}}${at} is not a field the scope gives (scope fields: ${fields})`);
