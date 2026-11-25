@@ -31,7 +31,7 @@ const SELLER = party(5);
 const [ORDER, ECDSA, ED25519] = (JSON.parse(readFileSync(new URL('../../../spec/examples/commitment.signature-valid.example.json', import.meta.url), 'utf8')) as Commitment).acceptance.deterministicChecks;
 
 /** A kind a later schema may add and this build does not run (ADR-0045 §8): the decline rule must still hold for it. */
-const TREND = { id: 'trend', type: 'monotonic_column', required: true, column: 'ts' };
+const TREND = { id: 'trend', type: 'trend_column', required: true, column: 'ts' };
 const TREND_OPTIONAL = { ...TREND, id: 'trend-b', required: false };
 
 const NINE = ['csv_columns_exact', 'row_count_range', 'unique_key', 'null_rate_max', 'regex_match_rate_min', 'iso8601_date_column', 'json_schema', 'reference_row_match_min', 'hidden_characters_max'];
@@ -69,11 +69,11 @@ async function offered(checks: readonly unknown[]) {
 }
 
 describe("an adjudicator's checkKinds (ADR-0045 §8)", () => {
-  it('lists exactly the kinds stage 1 runs: the nine of schema v0.12 and signature_valid (ADR-0045)', () => {
+  it('lists exactly the kinds stage 1 runs: the nine of schema v0.12, signature_valid (ADR-0045) and the three data kinds (ADR-0047)', () => {
     const adj = bench(A, 'bench-a', new TestSettlement());
     const listed = adj.registration().checkKinds!;
     expect(listed).toEqual([...CHECK_TYPES]);
-    expect([...listed].sort()).toEqual([...NINE, 'signature_valid'].sort());
+    expect([...listed].sort()).toEqual([...NINE, 'signature_valid', 'passes_through', 'monotonic_column', 'equal_lengths'].sort());
   });
 
   it('makes a record the adjudicator schema accepts, and leaves policyHash a hash of the policy alone', () => {
@@ -94,7 +94,7 @@ describe('the primary and a check kind it does not run (ADR-0045 §10)', () => {
     ['two of them, naming the first', [ORDER, TREND_OPTIONAL, TREND], 'trend-b'],
   ])('declines an offer with %s, signs no acceptance and says why', async (_, checks, id) => {
     const { s, a, deal, report } = await offered(checks);
-    const why = `bench-a does not run the check kind monotonic_column, which check ${id} names, so it declines the offer; checkKinds on its adjudicator record lists the kinds it runs`;
+    const why = `bench-a does not run the check kind trend_column, which check ${id} names, so it declines the offer; checkKinds on its adjudicator record lists the kinds it runs`;
     expect(report.accepted).toEqual([]);
     expect(report.declined).toEqual([{ commitmentId: deal.id, reason: why }]);
     expect(report.refused).toEqual([]);
@@ -121,7 +121,7 @@ describe('the primary and a check kind it does not run (ADR-0045 §10)', () => {
   it('answers the fallback and the appeal role the same way: they sign no decision on a kind they do not run (D92)', async () => {
     const { b, c, deal } = await offered([ORDER, TREND]);
     const why = (role: string) =>
-      `bench-${role === 'fallback' ? 'b' : 'c'} does not run the check kind monotonic_column, which check trend names, so as ${role} adjudicator it signs no decision; the deal passes to the next adjudicator or its default outcome, which returns the price and the fee`;
+      `bench-${role === 'fallback' ? 'b' : 'c'} does not run the check kind trend_column, which check trend names, so as ${role} adjudicator it signs no decision; the deal passes to the next adjudicator or its default outcome, which returns the price and the fee`;
     expect(await b.declines(deal, 'fallback')).toMatchObject({ type: 'adjudicator_unavailable', detail: why('fallback') });
     expect(await c.declines(deal, 'appeal')).toMatchObject({ type: 'adjudicator_unavailable', detail: why('appeal') });
     // Without that kind they answer as before.
@@ -143,11 +143,11 @@ describe('a turn on a funded deal whose terms name a kind the adjudicator does n
     s.offer(deal);
     // The primary's acceptance models a build that ran the kind then (an outside primary, or one rolled back since).
     const kinds = CHECK_TYPES as Set<string>;
-    kinds.add('monotonic_column');
+    kinds.add('trend_column');
     try {
       expect((await a.runOnce()).accepted).toEqual([deal.id]);
     } finally {
-      kinds.delete('monotonic_column');
+      kinds.delete('trend_column');
     }
     s.fund(deal.id);
     s.at('2026-11-01T09:59:00Z');
@@ -198,7 +198,7 @@ describe('a turn on a funded deal whose terms name a kind the adjudicator does n
     const { s, deal } = await funded(store);
     const kinds = CHECK_TYPES as Set<string>;
     // The build that ran the kind judges and keeps its result; its decision does not land.
-    kinds.add('monotonic_column');
+    kinds.add('trend_column');
     try {
       const first = bench(A, 'bench-a', s, { judgedStore: store });
       s.failNextDecisions = 1;
@@ -206,7 +206,7 @@ describe('a turn on a funded deal whose terms name a kind the adjudicator does n
       expect(s.decisions(deal.id)).toEqual([]);
       expect(rows.size).toBe(1);
     } finally {
-      kinds.delete('monotonic_column');
+      kinds.delete('trend_column');
     }
     // After a restart onto a build without the kind, the kept decision is signed, and no new judgment is made.
     const restarted = bench(A, 'bench-a', s, { judgedStore: store });

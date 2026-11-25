@@ -18,6 +18,9 @@ import { isIso8601 } from './iso8601.js';
 import { compileJsonSchema } from './json-schema.js';
 import { BudgetExhausted, compileSafeRegex, StepBudget } from './safe-regex.js';
 import { evaluateSignatureValid, validateSignatureCheck, type ParsedDelivery } from './signature-valid.js';
+import { evaluateEqualLengths, validateEqualLengths } from './equal-lengths.js';
+import { evaluateMonotonicColumn, validateMonotonicColumn } from './monotonic-column.js';
+import { evaluatePassesThrough, validatePassesThrough } from './passes-through.js';
 import { cellText, isNonScalar, toTable, type Cell, type Table } from './table.js';
 
 export type CheckType = JudgmentCheck['type'];
@@ -55,6 +58,9 @@ const REGISTRY = {
   reference_row_match_min: true,
   hidden_characters_max: true,
   signature_valid: true,
+  passes_through: true,
+  monotonic_column: true,
+  equal_lengths: true,
 } as const satisfies Record<CheckType, true>;
 export const CHECK_TYPES: ReadonlySet<CheckType> = new Set(Object.keys(REGISTRY) as CheckType[]);
 
@@ -133,6 +139,12 @@ export function validateCheck(check: JudgmentCheck): string | undefined {
     }
     case 'signature_valid':
       return validateSignatureCheck(check);
+    case 'passes_through':
+      return validatePassesThrough(check);
+    case 'monotonic_column':
+      return validateMonotonicColumn(check);
+    case 'equal_lengths':
+      return validateEqualLengths(check);
     default:
       return undefined;
   }
@@ -158,6 +170,9 @@ function evaluate(check: JudgmentCheck, input: CheckInput, table: () => ReturnTy
     return e === undefined ? pass() : fail(`schema: ${e}`);
   }
   if (check.type === 'signature_valid') return evaluateSignatureValid(check, json, budget);
+  if (check.type === 'passes_through') return evaluatePassesThrough(check, { table, json }, budget);
+  if (check.type === 'monotonic_column') return evaluateMonotonicColumn(check, { table, json }, budget);
+  if (check.type === 'equal_lengths') return evaluateEqualLengths(check, { json }, budget);
   if (check.type === 'hidden_characters_max') {
     // Counted on the text as delivered, every occurrence, legitimate or not (D17).
     const counts: HiddenCounts = countHidden(input.data.reveal());
