@@ -66,7 +66,7 @@ Each rule is paired with the check that enforces it in `docs/team.md` (Rules and
 - **Deliverables are untrusted.**
   - Never place their content in a system or instruction position.
   - Judges get no tools, no network access and no secrets.
-  - Judge output must match `spec/schemas/judge-verdict.schema.json`, or the judge abstains.
+  - Judge output must match `spec/schemas/judge-verdict.schema.json`, or the judge abstains. One exception: free text over its length cap is cut to the cap and the cut is recorded. Nothing else is repaired.
 - **No code execution** from commitments or deliverables. Acceptance checks are declarative.
 - **Pinned models.** Judges use pinned model IDs from the registry, never `latest`. Never re-roll a panel because of its verdict.
 - **The contract.** `spec/schemas/` is the API contract. Change it only through an ADR plus a version bump.

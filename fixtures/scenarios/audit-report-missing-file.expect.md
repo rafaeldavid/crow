@@ -11,11 +11,11 @@ The audit-report template (T-317, loosened by T-320), checks-only. Tidewater's r
 | Pragmas | settlement=sim · judges=recorded · mode=guaranteed_on_decision · seed=318 |
 | Prefix | none (normal flow: reaches a terminal state, invariants hold) |
 | Settlement | SimChain (T-006) driving @holdback/core `step` |
-| Judgment | @holdback/judgment (checks, screen, panel) · registry config/judges.yaml 0x8aa4…4549 · policy bench-a/p1 0xd136…9300 |
+| Judgment | @holdback/judgment (checks, screen, panel) · registry config/judges.yaml 0x8aa4…4549 · policy bench-a/p1 0x40b5…1e88 |
 | Club | fixtures/clubs/data-services-v1.yaml (loaded) · rulebook 0xd9bc…492d |
 | Buyer | atlas-buyer 0x7322…8C9B |
 | Seller | tidewater-seller 0xfA6c…C4D8 |
-| Terms | fixtures/terms/audit-report.yaml (loaded) · commitment 0x7217…dd25 · price 1,500.000000 tUSD · fee 50.000000 tUSD |
+| Terms | fixtures/terms/audit-report.yaml (loaded) · commitment 0xe2e8…3dda · price 1,500.000000 tUSD · fee 50.000000 tUSD |
 | Adjudicators | primary bench-a 0xc20d…561A · fallback bench-b 0x0a47…F408 · appeal bench-c 0x8221…F88f |
 | Operators | op-1 · op-2 |
 
@@ -46,13 +46,13 @@ The audit-report template (T-317, loosened by T-320), checks-only. Tidewater's r
 - **Intake:** plaintext 0xafab…895a · application/json · 5063 bytes (fixtures/data/audit-report/report.missing-file.json) · hash verified ✓ · normalized
 - **Deterministic checks:** report ✓ · proof ✓ · scope ✓ · coverage ✗ (schema: /filesReviewed: fewer than 3 items) · hidden ✓
 - **Screen:** clean
-- **Panel:** not run · first-instance template 0xabb5…4dd2 · rubric 0x551e…5e6a · seed source: commit-reveal (commitment 0x2ac1…4a29, seed 0x0014…d8a1, recomputed: match)
+- **Panel:** not run · first-instance template 0x4d32…629b · rubric 0x551e…5e6a · seed source: commit-reveal (commitment 0x2ac1…4a29, seed 0x0014…d8a1, recomputed: match)
 - **Aggregate:** reject. Reasons: required deterministic check failed: coverage.
 - **Signed:** reject.
 
 ## Receipts and log
 
-- Events 0–7. Chain head 0x0ea7…d9bd. Replay of 6 SimChain submissions from genesis matches the settlement state.
+- Events 0–7. Chain head 0x9f5d…fb76. Replay of 6 SimChain submissions from genesis matches the settlement state.
 - Receipts from op-1: 5 (rcpt-0001–rcpt-0005). The runner labels them without signing; the operator API signs real receipts.
 
 ## Invariants

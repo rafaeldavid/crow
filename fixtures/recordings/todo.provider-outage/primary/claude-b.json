@@ -1,0 +1,35 @@
+{
+  "format": "holdback.recording/v1",
+  "scenario": "todo.provider-outage",
+  "role": "primary",
+  "judgeId": "claude-b",
+  "provider": "anthropic",
+  "family": "claude",
+  "model": "placeholder-claude-b-20260601",
+  "promptTemplateHash": "0x4d328a15ef96b9aa0f4166efc720a320f82e9c677fdd8beaff431ecefcc9629b",
+  "inputHash": "0x0385cba5e224f7e81b18dfb4d63875363945b5ef907c8545d6f00cacbc45fb64",
+  "rubricHash": "0x4201c2a950347823c494fcfc89f88fab1ca670b2086f66ed726aa9c7b0ec7925",
+  "capturedFrom": "authored",
+  "verdict": {
+    "criteria": [
+      {
+        "id": "dedupe_quality",
+        "score": 0,
+        "evidence": "authored fixture verdict: provider unavailable, no score"
+      },
+      {
+        "id": "no_fabrication",
+        "score": 0,
+        "evidence": "authored fixture verdict: provider unavailable, no score"
+      },
+      {
+        "id": "notes",
+        "score": 0,
+        "evidence": "authored fixture verdict: provider unavailable, no score"
+      }
+    ],
+    "overall": "abstain",
+    "injectionSuspected": false,
+    "rationale": "authored fixture verdict for todo.provider-outage (T-010, re-seated under agg-3 by T-018 and under screen-1 by T-367), not a model output: the gpt provider returned no answer, so this judge abstains"
+  }
+}

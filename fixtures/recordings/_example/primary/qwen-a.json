@@ -1,0 +1,35 @@
+{
+  "format": "holdback.recording/v1",
+  "scenario": "_example",
+  "role": "primary",
+  "judgeId": "qwen-a",
+  "provider": "openai-compatible",
+  "family": "qwen",
+  "model": "placeholder-qwen-a-20260601",
+  "promptTemplateHash": "0x4d328a15ef96b9aa0f4166efc720a320f82e9c677fdd8beaff431ecefcc9629b",
+  "inputHash": "0xf73e9967da06b0294f3f830c0a1a2bb8f7bf0577fe90a9f6487aa53ccbc06664",
+  "rubricHash": "0x4201c2a950347823c494fcfc89f88fab1ca670b2086f66ed726aa9c7b0ec7925",
+  "capturedFrom": "fake",
+  "verdict": {
+    "criteria": [
+      {
+        "id": "dedupe_quality",
+        "score": 4,
+        "evidence": "fake judge: fixed score"
+      },
+      {
+        "id": "no_fabrication",
+        "score": 4,
+        "evidence": "fake judge: fixed score"
+      },
+      {
+        "id": "notes",
+        "score": 4,
+        "evidence": "fake judge: fixed score"
+      }
+    ],
+    "overall": "pass",
+    "injectionSuspected": false,
+    "rationale": "fake judge: fixed passing verdict, not a model output"
+  }
+}

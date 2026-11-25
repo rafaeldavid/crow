@@ -268,7 +268,7 @@ describe('site/setup.mjs seller, check and status (T-472)', () => {
     expect(readdirSync(`${folder}-card`)).toEqual(['agent.json']);
     expect(readFileSync(join(`${folder}-card`, 'agent.json'), 'utf8')).not.toMatch(/0x[0-9a-f]{40}/i);
     // It ends by running the check: one JSON line per check, all passing.
-    expect(lines.slice(1).map((l) => [l.step, l.check, l.ok])).toEqual([['check', 'folder', true], ['check', 'configuration', true], ['check', 'template', true], ['check', 'sample', true], ['check', 'required-field', true], ['check', 'secrets', true]]);
+    expect(lines.slice(1).map((l) => [l.step, l.check, l.ok])).toEqual([['check', 'folder', true], ['check', 'configuration', true], ['check', 'template', true], ['check', 'sample', true], ['check', 'required-field', true], ['check', 'secrets', true], ['check', 'card', true]]); // T-478: the card's local check
     sentNothing(run);
     // `check` alone gives the same lines and exit 0; `status` names the role, the steps and the addresses, and no key.
     const checked = await node(at, ['check', '--folder', folder, '--test-world', '--operators', operators]);

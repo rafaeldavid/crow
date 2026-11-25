@@ -20,6 +20,9 @@ const EXEMPT: Record<string, string> = {
   // Round 1's driver against the demo world on anvil. Each file's other suites run in the test shards. The anvil
   // halves take minutes, and one check is sensitive to machine load (docs/team.md, the row from T-231), so a job that
   // must not skip would fail on a slow runner. They run locally, with Foundry, in `pnpm test`.
+  // T-478: reads the branch's diff from main's history, which CI's shallow checkout of the pull request does not have;
+  // the frozen paths are a review rule there, and the test runs locally.
+  'apps/own-seller/src/frozen.test.ts': "needs main's history, which CI's shallow checkout does not fetch; runs locally",
   'examples/e2e-round.test.ts': "the round driver's anvil half: minutes long and load-sensitive; runs locally",
   'examples/e2e-scenarios-direct.test.ts': "the round driver's anvil half: minutes long and load-sensitive; runs locally",
   'examples/e2e-scenarios-escalation.test.ts': "the round driver's anvil half: minutes long and load-sensitive; runs locally",
@@ -39,6 +42,8 @@ const EXEMPT: Record<string, string> = {
   // T-555: two cases compare the published scan with Crow's private originals and private names list, which no public
   // runner may hold; the redaction's public checks (UUIDs, emails, removed fields, the table) run in the test shards.
   'tests/outside-scan.test.ts': "two cases need Crow's private repository, which CI must not have; the public checks run in the shards",
+  // ADR-0049: partner C's appeal, replayed from its private record; template-limits.test.ts runs a public model in CI.
+  'packages/judgment/src/partner-c-record.test.ts': "needs the partner's deal record from Crow's private repository, which CI must not have",
   // A wall-clock run at 10 MB, off unless HOLDBACK_PERF=1: tests do not assert on wall-clock time (docs/team.md).
   'packages/judgment/src/redteam.test.ts': 'an opt-in performance run (HOLDBACK_PERF=1), off by design',
 };

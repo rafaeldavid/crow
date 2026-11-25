@@ -14,6 +14,7 @@
     { "path": "examples" },
     { "path": "apps/test-agents" },
     { "path": "apps/hosted-sellers" },
+    { "path": "apps/own-seller" },
     { "path": "tools/sim" }
   ]
 }
