@@ -55,6 +55,21 @@ All measured on 2026-11-25 on main at `91430b55` (PR 795 merged) plus this branc
 - The Windows PowerShell line has not run: this machine has no PowerShell. A test compares its text only.
 - One reviewer pass: ISSUES. Fixed: a fixture too close to a private program's names (replaced with invented ones before the first commit); a refused start that stayed alive for minutes while one operator was silent; a template with the shipped template's name taken for the shipped one; the Windows line's error handling; three guide claims; two test gaps; one banner comment. The two behaviour fixes each have a test that failed before the fix. No second review ran on the fixes.
 
+## Follow-up: a signal at the ready line killed the process
+
+Branch `t-606-signal-before-ready`, 2026-11-25. All items measured, unless labeled otherwise, on main at `ae327a9a`.
+
+- **Symptom:** on PR 812's CI (shard 1 of 4), the shipped-template-name test got exit code `null` after 429 ms. PR 812 touches none of this code.
+- **Cause:** `startSellerAdapter` prints the ready line (`serves POST`) and more log lines before it returns, and `serve.ts` installed its handlers after the return. A signal in between took the operating system's default action. The order dates from the first version of `serve.ts`, not from a later merge.
+- **Why it passed before:** the test looked for the ready line every 25 ms, so the child had usually installed its handlers. That a busy CI runner delayed the child there is inferred.
+- **Reproduced** on main's `serve.mjs`, with a script outside the commit: SIGTERM sent as soon as the ready line arrived killed 241 of 300 runs. With the child paused 300 ms at that line, 5 of 5 for SIGTERM and 5 of 5 for SIGINT.
+- **Fix:** the handlers go in before the start. After the ready line they stop the adapter gracefully, as before. During a start they exit with status 0 at once and say that nothing was served.
+- **After:** the same script: SIGTERM 300 of 300 and SIGINT 100 of 100 ran the graceful stop, exit code 0; the paused case 5 of 5 for each signal.
+- **Tests:** two new ones in `examples/serve.test.ts`, for both signals: at the ready line with the child paused there, and during a start that waits on a silent operator. Both failed before the fix. A failed exit check now names the signal.
+- **Checks:** `pnpm typecheck` and `pnpm lint` exit 0; `node site/build.mjs && node site/check.mjs` PASS; 81 tests in the six files that read these files pass; `examples/serve.test.ts` passed 20 of 20 runs in a row. The full suite did not run here; CI is the gate. `serve.mjs` is the only pinned file this fix changes; its hash is in the published `ref/serve.txt`, which the build fills.
+- **Live:** during this fix, on 2026-11-25, https://crow.direct/serve.mjs served the first build (`faf1df13`), which has the race, until the next site deploy.
+- **The repo adapter has the same order** (`examples/seller-adapter.ts`, its own command line): the same script killed 77 of 100 runs. Not changed here. Its test sends the signal after a quote, so it has not failed on this.
+
 ## Out of scope
 
 - Check kinds added after the build: the file carries the check library as it was when built, so a new kind needs a rebuild and a new hash.

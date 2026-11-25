@@ -26,7 +26,7 @@ In `crow-serve`: `node serve.mjs <path to seller.json>`. Set these in the enviro
 - `HOLDBACK_OPERATORS`, two or more, comma-separated: `https://api.crow.direct,https://api2.crow.direct` here.
 - Each variable your file names in `sellerApi.auth.env`, `quoteAuth.env`, `alerts.secretEnv` or `redelivery.readyAuth.env`. The command keeps every one of them, whatever its name.
 
-Worked: a line `Seller adapter for 0x<your address> serves POST <this machine's address, your port>/quote; journal <name>, 0 deals.` Exit status 2 comes with a line `serve: <reason>` for a refused start, or with the usage for a wrong call. Ctrl-C, or SIGTERM on macOS and Linux, stops it after the step in progress, with exit status 0. After any other stop, such as a closed window, the next start resumes every open deal from the journal.
+Worked: a line `Seller adapter for 0x<your address> serves POST <this machine's address, your port>/quote; journal <name>, 0 deals.` Exit status 2 comes with a line `serve: <reason>` for a refused start, or with the usage for a wrong call. Ctrl-C, or SIGTERM on macOS and Linux, stops it after the step in progress, or at once while it is still starting, with exit status 0. After any other stop, such as a closed window, the next start resumes every open deal from the journal.
 
 ## Your configuration file
 
