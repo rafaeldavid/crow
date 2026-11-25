@@ -96,6 +96,9 @@ export function trustFaq(f = trustFacts()) {
       { id: 'who-receives-money', q: 'Which addresses can receive money from the hold?',
         a: `Only three. The price goes to the seller’s payout address or back to the buyer’s payment address. The adjudicator that decides receives its fee from the hold at the decision, if the terms set one. The rules contract pays no other address.`,
         sources: [controls, phaseOne] },
+      { id: 'cap-agent-spending', q: 'How can my company cap what its agent spends?',
+        a: `On your company’s side, in three ways. Load the agent’s payment address with only its budget, like a prepaid card: money leaves only from that balance, one deal’s funding at a time. Keep the payment key out of the agent’s reach, with a signer program your company runs (<code>examples/signer.ts</code>) whose rules file the agent cannot change: it signs a funding only within the most per deal and per day, the deals open at once, the listed sellers, the adjudicators and the deadlines. Or make the payment address a spend-controls vault your company owns, which checks its limits per deal, per period and in total in the same transaction that funds each hold; the vault runs on Sepolia with test tokens and has had no audit. A mandate’s caps are checked by each operator that relays the deal, not by the contracts.`,
+        sources: [['crow.direct/ref/limits.txt, “Where your agent’s limits hold”', 'https://crow.direct/ref/limits.txt'], ['crow.direct/ref/buyer-signer.txt, “A signer with rules, for an agent that holds no payment key”', 'https://crow.direct/ref/buyer-signer.txt'], ['crow.direct/vault.txt', 'https://crow.direct/vault.txt']] },
       { id: 'can-an-operator-move-funds', q: 'Can an operator move held funds?',
         a: `No. An operator’s relayer keys, which pay the gas for relayed messages, have no role in any contract. The rules contract checks every signature itself, so a relayed message that was changed fails. On the live service, Crow’s adjudicators run in the same service as Crow’s operators, and an adjudicator’s signed decision does move held funds within the deal’s terms.`,
         sources: [controls, file('docs/operations.md', 'What is live', 'what-is-live')] },
@@ -236,7 +239,7 @@ const qaHtml = (x) => `<section class="qa" id="${x.id}">
 ${sourceLine(x.sources)}
 </section>`;
 /** The header both pages share: the kit's header bar, its one button opening the early-access drawer. */
-const header = (base) => headerBar({ home: base, links: [[`${base}demo/`, 'Demo'], [`${base}llms.txt`, 'Agent docs']], button: { label: 'Request early access', href: `${base}#join-form`, attrs: 'data-join' } });
+const header = (base) => headerBar({ home: base, links: [[`${base}llms.txt`, 'Agent docs']], button: { label: 'Request early access', href: `${base}#join-form`, attrs: 'data-join' } });
 
 /** The two pages' styles, served as pages.css: the kit's parts they use, then their own layout. */
 export const PAGES_CSS = kitCss({ parts: ['bar', 'button', 'pill', 'head', 'table', 'notice', 'dialog', 'footer'] }) + `/* the trust and status pages (site/trust.mjs, T-421): light only, one column, the kit's tokens */

@@ -349,14 +349,14 @@ Each prints `results: … pass`. The escalation proves the operators' gas estima
    for f in try.mjs buy.mjs; do want=$(shasum -a 256 site/$f | cut -d' ' -f1); got=$(curl -fsS https://crow.direct/$f | shasum -a 256 | cut -d' ' -f1); echo "$f $([ "$want" = "$got" ] && echo same || echo DIFFERS)"; done
    curl -fsS https://crow.direct/ | grep -c "$(shasum -a 256 site/try.mjs | cut -d' ' -f1)"
    curl -fsS https://crow.direct/buy.txt | grep -c "$(shasum -a 256 site/buy.mjs | cut -d' ' -f1)"
-   curl -fsSL https://crow.direct/demo | grep -oE 'href="(https?://|/)[^"#]*' | cut -d'"' -f2 | sort -u | while read -r u; do case "$u" in /*) u="https://crow.direct$u" ;; esac; echo "$(curl -s -o /dev/null -L -w '%{http_code}' "$u") $u"; done
+   curl -fsSL https://crow.direct/ | grep -oE 'href="(https?://|/)[^"#]*' | cut -d'"' -f2 | sort -u | while read -r u; do case "$u" in /*) u="https://crow.direct$u" ;; esac; echo "$(curl -s -o /dev/null -L -w '%{http_code}' "$u") $u"; done
    curl -s -o /dev/null -w '%{http_code}\n' "https://crow.direct/no-such-page-$(date +%s)"
    curl -fsS https://crow.direct/ | wc -c
    curl -fs https://crow.direct/ | head -c 600 | grep -c '/llms.txt'
    for f in llms.txt buy.txt sell.txt; do curl -fsS https://crow.direct/$f | cmp -s - reports/site-out/$f && echo "$f same" || echo "$f DIFFERS"; done
    ```
 
-   Both scripts print `same`, and each hash count is at least `1`; every demo link starts with `200`; the missing page prints `404`; the home page's size is within `HOME_MAX_BYTES` in `site/check.mjs`, and its head, the first `POINTER_WITHIN` bytes there (the `head -c` value above), names `/llms.txt`; the three guides print `same`.
+   Both scripts print `same`, and each hash count is at least `1`; every homepage link starts with `200`; the missing page prints `404`; the home page's size is within `HOME_MAX_BYTES` in `site/check.mjs`, and its head, the first `POINTER_WITHIN` bytes there (the `head -c` value above), names `/llms.txt`; the three guides print `same`.
 
 **Rollback:** the script rolls the site back by itself on a failed live check. By hand, only together with the operators and the test agents, because the old command works only against the old world: `npx wrangler@4.151.3 rollback <crow-site version from step 0.9> --name crow-site`. Once the step passes, strangers open deals on the new world, and a rollback would leave each without an operator: fix forward.
 
