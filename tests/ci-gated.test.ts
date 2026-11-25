@@ -39,6 +39,8 @@ const EXEMPT: Record<string, string> = {
   // T-555: two cases compare the published scan with Crow's private originals and private names list, which no public
   // runner may hold; the redaction's public checks (UUIDs, emails, removed fields, the table) run in the test shards.
   'tests/outside-scan.test.ts': "two cases need Crow's private repository, which CI must not have; the public checks run in the shards",
+  // ADR-0049: partner C's appeal, replayed from its private record; template-limits.test.ts runs a public model in CI.
+  'packages/judgment/src/partner-c-record.test.ts': "needs the partner's deal record from Crow's private repository, which CI must not have",
   // A wall-clock run at 10 MB, off unless HOLDBACK_PERF=1: tests do not assert on wall-clock time (docs/team.md).
   'packages/judgment/src/redteam.test.ts': 'an opt-in performance run (HOLDBACK_PERF=1), off by design',
 };
