@@ -153,3 +153,56 @@ describe('the live world carries both live registries (T-631)', () => {
     expect(scripted.kept).toEqual([]);
   });
 });
+
+// T-632: after T-631's flip every live seat errored on the operators, because the Workers runtime refuses
+// `redirect: 'error'` (measured with wrangler 4.151.3 dev). This runs the Worker's own construction, panelConfig with
+// the live variables set, against a fetch that refuses what workerd refuses, over every seat of every carried registry.
+describe('the live panel under the Workers runtime (T-632)', () => {
+  const ENV = { HOLDBACK_ANTHROPIC_API_KEY: 'ka', HOLDBACK_OPENAI_COMPATIBLE_API_KEY: 'ko', HOLDBACK_OPENAI_COMPATIBLE_BASE_URL: 'https://api.deepseek.com', HOLDBACK_GOOGLE_API_KEY: 'kg' };
+  const VERDICT = JSON.stringify({ criteria: [], overall: 'pass', injectionSuspected: false, rationale: 'ok' });
+  const workersFetch = (status = 200) =>
+    (async (url: string, init: RequestInit = {}) => {
+      if (init.redirect !== undefined && init.redirect !== 'follow' && init.redirect !== 'manual') throw new TypeError('Invalid redirect value, must be one of "follow" or "manual"');
+      const json = url.includes('anthropic')
+        ? { content: [{ type: 'text', text: VERDICT }], usage: { input_tokens: 10, output_tokens: 5 } }
+        : url.includes('googleapis')
+          ? { candidates: [{ finishReason: 'STOP', content: { parts: [{ text: VERDICT }] } }], usageMetadata: { promptTokenCount: 10, candidatesTokenCount: 5 } }
+          : { choices: [{ message: { content: VERDICT } }], usage: { prompt_tokens: 10, completion_tokens: 5 } };
+      return new Response(JSON.stringify(json), { status });
+    }) as unknown as typeof globalThis.fetch;
+
+  it('every seat of the default and the carried registry answers live, repeats included, and is counted by model', async () => {
+    const cfg = panelConfig({ env: ENV, storage: new MemoryStorage(), now: () => Date.parse('2026-11-26T19:00:00Z'), fetch: workersFetch(), failClosed: true });
+    expect(cfg).toMatchObject({ live: true, closed: false, missing: [] });
+    cfg.allowLive = true;
+    for (const reg of [cfg.registry, ...cfg.kept.map((k) => k.registry)]) {
+      const provider = reg === cfg.registry ? cfg.provider : cfg.kept.find((k) => k.registry === reg)!.provider;
+      const seats = reg.active.flatMap((e) => [e, { ...e, id: `${e.id}:2` }]);
+      const answers = await cfg.panel(seats.length, () => Promise.all(seats.map((e) => provider.complete({ judgeId: e.id, provider: e.provider, model: e.model, system: 's', user: 'u', temperature: 0, maxOutputTokens: 100 }))));
+      for (const [i, a] of answers.entries()) expect(a.kind, seats[i]!.id).toBe('ok');
+    }
+    const day = await cfg.budget.used();
+    // Two seats per model per registry; Opus 5.5 and DeepSeek V4 Pro sit in both registries.
+    for (const e of cfg.registry.active) {
+      const n = 2 * [cfg.registry, ...cfg.kept.map((k) => k.registry)].filter((r) => r.active.some((x) => x.model === e.model)).length;
+      expect(day.byModel?.[e.model]).toMatchObject({ calls: n, input: 10 * n, output: 5 * n });
+    }
+  });
+
+  it('a failed call is counted by model and code and logged as one line, with no key', async () => {
+    const lines: string[] = [];
+    const orig = console.warn;
+    console.warn = (...a: unknown[]) => void lines.push(a.join(' '));
+    try {
+      const cfg = panelConfig({ env: ENV, storage: new MemoryStorage(), now: () => Date.parse('2026-11-26T19:00:00Z'), fetch: workersFetch(401), failClosed: true });
+      cfg.allowLive = true;
+      const e = cfg.registry.active.find((x) => x.provider === 'google')!;
+      const a = await cfg.panel(3, () => cfg.provider.complete({ judgeId: e.id, provider: e.provider, model: e.model, system: 's', user: 'u', temperature: 0, maxOutputTokens: 100 }));
+      expect(a.kind).toBe('error');
+      expect((await cfg.budget.used()).byModel?.[e.model]?.errors).toEqual({ http_401: 1 });
+    } finally {
+      console.warn = orig;
+    }
+    expect(lines).toEqual(['judge call failed: google gemini-4-neon@2026-11-26 http_401']);
+  });
+});
