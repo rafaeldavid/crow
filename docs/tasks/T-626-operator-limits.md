@@ -5,7 +5,7 @@
 - **Depends on:** T-422
 - **Paths this task may touch:** `apps/demo-cloud/`; `apps/operator/src/` (the write path); `docs/operator-threat-model.md`; this file.
 - **Human gate:** yes. A deploy of the operators waits for Rafa.
-- **Status:** blocked. The red-team pass is not done (Handoff).
+- **Status:** review
 - **Agent/session:** operator-limits, 2026-11-26; branch `t-626-operator-limits`
 - **Roadmap row:** none
 - **Change kind:** API and operator code (kind 4), with one red-team pass
@@ -46,7 +46,8 @@ The stored cap rows and the fingerprints in them keep their format, so a day's c
 All measured on 2026-11-26.
 
 - `pnpm build`, `pnpm typecheck` and `pnpm lint` pass.
-- `pnpm exec vitest run apps/demo-cloud apps/operator`, with anvil and built contracts: 55 files and 586 tests passed; 1 file and 2 tests skipped.
+- `pnpm exec vitest run apps/demo-cloud apps/operator`, with anvil and built contracts: 55 files and 586 tests passed; 1 file and 2 tests skipped. The result is the same after the merge of `origin/main` at `1a2440e3`.
+- After that merge, `node site/build.mjs && node site/check.mjs` passes and changes no file.
 - No snapshot changed.
 
 ## Decisions
@@ -55,7 +56,7 @@ All measured on 2026-11-26.
 
 ## Handoff
 
-- **Not done: the red-team pass.** The red-team subagent stopped before it reported findings: the model's safeguards ended its session. Nobody has attacked this change. The session did not retry it with another brief or model, and did not do the pass itself. The coordinator or Rafa decides how the pass runs.
-- **Not pushed.** The coordinator decides how to publish the pull request. The coordinator's private notes hold the details.
-- No merge and no deploy. A deploy waits for Rafa.
+- **Not done: the red-team pass.** The red-team agent's session ended before it reported findings. At the coordinator's request, a reviewer pass runs on the pull request. It is a code review and does not count as the red-team pass.
+- The coordinator merges after CI passes and the review is clean. This session does not merge.
+- No deploy. A deploy waits for Rafa.
 - To resume: run the tests above, after `pnpm build` and `forge build --root contracts`.
