@@ -166,11 +166,12 @@ export interface OperatorOptions {
   env: Readonly<Record<string, string | undefined>>;
   rateLimit?: RateLimit;
   /**
-   * This node's own quota on what it relays or stores for a client (a public node's daily caps). The node asks it last:
-   * after the throttle and its own checks, inside the idempotency handler. So a request refused earlier and a replay
-   * answered from the store never reach it, and its subject is the request as this node parsed it. A refusal is answered
-   * like any problem and is not stored; `settle` is told whether the relay or the upload succeeded. Dry runs relay and
-   * store nothing. Absent: no quota.
+   * This node's own quota on the writes it relays to the settlement layer and the ciphertext it stores (a public node's
+   * daily caps). Registrations, disclosures, reports and faucet grants never reach it. The node asks it last: after the
+   * throttle and its own checks, inside the idempotency handler. So a request refused earlier and a replay answered from
+   * the store never reach it, and its subject is the request as this node parsed it. A refusal is answered like any
+   * problem and is not stored; the throttle already counted the request. `settle` is told whether the relay or the upload
+   * succeeded. Dry runs relay and store nothing. Absent: no quota.
    */
   quota?: (about: QuotaSubject) => Promise<QuotaTake>;
   log?: (entry: LogEntry) => void;
@@ -1175,9 +1176,13 @@ export class Operator {
     this.send(ctx, response);
   }
 
-  /** Runs a relay or an upload within this node's quota (OperatorOptions.quota). */
+  /**
+   * Runs a relay or an upload within this node's quota (OperatorOptions.quota). The quota sees a frozen copy of its
+   * subject, as the policy does: it can refuse, never alter what this node relays.
+   */
   private async withinQuota(about: QuotaSubject, run: () => Promise<StoredResponse>): Promise<StoredResponse> {
-    const take = await this.o.quota?.(about);
+    if (!this.o.quota) return run();
+    const take = await this.o.quota(deepFreeze(structuredClone(about)));
     if (take && 'refuse' in take) throw new HttpProblem(take.refuse);
     let accepted = false;
     try {

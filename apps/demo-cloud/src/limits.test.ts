@@ -322,7 +322,7 @@ describe('each operator asks the daily caps as its quota (T-626)', () => {
     }
   }, 60_000);
 
-  it('asks the daily caps only about a write it is about to relay', async () => {
+  it('writes no cap row for a funding the operator refuses for its content', async () => {
     const { send, bodyReads, capWrites } = await directWorld(100);
     const funding = CAPPED_ROUTES.filter((r) => r.path !== '/v1/ciphertext');
     for (const { path, body } of funding) expect((await send(path, body, `bad-${path}`)).status, path).toBeLessThan(500);
@@ -355,6 +355,32 @@ describe('each operator asks the daily caps as its quota (T-626)', () => {
     } finally {
       capture.restore();
     }
+  }, 60_000);
+
+  it('answers replays of an accepted funding and upload after a reopen, from another client, when the caps allow nothing', async () => {
+    const storage = new MemoryStorage();
+    const first = await serveWorld({ fundedDealsPerClientPerDay: 1, ciphertextBytesPerClientPerDay: 100 }, storage);
+    const bytes = new Uint8Array(100).fill(9);
+    const capture = captureAgrees();
+    try {
+      const buyer = freshAgent(first.urls);
+      const deal = await acceptedOffer(first.urls, buyer);
+      await buyer.agreeAndFund(deal.offer.terms, 30_000_000n);
+    } finally {
+      capture.restore();
+    }
+    const accepted = capture.sent.at(-1)!;
+    expect(accepted.status).toBe(200);
+    expect((await postBytes(`${first.urls[0]}/v1/ciphertext`, bytes, 'kept-bytes')).status).toBe(200);
+    for (const c of closers.splice(0)) await c();
+    // The reopened world holds no stored answer, so both replays take the operator's whole write path to the caps. The
+    // other client has no row there, so only the deal's state and the stored bytes keep them from being counted.
+    const second = await serveWorld({ fundedDealsPerClientPerDay: 0, ciphertextBytesPerClientPerDay: 0 }, storage);
+    const again = await post(accepted.url.replace(first.urls[0], second.other[0]), JSON.parse(accepted.body), accepted.key);
+    expect({ status: again.status, escrowState: ((await again.json()) as J).escrowState }).toEqual({ status: 200, escrowState: 'Held' });
+    expect((await postBytes(`${second.other[0]}/v1/ciphertext`, bytes, 'kept-bytes')).status).toBe(200);
+    // Anything new is refused there, so the caps do allow nothing.
+    expect((await postBytes(`${second.other[0]}/v1/ciphertext`, new Uint8Array(10).fill(8), 'new-bytes')).status).toBe(429);
   }, 60_000);
 
   it('counts uploads against the daily cap', async () => {
