@@ -9,7 +9,7 @@
   - This file.
   - It changes no generated bundle: `site/setup.mjs` keeps its SHA-256.
 - **Human gate:** yes, for the site deploy that publishes the page (the coordinator's, batched). The merge is not gated.
-- **Status:** in progress
+- **Status:** done
 - **Agent/session:** `cold-sellers-setup`, started by the `journeys` session on 2026-11-26
 - **Roadmap row:** N213, N195
 
@@ -38,7 +38,7 @@ Make a cold seller's assistant reach the floor of 5 approvals from `setup.txt` a
 - [x] `publish` has its own paragraph, names where its card goes, and does not point to `sell.txt`.
 - [x] The published page is at most 10,000 bytes, and `node site/check.mjs` passes.
 - [x] `site/setup.mjs`'s SHA-256 is unchanged.
-- [ ] A second set of 8 runs, same runner, models and pass rule, recorded in crow-private beside the first.
+- [x] A light check, one cold run per path on the live page (Rafa, 2026-11-26, in place of a second set of 8), recorded in crow-private beside the first set; each run reaches its outcome.
 
 ## Out of scope
 
@@ -50,7 +50,12 @@ Make a cold seller's assistant reach the floor of 5 approvals from `setup.txt` a
 - **Page size** [measured]: the published `setup.txt` is 9,980 bytes (was 9,998), limit 10,000.
 - **Hash** [measured]: `site/setup.mjs` is `5d7636bd9f7671523d3436a37e816c1770042e5346e736e5ebd872aa806ed0c9` before and after `node site/build.mjs`.
 - **Checks** [measured]: `node site/build.mjs && node site/check.mjs` PASS. `pnpm vitest run tests/site-guides.test.ts examples/setup-bundle.test.ts`: 2 files, 41 tests passed.
-- **The runs:** after the deploy; see Handoff.
+- **The light check** [measured], on the site at `e9b3bd1` (deployed 09:39 UTC, 2026-11-26), with `setup.mjs` `5d7636bd…`. Recorded in crow-private `case-studies/cold-sellers-2026-11-26-light/` at `3aac1a2`:
+  - **First deal, DeepSeek V4 Pro:** 6 approvals (first set: 21 and 7). `Released` on both operators; commitment `0x592582794507e16aed99a9157c0bdf9a3841d61713b670af61d1c1c7aa6cc8d1`.
+  - **Standing offer, Claude Opus 5.5:** 5 approvals, the floor (first set: 6 and 6). `publish` exited 0; template `0x51fd06fc…04ad`.
+  - **Gone in these runs:** the first set's four calls above the floor. Neither run read `sell.txt`, ran a bare `seller`, ran `status` before the folder existed, or sold the sample.
+  - **New:** one refused `seller` call, with a guessed absolute path (`/root/template.json`). See Handoff.
+  - **Spend and keys:** USD 0.14 at list prices. A search of the recorded files for the 27 key values this work made, and for model-key patterns, found none.
 
 ## Decisions
 
@@ -60,5 +65,9 @@ Make a cold seller's assistant reach the floor of 5 approvals from `setup.txt` a
 
 ## Handoff
 
-- **Done:** the page and the command's tail; checks pass.
-- **Next:** after the merge and the coordinator's site deploy, run `case-studies/cold-sellers-2026-11-26/batch.sh` twice (sets a and b) against the live pages, record the set in crow-private beside the first, and fill in this file's Evidence with the medians by path and model family.
+- **Done:** the page and the command's tail, merged in rafaeldavid/crow#843 at `f0568298` (2026-11-26, 08:27 UTC); every check passed.
+- **The measurement was a light check** (Rafa, in the journeys thread, 2026-11-26: accept the page as is if it works for testing). It ran at 09:41 UTC on the site carrying #843, after the coordinator's 09:39 UTC deploy; results in Evidence. The page is not changed again in this task.
+- **Findings for later:**
+  1. **"With absolute paths" misleads an agent that already ran the first command.** The paths need to be absolute only when the flags are appended to the first command, which runs `cd ~/.crow`. DeepSeek applied it to `node ~/.crow/setup.mjs seller …` from its own folder and guessed `/root/…`, costing 1 approval [measured]. Fix: scope the phrase to the first command, or have the first command keep the caller's folder.
+  2. **The floor is still 5 against the target of 1.** The preview and the sending call are two approvals of one decision, and `list --skip` answers a question the person already answered.
+  3. **Not run in this check:** DeepSeek's standing offer and Claude's first deal. Claude was already at the floor on the first deal. DeepSeek's standing-offer calls above the floor were `status` and a bare `seller`, both removed from the page [inferred].
