@@ -56,12 +56,13 @@ Measured on this machine on 2026-11-25, Node 22.23.4, anvil and forge 1.0.0.
 - **CI's first run on the pull request** (run 45709146788): `test (3/4)` failed, and `check` with it. Cause (measured from the log, and reproduced on this machine): `tests/ci-gated.test.ts`, "every gated test file is named in CI or exempt here with a reason", listed `examples/deal-record-chain.test.ts`. The new file skips without anvil and no CI job named it, so the shards would have skipped it unseen. The local runs before the push covered `examples/`, `apps/demo-cloud` and `packages/settlement/evm`, not `tests/`. Fixed by naming the file in the `world` leg of CI's anvil job, which fails on a skip. Both anvil legs passed in that run, `examples/take.test.ts`'s creation-code pin included, so its failure here is this worktree's.
 - **After the second merge of `origin/main`** (at `f948f2fe`): `tests/` 1,435 passed, 2 skipped, 0 failed (55 files). CI's `world` list, with the new file: 77 passed, 1 failed (the creation-code pin above), none skipped. The adapter and sync tests, the setup bundle, the record on SimChain, the invoice and late work: 160 of 160. `pnpm typecheck`, `pnpm lint`, `pnpm validate:spec`, `pnpm snap` (73 of 73) and `node site/check.mjs` passed.
 - **After the third merge of `origin/main`** (at `df65a931`, PR 837): `tests/` and the eight affected files, 63 files, 1,607 passed, 2 skipped, 0 failed. `pnpm typecheck`, `pnpm lint`, `pnpm validate:spec` and `node site/check.mjs` passed. The run before it on the pull request (head `4c298a72`) showed 19 checks passing, 1 skipped, 0 failing, as the app reported it.
-- **Bundles, against `origin/main` at `df65a931`:**
+- **After the fourth merge of `origin/main`** (at `1a2440e3`, PR 835, schema v0.15; only the two generated files conflicted, and both were rebuilt): `packages/settlement/evm` on anvil 324 of 324 (25 files); `tests/`, the seller adapter, setup, held reject, serve and the four record files, 79 files, 1,774 passed, 2 skipped, 0 failed. `pnpm typecheck`, `pnpm lint`, `pnpm validate:spec`, `pnpm snap` (73 of 73) and `node site/check.mjs` passed. The pull request's checks at the head before it (`d61a6782`) all passed, as the coordinator reported.
+- **Bundles, against `origin/main` at `1a2440e3`:**
 
 | File | `origin/main` SHA-256 | This branch SHA-256 |
 | --- | --- | --- |
-| `site/setup.mjs` | `e87e061796fefeb1a6cd0a0ebecbb27429a48f391d846208fa1114e951e020a9` | `90119eed42a1a0110655ec872cd1fb39ab7be870df5d2da3a5895e762d1a145d` |
-| `site/seller-worker.mjs` | `4a2b5493964f63aa0c8b761996508313511c7887f6187a2cdcef0df648b20a3b` | `90c753ec14558f8066de0cb2b0a0f317409db88bcc4646f07a98b7e3f299b9df` |
+| `site/setup.mjs` | `abcd38579398c26c7a7bbc7a37db6d31f7ca7bab4eea76b53d76632e5ce58dda` | `a3ae6d815959cd453516a886908402c37201c1e3a8f693497d0070baa71cb89f` |
+| `site/seller-worker.mjs` | `06b21d39470982383cef3568262d2c6f6cc67e90d5761f68fd27deeb1836f3c3` | `86d1b081d773fa78133cac242baaf7ea96d14b59c430df4682cc3b99acb9ba92` |
 
   Every other `site/*.mjs` bundle, `buy.mjs`, `try.mjs`, `take.mjs` and `serve.mjs` included, keeps `origin/main`'s bytes. `seller-worker.mjs` moves because it holds the chain adapter's module; its pin (`examples/seller-worker-pin.ts`), inside `setup.mjs`, moves with it.
 
