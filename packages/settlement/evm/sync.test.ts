@@ -590,6 +590,33 @@ describe.skipIf(!ready)(`ChainSync on anvil standing in for Sepolia${ready ? '' 
     chained(s);
   }, 60_000);
 
+  it('a refund sent directly posts to the payment address, not to the buyer that signed, as an operator that relays it would (T-621)', async () => {
+    const { s, sync } = await node();
+    const payment = testActor('t621-payment');
+    const payout = testActor('t621-payout').address;
+    await chain.mint(payment.address, 10n ** 10n);
+    const d = new EvmDeal(s, cast, club, 'direct-refund-apart', 2_000_000_000n, 50_000_000n, { payment, payout });
+    await ok(s, await d.offer());
+    await ok(s, await d.accept());
+    await ok(s, await d.agreeAndFund());
+    await ok(s, await d.deliver());
+    const before = await s.tokenBalance(payment.address, true);
+    const seq = s.log().length;
+    // A stranger sends the primary's reject: only the token's own transfer and the contract's logs say what moved.
+    const mined = await direct(cast.stranger, 'decide', decideArgs(d, await decision(d, 'primary', 'reject')));
+    expect(await sync.pass()).toMatchObject({ applied: 1 });
+    const settled = after(s, d.id, seq).find((e) => e.type === 'settlement.refunded')!;
+    expect(settled).toMatchObject({ submittedVia: 'direct', payload: { tx: mined.hash } });
+    const escrow = `escrow:${d.id}`;
+    expect(settled.payload['postings']).toEqual([
+      { from: escrow, to: lc(payment.address), amount: { token: s.token, amount: '2000000000' }, why: 'price back to the buyer' },
+      { from: escrow, to: lc(cast.primary.address), amount: { token: s.token, amount: '50000000' }, why: 'fee to the primary adjudicator, whose decision settles' },
+    ]);
+    expect((await s.tokenBalance(payment.address, true)) - before).toBe(2_000_000_000n);
+    expect(schemaErrors(s.log())).toEqual([]);
+    chained(s);
+  }, 60_000);
+
   it('a mutual settlement sent by the buyer settles the deal', async () => {
     const { s, sync } = await node();
     const d = await funded('direct-mutual', s);

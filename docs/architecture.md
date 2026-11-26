@@ -324,6 +324,8 @@ Protocol finality is not legal finality. Courts can still compel real-world part
 
 SimChain keeps accounts per address and per escrow, in base units of the test token; a chain makes the same postings through the escrow. In every row, `buyer` is the buyer's payment address and `seller` the seller's payout address (ADR-0033). The bond and appeal postings of the full protocol are in "SimChain's full protocol: appeals and bonds" below.
 
+On a chain, the operators list these postings on the settled event after a decision or a reclaim, read from the rules contract's logs (`outPostings`, `packages/settlement/evm/evm-settlement.ts`), so a deal record names who was paid. They list none after an early acceptance or a default outcome, or after a decision on a price of 0, or where the two money addresses are one or the paid adjudicator is a party's address; a mutual settlement's event carries its payouts.
+
 | Operation | Postings |
 | --- | --- |
 | Faucet (test only) | `external:faucet → buyer` |

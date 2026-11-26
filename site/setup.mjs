@@ -74702,6 +74702,54 @@ function sellerAddressOf(key, salt = ZERO_SALT) {
 		bytecode: initCode
 	}));
 }
+/** The approve lines this folder's publish printed, newest last: what names a flag a later approve left out (T-621). */
+const SHOWN_FILE = "publish-shown.json";
+const UTC_SECONDS = /^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}Z$/;
+/** The kept approve lines. A missing or unreadable file, and an entry of another shape, count as none. */
+function shownLines(folder) {
+	try {
+		const kept = JSON.parse(readFileSync(join(folder, SHOWN_FILE), "utf8"));
+		const is = (value, shape) => typeof value === "string" && shape.test(value);
+		return kept.filter((r) => is(r?.hash, /^0x[0-9a-f]{64}$/) && is(r.offerId, OFFER_ID) && is(r.expiresAt, UTC_SECONDS) && typeof r.replace === "boolean");
+	} catch {
+		return [];
+	}
+}
+/** Keeps one approve line. It serves a later error message only, so a folder that cannot take the file stops nothing. */
+function keepShown(folder, line) {
+	try {
+		writeWhole$1(join(folder, SHOWN_FILE), `${JSON.stringify([...shownLines(folder).filter((r) => r.hash !== line.hash), line].slice(-20), null, 2)}\n`, 420);
+	} catch {}
+}
+/** How the flags of an approve differ from the line that printed its --expect: one clause for each flag. */
+function flagDifferences(shown, given) {
+	const out = [];
+	if (given.usedOfferId !== shown.offerId) out.push(given.offerId === void 0 ? `--offer-id is missing: the preview printed --offer-id ${shown.offerId}, and without it the offer is ${given.usedOfferId}` : `--offer-id is ${given.offerId}, and the preview printed --offer-id ${shown.offerId}`);
+	if (given.expiresAt !== shown.expiresAt) out.push(given.expiresAt === void 0 ? `--expires is missing: the preview printed --expires ${shown.expiresAt}` : `--expires is ${given.expiresAt}, and the preview printed --expires ${shown.expiresAt}`);
+	if (given.replace !== shown.replace) out.push(shown.replace ? "--replace is missing: the preview printed it" : "--replace is given, and the preview did not print it");
+	return out;
+}
+/** A word of a printed command: bare when a shell reads each of its characters as itself, else in single quotes. */
+const shellText = (s) => /^[A-Za-z0-9_@+:,./-]+$/.test(s) ? s : `'${s.replace(/'/g, `'\\''`)}'`;
+/** This run's publish command with its other flags kept and `own` as the publish flags. */
+function commandWith(c, own) {
+	const replaced = [
+		"--offer-id",
+		"--expires",
+		"--expect",
+		"--replace",
+		"--preview",
+		"--revoke"
+	];
+	const others = [...c.flags].filter(([flag]) => !replaced.includes(flag)).flatMap(([flag, value]) => flag === "--test-world" ? [flag] : [flag, shellText(value)]);
+	return [
+		"node",
+		shellText(process.argv[1] ?? "setup.mjs"),
+		"publish",
+		...others,
+		...own
+	].join(" ");
+}
 /** The standing entry a card names for one offer: what site/take.mjs's entryOf reads. */
 const entryOf = (r) => ({
 	chainId: r.chainId,
@@ -74931,7 +74979,7 @@ async function publish(c) {
 	const offerId = c.flags.get("--offer-id") ?? state.name;
 	if (!OFFER_ID.test(offerId)) throw new Error("--offer-id takes 1 to 80 letters, digits, dots, hyphens and underscores: the card's offer ID. Nothing was sent");
 	const given = c.flags.get("--expires");
-	if (given !== void 0 && !(/^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}Z$/.test(given) && Number.isFinite(Date.parse(given)))) throw new Error("--expires takes a UTC time in whole seconds, such as 2027-01-31T00:00:00Z. Nothing was sent");
+	if (given !== void 0 && !(UTC_SECONDS.test(given) && Number.isFinite(Date.parse(given)))) throw new Error("--expires takes a UTC time in whole seconds, such as 2027-01-31T00:00:00Z. Nothing was sent");
 	const modes = [
 		"--preview",
 		"--replace",
@@ -75026,7 +75074,8 @@ async function run(c, state, offerId, given) {
 	const ready = readyPath(c.folder, state.work.format);
 	const file = existsSync(ready) ? readWorkFile(ready, false) : void 0;
 	if (file && !file.bytes) throw new Error(`${ready} ${file.problem ?? "cannot be read"}. ${nothing}`);
-	const keep = !c.flags.has("--replace") ? live.filter((r) => !r.replacedAt).at(-1) : void 0;
+	const liveOne = (records) => records.filter((r) => !r.replacedAt).at(-1);
+	const keep = !c.flags.has("--replace") ? liveOne(live) : void 0;
 	const fileSha = file?.bytes ? `sha256:${createHash("sha256").update(file.bytes).digest("hex")}` : void 0;
 	const driftAdvice = keep !== void 0 && (jcs({
 		rules,
@@ -75047,16 +75096,17 @@ async function run(c, state, offerId, given) {
 		expiresAt,
 		offerId
 	});
-	const shownHash = keccak256(stringToBytes(jcs({
+	const hashOf = (id, t, sha) => keccak256(stringToBytes(jcs({
 		chainId,
 		rules,
 		seller,
 		key: keyAddress,
-		offerId,
-		expiresAt: shownTemplate.expiresAt,
-		terms: shownTemplate.terms,
-		file: keep ? keep.template.delivery?.plaintextSha256 ?? null : fileSha ?? null
+		offerId: id,
+		expiresAt: t.expiresAt,
+		terms: t.terms,
+		file: sha ?? null
 	})));
+	const shownHash = hashOf(offerId, shownTemplate, keep ? keep.template.delivery?.plaintextSha256 : fileSha);
 	const expect = c.flags.get("--expect");
 	if (preview || !keep && expect === void 0) {
 		const approve = [
@@ -75068,6 +75118,12 @@ async function run(c, state, offerId, given) {
 			shownHash,
 			...c.flags.has("--replace") ? ["--replace"] : []
 		].join(" ");
+		if (!keep) keepShown(c.folder, {
+			hash: shownHash,
+			offerId,
+			expiresAt: shownTemplate.expiresAt,
+			replace: c.flags.has("--replace")
+		});
 		c.say({
 			...previewLine$1(c, seller, holding, !keep && !!file),
 			offerId,
@@ -75090,7 +75146,51 @@ async function run(c, state, offerId, given) {
 		});
 		return preview ? 0 : 3;
 	}
-	if (!keep && expect !== shownHash) throw new Error(`the template is not the one shown (--expect ${plain$3(expect, 80)}; it is ${shownHash} now): the operators' answers or this folder changed since. Run publish without --expect to see it again. ${nothing}`);
+	if (expect !== void 0 && expect !== shownHash) {
+		const line = shownLines(c.folder).find((r) => r.hash === expect);
+		const differs = line ? flagDifferences(line, {
+			offerId: c.flags.get("--offer-id"),
+			usedOfferId: offerId,
+			expiresAt: given,
+			replace: c.flags.has("--replace")
+		}) : [];
+		if (!keep || differs.length) {
+			const id = line?.offerId ?? offerId;
+			const replace = line?.replace ?? c.flags.has("--replace");
+			const wouldKeep = replace ? void 0 : liveOne((state.standing ?? []).filter((r) => !r.revokeSignedAt && local < Date.parse(r.template.expiresAt) && r.offerId === id && r.chainId === chainId && r.key === keyAddress && lc(r.template.rules) === rules));
+			const would = line && (wouldKeep ? hashOf(id, wouldKeep.template, wouldKeep.template.delivery?.plaintextSha256) : Date.parse(line.expiresAt) > local ? hashOf(id, templateFrom(terms, {
+				rules,
+				expiresAt: line.expiresAt,
+				offerId: id
+			}), fileSha) : void 0);
+			const works = line !== void 0 && would === expect;
+			const again = commandWith(c, [
+				"--offer-id",
+				id,
+				...wouldKeep ? ["--preview"] : replace ? ["--replace"] : []
+			]);
+			const run = works ? commandWith(c, [
+				"--offer-id",
+				id,
+				"--expires",
+				line.expiresAt,
+				"--expect",
+				line.hash,
+				...line.replace ? ["--replace"] : []
+			]) : again;
+			const changed = "the operators' answers or this folder changed since";
+			const seeAgain = "Run the command in \"run\" to see the template again";
+			const why = !line ? `no preview in this folder printed that --expect, so the hash is mistyped, or another folder or an earlier setup.mjs printed it${given === void 0 ? ". --expires is missing too: the approve line carries it" : ""}. ${seeAgain}` : works ? `${differs.join("; ")}. The command in "run" has the flags shown. It signs that template, so run it only on the person's yes to that example` : !wouldKeep && Date.parse(line.expiresAt) <= local ? `${differs.join("; ")}. And the printed --expires ${line.expiresAt} has passed, so that approve signs nothing now. ${seeAgain}` : `${differs.length ? `${differs.join("; ")}. With the printed flags the template still differs: ` : ""}${changed}. ${seeAgain}`;
+			c.say({
+				step: "publish",
+				ok: false,
+				offerId,
+				detail: `the template is not the one shown (--expect ${plain$3(expect, 80)}; it is ${shownHash} now): ${why}. ${nothing}`,
+				run
+			});
+			return 1;
+		}
+	}
 	let record;
 	if (keep) record = keep;
 	else {
@@ -75230,7 +75330,7 @@ async function run(c, state, offerId, given) {
 }
 
 // examples/seller-worker-pin.ts
-const SELLER_WORKER_SHA256 = "06b21d39470982383cef3568262d2c6f6cc67e90d5761f68fd27deeb1836f3c3";
+const SELLER_WORKER_SHA256 = "86d1b081d773fa78133cac242baaf7ea96d14b59c430df4682cc3b99acb9ba92";
 
 // examples/setup-cloudflare.ts
 const plain$2 = (s, max = 300) => plain$8(String(s ?? "")).slice(0, max);
@@ -75594,7 +75694,7 @@ async function workerBytes(c) {
 		if (bytes.length > MAX_WORKER_BYTES) throw new Error(`${SELLER_WORKER_URL} is over ${MAX_WORKER_BYTES} bytes`);
 	}
 	const sha = createHash("sha256").update(bytes).digest("hex");
-	if (sha !== "06b21d39470982383cef3568262d2c6f6cc67e90d5761f68fd27deeb1836f3c3") throw new Error(`the Worker file's SHA-256 is ${sha}, not ${SELLER_WORKER_SHA256}, the one this setup.mjs carries: it is not the Worker this version writes`);
+	if (sha !== "86d1b081d773fa78133cac242baaf7ea96d14b59c430df4682cc3b99acb9ba92") throw new Error(`the Worker file's SHA-256 is ${sha}, not ${SELLER_WORKER_SHA256}, the one this setup.mjs carries: it is not the Worker this version writes`);
 	return bytes;
 }
 /** The card's quote entry in the card's folder: other offers kept, the draft's marks dropped. */
@@ -76872,9 +76972,10 @@ async function writeRecord(c, state, id, started) {
 }
 /**
 * Who a released deal paid, as its record shows it, against the payout address the folder was given (`answer`).
-* SimChain's events carry postings, so the record names the payee. A chain's events carry none (deal-record.ts): the
-* record then names no payee and its postings checks say so, and what it does show is the payout address in the
-* signed terms, which the contract pays on a release. `wait`: the record should name a payee and does not yet.
+* Settled events with postings name the payee in the record: SimChain's, and on a chain a decision's (T-621). A
+* chain's other events carry none, as do deals an operator recorded before it wrote them: the record then names no
+* payee and its postings checks say so, and what it does show is the payout address in the signed terms, which the
+* contract pays on a release. `wait`: the record should name a payee and does not yet.
 */
 function payeeOf(record, answer) {
 	const paidTo = record.row.paidTo;

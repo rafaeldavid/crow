@@ -17,6 +17,9 @@
 //      equal one, so terms the operators serve differently in between are never signed (red team, T-552). The key signs
 //      the template's EIP-712 digest under the contract's domain. The command checks its own result:
 //      the signature recovers to the key, and the example take and its standing delivery pass the API's schemas.
+//      Each approve line it prints is also kept in the folder (publish-shown.json: the hash and the flags, no secret), so
+//      an approve that differs names the missing or changed flag and prints the command to run (T-621). That command is
+//      called one that signs only when the template it would build has the approved hash.
 //   7. The mandate: the operators admit a seller by mandate, so the faucet grants one to the contract's address, as it
 //      grants one to each deal key with its quote (D73). The request names the contract and the folder's one holding
 //      address, which every per-deal grant already names. It lasts 30 days; `publish` run again renews it.
@@ -62,6 +65,52 @@ const iso = (ms: number) => new Date(ms).toISOString().replace(/\.\d{3}Z$/, 'Z')
 export function sellerAddressOf(key: Address, salt: Hex32 = ZERO_SALT): Address {
   const initCode = concat([STANDING_SELLER_CREATION_CODE, encodeAbiParameters([{ type: 'address' }], [key])]);
   return lc(getContractAddress({ opcode: 'CREATE2', from: DETERMINISTIC_DEPLOYER, salt, bytecode: initCode })) as Address;
+}
+
+/** The approve lines this folder's publish printed, newest last: what names a flag a later approve left out (T-621). */
+export const SHOWN_FILE = 'publish-shown.json';
+const SHOWN_KEPT = 20;
+const UTC_SECONDS = /^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}Z$/;
+/** One printed approve line: its --expect hash and the flags it named. */
+export type Shown = { hash: string; offerId: string; expiresAt: string; replace: boolean };
+
+/** The kept approve lines. A missing or unreadable file, and an entry of another shape, count as none. */
+function shownLines(folder: string): Shown[] {
+  try {
+    const kept: J = JSON.parse(readFileSync(join(folder, SHOWN_FILE), 'utf8'));
+    const is = (value: unknown, shape: RegExp) => typeof value === 'string' && shape.test(value);
+    return (kept as J[]).filter((r) => is(r?.hash, /^0x[0-9a-f]{64}$/) && is(r.offerId, OFFER_ID) && is(r.expiresAt, UTC_SECONDS) && typeof r.replace === 'boolean');
+  } catch {
+    return [];
+  }
+}
+
+/** Keeps one approve line. It serves a later error message only, so a folder that cannot take the file stops nothing. */
+function keepShown(folder: string, line: Shown): void {
+  try {
+    writeWhole(join(folder, SHOWN_FILE), `${JSON.stringify([...shownLines(folder).filter((r) => r.hash !== line.hash), line].slice(-SHOWN_KEPT), null, 2)}\n`, 0o644);
+  } catch {
+    // the approve still works as printed
+  }
+}
+
+/** How the flags of an approve differ from the line that printed its --expect: one clause for each flag. */
+export function flagDifferences(shown: Shown, given: { offerId: string | undefined; usedOfferId: string; expiresAt: string | undefined; replace: boolean }): string[] {
+  const out: string[] = [];
+  if (given.usedOfferId !== shown.offerId) out.push(given.offerId === undefined ? `--offer-id is missing: the preview printed --offer-id ${shown.offerId}, and without it the offer is ${given.usedOfferId}` : `--offer-id is ${given.offerId}, and the preview printed --offer-id ${shown.offerId}`);
+  if (given.expiresAt !== shown.expiresAt) out.push(given.expiresAt === undefined ? `--expires is missing: the preview printed --expires ${shown.expiresAt}` : `--expires is ${given.expiresAt}, and the preview printed --expires ${shown.expiresAt}`);
+  if (given.replace !== shown.replace) out.push(shown.replace ? '--replace is missing: the preview printed it' : '--replace is given, and the preview did not print it');
+  return out;
+}
+
+/** A word of a printed command: bare when a shell reads each of its characters as itself, else in single quotes. */
+const shellText = (s: string): string => (/^[A-Za-z0-9_@+:,./-]+$/.test(s) ? s : `'${s.replace(/'/g, `'\\''`)}'`);
+
+/** This run's publish command with its other flags kept and `own` as the publish flags. */
+function commandWith(c: Call, own: string[]): string {
+  const replaced = ['--offer-id', '--expires', '--expect', '--replace', '--preview', '--revoke'];
+  const others = [...c.flags].filter(([flag]) => !replaced.includes(flag)).flatMap(([flag, value]) => (flag === '--test-world' ? [flag] : [flag, shellText(value)]));
+  return ['node', shellText(process.argv[1] ?? 'setup.mjs'), 'publish', ...others, ...own].join(' ');
 }
 
 /** The standing entry a card names for one offer: what site/take.mjs's entryOf reads. */
@@ -193,7 +242,7 @@ export async function publish(c: Call): Promise<number> {
   const offerId = c.flags.get('--offer-id') ?? state.name;
   if (!OFFER_ID.test(offerId)) throw new Error('--offer-id takes 1 to 80 letters, digits, dots, hyphens and underscores: the card\'s offer ID. Nothing was sent');
   const given = c.flags.get('--expires');
-  if (given !== undefined && !(/^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}Z$/.test(given) && Number.isFinite(Date.parse(given)))) throw new Error('--expires takes a UTC time in whole seconds, such as 2027-01-31T00:00:00Z. Nothing was sent');
+  if (given !== undefined && !(UTC_SECONDS.test(given) && Number.isFinite(Date.parse(given)))) throw new Error('--expires takes a UTC time in whole seconds, such as 2027-01-31T00:00:00Z. Nothing was sent');
   const modes = ['--preview', '--replace', '--revoke'].filter((f) => c.flags.has(f));
   if (modes.length > 1) throw new Error(`give one of ${modes.join(', ')}. Nothing was sent`);
   if (c.flags.has('--preview')) return run(c, state, offerId, given);
@@ -260,7 +309,8 @@ async function run(c: Call, state: State, offerId: string, given: string | undef
 
   // A live template, and no --replace: it is kept as it is, and only its mandate is renewed. A folder whose terms or
   // finished work changed since is told so: --replace publishes them.
-  const keep = !c.flags.has('--replace') ? live.filter((r) => !r.replacedAt).at(-1) : undefined;
+  const liveOne = (records: StandingRecord[]) => records.filter((r) => !r.replacedAt).at(-1);
+  const keep = !c.flags.has('--replace') ? liveOne(live) : undefined;
   const fileSha = file?.bytes ? `sha256:${createHash('sha256').update(file.bytes).digest('hex')}` : undefined;
   const drifted = keep !== undefined && (jcs({ rules, terms: templateFrom(terms, { rules, expiresAt: keep.template.expiresAt, offerId }).terms }) !== jcs({ rules: lc(keep.template.rules), terms: keep.template.terms }) || fileSha !== keep.template.delivery?.plaintextSha256);
   const driftAdvice = drifted ? { advice: `This folder's terms or finished work changed since the live template ${templateHash(keep!.template)} was signed, and it is kept as it was. Run publish --replace to sign the folder's current template.` } : {};
@@ -270,14 +320,41 @@ async function run(c: Call, state: State, offerId: string, given: string | undef
   // What the key will sign, shown first: the approval names it by a hash, so a template that differs from the one shown
   // (another adjudicator, club, fee or policy the operators serve, or a changed folder) is never signed.
   const shownTemplate = keep?.template ?? templateFrom(terms, { rules, expiresAt, offerId });
-  const shownHash = keccak256(stringToBytes(jcs({ chainId, rules, seller, key: keyAddress, offerId, expiresAt: shownTemplate.expiresAt, terms: shownTemplate.terms, file: keep ? (keep.template.delivery?.plaintextSha256 ?? null) : (fileSha ?? null) })));
+  const hashOf = (id: string, t: StandingOffer, sha: string | undefined) => keccak256(stringToBytes(jcs({ chainId, rules, seller, key: keyAddress, offerId: id, expiresAt: t.expiresAt, terms: t.terms, file: sha ?? null })));
+  const shownHash = hashOf(offerId, shownTemplate, keep ? keep.template.delivery?.plaintextSha256 : fileSha);
   const expect = c.flags.get('--expect');
   if (preview || (!keep && expect === undefined)) {
     const approve = ['--offer-id', offerId, '--expires', shownTemplate.expiresAt, '--expect', shownHash, ...(c.flags.has('--replace') ? ['--replace'] : [])].join(' ');
+    if (!keep) keepShown(c.folder, { hash: shownHash, offerId, expiresAt: shownTemplate.expiresAt, replace: c.flags.has('--replace') });
     c.say({ ...previewLine(c, seller, holding, !keep && !!file), offerId, seller, key: keyAddress, expiresAt: shownTemplate.expiresAt, ...(keep ? { kept: templateHash(keep.template), ...driftAdvice } : { approve, next: `Show the person the example: every take is these terms with the buyer's own fields, binding until ${shownTemplate.expiresAt}. On their yes, run publish again with: ${approve}` }), ...(file ? { file: { path: ready, bytes: file.bytes!.length } } : { delivery: 'work done after funding: deliver delivers each take' }), example: exampleOf(shownTemplate, seller, createdAt).terms, sent: 'nothing: nothing is signed or sent before the person approves the example.' });
     return preview ? 0 : 3;
   }
-  if (!keep && expect !== shownHash) throw new Error(`the template is not the one shown (--expect ${plain(expect, 80)}; it is ${shownHash} now): the operators' answers or this folder changed since. Run publish without --expect to see it again. ${nothing}`);
+  // An approve that is not the one shown. Its own flags are named first: the operators and the folder are the cause only
+  // when the flags are the printed ones. With a live template to keep, only a flag that differs stops the run.
+  if (expect !== undefined && expect !== shownHash) {
+    const line = shownLines(c.folder).find((r) => r.hash === expect);
+    const differs = line ? flagDifferences(line, { offerId: c.flags.get('--offer-id'), usedOfferId: offerId, expiresAt: given, replace: c.flags.has('--replace') }) : [];
+    if (!keep || differs.length) {
+      const id = line?.offerId ?? offerId;
+      const replace = line?.replace ?? c.flags.has('--replace');
+      // What the printed flags would build now: the live template they would keep, or the folder's own.
+      const wouldKeep = replace ? undefined : liveOne((state.standing ?? []).filter((r) => !r.revokeSignedAt && local < Date.parse(r.template.expiresAt) && r.offerId === id && r.chainId === chainId && r.key === keyAddress && lc(r.template.rules) === rules));
+      const would = line && (wouldKeep ? hashOf(id, wouldKeep.template, wouldKeep.template.delivery?.plaintextSha256) : Date.parse(line.expiresAt) > local ? hashOf(id, templateFrom(terms, { rules, expiresAt: line.expiresAt as Timestamp, offerId: id }), fileSha) : undefined);
+      const works = line !== undefined && would === expect;
+      // Without --expect a run sends nothing, except where a live template would be kept: --preview then.
+      const again = commandWith(c, ['--offer-id', id, ...(wouldKeep ? ['--preview'] : replace ? ['--replace'] : [])]);
+      const run = works ? commandWith(c, ['--offer-id', id, '--expires', line.expiresAt, '--expect', line.hash, ...(line.replace ? ['--replace'] : [])]) : again;
+      const changed = "the operators' answers or this folder changed since";
+      const seeAgain = 'Run the command in "run" to see the template again';
+      const why = !line
+        ? `no preview in this folder printed that --expect, so the hash is mistyped, or another folder or an earlier setup.mjs printed it${given === undefined ? '. --expires is missing too: the approve line carries it' : ''}. ${seeAgain}`
+        : works ? `${differs.join('; ')}. The command in "run" has the flags shown. It signs that template, so run it only on the person's yes to that example`
+          : !wouldKeep && Date.parse(line.expiresAt) <= local ? `${differs.join('; ')}. And the printed --expires ${line.expiresAt} has passed, so that approve signs nothing now. ${seeAgain}`
+            : `${differs.length ? `${differs.join('; ')}. With the printed flags the template still differs: ` : ''}${changed}. ${seeAgain}`;
+      c.say({ step: 'publish', ok: false, offerId, detail: `the template is not the one shown (--expect ${plain(expect, 80)}; it is ${shownHash} now): ${why}. ${nothing}`, run });
+      return 1;
+    }
+  }
   let record: StandingRecord;
   if (keep) {
     record = keep;

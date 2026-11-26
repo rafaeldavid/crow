@@ -397,9 +397,10 @@ async function writeRecord(c: Call, state: State, id: Hex, started: number): Pro
 
 /**
  * Who a released deal paid, as its record shows it, against the payout address the folder was given (`answer`).
- * SimChain's events carry postings, so the record names the payee. A chain's events carry none (deal-record.ts): the
- * record then names no payee and its postings checks say so, and what it does show is the payout address in the
- * signed terms, which the contract pays on a release. `wait`: the record should name a payee and does not yet.
+ * Settled events with postings name the payee in the record: SimChain's, and on a chain a decision's (T-621). A
+ * chain's other events carry none, as do deals an operator recorded before it wrote them: the record then names no
+ * payee and its postings checks say so, and what it does show is the payout address in the signed terms, which the
+ * contract pays on a release. `wait`: the record should name a payee and does not yet.
  */
 export function payeeOf(record: { row: { paidTo: string | null; sellerPayoutAddress: string | null; outcome: string | null }; checks: Array<{ check: string; ok: boolean | null }> }, answer: string): { paidTo: string | null; asAnswered: boolean; wait: boolean; note?: string } {
   const paidTo = record.row.paidTo;
