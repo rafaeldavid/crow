@@ -51,7 +51,7 @@ const LIVE_REGISTRIES = {
   'config/judges-live.yaml': { load: liveRegistry, uri: LIVE_REGISTRY_URI },
   'config/judges-live-2.yaml': { load: liveRegistry2, uri: LIVE_REGISTRY_2_URI },
 } as const;
-export const LIVE_DEFAULT_REGISTRY: keyof typeof LIVE_REGISTRIES = 'config/judges-live.yaml';
+export const LIVE_DEFAULT_REGISTRY: keyof typeof LIVE_REGISTRIES = 'config/judges-live-2.yaml';
 const liveDefault = () => LIVE_REGISTRIES[LIVE_DEFAULT_REGISTRY];
 /** The providers the default live registry seats: live judging needs each one's variables, or the world fails closed (T-631). */
 const liveNeed = () => [...new Set(liveDefault().load().active.map((e) => e.provider))].sort();
