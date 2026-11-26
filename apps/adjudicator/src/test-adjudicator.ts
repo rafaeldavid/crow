@@ -74,6 +74,10 @@ export const LIVE_REGISTRY_URI = 'file:///config/judges-live.yaml';
 /** config/judges-live.yaml: real pinned models from two families, which live judges can call. */
 export const liveRegistry = (): LoadedRegistry => repoRegistry('config/judges-live.yaml');
 
+export const LIVE_REGISTRY_2_URI = 'file:///config/judges-live-2.yaml';
+/** config/judges-live-2.yaml (T-631): the live registry without Claude Sonnet, for new deals once it is the default. */
+export const liveRegistry2 = (): LoadedRegistry => repoRegistry('config/judges-live-2.yaml');
+
 export interface TestAdjudicatorOptions {
   /** Display name, published in the registration. */
   name: string;

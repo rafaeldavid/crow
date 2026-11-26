@@ -68,7 +68,7 @@ import { decodePublicKey } from '@holdback/core/crypto';
 import { ChainSync, EvmSettlement, OperatorTimeouts, rebindToken, RelayRefused, type Book, type Cursor, type LiveChain, type RecoverReport, type SyncReport, type TimeoutBudget, type TimeoutReport } from '@holdback/settlement/live';
 import type { TimeoutKind } from '@holdback/settlement';
 import { mandateFor, SIM_CHAIN_ID, SIM_RULEBOOK, simClub, SimChain, TOKEN, wideScope, type Genesis, type JournalEntry } from '@holdback/settlement/sim';
-import { panelConfig, unconfiguredReason, type JudgeProvider, type PanelConfig } from './judges.js';
+import { LIVE_DEFAULT_REGISTRY, panelConfig, unconfiguredReason, type JudgeProvider, type PanelConfig } from './judges.js';
 import { StorageLanes } from './lanes.js';
 import { JudgedDealsPerPair, DailyCaps, dailyCapQuota, DEFAULT_JUDGED_DEALS_PER_PAIR, secondsToUtcMidnight, DEFAULT_DAILY_CAPS, DEFAULT_RATE, FLOOD_CEILING, wholeNumberVar } from './limits.js';
 import type { WorldStorage } from './storage.js';
@@ -310,7 +310,7 @@ const SCRIPTED_PANEL = 'scripted judge panel: no model runs in this demo, every 
 const CLOSED_PANEL = (missing: readonly string[]) =>
   `judge panel unavailable: this demo's live judge models are not all configured (missing: ${missing.join(', ')}), so Crow's adjudicators decline deals that can need a panel (reason judges_unconfigured:) and never judge with a scripted stand-in; use template checks-only with required checks`;
 const livePanel = (perDay: number) =>
-  `live judge panel: pinned models from two families (Anthropic, DeepSeek; config/judges-live.yaml), at most ${perDay} live judge calls a day across this demo; past that, Crow's adjudicators decline new deals that can need a panel until the next UTC day (demo.judges.judgedDeals), and one already open escalates and, unless a panel can run before its deadline, ends in the default outcome`;
+  `live judge panel: pinned models from two families (Anthropic, DeepSeek; ${LIVE_DEFAULT_REGISTRY}), at most ${perDay} live judge calls a day across this demo; past that, Crow's adjudicators decline new deals that can need a panel until the next UTC day (demo.judges.judgedDeals), and one already open escalates and, unless a panel can run before its deadline, ends in the default outcome`;
 const SEALED =
   'These demo adjudicators decline private and judgment offers: they cannot open sealed terms yet (T-207), so the offer would stay unaccepted and expire, and nobody could fund it. Offer at disclosure public on this demo; the work itself is encrypted either way.';
 
@@ -1957,7 +1957,7 @@ export function notesFor(
   const judges = panel?.closed
     ? `Adjudicators: three test adjudicators run by this demo, listed by role under demo.adjudicators in this discovery document. Deterministic checks are real. Judge panels are unavailable: the live judge models are not all configured (missing: ${panel.missing.join(', ')}; demo.judges.missing), so Crow's adjudicators decline deals that can need a panel (a rubric, or an optional check; reason judges_unconfigured:) and never judge with a scripted stand-in. Use template "checks-only" with required checks.`
     : panel?.live
-    ? `Adjudicators: three test adjudicators run by this demo, listed by role under demo.adjudicators in this discovery document. Deterministic checks are real. Rubric deals get a live judge panel: pinned models from two families, Anthropic and DeepSeek (${panel.registry.active.map((e) => e.model).join(', ')}; registry config/judges-live.yaml, not calibrated). At most ${panel.budget.perDay} live judge calls a day across this demo (UTC; demo.judges shows today's count). Past that, Crow's adjudicators decline new deals that can need a panel (a rubric, or an optional check) until the next UTC day (demo.judges.judgedDeals.resumesAt), and one already open escalates and, unless a panel can run before its deadline, ends in the default outcome, never on a scripted verdict. DeepSeek's model names are provider aliases that can change underneath.`
+    ? `Adjudicators: three test adjudicators run by this demo, listed by role under demo.adjudicators in this discovery document. Deterministic checks are real. Rubric deals get a live judge panel: pinned models from two families, Anthropic and DeepSeek (${panel.registry.active.map((e) => e.model).join(', ')}; registry ${LIVE_DEFAULT_REGISTRY}, not calibrated). At most ${panel.budget.perDay} live judge calls a day across this demo (UTC; demo.judges shows today's count). Past that, Crow's adjudicators decline new deals that can need a panel (a rubric, or an optional check) until the next UTC day (demo.judges.judgedDeals.resumesAt), and one already open escalates and, unless a panel can run before its deadline, ends in the default outcome, never on a scripted verdict. DeepSeek's model names are provider aliases that can change underneath.`
     : 'Adjudicators: three test adjudicators run by this demo, listed by role under demo.adjudicators in this discovery document. Deterministic checks are real. Judge panels are scripted fake judges (no model runs; verdicts start "[fake judge, no model ran]"), so use template "checks-only" for real acceptance.';
   const settlement = chain
     ? [

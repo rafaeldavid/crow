@@ -1,7 +1,7 @@
 import { canonicalKeccak } from '@holdback/core';
 import { describe, expect, it } from 'vitest';
 import { loadRegistryFile, loadRegistryYaml } from './registry-file.js';
-import { liveRegistry } from './test-adjudicator.js';
+import { liveRegistry, liveRegistry2 } from './test-adjudicator.js';
 
 const PATH = new URL('../../../config/judges.yaml', import.meta.url).pathname;
 const LIVE_PATH = new URL('../../../config/judges-live.yaml', import.meta.url).pathname;
@@ -44,5 +44,16 @@ describe('config/judges-live.yaml (T-028)', () => {
     expect(r.value.active.length).toBeGreaterThanOrEqual(5);
     expect(new Set(r.value.active.map((e) => e.family))).toEqual(new Set(['claude', 'deepseek']));
     expect(new Set(r.value.active.map((e) => e.provider))).toEqual(new Set(['anthropic', 'openai-compatible']));
+  });
+});
+
+describe('the google provider in a registry (T-631)', () => {
+  it('a registry may name provider google, and the second live registry seats Gemini', () => {
+    expect(loadRegistryYaml('version: 1\njudges:\n  - {id: gemini-a, provider: google, family: gemini, model: gemini-4-neon@2026-11-26, status: candidate}\n').ok).toBe(true);
+    expect(liveRegistry2().active.filter((e) => e.provider === 'google').map((e) => e.model)).toEqual(['gemini-4-neon@2026-11-26']);
+    expect(liveRegistry().doc.judges.map((e) => e.provider)).not.toContain('google');
+  });
+  it('an unknown provider is still refused', () => {
+    expect(loadRegistryYaml('version: 1\njudges:\n  - {id: x, provider: openai, family: gpt, model: gpt-x@2026-11-26, status: active}\n').ok).toBe(false);
   });
 });

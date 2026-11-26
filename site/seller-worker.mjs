@@ -60722,7 +60722,13 @@ function resolveSeats(seats, policy, registry) {
 		families.push(family);
 	}
 	if (new Set(seats.map((s) => s.judgeId)).size !== seats.length) return err("duplicate judgeId in the panel");
-	if (new Set(seats.map((s) => s.model)).size !== seats.length) return err("duplicate model ID in the panel");
+	const byModel = /* @__PURE__ */ new Map();
+	for (const s of seats) byModel.set(s.model, [...byModel.get(s.model) ?? [], s.judgeId]);
+	for (const ids of byModel.values()) {
+		if (ids.length === 1) continue;
+		const first = ids.find((id) => !id.endsWith(":2"));
+		if (ids.length > 2 || !first || !ids.includes(`${first}:2`)) return err("duplicate model ID in the panel");
+	}
 	const distinct = new Set(families).size;
 	if (distinct < policy.minFamilies) return err(`the panel has ${distinct} model families; the policy needs ${policy.minFamilies}`);
 	return ok(families);
@@ -61104,7 +61110,8 @@ function shuffle(items, key, label) {
 }
 /**
 * Walks the shuffled active entries and seats each one unless seating it would leave too few seats to
-* reach the family minimum. Refuses when the registry cannot fill the panel.
+* reach the family minimum. A panel larger than the registry repeats judges, each at most twice (T-631). Refuses when
+* the registry cannot fill the panel that way.
 */
 function selectPanel(input) {
 	const { registry, size, minFamilies } = input;
@@ -61123,7 +61130,16 @@ function selectPanel(input) {
 		});
 		families.add(e.family);
 	}
-	if (seats.length < size) return err(`the registry has ${registry.active.length} active judges; the panel needs ${size} meeting ${minFamilies} families`);
+	if (seats.length === registry.active.length && size <= 2 * registry.active.length) for (const e of shuffle(registry.active, panelKey(input.seed, input.commitmentId), `${PANEL_VERSION}:repeats`)) {
+		if (seats.length === size) break;
+		seats.push({
+			judgeId: `${e.id}${":2"}`,
+			provider: e.provider,
+			family: e.family,
+			model: e.model
+		});
+	}
+	if (seats.length < size) return err(`the registry has ${registry.active.length} active judges; the panel needs ${size} meeting ${minFamilies} families, each judge seated at most twice`);
 	if (families.size < minFamilies) return err(`the registry cannot seat ${minFamilies} model families`);
 	return ok(seats);
 }
@@ -61150,12 +61166,13 @@ function panelPlan(input) {
 		sampleSeed: (s) => sampleSeedFor(seed, commitmentId, s.judgeId)
 	});
 }
-var PANEL_VERSION, panelKey, derive, criteriaOrder, sampleSeedFor;
+var PANEL_VERSION, REPEAT_SUFFIX, panelKey, derive, criteriaOrder, sampleSeedFor;
 var init_panel = __esmMin((() => {
 	init__esm();
 	init_dist$3();
 	init_sample();
 	PANEL_VERSION = "panel-1";
+	REPEAT_SUFFIX = ":2";
 	panelKey = (seed, commitmentId) => keccak256(concat([toBytes$1(seed), toBytes$1(commitmentId)]));
 	derive = (seed, commitmentId, label) => keccak256(concat([toBytes$1(panelKey(seed, commitmentId)), stringToBytes(label)]));
 	criteriaOrder = (seed, commitmentId, judgeId, criteria) => shuffle(criteria, panelKey(seed, commitmentId), `${PANEL_VERSION}:criteria:${judgeId}`);
@@ -61182,7 +61199,7 @@ function entryProblem(e, k) {
 	if (!isObj$1(e)) return `judges[${k}] is not an object`;
 	for (const key of Object.keys(e)) if (!ENTRY_KEYS.has(key)) return `judges[${k}] has unknown key ${key}`;
 	if (typeof e.id !== "string" || !ID$2.test(e.id)) return `judges[${k}].id is invalid`;
-	if (e.provider !== "anthropic" && e.provider !== "openai-compatible") return `${e.id}: provider must be anthropic or openai-compatible`;
+	if (typeof e.provider !== "string" || !PROVIDERS.includes(e.provider)) return `${e.id}: provider must be anthropic, openai-compatible or google`;
 	if (typeof e.family !== "string" || !ID$2.test(e.family)) return `${e.id}: family is invalid`;
 	if (typeof e.model !== "string" || !isPinnedModelId(e.model)) return `unpinned-model-refused: ${e.id} names ${JSON.stringify(String(e.model).slice(0, 80))}, not a pinned dated model ID`;
 	if (e.status !== "candidate" && e.status !== "active" && e.status !== "retired") return `${e.id}: status must be candidate, active or retired`;
@@ -61219,10 +61236,15 @@ function loadRegistry(doc, expectedHash) {
 		judges: new Map(active.map((e) => [e.model, { family: e.family }]))
 	});
 }
-var ENTRY_KEYS, ID$2, DATE, isObj$1, isInt;
+var PROVIDERS, ENTRY_KEYS, ID$2, DATE, isObj$1, isInt;
 var init_registry = __esmMin((() => {
 	init_dist$3();
 	init_pipeline();
+	PROVIDERS = [
+		"anthropic",
+		"openai-compatible",
+		"google"
+	];
 	ENTRY_KEYS = /* @__PURE__ */ new Set([
 		"id",
 		"provider",

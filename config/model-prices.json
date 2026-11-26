@@ -13,6 +13,15 @@
       "source": "https://platform.claude.com/docs/en/about-claude/pricing",
       "readOn": "2026-11-05"
     },
+    "claude-fable-5-2": {
+      "input": 8000000,
+      "cacheWrite5m": 10000000,
+      "cacheWrite1h": 16000000,
+      "cacheRead": 200000,
+      "output": 40000000,
+      "source": "https://platform.claude.com/docs/en/about-claude/pricing",
+      "readOn": "2026-11-26"
+    },
     "claude-sonnet-5-5": {
       "input": 2000000,
       "cacheWrite5m": 2500000,
@@ -73,6 +82,16 @@
       "pricesNote": "The main prices are peak, an upper bound. DeepSeek bills a cache miss as input and has no cache-write price, so both cache writes equal input; cacheRead is its cache-hit input price.",
       "source": "https://api-docs.deepseek.com/quick_start/pricing/",
       "readOn": "2026-11-05"
+    },
+    "gemini-4-neon": {
+      "input": 3000000,
+      "cacheWrite5m": 3000000,
+      "cacheWrite1h": 3000000,
+      "cacheRead": 3000000,
+      "output": 15000000,
+      "pricesNote": "Paid tier, standard. Output includes thinking tokens. The adapter sets no cache, so every cache field equals input. Google's pricing page lists the model without a Stable or Preview label (T-631).",
+      "source": "https://aistudio.google.com/docs/pricing",
+      "readOn": "2026-11-26"
     }
   }
 }

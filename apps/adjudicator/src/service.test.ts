@@ -1703,7 +1703,7 @@ describe('turns declined from the terms alone (T-221 review)', () => {
   it.each<[string, AdjudicatorPolicy, LoadedRegistry, string]>([
     ['another registry', defaultPolicy('outsider/p1'), wider, 'registry_mismatch'],
     ['a policy with another screen version', defaultPolicy('outsider/p1', { screenVersion: 'screen-9' }), reg, 'policy_mismatch'],
-    ['a first-instance panel larger than the registry', defaultPolicy('outsider/p1', { panelSize: 7 }), reg, 'invalid_terms'],
+    ['a first-instance panel more than twice the registry (T-631: up to twice, judges repeat)', defaultPolicy('outsider/p1', { panelSize: 13 }), reg, 'invalid_terms'],
   ])('the fallback neither triggers nor decides under %s', async (_label, policy, registry, type) => {
     const { s, o, b, terms } = await deal(policy, registry);
     s.offer(terms);
@@ -1726,8 +1726,8 @@ describe('turns declined from the terms alone (T-221 review)', () => {
     expect((await foreign.b.adj.declines(foreign.terms, 'fallback'))?.type).toBe('registry_mismatch');
     expect((await foreign.c.adj.declines(foreign.terms, 'appeal'))?.type).toBe('registry_mismatch');
 
-    // minValidAppeal 6 of an appeal panel of 5 can never be reached; a panel of 7 cannot be seated from 6 judges.
-    for (const over of [{ minValidAppeal: 6 }, { appealPanelSize: 7 }]) {
+    // minValidAppeal 6 of an appeal panel of 5 can never be reached; a panel of 13 cannot be seated from 6 judges, each at most twice (T-631).
+    for (const over of [{ minValidAppeal: 6 }, { appealPanelSize: 13 }]) {
       const d = await deal(defaultPolicy('outsider/p1', over));
       expect(await d.b.adj.declines(d.terms, 'fallback')).toBeNull();
       expect((await d.c.adj.declines(d.terms, 'appeal'))?.detail).toMatch(/panel/);

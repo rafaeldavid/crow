@@ -1,9 +1,9 @@
 // T-574, from T-570's red team (H2): the demo's panel is live or abstaining as a whole, chosen once as it starts. Before,
 // each call chose, so a panel could mix live and scripted judges: a live seat's retry after the budget ran out, or a
 // second panel in the same pass that started with budget for one seat. A scripted pass then counted as a model family.
-import { FAKE_JUDGE_MARK } from '@holdback/adjudicator';
+import { FAKE_JUDGE_MARK, LIVE_REGISTRY_2_URI, LIVE_REGISTRY_URI, liveRegistry, liveRegistry2, placeholderRegistry } from '@holdback/adjudicator';
 import { describe, expect, it } from 'vitest';
-import { ABSTAIN_DETAIL, panelConfig, type JudgeProvider } from './judges.js';
+import { ABSTAIN_DETAIL, LIVE_DEFAULT_REGISTRY, panelConfig, type JudgeProvider } from './judges.js';
 import { MemoryStorage } from './storage.js';
 
 type Request = Parameters<JudgeProvider['complete']>[0];
@@ -122,5 +122,34 @@ describe('a chain world with an incomplete live configuration fails closed (N222
     expect(lines).toHaveLength(1);
     expect(lines[0]).toMatch(/HOLDBACK_OPENAI_COMPATIBLE_BASE_URL/);
     for (const v of ['secret-a', 'secret-b', 'judges.example']) expect(lines[0]).not.toContain(v);
+  });
+});
+
+// T-631, ADR-0036: a new default registry ships in two deploys. The carry deploy keeps config/judges-live.yaml as the
+// registry new deals bind and carries config/judges-live-2.yaml beside it, reached through the same live panel; the
+// flip deploy swaps the two. Either way a deal keeps the registry it bound, and both are judged live within one budget.
+describe('the live world carries both live registries (T-631)', () => {
+  it('binds new deals to the live default and carries the other live registry with the same panel provider', async () => {
+    const { cfg, live } = world(100);
+    expect(LIVE_DEFAULT_REGISTRY).toBe('config/judges-live.yaml');
+    expect(cfg.registry.hash).toBe(liveRegistry().hash);
+    expect(cfg.registryUri).toBe(LIVE_REGISTRY_URI);
+    expect(cfg.kept.map((k) => [k.uri, k.registry.hash])).toEqual([[LIVE_REGISTRY_2_URI, liveRegistry2().hash]]);
+    // The carried registry's seats go through the panel: live inside a live panel, counted against the same budget.
+    const kept = cfg.kept[0]!;
+    const a = await cfg.panel(3, () => kept.provider.complete(request('claude-opus-5-5')));
+    expect(a.kind).toBe('ok');
+    expect(live).toEqual(['claude-opus-5-5']);
+    expect((await cfg.budget.used()).calls).toBe(1);
+    // Outside a panel it abstains, as the default registry's seats do.
+    const b = await kept.provider.complete(request('claude-opus-5-5'));
+    expect(b.kind === 'error' && b.detail).toBe(ABSTAIN_DETAIL);
+  });
+
+  it('never carries the placeholder registry, live or scripted', () => {
+    const { cfg } = world(100);
+    expect(cfg.kept.map((k) => k.registry.hash)).not.toContain(placeholderRegistry().hash);
+    const scripted = panelConfig({ env: {}, storage: new MemoryStorage(), now: () => 0 });
+    expect(scripted.kept).toEqual([]);
   });
 });

@@ -5,7 +5,9 @@
 import { canonicalKeccak, err, ok, problem, type Hex32, type Problem, type Result } from '@holdback/core';
 import { isPinnedModelId, type JudgeRegistry } from '../pipeline.js';
 
-export type RegistryProvider = 'anthropic' | 'openai-compatible';
+/** The live providers an adjudicator can reach; google since T-631. */
+export type RegistryProvider = 'anthropic' | 'openai-compatible' | 'google';
+const PROVIDERS: readonly string[] = ['anthropic', 'openai-compatible', 'google'] satisfies readonly RegistryProvider[];
 export type RegistryStatus = 'candidate' | 'active' | 'retired';
 
 export interface RegistryEntry {
@@ -45,7 +47,7 @@ function entryProblem(e: unknown, k: number): string | undefined {
   if (!isObj(e)) return `judges[${k}] is not an object`;
   for (const key of Object.keys(e)) if (!ENTRY_KEYS.has(key)) return `judges[${k}] has unknown key ${key}`;
   if (typeof e.id !== 'string' || !ID.test(e.id)) return `judges[${k}].id is invalid`;
-  if (e.provider !== 'anthropic' && e.provider !== 'openai-compatible') return `${e.id}: provider must be anthropic or openai-compatible`;
+  if (typeof e.provider !== 'string' || !PROVIDERS.includes(e.provider)) return `${e.id}: provider must be anthropic, openai-compatible or google`;
   if (typeof e.family !== 'string' || !ID.test(e.family)) return `${e.id}: family is invalid`;
   if (typeof e.model !== 'string' || !isPinnedModelId(e.model)) return `unpinned-model-refused: ${e.id} names ${JSON.stringify(String(e.model).slice(0, 80))}, not a pinned dated model ID`;
   if (e.status !== 'candidate' && e.status !== 'active' && e.status !== 'retired') return `${e.id}: status must be candidate, active or retired`;

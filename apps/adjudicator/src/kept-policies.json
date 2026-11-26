@@ -102,6 +102,12 @@
       "file": "config/judges-live.yaml",
       "status": "kept",
       "since": "T-028, 2026-11-01"
+    },
+    {
+      "hash": "0xff7d5d1a72724248ab66877c7fc97484c9e8223a25145bae471f5904d2e50ac2",
+      "file": "config/judges-live-2.yaml",
+      "status": "kept",
+      "since": "T-631, 2026-11-26: three judges from three families, without Claude Sonnet (claude-sonnet-5's verdict voided by the schema filter in 7 of 8 panels): claude-opus-5-5, gemini-4-neon, deepseek-v4-pro; carried beside config/judges-live.yaml, the default moves in a second deploy"
     }
   ]
 }

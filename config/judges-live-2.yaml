@@ -1,0 +1,32 @@
+# Holdback's second live judge registry (T-631; docs/decisions/registry-log.md, 2026-11-26): three judges from three
+# families, Rafa's decision of 2026-11-26 ("To start, let's only do 3 judges: Opus, Gemini Neon, and Deepseek"). It
+# replaces both Claude Sonnet seats of config/judges-live.yaml. In the regression pass of 2026-11-26 the schema filter
+# voided claude-sonnet-5's verdict in 7 of the 8 panels that seated it since 2026-11-25 22:31 UTC: it adds a criterion
+# key the verdict schema does not have, a different one each time. Under agg-5 one voided verdict escalates, and on
+# 2026-11-26 a good delivery was refunded.
+#
+# A deal keeps the registry it bound (ADR-0036): deals bound to config/judges-live.yaml are still judged by that file.
+# This one applies to new deals only, once it is the live adjudicators' default (the second of two deploys), under a
+# policy whose escalation panel is three judges, so every panel seats all three.
+#
+# Model IDs end in "@<date>" as in config/judges-live.yaml. claude-opus-5-5: Anthropic's snapshot ID, dated by its
+# created_at from GET /v1/models. gemini-4-neon and deepseek-v4-pro: provider aliases with no dated snapshot, dated the
+# day they were checked (recorded limit: the provider can change the model behind the name). Not calibrated. Any
+# change is a new registry hash.
+version: 1
+judges:
+  - id: claude-opus-5-5
+    provider: anthropic
+    family: claude
+    model: claude-opus-5-5@2026-09-21
+    status: active
+  - id: gemini-4-neon
+    provider: google
+    family: gemini
+    model: gemini-4-neon@2026-11-26
+    status: active
+  - id: deepseek-v4-pro
+    provider: openai-compatible
+    family: deepseek
+    model: deepseek-v4-pro@2026-11-01
+    status: active
