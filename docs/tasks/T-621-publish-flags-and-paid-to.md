@@ -55,12 +55,13 @@ Measured on this machine on 2026-11-25, Node 22.23.4, anvil and forge 1.0.0.
 - **After the review fixes and the merge of `origin/main`:** 8 files (the adapter and sync tests, publish, the setup bundle, the record on SimChain and on anvil, the invoice, late work), 168 of 168 passed. `pnpm typecheck`, `pnpm lint` and `node site/check.mjs` passed; `pnpm validate:spec` passed before the merge. No file under `spec/` changed.
 - **CI's first run on the pull request** (run 45709146788): `test (3/4)` failed, and `check` with it. Cause (measured from the log, and reproduced on this machine): `tests/ci-gated.test.ts`, "every gated test file is named in CI or exempt here with a reason", listed `examples/deal-record-chain.test.ts`. The new file skips without anvil and no CI job named it, so the shards would have skipped it unseen. The local runs before the push covered `examples/`, `apps/demo-cloud` and `packages/settlement/evm`, not `tests/`. Fixed by naming the file in the `world` leg of CI's anvil job, which fails on a skip. Both anvil legs passed in that run, `examples/take.test.ts`'s creation-code pin included, so its failure here is this worktree's.
 - **After the second merge of `origin/main`** (at `f948f2fe`): `tests/` 1,435 passed, 2 skipped, 0 failed (55 files). CI's `world` list, with the new file: 77 passed, 1 failed (the creation-code pin above), none skipped. The adapter and sync tests, the setup bundle, the record on SimChain, the invoice and late work: 160 of 160. `pnpm typecheck`, `pnpm lint`, `pnpm validate:spec`, `pnpm snap` (73 of 73) and `node site/check.mjs` passed.
-- **Bundles, against `origin/main` at `f948f2fe`:**
+- **After the third merge of `origin/main`** (at `df65a931`, PR 837): `tests/` and the eight affected files, 63 files, 1,607 passed, 2 skipped, 0 failed. `pnpm typecheck`, `pnpm lint`, `pnpm validate:spec` and `node site/check.mjs` passed. The run before it on the pull request (head `4c298a72`) showed 19 checks passing, 1 skipped, 0 failing, as the app reported it.
+- **Bundles, against `origin/main` at `df65a931`:**
 
 | File | `origin/main` SHA-256 | This branch SHA-256 |
 | --- | --- | --- |
-| `site/setup.mjs` | `39a3c142791c7d5df2fe16b745071e7834d6dac7e14c022ebe35637a067e33c3` | `9a530029a8438479cccfdedf7d4c1c928741cbb34a24dd71f425261f23fad442` |
-| `site/seller-worker.mjs` | `29f1b4f12063d0a9ec8e783c6375887da5b3c8ae97389dd383fba0d8b287ba93` | `cadd7d73d3a9038f2d96770920774ad96e9756db59a4e331e19e38986d28f90a` |
+| `site/setup.mjs` | `e87e061796fefeb1a6cd0a0ebecbb27429a48f391d846208fa1114e951e020a9` | `90119eed42a1a0110655ec872cd1fb39ab7be870df5d2da3a5895e762d1a145d` |
+| `site/seller-worker.mjs` | `4a2b5493964f63aa0c8b761996508313511c7887f6187a2cdcef0df648b20a3b` | `90c753ec14558f8066de0cb2b0a0f317409db88bcc4646f07a98b7e3f299b9df` |
 
   Every other `site/*.mjs` bundle, `buy.mjs`, `try.mjs`, `take.mjs` and `serve.mjs` included, keeps `origin/main`'s bytes. `seller-worker.mjs` moves because it holds the chain adapter's module; its pin (`examples/seller-worker-pin.ts`), inside `setup.mjs`, moves with it.
 
