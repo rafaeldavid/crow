@@ -5,7 +5,7 @@
 - **Depends on:** T-621 (the chain adapter's postings after a decision and a reclaim)
 - **Paths this task may touch:** `packages/settlement/evm/evm-settlement.ts` and its test, `examples/deal-record.ts`, `examples/deal-record.test.ts`, `examples/deal-record-chain.test.ts`, `examples/seller-invoice.ts` (one comment), `examples/setup.ts` (one note) and `examples/setup-bundle.test.ts`, the generated `site/*.mjs` bundles and `examples/seller-worker-pin.ts`, this file
 - **Human gate:** yes. The new postings take effect only when both operators run this code; the record's new check only when the site serves the rebuilt bundles. Both deploys are Rafa's. The change moves the pinned `buy.mjs` (D101).
-- **Status:** review
+- **Status:** done
 - **Agent/session:** payee-every-outcome, 2026-11-26
 - **Roadmap row:** N142
 
@@ -34,7 +34,7 @@ The record of every outcome that moves money out of escrow names who was paid an
 - [x] On SimChain and on anvil, the record of an early accept names `paidTo` and no `refundedTo`; the record of a default outcome names `refundedTo` (on SimChain; on anvil its postings only, see Evidence). Both postings checks pass, for the buyer's and the seller's record.
 - [x] A decision on a price of 0 writes the fee's posting, and the record's checks pass on it.
 - [x] No schema, route or contract change.
-- [ ] One deal on Sepolia through the live guides, after the deploy: its record names the payee and both postings checks pass.
+- [x] One deal on Sepolia through the live guides, after the deploy: its record names the payee and both postings checks pass.
 
 ## Evidence
 
@@ -66,6 +66,15 @@ Measured on this machine on 2026-11-26, Node 22.23.4, anvil and forge 1.0.0, unl
   - L2: an early accept's postings must pay exactly the price to the payout address and exactly the rest to the payment address.
   After the fixes and the rebuild: the six affected files with anvil, 131 of 131 passed; `pnpm lint` and `node site/check.mjs` passed [measured].
 - **`/verify`, kind 5, at `0fc83f2a` [measured]:** `packages/settlement/evm` on anvil, 25 files, 327 of 327 passed; `pnpm typecheck` passed; `pnpm snap` 73 passed, 0 failed, no snapshot diff; `pnpm validate:spec` passed. Full `pnpm verify` not run (it is for deploys).
+- **Merged** as PR 841 (`fac19151`), 07:14 UTC; deployed to both operators at 09:32 UTC and to the site at 09:39 UTC, at `e9b3bd1` (as the coordinator reported).
+- **Sepolia, a decision on a price of 0, through `setup.txt` [measured, 2026-11-26]:** `setup.mjs` (`5d7636bd…d0c9`, the guide's hash) `seller --template` with `"price": "0"`, then `first-deal`: commitment `0x200b84537b3c1a345d3f96c7170d259fe175729409426f41cd1a3338671fb445`, Released at 09:44 UTC in 53 s, exit 0, with no wait for a payee (the M1 fix): "The deal released at a price of 0, so nothing was due to the seller."
+  - Seller's record (the command's) and buyer's record (`node examples/deal-record.ts <id> --as buyer`): 18 checks passed, 0 failed, 3 not run (the delivery and plaintext checks, which need the party's files); both operators agree. `paidTo` null, `refundedTo` null. One posting: 1,000,000 base units to the primary adjudicator `0x7c40a6762e59a3a14f9dd9d1a3a302cf54579647`, "fee to the primary adjudicator, whose decision settles". "Postings conserve the hold" and "postings follow the outcome" pass.
+  - The chain agrees: the decision's transaction `0xe75a1713e45279c10a3ffd2c898bf299b196a35048097993d0bca69238865a8b` holds one tUSDC Transfer, 1,000,000 from the hold `0x38568b61…7c0f` to that adjudicator (read from a public Sepolia RPC).
+- **Sepolia, an early accept during a held reject [measured, 2026-11-26]:** a fresh seller and buyer with the examples' agent (`examples/agent.ts`), a rubric deal ("written entirely in French", 1 tUSDC, judge window 1,800 s) and an English note. The primary published a reject at 09:45:43 UTC ("3 of 3 valid verdicts fail"), held until 10:05:43 UTC; the buyer accepted with `examples/held-reject.ts <id> --accept <delivery.json>` at 09:51:39 UTC (`envelopeChecked: true`). Commitment `0xef8c96caf6b8fc70d1daf51058a9d1f6e124c433f6868beaff77959df84eccdf`.
+  - Buyer's and seller's records: 0 failed, both operators agree. `paidTo` `0xd91b19d789f7299bee2b18fa9264c31da0b8e0e4` (the seller's payout address), `refundedTo` null. Postings: 1,000,000 to the payout address, "price to the seller"; 1,000,000 to the buyer's payment address `0xf54d0a16a34c0fa2d09a1fe5af9a92e492043994`, "fee back to the buyer: no adjudicator judged". Both postings checks pass.
+  - The chain agrees: the accept's transaction `0xdd6b9e4b9ba38b0504df0c6efe36e48c8d617ec2c8bb64607beceeeed380f244` holds two tUSDC Transfers from the hold, 1,000,000 to the payout address and 1,000,000 to the payment address.
+  - **One mismatch, not in this task:** the first `--accept` refused, "the typed data for signature (domain, types or message) is not the message you intend". `held-reject.ts` builds its agent with no pinned domain, so it signs under SimChain's unless `HOLDBACK_CHAIN_ID` and `HOLDBACK_VERIFYING_CONTRACT` are set; `ref/after-funding.txt` names the command without them. With both set to the domain `llms.txt` pins, it accepted.
+- **Not run on Sepolia:** a default outcome. It needs both deciding adjudicators silent past `fallbackBy`, which the live adjudicators are not; its postings are measured on anvil and its record on SimChain (above).
 
 ## Decisions
 
@@ -77,7 +86,7 @@ Measured on this machine on 2026-11-26, Node 22.23.4, anvil and forge 1.0.0, unl
 
 ## Handoff
 
-**Done:** the adapter's postings for an early accept, a default outcome and a decision on a price of 0; the record's check and `refundedTo`; the review's M1 and L2; the rebuilt bundles.
+**Done:** merged in PR 841 and deployed; the adapter's postings for an early accept, a default outcome and a decision on a price of 0; the record's check and `refundedTo`; the review's M1 and L2; the rebuilt bundles.
 
 **What each deploy turns on (the coordinator's batch, Rafa's word):**
 
@@ -87,7 +96,7 @@ Measured on this machine on 2026-11-26, Node 22.23.4, anvil and forge 1.0.0, unl
 
 **Left open:**
 
-- The Sepolia deal through the live guides after the deploy: one early accept during a held reject (`held-reject.mjs --accept`) or one decided deal, its buyer's and seller's records, both postings checks, and the payee lines with the commitment ID.
+- `examples/held-reject.ts` on Sepolia signs under SimChain's domain unless `HOLDBACK_CHAIN_ID` and `HOLDBACK_VERIFYING_CONTRACT` are set, so `--accept` as `ref/after-funding.txt` writes it refuses (Evidence). A task of its own: pin the domain the operators serve against `knownPins()`, as `try.ts` does.
 - Red team L1 (SimChain only, Low): where one address is both money addresses, a refunded deal's row reads `paidTo` set and `refundedTo` null. On a chain the adapter writes no postings for such a deal, so no deployed path shows it; the invoice refuses the record either way.
 
 **To resume:** `git switch t-627-payee-every-outcome`. The anvil tests need `forge build` in `contracts/` with the submodules checked out as `.github/workflows/ci.yml` does.
