@@ -5,7 +5,7 @@
 - **Depends on:** T-619 (ADR-0051)
 - **Paths this task may touch:** `examples/seller-adapter-core.ts`, `examples/seller-adapter-stub.ts`, `examples/setup-seller.ts`, `examples/held-reject.ts`, `examples/deal-record.ts` and their tests, `apps/operator/src/` (registry, server, sim-world), `apps/demo-cloud/src/world.ts` and its test, `spec/openapi/paths.json` and `spec/openapi.json`, `site/` (guides and rebuilt bundles), `docs/decisions/ADR-0051-held-reject.md`, `docs/decisions-today.md` (D109), `docs/api.md`
 - **Human gate:** no for the code; the Workers and site deploys are Rafa's
-- **Status:** review
+- **Status:** done
 - **Agent/session:** Claude Code session in worktree `held-reject-interim-22d9a6`, asked by the coordinator on 2026-11-25
 - **Roadmap row:** none
 

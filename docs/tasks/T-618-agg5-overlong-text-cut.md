@@ -5,7 +5,7 @@
 - **Depends on:** T-615 (template pair 2 and the named filter reasons, PR 824, merged)
 - **Paths this task may touch:** `packages/judgment/src/verdict.ts`, `packages/judgment/src/aggregate.ts`, `packages/judgment/src/pipeline.ts`, `packages/judgment/src/kept.ts`, `packages/judgment/src/kept/agg-4.ts`, `packages/judgment/src/kept/verdict-0.ts`, the judgment tests, `apps/adjudicator/src/kept-policies.json` and the adjudicator tests that read its default, `fixtures/replay/kept-policies.json`, `fixtures/recordings/`, `fixtures/scenarios/*.expect.md`, `tests/ci-gated.test.ts`, `CLAUDE.md` and `docs/team.md` (the one sentence D105 approved), `docs/judgment-and-defenses.md`, `examples/take.ts` and `examples/take.test.ts` (the separate CROW_SELLER fix), the rebuilt `site/setup.mjs`, `site/take.mjs` and `site/serve.mjs`, this file
 - **Human gate:** no for this pull request; yes for the two deploys (carry agg-5, then the default), which are Rafa's
-- **Status:** review
+- **Status:** done
 - **Agent/session:** agg5-cut-rule, 2026-11-25; branch `claude/agg5-cut-rule-887d79`
 - **Roadmap row:** none (follows partner C's refund, 2026-11-25)
 

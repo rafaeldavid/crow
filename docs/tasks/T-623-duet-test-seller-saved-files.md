@@ -5,7 +5,7 @@
 - **Depends on:** T-617 (the buying command saves the deal's files), T-611 (the buyer names the seller)
 - **Paths this task may touch:** `tools/duet/`, this file
 - **Human gate:** no. A live run spends model keys and test tokens; this change runs none.
-- **Status:** review
+- **Status:** done
 - **Agent/session:** p16-cold-buyers, 2026-11-25
 - **Roadmap row:** N38
 - **Change kind:** 4 (tool code with its tests): the runner's tests, typecheck, lint; one `reviewer` pass

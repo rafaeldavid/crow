@@ -5,7 +5,7 @@
 - **Depends on:** T-552 (`publish`), T-390 and T-411 (the deal record's payee)
 - **Paths this task may touch:** `examples/setup-publish.ts` and its test, `examples/deal-record-chain.test.ts`, `packages/settlement/evm/evm-settlement.ts` and its tests, `site/setup.mjs`, `site/seller-worker.mjs` and `examples/seller-worker-pin.ts` (generated), `examples/setup.ts` (one comment), `.github/workflows/ci.yml` (one test file in the anvil job's list), `docs/api.md`, `docs/architecture.md`, this file
 - **Human gate:** yes. The postings take effect only when both operators run this code, and the new message only when the site is deployed. Both deploys are Rafa's. A partner page pins `setup.mjs`; the coordinator rebuilds it after the site deploy.
-- **Status:** review
+- **Status:** done
 - **Agent/session:** seller-tool-fixes, 2026-11-25
 - **Roadmap row:** N196
 
