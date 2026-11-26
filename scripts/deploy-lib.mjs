@@ -151,12 +151,14 @@ export function recordLine({ title, startedAt, commit, branch, failure, workers,
     return `${w.name} \`${w.version ?? 'not deployed'}\` (rollback target \`${w.before ?? 'unknown'}\`${back})`;
   });
   const short = (c) => `\`${String(c).slice(0, 7)}\``;
+  const rolled = workers.filter((w) => w.rolledBack === true).length;
+  const fronts = `front Worker${rolled === 1 ? '' : 's'} rolled back`;
   const after =
-    !world || !workers.some((w) => w.rolledBack === true) ? ''
+    !world || !rolled ? ''
     : world.status === 'back' ? `; discovery named ${short(world.before)} again ${world.seconds} s after the rollback`
-    : world.status === 'unknown' ? '; front Workers rolled back; World not checked: the commit live before the deploy is unknown'
-    : world.commit ? `; front Workers rolled back; World still on ${short(world.commit)} after ${world.seconds} s`
-    : `; front Workers rolled back; World not back on ${short(world.before)} after ${world.seconds} s, and the last read named no commit`;
+    : world.status === 'unknown' ? `; ${fronts}; World not checked: the commit live before the deploy is unknown`
+    : world.commit ? `; ${fronts}; World still on ${short(world.commit)} after ${world.seconds} s`
+    : `; ${fronts}; World not back on ${short(world.before)} after ${world.seconds} s, and its last answer named no commit`;
   return `**${title} ${when}, commit \`${commit.slice(0, 7) || 'unknown'}\`${on}: ${failure ? `FAIL, ${failure}` : 'pass'}.** ${versions.join(', ')}${after}.${note}`;
 }
 
@@ -190,18 +192,27 @@ export async function finishDeploy(code, args = [], { run = sh, log = console.lo
   return code;
 }
 
-// How the wait for a commit in discovery tells a slow handover from a broken node (T-629). A read that names a commit
-// ends a run of failed reads. While the old commit is still served, and while reads fail after the old commit was named
-// (the World Durable Object moving to a new version: one read hung about 30 s on 2026-11-26), the wait goes on to its
-// deadline. A run of failed reads in a row stops it early in two cases:
+// How the wait for a commit in discovery tells a slow handover from a broken node (T-629). A read that
+// discovery answers (a 200 with JSON) ends a run of failed reads, whatever commit it names: the old one, or none, as from a World
+// deployed by hand without --var BUILD_COMMIT. While the World answers with something other than the new commit, the
+// wait goes on to its deadline. A run of failed reads in a row stops it early in three cases:
 /** after the new commit has appeared on any node: the World has moved, so a node that cannot answer is broken; */
 export const FAILED_READS_AFTER_NEW = 6;
-/** when no read on any node has named a commit: discovery itself is down (12 reads, 5 s apart, each up to 30 s: 1 to 7 min). */
+/** when no read on any node has had an answer: discovery itself is down (12 reads, 5 s apart, each up to 30 s: 1 to 7 min); */
 export const FAILED_READS_WITHOUT_COMMIT = 12;
+/**
+ * when the run has lasted this long since the node last answered. The handover of 2026-11-26 showed one read that hung
+ * about 30 s after the old commit; 180 s is six such reads in a row, and stops a broken new World about 3 minutes after
+ * its last answer instead of at the ceiling.
+ */
+export const FAILED_SECONDS_AFTER_ANSWER = 180;
 
 const isTimeout = (e) => e?.name === 'TimeoutError' || e?.name === 'AbortError';
 
-/** One read of `<node>/`: `{ commit }`, or `{ failed }` with its kind ('timed out', 'answered 503', 'not JSON', 'no commit', 'failed'). */
+/**
+ * One read of `<node>/`: `{ answered: true, commit }` (commit null when discovery names none), or `{ failed }` with its
+ * kind ('timed out', 'answered 503', 'not JSON', 'failed').
+ */
 async function readDiscovery(node, fetchImpl, timeoutMs) {
   let r;
   try {
@@ -217,18 +228,17 @@ async function readDiscovery(node, fetchImpl, timeoutMs) {
     return { failed: isTimeout(e) ? 'timed out' : 'not JSON' };
   }
   const commit = d?.demo?.build?.commit;
-  return typeof commit === 'string' ? { commit } : { failed: 'no commit' };
+  return { answered: true, commit: typeof commit === 'string' ? commit : null };
 }
 
 const FAILED_AS = {
   'timed out': ['timed out', 'timed out'],
   'not JSON': ['was not JSON', 'were not JSON'],
-  'no commit': ['named no commit', 'named no commit'],
   failed: ['failed', 'failed'],
 };
-/** A phase in words: "named 00be274 for 0 to 590 s", "1 read timed out at 625 s", "6 reads answered 503 from 0 to 25 s". */
+/** A phase in words: "named 00be274 for 0 to 590 s", "named no commit at 15 s", "1 read timed out at 625 s", "6 reads answered 503 from 0 to 25 s". */
 function phaseText(p) {
-  if (p.commit) return `named ${p.commit.slice(0, 7)} ${p.n === 1 ? `at ${p.from} s` : `for ${p.from} to ${p.to} s`}`;
+  if (p.answered) return `named ${p.commit ? p.commit.slice(0, 7) : 'no commit'} ${p.n === 1 ? `at ${p.from} s` : `for ${p.from} to ${p.to} s`}`;
   const [one, many] = FAILED_AS[p.failed] ?? [p.failed, p.failed];
   return p.n === 1 ? `1 read ${one} at ${p.from} s` : `${p.n} reads ${many} from ${p.from} to ${p.to} s`;
 }
@@ -243,12 +253,14 @@ function tallyText(phases) {
  * runs against the code just deployed. The World Durable Object kept serving the previous version for minutes after a
  * new one reached 100%: 0 s, 255 to 286 s, once 677 s on a passing deploy, and more than 600 s on 2026-11-26 (T-370,
  * T-629; docs/operations.md). /v1/status answers 200 all the while. The wait keeps a tally of each node's reads: the
- * commit each named, and each failed read by kind (a non-OK status, not JSON, no commit field, a timeout, a failed
+ * commit each named (or none), and each failed read by kind (a non-OK status, not JSON, a timeout, a failed
  * connection), with when each phase began and ended, so a failure says what it saw.
  * @param {{ nodes: string[], commit: string, deadline: number, fetchImpl?: typeof fetch, sleep?: (ms: number) => Promise<void>,
- *   now?: () => number, everyMs?: number, readTimeoutMs?: number, failedAfterNew?: number, failedWithoutCommit?: number }} o
+ *   now?: () => number, everyMs?: number, readTimeoutMs?: number, failedAfterNew?: number, failedWithoutCommit?: number,
+ *   failedSecondsAfterAnswer?: number }} o
  * @returns {Promise<{ failure: string | null, seconds: number, last: string | null }>} `failure` is null once every node
- *   names the commit; `seconds` is how long the wait took; `last` is the last commit the last node read named.
+ *   names the commit; `seconds` is how long the wait took; `last` is the commit the last node's last answer named
+ *   (null when it named none, or the node never answered).
  */
 export async function waitForCommit({
   nodes,
@@ -261,27 +273,29 @@ export async function waitForCommit({
   readTimeoutMs = 30_000,
   failedAfterNew = FAILED_READS_AFTER_NEW,
   failedWithoutCommit = FAILED_READS_WITHOUT_COMMIT,
+  failedSecondsAfterAnswer = FAILED_SECONDS_AFTER_ANSWER,
 }) {
   const start = now();
   const seconds = () => Math.round((now() - start) / 1000);
   if (!/^[0-9a-f]{40}$/.test(String(commit))) return { failure: `the deploy has no commit to look for in discovery (got ${JSON.stringify(String(commit).slice(0, 60))})`, seconds: 0, last: null };
   const short = commit.slice(0, 7);
-  let anyCommit = false, newSeen = false, last = null;
+  let anyAnswer = false, newSeen = false, last = null;
   for (const node of nodes) {
     const phases = [];
-    let run = 0;
+    let run = 0, answeredAt = null;
     last = null;
     for (;;) {
       const read = await readDiscovery(node, fetchImpl, readTimeoutMs);
       const at = seconds();
       const prev = phases.at(-1);
-      if (prev && prev.commit === read.commit && prev.failed === read.failed) {
+      if (prev && prev.answered === read.answered && prev.commit === read.commit && prev.failed === read.failed) {
         prev.n++;
         prev.to = at;
       } else phases.push({ ...read, n: 1, from: at, to: at });
-      if (read.commit) {
-        anyCommit = true;
+      if (read.answered) {
+        anyAnswer = true;
         last = read.commit;
+        answeredAt = at;
         run = 0;
       } else run++;
       if (read.commit === commit) {
@@ -290,7 +304,8 @@ export async function waitForCommit({
       }
       const early =
         newSeen && run >= failedAfterNew ? `failed ${run} discovery reads in a row after ${short} first appeared`
-        : !anyCommit && run >= failedWithoutCommit ? `failed ${run} discovery reads in a row and no read named a commit`
+        : !anyAnswer && run >= failedWithoutCommit ? `failed ${run} discovery reads in a row and no read named a commit`
+        : run > 0 && answeredAt !== null && at - answeredAt >= failedSecondsAfterAnswer ? `failed ${run} discovery reads in a row over ${at - answeredAt} s after it last ${last ? `named ${last.slice(0, 7)}` : 'answered with no commit'}`
         : null;
       if (early) return { failure: `${node} ${early}, after ${seconds()} s: ${tallyText(phases)}`, seconds: seconds(), last };
       if (now() > deadline) return { failure: `${node} did not name ${short} in discovery after ${seconds()} s: ${tallyText(phases)}`, seconds: seconds(), last };
@@ -313,6 +328,27 @@ export async function waitForRollback({ before, ...o }) {
   if (!/^[0-9a-f]{40}$/.test(String(before ?? ''))) return { status: 'unknown', before: null, commit: null, seconds: 0, failure: null };
   const r = await waitForCommit({ ...o, commit: before });
   return r.failure ? { status: 'behind', before, commit: r.last, seconds: r.seconds, failure: r.failure } : { status: 'back', before, commit: before, seconds: r.seconds, failure: null };
+}
+
+/**
+ * The operators' deploy after its rollbacks: whether to wait for the World, and the wait. The World Durable Object
+ * lives in `worldWorker` (holdback-op1), so the deploy waits whenever that Worker rolled back, whatever happened to the
+ * others; when it was not rolled back (unchanged, or its rollback failed) there is nothing to wait for. Says what it
+ * does through `log`.
+ * @param {{ workers: Array<{ name: string, rolledBack?: boolean }>, worldWorker: string, before: string | null | undefined,
+ *   nodes: string[], ceilingMs: number, log?: (line: string) => void }} o with waitForCommit's other options
+ * @returns {Promise<object | undefined>} waitForRollback's result for recordLine's `world`, or undefined when it did not wait
+ */
+export async function worldAfterRollback({ workers, worldWorker, before, ceilingMs, log = console.error, now = Date.now, ...o }) {
+  if (workers.find((w) => w.name === worldWorker)?.rolledBack !== true) return undefined;
+  if (!/^[0-9a-f]{40}$/.test(String(before ?? ''))) {
+    log('World not checked: the commit live before the deploy is unknown.');
+    return waitForRollback({ before: null });
+  }
+  log(`Waiting up to ${Math.round(ceilingMs / 1000)} s for discovery to name ${before.slice(0, 7)} again.`);
+  const world = await waitForRollback({ ...o, now, before, deadline: now() + ceilingMs });
+  if (world.failure) log(`WORLD NOT BACK: ${world.failure}`);
+  return world;
 }
 
 // ---------------------------------------------------------------------------------------------------------------------

@@ -21,7 +21,7 @@
 // and the startup guards refuse anything else at run time. A cutover deploys the Workers one at a time instead
 // (docs/operations.md, Settlement).
 import { fileURLToPath } from 'node:url';
-import { checkout, dealGuard, finishDeploy, liveVersion, recordLine, rollback, sh, waitForCommit, waitForRollback } from '../../../scripts/deploy-lib.mjs';
+import { checkout, dealGuard, finishDeploy, liveVersion, recordLine, rollback, sh, waitForCommit, worldAfterRollback } from '../../../scripts/deploy-lib.mjs';
 
 const NODES = ['https://api.crow.direct', 'https://api2.crow.direct'];
 const WORKERS = [
@@ -112,14 +112,9 @@ try {
     w.rolledBack = await rollback(w.name, w.before, 'pnpm demo-cloud:deploy failed a check');
     if (!w.rolledBack) console.error(`ROLLBACK FAILED for ${w.name}. Run: npx wrangler@4.151.3 rollback ${w.before} --name ${w.name}`);
   }
-  // T-629: wrangler showing the old versions at 100% moves the front Workers only; the World Durable Object keeps
-  // running the new code until discovery names the commit from before the upload again.
-  const tried = WORKERS.filter((w) => w.rolledBack !== undefined);
-  if (tried.length && tried.every((w) => w.rolledBack)) {
-    console.error(`Waiting up to ${ROLLBACK_COMMIT_TIMEOUT_MS / 1000} s for discovery to name ${guard?.liveCommit ? guard.liveCommit.slice(0, 7) : 'the commit from before the deploy'} again.`);
-    world = await waitForRollback({ nodes: NODES, before: guard?.liveCommit, deadline: Date.now() + ROLLBACK_COMMIT_TIMEOUT_MS });
-    if (world.failure) console.error(`WORLD NOT BACK: ${world.failure}`);
-  }
+  // T-629: wrangler showing the old versions at 100% moves the front Workers only; the World Durable Object, which
+  // holdback-op1 defines, keeps running the new code until discovery names the commit from before the upload again.
+  world = await worldAfterRollback({ workers: WORKERS, worldWorker: WORKERS[0].name, before: guard?.liveCommit, nodes: NODES, ceilingMs: ROLLBACK_COMMIT_TIMEOUT_MS });
 }
 
 const against = served && !served.failure ? `, against commit \`${commit.slice(0, 7)}\` (both nodes' discovery named it ${served.seconds} s after /v1/status answered)` : '';
