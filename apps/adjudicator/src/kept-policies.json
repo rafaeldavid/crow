@@ -60,6 +60,12 @@
       "appealPromptTemplateHash": "0xfc6d93d5441808bbfa690c0402a0ee185eab48c508025f59cf3c4f9f5d8332f1",
       "status": "kept",
       "since": "2026-11-25, partner C's refund: rule 5 states the verdict limits in words; carried beside pair 1, the default moves in a second deploy"
+    },
+    {
+      "promptTemplateHash": "0xf65c785946bfe279f73b08b9a3457e932556795e42f6a613f6c15dc1a186d11f",
+      "appealPromptTemplateHash": "0x6839cb0cc7425a93eb328ff5297007e35d20892684ba8d07156ee3e3a54293cc",
+      "status": "kept",
+      "since": "T-616, ADR-0050, D106, 2026-11-25: the coded verdict (closed reason codes and injection kinds, references into the work); carried beside pairs 1 and 2, read only by agg-6; the default moves after a live calibration"
     }
   ],
   "aggregations": [
@@ -77,6 +83,11 @@
       "version": "agg-5",
       "status": "kept",
       "since": "ADR-0049, D105, 2026-11-25: agg-4's rule with free text over its cap cut and recorded instead of abstaining"
+    },
+    {
+      "version": "agg-6",
+      "status": "kept",
+      "since": "T-616, ADR-0050, D106, 2026-11-25: agg-5's rule over coded verdicts; evidence the pipeline cannot use is dropped and counted, and the record keeps anchors, never judge text; pairs only with template pair 3"
     }
   ],
   "registries": [

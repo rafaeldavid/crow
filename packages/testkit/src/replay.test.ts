@@ -2,7 +2,7 @@
 // the record recorded when the version was new (fixtures/replay/kept-policies.json). A changed filter, sampler or
 // screen under an unchanged label fails it.
 import { readFileSync } from 'node:fs';
-import { aggregate, KEPT, parseVerdict, type KeptTable } from '@holdback/judgment';
+import { aggregate, KEPT, parseVerdict, type KeptTable, type ProseAggregation } from '@holdback/judgment';
 import { describe, expect, it } from 'vitest';
 import { keptPolicies, READ_PATHS, replay } from './replay.js';
 
@@ -57,7 +57,7 @@ describe('attack.kept-version-drift: the replay fails on a changed filter, sampl
   });
 
   it('a verdict filter that drops a judge it used to keep', async () => {
-    const agg = KEPT.aggregations.get('agg-3')!;
+    const agg = KEPT.aggregations.get('agg-3') as ProseAggregation;
     const drifted: KeptTable = {
       ...KEPT,
       aggregations: new Map([['agg-3', { ...agg, parseVerdict: (raw, o) => (raw.includes('fixed fail') ? { status: 'abstain', reason: 'schema' } : parseVerdict(raw, o)) as ReturnType<typeof parseVerdict> }]]),

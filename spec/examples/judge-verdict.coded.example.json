@@ -1,0 +1,26 @@
+{
+  "criteria": [
+    {
+      "id": "dedupe_quality",
+      "refs": ["L14", "L208"],
+      "reasons": ["meets_terms", "consistent"],
+      "score": 4
+    },
+    {
+      "id": "no_fabrication",
+      "refs": ["L57"],
+      "reasons": ["accurate"],
+      "score": 4
+    },
+    {
+      "id": "notes",
+      "refs": [],
+      "reasons": ["incomplete"],
+      "score": 3
+    }
+  ],
+  "overall": "pass",
+  "injectionSuspected": false,
+  "injectionKinds": [],
+  "injectionRefs": []
+}

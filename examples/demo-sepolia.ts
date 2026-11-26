@@ -71,8 +71,9 @@ function panelLine(j: J | null): string {
   return `${j.role} adjudicator decided ${j.aggregate?.decision ?? 'unknown'}${members.length ? `; panel of ${members.length}: ${seats}` : '; no panel ran'}`;
 }
 /**
- * A scripted seat: its rationale starts with the demo's mark "[fake judge, no model ran]" (or, offline, a placeholder
- * model). Scripted seats still name the live models and families, so only the mark tells them apart.
+ * A scripted seat: its model ID starts "placeholder-", the mark since ADR-0050 (a coded verdict has no rationale to
+ * mark). A prose record written before it, whose scripted seats could name the live models, marks the rationale
+ * "[fake judge, no model ran]" instead, so both are read.
  */
 const marked = (m: J) => String(m.model).startsWith('placeholder-') || String(m.verdict?.rationale ?? '').startsWith('[fake judge');
 const scripted = (j: J | null) => (j?.panel?.members ?? []).some(marked);

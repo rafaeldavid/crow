@@ -898,8 +898,9 @@ ${items}
   private async otherEnding(id: Hex, ended: 'release' | 'refund'): Promise<string> {
     const j = await this.agent.call('GET', `/v1/commitments/${id}/judgment`).catch(() => null);
     const members: J[] = j?.panel?.members ?? [];
-    if (members.length && members.every((m) => /^\[fake judge/.test(String(m.verdict?.rationale ?? '')))) {
-      return `the deal ended in a ${ended}, not as this offer intends: the day's live judge calls ran out before the panel sat, so scripted judges decided, and they pass every text (their verdicts start "[fake judge, no model ran]")`;
+    // A scripted seat's model ID starts placeholder- (ADR-0050); a prose record before it also marks the rationale.
+    if (members.length && members.every((m) => String(m.model).startsWith('placeholder-') || /^\[fake judge/.test(String(m.verdict?.rationale ?? '')))) {
+      return `the deal ended in a ${ended}, not as this offer intends: the day's live judge calls ran out before the panel sat, so scripted judges decided, and they pass every text (their model IDs start "placeholder-")`;
     }
     return `the deal ended in a ${ended}, not as this offer intends: read the judgment record (GET /v1/commitments/${id}/judgment)`;
   }

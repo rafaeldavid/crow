@@ -1,5 +1,6 @@
 export * from './aggregate.js';
 export * from './checks/index.js';
+export * from './coded.js';
 export { StepBudget, BudgetExhausted, SubjectTooLong } from './checks/safe-regex.js';
 export * from './hidden.js';
 export { compileJsonSchema, type Validator } from './checks/json-schema.js';
@@ -12,6 +13,7 @@ export * from './prompt.js';
 export * from './panel.js';
 export * from './providers/index.js';
 export * from './references.js';
+export * from './refs.js';
 export * from './sample.js';
 export * from './screen.js';
 export * from './terms.js';

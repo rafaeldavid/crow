@@ -13,7 +13,7 @@ let exampleResults: ReturnType<typeof validateExamplesFresh> | undefined;
 const loadSpec = () => (spec ??= loadSpecFresh());
 const validateExamples = () => (exampleResults ??= validateExamplesFresh(loadSpec()));
 
-const V = 'https://holdback.dev/schemas/v0.14';
+const V = 'https://holdback.dev/schemas/v0.15';
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
 const example = (name: string): any => structuredClone(loadSpec().examples.find((e: { name: string }) => e.name === name).data);
 
@@ -81,9 +81,10 @@ describe('spec/', () => {
   // and the seller's payout address to the terms, so both move to 0.8. ADR-0040 and ADR-0041: v0.12 widens the parties'
   // signatures and changes no signed struct, so both stay at 0.8. ADR-0045: v0.13 adds the signature_valid check kind
   // and an adjudicator's checkKinds list, and ADR-0047: v0.14 adds the three data check kinds; neither changes a signed struct, so both stay at 0.8.
-  it('moves every schema $id to v0.14 and keeps the commitment schemaVersion at 0.8', () => {
+  // ADR-0050: v0.15 adds the coded judge verdict and the judgment record's coded seat; no signed struct changes.
+  it('moves every schema $id to v0.15 and keeps the commitment schemaVersion at 0.8', () => {
     const { schemas, ajv } = loadSpec();
-    for (const id of schemas.values()) expect(id).toMatch(/\/schemas\/v0\.14\//);
+    for (const id of schemas.values()) expect(id).toMatch(/\/schemas\/v0\.15\//);
     const validate = ajv.getSchema(`${V}/commitment.schema.json`);
     const c = example('commitment');
     expect(c.schemaVersion).toBe('0.8');
@@ -364,7 +365,8 @@ describe('spec/', () => {
   it.each([
     ['commitment', '/properties/deliverable/properties/description'],
     ['commitment', '/$defs/Criterion/properties/anchors/properties/0'],
-    ['judge-verdict', '/properties/rationale'],
+    ['judge-verdict', '/$defs/ProseVerdict/properties/rationale'],
+    ['judge-verdict', '/$defs/Locator'],
     ['judgment', '/properties/aggregate/properties/reasons/items'],
     ['messages', '/$defs/Dispute/properties/grounds'],
   ])('marks %s %s as untrusted, not merely constrained', (file, pointer) => {
@@ -1063,6 +1065,78 @@ describe('spec/', () => {
       ...(['series', 'waypoints', 'tolerance'] as const).map((f): [string, 'path', Edit] => [`a path without ${f}`, 'path', (k) => delete k[f]]),
     ])('refuses %s', (_, which, edit) => {
       expect(verdicts(terms(which, edit))).toEqual([false, false]);
+    });
+  });
+
+  // ADR-0050 (D106): each case runs under both validators, Ajv over spec/schemas and the compiled one the operators run.
+  describe('the coded verdict and the coded seat, v0.15 (ADR-0050)', () => {
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    type Edit = (x: any) => void;
+    const verdicts = (file: 'judge-verdict' | 'judgment', doc: unknown) => [loadSpec().ajv.getSchema(`${V}/${file}.schema.json`)(doc), parsers[file](doc).ok];
+    const coded = (edit: Edit = () => {}) => {
+      const v = example('judge-verdict.coded');
+      edit(v);
+      return v;
+    };
+    const seat = (edit: Edit = () => {}) => {
+      const j = example('judgment.coded');
+      edit(j.panel.members[0].verdict);
+      return j;
+    };
+
+    it('takes the v0.14 prose verdict and record unchanged, and the coded examples', () => {
+      expect(verdicts('judge-verdict', example('judge-verdict'))).toEqual([true, true]);
+      expect(verdicts('judgment', example('judgment'))).toEqual([true, true]);
+      expect(verdicts('judge-verdict', coded())).toEqual([true, true]);
+      expect(verdicts('judgment', seat())).toEqual([true, true]);
+    });
+
+    it('keeps the two formats apart: the prose parser refuses a coded verdict, and a verdict is never both', () => {
+      const { ajv } = loadSpec();
+      const prose = ajv.getSchema(`${V}/judge-verdict.schema.json#/$defs/ProseVerdict`);
+      const codedOnly = ajv.getSchema(`${V}/judge-verdict.schema.json#/$defs/CodedVerdict`);
+      expect([prose(coded()), codedOnly(coded())]).toEqual([false, true]);
+      expect([prose(example('judge-verdict')), codedOnly(example('judge-verdict'))]).toEqual([true, false]);
+    });
+
+    it.each<[string, Edit]>([
+      ['no references and no reasons left after the filter dropped them', (v) => { v.criteria[0].refs = []; v.criteria[0].reasons = []; }],
+      ['no refs key', (v) => delete v.criteria[0].refs],
+      ['no injection lists', (v) => { delete v.injectionKinds; delete v.injectionRefs; }],
+      ['three kinds and three references', (v) => { v.injectionSuspected = true; v.injectionKinds = ['instruction_override', 'hidden_text', 'other']; v.injectionRefs = ['/a', '/b', 'L3']; }],
+      ['a pointer of 512 characters', (v) => (v.criteria[0].refs = [`/${'a'.repeat(511)}`])],
+    ])('takes a coded verdict with %s', (_, edit) => {
+      expect(verdicts('judge-verdict', coded(edit))).toEqual([true, true]);
+    });
+
+    it.each<[string, Edit]>([
+      ['an unknown reason code', (v) => (v.criteria[0].reasons = ['excellent'])],
+      ['four reasons', (v) => (v.criteria[0].reasons = ['complete', 'accurate', 'consistent', 'well_formed'])],
+      ['a repeated reason', (v) => (v.criteria[0].reasons = ['complete', 'complete'])],
+      ['four references', (v) => (v.criteria[0].refs = ['L1', 'L2', 'L3', 'L4'])],
+      ['a reference of 513 characters', (v) => (v.criteria[0].refs = [`/${'a'.repeat(512)}`])],
+      ['an unknown injection kind', (v) => (v.injectionKinds = ['jailbreak'])],
+      ['a rationale', (v) => (v.rationale = 'habit')],
+      ['evidence on a criterion', (v) => (v.criteria[0].evidence = 'quoted')],
+      ['a score of 5', (v) => (v.criteria[0].score = 5)],
+      ['no reasons key', (v) => delete v.criteria[0].reasons],
+      ['no overall', (v) => delete v.overall],
+    ])('refuses a coded verdict with %s', (_, edit) => {
+      expect(verdicts('judge-verdict', coded(edit))).toEqual([false, false]);
+    });
+
+    it.each<[string, Edit]>([
+      ['a locator where an anchor goes', (v) => (v.criteria[0].refs = ['L14'])],
+      ['an anchor in capitals', (v) => (v.criteria[0].refs = ['3F9A0C1D22B84E67'])],
+      ['an anchor of 15 characters', (v) => (v.injectionRefs = ['3f9a0c1d22b84e6'])],
+      ['a dropped count of 10', (v) => (v.dropped.keys = 10)],
+      ['no dropped counts', (v) => delete v.dropped],
+      ['format prose-1 on a coded seat', (v) => (v.format = 'prose-1')],
+      ['no format', (v) => delete v.format],
+      ['a rationale', (v) => (v.rationale = 'habit')],
+      ['an extra dropped count', (v) => (v.dropped.urls = 0)],
+    ])('refuses a coded seat with %s', (_, edit) => {
+      expect(verdicts('judgment', seat(edit))).toEqual([false, false]);
     });
   });
 

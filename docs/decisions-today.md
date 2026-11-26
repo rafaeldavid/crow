@@ -2007,6 +2007,12 @@ Amended (Rafa, 2026-11-25: "Default for rubric deals"): Crow's setup tools and t
 
 Rafa, 2026-11-25: "Yes, adopt it". A judge's free text over its length cap (300 characters for evidence and injection evidence, 600 for the rationale) is cut to the cap, ends with `[cut]`, and the adjudicator records the cut in the aggregate's reasons; the verdict counts. Every other schema failure stays an abstention, and the cut never touches scores, ids, booleans or `overall`. The canary and URL scans run on the full text before the cut. No schema change: it ships as aggregation version `agg-5`, with today's filter frozen for `agg-3` and `agg-4`. The hard rule gains one sentence, which lands with the build: "One exception: free text over its length cap is cut to the cap and the cut is recorded. Nothing else is repaired." The caps are a privacy and injection bound, not a protocol constraint; the harm was the penalty, which on 2026-11-25 discarded half a panel's verdicts and refunded a delivery that passed every check.
 
+## D106. Judges return coded verdicts, and the public record keeps no judge text (ADR-0050)
+
+**Status:** adopted, 2026-11-25.
+
+Rafa, 2026-11-25: "ok fix it", on judges answering "as code, not raw text", with "a fixed character count" and "privacy controlled"; then "Cut rule, then T-616". A judge answers per criterion with a score, one to three reason codes from a closed list of 16 and up to three references into the work, plus `overall`, the injection flag and up to three injection kinds from a closed list of 6; no rationale or evidence prose. Decision fields stay strict and abstain as today; an unknown code, an extra item, a reference that does not resolve or an unknown key is dropped and counted on the seat. The public judgment record keeps no judge-written text: each resolved reference is kept as a 16-hex anchor that only a holder of the work can match. It ships as schema v0.15 (additive), template pair 3 and aggregation version `agg-6`, built after `agg-5` (D105) merges; ADR-0049's cut rule stays kept for every policy that binds `agg-5`. The default moves to `agg-6` only after a live calibration on Sepolia that judges the same deliveries under both formats and reports how far the scores agree, through Rafa's deploys (T-616). Built in T-616 on 2026-11-25 (carried, not the default); the hard rule's two exceptions now stand in one sentence.
+
 ## D107. Crow's adjudicators hold a rubric deal's reject before signing it, the interim for ADR-0048 (ADR-0051)
 
 **Status:** adopted, 2026-11-25.

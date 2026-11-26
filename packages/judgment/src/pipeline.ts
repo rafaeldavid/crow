@@ -10,6 +10,7 @@ import { runChecks, type CheckOutcome } from './checks/index.js';
 import type { Intaken } from './intake.js';
 import { implementationsFor, KEPT, NEWEST_VERSIONS, type AggregationImpl, type KeptTable, type PolicyVersions } from './kept.js';
 import { buildPrompt, type Nonces, type PromptTemplateKind } from './prompt.js';
+import { anchorKey, NO_REFS, plaintextBytes, workView } from './refs.js';
 import { validateTermsText, type ScreenResult } from './screen.js';
 import type { VerdictCuts } from './verdict.js';
 import { validatePolicy, validateRubric, type JudgmentAcceptance, type JudgmentCriterion, type JudgmentPolicy } from './terms.js';
@@ -266,6 +267,8 @@ export async function runPipeline(input: PipelineInput): Promise<Result<Judgment
   const sameIds = (cs: readonly JudgmentCriterion[]) => cs.length === rubricIds.length && cs.every((c) => rubricIds.includes(c.id)) && new Set(cs.map((c) => c.id)).size === cs.length;
 
   type SeatResult = { member: PanelMember; verdict: PanelVerdict; canaryEcho: boolean; filtered?: string; filterDetail?: string; cut?: VerdictCuts; strided: boolean };
+  // agg-6 (ADR-0050): what a coded verdict's references resolve against and the key of their anchors, once per panel.
+  const coded = aggregation.format === 'coded-1' ? { work: workView(input.intake), key: anchorKey(plaintextBytes(input.intake)) } : null;
   // Every seat's prompt is built before any judge is called, so a refusal (a bad criteria order, a prompt that cannot
   // be built) never follows a judge call, and a retry of the turn never calls the same judges again for nothing.
   const prompts: Array<{ seat: PanelSeat; family: string; p: Exclude<ReturnType<typeof buildPrompt>, { ok: false }>['value'] }> = [];
@@ -283,6 +286,7 @@ export async function runPipeline(input: PipelineInput): Promise<Result<Judgment
       rationaleMaxChars: policy.rationaleMaxChars,
       ...(input.maxDataChars !== undefined ? { maxDataChars: input.maxDataChars } : {}),
       ...(input.sampleSeed ? { sample: { seed: input.sampleSeed(seat, i), mime: input.intake.mime } } : {}),
+      mime: input.intake.mime,
     });
     if (!prompt.ok) return err(problem('invalid_terms', `prompt for ${seat.judgeId}: ${prompt.error}`));
     prompts.push({ seat, family: families[i]!, p: prompt.value });
@@ -312,9 +316,17 @@ export async function runPipeline(input: PipelineInput): Promise<Result<Judgment
       const seatError = { member: { ...member, status: 'error' as const }, verdict: none, canaryEcho: false, strided: p.sampling === 'stride' };
       if (res.kind !== 'ok') return { member: { ...member, status: res.kind }, verdict: none, canaryEcho: false, strided: p.sampling === 'stride' };
       if (res.latencyMs !== undefined) member.latencyMs = res.latencyMs;
-      let parsed: ReturnType<AggregationImpl['parseVerdict']>;
+      type Read = { status: 'ok'; record: NonNullable<PanelMember['verdict']>; scored: NonNullable<PanelVerdict['verdict']>; cut?: VerdictCuts } | { status: 'abstain'; reason: string; detail: string };
+      let parsed: Read;
       try {
-        parsed = aggregation.parseVerdict(res.text, { criterionIds: rubricIds, canary: p.canary, rationaleMaxChars: policy.rationaleMaxChars });
+        if (aggregation.format === 'coded-1') {
+          // A sampled read keeps no reference: its lines are not the file's.
+          const c = aggregation.parseCoded(res.text, { criterionIds: rubricIds, canary: p.canary, work: p.sampling === 'none' ? coded!.work : NO_REFS, anchorKey: coded!.key });
+          parsed = c.status === 'ok' ? { status: 'ok', record: c.record, scored: aggregation.scored(c.record) } : c;
+        } else {
+          const v = aggregation.parseVerdict(res.text, { criterionIds: rubricIds, canary: p.canary, rationaleMaxChars: policy.rationaleMaxChars });
+          parsed = v.status === 'ok' ? { status: 'ok', record: v.verdict, scored: v.verdict, ...(v.cut ? { cut: v.cut } : {}) } : v;
+        }
       } catch {
         // A verdict filter that throws on one seat's output makes that seat an error, never the whole panel's failure.
         return seatError;
@@ -322,8 +334,8 @@ export async function runPipeline(input: PipelineInput): Promise<Result<Judgment
       if (parsed.status === 'abstain') {
         return { member: { ...member, status: 'abstain' }, verdict: none, canaryEcho: parsed.reason === 'canary_echo', filtered: parsed.reason, filterDetail: parsed.detail, strided: p.sampling === 'stride' };
       }
-      const status = parsed.verdict.overall === 'abstain' ? 'abstain' : 'ok';
-      return { member: { ...member, status, verdict: parsed.verdict }, verdict: { family, verdict: parsed.verdict }, canaryEcho: false, ...(parsed.cut ? { cut: parsed.cut } : {}), strided: p.sampling === 'stride' };
+      const status = parsed.record.overall === 'abstain' ? 'abstain' : 'ok';
+      return { member: { ...member, status, verdict: parsed.record }, verdict: { family, verdict: parsed.scored }, canaryEcho: false, ...(parsed.cut ? { cut: parsed.cut } : {}), strided: p.sampling === 'stride' };
     }),
   );
 

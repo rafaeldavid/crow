@@ -1,4 +1,4 @@
-// Hand-written types for spec/schemas v0.14 (signed encoding 0.8: the EIP-712 domain version in eip712.ts; ADR-0023,
+// Hand-written types for spec/schemas v0.15 (signed encoding 0.8: the EIP-712 domain version in eip712.ts; ADR-0023,
 // ADR-0024, ADR-0029, ADR-0033). Values reach these types only through the parsers in parse.ts, which validate against the
 // schema files. Phase 1 narrows the commitment to guaranteed_on_decision and maxSubmissions = 1 (ADR-0007).
 import type { TokenAmount } from './money/index.js';
@@ -732,13 +732,58 @@ export interface SettlementEvent {
   hash: Hex32;
 }
 
-// judge-verdict.schema.json
+// judge-verdict.schema.json, $defs/ProseVerdict: the prose verdict of template pairs 1 and 2 (agg-3 to agg-5).
 export interface JudgeVerdict {
   criteria: Array<{ id: string; score: 0 | 1 | 2 | 3 | 4; evidence: string }>;
   overall: 'pass' | 'fail' | 'abstain';
   injectionSuspected: boolean;
   injectionEvidence?: string;
   rationale: string;
+}
+
+/** ADR-0050: the closed list of 16 reason codes (judge-verdict.schema.json `$defs/ReasonCode`). */
+export type ReasonCode =
+  | 'meets_terms'
+  | 'complete'
+  | 'accurate'
+  | 'consistent'
+  | 'well_formed'
+  | 'missing_element'
+  | 'incomplete'
+  | 'inaccurate'
+  | 'inconsistent'
+  | 'malformed'
+  | 'off_spec'
+  | 'weak_execution'
+  | 'filler_content'
+  | 'unsupported_claim'
+  | 'not_assessable'
+  | 'other';
+/** ADR-0050: the closed list of 6 injection kinds, the screen's classes (`$defs/InjectionKind`). */
+export type InjectionKind = 'instruction_override' | 'addressed_to_judge' | 'verdict_steer' | 'prompt_probe' | 'hidden_text' | 'other';
+/** A verdict's format (ADR-0050): prose-1 for template pairs 1 and 2, coded-1 for template pair 3 and agg-6. */
+export type VerdictFormat = 'prose-1' | 'coded-1';
+
+// judge-verdict.schema.json, $defs/CodedVerdict: the coded verdict after the filter's normalization. refs and
+// injectionRefs hold locators into the work (an RFC 6901 pointer, or L<n>), each one that resolved.
+export interface CodedJudgeVerdict {
+  criteria: Array<{ id: string; refs: string[]; reasons: ReasonCode[]; score: 0 | 1 | 2 | 3 | 4 }>;
+  overall: 'pass' | 'fail' | 'abstain';
+  injectionSuspected: boolean;
+  injectionKinds: InjectionKind[];
+  injectionRefs: string[];
+}
+
+// judgment.schema.json, $defs/CodedRecordVerdict: a coded seat in the judgment record. refs and injectionRefs hold
+// 16-hex anchors, never a locator; dropped counts what the filter dropped, each count at most 9. No judge-written string.
+export interface CodedRecordVerdict {
+  format: 'coded-1';
+  criteria: Array<{ id: string; refs: string[]; reasons: ReasonCode[]; score: 0 | 1 | 2 | 3 | 4 }>;
+  overall: 'pass' | 'fail' | 'abstain';
+  injectionSuspected: boolean;
+  injectionKinds: InjectionKind[];
+  injectionRefs: string[];
+  dropped: { reasons: number; refs: number; keys: number };
 }
 
 // judgment.schema.json
@@ -766,7 +811,8 @@ export interface PanelMember {
   rubricHash: Hex32;
   latencyMs?: number;
   status: 'ok' | 'abstain' | 'timeout' | 'error' | 'recorded';
-  verdict?: JudgeVerdict;
+  /** A prose verdict (no format key) or, under agg-6, a coded seat (ADR-0050). */
+  verdict?: JudgeVerdict | CodedRecordVerdict;
 }
 
 export interface Judgment {

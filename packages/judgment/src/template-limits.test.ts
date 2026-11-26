@@ -8,6 +8,7 @@
 //
 // Template pair 2 keeps the filter, the caps and every other line of pair 1, and states the limits in words with
 // targets well under them, so a judge that overshoots its target still fits the schema.
+import type { JudgeVerdict } from '@holdback/core';
 import { describe, expect, it } from 'vitest';
 import { ADJUDICATOR, criterion, delivery, fakeUnwrap, NONCES, POLICY, seal, utf8 } from './_helpers.js';
 import { intake } from './intake.js';
@@ -194,7 +195,7 @@ describe("partner C's appeal, replayed on the pipeline", () => {
     for (const id of ['claude-sonnet-5', 'claude-sonnet-5-5', 'claude-opus-5-5']) {
       expect(d.aggregate.reasons).toContain(`judge ${id} free text cut to its cap (evidence of 4 criteria)`);
       const m = d.panel.members.find((x) => x.judgeId === id)!;
-      for (const c of m.verdict!.criteria) expect([...c.evidence]).toHaveLength(300);
+      for (const c of (m.verdict as JudgeVerdict).criteria) expect([...c.evidence]).toHaveLength(300);
     }
     expect(d.aggregate.reasons.filter((r) => r.includes('deepseek'))).toEqual([]);
     expect(d.aggregate.reasons.some((r) => r.includes('rejected by a filter'))).toBe(false);
