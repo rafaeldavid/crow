@@ -181,7 +181,8 @@ export async function dealOf(r: J): Promise<Deal> {
     if (total !== price) refuse(`the record does not agree with itself: its settlement pays out ${total} base units against a price of ${price}`);
   }
   // Who received money, where the record says: the seller's payout address when the seller had a share, the buyer's
-  // payment address when part of the price went back. A chain's record may leave both null (no postings).
+  // payment address when part of the price went back. A chain's record leaves both null for a deal that settled before
+  // its operators wrote postings (T-621, T-627).
   const paidTo = r.row?.paidTo ?? null, refundedTo = r.row?.refundedTo ?? null;
   if ((paidTo !== null && (lc(paidTo) !== payout || sellerShare === 0n)) || (refundedTo !== null && (lc(refundedTo) !== payment || sellerShare === price))) refuse('the record does not agree with itself: who it says was paid does not match its outcome. Write the record again');
   if (outcome === 'Settled' && ((paidTo !== null) !== (sellerShare > 0n) || (refundedTo !== null) !== (sellerShare < price))) refuse('the record does not agree with itself: who it says was paid does not match its settlement. Write the record again');

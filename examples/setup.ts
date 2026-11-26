@@ -408,7 +408,7 @@ export function payeeOf(record: { row: { paidTo: string | null; sellerPayoutAddr
   const noPostings = record.checks.some((x) => x.check === 'postings follow the outcome' && x.ok === null);
   const named = record.row.sellerPayoutAddress;
   if (!noPostings) return { paidTo: null, asAnswered: false, wait: true, note: 'The deal is released, and the operators do not show its payment yet. Run the same command again to read the record anew.' };
-  if (record.row.outcome === 'Released' && named === answer) return { paidTo: null, asAnswered: true, wait: false, note: `The operators' events carry no postings on this settlement layer, so the record names no payee. The signed terms of this released deal pay ${answer}, the payout address this folder was given; the transactions show the transfer.` };
+  if (record.row.outcome === 'Released' && named === answer) return { paidTo: null, asAnswered: true, wait: false, note: `The operators' events for this deal carry no postings, so the record names no payee. The signed terms of this released deal pay ${answer}, the payout address this folder was given; the transactions show the transfer.` };
   return { paidTo: null, asAnswered: false, wait: false, note: `The signed terms of this deal pay ${plain(named, 42)}, not the payout address ${answer} this folder was given.` };
 }
 

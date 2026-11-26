@@ -45,6 +45,23 @@ describe('outPostings: where a chain\'s settled event lists no postings (T-621)'
     expect(outPostings('reclaim', id, oneAddress, [log('Refunded', { jobId: id, amount: 105n })], undefined)).toEqual([]);
     for (const party of ['b', 'c', 'd', 'e']) expect(outPostings('decide', id, terms, accept(at(party)), 'primary'), party).toEqual([]);
   });
+
+  // T-627: an early accept returns the fee to the buyer; a default returns the whole hold, as SimChain posts them.
+  it('lists an early accept\'s price and returned fee, and a default\'s whole hold, at the terms\' money addresses', () => {
+    const early = [log('PaymentReleased', { jobId: id, amount: 100n }), log('Refunded', { jobId: id, amount: 5n })];
+    expect(outPostings('earlyAccept', id, terms, early, undefined).map((p) => [p.to, p.amount, p.why])).toEqual([[at('e'), 100n, 'price to the seller'], [at('d'), 5n, 'fee back to the buyer: no adjudicator judged']]);
+    const defaulted = [log('Defaulted', { jobId: id }), log('Refunded', { jobId: id, amount: 105n })];
+    expect(outPostings('triggerDefault', id, terms, defaulted, undefined).map((p) => [p.to, p.amount, p.why])).toEqual([[at('d'), 105n, 'price + fee back to the buyer: default outcome']]);
+  });
+
+  it('lists a decision on a price of 0: the fee only, since a zero amount is no posting', () => {
+    const free = { ...terms, price: { ...terms.price, amount: '0' } } as typeof terms;
+    expect(outPostings('decide', id, free, [log('PaymentReleased', { jobId: id, amount: 0n }), log('FeePaid', { id, adjudicator: at('f'), amount: 5n })], 'primary').map((p) => [p.to, p.amount])).toEqual([[at('f'), 5n]]);
+  });
+
+  it('lists nothing for a call that settles nothing', () => {
+    expect(outPostings('deliver', id, terms, [log('Refunded', { jobId: id, amount: 5n })], undefined)).toEqual([]);
+  });
 });
 
 describe.skipIf(!ready)(`EvmSettlement on anvil${ready ? '' : ' (SKIPPED: needs anvil on PATH and forge build output in contracts/out)'}`, () => {
@@ -101,6 +118,9 @@ describe.skipIf(!ready)(`EvmSettlement on anvil${ready ? '' : ' (SKIPPED: needs 
       ['fallback (primary silent, fallback accepts)', 'settlement.released', [['seller', price, 'price to the seller'], ['fallback', fee, 'fee to the fallback adjudicator, whose decision settles']]],
       ['escalation, then the appeal adjudicator decides', 'settlement.released', [['seller', price, 'price to the seller'], ['appeal', fee, 'fee to the appeal adjudicator, whose decision settles']]],
       ['reclaim (nothing delivered)', 'settlement.reclaimed', [['buyer', price + fee, 'price + fee back to the buyer: nothing delivered']]],
+      // T-627: an early accept and a default outcome, in SimChain's shape and labels.
+      ['early accept (delivery carried)', 'settlement.released', [['seller', price, 'price to the seller'], ['buyer', fee, 'fee back to the buyer: no adjudicator judged']]],
+      ['default (primary and fallback silent)', 'settlement.refunded', [['buyer', price + fee, 'price + fee back to the buyer: default outcome']]],
     ];
     for (const [path, type, expected] of cases) {
       const { chain, cast, club } = await newSettlement(world);
@@ -117,10 +137,8 @@ describe.skipIf(!ready)(`EvmSettlement on anvil${ready ? '' : ' (SKIPPED: needs 
       }
       expect(eventSchemaErrors(chain.log()), path).toEqual([]);
     }
-    // Two settlements keep their events as they were: the deal record's checks (examples/deal-record.ts) fail an early
-    // accept's and a default outcome's postings in SimChain's shape, so those stay "not run" on a chain. And a mutual
-    // settlement's event takes exactly its payouts (event.schema.json).
-    for (const path of ['early accept (delivery carried)', 'default (primary and fallback silent)', 'mutual settlement (70/30, before delivery)']) {
+    // A mutual settlement's event keeps exactly its payouts (event.schema.json).
+    for (const path of ['mutual settlement (70/30, before delivery)']) {
       const { chain, cast, club } = await newSettlement(world);
       const id = await PATHS[path]!(chain, cast, club);
       const closing = chain.log().filter((e) => e.commitmentId === id && (SETTLED.test(e.type) || e.type === 'commitment.settled'));

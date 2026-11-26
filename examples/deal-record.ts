@@ -479,8 +479,9 @@ async function view(a: Answers, id: Hex, o: Options, cache: Map<string, Uint8Arr
   const settledEv = out.at(-1)?.type === 'commitment.settled' ? out.at(-1) : null;
   const fromPayouts = postings.length === 0 && settledEv !== null && Array.isArray(settledEv.payload?.payouts);
   if (fromPayouts) postings = settledEv!.payload.payouts.map((p: J) => ({ to: lc(p.to), amount: p.amount, why: 'agreed payout (from the settled event)' }));
-  // A chain's events carry no postings at all: the release's or refund's transfers are in the token's logs (Handoff).
-  // Only on a chain: SimChain writes postings for every outcome but a settlement, so a SimChain event without them fails (PR 440 review, Low 3).
+  // A chain's settled events carry postings from operators that run T-621 and T-627; an older operator's carry none,
+  // and their transfers are only in the token's logs. Only on a chain: SimChain writes postings for every outcome but a
+  // settlement, so a SimChain event without them fails (PR 440 review, Low 3).
   const noPostings = postings.length === 0 && pin?.chain !== undefined;
   if (hold && out.length && noPostings) {
     for (const name of ['postings conserve the hold', 'postings follow the outcome']) add(name, null, "the operators' events carry no postings for this outcome; read the token's Transfer logs of the transactions below to check it");
@@ -494,13 +495,20 @@ async function view(a: Answers, id: Hex, o: Options, cache: Map<string, Uint8Arr
   } else if (hold && out.length) {
     const ok = postings.every((x: J) => isMoney(x.amount) && x.amount.token === hold.token) && sum(postings.map((x: J) => x.amount)) === BigInt(hold.amount);
     add('postings conserve the hold', ok, `the postings out of escrow sum to the hold, ${hold.amount} ${hold.token}`);
-    const to = (who: string, amount: bigint) => postings.some((x: J) => x.to === lc(who) && BigInt(x.amount.amount) === amount);
+    // A price of 0 is due to no one, so no posting carries it (T-627).
+    const to = (who: string, amount: bigint) => amount === 0n || postings.some((x: J) => x.to === lc(who) && BigInt(x.amount.amount) === amount);
     const adjudicators = t ? [t.adjudication.adjudicator, t.adjudication.fallbackAdjudicator, t.adjudication.appealAdjudicator].map(lc) : [];
     const rest = (who: string) => postings.filter((x: J) => x.to !== lc(who)).every((x: J) => adjudicators.includes(x.to));
-    const type = out.at(-1).type;
+    const last = out.at(-1), type = last.type;
+    // T-627: an early accept settles with no adjudicator's decision, so the fee goes back to the buyer; a default outcome
+    // returns the whole hold. Each is read from the event's `via` and held to the log: no decision, or a default.
+    const early = type === 'settlement.released' && last.payload?.via === 'early_accept' && of('judgment.decided').length === 0;
+    const defaulted = type === 'settlement.refunded' && last.payload?.via === 'default_outcome' && of('default.triggered').length > 0;
     // ADR-0033: money goes to the seller's payout address and back to the buyer's payment address, never to a signing address that differs.
     const payout = t?.sellerPayoutAddress ?? t?.seller, payment = t?.buyerPaymentAddress ?? t?.buyer;
     if (!t || !price) add('postings follow the outcome', null, 'the terms were not read');
+    else if (early) add('postings follow the outcome', to(payout, BigInt(price.amount)) && postings.every((x: J) => x.to === lc(payout) || x.to === lc(payment)), "released by the buyer's early accept: the price to the seller's payout address, the adjudication fee back to the buyer's payment address, since no adjudicator decided");
+    else if (defaulted) add('postings follow the outcome', to(payment, BigInt(hold.amount)) && postings.length === 1, "refunded by the default outcome: the whole hold back to the buyer's payment address");
     else if (type === 'settlement.released') add('postings follow the outcome', to(payout, BigInt(price.amount)) && rest(payout), "released: the price to the seller's payout address, the rest to adjudicators the terms name");
     else if (type === 'settlement.refunded') add('postings follow the outcome', to(payment, BigInt(price.amount)) && rest(payment), "refunded: the price to the buyer's payment address, the rest to adjudicators the terms name");
     else if (type === 'settlement.reclaimed') add('postings follow the outcome', to(payment, BigInt(hold.amount)) && postings.length === 1, "reclaimed: the whole hold back to the buyer's payment address");
@@ -558,12 +566,15 @@ export async function dealRecord(id: Hex, o: Options): Promise<DealRecord> {
   const st = agreed.settlement ? merged.settlement : null;
   const settledAt = agreed.steps ? ((merged.steps as J[]).find((x) => SETTLED.includes(x.step))?.at ?? null) : null;
   // Who received money out of escrow, by the money addresses the terms name (ADR-0033): the seller's payout address was
-  // paid, the buyer's payment address refunded. Adjudicators' fees are left out.
-  const received = (who: string | undefined) => (st && who ? st.postings.some((x: J) => x.to === lc(who) && BigInt(x.amount?.amount ?? 0) > 0n) : false);
+  // paid, the buyer's payment address refunded. Adjudicators' fees are left out. T-627: refundedTo needs part of the
+  // price back, so an early accept, which returns only the adjudication fee, names no refund.
+  const received = (who: string | undefined) => (st && who ? st.postings.filter((x: J) => x.to === lc(who)).reduce((n: bigint, x: J) => n + BigInt(x.amount?.amount ?? 0), 0n) : 0n);
+  const priceDue = isMoney(t?.price) ? BigInt(t.price.amount) : 0n;
   const row: Row = {
     commitmentId: cid, buyer: t ? lc(t.buyer) : null, seller: t ? lc(t.seller) : null,
     buyerPaymentAddress: t ? lc(t.buyerPaymentAddress) : null, sellerPayoutAddress: t ? lc(t.sellerPayoutAddress) : null,
-    paidTo: t && received(t.sellerPayoutAddress) ? lc(t.sellerPayoutAddress) : null, refundedTo: t && received(t.buyerPaymentAddress) ? lc(t.buyerPaymentAddress) : null,
+    paidTo: t && received(t.sellerPayoutAddress) > 0n ? lc(t.sellerPayoutAddress) : null,
+    refundedTo: t && received(t.buyerPaymentAddress) > 0n && received(t.sellerPayoutAddress) < priceDue ? lc(t.buyerPaymentAddress) : null,
     price: t?.price ?? null, adjudicationFee: t?.adjudication?.fee ?? null, operatorFee: st?.operatorFee ?? null,
     outcome: agreed.outcome ? merged.outcome.escrowState : null, reclaimed: agreed.outcome ? merged.outcome.reclaimed : null, lateWork: agreed.outcome ? merged.outcome.lateWork !== null : null,
     offeredAt: at('commitment.offered'), agreedAt: at('commitment.agreed'), fundedAt: at('hold.funded'), deliveredAt: at('delivery.submitted'), decidedAt: at('judgment.decided'), settledAt,

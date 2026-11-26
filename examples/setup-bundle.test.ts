@@ -184,7 +184,7 @@ describe('who a released deal paid, as its record shows it (T-472, found by the 
   });
 
   it("a chain: the operators' events carry no postings, so the record names no payee and the signed terms' payout address is held to the answer", () => {
-    expect(payeeOf(record(null, answer, null), answer)).toMatchObject({ paidTo: null, asAnswered: true, wait: false, note: expect.stringMatching(/carry no postings on this settlement layer.*pay 0x0+c0ffe, the payout address this folder was given/) });
+    expect(payeeOf(record(null, answer, null), answer)).toMatchObject({ paidTo: null, asAnswered: true, wait: false, note: expect.stringMatching(/for this deal carry no postings.*pay 0x0+c0ffe, the payout address this folder was given/) });
     expect(payeeOf(record(null, other, null), answer)).toMatchObject({ paidTo: null, asAnswered: false, wait: false, note: expect.stringMatching(/pay 0x0+dead, not the payout address 0x0+c0ffe/) });
     expect(payeeOf(record(null, answer, null, 'Refunded'), answer)).toMatchObject({ asAnswered: false });
   });

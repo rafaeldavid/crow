@@ -385,25 +385,30 @@ export function eventTypesFor(call: string, logs: readonly DecodedLog[]): Array<
 }
 
 /**
- * The postings out of escrow that a decision or a reclaim made, as SimChain writes them on the settled event, so a
- * deal record names who was paid (T-621). They come from one deal's logs of the rules contract: the caller passes only
- * those. The amounts and the paid adjudicator are the logs'. The two money addresses are the terms', which the
- * contract pays (ADR-0033): `PaymentReleased` and `Refunded` name the signing addresses, not where the money went.
- * A zero amount is no posting. None for an early accept or a default outcome: the deal record's checks refuse their
- * postings in SimChain's shape (examples/deal-record.ts, "postings follow the outcome"), and none for a mutual
- * settlement, whose event takes its payouts only (event.schema.json). None for a decision on a price of 0, which the
- * same check refuses. None where one address stands on two sides, the two money addresses being one or the paid
+ * The postings out of escrow that a decision, an early accept, a reclaim or a default made, as SimChain writes them on
+ * the settled event, so a deal record names who was paid (T-621, T-627). They come from one deal's logs of the rules
+ * contract: the caller passes only those. The amounts and the paid adjudicator are the logs'. The two money addresses
+ * are the terms', which the contract pays (ADR-0033): `PaymentReleased` and `Refunded` name the signing addresses, not
+ * where the money went. A zero amount is no posting. None for a mutual settlement, whose event takes its payouts only
+ * (event.schema.json). None where one address stands on two sides, the two money addresses being one or the paid
  * adjudicator being an address of a party: the record tells who was paid by address, so it would read a correct
  * payment as a wrong one.
  */
 export function outPostings(fn: string, id: Hex32, terms: AnyCommitmentTerms, rulesLogs: readonly DecodedLog[], role: Decision['role'] | undefined): Array<{ from: string; to: string; amount: bigint; why: string }> {
-  if (fn !== 'reclaim' && !(fn === 'decide' && BigInt(terms.price.amount) > 0n)) return [];
+  // The contract's `Refunded` on each: a decision's price, an early accept's fee, a reclaim's or a default's whole hold.
+  const refund: Record<string, string> = {
+    decide: 'price back to the buyer',
+    earlyAccept: 'fee back to the buyer: no adjudicator judged',
+    reclaim: 'price + fee back to the buyer: nothing delivered',
+    triggerDefault: 'price + fee back to the buyer: default outcome',
+  };
+  if (!Object.hasOwn(refund, fn)) return [];
   const parties = [terms.buyer, terms.seller, terms.buyerPaymentAddress, terms.sellerPayoutAddress].map(lc);
   if (lc(terms.buyerPaymentAddress) === lc(terms.sellerPayoutAddress) || rulesLogs.some((l) => l.eventName === 'FeePaid' && parties.includes(lc(String(l.args['adjudicator']))))) return [];
   const line = (to: string, amount: unknown, why: string) => ({ from: `escrow:${id}`, to: lc(to), amount: BigInt(amount as bigint), why });
   return rulesLogs.flatMap((l) => {
     if (l.eventName === 'PaymentReleased') return [line(terms.sellerPayoutAddress, l.args['amount'], 'price to the seller')];
-    if (l.eventName === 'Refunded') return [line(terms.buyerPaymentAddress, l.args['amount'], fn === 'reclaim' ? 'price + fee back to the buyer: nothing delivered' : 'price back to the buyer')];
+    if (l.eventName === 'Refunded') return [line(terms.buyerPaymentAddress, l.args['amount'], refund[fn]!)];
     if (l.eventName === 'FeePaid') return [line(String(l.args['adjudicator']), l.args['amount'], `fee to the ${role} adjudicator, whose decision settles`)];
     return [];
   }).filter((p) => p.amount > 0n);

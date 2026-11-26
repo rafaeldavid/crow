@@ -1,7 +1,8 @@
 // T-621: the deal record on a chain names who was paid. The demo's world on anvil, as the live operators run it: one
 // deal the checks accept and one they reject, each settled by the primary's decision. The record then names the seller's
 // payout address as paidTo, or the buyer's payment address as refundedTo, and its two postings checks run. Before
-// T-621 a chain's settled events carried no postings, so both fields read null and both checks "not run".
+// T-621 a chain's settled events carried no postings, so both fields read null and both checks "not run". T-627 adds
+// an early accept, whose fee returns to the buyer.
 import nacl from 'tweetnacl';
 import { generatePrivateKey, privateKeyToAccount } from 'viem/accounts';
 import { afterAll, beforeAll, describe, expect, it } from 'vitest';
@@ -70,5 +71,43 @@ describe.skipIf(!anvilReady)(`deal-record.ts on anvil: a decided deal names who 
     expect(record.checks.filter((c) => c.ok === false)).toEqual([]);
     expect((record.settlement as J).postings.map((p: J) => p.why)).toEqual(['price back to the buyer', 'fee to the primary adjudicator, whose decision settles']);
     expect(record.disagreements).toEqual([]);
+  }, 300_000);
+
+  // T-627: the buyer accepts during a held reject (ADR-0051), as `held-reject --accept` does. The price goes to the
+  // payout address and the fee back to the buyer, which is no refund of the price.
+  it('an early accept: paidTo is the payout address, refundedTo null, and the postings checks pass, for both parties', async () => {
+    const pin = pinOf(a.deployment);
+    const agent = () => new Agent([...a.urls], generatePrivateKey(), nacl.box.keyPair().secretKey, pin.domain, pin.chain);
+    const seller = agent(), buyer = agent();
+    const payout = privateKeyToAccount(generatePrivateKey()).address.toLowerCase();
+    const found = await buyer.call('GET', '/.well-known/holdback.json');
+    for (const who of [buyer, seller]) await who.call('POST', '/v1/faucet', { address: who.address });
+    const [primary, fallback, appeal] = ['primary', 'fallback', 'appeal'].map((r) => (found.demo.adjudicators as J[]).find((x) => x.role === r).address);
+    const offer = await seller.offer({
+      template: 'default', clubId: found.demo.clubId, seller: seller.address, sellerPayoutAddress: payout,
+      buyer: { address: buyer.address, encryptionPublicKey: buyer.encryptionPublicKey },
+      adjudicators: { primary, fallback, appeal }, price: { token: pin.token.id, amount: '5000000' },
+      deliverable: { kind: 'document', description: 'a note, accepted early', format: 'text/plain' }, checks: [],
+      rubric: { passThreshold: 300, criteria: [{ id: 'ok', description: 'Fine.', weight: 1, anchors: { '0': 'No', '2': 'Partly', '4': 'Yes' } }] },
+      timing: { offerExpiresInSec: 600, fundWithinSec: 900, deliverWithinSec: 1800, judgeWithinSec: 3600, fallbackWithinSec: 3600, appealDecideSec: 3600 },
+    });
+    await buyer.waitFor(offer.id, ['AcceptedByAdjudicator'], 90_000);
+    await buyer.agreeAndFund(offer.terms, 10n ** 12n);
+    await seller.waitFor(offer.id, ['Held'], 90_000);
+    const { delivery } = await seller.deliverAndShare(offer.terms, new TextEncoder().encode('a note that says FAIL-ME'));
+    // The primary publishes its reject and holds it: the deal stays Delivered for the buyer's choice.
+    for (let i = 0; i < 300 && !(await buyer.call('GET', `/v1/commitments/${offer.id}/judgment`).catch(() => null)); i++) await new Promise((r) => setTimeout(r, 200));
+    expect((await buyer.call('GET', `/v1/commitments/${offer.id}`)).escrowState).toBe('Delivered');
+    await buyer.earlyAccept(offer.terms, delivery);
+    await buyer.waitFor(offer.id, ['Released'], 90_000);
+    for (const party of ['buyer', 'seller'] as const) {
+      const record = await dealRecord(offer.id, { operators: [...a.urls], party, ...(party === 'seller' ? { delivery } : {}) });
+      const checks = Object.fromEntries(record.checks.map((c) => [c.check, c.ok]));
+      expect(record.row, party).toMatchObject({ outcome: 'Released', paidTo: payout, refundedTo: null, sellerPayoutAddress: payout });
+      expect(checks, party).toMatchObject({ 'domain is pinned': true, 'postings conserve the hold': true, 'postings follow the outcome': true });
+      expect(record.checks.filter((c) => c.ok === false), party).toEqual([]);
+      expect((record.settlement as J).postings.map((p: J) => [p.to, p.amount.amount]), party).toEqual([[payout, '5000000'], [buyer.address.toLowerCase(), offer.terms.adjudication.fee.amount]]);
+      expect(record.disagreements, party).toEqual([]);
+    }
   }, 300_000);
 });

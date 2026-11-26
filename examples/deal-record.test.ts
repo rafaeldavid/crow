@@ -348,6 +348,79 @@ describe('deal-record.ts when a release\'s event carries no postings (T-390)', (
   }, 60_000);
 });
 
+describe('deal-record.ts names who was paid after an early accept and a default outcome (T-627)', () => {
+  const silence = (role: string, silent: boolean) => fetch(`${world.url}/adjudicators/${role}`, { method: 'POST', body: JSON.stringify({ silent }) });
+  const TIMING = { offerExpiresInSec: 60, fundWithinSec: 90, deliverWithinSec: DELIVER_WITHIN_SEC, judgeWithinSec: 120, fallbackWithinSec: 120 };
+  /** One funded deal whose work the seller delivers while the deciding adjudicators named in `silent` stay silent. */
+  async function delivered(silent: string[]) {
+    const account = async () => (await (await realFetch(`${world.url}/accounts`, { method: 'POST' })).json()) as J;
+    const s = await account(), b = await account();
+    const seller = new Agent([...world.info.operators], s.privateKey, Buffer.from(s.encryptionSecretKey, 'base64url'));
+    const buyer = new Agent([...world.info.operators], b.privateKey, Buffer.from(b.encryptionSecretKey, 'base64url'));
+    const a = world.info.adjudicators;
+    const offer = await seller.offer({
+      template: 'checks-only', clubId: world.info.clubId, seller: seller.address,
+      buyer: { address: buyer.address, encryptionPublicKey: buyer.encryptionPublicKey },
+      adjudicators: { primary: a[0]!.address, fallback: a[1]!.address, appeal: a[2]!.address },
+      price: PRICE, deliverable: { kind: 'dataset', description: `customers, deal ${++n}`, format: 'text/csv' }, checks: CHECKS, timing: TIMING,
+    });
+    await buyer.waitFor(offer.id, ['AcceptedByAdjudicator']);
+    await buyer.agreeAndFund(offer.terms, 10n ** 12n);
+    for (const role of silent) await silence(role, true);
+    const { delivery } = await seller.deliverAndShare(offer.terms, new TextEncoder().encode(GOOD));
+    return { id: offer.id as Hex, terms: offer.terms, buyer, buyerKey: b.encryptionSecretKey as string, seller, delivery };
+  }
+  const final = async (d: { id: Hex; buyer: Agent }) => {
+    for (let i = 0; i < 100 && !(await d.buyer.call('GET', `/v1/commitments/${d.id}`)).finalAt; i++) await new Promise((r) => setTimeout(r, 100));
+  };
+
+  it("an early accept: paidTo is the seller's payout address, the fee back to the buyer is no refund, and both postings checks pass", async () => {
+    const d = await delivered(['primary']);
+    try {
+      expect((await d.buyer.earlyAccept(d.terms, d.delivery)).escrowState).toBe('Released');
+    } finally {
+      await silence('primary', false);
+    }
+    await final(d);
+    const r = await dealRecord(d.id, { operators: [...world.info.operators], party: 'buyer', encryptionSecretKey: d.buyerKey });
+    expect(checks(r)).toMatchObject({ 'postings conserve the hold': true, 'postings follow the outcome': true });
+    expect(failed(r)).toEqual([]);
+    expect(r.row).toMatchObject({ outcome: 'Released', paidTo: d.seller.address.toLowerCase(), refundedTo: null, decidedAt: null });
+    expect(r.settlement.postings).toEqual([
+      { to: d.seller.address.toLowerCase(), amount: PRICE, why: 'price to the seller' },
+      { to: d.buyer.address.toLowerCase(), amount: { token: PRICE.token, amount: FEE }, why: expect.stringMatching(/^fee back to the buyer/) },
+    ]);
+    // The seller's own record of the same deal names the same payee.
+    const mine = await dealRecord(d.id, { operators: [...world.info.operators], party: 'seller', delivery: d.delivery });
+    expect(failed(mine)).toEqual([]);
+    expect(mine.row).toMatchObject({ paidTo: d.seller.address.toLowerCase(), refundedTo: null });
+  }, 60_000);
+
+  it("a default outcome: refundedTo is the buyer's payment address, paidTo null, and both postings checks pass", async () => {
+    const d = await delivered(['primary', 'fallback']);
+    try {
+      world.advance(TIMING.deliverWithinSec + TIMING.judgeWithinSec + 1);
+      await d.buyer.call('POST', `/v1/commitments/${d.id}/triggers/fallback`, {}).catch(() => undefined); // the operator may have moved it already
+      world.advance(TIMING.fallbackWithinSec + 1);
+      await d.buyer.call('POST', `/v1/commitments/${d.id}/triggers/default`, {}).catch(() => undefined);
+      await d.buyer.waitFor(d.id, ['Defaulted', 'Refunded'], 20_000);
+      await d.buyer.call('POST', `/v1/commitments/${d.id}/triggers/apply-default`, {}).catch(() => undefined);
+      expect((await d.buyer.waitFor(d.id, ['Refunded'], 20_000)).escrowState).toBe('Refunded');
+    } finally {
+      await silence('primary', false);
+      await silence('fallback', false);
+    }
+    await final(d);
+    for (const party of ['buyer', 'seller'] as const) {
+      const r = await dealRecord(d.id, { operators: [...world.info.operators], party, ...(party === 'buyer' ? { encryptionSecretKey: d.buyerKey } : { delivery: d.delivery }) });
+      expect(checks(r), party).toMatchObject({ 'postings conserve the hold': true, 'postings follow the outcome': true });
+      expect(failed(r), party).toEqual([]);
+      expect(r.row, party).toMatchObject({ outcome: 'Refunded', reclaimed: false, paidTo: null, refundedTo: d.buyer.address.toLowerCase() });
+      expect(r.settlement.postings, party).toEqual([{ to: d.buyer.address.toLowerCase(), amount: { token: PRICE.token, amount: (BigInt(PRICE.amount) + BigInt(FEE)).toString() }, why: expect.stringMatching(/default outcome/) }]);
+    }
+  }, 60_000);
+});
+
 describe('deal-record.ts lists each transaction once (T-399 Finding 6)', () => {
   it('a decision that emits three events in one transaction is one transaction, under its first step', async () => {
     const released = await deal(GOOD);
