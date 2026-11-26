@@ -60,5 +60,6 @@ Make a cold seller's assistant reach the floor of 5 approvals from `setup.txt` a
 
 ## Handoff
 
-- **Done:** the page and the command's tail; checks pass.
-- **Next:** after the merge and the coordinator's site deploy, run `case-studies/cold-sellers-2026-11-26/batch.sh` twice (sets a and b) against the live pages, record the set in crow-private beside the first, and fill in this file's Evidence with the medians by path and model family.
+- **Done:** the page and the command's tail, merged in rafaeldavid/crow#843 at `f0568298` (2026-11-26, 08:27 UTC); every check passed.
+- **The measurement is now a light check** (Rafa, in the journeys thread, 2026-11-26: accept the page as is if it works for testing). One cold run per path on the live page: DeepSeek on the first deal, where the first set's DeepSeek run sold the sample, and Claude on the standing offer, where both Claude runs read `sell.txt`. Same runner, brief and fence as the first set. Each run must reach its outcome; its approvals go beside the 2026-11-26 set in crow-private. The page is not changed again to reach 5: calls still above the floor go here as findings for later.
+- **Waiting, 08:28 UTC:** the site carrying `f0568298` is not live. The coordinator's 07:29 UTC operators deploy at `9375c7d` failed and rolled back to `5220712`, and the site was not deployed. The coordinator has been asked to include #843 in its next site deploy. **To resume:** once the coordinator says that site is live, download `setup.mjs` by the page's own line into the scratch folder's `dl2/`, then run `reports/scratch/set2/light.sh` from this task's worktree.
