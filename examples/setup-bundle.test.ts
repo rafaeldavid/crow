@@ -103,7 +103,7 @@ describe('site/setup.mjs, the bundle (T-472)', () => {
     const sha = createHash('sha256').update(readFileSync(committed)).digest('hex');
     expect(setupSha256()).toBe(sha);
     const command = setupCommand();
-    expect(command).toBe(`mkdir -p ~/.crow && cd ~/.crow && curl -fsSL https://crow.direct/setup.mjs -o setup.mjs.part && echo "${sha}  setup.mjs.part" | shasum -a 256 -c && mv setup.mjs.part setup.mjs && node setup.mjs seller --sample`);
+    expect(command).toBe(`mkdir -p ~/.crow && cd ~/.crow && curl -fsSL https://crow.direct/setup.mjs -o setup.mjs.part && echo "${sha}  setup.mjs.part" | shasum -a 256 -c && mv setup.mjs.part setup.mjs && node setup.mjs seller`);
     const source = readFileSync(here('../site/setup.txt'), 'utf8');
     expect(source.split('{{SETUP_COMMAND}}').length - 1).toBe(1);
     const published = publishedGuides({ op1: 'https://a.example', op2: 'https://b.example' }).get('setup.txt') as string;
