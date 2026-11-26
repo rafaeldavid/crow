@@ -11,11 +11,11 @@ T-550, ADR-0040 section 2 and D81. Tidewater's standing delivery names one ciphe
 | Pragmas | settlement=sim · judges=recorded · mode=guaranteed_on_decision · seed=551 |
 | Prefix | neutrality. (an actor fails: terms-compliant terminal state anyway) |
 | Settlement | SimChain (T-006) driving @holdback/core `step` |
-| Judgment | @holdback/judgment (checks, screen, panel) · registry config/judges.yaml 0x8aa4…4549 · policy bench-a/p1 0xd136…9300 |
+| Judgment | @holdback/judgment (checks, screen, panel) · registry config/judges.yaml 0x8aa4…4549 · policy bench-a/p1 0x40b5…1e88 |
 | Club | fixtures/clubs/data-services-v1.yaml (loaded) · rulebook 0xd9bc…492d |
 | Buyer | atlas-buyer 0x486b…78E8 |
 | Seller | tidewater-seller 0x8da0…b96A |
-| Terms | fixtures/terms/clean-customers-2000.yaml (loaded) · commitment 0x0338…1ba5 · price 2,000.000000 tUSD · fee 50.000000 tUSD |
+| Terms | fixtures/terms/clean-customers-2000.yaml (loaded) · commitment 0x8de7…4df8 · price 2,000.000000 tUSD · fee 50.000000 tUSD |
 | Adjudicators | primary bench-a 0xBa44…1b5e · fallback bench-b 0x53db…6B7c · appeal bench-c 0x83FC…9c5E |
 | Operators | op-1 · op-2 |
 
@@ -63,7 +63,7 @@ Outages:
 
 ## Receipts and log
 
-- Events 0–11. Chain head 0x7080…33e4. Replay of 8 SimChain submissions from genesis matches the settlement state.
+- Events 0–11. Chain head 0x1373…ef6c. Replay of 8 SimChain submissions from genesis matches the settlement state.
 - Receipts from op-1: 5 (rcpt-0001–rcpt-0005). The runner labels them without signing; the operator API signs real receipts.
 - Receipts from op-2: 3 (rcpt-0006–rcpt-0008). The runner labels them without signing; the operator API signs real receipts.
 

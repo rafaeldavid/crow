@@ -43,6 +43,8 @@ export const FILES = { state: 'crow.json', lock: 'crow.lock', ignore: '.gitignor
 export const CARD_FILE = 'agent.json';
 /** Windows Crow's test buyer takes: 10 minutes to agree, 15 to fund, the work due within the hour, a minute per judging window, no appeal window. */
 export const TIMING = { offerExpiresInSec: 600, fundWithinSec: 900, deliverWithinSec: 3600, judgeWithinSec: 60, fallbackWithinSec: 60, appealWindowSec: 0, appealDecideSec: 60 };
+/** ADR-0051: what an offer with a rubric takes over TIMING, so Crow's adjudicators can hold a panel's reject a day. */
+export const RUBRIC_TIMING = { judgeWithinSec: 87_000, appealDecideSec: 87_000 };
 const ZERO_ADDRESS = `0x${'0'.repeat(40)}`;
 
 /** What one command gets: where it works, and how it prints. Every line is one JSON object. */
@@ -431,7 +433,8 @@ export async function seller(c: Call): Promise<number> {
         // A folder that sells from a template takes no scope, has the work due when its template says, and looks at a
         // refused work file again at every poll, so a corrected file is delivered by the next run.
         const own = sells === 'template' ? { sellerApi: workAddresses(port), scope: {}, timing: { ...TIMING, deliverWithinSec: state.work!.deliverWithinSec }, redelivery: { refetchEverySec: 0 } } : { sellerApi: sampleAddresses(port), scope: SAMPLE.scope, timing: TIMING };
-        const text = `${JSON.stringify({ port: 0, sellerApi: own.sellerApi, template: FILES.template, scope: own.scope, signingKey: 'per-deal', payoutAddress: payout.address, timing: own.timing, pollMs: 3000, ...('redelivery' in own ? { redelivery: own.redelivery } : {}) }, null, 2)}\n`;
+        // T-625: the file names its short judging windows, so it also names the rubric windows a judged offer takes (ADR-0051).
+        const text = `${JSON.stringify({ port: 0, sellerApi: own.sellerApi, template: FILES.template, scope: own.scope, signingKey: 'per-deal', payoutAddress: payout.address, timing: own.timing, rubricTiming: RUBRIC_TIMING, pollMs: 3000, ...('redelivery' in own ? { redelivery: own.redelivery } : {}) }, null, 2)}\n`;
         state.files = { ...state.files, configuration: sha256(text) };
         writeState(folder, state); // the hash first: a stop before the file is written leaves no file to refuse
         writeWhole(configFile, text);

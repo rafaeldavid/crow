@@ -52,6 +52,7 @@ import { privateKeyToAccount } from 'viem/accounts';
 import type { Sha256, Signature, Timestamp, TokenAmount } from '@holdback/core';
 import { CryptoError, sha256 } from '@holdback/core/crypto';
 import { MAX_CIPHERTEXT_BYTES, StoreError, type CiphertextStore } from '@holdback/core/store';
+import { JUDGED_MAX_PLAINTEXT_BYTES } from '@holdback/judgment';
 import { ENVELOPE_SPEC } from './envelope-spec.js';
 import { FeedbackDesk, FeedbackError, MAX_REPORT_BYTES, parseReport, type FeedbackOptions } from './feedback.js';
 import { startupGuards } from './guards.js';
@@ -1503,6 +1504,16 @@ export class Operator {
         }
         return reg.judgment?.(id as Hex32) ?? fail('not_found', `no judgment record for ${id} on this operator`);
       }
+      // T-625: every record, one for each role and attempt: the primary's stays readable after an appeal decides.
+      if (s.length === 4 && s[3] === 'judgments') {
+        if (outsider && this.levelOf(terms.id, terms.disclosure.level) === 'private') {
+          fail('unauthorized', 'this deal is private: its judgment records are served to a party or an involved adjudicator with a ReadToken (Authorization: Holdback-ReadToken)');
+        }
+        const latest = reg.judgment?.(id as Hex32);
+        const items = reg.judgments?.(id as Hex32) ?? (latest ? [latest] : []);
+        if (!items.length) fail('not_found', `no judgment record for ${id} on this operator`);
+        return { items };
+      }
       if (s.length === 4 && s[3] === 'key') {
         const recipient = q.get('recipient') ?? undefined;
         if (!isAddress(recipient)) fail('invalid_terms', 'key takes ?recipient=<address>');
@@ -1571,6 +1582,8 @@ export class Operator {
       ...(r ? { reads: { limit: r.reads, windowSec, per: 'client' }, writes: { limit: r.writes, windowSec, per: 'signer' } } : {}),
       // T-315: the largest ciphertext POST /v1/ciphertext stores; absent on a node with no store.
       ...(this.o.store ? { maxCiphertextBytes: this.maxCiphertextBytes } : {}),
+      // D108 (T-624): the largest plaintext this build's adjudicators judge; a larger delivery is rejected at intake.
+      maxJudgedPlaintextBytes: JUDGED_MAX_PLAINTEXT_BYTES,
       // Refusals are not stored (a corrected call reuses its key); successes are kept until this node restarts.
       idempotency: { replays: 'success-only', retention: 'process' },
     };

@@ -11778,7 +11778,19 @@ async function view(a, id, o, cache) {
 			t.adjudication?.appealAdjudicator
 		].map(lc$1) : [];
 		add("adjudicator's record signature", signer === lc$1(j.adjudicator) && named.includes(signer), `recovered to ${signer || "nothing"}; the record names ${lc$1(j.adjudicator)}; the terms name ${named.join(", ") || "no adjudicators (terms unread)"}`);
-		add("judgment names the delivery", [...of("judgment.decided"), ...of("appeal.decided")].map((e) => lc$1(e.payload?.recordHash)).includes(lc$1(recordHash)) && lc$1(j.deliveryHash) === lc$1(d?.payload?.deliveryHash), "a decided event carries this recordHash, and the record names the recorded deliveryHash");
+		const decidedEvents = [...of("judgment.decided"), ...of("appeal.decided")];
+		const decided = decidedEvents.map((e) => lc$1(e.payload?.recordHash));
+		const names = lc$1(j.deliveryHash) === lc$1(d?.payload?.deliveryHash);
+		const ownTurn = decidedEvents.filter((e) => e.payload?.role === void 0 || e.payload?.role === j.role);
+		const TURN = {
+			primary: 0,
+			fallback: 1,
+			appeal: 2
+		};
+		const later = decidedEvents.find((e) => TURN[String(e.payload?.role)] !== void 0 && TURN[String(e.payload?.role)] > (TURN[String(j.role)] ?? 3));
+		if (!ownTurn.length && later) add("judgment names the delivery", false, `the record is the ${String(j.role).slice(0, 20)}'s and was never signed, and the ${String(later.payload.role).slice(0, 20)}'s decision decided the deal: read its record at /judgments`);
+		else if (ownTurn.length) add("judgment names the delivery", decided.includes(lc$1(recordHash)) && names, "a decided event carries this recordHash, and the record names the recorded deliveryHash");
+		else add("judgment names the delivery", names, `the record names the recorded deliveryHash; no decided event of the ${String(j.role).slice(0, 20)} role exists, so the record was published and not signed into a decision (a held reject, ADR-0051, or one the parties closed during the hold)`);
 		const ev = [...of("judgment.decided"), ...of("appeal.decided")].find((e) => lc$1(e.payload?.recordHash) === lc$1(recordHash));
 		judgment = {
 			adjudicator: lc$1(j.adjudicator),
@@ -13231,7 +13243,7 @@ const eip712Types = {
 	CommitmentTerms: termsType,
 	...messageTypes
 };
-function seconds(ts) {
+function seconds$1(ts) {
 	const ms = instant(ts);
 	if (ms === void 0) throw new RangeError(`cannot encode timestamp ${ts}: need RFC 3339 in whole seconds`);
 	return BigInt(ms / 1e3);
@@ -13258,7 +13270,7 @@ const scope = (s) => ({
 	maxDaily: amount(s.maxDaily),
 	hasCategories: s.categories !== void 0,
 	categories: s.categories ?? [],
-	expiresAt: seconds(s.expiresAt)
+	expiresAt: seconds$1(s.expiresAt)
 });
 /** True for the sealed wire form (private and judgment levels, ADR-0024): bodies as privateTerms ciphertext. */
 const isSealed = (t) => t.privateTerms !== void 0;
@@ -13289,15 +13301,15 @@ function typedTermsOf(t) {
 			fee: amount(t.adjudication.fee)
 		},
 		timing: {
-			offerExpiresAt: seconds(t.timing.offerExpiresAt),
-			fundBy: seconds(t.timing.fundBy),
-			deliverBy: seconds(t.timing.deliverBy),
-			judgeBy: seconds(t.timing.judgeBy),
-			fallbackBy: seconds(t.timing.fallbackBy),
+			offerExpiresAt: seconds$1(t.timing.offerExpiresAt),
+			fundBy: seconds$1(t.timing.fundBy),
+			deliverBy: seconds$1(t.timing.deliverBy),
+			judgeBy: seconds$1(t.timing.judgeBy),
+			fallbackBy: seconds$1(t.timing.fallbackBy),
 			appealWindowSec: BigInt(t.timing.appealWindowSec),
 			appealDecideSec: BigInt(t.timing.appealDecideSec),
 			maxSubmissions: t.timing.maxSubmissions,
-			disputeBy: t.timing.disputeBy === void 0 ? 0n : seconds(t.timing.disputeBy),
+			disputeBy: t.timing.disputeBy === void 0 ? 0n : seconds$1(t.timing.disputeBy),
 			disputeJudgeSec: BigInt(t.timing.disputeJudgeSec ?? 0),
 			disputeFallbackSec: BigInt(t.timing.disputeFallbackSec ?? 0)
 		},
@@ -13306,12 +13318,12 @@ function typedTermsOf(t) {
 		disclosure: t.disclosure,
 		buyerEncryptionPublicKey: t.buyerEncryptionPublicKey,
 		nonce: t.nonce,
-		createdAt: seconds(t.createdAt)
+		createdAt: seconds$1(t.createdAt)
 	};
 }
 const expiry = (m) => ({
 	nonce: m.nonce,
-	expiresAt: seconds(m.expiresAt)
+	expiresAt: seconds$1(m.expiresAt)
 });
 /** A message as EIP-712 typed values; the primary type is its `type`. Throws RangeError on unencodable values. */
 function typedDataOf(m) {
@@ -13348,8 +13360,8 @@ function encodeMessage(m) {
 			from: m.from,
 			value: BigInt(m.value),
 			token: m.token,
-			validAfter: seconds(m.validAfter),
-			validBefore: seconds(m.validBefore),
+			validAfter: seconds$1(m.validAfter),
+			validBefore: seconds$1(m.validBefore),
 			...expiry(m)
 		};
 		case "TransferAuthorization": return {
@@ -13360,8 +13372,8 @@ function encodeMessage(m) {
 			to: m.to,
 			value: BigInt(m.value),
 			token: m.token,
-			validAfter: seconds(m.validAfter),
-			validBefore: seconds(m.validBefore),
+			validAfter: seconds$1(m.validAfter),
+			validBefore: seconds$1(m.validBefore),
 			...expiry(m)
 		};
 		case "EarlyAccept": return {
@@ -13410,7 +13422,7 @@ function encodeMessage(m) {
 			clubId: m.clubId,
 			member: m.member,
 			operator: m.operator,
-			validUntil: seconds(m.validUntil),
+			validUntil: seconds$1(m.validUntil),
 			...expiry(m)
 		};
 		case "MemberRevocation": return {
@@ -13465,7 +13477,7 @@ function encodeMessage(m) {
 			fee: amount(m.fee),
 			poolTermsHash: m.poolTermsHash,
 			bodyHash: m.bodyHash,
-			issuedAt: seconds(m.issuedAt),
+			issuedAt: seconds$1(m.issuedAt),
 			...expiry(m)
 		};
 		case "MutualSettlement": return {
@@ -13496,7 +13508,7 @@ function encodeMessage(m) {
 			plaintextSha256: m.plaintextSha256,
 			plaintextMime: m.plaintextMime,
 			encryptedKeys: m.encryptedKeys.map(key$1),
-			submittedAt: seconds(m.submittedAt)
+			submittedAt: seconds$1(m.submittedAt)
 		};
 		case "Appeal": return {
 			commitmentId: m.commitmentId,
@@ -13504,7 +13516,7 @@ function encodeMessage(m) {
 			appellantAddress: m.appellantAddress,
 			grounds: m.grounds,
 			bond: amount(m.bond),
-			filedAt: seconds(m.filedAt)
+			filedAt: seconds$1(m.filedAt)
 		};
 		case "Mandate": return {
 			principal: m.principal,
@@ -13512,7 +13524,7 @@ function encodeMessage(m) {
 			clubId: m.clubId,
 			scope: scope(m.scope),
 			nonce: m.nonce,
-			issuedAt: seconds(m.issuedAt)
+			issuedAt: seconds$1(m.issuedAt)
 		};
 	}
 }
@@ -54307,8 +54319,6 @@ function draw(random, length) {
 
 // packages/core/dist/crypto/content.js
 const CONTENT_KEY_BYTES = 32;
-/** delivery.schema.json ciphertext.bytes maximum. */
-const MAX_CIPHERTEXT_BYTES = 10485760;
 const IV_BYTES = 12;
 const REDACTED$1 = "ContentKey(redacted)";
 /**
@@ -62058,18 +62068,38 @@ const KEYCAP_BASE = /[0-9#*]/;
 const LETTER = /\p{L}/u;
 const LATIN_LIKE = /[\p{Script=Latin}\p{Script=Cyrillic}\p{Script=Greek}]/u;
 const NON_ASCII = /[^\x00-\x7f]/gu;
-/** The code point before index i, skipping variation selectors. */
-function prevBase(s, i) {
+/**
+* The code point before index i, skipping variation selectors. With `memo`, a walk that reaches the index the last call
+* started from takes that call's answer, so a run of n variation selectors costs n steps, not n squared (T-624, red team
+* H2: 1 MiB of them took 513 s). The answer is the same: the memo holds prevBase(s, memo.end) for the same `s`.
+*/
+function prevBase(s, i, memo) {
 	let j = i;
+	let base;
 	for (;;) {
-		if (j <= 0) return "";
+		if (memo && j === memo.end && j !== i) {
+			base = memo.base;
+			break;
+		}
+		if (j <= 0) {
+			base = "";
+			break;
+		}
 		const lo = s.charCodeAt(j - 1);
 		const start = lo >= 56320 && lo <= 57343 && j >= 2 ? j - 2 : j - 1;
 		const ch = String.fromCodePoint(s.codePointAt(start));
 		const cp = ch.codePointAt(0);
-		if (!(cp >= 65024 && cp <= 65039 || cp >= 917760 && cp <= 917999)) return ch;
+		if (!(cp >= 65024 && cp <= 65039 || cp >= 917760 && cp <= 917999)) {
+			base = ch;
+			break;
+		}
 		j = start;
 	}
+	if (memo) {
+		memo.end = i;
+		memo.base = base;
+	}
+	return base;
 }
 const nextChar = (s, i) => i < s.length ? String.fromCodePoint(s.codePointAt(i)) : "";
 const TAG_CHAR = /[\u{E0000}-\u{E007F}]/u;
@@ -62083,6 +62113,10 @@ function normalizeText(raw) {
 	let tagChars = 0;
 	let zeroWidth = 0;
 	const vsBytes = [];
+	const memo = {
+		end: -1,
+		base: ""
+	};
 	const stripped = raw.replace(EMOJI_TAG_SEQUENCE, (m) => {
 		explained += [...m].length - 1;
 		return "🏴";
@@ -62095,7 +62129,7 @@ function normalizeText(raw) {
 			if (a >= 32 && a <= 126) tagText += String.fromCharCode(a);
 			return "";
 		}
-		const before = prevBase(s, offset);
+		const before = prevBase(s, offset, memo);
 		const after = nextChar(s, offset + c.length);
 		if ((cp === 65038 || cp === 65039) && (PICTOGRAPHIC.test(before) || KEYCAP_BASE.test(before))) {
 			explained++;
@@ -62133,6 +62167,100 @@ function normalizeText(raw) {
 		nfkcLetters,
 		hiddenTagText
 	};
+}
+
+// packages/judgment/dist/untrusted.js
+const REDACTED = "[UntrustedData]";
+var UntrustedData = class UntrustedData {
+	#text;
+	constructor(text) {
+		this.#text = text;
+	}
+	/** Wraps text that came from a deliverable, a reference file, or anything else a party wrote. */
+	static wrap(text) {
+		return new UntrustedData(text);
+	}
+	/** True only for real instances (the private field cannot be forged structurally). */
+	static is(value) {
+		return typeof value === "object" && value !== null && #text in value;
+	}
+	/** The content, for evaluators and for the data section of a prompt. Never for an instruction position. */
+	reveal() {
+		return this.#text;
+	}
+	get length() {
+		return this.#text.length;
+	}
+	toString() {
+		return REDACTED;
+	}
+	toJSON() {
+		return REDACTED;
+	}
+	[Symbol.toPrimitive]() {
+		return REDACTED;
+	}
+};
+
+// packages/judgment/dist/intake.js
+/**
+* D108: the most plaintext judgment reads, a delivery or a reference: 1 MiB. At this size stage 1 and every kept screen
+* fit a 64 MB heap, half a Durable Object's 128 MB (heap.test.ts; measured, T-624), so a small host and a large one judge
+* it alike. A larger delivery is refused here as payload_too_large, a seller's fault (reject without a panel), before any
+* check or screen reads it. A bound, raised when a measured need appears; the store cap above stays 10 MiB.
+*/
+const JUDGED_MAX_PLAINTEXT_BYTES = 1048576;
+const ALLOWED_MIME = [
+	"text/csv",
+	"application/json",
+	"text/plain",
+	"text/markdown"
+];
+const fail$2 = (code, detail) => err({
+	code,
+	detail
+});
+/** The MIME rules: the allowlist, then the commitment's agreed format when one is given. Returns the refusal, if any. */
+function refuseMime(mime, format) {
+	if (!ALLOWED_MIME.includes(mime)) return {
+		code: "mime_not_allowed",
+		detail: `${String(mime).slice(0, 80)} is not in the allowlist`
+	};
+	if (format !== void 0 && mime !== format) return {
+		code: "mime_mismatch",
+		detail: `delivered ${mime}; the commitment agreed ${format}`
+	};
+}
+/** The judged-intake limit on the plaintext (D108). Returns the refusal, if any. */
+function refuseSize(plaintext) {
+	return plaintext.length > 1048576 ? {
+		code: "payload_too_large",
+		detail: `plaintext is ${plaintext.length} bytes; judgment reads at most ${JUDGED_MAX_PLAINTEXT_BYTES} (the judged-intake limit)`
+	} : void 0;
+}
+/** Strict UTF-8 decoding and normalization. It checks no hash and no size: intake() does both before it calls this. */
+function decodePlaintext(plaintext, mime) {
+	let raw;
+	try {
+		raw = new TextDecoder("utf-8", { fatal: true }).decode(plaintext);
+	} catch {
+		return fail$2("not_utf8", "plaintext is not valid UTF-8");
+	}
+	const n = normalizeText(raw);
+	const units = Math.max(n.text.length, raw.includes("\\u") ? decodeJsonEscapes(raw).normalize("NFKC").length : 0);
+	if (units > 1048576) return fail$2("payload_too_large", `the text is ${units} UTF-16 units once normalized; judgment reads at most ${JUDGED_MAX_PLAINTEXT_BYTES} (the judged-intake limit)`);
+	return ok({
+		raw: UntrustedData.wrap(raw),
+		data: UntrustedData.wrap(n.text),
+		hiddenTagText: UntrustedData.wrap(n.hiddenTagText),
+		removed: {
+			tagChars: n.tagChars,
+			zeroWidth: n.zeroWidth,
+			nfkcChanged: n.nfkcChanged,
+			nfkcLetters: n.nfkcLetters
+		},
+		mime
+	});
 }
 
 // packages/judgment/dist/checks/cost.js
@@ -63807,7 +63935,7 @@ function parseDelivery(text) {
 	}
 }
 const LONE_SURROGATE$1 = /[\uD800-\uDBFF](?![\uDC00-\uDFFF])|(?<![\uD800-\uDBFF])[\uDC00-\uDFFF]/;
-const fail$2 = (detail) => ({
+const fail$1 = (detail) => ({
 	passed: false,
 	detail
 });
@@ -63817,9 +63945,9 @@ const fail$2 = (detail) => ({
 */
 function evaluateSignatureValid(check, delivered, budget) {
 	const invalid = validateSignatureCheck(check);
-	if (invalid) return fail$2(`check invalid: ${invalid}`);
+	if (invalid) return fail$1(`check invalid: ${invalid}`);
 	const parsed = typeof delivered === "string" ? parseDelivery(delivered) : delivered();
-	if (!parsed.ok) return fail$2("not a JSON document");
+	if (!parsed.ok) return fail$1("not a JSON document");
 	const document = parsed.value;
 	const strings = {};
 	for (const name of [
@@ -63828,36 +63956,36 @@ function evaluateSignatureValid(check, delivered, budget) {
 		"signature"
 	]) {
 		const found = resolve$2(document, check[name].pointer);
-		if (!found) return fail$2(`${name}: nothing at the pointer`);
-		if (typeof found.value !== "string") return fail$2(`${name}: not a string`);
-		if (name !== "message" && found.value.length > SIGNATURE_LIMITS[name]) return fail$2(`${name}: too long`);
+		if (!found) return fail$1(`${name}: nothing at the pointer`);
+		if (typeof found.value !== "string") return fail$1(`${name}: not a string`);
+		if (name !== "message" && found.value.length > SIGNATURE_LIMITS[name]) return fail$1(`${name}: too long`);
 		strings[name] = found.value;
 	}
 	const pem = check.publicKey.format === "spki-pem";
 	const spki = pem ? pemPublicKey(strings.publicKey) : strictBase64(strings.publicKey);
-	if (!spki) return fail$2(pem ? "publicKey: not a PEM public key" : "publicKey: not valid base64");
-	if (fingerprint(spki) !== check.publicKey.spkiSha256) return fail$2("publicKey: fingerprint differs from the terms");
-	if (!keyShapeOk(check.alg, spki)) return fail$2(ALGORITHMS[check.alg].wrongKey);
+	if (!spki) return fail$1(pem ? "publicKey: not a PEM public key" : "publicKey: not valid base64");
+	if (fingerprint(spki) !== check.publicKey.spkiSha256) return fail$1("publicKey: fingerprint differs from the terms");
+	if (!keyShapeOk(check.alg, spki)) return fail$1(ALGORITHMS[check.alg].wrongKey);
 	const signature = strictBase64(strings.signature);
-	if (!signature) return fail$2("signature: not valid base64");
+	if (!signature) return fail$1("signature: not valid base64");
 	const { format } = check.signature;
-	if (format === "der" ? signature.length > SIGNATURE_LIMITS.derBytes : signature.length !== SIGNATURE_LIMITS.rawBytes) return fail$2("signature: wrong length");
+	if (format === "der" ? signature.length > SIGNATURE_LIMITS.derBytes : signature.length !== SIGNATURE_LIMITS.rawBytes) return fail$1("signature: wrong length");
 	let message;
 	let prepaid = 0;
 	if (check.message.encoding === "utf8") {
 		prepaid = strings.message.length;
 		budget.spend(prepaid);
-		if (LONE_SURROGATE$1.test(strings.message)) return fail$2("message: not well-formed text");
+		if (LONE_SURROGATE$1.test(strings.message)) return fail$1("message: not well-formed text");
 		message = new TextEncoder().encode(strings.message);
 	} else {
 		budget.spend(strings.message.length / 4 * 3);
 		const decoded = strictBase64(strings.message);
-		if (!decoded) return fail$2("message: not valid base64");
+		if (!decoded) return fail$1("message: not valid base64");
 		message = decoded;
 	}
-	if (format === "der" && !isStrictDer(signature)) return fail$2("signature: not valid DER");
+	if (format === "der" && !isStrictDer(signature)) return fail$1("signature: not valid DER");
 	budget.spend(message.length - prepaid + SIGNATURE_WORK.perVerification);
-	if (!verifySignature(check.alg, spki, message, signature, format)) return fail$2("signature does not verify");
+	if (!verifySignature(check.alg, spki, message, signature, format)) return fail$1("signature does not verify");
 	if (check.message.jsonEquals !== void 0) {
 		let signed;
 		try {
@@ -63866,10 +63994,10 @@ function evaluateSignatureValid(check, delivered, budget) {
 				ignoreBOM: true
 			}).decode(message));
 		} catch {
-			return fail$2("message: not JSON");
+			return fail$1("message: not JSON");
 		}
 		const named = resolve$2(document, check.message.jsonEquals);
-		if (!named || !jsonEqual(signed, named.value, budget)) return fail$2("message: differs from the value at jsonEquals");
+		if (!named || !jsonEqual(signed, named.value, budget)) return fail$1("message: differs from the value at jsonEquals");
 	}
 	return { passed: true };
 }
@@ -64465,7 +64593,7 @@ const pass$1 = (detail) => detail === void 0 ? { passed: true } : {
 	passed: true,
 	detail
 };
-const fail$1 = (detail) => ({
+const fail = (detail) => ({
 	passed: false,
 	detail
 });
@@ -64537,7 +64665,7 @@ function newRun(input, budget, checks) {
 	};
 }
 function readReference(sha, bytes, mime, budget) {
-	if (bytes.length > 10485760) return err(`reference is ${bytes.length} bytes; the cap is ${MAX_CIPHERTEXT_BYTES}`);
+	if (bytes.length > 1048576) return err(`reference is ${bytes.length} bytes; judgment reads at most ${JUDGED_MAX_PLAINTEXT_BYTES} (the judged-intake limit)`);
 	budget.spend(Math.ceil(bytes.length / REFERENCE_BYTES_PER_UNIT));
 	if (sha256$3(bytes) !== sha) return err("reference bytes do not match the committed hash");
 	let text;
@@ -64558,13 +64686,13 @@ function keyOf(c, budget) {
 	return k;
 }
 function evaluate$1(check, prepared, run) {
-	if (prepared.error !== void 0) return fail$1(`check invalid: ${prepared.error}`);
+	if (prepared.error !== void 0) return fail(`check invalid: ${prepared.error}`);
 	const { input, budget } = run;
 	if (check.type === "json_schema") {
 		const doc = run.json();
-		if (!doc.ok) return fail$1("deliverable is not valid JSON");
+		if (!doc.ok) return fail("deliverable is not valid JSON");
 		const e = prepared.schema(doc.value, budget);
-		return e === void 0 ? pass$1() : fail$1(`schema: ${e}`);
+		return e === void 0 ? pass$1() : fail(`schema: ${e}`);
 	}
 	if (check.type === "signature_valid") return evaluateSignatureValid(check, run.json, budget);
 	if (check.type === "passes_through") return evaluatePassesThrough(check, run, budget);
@@ -64575,50 +64703,50 @@ function evaluate$1(check, prepared, run) {
 		const counts = run.hidden();
 		const over = HIDDEN_KEYS.filter((k) => check.max[k] !== void 0 && counts[k] > check.max[k]);
 		const summary = HIDDEN_KEYS.map((k) => `${k} ${counts[k]}`).join(", ");
-		return over.length ? fail$1(`over the limit for ${over.join(", ")} (${summary})`) : pass$1(summary);
+		return over.length ? fail(`over the limit for ${over.join(", ")} (${summary})`) : pass$1(summary);
 	}
-	if (check.type === "csv_columns_exact" && input.mime !== "text/csv") return fail$1(`csv_columns_exact needs a text/csv deliverable, not ${input.mime}`);
+	if (check.type === "csv_columns_exact" && input.mime !== "text/csv") return fail(`csv_columns_exact needs a text/csv deliverable, not ${input.mime}`);
 	const tr = run.table();
-	if (!tr.ok) return fail$1(tr.error);
+	if (!tr.ok) return fail(tr.error);
 	const t = tr.value;
 	switch (check.type) {
 		case "csv_columns_exact": {
 			const n = t.columns.length === check.columns.length ? check.columns.length : 0;
 			budget.spend(n + 1);
-			return n === check.columns.length && t.columns.every((c, i) => c === check.columns[i]) ? pass$1() : fail$1(`columns are [${list$2(t.columns)}]; expected [${list$2(check.columns)}]`);
+			return n === check.columns.length && t.columns.every((c, i) => c === check.columns[i]) ? pass$1() : fail(`columns are [${list$2(t.columns)}]; expected [${list$2(check.columns)}]`);
 		}
 		case "row_count_range": {
 			const n = t.rows;
-			return n >= check.min && n <= check.max ? pass$1(`${n} rows`) : fail$1(`${n} rows; expected ${check.min} to ${check.max}`);
+			return n >= check.min && n <= check.max ? pass$1(`${n} rows`) : fail(`${n} rows; expected ${check.min} to ${check.max}`);
 		}
 		case "unique_key": {
 			const named = check.columns.map((c) => column(t, c, budget));
 			const missing = named.find((i) => typeof i === "string");
-			if (missing !== void 0) return fail$1(missing);
+			if (missing !== void 0) return fail(missing);
 			const idx = [...new Set(named)];
 			const seen = /* @__PURE__ */ new Set();
 			for (let r = 0; r < t.rows; r++) {
 				const key = JSON.stringify(idx.map((i) => cellAt(t, r, i)));
 				budget.spend(8);
 				chargeChars(budget, key.length);
-				if (seen.has(key)) return fail$1(`duplicate key at row ${r + 1}`);
+				if (seen.has(key)) return fail(`duplicate key at row ${r + 1}`);
 				seen.add(key);
 			}
 			return pass$1();
 		}
 		case "null_rate_max": {
 			const i = column(t, check.column, budget);
-			if (typeof i === "string") return fail$1(i);
+			if (typeof i === "string") return fail(i);
 			let nulls = 0;
 			for (let r = 0; r < t.rows; r++) {
 				budget.spend(1);
 				if (isNullish(cellAt(t, r, i), budget)) nulls++;
 			}
-			return nulls * 1e4 <= check.maxBps * t.rows ? pass$1(`null ${pct(nulls, t.rows)}`) : fail$1(`null ${pct(nulls, t.rows)} exceeds ${bps(check.maxBps)}`);
+			return nulls * 1e4 <= check.maxBps * t.rows ? pass$1(`null ${pct(nulls, t.rows)}`) : fail(`null ${pct(nulls, t.rows)} exceeds ${bps(check.maxBps)}`);
 		}
 		case "regex_match_rate_min": {
 			const i = column(t, check.column, budget);
-			if (typeof i === "string") return fail$1(i);
+			if (typeof i === "string") return fail(i);
 			const re = prepared.regex;
 			let matches = 0;
 			for (let r = 0; r < t.rows; r++) {
@@ -64626,28 +64754,28 @@ function evaluate$1(check, prepared, run) {
 				const s = cellText(cellAt(t, r, i));
 				if (s !== null && countsAsMatch(re, s, budget)) matches++;
 			}
-			return t.rows === 0 || matches * 1e4 >= check.minBps * t.rows ? pass$1(`match ${pct(matches, t.rows)}`) : fail$1(`match ${pct(matches, t.rows)} below ${bps(check.minBps)}`);
+			return t.rows === 0 || matches * 1e4 >= check.minBps * t.rows ? pass$1(`match ${pct(matches, t.rows)}`) : fail(`match ${pct(matches, t.rows)} below ${bps(check.minBps)}`);
 		}
 		case "iso8601_date_column": {
 			const i = column(t, check.column, budget);
-			if (typeof i === "string") return fail$1(i);
+			if (typeof i === "string") return fail(i);
 			for (let r = 0; r < t.rows; r++) {
 				const c = cellAt(t, r, i);
 				budget.spend(ISO_CELL_UNITS);
-				if (c !== null && (isNonScalar(c) || !isIso8601(c))) return fail$1(`row ${r + 1} is not an ISO 8601 date`);
+				if (c !== null && (isNonScalar(c) || !isIso8601(c))) return fail(`row ${r + 1} is not an ISO 8601 date`);
 			}
 			return pass$1();
 		}
 		case "reference_row_match_min": {
 			const bytes = input.references?.get(check.reference.sha256);
-			if (!bytes) return fail$1("reference not available");
+			if (!bytes) return fail("reference not available");
 			const rr = run.reference(check.reference.sha256, bytes);
-			if (!rr.ok) return fail$1(rr.error);
+			if (!rr.ok) return fail(rr.error);
 			const ref = rr.value;
 			const rk = column(ref, check.keyColumn, budget);
 			const dk = column(t, check.keyColumn, budget);
-			if (typeof rk === "string") return fail$1(`reference: ${rk}`);
-			if (typeof dk === "string") return fail$1(dk);
+			if (typeof rk === "string") return fail(`reference: ${rk}`);
+			if (typeof dk === "string") return fail(dk);
 			const byKey = /* @__PURE__ */ new Map();
 			for (let r = 0; r < t.rows; r++) {
 				const k = keyOf(cellAt(t, r, dk), budget);
@@ -64665,7 +64793,7 @@ function evaluate$1(check, prepared, run) {
 				const d = byKey.get(k);
 				if (d !== void 0 && map.every((di, ri) => di >= 0 && keyOf(cellAt(t, d, di), budget) === keyOf(cellAt(ref, r, ri), budget))) matched++;
 			}
-			return ref.rows === 0 || matched * 1e4 >= check.minBps * ref.rows ? pass$1(`reference match ${pct(matched, ref.rows)}`) : fail$1(`reference match ${pct(matched, ref.rows)} below ${bps(check.minBps)}`);
+			return ref.rows === 0 || matched * 1e4 >= check.minBps * ref.rows ? pass$1(`reference match ${pct(matched, ref.rows)}`) : fail(`reference match ${pct(matched, ref.rows)} below ${bps(check.minBps)}`);
 		}
 	}
 }
@@ -64698,10 +64826,10 @@ function runChecks$1(checks, input, budget = new StepBudget(CHECK_BUDGET)) {
 			} catch (e) {
 				if (e instanceof BudgetExhausted) {
 					inconclusive.push(id);
-					o = fail$1("inconclusive: the check work budget for this delivery ran out");
-				} else if (e instanceof TooDeep) o = fail$1(`a value is nested deeper than ${MAX_CANONICAL_DEPTH} levels`);
-				else if (e instanceof SubjectTooLong) o = fail$1(`a pattern met a string over ${MAX_SUBJECT_CHARS} code points`);
-				else o = fail$1("check could not be evaluated on this input");
+					o = fail("inconclusive: the check work budget for this delivery ran out");
+				} else if (e instanceof TooDeep) o = fail(`a value is nested deeper than ${MAX_CANONICAL_DEPTH} levels`);
+				else if (e instanceof SubjectTooLong) o = fail(`a pattern met a string over ${MAX_SUBJECT_CHARS} code points`);
+				else o = fail("check could not be evaluated on this input");
 			}
 			const out = {
 				checkId: id,
@@ -64838,39 +64966,6 @@ function sampleCsv(records, maxChars, seed) {
 		totalRows: n
 	};
 }
-
-// packages/judgment/dist/untrusted.js
-const REDACTED = "[UntrustedData]";
-var UntrustedData = class UntrustedData {
-	#text;
-	constructor(text) {
-		this.#text = text;
-	}
-	/** Wraps text that came from a deliverable, a reference file, or anything else a party wrote. */
-	static wrap(text) {
-		return new UntrustedData(text);
-	}
-	/** True only for real instances (the private field cannot be forged structurally). */
-	static is(value) {
-		return typeof value === "object" && value !== null && #text in value;
-	}
-	/** The content, for evaluators and for the data section of a prompt. Never for an instruction position. */
-	reveal() {
-		return this.#text;
-	}
-	get length() {
-		return this.#text.length;
-	}
-	toString() {
-		return REDACTED;
-	}
-	toJSON() {
-		return REDACTED;
-	}
-	[Symbol.toPrimitive]() {
-		return REDACTED;
-	}
-};
 
 // packages/judgment/dist/prompt.js
 const USER_SPLIT = "\n<<<USER MESSAGE>>>\n";
@@ -65725,59 +65820,6 @@ function parseCodedVerdict(raw, opts) {
 			dropped: dropped.value
 		}
 	};
-}
-
-// packages/judgment/dist/intake.js
-const MAX_PLAINTEXT_BYTES = 10485760;
-const ALLOWED_MIME = [
-	"text/csv",
-	"application/json",
-	"text/plain",
-	"text/markdown"
-];
-const fail = (code, detail) => err({
-	code,
-	detail
-});
-/** The MIME rules: the allowlist, then the commitment's agreed format when one is given. Returns the refusal, if any. */
-function refuseMime(mime, format) {
-	if (!ALLOWED_MIME.includes(mime)) return {
-		code: "mime_not_allowed",
-		detail: `${String(mime).slice(0, 80)} is not in the allowlist`
-	};
-	if (format !== void 0 && mime !== format) return {
-		code: "mime_mismatch",
-		detail: `delivered ${mime}; the commitment agreed ${format}`
-	};
-}
-/** The size cap on the plaintext. Returns the refusal, if any. */
-function refuseSize(plaintext) {
-	return plaintext.length > 10485760 ? {
-		code: "payload_too_large",
-		detail: `plaintext is ${plaintext.length} bytes; the cap is ${MAX_PLAINTEXT_BYTES}`
-	} : void 0;
-}
-/** Strict UTF-8 decoding and normalization. It checks no hash and no size: intake() does both before it calls this. */
-function decodePlaintext(plaintext, mime) {
-	let raw;
-	try {
-		raw = new TextDecoder("utf-8", { fatal: true }).decode(plaintext);
-	} catch {
-		return fail("not_utf8", "plaintext is not valid UTF-8");
-	}
-	const n = normalizeText(raw);
-	return ok({
-		raw: UntrustedData.wrap(raw),
-		data: UntrustedData.wrap(n.text),
-		hiddenTagText: UntrustedData.wrap(n.hiddenTagText),
-		removed: {
-			tagChars: n.tagChars,
-			zeroWidth: n.zeroWidth,
-			nfkcChanged: n.nfkcChanged,
-			nfkcLetters: n.nfkcLetters
-		},
-		mime
-	});
 }
 
 // packages/judgment/dist/kept/agg-3.js
@@ -67931,17 +67973,51 @@ function referenceLookups(checks) {
 	return [...out.values()];
 }
 /**
-* The largest reference, in bytes: 10,485,760, the most any content store keeps (core's `MAX_CIPHERTEXT_BYTES`;
-* `POST /v1/ciphertext` refuses more, and a node may publish a lower `limits.maxCiphertextBytes`). So the cap refuses
-* nothing a store would have taken. The check library fails a larger reference closed with the same number
-* (checks/index.ts), so a seller's preflight agrees; an adjudicator counts it unavailable and does not serve the deal.
+* The largest reference, in bytes: the judged-intake limit, 1,048,576 (D108), since stage 1 reads a reference as it
+* reads the delivery. A content store may keep up to 10 MiB. The check library fails a larger reference closed with the
+* same number (checks/index.ts), so a seller's preflight agrees; an adjudicator counts it unavailable and does not
+* serve the deal, so a too-large reference is refused before an adjudicator accepts the terms.
 */
-const REFERENCE_MAX_BYTES = MAX_CIPHERTEXT_BYTES;
+const REFERENCE_MAX_BYTES = JUDGED_MAX_PLAINTEXT_BYTES;
 const REASON = {
 	not_returned: "the store did not return it",
 	hash_mismatch: "the store returned other bytes",
-	too_large: `the store returned more than ${REFERENCE_MAX_BYTES} bytes`
+	too_large: `the store returned more than ${REFERENCE_MAX_BYTES} bytes, the judged-intake limit`
 };
+
+// packages/judgment/dist/hold.js
+/** Seconds a held reject is signed before its turn's deadline: Sepolia takes about a minute a transaction, and a relay retries. */
+const HOLD_MARGIN_SEC = 600;
+/** The longest hold, in seconds: one day. A longer window holds a day and then signs. */
+const HOLD_MAX_SEC = 86400;
+/** True when the terms carry a rubric with at least one criterion, so a panel scores the work (ADR-0051). */
+function hasRubric(c) {
+	return (c.acceptance?.rubric?.criteria?.length ?? 0) > 0;
+}
+const seconds = (ts) => Math.floor(Date.parse(ts) / 1e3);
+/**
+* When this adjudicator signs `outcome` on `task`, whose record was decided at `decidedAt`: a whole-second timestamp, or
+* null to sign at once. A time already passed means sign now. Malformed times hold nothing.
+*/
+function holdUntil(task, outcome, decidedAt) {
+	if (outcome !== "reject" || !hasRubric(task.commitment)) return null;
+	const t = task.commitment.timing;
+	let window;
+	let deadline = seconds(task.deadline);
+	if (task.role === "primary") {
+		window = seconds(t.judgeBy) - seconds(t.deliverBy);
+		deadline = Math.min(deadline, seconds(t.judgeBy));
+	} else if (task.role === "appeal" && task.firstOutcome === void 0) window = t.appealDecideSec;
+	else return null;
+	const from = seconds(decidedAt);
+	if (![
+		window,
+		deadline,
+		from
+	].every(Number.isSafeInteger)) return null;
+	const until = Math.min(from + Math.min(window - 600, HOLD_MAX_SEC), deadline - 600);
+	return until > from ? toTimestamp(until * 1e3) : null;
+}
 
 // packages/testkit/dist/judgment.js
 /**
@@ -69412,7 +69488,7 @@ function reasonLine(r) {
 }
 
 // examples/seller-adapter-core.ts
-/* @__PURE__ */ init_concat(), init_isAddressEqual(), init_keccak256(), init_recoverTypedDataAddress(), init_toHex();
+/* @__PURE__ */ init_concat(), init_isAddressEqual(), init_keccak256(), init_recoverMessageAddress(), init_recoverTypedDataAddress(), init_toHex();
 const DEFAULTS = {
 	port: 8791,
 	sellerApi: {
@@ -69520,7 +69596,8 @@ const FILE_KEYS = [
 	"quoteAuth",
 	"quoteRateLimit",
 	"alerts",
-	"redelivery"
+	"redelivery",
+	"shareDelivery"
 ];
 /** Options removed in T-331, each with what to do instead. A configuration that still sets one is refused. */
 const REMOVED = [
@@ -69606,6 +69683,11 @@ function configFrom(f, file, files) {
 	if (f.events !== void 0 && (typeof f.events !== "string" || f.events === "")) throw new Error(`${file}: events must be a file path`);
 	if (f.reportSalt !== void 0 && typeof f.reportSalt !== "boolean") throw new Error(`${file}: reportSalt must be true or false`);
 	if (f.signingKey !== void 0 && f.signingKey !== "standing" && f.signingKey !== "per-deal") throw new Error(`${file}: signingKey must be "standing" or "per-deal"`);
+	if (f.shareDelivery !== void 0 && ![
+		"held-reject",
+		"delivered",
+		"never"
+	].includes(f.shareDelivery)) throw new Error(`${file}: shareDelivery must be "held-reject", "delivered" or "never"`);
 	if (own && Array.isArray(f.termsRules) && f.termsRules.some((r) => r?.rubric === true)) {
 		let t;
 		try {
@@ -69631,6 +69713,7 @@ function configFrom(f, file, files) {
 		...f.reportMapping === void 0 ? {} : { reportMapping: beside(f.reportMapping, "reportMapping") },
 		...pass("reportSalt"),
 		...pass("signingKey"),
+		...pass("shareDelivery"),
 		scope: f.scope ?? DEFAULTS.scope,
 		...own ? {
 			...pass("options"),
@@ -69643,7 +69726,7 @@ function configFrom(f, file, files) {
 			...DEFAULTS.timing,
 			...f.timing ?? {}
 		},
-		rubricTiming: { ...f.rubricTiming ?? DEFAULTS.rubricTiming },
+		rubricTiming: f.rubricTiming !== void 0 ? { ...f.rubricTiming } : Object.fromEntries(Object.entries(DEFAULTS.rubricTiming ?? {}).filter(([k]) => !(isRecord$1(f.timing) && Object.hasOwn(f.timing, k)))),
 		journal: f.journal ?? DEFAULTS.journal,
 		...f.events === void 0 ? {} : { events: f.events },
 		pollMs: f.pollMs ?? DEFAULTS.pollMs,
@@ -70616,6 +70699,23 @@ async function createSellerAdapter(c, env, io) {
 		save();
 		return seller.call("POST", v.path, v.body);
 	}
+	/**
+	* T-625: a delivery this adapter's own key signs, prepared and signed as Agent.deliver does it, kept in the journal,
+	* then sent, as remoteDeliver keeps the signer's. The buyer's early accept needs this signed body (GET
+	* /deals/<id>/delivery); a deal whose delivery is already signed sends that same body again.
+	*/
+	async function localDeliver(deal, bytes) {
+		const agent = signerOf(deal);
+		if (deal.signedDelivery) return agent.call("POST", deal.signedDelivery.path, deal.signedDelivery.body);
+		const { prepared, intent } = await agent.prepareDelivery(deal.terms, bytes);
+		const { path, body } = await agent.sign(prepared, intent);
+		deal.signedDelivery = {
+			path,
+			body
+		};
+		save();
+		return agent.call("POST", path, body);
+	}
 	let mandateUntil = 0;
 	/** The end of the seller's latest mandate in the club that covers selling, as every operator lists it; 0 for none. */
 	async function mandateEnd(address = seller.address) {
@@ -71050,6 +71150,14 @@ async function createSellerAdapter(c, env, io) {
 					attempts: deal.refusals
 				}, said);
 			}
+			if (deal.signedDelivery && deal.stage === "delivering") {
+				const kept = deal.signedDelivery.body;
+				await (remote ? remoteDeliver(deal, /* @__PURE__ */ new Uint8Array()) : localDeliver(deal, /* @__PURE__ */ new Uint8Array()));
+				return record(deal, {
+					stage: "delivered",
+					note: `${String(kept.ciphertext?.bytes ?? "?")} ciphertext bytes, ${String(kept.plaintextSha256)}, the signed delivery kept from the first send`
+				});
+			}
 			if (deal.stage === "refused") {
 				if (!(deal.ready === true || refusal.refetchEverySec !== void 0 && (deal.nextFetchAt === void 0 || Date.parse(deal.nextFetchAt) <= now))) return;
 			}
@@ -71136,7 +71244,7 @@ async function createSellerAdapter(c, env, io) {
 				ready: false,
 				note: `delivering ${pre.bytes} bytes, ${pre.plaintextSha256}`
 			});
-			await (remote ? remoteDeliver(deal, bytes) : signerOf(deal).deliver(deal.terms, bytes));
+			await (remote ? remoteDeliver(deal, bytes) : localDeliver(deal, bytes));
 			record(deal, {
 				stage: "delivered",
 				note: `${pre.bytes} bytes, ${pre.plaintextSha256}`
@@ -71543,6 +71651,121 @@ async function createSellerAdapter(c, env, io) {
 			...why === void 0 ? {} : { refusal: why }
 		});
 	}
+	/** T-625: how old a buyer's signed request may be, in seconds; a request time in the future is refused. */
+	const DELIVERY_REQUEST_MAX_AGE_SEC = 300;
+	/**
+	* T-625 (red team M2): concurrent requests share the decision in flight, a "no" is reused for SHARE_REFUSAL_MS, and a
+	* "yes" is never reused once made, so a deal that closes is not shared on an old answer. Each deal takes at most
+	* SHARE_REQUESTS_PER_MIN decisions a minute; past that it answers 429, so one buyer's loop cannot spend the operators'
+	* read budget the deal loop needs.
+	*/
+	const SHARE_REFUSAL_MS = 1e4;
+	const SHARE_REQUESTS_PER_MIN = 10;
+	const shareDecisions = /* @__PURE__ */ new Map();
+	const shareRequests = /* @__PURE__ */ new Map();
+	/** T-625 (red team L1): signatures already answered, by signature, until they are too old to be accepted again. */
+	const usedRequests = /* @__PURE__ */ new Map();
+	/**
+	* T-625: may this adapter hand `deal`'s signed delivery to its buyer now? Read from every operator (one that lies or
+	* lags is caught, red team H1): the deal must be Delivered. For "held-reject", also the primary's published reject
+	* of this very delivery, signed by the primary the terms name, on a rubric deal whose hold by ADR-0051's rule has
+	* not ended (red team M1).
+	*/
+	async function mayShare(deal, mode) {
+		const id = deal.id;
+		const cached = shareDecisions.get(id);
+		if (cached && Date.now() < cached.until) return cached.ok;
+		const decide = async () => {
+			if (await seller.trusted(`/v1/commitments/${id}`, (x) => x?.escrowState) !== "Delivered") return false;
+			if (mode === "delivered") return true;
+			const record = await seller.trusted(`/v1/commitments/${id}/judgment`, (x) => x);
+			const terms = deal.terms;
+			const body = { ...record };
+			delete body.recordHash;
+			delete body.signature;
+			delete body.recordUri;
+			if (record?.role !== "primary" || record?.aggregate?.decision !== "reject") return false;
+			if (String(record.commitmentId).toLowerCase() !== id || String(record.deliveryHash).toLowerCase() !== deliveryHashOf(deal.signedDelivery.body)) return false;
+			if (jcsHash(body) !== String(record.recordHash).toLowerCase()) return false;
+			const by = await recoverMessageAddress({
+				message: { raw: record.recordHash },
+				signature: record.signature
+			}).catch(() => null);
+			if (!by || !isAddressEqual(by, terms.adjudication.adjudicator)) return false;
+			const until = holdUntil({
+				commitment: terms,
+				role: "primary",
+				deadline: terms.timing.judgeBy
+			}, "reject", record.decidedAt);
+			return until !== null && await seller.settlementNow() < Date.parse(until);
+		};
+		const ok = decide().catch(() => false);
+		const entry = {
+			until: Infinity,
+			ok
+		};
+		shareDecisions.set(id, entry);
+		ok.then((yes) => {
+			entry.until = yes ? 0 : Date.now() + SHARE_REFUSAL_MS;
+		});
+		return ok;
+	}
+	/**
+	* GET /deals/<commitmentId>/delivery?at=<unix seconds>&nonce=<16 to 64 hex digits>&signature=<0x...> (T-625): the signed
+	* delivery's hashes, never an envelope (D110), to the deal's buyer only, when `shareDelivery` allows it now (mayShare). The buyer signs
+	* `crow.delivery:<commitmentId>:<at>:<nonce>`
+	* (EIP-191) with the key the terms name as buyer, at most DELIVERY_REQUEST_MAX_AGE_SEC before this clock; each signed
+	* request is answered once. The signature is recovered before the journal is read, and anyone else, any deal this
+	* adapter does not share now and any malformed request gets the same 404, so the route links no deal to this seller.
+	* A buyer that is a contract (ERC-1271) cannot sign this request: ask the seller for its signed delivery instead.
+	*/
+	async function deliveryShared(req, commitmentId) {
+		if (req.method !== "GET") return send(405, {
+			type: "method_not_allowed",
+			detail: "this route takes GET"
+		});
+		const none = () => send(404, {
+			type: "not_found",
+			detail: "this adapter shares no such delivery with this signer now"
+		});
+		const id = commitmentId.toLowerCase();
+		const q = new URL(req.url).searchParams;
+		const at = Number(q.get("at"));
+		const nonce = (q.get("nonce") ?? "").toLowerCase();
+		const signature = (q.get("signature") ?? "").toLowerCase();
+		const nowSec = Math.floor(Date.now() / 1e3);
+		if (!Number.isSafeInteger(at) || at > nowSec + 5 || nowSec - at > DELIVERY_REQUEST_MAX_AGE_SEC || !/^[0-9a-f]{16,64}$/.test(nonce) || !/^0x[0-9a-f]{130}$/.test(signature)) return none();
+		const by = await recoverMessageAddress({
+			message: `crow.delivery:${id}:${at}:${nonce}`,
+			signature
+		}).catch(() => null);
+		for (const [sig, until] of usedRequests) if (until < nowSec) usedRequests.delete(sig);
+		if (!by || usedRequests.has(signature)) return none();
+		const deal = Object.hasOwn(journal.deals, id) ? journal.deals[id] : void 0;
+		const mode = c.shareDelivery ?? "held-reject";
+		if (!deal?.signedDelivery || mode === "never" || !isAddressEqual(by, deal.terms.buyer)) return none();
+		usedRequests.set(signature, at + DELIVERY_REQUEST_MAX_AGE_SEC);
+		const recent = (shareRequests.get(id) ?? []).filter((t) => Date.now() - t < 6e4);
+		if (recent.length >= SHARE_REQUESTS_PER_MIN && shareDecisions.get(id)?.until !== Infinity) return send(429, {
+			type: "rate_limited",
+			detail: "too many delivery requests for this deal; try again in a minute"
+		}, { "retry-after": "60" });
+		recent.push(Date.now());
+		shareRequests.set(id, recent);
+		if (!await mayShare(deal, mode)) return none();
+		const b = deal.signedDelivery.body;
+		log(`${id} told the buyer ${deal.terms.buyer} its delivery's hashes, no envelope (${mode}).`);
+		return send(200, {
+			commitmentId: id,
+			deliveryHash: deliveryHashOf(b),
+			attempt: b.attempt,
+			plaintextSha256: b.plaintextSha256,
+			...b.plaintextMime === void 0 ? {} : { plaintextMime: b.plaintextMime },
+			ciphertext: b.ciphertext,
+			envelopes: Array.isArray(b.encryptedKeys) ? b.encryptedKeys.length : 0,
+			note: "the seller signed a delivery with these hashes; its envelopes are withheld, and the buyer gets its key with its accept"
+		});
+	}
 	/** T-503: a stored refund is answered again while it has at least this long left, in ms of settlement-layer time. */
 	const REFUND_REUSE_MS = 6e5;
 	/** T-503: how long a signed refund stays valid, in ms: 23 hours, inside the 24 hours verify.ts allows a settlement. */
@@ -71757,6 +71980,8 @@ async function createSellerAdapter(c, env, io) {
 		}));
 		const refundFor = refusal.ready ? /^\/deals\/(0x[0-9a-fA-F]{64})\/refund$/.exec(path)?.[1] : void 0;
 		if (refundFor) return refundSigned(req, refundFor);
+		const deliveryFor = /^\/deals\/(0x[0-9a-fA-F]{64})\/delivery$/.exec(path)?.[1];
+		if (deliveryFor) return deliveryShared(req, deliveryFor);
 		const dealFor = /^\/deals\/(0x[0-9a-fA-F]{64})$/.exec(path)?.[1];
 		if (dealFor) return dealState(req, dealFor);
 		if (path !== "/quote") return send(404, {
@@ -72593,6 +72818,11 @@ const TIMING = {
 	appealWindowSec: 0,
 	appealDecideSec: 60
 };
+/** ADR-0051: what an offer with a rubric takes over TIMING, so Crow's adjudicators can hold a panel's reject a day. */
+const RUBRIC_TIMING = {
+	judgeWithinSec: 87e3,
+	appealDecideSec: 87e3
+};
 const ZERO_ADDRESS = `0x${"0".repeat(40)}`;
 function readState(folder) {
 	let text;
@@ -72944,6 +73174,7 @@ async function seller(c) {
 					signingKey: "per-deal",
 					payoutAddress: payout.address,
 					timing: own.timing,
+					rubricTiming: RUBRIC_TIMING,
 					pollMs: 3e3,
 					..."redelivery" in own ? { redelivery: own.redelivery } : {}
 				}, null, 2)}\n`;
@@ -74999,7 +75230,7 @@ async function run(c, state, offerId, given) {
 }
 
 // examples/seller-worker-pin.ts
-const SELLER_WORKER_SHA256 = "cb95ff32331f962c2aa4d38b44f0e32d4bc4cb51e13bf4fbc322f56d89c3184e";
+const SELLER_WORKER_SHA256 = "06b21d39470982383cef3568262d2c6f6cc67e90d5761f68fd27deeb1836f3c3";
 
 // examples/setup-cloudflare.ts
 const plain$2 = (s, max = 300) => plain$8(String(s ?? "")).slice(0, max);
@@ -75363,7 +75594,7 @@ async function workerBytes(c) {
 		if (bytes.length > MAX_WORKER_BYTES) throw new Error(`${SELLER_WORKER_URL} is over ${MAX_WORKER_BYTES} bytes`);
 	}
 	const sha = createHash("sha256").update(bytes).digest("hex");
-	if (sha !== "cb95ff32331f962c2aa4d38b44f0e32d4bc4cb51e13bf4fbc322f56d89c3184e") throw new Error(`the Worker file's SHA-256 is ${sha}, not ${SELLER_WORKER_SHA256}, the one this setup.mjs carries: it is not the Worker this version writes`);
+	if (sha !== "06b21d39470982383cef3568262d2c6f6cc67e90d5761f68fd27deeb1836f3c3") throw new Error(`the Worker file's SHA-256 is ${sha}, not ${SELLER_WORKER_SHA256}, the one this setup.mjs carries: it is not the Worker this version writes`);
 	return bytes;
 }
 /** The card's quote entry in the card's folder: other offers kept, the draft's marks dropped. */

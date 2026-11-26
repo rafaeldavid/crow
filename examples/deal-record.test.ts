@@ -442,3 +442,42 @@ describe('deal-record.ts shows late work accepted by a mutual settlement (SC-5b)
     expect(checks(await record(null, late))['late work: the settlement is the one that settled']).toBeNull();
   }, 60_000);
 });
+
+// T-625, from the partner C rehearsal: a held reject's record is published and never signed into a decision while the
+// parties act first (ADR-0051), so no decided event carries it. The record still names the delivery, during the hold
+// and after the parties settle in it.
+describe('deal-record.ts on a held reject (T-625)', () => {
+  it('passes "judgment names the delivery" for a published, unsigned record, held and after a settlement', async () => {
+    const account = async () => (await (await realFetch(`${world.url}/accounts`, { method: 'POST' })).json()) as J;
+    const s = await account(), b = await account();
+    const seller = new Agent([...world.info.operators], s.privateKey, Buffer.from(s.encryptionSecretKey, 'base64url'));
+    const buyer = new Agent([...world.info.operators], b.privateKey, Buffer.from(b.encryptionSecretKey, 'base64url'));
+    const a = world.info.adjudicators;
+    const offer = await seller.offer({
+      template: 'default', clubId: world.info.clubId, seller: seller.address,
+      buyer: { address: buyer.address, encryptionPublicKey: buyer.encryptionPublicKey },
+      adjudicators: { primary: a[0]!.address, fallback: a[1]!.address, appeal: a[2]!.address },
+      price: PRICE, deliverable: { kind: 'document', description: `a note, deal ${++n}`, format: 'text/plain' }, checks: [],
+      rubric: { passThreshold: 300, criteria: [{ id: 'ok', description: 'Fine.', weight: 1, anchors: { '0': 'No', '2': 'Partly', '4': 'Yes' } }] },
+      timing: { judgeWithinSec: 87_000, appealDecideSec: 87_000 },
+    });
+    await buyer.waitFor(offer.id, ['AcceptedByAdjudicator']);
+    await buyer.agreeAndFund(offer.terms, 10n ** 12n);
+    await seller.deliver(offer.terms, new TextEncoder().encode('a note that says FAIL-ME'));
+    for (let i = 0; i < 200; i++, await new Promise((r) => setTimeout(r, 100))) if (await buyer.call('GET', `/v1/commitments/${offer.id}/judgment`).catch(() => null)) break;
+    expect((await buyer.call('GET', `/v1/commitments/${offer.id}`)).escrowState).toBe('Delivered');
+    const held = await dealRecord(offer.id, { operators: [...world.info.operators], party: 'buyer', encryptionSecretKey: b.encryptionSecretKey });
+    expect(checks(held)['judgment names the delivery']).toBe(true);
+    expect((held.checks.find((c) => c.check === 'judgment names the delivery') as J)?.how).toMatch(/not signed into a decision/);
+    // Both sign a split during the hold: the record stays unsigned, and it still names the delivery.
+    const posted = (await buyer.call('GET', `/v1/commitments/${offer.id}/events?limit=200`)).items.find((e: J) => e.type === 'delivery.submitted').payload;
+    const prepared = await buyer.call('POST', '/v1/prepare/settlement', { commitmentId: offer.id, nonce: freshNonce(), toSellerBps: 5000 });
+    const intent = { kind: 'settlement', terms: offer.terms, payouts: prepared.submit.body.payouts, releaseKey: prepared.submit.body.releaseKey, deliveryHash: posted.deliveryHash, nonce: prepared.submit.body.nonce } as Intent;
+    const byBuyer = await buyer.sign(prepared, intent);
+    const bySeller = await seller.sign(prepared, intent);
+    await buyer.call('POST', byBuyer.path, { ...byBuyer.body, sellerSignature: bySeller.body.sellerSignature });
+    expect((await buyer.waitFor(offer.id, ['Settled'])).escrowState).toBe('Settled');
+    const settled = await dealRecord(offer.id, { operators: [...world.info.operators], party: 'buyer', encryptionSecretKey: b.encryptionSecretKey });
+    expect(checks(settled)['judgment names the delivery']).toBe(true);
+  }, 60_000);
+});
