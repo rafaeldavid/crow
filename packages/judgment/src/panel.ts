@@ -15,6 +15,8 @@ import { seededIndex } from './sample.js';
 import type { JudgmentCriterion } from './terms.js';
 
 export const PANEL_VERSION = 'panel-1';
+/** The seat id suffix of a judge's second seat on a panel larger than the registry (T-631). */
+export const REPEAT_SUFFIX = ':2';
 
 /** keccak256(seed || commitmentId): the key every derivation for this case starts from. */
 export const panelKey = (seed: Hex32, commitmentId: Hex32): Hex32 => keccak256(concat([toBytes(seed), toBytes(commitmentId)]));
@@ -39,7 +41,8 @@ export interface SelectInput {
 
 /**
  * Walks the shuffled active entries and seats each one unless seating it would leave too few seats to
- * reach the family minimum. Refuses when the registry cannot fill the panel.
+ * reach the family minimum. A panel larger than the registry repeats judges, each at most twice (T-631). Refuses when
+ * the registry cannot fill the panel that way.
  */
 export function selectPanel(input: SelectInput): Result<PanelSeat[], string> {
   const { registry, size, minFamilies } = input;
@@ -55,7 +58,18 @@ export function selectPanel(input: SelectInput): Result<PanelSeat[], string> {
     seats.push({ judgeId: e.id, provider: e.provider, family: e.family, model: e.model });
     families.add(e.family);
   }
-  if (seats.length < size) return err(`the registry has ${registry.active.length} active judges; the panel needs ${size} meeting ${minFamilies} families`);
+  // T-631 (Rafa, 2026-11-26: "5 seats, repeat models"): a panel larger than the registry, which panel-1 refused, seats
+  // every active judge once and then repeats judges, each at most twice. A second seeded shuffle under its own label
+  // chooses which repeat, so the seed picks them and nothing else does. A repeat is its own seat, `<id>:2` (a registry id
+  // has no ":"), so it draws its own nonces, criteria order and sample; its family is the model's, so it never adds one.
+  // A panel the registry can fill is seated exactly as before.
+  if (seats.length === registry.active.length && size <= 2 * registry.active.length) {
+    for (const e of shuffle(registry.active, panelKey(input.seed, input.commitmentId), `${PANEL_VERSION}:repeats`)) {
+      if (seats.length === size) break;
+      seats.push({ judgeId: `${e.id}${REPEAT_SUFFIX}`, provider: e.provider, family: e.family, model: e.model });
+    }
+  }
+  if (seats.length < size) return err(`the registry has ${registry.active.length} active judges; the panel needs ${size} meeting ${minFamilies} families, each judge seated at most twice`);
   if (families.size < minFamilies) return err(`the registry cannot seat ${minFamilies} model families`);
   return ok(seats);
 }

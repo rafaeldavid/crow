@@ -169,13 +169,16 @@ describe('the guard reads the open deals through the public reads (ADR-0036 sect
 });
 
 describe('attack.live-world-binds-scripted-registry (red team H1)', () => {
-  it('a live world carries no registry but the live one, so no deal is judged there by scripted judges', async () => {
+  // T-631: a live world now carries both live registries (config/judges-live.yaml and config/judges-live-2.yaml), each
+  // through the live panel; it still never carries the placeholder registry, whose judges are scripted.
+  it('a live world carries only live registries, so no deal is judged there by scripted judges', async () => {
     const { panelConfig } = await import('./judges.js');
-    const { markerFake, liveRegistry } = await import('@holdback/adjudicator');
+    const { markerFake, liveRegistry, liveRegistry2, placeholderRegistry } = await import('@holdback/adjudicator');
     const live = panelConfig({ env: {}, storage: new MemoryStorage(), now: Date.now, judgeProvider: markerFake() });
     expect(live.live).toBe(true);
-    expect(live.registry.hash).toBe(liveRegistry().hash);
-    expect(live.kept).toEqual([]);
+    expect([live.registry.hash, ...live.kept.map((k) => k.registry.hash)].sort()).toEqual([liveRegistry().hash, liveRegistry2().hash].sort());
+    expect(live.kept.map((k) => k.registry.hash)).not.toContain(placeholderRegistry().hash);
+    for (const k of live.kept) expect(k.provider).toBe(live.provider);
     const scripted = panelConfig({ env: {}, storage: new MemoryStorage(), now: Date.now });
     expect(scripted.kept).toEqual([]);
   });

@@ -791,8 +791,9 @@ export class Adjudicator {
     const { active } = registry;
     const families = new Set(active.map((e) => e.family)).size;
     const minFamilies = appeal ? Math.max(policy.minFamilies, Math.min(policy.minFamiliesAppeal, families)) : policy.minFamilies;
-    if (size > active.length || minFamilies > families || minFamilies > size) {
-      return problem('invalid_terms', `panel: the registry has ${active.length} active judges in ${families} families; the ${appeal ? 'appeal' : 'first-instance'} panel needs ${size} meeting ${minFamilies} families`);
+    // T-631: a panel larger than the registry repeats judges, each at most twice (selectPanel).
+    if (size > 2 * active.length || minFamilies > families || minFamilies > size) {
+      return problem('invalid_terms', `panel: the registry has ${active.length} active judges in ${families} families; the ${appeal ? 'appeal' : 'first-instance'} panel needs ${size} meeting ${minFamilies} families, each judge seated at most twice`);
     }
     if (minValid > size) return problem('invalid_terms', `panel: the policy needs ${minValid} valid verdicts from ${appeal ? 'an appeal' : 'a first-instance'} panel of ${size}, which no panel can reach`);
     return null;

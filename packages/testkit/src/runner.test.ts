@@ -24,6 +24,7 @@ function sandbox(): string {
   cpSync(join(repo, 'apps/adjudicator/src/kept-policies.json'), join(root, 'apps/adjudicator/src/kept-policies.json'));
   // The registries that file keeps, which the runner loads beside the default one.
   cpSync(join(repo, 'config/judges-live.yaml'), join(root, 'config/judges-live.yaml'));
+  cpSync(join(repo, 'config/judges-live-2.yaml'), join(root, 'config/judges-live-2.yaml'));
   return root;
 }
 

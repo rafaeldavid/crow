@@ -121,7 +121,9 @@ describe('selectPanel', () => {
   });
 
   it('refuses when the registry cannot satisfy the size or the family minimum', () => {
-    expect(selectPanel({ registry: reg, seed: seed(1), commitmentId: CID, size: 7, minFamilies: 2 }).ok).toBe(false);
+    // T-631: a panel larger than the registry repeats judges, each at most twice; past twice the registry it refuses.
+    expect(selectPanel({ registry: reg, seed: seed(1), commitmentId: CID, size: 13, minFamilies: 2 }).ok).toBe(false);
+    expect(selectPanel({ registry: reg, seed: seed(1), commitmentId: CID, size: 7, minFamilies: 2 }).ok).toBe(true);
     expect(selectPanel({ registry: reg, seed: seed(1), commitmentId: CID, size: 3, minFamilies: 4 }).ok).toBe(false);
   });
 });

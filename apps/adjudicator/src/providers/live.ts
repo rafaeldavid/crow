@@ -1,4 +1,4 @@
-// Live judge providers: Anthropic Messages and OpenAI-compatible chat completions. Keys come from
+// Live judge providers: Anthropic Messages, OpenAI-compatible chat completions and Google Gemini generateContent. Keys come from
 // environment variables only, and a provider refuses to exist without one; a refusal names the variable, never
 // a value. Requests carry the provider's model ID, the two prompt strings and an output cap; never tools, never
 // URLs to fetch. Not exercised against a network in tests or CI: a stubbed fetch checks the request shape, and
@@ -8,12 +8,19 @@ import type { JudgeProvider, JudgeRequest, JudgeResponse } from '@holdback/judgm
 import type { RegistryProvider } from '@holdback/judgment';
 import { routeByProvider, withTimeout } from './timeout.js';
 
-export const LIVE_KEY_ENV: Readonly<Record<RegistryProvider, string>> = {
+/** The providers this build can call: the registry's (T-631 added google). */
+export type LiveProviderName = RegistryProvider;
+
+export const LIVE_KEY_ENV: Readonly<Record<LiveProviderName, string>> = {
   anthropic: 'HOLDBACK_ANTHROPIC_API_KEY',
   'openai-compatible': 'HOLDBACK_OPENAI_COMPATIBLE_API_KEY',
+  google: 'HOLDBACK_GOOGLE_API_KEY',
 };
 export const OPENAI_COMPATIBLE_BASE_URL_ENV = 'HOLDBACK_OPENAI_COMPATIBLE_BASE_URL';
-/** Every variable live judging needs, in the order a refusal names them. */
+/**
+ * Every variable live judging needs, in the order a refusal names them. The Google key is not one (T-631): Gemini is
+ * optional, and a seat that names it without the key abstains.
+ */
 export const LIVE_ENV: readonly string[] = [LIVE_KEY_ENV.anthropic, LIVE_KEY_ENV['openai-compatible'], OPENAI_COMPATIBLE_BASE_URL_ENV];
 /**
  * The output-token cap per live judge call, reasoning or thinking tokens included: the provider's max_tokens. It
@@ -28,7 +35,7 @@ type Env = Readonly<Record<string, string | undefined>>;
 
 /** Tokens one live call used, as the provider reported them. */
 export interface JudgeUsage {
-  provider: RegistryProvider;
+  provider: LiveProviderName;
   /** The registry's model ID (with its @date suffix). */
   model: string;
   inputTokens: number;
@@ -57,12 +64,13 @@ async function post(
   url: string,
   headers: Record<string, string>,
   body: unknown,
-  read: (json: unknown) => { text: string | undefined; usage: [number, number] },
+  read: (json: unknown) => { text: string | undefined; usage: [number, number]; refused?: string },
   usage: (input: number, output: number) => void,
 ): Promise<JudgeResponse> {
   let res: Response;
   try {
-    res = await (o.fetch ?? fetch)(url, { method: 'POST', headers: { 'content-type': 'application/json', ...headers }, body: JSON.stringify(body) });
+    // T-631 red team L3: never follow a redirect, which would resend the key header to another host.
+    res = await (o.fetch ?? fetch)(url, { method: 'POST', redirect: 'error', headers: { 'content-type': 'application/json', ...headers }, body: JSON.stringify(body) });
   } catch {
     return { kind: 'error', transport: true, detail: 'network error' };
   }
@@ -70,11 +78,12 @@ async function post(
   if (!res.ok) return { kind: 'error', transport: false, detail: `HTTP ${res.status}` };
   const r = read(await res.json().catch(() => undefined));
   usage(...r.usage);
+  if (r.refused) return { kind: 'error', transport: false, detail: r.refused };
   return r.text === undefined || r.text === '' ? { kind: 'error', transport: false, detail: 'no text in the response' } : { kind: 'ok', text: r.text };
 }
 
 const cap = (o: LiveOptions) => o.maxOutputTokens ?? LIVE_MAX_OUTPUT_TOKENS;
-const report = (o: LiveOptions, provider: RegistryProvider, model: string) => (inputTokens: number, outputTokens: number) => o.onUsage?.({ provider, model, inputTokens, outputTokens });
+const report = (o: LiveOptions, provider: LiveProviderName, model: string) => (inputTokens: number, outputTokens: number) => o.onUsage?.({ provider, model, inputTokens, outputTokens });
 
 // Current Claude models accept only the default sampling parameters (a temperature of 0 is a 400), so none is
 // sent; effort low keeps adaptive thinking inside the output cap.
@@ -113,30 +122,82 @@ const openaiCompatible = (key: string, baseUrl: string, o: LiveOptions): JudgePr
     ),
 });
 
+const GEMINI_URL = 'https://generativelanguage.googleapis.com/v1beta/models';
+
+// T-631: Gemini's generateContent. The key goes in the x-goog-api-key header, never the URL, so no log of a URL holds it.
+// JSON output is asked for by MIME type only: the verdict schema is still the filter that decides (hard rules). The
+// prompt goes in its places, the system prompt as systemInstruction and the data as the user turn. No tools, no
+// grounding: those would store prompts at Google or reach the network. No sampling parameter: current Gemini models
+// ignore temperature. Thinking stays low, as Anthropic's effort does; thought parts are never verdict text, and thinking
+// tokens are billed as output, so they count as output.
+const google = (key: string, o: LiveOptions): JudgeProvider => ({
+  complete: (r: JudgeRequest) =>
+    post(
+      o,
+      `${GEMINI_URL}/${encodeURIComponent(providerModelId(r.model))}:generateContent`,
+      { 'x-goog-api-key': key },
+      {
+        systemInstruction: { parts: [{ text: r.system }] },
+        contents: [{ role: 'user', parts: [{ text: r.user }] }],
+        generationConfig: { maxOutputTokens: cap(o), responseMimeType: 'application/json', thinkingConfig: { thinkingLevel: 'low' } },
+      },
+      (j) => {
+        const b = j as { promptFeedback?: { blockReason?: unknown }; candidates?: Array<{ finishReason?: unknown; content?: { parts?: Array<{ text?: unknown; thought?: unknown }> } }>; usageMetadata?: { promptTokenCount?: unknown; candidatesTokenCount?: unknown; thoughtsTokenCount?: unknown } } | undefined;
+        const u = b?.usageMetadata;
+        const usage: [number, number] = [count(u?.promptTokenCount), count(u?.candidatesTokenCount) + count(u?.thoughtsTokenCount)];
+        // T-631 red team L2: a blocked prompt, or a candidate stopped for any reason but STOP (safety, recitation, the
+        // output cap), is never a verdict, whatever text it carries. The reason is the provider's word: a fixed label.
+        const c = b?.candidates?.[0];
+        if (b?.promptFeedback?.blockReason !== undefined) return { text: undefined, usage, refused: 'the provider blocked the prompt' };
+        if (c?.finishReason !== undefined && c.finishReason !== 'STOP') return { text: undefined, usage, refused: `the provider stopped the answer (${String(c.finishReason).replace(/[^A-Z_]/g, '').slice(0, 32)})` };
+        const parts = c?.content?.parts?.filter((p) => p.thought !== true && typeof p.text === 'string');
+        return { text: parts?.map((p) => p.text as string).join(''), usage };
+      },
+      report(o, 'google', r.model),
+    ),
+});
+
 /** A live provider, or the reason it cannot run (no key, no base URL). */
-export function liveProvider(kind: RegistryProvider, env: Env, o: LiveOptions = {}): Result<JudgeProvider, string> {
+export function liveProvider(kind: LiveProviderName, env: Env, o: LiveOptions = {}): Result<JudgeProvider, string> {
   const key = env[LIVE_KEY_ENV[kind]];
   if (!key) return err(`live ${kind} judges need ${LIVE_KEY_ENV[kind]} in the environment; use recorded or fake judges instead`);
   if (kind === 'anthropic') return ok(anthropic(key, o));
+  if (kind === 'google') return ok(google(key, o));
   const base = env[OPENAI_COMPATIBLE_BASE_URL_ENV];
   if (!base || !base.startsWith('https://')) return err(`live openai-compatible judges need an https ${OPENAI_COMPATIBLE_BASE_URL_ENV}`);
   return ok(openaiCompatible(key, base, o));
 }
 
-/** The live-judging variables that are unset or empty, by name. */
-export const missingLiveEnv = (env: Env): string[] => LIVE_ENV.filter((name) => !env[name]);
+/** The providers live judging needs unless told otherwise: the first live registry's two. */
+export const DEFAULT_LIVE_PROVIDERS: readonly LiveProviderName[] = ['anthropic', 'openai-compatible'];
+
+/** The variables the `need` providers take, in LIVE_ENV's order, then the Google key. */
+export const liveEnvFor = (need: readonly LiveProviderName[] = DEFAULT_LIVE_PROVIDERS): string[] => [
+  ...(need.includes('anthropic') ? [LIVE_KEY_ENV.anthropic] : []),
+  ...(need.includes('openai-compatible') ? [LIVE_KEY_ENV['openai-compatible'], OPENAI_COMPATIBLE_BASE_URL_ENV] : []),
+  ...(need.includes('google') ? [LIVE_KEY_ENV.google] : []),
+];
+
+/** The live-judging variables that are unset or empty, by name, for the providers `need` names (T-631). */
+export const missingLiveEnv = (env: Env, need: readonly LiveProviderName[] = DEFAULT_LIVE_PROVIDERS): string[] => liveEnvFor(need).filter((name) => !env[name]);
 
 /**
- * Both live providers, routed by the seat's provider and wrapped in the judge timeout (default 60 s, the
+ * The live providers, routed by the seat's provider and wrapped in the judge timeout (default 60 s, the
  * policy's judgeTimeoutSec): what the adjudicator service takes as `provider`. Refuses, naming every missing
- * variable, unless all of LIVE_ENV are set.
+ * variable, unless every variable the `need` providers take is set (default: Anthropic and the OpenAI-compatible
+ * host, LIVE_ENV). T-631: a registry that seats Gemini passes `need` with google, so its world fails closed without
+ * the key.
  */
-export function liveJudges(env: Env, o: LiveOptions & { timeoutMs?: number } = {}): Result<JudgeProvider, string> {
-  const missing = missingLiveEnv(env);
+export function liveJudges(env: Env, o: LiveOptions & { timeoutMs?: number; need?: readonly LiveProviderName[] } = {}): Result<JudgeProvider, string> {
+  const missing = missingLiveEnv(env, o.need);
   if (missing.length) return err(`live judges need ${missing.join(', ')} in the environment`);
   const a = liveProvider('anthropic', env, o);
   if (!a.ok) return a;
   const c = liveProvider('openai-compatible', env, o);
   if (!c.ok) return c;
-  return ok(withTimeout(routeByProvider({ anthropic: a.value, 'openai-compatible': c.value }), o.timeoutMs ?? 60_000));
+  // T-631: Gemini only when its key is set. Without it a seat naming google abstains, naming the variable, and is not
+  // retried: no registry seats google until a decision does, and that decision makes the key required.
+  const g = liveProvider('google', env, o);
+  const unset: JudgeProvider = { complete: async () => ({ kind: 'error', transport: false, detail: `no ${LIVE_KEY_ENV.google} in the environment, so no Gemini judge can run` }) };
+  return ok(withTimeout(routeByProvider({ anthropic: a.value, 'openai-compatible': c.value, google: g.ok ? g.value : unset }), o.timeoutMs ?? 60_000));
 }

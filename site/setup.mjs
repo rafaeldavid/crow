@@ -75335,7 +75335,7 @@ async function run(c, state, offerId, given) {
 }
 
 // examples/seller-worker-pin.ts
-const SELLER_WORKER_SHA256 = "d657b868101c02e281999024215f4fc6d41c5713b8d06fb9d6459cdbc547bb3b";
+const SELLER_WORKER_SHA256 = "1bd55a19d588f9f2582fca228277e9c8b7ce5eaa4d0815dd4329132f452054b1";
 
 // examples/setup-cloudflare.ts
 const plain$2 = (s, max = 300) => plain$8(String(s ?? "")).slice(0, max);
@@ -75699,7 +75699,7 @@ async function workerBytes(c) {
 		if (bytes.length > MAX_WORKER_BYTES) throw new Error(`${SELLER_WORKER_URL} is over ${MAX_WORKER_BYTES} bytes`);
 	}
 	const sha = createHash("sha256").update(bytes).digest("hex");
-	if (sha !== "d657b868101c02e281999024215f4fc6d41c5713b8d06fb9d6459cdbc547bb3b") throw new Error(`the Worker file's SHA-256 is ${sha}, not ${SELLER_WORKER_SHA256}, the one this setup.mjs carries: it is not the Worker this version writes`);
+	if (sha !== "1bd55a19d588f9f2582fca228277e9c8b7ce5eaa4d0815dd4329132f452054b1") throw new Error(`the Worker file's SHA-256 is ${sha}, not ${SELLER_WORKER_SHA256}, the one this setup.mjs carries: it is not the Worker this version writes`);
 	return bytes;
 }
 /** The card's quote entry in the card's folder: other offers kept, the draft's marks dropped. */

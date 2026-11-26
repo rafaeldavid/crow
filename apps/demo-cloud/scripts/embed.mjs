@@ -7,7 +7,7 @@ import { existsSync, readFileSync, writeFileSync } from 'node:fs';
 
 const root = new URL('../../../', import.meta.url);
 const files = {};
-for (const f of ['spec/openapi.json', 'config/judges.yaml', 'config/judges-live.yaml']) files[f] = readFileSync(new URL(f, root), 'utf8');
+for (const f of ['spec/openapi.json', 'config/judges.yaml', 'config/judges-live.yaml', 'config/judges-live-2.yaml']) files[f] = readFileSync(new URL(f, root), 'utf8');
 const deployment = 'contracts/deployments/sepolia.json';
 if (existsSync(new URL(deployment, root))) files[deployment] = readFileSync(new URL(deployment, root), 'utf8');
 else console.warn(`no ${deployment}: a Worker with SETTLEMENT=sepolia will refuse to open its world`);

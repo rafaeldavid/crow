@@ -14,7 +14,7 @@
 // T-574: a panel is live or abstaining as a whole, chosen once when it starts (`PanelConfig.panel`). Before, each call
 // chose, so a live seat's retry after an HTTP 503 could go to the scripted judge once the budget ran out, and that
 // scripted pass counted as the second model family (T-570's red team, H2).
-import { liveJudges, liveRegistry, LIVE_REGISTRY_URI, markedFake, markerFake, missingLiveEnv, OPENAI_COMPATIBLE_BASE_URL_ENV, placeholderRegistry, type JudgeUsage, type KeptRegistry, type TestAdjudicatorOptions } from '@holdback/adjudicator';
+import { liveJudges, liveRegistry, liveRegistry2, LIVE_REGISTRY_2_URI, LIVE_REGISTRY_URI, markedFake, markerFake, missingLiveEnv, OPENAI_COMPATIBLE_BASE_URL_ENV, placeholderRegistry, type JudgeUsage, type KeptRegistry, type TestAdjudicatorOptions } from '@holdback/adjudicator';
 import { wholeNumberVar } from './limits.js';
 import type { WorldStorage } from './storage.js';
 
@@ -40,6 +40,26 @@ export const nextUtcDay = (ms: number): string => {
 /** Live judge calls a day across the whole demo, both nodes together, unless LIVE_JUDGE_CALLS_PER_DAY says otherwise (100 since Rafa, 2026-11-24; 30 before). */
 export const DEFAULT_LIVE_CALLS_PER_DAY = 100;
 const PLACEHOLDER_REGISTRY_URI = 'file:///config/judges.yaml';
+
+/**
+ * T-631, ADR-0036: the live registries this world carries, and the one new deals bind. A new default ships in two
+ * deploys: the carry deploy keeps config/judges-live.yaml as the default and carries config/judges-live-2.yaml beside
+ * it; the flip deploy sets LIVE_DEFAULT_REGISTRY to config/judges-live-2.yaml. A deal keeps the registry it bound, so
+ * both stay carried, each judged by the same live panel.
+ */
+const LIVE_REGISTRIES = {
+  'config/judges-live.yaml': { load: liveRegistry, uri: LIVE_REGISTRY_URI },
+  'config/judges-live-2.yaml': { load: liveRegistry2, uri: LIVE_REGISTRY_2_URI },
+} as const;
+export const LIVE_DEFAULT_REGISTRY: keyof typeof LIVE_REGISTRIES = 'config/judges-live-2.yaml';
+const liveDefault = () => LIVE_REGISTRIES[LIVE_DEFAULT_REGISTRY];
+/** The providers the default live registry seats: live judging needs each one's variables, or the world fails closed (T-631). */
+const liveNeed = () => [...new Set(liveDefault().load().active.map((e) => e.provider))].sort();
+/** The other live registries, each reached through `provider` (the world's panel). */
+const liveKept = (provider: JudgeProvider): KeptRegistry[] =>
+  Object.entries(LIVE_REGISTRIES)
+    .filter(([file]) => file !== LIVE_DEFAULT_REGISTRY)
+    .map(([, r]) => ({ registry: r.load(), uri: r.uri, provider }));
 
 /** One model's live calls and tokens for a day: counts only, never a prompt or a verdict (T-066). */
 export interface ModelDay {
@@ -145,11 +165,11 @@ export interface PanelConfig {
   registry: Registry;
   registryUri: string;
   /**
-   * ADR-0036: the other registries this world carries, each with a provider that reaches its models. None: the live
-   * world never carries the placeholder registry, whose "judges" are scripted fakes, or a seller could bind a deal to it
+   * ADR-0036: the other registries this world carries, each with a provider that reaches its models. A live world
+   * carries the other live registry (T-631) through its panel, and nothing else. It never carries the placeholder registry, whose "judges" are scripted fakes, or a seller could bind a deal to it
    * through its own primary and have a live Crow fallback accept the work with no model run (T-377 red team H1). And
-   * without the live keys no provider reaches the live models. So a deal bound to the other registry cannot be judged
-   * here, and the state read says so.
+   * without the live keys no provider reaches the live models. So a deal bound to the placeholder registry cannot be
+   * judged here, and the state read says so.
    */
   kept: KeptRegistry[];
   /** The live-judging variables that are missing, by name (empty when live). */
@@ -194,18 +214,18 @@ export function panelConfig(o: PanelOptions): PanelConfig {
   const perDay = o.liveCallsPerDay ?? wholeNumberVar(o.env, 'LIVE_JUDGE_CALLS_PER_DAY', DEFAULT_LIVE_CALLS_PER_DAY);
   const budget = new JudgeBudget(o.storage, perDay, o.now);
   const scripted = markedFake(markerFake());
-  const live = o.judgeProvider ? { ok: true as const, value: o.judgeProvider } : liveJudges(o.env, { onUsage: (u) => budget.usage(u) });
+  const live = o.judgeProvider ? { ok: true as const, value: o.judgeProvider } : liveJudges(o.env, { onUsage: (u) => budget.usage(u), need: liveNeed() });
   if (!live.ok && o.failClosed) {
     // All three set, yet refused: the base URL is not https (liveProvider), so name it rather than nothing (red team of PR 797, L1).
-    const unset = missingLiveEnv(o.env);
+    const unset = missingLiveEnv(o.env, liveNeed());
     const missing = unset.length ? unset : [OPENAI_COMPATIBLE_BASE_URL_ENV];
     // One line at start, names only: never a value (N222).
     console.warn(`judges fail closed: the live judge variables are incomplete (missing: ${missing.join(', ')}); Crow's adjudicators decline new judged deals and any judgment under way abstains`);
     const closed: JudgeProvider = { complete: async () => ({ kind: 'error', transport: false, detail: UNCONFIGURED_DETAIL }) };
-    return { live: false, closed: true, registry: liveRegistry(), registryUri: LIVE_REGISTRY_URI, kept: [], missing, provider: closed, budget, allowLive: false, panel: (_size, run) => run(), canRunLive: async () => false, resumesAt: () => nextUtcDay(o.now()) };
+    return { live: false, closed: true, registry: liveDefault().load(), registryUri: liveDefault().uri, kept: [], missing, provider: closed, budget, allowLive: false, panel: (_size, run) => run(), canRunLive: async () => false, resumesAt: () => nextUtcDay(o.now()) };
   }
   if (!live.ok) {
-    return { live: false, closed: false, registry: placeholderRegistry(), registryUri: PLACEHOLDER_REGISTRY_URI, kept: [], missing: missingLiveEnv(o.env), provider: scripted, budget, allowLive: false, panel: (_size, run) => run(), canRunLive: async () => true, resumesAt: () => nextUtcDay(o.now()) };
+    return { live: false, closed: false, registry: placeholderRegistry(), registryUri: PLACEHOLDER_REGISTRY_URI, kept: [], missing: missingLiveEnv(o.env, liveNeed()), provider: scripted, budget, allowLive: false, panel: (_size, run) => run(), canRunLive: async () => true, resumesAt: () => nextUtcDay(o.now()) };
   }
   const abstain: JudgeProvider = { complete: async () => ({ kind: 'error', transport: false, detail: ABSTAIN_DETAIL }) };
   const canRunLive = async (size: number) => (await budget.remaining()) >= 2 * size;
@@ -216,8 +236,8 @@ export function panelConfig(o: PanelOptions): PanelConfig {
   const cfg: PanelConfig = {
     live: true,
     closed: false,
-    registry: liveRegistry(),
-    registryUri: LIVE_REGISTRY_URI,
+    registry: liveDefault().load(),
+    registryUri: liveDefault().uri,
     kept: [],
     missing: [],
     budget,
@@ -244,5 +264,8 @@ export function panelConfig(o: PanelOptions): PanelConfig {
     canRunLive,
     resumesAt: () => nextUtcDay(o.now()),
   };
+  // T-631: the other live registries go through the same panel, so their seats are live or abstaining with it and count
+  // against the same budget.
+  cfg.kept = liveKept(cfg.provider);
   return cfg;
 }

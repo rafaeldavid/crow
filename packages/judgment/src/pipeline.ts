@@ -125,7 +125,15 @@ function resolveSeats(seats: readonly PanelSeat[], policy: PipelinePolicy, regis
     families.push(family);
   }
   if (new Set(seats.map((s) => s.judgeId)).size !== seats.length) return err('duplicate judgeId in the panel');
-  if (new Set(seats.map((s) => s.model)).size !== seats.length) return err('duplicate model ID in the panel');
+  // T-631: a panel larger than the registry seats a judge twice (selectPanel): its first seat `<id>` and its repeat
+  // `<id>:2`, the same model. Any other second seat of a model, or a third, is refused.
+  const byModel = new Map<string, string[]>();
+  for (const s of seats) byModel.set(s.model, [...(byModel.get(s.model) ?? []), s.judgeId]);
+  for (const ids of byModel.values()) {
+    if (ids.length === 1) continue;
+    const first = ids.find((id) => !id.endsWith(':2'));
+    if (ids.length > 2 || !first || !ids.includes(`${first}:2`)) return err('duplicate model ID in the panel');
+  }
   const distinct = new Set(families).size;
   if (distinct < policy.minFamilies) return err(`the panel has ${distinct} model families; the policy needs ${policy.minFamilies}`);
   return ok(families);
