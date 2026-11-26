@@ -10,16 +10,18 @@
 //   3. read each Worker's live version: its rollback target;
 //   4. deploy holdback-op1 (it defines the World Durable Object), then holdback-op2; a refused upload stops here;
 //   5. wait until /v1/status answers 200 on both nodes, then until both nodes' discovery names the deployed commit
-//      (demo.build.commit), since the World Durable Object can serve the previous version for minutes (T-370);
+//      (demo.build.commit), since the World Durable Object can serve the previous version for minutes (T-370): up to
+//      1200 s while the old commit is served, less after a run of failed reads (T-629);
 //   6. one examples/try.ts deal against both operators must end Released within 180 s;
-//   7. when a step after an upload fails, roll back each Worker whose live version changed, and exit 1;
+//   7. when a step after an upload fails, roll back each Worker whose live version changed, wait until discovery names
+//      the commit from before the upload again (T-629), and exit 1;
 //   8. print one Markdown record line for docs/operations.md, with the commit and its branch.
 // Wrangler uses the Cloudflare login of whoever runs it (its own OAuth; nothing is read from the repository). Test
 // networks only: each wrangler file's SETTLEMENT picks SimChain (chain id 31337) or Ethereum Sepolia (11155111, D41),
 // and the startup guards refuse anything else at run time. A cutover deploys the Workers one at a time instead
 // (docs/operations.md, Settlement).
 import { fileURLToPath } from 'node:url';
-import { checkout, dealGuard, finishDeploy, liveVersion, recordLine, rollback, sh, waitForCommit } from '../../../scripts/deploy-lib.mjs';
+import { checkout, dealGuard, finishDeploy, liveVersion, recordLine, rollback, sh, waitForCommit, worldAfterRollback } from '../../../scripts/deploy-lib.mjs';
 
 const NODES = ['https://api.crow.direct', 'https://api2.crow.direct'];
 const WORKERS = [
@@ -27,9 +29,14 @@ const WORKERS = [
   { name: 'holdback-op2', config: 'wrangler.op2.jsonc' },
 ];
 const STATUS_TIMEOUT_MS = 300_000;
-// The World Durable Object took about five minutes to move to a new version on 2026-11-12 (T-370), so the wait for
-// discovery to name the new commit has a longer budget of its own.
-const COMMIT_TIMEOUT_MS = 600_000;
+// The World Durable Object moves to a new version minutes after the Workers do. Measured on passing deploys: 0 s, 255 to
+// 286 s, and once 677 s (2026-11-25 06:35 UTC, docs/operations.md); on 2026-11-26 it took more than 600 s, the old
+// budget, and a good deploy failed (T-629). While discovery still names the old commit the wait goes on to this
+// ceiling; a run of failed reads ends it sooner (FAILED_READS_AFTER_NEW and FAILED_READS_WITHOUT_COMMIT, deploy-lib.mjs).
+const COMMIT_TIMEOUT_MS = 1_200_000;
+// After a rollback, the wait until discovery names the commit from before the upload again. On 2026-11-26 it named the
+// rolled-back commit for 40 to 55 minutes more; past this ceiling the record line says the World is still on it.
+const ROLLBACK_COMMIT_TIMEOUT_MS = 1_200_000;
 const SMOKE_TIMEOUT_MS = 180_000;
 
 if (process.argv.length > 2) {
@@ -49,7 +56,7 @@ if (refused) {
 }
 
 const startedAt = new Date();
-let uploaded = false, failure = null, smoke = null, served = null, guard = null;
+let uploaded = false, failure = null, smoke = null, served = null, guard = null, world;
 // ADR-0036 section 4: the one override, scoped to a recorded withdrawal; it names the version or registry hash.
 const override = process.env.HOLDBACK_DEPLOY_WITHDRAWN?.trim() || null;
 
@@ -105,10 +112,13 @@ try {
     w.rolledBack = await rollback(w.name, w.before, 'pnpm demo-cloud:deploy failed a check');
     if (!w.rolledBack) console.error(`ROLLBACK FAILED for ${w.name}. Run: npx wrangler@4.151.3 rollback ${w.before} --name ${w.name}`);
   }
+  // T-629: wrangler showing the old versions at 100% moves the front Workers only; the World Durable Object, which
+  // holdback-op1 defines, keeps running the new code until discovery names the commit from before the upload again.
+  world = await worldAfterRollback({ workers: WORKERS, worldWorker: WORKERS[0].name, before: guard?.liveCommit, nodes: NODES, ceilingMs: ROLLBACK_COMMIT_TIMEOUT_MS });
 }
 
 const against = served && !served.failure ? `, against commit \`${commit.slice(0, 7)}\` (both nodes' discovery named it ${served.seconds} s after /v1/status answered)` : '';
 const orphaned = guard?.withdrawnOrphans?.length ? ` Declined under the recorded withdrawal of ${override}: ${guard.withdrawnOrphans.map((o) => `\`${o.id}\``).join(', ')}.` : '';
 const deal = smoke?.id ? ` Smoke deal \`${smoke.id}\` ${smoke.state} in ${smoke.seconds} s${against}.` : '';
-console.log(`\nThe record line for docs/operations.md:\n\n${recordLine({ title: 'Deploy', startedAt, commit, branch, failure, workers: WORKERS, note: `${deal}${orphaned}` })}\n`);
+console.log(`\nThe record line for docs/operations.md:\n\n${recordLine({ title: 'Deploy', startedAt, commit, branch, failure, workers: WORKERS, note: `${deal}${orphaned}`, world })}\n`);
 process.exit(await finishDeploy(failure ? 1 : 0, process.argv.slice(2)));

@@ -2,13 +2,13 @@
 // (scripts/deploy-lib.mjs at the repository root), tested with plain facts. The script itself then runs in temporary git repositories whose `origin` is a local bare
 // repository, with stand-ins for pnpm and npx first on the PATH: no network, no build, no wrangler, no upload.
 import { spawnSync } from 'node:child_process';
-import { chmodSync, copyFileSync, mkdirSync, mkdtempSync, realpathSync, rmSync, writeFileSync } from 'node:fs';
+import { chmodSync, copyFileSync, mkdirSync, mkdtempSync, readFileSync, realpathSync, rmSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { dirname, join } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { afterAll, describe, expect, it } from 'vitest';
 // @ts-expect-error -- a plain ESM script without type declarations
-import { preflight, waitForCommit } from '../../../scripts/deploy-lib.mjs';
+import { dealGuard, preflight, recordLine, waitForCommit, waitForRollback, worldAfterRollback } from '../../../scripts/deploy-lib.mjs';
 
 type Facts = { command: string; branch: string; status: { code: number | null; out: string }; fetch: { code: number | null; out: string }; ancestor: { code: number | null; out: string } };
 const refusal = preflight as (facts: Facts) => string | null;
@@ -167,49 +167,235 @@ describe('pnpm demo-cloud:deploy, before the build', () => {
   });
 });
 
-describe('the deploy waits until discovery names the deployed commit (T-370)', () => {
+describe('the deploy waits until discovery names the deployed commit (T-370, T-629)', () => {
   const NEW = '8d20405af9407d37ed790a2b533d3e52728f4b0b';
   const OLD = '00be274000000000000000000000000000000000';
   const NODES = ['https://op1.test', 'https://op2.test'];
-  type Wait = (o: { nodes: string[]; commit: string; deadline: number; fetchImpl: unknown; sleep: (ms: number) => Promise<void>; now: () => number; everyMs?: number }) => Promise<{ failure: string | null; seconds: number }>;
-  const wait = waitForCommit as Wait;
-  /** A fake clock and a fetch that answers each node from a script of commits, one per read; the last repeats. */
-  function world(answers: Record<string, Array<string | null | 'error'>>) {
+  type Waited = { failure: string | null; seconds: number; last: string | null };
+  type WaitOpts = { nodes: string[]; commit: string; deadline: number; fetchImpl: unknown; sleep: (ms: number) => Promise<void>; now: () => number; everyMs?: number; readTimeoutMs?: number };
+  const wait = waitForCommit as (o: WaitOpts) => Promise<Waited>;
+  /**
+   * One read's answer: a commit, null (discovery without the field), 'error' (the connection fails), 'notjson',
+   * 'hang' (no answer until the read is aborted; the fake clock then moves 30 s, as a real read's timeout would),
+   * 'slowbody' (a 200 whose body never ends until the read is aborted; the clock moves 30 s too), or an HTTP status.
+   */
+  type Answer = string | null | 'error' | 'notjson' | 'hang' | 'slowbody' | number;
+  /** A fake clock and a fetch that answers each node from a script, one answer per read (the last repeats), or from a function of the clock. */
+  function world(answers: Record<string, Answer[] | ((t: number) => Answer)>) {
     let t = 0;
     const reads: string[] = [];
-    const fetchImpl = async (url: string) => {
+    const fetchImpl = async (url: string, init: { signal: AbortSignal }) => {
       const node = url.replace(/\/$/, '');
       reads.push(node);
-      const list = answers[node] ?? [];
-      const a = list.length > 1 ? list.shift() : list[0];
-      if (a === 'error') throw new Error('network');
+      const script = answers[node] ?? [];
+      const a = typeof script === 'function' ? script(t) : script.length > 1 ? script.shift() : script[0];
+      if (a === 'error') throw new TypeError('fetch failed');
+      const untilAborted = <T,>() =>
+        new Promise<T>((_, reject) =>
+          init.signal.addEventListener('abort', () => {
+            t += 30_000;
+            reject(init.signal.reason);
+          }),
+        );
+      if (a === 'hang') return untilAborted<Response>();
+      if (a === 'slowbody') return { ok: true, status: 200, json: () => untilAborted<unknown>() };
+      if (typeof a === 'number') return new Response('busy', { status: a });
+      if (a === 'notjson') return new Response('<html>', { status: 200 });
       return new Response(JSON.stringify({ demo: { build: { commit: a ?? null } } }), { status: 200 });
     };
-    return { reads, opts: { fetchImpl, now: () => t, sleep: async (ms: number) => void (t += ms), deadline: 600_000, nodes: NODES, commit: NEW, everyMs: 5000 } };
+    return { reads, opts: { fetchImpl, now: () => t, sleep: async (ms: number) => void (t += ms), deadline: 600_000, nodes: NODES, commit: NEW, everyMs: 5000, readTimeoutMs: 20 } };
   }
 
   it('goes on at once when both nodes already name the commit', async () => {
     const w = world({ 'https://op1.test': [NEW], 'https://op2.test': [NEW] });
-    expect(await wait(w.opts)).toEqual({ failure: null, seconds: 0 });
+    expect(await wait(w.opts)).toMatchObject({ failure: null, seconds: 0 });
     expect(w.reads).toEqual(NODES);
   });
 
   it('waits through the previous commit, a failed read and a missing field until both name it', async () => {
     const w = world({ 'https://op1.test': [OLD, 'error', null, OLD, NEW], 'https://op2.test': [NEW] });
-    expect(await wait(w.opts)).toEqual({ failure: null, seconds: 20 });
+    expect(await wait(w.opts)).toMatchObject({ failure: null, seconds: 20 });
     expect(w.reads).toEqual([...Array(5).fill('https://op1.test'), 'https://op2.test']);
   });
 
-  it('fails with the commit it saw once the deadline passes, so the deploy rolls back', async () => {
+  it('fails with the commit it saw and for how long once the deadline passes, so the deploy rolls back', async () => {
     const w = world({ 'https://op1.test': [NEW], 'https://op2.test': [OLD] });
     const r = await wait(w.opts);
-    expect(r.failure).toBe('https://op2.test still names commit 00be274 in discovery, not 8d20405, after 605 s');
+    expect(r.failure).toBe('https://op2.test did not name 8d20405 in discovery after 605 s: named 00be274 for 0 to 605 s');
+    expect(r.last).toBe(OLD);
+  });
+
+  // 2026-11-26, at 9375c7d: the last read hung during the handover, and the message said "names commit none", hiding the
+  // 590 s of reads that had named the old commit.
+  it('names the old commit and the read that timed out after it', async () => {
+    const w = world({ 'https://op1.test': (t) => (t <= 590_000 ? OLD : 'hang'), 'https://op2.test': [NEW] });
+    const r = await wait(w.opts);
+    expect(r.failure).toBe('https://op1.test did not name 8d20405 in discovery after 625 s: named 00be274 for 0 to 590 s, then 1 read timed out at 625 s');
+  });
+
+  it('names each kind of failed read in the order it came', async () => {
+    const w = world({ 'https://op1.test': [OLD, OLD, 'notjson', null, 'hang', 502, 502] });
+    const r = await wait({ ...w.opts, deadline: 60_000 });
+    expect(r.failure).toBe(
+      'https://op1.test did not name 8d20405 in discovery after 65 s: named 00be274 for 0 to 5 s, then 1 read was not JSON at 10 s, then named no commit at 15 s, then 1 read timed out at 50 s, then 3 reads answered 502 from 55 to 65 s',
+    );
+  });
+
+  it('keeps a long tally short', async () => {
+    const w = world({ 'https://op1.test': (t) => ((t / 5000) % 2 ? 'error' : OLD) });
+    const r = await wait({ ...w.opts, deadline: 100_000 });
+    expect(r.failure).toMatch(/^https:\/\/op1\.test did not name 8d20405 in discovery after 105 s: named 00be274 at 0 s, then 15 more phases, then named 00be274 at 80 s, then 1 read failed at 85 s, /);
+    expect(r.failure!.split(', then ')).toHaveLength(8);
+  });
+
+  it('waits past the 677 s measured on a passing deploy while the old commit is still served', async () => {
+    const w = world({ 'https://op1.test': (t) => (t < 1_000_000 ? OLD : NEW), 'https://op2.test': [NEW] });
+    expect(await wait({ ...w.opts, deadline: 1_200_000 })).toMatchObject({ failure: null, seconds: 1000 });
+    // the deploy's own ceilings, forward and after a rollback
+    const script = readFileSync(fileURLToPath(new URL('../scripts/deploy.mjs', import.meta.url)), 'utf8');
+    expect(script).toMatch(/^const COMMIT_TIMEOUT_MS = 1_200_000;/m);
+    expect(script).toMatch(/^const ROLLBACK_COMMIT_TIMEOUT_MS = 1_200_000;/m);
+  });
+
+  // 2026-11-26: one read hung about 30 s during the handover. Four hangs in a row (140 s) are still a handover.
+  it('waits through failed reads after the old commit, as in a handover', async () => {
+    const w = world({ 'https://op1.test': [OLD, ...Array<Answer>(4).fill('hang'), NEW], 'https://op2.test': [NEW] });
+    expect(await wait({ ...w.opts, deadline: 1_200_000 })).toMatchObject({ failure: null, seconds: 145 });
+  });
+
+  it('fails after 180 s of failed reads in a row that follow the old commit, not at the ceiling', async () => {
+    const errors = world({ 'https://op1.test': (t) => (t <= 300_000 ? OLD : 500) });
+    expect((await wait({ ...errors.opts, deadline: 1_200_000 })).failure).toBe(
+      'https://op1.test failed 36 discovery reads in a row over 180 s after it last named 00be274, after 480 s: named 00be274 for 0 to 300 s, then 36 reads answered 500 from 305 to 480 s',
+    );
+    const hangs = world({ 'https://op1.test': (t) => (t <= 300_000 ? OLD : 'hang') });
+    expect((await wait({ ...hangs.opts, deadline: 1_200_000 })).failure).toBe(
+      'https://op1.test failed 6 discovery reads in a row over 210 s after it last named 00be274, after 510 s: named 00be274 for 0 to 300 s, then 6 reads timed out from 335 to 510 s',
+    );
+  });
+
+  it('counts a read that times out while the body arrives as timed out', async () => {
+    const w = world({ 'https://op1.test': [OLD, 'slowbody'] });
+    expect((await wait({ ...w.opts, deadline: 30_000 })).failure).toBe('https://op1.test did not name 8d20405 in discovery after 35 s: named 00be274 at 0 s, then 1 read timed out at 35 s');
+  });
+
+  // A World deployed by hand without --var BUILD_COMMIT answers discovery with no commit: it answered, like an old commit.
+  it('waits through a World that answers with no commit, as through the old commit', async () => {
+    const w = world({ 'https://op1.test': (t) => (t < 300_000 ? null : NEW), 'https://op2.test': [NEW] });
+    expect(await wait({ ...w.opts, deadline: 1_200_000 })).toMatchObject({ failure: null, seconds: 300 });
+  });
+
+  it('starts the count of failed reads again after a read that names a commit', async () => {
+    const w = world({ 'https://op1.test': [NEW], 'https://op2.test': [503, 503, 503, 503, 503, OLD, 503, 503, 503, 503, 503, NEW] });
+    expect(await wait({ ...w.opts, deadline: 1_200_000 })).toMatchObject({ failure: null, seconds: 55 });
+  });
+
+  it('fails fast after 6 failed reads in a row once the new commit has appeared', async () => {
+    const six = world({ 'https://op1.test': [NEW], 'https://op2.test': [503, 503, 503, 503, 503, 503, NEW] });
+    const r = await wait({ ...six.opts, deadline: 1_200_000 });
+    expect(r.failure).toBe('https://op2.test failed 6 discovery reads in a row after 8d20405 first appeared, after 25 s: 6 reads answered 503 from 0 to 25 s');
+    const five = world({ 'https://op1.test': [NEW], 'https://op2.test': [503, 503, 503, 503, 503, NEW] });
+    expect(await wait({ ...five.opts, deadline: 1_200_000 })).toMatchObject({ failure: null, seconds: 25 });
+  });
+
+  it('fails fast after 12 failed reads in a row when no read has named a commit', async () => {
+    const w = world({ 'https://op1.test': ['error'] });
+    const r = await wait({ ...w.opts, deadline: 1_200_000 });
+    expect(r.failure).toBe('https://op1.test failed 12 discovery reads in a row and no read named a commit, after 55 s: 12 reads failed from 0 to 55 s');
+    expect(w.reads).toHaveLength(12);
+    expect(r.last).toBeNull();
   });
 
   it('refuses to wait without a commit to look for', async () => {
     const w = world({});
     expect((await wait({ ...w.opts, commit: '' })).failure).toMatch(/no commit to look for/);
     expect(w.reads).toEqual([]);
+  });
+
+  describe('after a rollback (T-629)', () => {
+    type World = { status: 'back' | 'behind' | 'unknown'; before: string | null; commit: string | null; seconds: number; failure: string | null };
+    const back = waitForRollback as (o: Omit<WaitOpts, 'commit'> & { before: string | null | undefined }) => Promise<World>;
+    type Worker = { name: string; version?: string; before?: string; rolledBack?: boolean };
+    const line = recordLine as (r: { title: string; startedAt: Date; commit: string; branch?: string; failure: string | null; workers: Worker[]; note?: string; world?: World }) => string;
+    const workers: Worker[] = [
+      { name: 'holdback-op1', version: 'v-new-1', before: 'v-old-1', rolledBack: true },
+      { name: 'holdback-op2', version: 'v-new-2', before: 'v-old-2', rolledBack: true },
+    ];
+    const facts = { title: 'Deploy', startedAt: new Date('2026-11-26T07:29:00Z'), commit: NEW, branch: '', failure: 'the smoke deal did not end Released within 180 s', workers };
+
+    // 2026-11-26: wrangler showed the old versions at 100%, and discovery named the new commit for 40 to 55 minutes more.
+    it('says the World is still on the new commit while discovery names it', async () => {
+      const w = world({ 'https://op1.test': [NEW], 'https://op2.test': [NEW] });
+      const r = await back({ ...w.opts, before: OLD, deadline: 1_200_000 });
+      expect(r).toMatchObject({ status: 'behind', before: OLD, commit: NEW, seconds: 1205 });
+      const text = line({ ...facts, world: r });
+      expect(text).toContain('holdback-op1 `v-new-1` (rollback target `v-old-1`), holdback-op2 `v-new-2` (rollback target `v-old-2`); front Workers rolled back; World still on `8d20405` after 1205 s.');
+      expect(text).not.toContain(', rolled back');
+    });
+
+    it('says rolled back once discovery names the commit from before the deploy again', async () => {
+      const w = world({ 'https://op1.test': [NEW, NEW, NEW, OLD], 'https://op2.test': [OLD] });
+      const r = await back({ ...w.opts, before: OLD, deadline: 1_200_000 });
+      expect(r).toMatchObject({ status: 'back', commit: OLD, seconds: 15, failure: null });
+      expect(line({ ...facts, world: r })).toContain('holdback-op1 `v-new-1` (rollback target `v-old-1`, rolled back), holdback-op2 `v-new-2` (rollback target `v-old-2`, rolled back); discovery named `00be274` again 15 s after the rollback.');
+    });
+
+    it('says the World was not checked when the commit from before the deploy is unknown', async () => {
+      const w = world({ 'https://op1.test': [NEW] });
+      const r = await back({ ...w.opts, before: null, deadline: 1_200_000 });
+      expect(r).toMatchObject({ status: 'unknown', seconds: 0 });
+      expect(w.reads).toEqual([]);
+      const text = line({ ...facts, world: r });
+      expect(text).toContain('; front Workers rolled back; World not checked: the commit live before the deploy is unknown.');
+      expect(text).not.toContain(', rolled back');
+    });
+
+    describe('whether the deploy waits for the World (it lives in holdback-op1)', () => {
+      const after = worldAfterRollback as (o: Omit<WaitOpts, 'commit' | 'deadline'> & { workers: Worker[]; worldWorker: string; before: string | null; ceilingMs: number; log: (s: string) => void }) => Promise<World | undefined>;
+      const run = async (rolled: Array<boolean | undefined>, before: string | null = OLD) => {
+        const w = world({ 'https://op1.test': [NEW], 'https://op2.test': [NEW] });
+        const logged: string[] = [];
+        const ws = workers.map((x, i) => ({ ...x, rolledBack: rolled[i] }));
+        const r = await after({ ...w.opts, workers: ws, worldWorker: 'holdback-op1', before, ceilingMs: 1_200_000, log: (s) => logged.push(s) });
+        return { r, reads: w.reads, logged, ws };
+      };
+
+      it('waits when holdback-op1 rolled back, even if holdback-op2 did not, and names one front Worker', async () => {
+        const { r, reads, logged, ws } = await run([true, false]);
+        expect(r).toMatchObject({ status: 'behind', commit: NEW, seconds: 1205 });
+        expect(reads.length).toBeGreaterThan(0);
+        expect(logged).toEqual(['Waiting up to 1200 s for discovery to name 00be274 again.', expect.stringMatching(/^WORLD NOT BACK: https:\/\/op1\.test did not name 00be274/)]);
+        expect(line({ ...facts, workers: ws, world: r })).toContain('holdback-op1 `v-new-1` (rollback target `v-old-1`), holdback-op2 `v-new-2` (rollback target `v-old-2`, ROLLBACK FAILED); front Worker rolled back; World still on `8d20405` after 1205 s.');
+      });
+
+      it('does not wait when holdback-op1 was not rolled back', async () => {
+        for (const rolled of [[false, true], [undefined, true], [undefined, undefined]]) {
+          const { r, reads, logged } = await run(rolled);
+          expect(r).toBeUndefined();
+          expect(reads).toEqual([]);
+          expect(logged).toEqual([]);
+        }
+      });
+
+      it('says the World was not checked, and does not say it waits, without the commit from before the deploy', async () => {
+        const { r, reads, logged } = await run([true, true], null);
+        expect(r).toMatchObject({ status: 'unknown' });
+        expect(reads).toEqual([]);
+        expect(logged).toEqual(['World not checked: the commit live before the deploy is unknown.']);
+      });
+    });
+
+    it('leaves the line of a deploy without a World as it was', () => {
+      expect(line(facts)).toContain('holdback-op1 `v-new-1` (rollback target `v-old-1`, rolled back), holdback-op2 `v-new-2` (rollback target `v-old-2`, rolled back).');
+    });
+
+    it('takes the commit from before the deploy from the deal guard', async () => {
+      const guard = dealGuard as (o: { node: string; root: string; hashOf: (p: unknown) => string; run: unknown; fetchImpl: unknown }) => Promise<{ refused: string | null; liveCommit: string | null }>;
+      const fetchImpl = async (url: string) => (url === 'https://op1.test/' ? new Response(JSON.stringify({ demo: { build: { commit: OLD } } })) : new Response('down', { status: 503 }));
+      const run = async () => ({ code: 128, stdout: '', out: `fatal: path 'apps/adjudicator/src/kept-policies.json' does not exist in '${OLD}'` });
+      const r = await guard({ node: 'https://op1.test', root: fileURLToPath(new URL('../../../', import.meta.url)), hashOf: () => '0x', run, fetchImpl });
+      expect(r).toMatchObject({ refused: null, liveCommit: OLD });
+    });
   });
 });
 
