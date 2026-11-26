@@ -65,6 +65,7 @@ Measured on this machine on 2026-11-26, Node 22.23.4, anvil and forge 1.0.0, unl
   - M1 (a regression of this change, measured by the red team on SimChain and anvil): `setup.mjs first-deal` waited 2 minutes and failed after a release at a price of 0, whose postings name no payee. `payeeOf` now holds the signed terms' payout address to the answer there;
   - L2: an early accept's postings must pay exactly the price to the payout address and exactly the rest to the payment address.
   After the fixes and the rebuild: the six affected files with anvil, 131 of 131 passed; `pnpm lint` and `node site/check.mjs` passed [measured].
+- **`/verify`, kind 5, at `0fc83f2a` [measured]:** `packages/settlement/evm` on anvil, 25 files, 327 of 327 passed; `pnpm typecheck` passed; `pnpm snap` 73 passed, 0 failed, no snapshot diff; `pnpm validate:spec` passed. Full `pnpm verify` not run (it is for deploys).
 
 ## Decisions
 
