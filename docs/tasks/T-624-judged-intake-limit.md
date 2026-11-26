@@ -5,7 +5,7 @@
 - **Depends on:** T-613 (PR 818, where the red team found this), T-607 (PR 807, the charged run), T-614 (PR 821, the long-string rule)
 - **Paths this task may touch:** `packages/judgment/src/intake.ts`, `packages/judgment/src/normalize.ts` (the memo, red team H2) and a new `normalize.test.ts`, `packages/judgment/src/references.ts`, the reference-size line of `readReference` in `packages/judgment/src/checks/index.ts`, their tests, the tests that relied on 10 MiB deliveries (`pipeline.test.ts`, `preflight.test.ts`, `redteam.test.ts`, `references.test.ts`), a new test `packages/judgment/src/heap.test.ts`, `packages/judgment/scripts/mutants.mjs` (one mutant's text), `apps/operator/src/server.ts` (one discovery field) and its test, `apps/demo-cloud/src/world.test.ts`, `spec/openapi/paths.json` and the generated `spec/openapi.json`, `examples/check-terms.ts` and its test, `examples/check-delivery.test.ts` (one test's delivery size), `site/ref/limits.txt`, `site/ref/http-seller.txt`, `site/ref/checks.txt`, `docs/api.md`, `docs/judgment-and-defenses.md` (T17), the rebuilt bundles under `site/`, `docs/decisions-today.md` (D108), this file
 - **Human gate:** no. A deploy of the operators or the site waits for Rafa.
-- **Status:** review
+- **Status:** done
 - **Agent/session:** heap-bound, 2026-11-25
 - **Roadmap row:** none; finding 2 of the private triage note `roadmap/triage/2026-11-25-terms-nesting-and-heap-bound.md`
 
