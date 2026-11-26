@@ -7,14 +7,15 @@
 %% T-543: "The person's own work" is the template path; its bytes came from the check's and the status's descriptions, which each command's own lines carry.
 %% T-486 (D76): "The list" is the setup's listing step. Its four sentences on what an entry means are the command's own (examples/setup-list.ts, ENTRY_MEANS).
 %% T-612: the `work/` lines took bytes from wording only, here and in five other places.
-One page for an AI assistant whose person said: "Read https://crow.direct/setup.txt and set up Crow for me as a seller." One pinned file, `setup.mjs`, makes one folder on this machine, checks it, asks once for the person's website and sells one job to Crow's test buyer. This version sets up a seller; a buyer starts at https://crow.direct/buy.txt.
+%% T-628: the command names no product and the seller's line leads with the person's own work, with the template's shape, so no bare `seller` or `status` call comes first; `publish` has its own paragraph and needs no other page. Bytes came from the folder's list, now one sentence, the `kept` field, which publish's own line carries, and five phrases of wording.
+One page for an AI assistant whose person said: "Read https://crow.direct/setup.txt and set up Crow for me as a seller." One pinned file, `setup.mjs`, makes one folder on this machine, asks once for the person's website and sells one job to Crow's test buyer. This version sets up a seller; a buyer starts at https://crow.direct/buy.txt.
 
 ## What this is
 
 - **Test tokens only.** Deals settle on Ethereum Sepolia in tUSDC, a test token worth nothing.
 - **Every deal on the live service is public.** Anyone can read a deal's whole terms, every address included. The delivered work stays encrypted.
 - **No fee in the pilots.** Crow's API is free for the first pilots; discovery states any fee as `fees.operator`.
-- **No account.** The setup asks for no email, name, key or password. It asks for one thing, the person's website, and the person can decline ("The list", below).
+- **No account.** The setup asks for no email, name, key or password. It asks for one thing, the person's website, and the person can decline.
 
 ## Rules for every step
 
@@ -32,23 +33,17 @@ First ask the person: "Where are you paid?" The answer is an address whose key i
 {{SETUP_COMMAND}}
 ```
 
-Add `--payout <address>` or `--payout this-key` at the end. Without it the command makes nothing and exits 3. Needs Node 22.18+ and curl; installs nothing (`cloudflare --key` and `leave` run Wrangler 4.151.3, installed first). It keeps `setup.mjs` in `~/.crow` only if its SHA-256 matches the command's. Every later command names that file: `node ~/.crow/setup.mjs`.
+Add `--template <file> --file <path>` with absolute paths, or `--sample` to practise on Crow's sample (`squares.csv`, 1 tUSDC), then `--payout <address>` or `--payout this-key`. A folder sells one kind for good. Without both it makes nothing and exits 3. Needs Node 22.18+ and curl; installs nothing (`cloudflare --key` and `leave` install Wrangler 4.151.3). It keeps `setup.mjs` in `~/.crow` only if its SHA-256 matches the command's. Every later command names that file: `node ~/.crow/setup.mjs`.
 
 ## As a seller
 
-`node ~/.crow/setup.mjs seller --sample --payout <answer>` makes `~/.crow/seller`:
-
-- `keys/signing.key`, mode 0600 in a folder of mode 0700: the signing key, made here; the command never prints it.
-- `adapter.json`: the adapter's configuration; a fresh key derived from the signing key signs each deal.
-- `template.json`, the deal template, and `crow.json`, the state.
-- A draft card in `~/.crow/seller-card`.
+`node ~/.crow/setup.mjs seller --template <file> --file <path> --payout <answer>` makes `~/.crow/seller`; nothing runs before it. The template is JSON: `price` (base units: 5000000 is 5.00 tUSDC), `deliverable` (`kind`, `description`, `format`), declarative `checks` and an optional `deliverWithinSec`. `--file` is finished work, delivered once a deal is funded. The folder holds `keys/signing.key` (mode 0600, made here, never printed), `adapter.json` (a fresh key derived from the signing key signs each deal), `template.json` and `crow.json`, the state; the draft card is in `~/.crow/seller-card`.
 
 It sends nothing, takes only an empty folder, and refuses one in a git work tree or a synced folder, naming the flag that overrides each; it knows common names only. A rerun after a stop continues with no second key. It ends with the check, `"ok": true` on each line.
 
-`check` runs that check alone. `status` prints the folder's state and open deals.
+**Work not yet done.** Without `--file`, `first-deal` makes no `work/` and exits 0 at `"state": "Held"` with `workPath` and `deliverBy`: `mkdir -p` its folder and put the work there. Done sooner: `mkdir -p work` in the folder, save `work/ready.<csv|json|txt|md>`; `seller --template` without `--file` deletes it. `deliver` delivers the folder's funded deals (exit 4: work is due); `deliver --schedule` prints a 5-minute scheduler entry. Each delivers only work that passes the agreed checks; `check --work <file>` tests a sample.
 
-The sample: `squares.csv`, 1 tUSDC.
-**The person's own work.** `seller --template <file>` sells the work a JSON file names (`seller` alone prints its shape). `--file <path>` adds finished work, delivered once the deal is funded. Without it `first-deal` makes no `work/` and exits 0 at `"state": "Held"` with `workPath` and `deliverBy`: `mkdir -p` its folder and put the work there. Done sooner: `mkdir -p work` in the folder, save `work/ready.<csv|json|txt|md>`; `seller --template` without `--file` deletes it. `deliver` delivers the folder's funded deals (exit 4: work is due); `deliver --schedule` prints a 5-minute scheduler entry. Each delivers only work that passes the agreed checks; `check --work <file>` tests a sample. `publish` shows a standing offer, sends nothing and exits 3; on the person's yes, run it with its printed `approve` flags. `--offer-id` names it (default `seller`; buyers type it). `"kept": true` means the folder's live template stands as signed (`--replace` signs the current one); `false`, a new one was signed. It needs no ETH, writes the marker as `first-deal` does, and the card entry. More: https://crow.direct/sell.txt.
+**A standing offer.** `publish` shows one, sends nothing and exits 3; on the person's yes, run it with its printed `approve` flags. `--offer-id` names it (default `seller`; buyers type it). `--replace` signs anew over a kept template. It needs no ETH (the first take deploys the seller contract), writes the marker as `first-deal` does and the card, and its last line says where the card goes. Publishing needs nothing more.
 
 **Work shaped by each buyer** needs a program per quote: `cloudflare` puts one on the person's Cloudflare account. Ask which account and address; never pick. `--open` lets anyone start jobs and spend faucet grants. The person logs in, deploys and types the API key at Wrangler's prompt. Nobody sees the Worker's key again, but the login can replace it or deploy code reading it: log Wrangler out after, or limits hold only as you keep them. Cloudflare names the zone to hosts it calls (inferred). Then `check --published <URL>`; `leave` ends it.
 
@@ -106,4 +101,4 @@ Sources: `examples/setup.ts` and files beside it, https://github.com/rafaeldavid
 
 ## Not in this version
 
-A buyer's setup; a command that removes the folder. This version registers nothing at Crow but the website `list` sends. To stop, run `leave` if a Worker runs, then delete the folder once `status` shows no open deal. That deletes the key too: with a `this-key` payout, move the tokens at that address first. Past deals stay public on the operators and on Sepolia.
+A command that removes the folder. This version registers nothing at Crow but the website `list` sends. To stop, run `leave` if a Worker runs, then delete the folder once `status` shows no open deal. That deletes the key too: with a `this-key` payout, move the tokens at that address first. Past deals stay public on the operators and on Sepolia.

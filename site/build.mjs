@@ -610,11 +610,12 @@ export function serveInstallWindows(sha = serveSha256()) {
  * The setup's one command (T-472), which setup.txt carries as {{SETUP_COMMAND}}: setup.mjs from the site into ~/.crow,
  * downloaded as setup.mjs.part and moved to setup.mjs only when its sha256 is the pinned one, as goalCommand does, so
  * a file that fails the check is never setup.mjs; then the seller's first step. No npm: the file carries its packages.
- * The assistant adds `--payout <address>` or `--payout this-key` when the person has answered; without it the step
- * prints the question and exits 3.
+ * The assistant adds what the folder sells (`--template <file> --file <path>`, or `--sample`) and `--payout <address>`
+ * or `--payout this-key` when the person has answered; without them the step prints the questions and exits 3. The
+ * command names no product (T-628): a cold seller that ran it as written sold Crow's sample, not its own work.
  */
 export function setupCommand(sha = setupSha256()) {
-  return `mkdir -p ~/.crow && cd ~/.crow && curl -fsSL ${SETUP_MJS_URL} -o setup.mjs.part && echo "${sha}  setup.mjs.part" | shasum -a 256 -c && mv setup.mjs.part setup.mjs && node setup.mjs seller --sample`;
+  return `mkdir -p ~/.crow && cd ~/.crow && curl -fsSL ${SETUP_MJS_URL} -o setup.mjs.part && echo "${sha}  setup.mjs.part" | shasum -a 256 -c && mv setup.mjs.part setup.mjs && node setup.mjs seller`;
 }
 
 /**
