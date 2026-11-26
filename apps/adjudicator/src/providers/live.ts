@@ -47,6 +47,8 @@ export interface LiveOptions {
   maxOutputTokens?: number;
   /** Called once per answered call with the provider's token counts. */
   onUsage?: (usage: JudgeUsage) => void;
+  /** T-632: called once per call that gave no verdict, with a code from a closed list (never provider text or a key). */
+  onError?: (error: JudgeCallError) => void;
   /** For tests. Default: the global fetch. */
   fetch?: typeof fetch;
 }
@@ -59,31 +61,53 @@ export const providerModelId = (model: string): string => model.replace(/@\d{4}-
 
 const count = (v: unknown): number => (typeof v === 'number' && Number.isSafeInteger(v) && v >= 0 ? v : 0);
 
+/**
+ * T-632: why a live call gave no verdict, as a code from a closed list, so a seat's failure can be counted and logged
+ * without provider text, a prompt or a key: network (the request never got an answer), redirect (a 3xx, refused and
+ * not followed), http_<status>, blocked (the provider refused the prompt), stopped (it stopped the answer for a reason
+ * other than finishing), no_text (an answer with no verdict text).
+ */
+export type JudgeCallErrorCode = 'network' | 'redirect' | `http_${number}` | 'blocked' | 'stopped' | 'no_text';
+export interface JudgeCallError {
+  provider: LiveProviderName;
+  /** The registry's model ID (with its @date suffix). */
+  model: string;
+  code: JudgeCallErrorCode;
+}
+
+type Who = { provider: LiveProviderName; model: string };
+
 async function post(
   o: LiveOptions,
   url: string,
   headers: Record<string, string>,
   body: unknown,
-  read: (json: unknown) => { text: string | undefined; usage: [number, number]; refused?: string },
-  usage: (input: number, output: number) => void,
+  read: (json: unknown) => { text: string | undefined; usage: [number, number]; refused?: 'blocked' | 'stopped'; detail?: string },
+  who: Who,
 ): Promise<JudgeResponse> {
+  const fail = (code: JudgeCallErrorCode, transport: boolean, detail: string): JudgeResponse => {
+    o.onError?.({ ...who, code });
+    return { kind: 'error', transport, detail };
+  };
   let res: Response;
   try {
-    // T-631 red team L3: never follow a redirect, which would resend the key header to another host.
-    res = await (o.fetch ?? fetch)(url, { method: 'POST', redirect: 'error', headers: { 'content-type': 'application/json', ...headers }, body: JSON.stringify(body) });
+    // T-631 red team L3: never follow a redirect, which would resend the key header to another host. T-632: "manual",
+    // not "error": the Workers runtime throws on "error" (measured), which failed every live call on the operators.
+    // With "manual" a 3xx comes back as the response, and it is refused below.
+    res = await (o.fetch ?? fetch)(url, { method: 'POST', redirect: 'manual', headers: { 'content-type': 'application/json', ...headers }, body: JSON.stringify(body) });
   } catch {
-    return { kind: 'error', transport: true, detail: 'network error' };
+    return fail('network', true, 'network error');
   }
-  if (res.status === 429 || res.status >= 500) return { kind: 'error', transport: true, detail: `HTTP ${res.status}` };
-  if (!res.ok) return { kind: 'error', transport: false, detail: `HTTP ${res.status}` };
+  if (res.type === 'opaqueredirect' || (res.status >= 300 && res.status < 400)) return fail('redirect', false, `HTTP ${res.status}: redirect refused`);
+  if (res.status === 429 || res.status >= 500) return fail(`http_${res.status}`, true, `HTTP ${res.status}`);
+  if (!res.ok) return fail(`http_${res.status}`, false, `HTTP ${res.status}`);
   const r = read(await res.json().catch(() => undefined));
-  usage(...r.usage);
-  if (r.refused) return { kind: 'error', transport: false, detail: r.refused };
-  return r.text === undefined || r.text === '' ? { kind: 'error', transport: false, detail: 'no text in the response' } : { kind: 'ok', text: r.text };
+  o.onUsage?.({ ...who, inputTokens: r.usage[0], outputTokens: r.usage[1] });
+  if (r.refused) return fail(r.refused, false, r.detail ?? r.refused);
+  return r.text === undefined || r.text === '' ? fail('no_text', false, 'no text in the response') : { kind: 'ok', text: r.text };
 }
 
 const cap = (o: LiveOptions) => o.maxOutputTokens ?? LIVE_MAX_OUTPUT_TOKENS;
-const report = (o: LiveOptions, provider: LiveProviderName, model: string) => (inputTokens: number, outputTokens: number) => o.onUsage?.({ provider, model, inputTokens, outputTokens });
 
 // Current Claude models accept only the default sampling parameters (a temperature of 0 is a 400), so none is
 // sent; effort low keeps adaptive thinking inside the output cap.
@@ -98,7 +122,7 @@ const anthropic = (key: string, o: LiveOptions): JudgeProvider => ({
         const b = j as { content?: Array<{ type?: string; text?: string }>; usage?: { input_tokens?: unknown; output_tokens?: unknown } } | undefined;
         return { text: b?.content?.filter((c) => c.type === 'text').map((c) => c.text ?? '').join(''), usage: [count(b?.usage?.input_tokens), count(b?.usage?.output_tokens)] };
       },
-      report(o, 'anthropic', r.model),
+      { provider: 'anthropic', model: r.model },
     ),
 });
 
@@ -118,7 +142,7 @@ const openaiCompatible = (key: string, baseUrl: string, o: LiveOptions): JudgePr
         const b = j as { choices?: Array<{ message?: { content?: string } }>; usage?: { prompt_tokens?: unknown; completion_tokens?: unknown } } | undefined;
         return { text: b?.choices?.[0]?.message?.content, usage: [count(b?.usage?.prompt_tokens), count(b?.usage?.completion_tokens)] };
       },
-      report(o, 'openai-compatible', r.model),
+      { provider: 'openai-compatible', model: r.model },
     ),
 });
 
@@ -148,12 +172,12 @@ const google = (key: string, o: LiveOptions): JudgeProvider => ({
         // T-631 red team L2: a blocked prompt, or a candidate stopped for any reason but STOP (safety, recitation, the
         // output cap), is never a verdict, whatever text it carries. The reason is the provider's word: a fixed label.
         const c = b?.candidates?.[0];
-        if (b?.promptFeedback?.blockReason !== undefined) return { text: undefined, usage, refused: 'the provider blocked the prompt' };
-        if (c?.finishReason !== undefined && c.finishReason !== 'STOP') return { text: undefined, usage, refused: `the provider stopped the answer (${String(c.finishReason).replace(/[^A-Z_]/g, '').slice(0, 32)})` };
+        if (b?.promptFeedback?.blockReason !== undefined) return { text: undefined, usage, refused: 'blocked', detail: 'the provider blocked the prompt' };
+        if (c?.finishReason !== undefined && c.finishReason !== 'STOP') return { text: undefined, usage, refused: 'stopped', detail: `the provider stopped the answer (${String(c.finishReason).replace(/[^A-Z_]/g, '').slice(0, 32)})` };
         const parts = c?.content?.parts?.filter((p) => p.thought !== true && typeof p.text === 'string');
         return { text: parts?.map((p) => p.text as string).join(''), usage };
       },
-      report(o, 'google', r.model),
+      { provider: 'google', model: r.model },
     ),
 });
 

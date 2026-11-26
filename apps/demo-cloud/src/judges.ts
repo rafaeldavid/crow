@@ -14,7 +14,7 @@
 // T-574: a panel is live or abstaining as a whole, chosen once when it starts (`PanelConfig.panel`). Before, each call
 // chose, so a live seat's retry after an HTTP 503 could go to the scripted judge once the budget ran out, and that
 // scripted pass counted as the second model family (T-570's red team, H2).
-import { liveJudges, liveRegistry, liveRegistry2, LIVE_REGISTRY_2_URI, LIVE_REGISTRY_URI, markedFake, markerFake, missingLiveEnv, OPENAI_COMPATIBLE_BASE_URL_ENV, placeholderRegistry, type JudgeUsage, type KeptRegistry, type TestAdjudicatorOptions } from '@holdback/adjudicator';
+import { liveJudges, liveRegistry, liveRegistry2, LIVE_REGISTRY_2_URI, LIVE_REGISTRY_URI, markedFake, markerFake, missingLiveEnv, OPENAI_COMPATIBLE_BASE_URL_ENV, placeholderRegistry, type JudgeCallError, type JudgeUsage, type KeptRegistry, type TestAdjudicatorOptions } from '@holdback/adjudicator';
 import { wholeNumberVar } from './limits.js';
 import type { WorldStorage } from './storage.js';
 
@@ -66,6 +66,8 @@ export interface ModelDay {
   calls: number;
   input: number;
   output: number;
+  /** T-632: calls that gave no verdict, by code (JudgeCallError): counts only, never provider text. */
+  errors?: Record<string, number>;
 }
 
 interface Day {
@@ -78,7 +80,7 @@ interface Day {
 }
 
 /** A copy that shares no object with the live day, `byModel` included. */
-const copyDay = (d: Day): Day => ({ ...d, byModel: Object.fromEntries(Object.entries(d.byModel ?? {}).map(([k, v]) => [k, { ...v }])) });
+const copyDay = (d: Day): Day => ({ ...d, byModel: Object.fromEntries(Object.entries(d.byModel ?? {}).map(([k, v]) => [k, { ...v, ...(v.errors ? { errors: { ...v.errors } } : {}) }])) });
 
 /** Today's live calls and tokens, kept in world storage under `lj:<UTC date>`. */
 export class JudgeBudget {
@@ -147,6 +149,21 @@ export class JudgeBudget {
     this.dirty = true;
   }
 
+  /**
+   * T-632: counts a live call that gave no verdict under its model and code, and logs one line (names and the code
+   * only). Before, a failed seat left no trace but the call count: every seat failed for an hour after the flip, and
+   * the records said only "error".
+   */
+  error(e: JudgeCallError): void {
+    console.warn(`judge call failed: ${e.provider} ${e.model} ${e.code}`);
+    if (!this.today) return;
+    const byModel = (this.today.byModel ??= {});
+    const m = (byModel[e.model] ??= { calls: 0, input: 0, output: 0 });
+    const errors = (m.errors ??= {});
+    errors[e.code] = (errors[e.code] ?? 0) + 1;
+    this.dirty = true;
+  }
+
   async flush(): Promise<void> {
     if (!this.dirty || !this.today) return;
     this.dirty = false;
@@ -205,6 +222,8 @@ export interface PanelOptions {
   liveCallsPerDay?: number;
   /** N222: fail closed, not scripted, when the live variables are incomplete. The world sets it for every chain world. */
   failClosed?: boolean;
+  /** The fetch the live providers call (tests: a stand-in that behaves like the Workers runtime, T-632). Default: the global fetch. */
+  fetch?: typeof fetch;
 }
 
 /** Live when a stand-in is given or all three model variables are set; otherwise scripted, or closed with `failClosed` (N222). */
@@ -214,7 +233,7 @@ export function panelConfig(o: PanelOptions): PanelConfig {
   const perDay = o.liveCallsPerDay ?? wholeNumberVar(o.env, 'LIVE_JUDGE_CALLS_PER_DAY', DEFAULT_LIVE_CALLS_PER_DAY);
   const budget = new JudgeBudget(o.storage, perDay, o.now);
   const scripted = markedFake(markerFake());
-  const live = o.judgeProvider ? { ok: true as const, value: o.judgeProvider } : liveJudges(o.env, { onUsage: (u) => budget.usage(u), need: liveNeed() });
+  const live = o.judgeProvider ? { ok: true as const, value: o.judgeProvider } : liveJudges(o.env, { onUsage: (u) => budget.usage(u), onError: (e) => budget.error(e), need: liveNeed(), ...(o.fetch ? { fetch: o.fetch } : {}) });
   if (!live.ok && o.failClosed) {
     // All three set, yet refused: the base URL is not https (liveProvider), so name it rather than nothing (red team of PR 797, L1).
     const unset = missingLiveEnv(o.env, liveNeed());

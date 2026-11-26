@@ -88,9 +88,12 @@ describe('attack.gemini-key-leak: the key never leaves the header', () => {
 
   it('a redirect is refused, so the key header is never resent to another host (fixed: T-631 red team L3)', async () => {
     // fetch follows redirects by default and resends custom headers (x-goog-api-key, like x-api-key) across origins.
-    const { fetch, inits } = stub({ candidates: [{ content: { parts: [{ text: VERDICT }] } }] });
-    await gemini(fetch).complete(req());
-    expect(inits[0]!.redirect).toBe('error');
+    // T-632: "manual", not "error", which the Workers runtime refuses; the 3xx comes back and is refused, unfollowed.
+    const { fetch, inits } = stub({ candidates: [{ content: { parts: [{ text: VERDICT }] } }] }, 302);
+    const res = await gemini(fetch).complete(req());
+    expect(inits[0]!.redirect).toBe('manual');
+    expect(inits).toHaveLength(1);
+    expect(res).toMatchObject({ kind: 'error', transport: false });
   });
 });
 
