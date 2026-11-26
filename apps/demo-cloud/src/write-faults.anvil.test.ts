@@ -5,11 +5,13 @@
 // No network and no secret. Needs `anvil` on PATH and `forge build` output.
 import { createServer, type Server } from 'node:http';
 import type { AddressInfo } from 'node:net';
-import { canonicalKeccak } from '@holdback/core';
-import { LiveChain, type DeploymentFile, type EvmSettlement } from '@holdback/settlement/live';
+import { canonicalKeccak, commitmentId, encodeStandingSignature, holdbackDomain, signTerms, TAKE, takeTerms, templateDigest, templateFrom, type Address, type CommitmentTerms, type TakeFill, type Timestamp } from '@holdback/core';
+import { CREATE2_DEPLOYER, LiveChain, standingSellerAddress, type DeploymentFile, type EvmSettlement } from '@holdback/settlement/live';
 import { EvmWorld } from '@holdback/settlement/evm';
-import type { Hex } from 'viem';
+import { keccak256, stringToBytes, type Hex } from 'viem';
+import { privateKeyToAccount } from 'viem/accounts';
 import { afterAll, beforeAll, describe, expect, it, vi } from 'vitest';
+import { publicOfferTerms } from '../../../examples/verify.ts';
 import { deploymentOf, lc, party, PRICE, ready, RELAYER, root, serve, sleep, untilBoth, type J } from '../test/anvil.ts';
 import { MemoryStorage, PublicWorld } from './index.js';
 
@@ -247,6 +249,68 @@ describe.skipIf(!ready)(`operator writes over an RPC that fails a read (anvil; T
     expect(again.body.escrowState).toBe('Held');
     expect(await nonce()).toBe(before + 1);
   }, 90_000);
+
+  // T-630 (N232): the 500s outside clients met on 2026-11-25 were on a standing offer's first take, whose funding reads
+  // more than a plain deal's: the seller contract's code, its runtime from the creation code, and the deployment's gas.
+  it("funds a standing offer's first take when each read on the deployment path fails once", async () => {
+    const [primary, fallback, appeal] = discovery.demo.adjudicators.map((a: J) => a.address as string);
+    const [b, s] = [party(demo.urls, deployment), party(demo.urls, deployment)];
+    const key = s.agent.address as Address;
+    const seller = lc(standingSellerAddress(key)) as Address;
+    expect(await anvil.publicClient.getCode({ address: seller })).toBe(undefined);
+    await b.agent.call('POST', '/v1/faucet', { address: b.agent.address });
+    // The faucet admits the seller contract by mandate, so this operator deploys it; its tokens go to the buyer.
+    await b.agent.call('POST', '/v1/faucet', { address: seller, paymentAddress: b.agent.address });
+    const token = lc(deployment.token.address);
+    const iso = (ms: number) => new Date(ms).toISOString().replace('.000Z', 'Z') as Timestamp;
+    const createdAt = iso(Number((await anvil.publicClient.getBlock()).timestamp) * 1000);
+    const given = {
+      template: 'checks-only', clubId: discovery.demo.clubId, seller, sellerPayoutAddress: key,
+      buyer: { address: b.agent.address, encryptionPublicKey: b.agent.encryptionPublicKey }, adjudicators: { primary, fallback, appeal },
+      price: { token, amount: PRICE }, deliverable: { kind: 'dataset', description: 'customers.csv, one row per customer', format: 'text/csv' },
+      checks: [{ id: 'rows', type: 'row_count_range', required: true, min: 3, max: 3 }],
+      timing: { judgeWithinSec: 60, fallbackWithinSec: 60, appealWindowSec: 0, appealDecideSec: 120 },
+    };
+    const chosen = publicOfferTerms(given, await b.agent.registration(primary), await b.agent.rulebookHash(discovery.demo.clubId), createdAt, keccak256(stringToBytes('t-630/chosen'))) as CommitmentTerms;
+    const template = templateFrom(chosen, { rules: lc(deployment.rules) as Address, expiresAt: iso(Date.parse(createdAt) + 86_400_000), offerId: 't-630/first-take' });
+    const keySignature = await privateKeyToAccount(s.key).sign({ hash: templateDigest(template, seller, anvil.chainId) });
+    const fill: TakeFill = { buyer: b.agent.address as Address, buyerPaymentAddress: b.agent.address as Address, buyerEncryptionPublicKey: b.agent.encryptionPublicKey, nonceSeed: keccak256(stringToBytes('t-630/take')), createdAt };
+    const terms = takeTerms(template, fill, seller) as CommitmentTerms;
+    const id = commitmentId(terms);
+    const domain = holdbackDomain(anvil.chainId, lc(deployment.rules) as Address);
+    // Each read a first take makes on its way to the deployment fails the first time: the seller contract's code, its
+    // creation simulated by eth_call (no `to`; the take's own signature check runs it), and the deployment's gas estimate.
+    const failed = new Set<string>();
+    const kindOf = (r: Rpc): string | undefined => {
+      const tx = r.params?.[0] as { to?: string | null } | undefined;
+      if (codeOf(seller)(r)) return 'code';
+      if (r.method === 'eth_call' && !tx?.to) return 'creation';
+      if (r.method === 'eth_estimateGas' && lc(tx?.to ?? '') === lc(CREATE2_DEPLOYER)) return 'deployment gas';
+      return undefined;
+    };
+    const fault = rpc.arm((r) => {
+      const kind = kindOf(r);
+      if (!kind || failed.has(kind)) return false;
+      failed.add(kind);
+      return true;
+    }, 3);
+    try {
+      const taken = await post('/v1/commitments', { ...terms, id, signatures: { seller: encodeStandingSignature(TAKE, template, keySignature, fill), buyer: await signTerms(b.key, domain, terms) } }, crypto.randomUUID());
+      expect(taken.status, JSON.stringify(taken.body)).toBe(200);
+      await untilBoth(b.agent, id, ['AcceptedByAdjudicator'], 30_000);
+      const { prepared, intent } = await b.agent.prepareAgreeAndFund(terms, 40_000_000n);
+      const agreement = await b.agent.sign(prepared, intent);
+      const res = await post(agreement.path, agreement.body, crypto.randomUUID());
+      expect(res.status, JSON.stringify(res.body)).toBe(200);
+      expect(res.body.escrowState).toBe('Held');
+    } finally {
+      rpc.clear();
+    }
+    expect([...failed].sort()).toEqual(['code', 'creation', 'deployment gas']);
+    expect(fault.hits).toBe(3);
+    expect(lc((await anvil.publicClient.getCode({ address: seller })) ?? '0x')).not.toBe('0x');
+    await untilBoth(b.agent, id, ['Held'], 30_000);
+  }, 120_000);
 
   it("claims nothing while a deployment with no note waits on the deal's lane (a first take's)", async () => {
     const deal = await signedAgreement();
