@@ -1,6 +1,6 @@
 {
   "$schema": "https://json-schema.org/draft/2020-12/schema",
-  "$id": "https://holdback.dev/schemas/v0.14/judgment.schema.json",
+  "$id": "https://holdback.dev/schemas/v0.15/judgment.schema.json",
   "title": "Judgment record",
   "type": "object",
   "required": [
@@ -231,7 +231,15 @@
                 ]
               },
               "verdict": {
-                "$ref": "judge-verdict.schema.json"
+                "description": "The seat's verdict in the format its bound policy names (ADR-0050). A prose verdict (template pairs 1 and 2) carries no format key and is the judge's output after the filter. A coded verdict (template pair 3, agg-6) carries format coded-1, the scores, reason codes and injection kinds, an anchor for each reference that resolved in the work, and the counts of what the filter dropped; no judge-written string.",
+                "oneOf": [
+                  {
+                    "$ref": "judge-verdict.schema.json#/$defs/ProseVerdict"
+                  },
+                  {
+                    "$ref": "#/$defs/CodedRecordVerdict"
+                  }
+                ]
               }
             }
           }
@@ -369,6 +377,125 @@
     "privateRecord": {
       "$ref": "common.schema.json#/$defs/PrivateBody",
       "description": "The full record kept off the public log when disclosure is private (ADR-0020)"
+    }
+  },
+  "$defs": {
+    "Anchor": {
+      "type": "string",
+      "pattern": "^[0-9a-f]{16}$",
+      "description": "The first 8 bytes of HMAC-SHA-256 over the locator, keyed by SHA-256 of the domain tag holdback/judgment/anchor/v1 and the work's plaintext, as 16 lowercase hex characters (ADR-0050 section 3). Only a holder of the work can match it to a node or a line."
+    },
+    "CodedRecordVerdict": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "format",
+        "criteria",
+        "overall",
+        "injectionSuspected",
+        "injectionKinds",
+        "injectionRefs",
+        "dropped"
+      ],
+      "properties": {
+        "format": {
+          "const": "coded-1"
+        },
+        "criteria": {
+          "type": "array",
+          "maxItems": 12,
+          "items": {
+            "type": "object",
+            "additionalProperties": false,
+            "required": [
+              "id",
+              "refs",
+              "reasons",
+              "score"
+            ],
+            "properties": {
+              "id": {
+                "type": "string",
+                "pattern": "^[a-z0-9_-]{1,40}$"
+              },
+              "refs": {
+                "type": "array",
+                "maxItems": 3,
+                "uniqueItems": true,
+                "items": {
+                  "$ref": "#/$defs/Anchor"
+                }
+              },
+              "reasons": {
+                "type": "array",
+                "maxItems": 3,
+                "uniqueItems": true,
+                "items": {
+                  "$ref": "judge-verdict.schema.json#/$defs/ReasonCode"
+                }
+              },
+              "score": {
+                "type": "integer",
+                "minimum": 0,
+                "maximum": 4
+              }
+            }
+          }
+        },
+        "overall": {
+          "enum": [
+            "pass",
+            "fail",
+            "abstain"
+          ]
+        },
+        "injectionSuspected": {
+          "type": "boolean"
+        },
+        "injectionKinds": {
+          "type": "array",
+          "maxItems": 3,
+          "uniqueItems": true,
+          "items": {
+            "$ref": "judge-verdict.schema.json#/$defs/InjectionKind"
+          }
+        },
+        "injectionRefs": {
+          "type": "array",
+          "maxItems": 3,
+          "uniqueItems": true,
+          "items": {
+            "$ref": "#/$defs/Anchor"
+          }
+        },
+        "dropped": {
+          "type": "object",
+          "additionalProperties": false,
+          "required": [
+            "reasons",
+            "refs",
+            "keys"
+          ],
+          "description": "What the filter dropped from the judge's output, each count capped at 9: reasons counts reason codes and injection kinds; refs counts references; keys counts unknown keys (ADR-0050 section 2). Never an escalation reason.",
+          "properties": {
+            "reasons": {
+              "type": "integer",
+              "minimum": 0,
+              "maximum": 9
+            },
+            "refs": {
+              "type": "integer",
+              "minimum": 0,
+              "maximum": 9
+            },
+            "keys": {
+              "type": "integer",
+              "minimum": 0,
+              "maximum": 9
+            }
+          }
+        }
+      }
     }
   }
 }

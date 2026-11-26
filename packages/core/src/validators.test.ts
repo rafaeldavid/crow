@@ -91,9 +91,11 @@ describe('validators.generated.ts', () => {
       .map((s) => s.name)
       .sort();
     // T-574: and one per message type, keyed messages#<type>, for the parser's error text.
-    const files = (set: Record<string, unknown>) => Object.keys(set).filter((k) => !k.startsWith('messages#')).sort();
+    // ADR-0050: and one per verdict format, judge-verdict#prose and judge-verdict#coded.
+    const files = (set: Record<string, unknown>) => Object.keys(set).filter((k) => !k.startsWith('messages#') && !k.startsWith('judge-verdict#')).sort();
     expect(files(signedValidators)).toEqual(names);
     expect(files(plainValidators)).toEqual(names);
+    expect(Object.keys(plainValidators).filter((k) => k.startsWith('judge-verdict#')).sort()).toEqual(['judge-verdict#coded', 'judge-verdict#prose']);
     // Every branch of the oneOf, by the type it names, and every example message's type.
     const types = messageTypes(schemaFiles()).map((t) => `messages#${t.type}`).sort();
     expect(types.length).toBeGreaterThan(10);

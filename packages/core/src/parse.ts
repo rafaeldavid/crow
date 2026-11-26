@@ -25,6 +25,7 @@ import type {
   SettlementProjection,
   EncryptedKey,
   JudgeVerdict,
+  CodedJudgeVerdict,
   Judgment,
   Mandate,
   Message,
@@ -92,10 +93,11 @@ function messageError(validators: Record<string, SchemaValidator>, value: unknow
   return own(value) ? undefined : errorText(own.errors?.[0]);
 }
 
-function parserFor<T>(name: string, signed: boolean, extra?: (value: T) => string | undefined): Parser<T> {
+function parserFor<T>(key: string, signed: boolean, extra?: (value: T) => string | undefined, label = key): Parser<T> {
   const validators = signed ? signedValidators : plainValidators;
-  const validate = Object.hasOwn(validators, name) ? validators[name] : undefined;
-  if (!validate) throw new Error(`spec/schemas/${name}.schema.json not found`);
+  const validate = Object.hasOwn(validators, key) ? validators[key] : undefined;
+  if (!validate) throw new Error(`spec/schemas/${key}.schema.json not found`);
+  const name = label;
   return (json) => {
     // Validate and return a private copy, so the caller cannot change the value after it was checked.
     let copy: unknown;
@@ -233,7 +235,15 @@ export const parseDisclosure = parserFor<DisclosureBody>('disclosure', true);
 export const parseProjection = parserFor<SettlementProjection>('projection', false);
 export const parseDelivery = parserFor<Delivery>('delivery', true, (d) => unlockRule(d.encryptedKeys));
 export const parseEvent = parserFor<SettlementEvent>('event', false);
-export const parseJudgeVerdict = parserFor<JudgeVerdict>('judge-verdict', false);
+/**
+ * The prose verdict only (judge-verdict.schema.json `$defs/ProseVerdict`, the v0.14 verdict): what the prose filters of
+ * agg-3 to agg-5 and the recordings read. A coded verdict is refused here (ADR-0050), so no prose policy accepts one.
+ */
+export const parseJudgeVerdict = parserFor<JudgeVerdict>('judge-verdict#prose', false, undefined, 'judge-verdict');
+/** The coded verdict after the filter's normalization (`$defs/CodedVerdict`, ADR-0050). */
+export const parseCodedJudgeVerdict = parserFor<CodedJudgeVerdict>('judge-verdict#coded', false, undefined, 'judge-verdict');
+/** Either format: the whole judge-verdict.schema.json. */
+export const parseAnyJudgeVerdict = parserFor<JudgeVerdict | CodedJudgeVerdict>('judge-verdict', false);
 export const parseJudgment = parserFor<Judgment>('judgment', false, (j) =>
   // ADR-0020: private records arrive with Phase 2 reads.
   'privateRecord' in j ? 'privateRecord is not supported in Phase 1' : undefined,
@@ -256,7 +266,7 @@ export const parsers = {
   disclosure: parseDisclosure,
   projection: parseProjection,
   event: parseEvent,
-  'judge-verdict': parseJudgeVerdict,
+  'judge-verdict': parseAnyJudgeVerdict,
   judgment: parseJudgment,
   mandate: parseMandate,
   messages: parseMessage,

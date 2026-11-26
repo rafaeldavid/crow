@@ -1,64 +1,195 @@
 {
   "$schema": "https://json-schema.org/draft/2020-12/schema",
-  "$id": "https://holdback.dev/schemas/v0.14/judge-verdict.schema.json",
+  "$id": "https://holdback.dev/schemas/v0.15/judge-verdict.schema.json",
   "title": "Judge verdict (enforced on model output)",
-  "type": "object",
-  "required": [
-    "criteria",
-    "overall",
-    "injectionSuspected",
-    "rationale"
+  "description": "One of two formats; the policy a deal binds names which (ADR-0050). ProseVerdict is the v0.14 verdict, unchanged, which template pairs 1 and 2 ask for. CodedVerdict is the coded verdict of template pair 3 and agg-6 after the filter's normalization: reason codes and injection kinds from closed lists, and references into the work. The judge's raw output is checked strictly only on the decision fields; an unknown code, an extra item, a reference that does not resolve and an unknown key are dropped and counted.",
+  "oneOf": [
+    {
+      "$ref": "#/$defs/ProseVerdict"
+    },
+    {
+      "$ref": "#/$defs/CodedVerdict"
+    }
   ],
-  "additionalProperties": false,
-  "properties": {
-    "criteria": {
-      "type": "array",
-      "maxItems": 12,
-      "items": {
-        "type": "object",
-        "additionalProperties": false,
-        "required": [
-          "id",
-          "score",
-          "evidence"
-        ],
-        "properties": {
-          "id": {
-            "type": "string",
-            "pattern": "^[a-z0-9_-]{1,40}$"
-          },
-          "score": {
-            "type": "integer",
-            "minimum": 0,
-            "maximum": 4
-          },
-          "evidence": {
-            "type": "string",
-            "maxLength": 300,
-            "x-holdback-untrusted": true
+  "$defs": {
+    "ProseVerdict": {
+      "type": "object",
+      "required": [
+        "criteria",
+        "overall",
+        "injectionSuspected",
+        "rationale"
+      ],
+      "additionalProperties": false,
+      "properties": {
+        "criteria": {
+          "type": "array",
+          "maxItems": 12,
+          "items": {
+            "type": "object",
+            "additionalProperties": false,
+            "required": [
+              "id",
+              "score",
+              "evidence"
+            ],
+            "properties": {
+              "id": {
+                "type": "string",
+                "pattern": "^[a-z0-9_-]{1,40}$"
+              },
+              "score": {
+                "type": "integer",
+                "minimum": 0,
+                "maximum": 4
+              },
+              "evidence": {
+                "type": "string",
+                "maxLength": 300,
+                "x-holdback-untrusted": true
+              }
+            }
+          }
+        },
+        "overall": {
+          "enum": [
+            "pass",
+            "fail",
+            "abstain"
+          ]
+        },
+        "injectionSuspected": {
+          "type": "boolean"
+        },
+        "injectionEvidence": {
+          "type": "string",
+          "maxLength": 300,
+          "x-holdback-untrusted": true
+        },
+        "rationale": {
+          "type": "string",
+          "maxLength": 600,
+          "x-holdback-untrusted": true
+        }
+      }
+    },
+    "CodedVerdict": {
+      "type": "object",
+      "required": [
+        "criteria",
+        "overall",
+        "injectionSuspected"
+      ],
+      "additionalProperties": false,
+      "properties": {
+        "criteria": {
+          "type": "array",
+          "maxItems": 12,
+          "items": {
+            "type": "object",
+            "additionalProperties": false,
+            "required": [
+              "id",
+              "reasons",
+              "score"
+            ],
+            "properties": {
+              "id": {
+                "type": "string",
+                "pattern": "^[a-z0-9_-]{1,40}$"
+              },
+              "refs": {
+                "type": "array",
+                "maxItems": 3,
+                "uniqueItems": true,
+                "items": {
+                  "$ref": "#/$defs/Locator"
+                }
+              },
+              "reasons": {
+                "type": "array",
+                "maxItems": 3,
+                "uniqueItems": true,
+                "description": "The template asks for one to three codes. Empty only when the filter dropped every code the judge wrote.",
+                "items": {
+                  "$ref": "#/$defs/ReasonCode"
+                }
+              },
+              "score": {
+                "type": "integer",
+                "minimum": 0,
+                "maximum": 4
+              }
+            }
+          }
+        },
+        "overall": {
+          "enum": [
+            "pass",
+            "fail",
+            "abstain"
+          ]
+        },
+        "injectionSuspected": {
+          "type": "boolean"
+        },
+        "injectionKinds": {
+          "type": "array",
+          "maxItems": 3,
+          "uniqueItems": true,
+          "description": "Kept only when injectionSuspected is true",
+          "items": {
+            "$ref": "#/$defs/InjectionKind"
+          }
+        },
+        "injectionRefs": {
+          "type": "array",
+          "maxItems": 3,
+          "uniqueItems": true,
+          "description": "Kept only when injectionSuspected is true",
+          "items": {
+            "$ref": "#/$defs/Locator"
           }
         }
       }
     },
-    "overall": {
+    "Locator": {
+      "type": "string",
+      "maxLength": 512,
+      "x-holdback-untrusted": true,
+      "description": "A reference into the work: an RFC 6901 JSON pointer for a JSON delivery, or L<n>, the line number template pair 3 prints beside each line, for CSV, plain text and Markdown. The filter keeps only a locator that resolves in the work; the judgment record keeps its anchor, never the locator."
+    },
+    "ReasonCode": {
       "enum": [
-        "pass",
-        "fail",
-        "abstain"
-      ]
+        "meets_terms",
+        "complete",
+        "accurate",
+        "consistent",
+        "well_formed",
+        "missing_element",
+        "incomplete",
+        "inaccurate",
+        "inconsistent",
+        "malformed",
+        "off_spec",
+        "weak_execution",
+        "filler_content",
+        "unsupported_claim",
+        "not_assessable",
+        "other"
+      ],
+      "description": "Closed list of 16 (ADR-0050): five positive, nine negative, two neutral"
     },
-    "injectionSuspected": {
-      "type": "boolean"
-    },
-    "injectionEvidence": {
-      "type": "string",
-      "maxLength": 300,
-      "x-holdback-untrusted": true
-    },
-    "rationale": {
-      "type": "string",
-      "maxLength": 600,
-      "x-holdback-untrusted": true
+    "InjectionKind": {
+      "enum": [
+        "instruction_override",
+        "addressed_to_judge",
+        "verdict_steer",
+        "prompt_probe",
+        "hidden_text",
+        "other"
+      ],
+      "description": "Closed list of 6 (ADR-0050), the screen's classes"
     }
   }
 }

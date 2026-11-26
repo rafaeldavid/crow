@@ -12,7 +12,7 @@ Validation as of November 3, 2026 (measured, `pnpm validate:spec`): all 33 examp
 - a model ID containing "latest";
 - an extra field in a judge verdict.
 
-The `$id` URLs (`https://holdback.dev/schemas/v0.14/…`) are namespaces for resolving `$ref` between files. They are not hosted. Replace the domain if the project gets one.
+The `$id` URLs (`https://holdback.dev/schemas/v0.15/…`) are namespaces for resolving `$ref` between files. They are not hosted. Replace the domain if the project gets one.
 
 ## Annotations
 
@@ -20,6 +20,12 @@ The `$id` URLs (`https://holdback.dev/schemas/v0.14/…`) are namespaces for res
 - **Every free-text string is marked or constrained.** A string with no `date-time` format, pattern, enum or const must carry the marker. URIs count as free text: they are marked and capped at 2048 characters. Identifiers instead get a pattern: club IDs, token IDs, and `Ident` for judge, provider, family, model and version labels. `tests/spec.test.ts` lints this, with an empty allowlist.
 
 ## Changelog
+
+- **v0.15 (2026-11-25, D106, ADR-0050), additive:** every `$id`, the `Holdback-Schema-Version` header and the OpenAPI `x-holdback-schema-version` move to 0.15. No typed-data struct changes, so the EIP-712 domain version and `commitment.schemaVersion` stay 0.8, and no signature or commitment ID moves. Every document that passed v0.14 passes v0.15.
+  - **`judge-verdict.schema.json`** is `oneOf` two formats. `$defs/ProseVerdict` is the v0.14 verdict, unchanged; template pairs 1 and 2 ask for it, and the prose filters of `agg-3` to `agg-5` read only it. `$defs/CodedVerdict` is template pair 3's coded verdict after the filter's normalization: per criterion `id`, `refs` (at most 3 locators of at most 512 characters, `$defs/Locator`), `reasons` (at most 3 of the 16 codes in `$defs/ReasonCode`) and `score`; then `overall`, `injectionSuspected`, `injectionKinds` (at most 3 of the 6 in `$defs/InjectionKind`) and `injectionRefs`. No free text. `reasons` may be empty: the template asks for one to three, and the filter drops a code it cannot use. The two branches never overlap: a prose verdict requires `rationale`, which a coded one refuses.
+  - **`judgment.schema.json`:** a seat's `verdict` is a prose verdict, with no `format` key, as in v0.14, or `$defs/CodedRecordVerdict`: `format: "coded-1"`, the scores, codes and kinds, each reference kept as a 16-hex anchor (`$defs/Anchor`), never the locator, and `dropped: {reasons, refs, keys}`, integers 0 to 9. A coded seat holds no judge-written string.
+  - **Core** exports `parseJudgeVerdict` for the prose branch only, `parseCodedJudgeVerdict` for the coded one and `parseAnyJudgeVerdict` for the file, with a compiled validator for each branch (`judge-verdict#prose`, `judge-verdict#coded`).
+  - **Examples:** new `judge-verdict.coded` and `judgment.coded`. `tests/spec.test.ts` holds the refused cases.
 
 - **v0.14 (2026-11-25, D98, ADR-0047), additive:** every `$id`, the `Holdback-Schema-Version` header and the OpenAPI `x-holdback-schema-version` move to 0.14. No typed-data struct changes, so the EIP-712 domain version and `commitment.schemaVersion` stay 0.8, and no signature or commitment ID moves. Every document that passed v0.13 passes v0.14.
   - **Three data check kinds:** `passes_through` (`series`, `waypoints`, `tolerance`), `monotonic_column` (`series`, optional `minStep` and `maxStep`) and `equal_lengths` (`series`, pointers only). Each branch is closed. Every number is an integer bounded by the safe range: no float enters the hashed terms (ADR-0022).

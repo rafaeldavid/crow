@@ -6,7 +6,7 @@
 import { readdirSync, readFileSync } from 'node:fs';
 import { dirname, join } from 'node:path';
 import { fileURLToPath } from 'node:url';
-import { canonicalJson } from '@holdback/core';
+import { canonicalJson, type JudgeVerdict } from '@holdback/core';
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import { ADJUDICATOR, delivery, fakeUnwrap, GOOD_CSV, NONCES, POLICY, RUBRIC, seal, utf8 } from './_helpers.js';
 import { intake } from './intake.js';
@@ -357,7 +357,7 @@ describe('attack 5: rubric criteria that demand long quotes: the case is judged,
     expect(draft.aggregate.decision).toBe(overall === 'pass' ? 'accept' : 'reject');
     expect(draft.aggregate.validCount).toBe(3);
     expect(draft.aggregate.reasons.filter((r) => CUT_LINE.test(r))).toEqual(SEATS.map((s) => `judge ${s.judgeId} free text cut to its cap (rationale; injectionEvidence; evidence of 3 criteria)`));
-    for (const m of draft.panel.members) for (const c of m.verdict!.criteria) expect(cps(c.evidence)).toBeLessThanOrEqual(300);
+    for (const m of draft.panel.members) for (const c of (m.verdict as JudgeVerdict).criteria) expect(cps(c.evidence)).toBeLessThanOrEqual(300);
   });
   it('agg-4 and agg-3 escalate the same case, and their records hold no cut line (frozen)', async () => {
     for (const v of [AGG4, AGG3]) {

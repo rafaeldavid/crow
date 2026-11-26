@@ -2,11 +2,11 @@
 // build is an adjudicator configured with the earlier default; the deploy is a new Adjudicator for the same address on
 // another default, registered again (the store keeps the earlier policy by hash, ADR-0030 §6).
 import { type Hex32 } from '@holdback/core';
-import { fakeProvider, KEPT, loadRegistry, type JudgeProvider, type LoadedRegistry, type RegistryDoc } from '@holdback/judgment';
+import { APPEAL_PROMPT_TEMPLATE_3_HASH, fakeProvider, KEPT, loadRegistry, TEMPLATE_PAIR_3, type JudgeProvider, type LoadedRegistry, type RegistryDoc } from '@holdback/judgment';
 import { keccak256 } from 'viem';
 import { describe, expect, it } from 'vitest';
 import { demoCsv, DOMAIN, makeCommitment, party, TestSettlement, tusd, type Party } from './_sim.js';
-import { defaultPolicy, KEPT_POLICIES, keptConsistency, parseKeptPolicies, policyHashOf, type KeptPolicies } from './policy.js';
+import { checkPolicyBinding, defaultPolicy, KEPT_POLICIES, keptConsistency, parseKeptPolicies, policyHashOf, type KeptPolicies } from './policy.js';
 import { Adjudicator, type AdjudicatorConfig } from './service.js';
 
 const entry = (id: string, family: string, provider: 'anthropic' | 'openai-compatible', stamp = '20260601') => ({ id, provider, family, model: `${id}-${stamp}`, status: 'active' as const });
@@ -297,6 +297,24 @@ describe('attack.offer-binds-kept-version: a Crow primary accepts new deals only
 describe('the kept-policies data file and the code agree (the static check, ADR-0036 section 4)', () => {
   it('every kept value is in the code, every value in the code is kept, and the default is carried', () => {
     expect(keptConsistency()).toEqual([]);
+  });
+
+  // T-616, ADR-0050: pair 3 and agg-6 are carried beside the prose versions, the default stays prose, and a policy that
+  // pairs a template and an aggregation of different formats is declined before any judge is called.
+  it('carries template pair 3 and agg-6, keeps the prose default, and declines a policy that mixes the formats', () => {
+    const pair3 = KEPT_POLICIES.templatePairs.find((p) => p.promptTemplateHash === TEMPLATE_PAIR_3.firstHash);
+    expect(pair3).toMatchObject({ appealPromptTemplateHash: APPEAL_PROMPT_TEMPLATE_3_HASH, status: 'kept' });
+    expect(KEPT_POLICIES.aggregations.find((a) => a.version === 'agg-6')?.status).toBe('kept');
+    // The default is main's prose default; it moves to pair 3 and agg-6 only after the calibration (ADR-0050 section 7).
+    expect(KEPT_POLICIES.default.aggregationVersion).not.toBe('agg-6');
+    expect(KEPT_POLICIES.default.promptTemplateHash).not.toBe(TEMPLATE_PAIR_3.firstHash);
+    const coded = defaultPolicy('t616/p1', { promptTemplateHash: TEMPLATE_PAIR_3.firstHash, appealPromptTemplateHash: APPEAL_PROMPT_TEMPLATE_3_HASH, aggregationVersion: 'agg-6' });
+    expect(checkPolicyBinding(coded, policyHashOf(coded)).ok).toBe(true);
+    for (const mixed of [{ ...coded, aggregationVersion: 'agg-5' }, defaultPolicy('t616/p2', { aggregationVersion: 'agg-6' })]) {
+      const r = checkPolicyBinding(mixed, policyHashOf(mixed));
+      expect(r.ok).toBe(false);
+      if (!r.ok) expect(r.error).toMatchObject({ type: 'policy_mismatch', detail: expect.stringMatching(/a policy pairs a template and an aggregation of one format/) });
+    }
   });
 
   it('a value dropped from the code without a retired mark fails the check', () => {

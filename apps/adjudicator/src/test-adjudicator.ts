@@ -1,7 +1,8 @@
 // A test adjudicator for local worlds (`pnpm sim`): the real adjudicator service (service.ts) on a SimChain,
-// with fake judges in place of models. No model runs and no key is needed. Every verdict a fake judge
-// writes is marked as fake in its rationale and evidence, so a record read through the API never passes for
-// real model output; the model IDs come from config/judges.yaml, whose placeholders say the same.
+// with fake judges in place of models. No model runs and no key is needed. The mark of a fake judge is its model ID:
+// the IDs come from config/judges.yaml, and every one starts `placeholder-`, so a record read through the API never
+// passes for real model output (ADR-0050). Readers check the prefix. A prose verdict's rationale and evidence also
+// start with FAKE_JUDGE_MARK, as before; a coded verdict has no free text to mark.
 import { existsSync } from 'node:fs';
 import { dirname, join } from 'node:path';
 import { fileURLToPath } from 'node:url';
@@ -29,7 +30,13 @@ export function markerFake(script: FakeScript = {}, marker = FAIL_MARKER): Judge
 
 const mark = (text: unknown, max: number): unknown => (typeof text === 'string' && !text.startsWith(FAKE_JUDGE_MARK) ? `${FAKE_JUDGE_MARK} ${text}`.slice(0, max) : text);
 
-/** Wraps a provider so every verdict's rationale and evidence start with FAKE_JUDGE_MARK. */
+/** The mark of a fake judge's seat in a judgment record: its model ID starts with it (config/judges.yaml). */
+export const PLACEHOLDER_MODEL_PREFIX = 'placeholder-';
+
+/**
+ * Wraps a provider so every prose verdict's rationale and evidence start with FAKE_JUDGE_MARK. A coded verdict
+ * (template pair 3, ADR-0050) passes unchanged: it holds no free text, and the seat's model prefix is its mark.
+ */
 export function markedFake(inner: JudgeProvider): JudgeProvider {
   return {
     async complete(req) {
@@ -41,6 +48,7 @@ export function markedFake(inner: JudgeProvider): JudgeProvider {
       } catch {
         return res;
       }
+      if (v === null || typeof v !== 'object' || !Object.hasOwn(v, 'rationale')) return res;
       const criteria = Array.isArray(v['criteria']) ? (v['criteria'] as Array<Record<string, unknown>>).map((c) => ({ ...c, evidence: mark(c['evidence'], 300) })) : v['criteria'];
       return { ...res, text: JSON.stringify({ ...v, criteria, rationale: mark(v['rationale'], 600) }) };
     },

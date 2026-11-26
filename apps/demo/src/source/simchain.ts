@@ -640,7 +640,8 @@ class Narrator {
         // Fake providers (ServiceBench's default) unless `pnpm demo --live` set live judges.
         scripted: !liveJudgesInUse(),
         prompt: judgePromptView(request.system, request.user),
-        ...(seat.verdict ? { verdict: verdictView(seat.verdict) } : {}),
+        // ADR-0050: a coded seat (format coded-1) has no prose to show; the demo's policies are prose.
+        ...(seat.verdict && !('format' in seat.verdict) ? { verdict: verdictView(seat.verdict) } : {}),
       });
   }
 }

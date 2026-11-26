@@ -45,6 +45,10 @@ describe('demo-sepolia.ts', () => {
     expect(panelKind({ role: 'primary', panel: { members: [seat('Faithful.'), seat('Fluent.')] } })).toEqual({ role: 'primary', kind: 'live', seats: 2, marked: 0 });
     expect(panelKind({ role: 'appeal', panel: { members: [seat('Faithful.'), seat('[fake judge, no model ran] pass')] } })).toEqual({ role: 'appeal', kind: 'scripted', seats: 2, marked: 1 });
     expect(panelKind({ role: 'primary', panel: { ran: false, members: [] } }).kind).toBe('none');
+    // ADR-0050: a coded seat has no rationale; its placeholder- model ID is the mark.
+    const codedSeat = (model: string) => ({ model, family: 'claude', verdict: { format: 'coded-1', overall: 'pass', criteria: [] } });
+    expect(panelKind({ role: 'primary', panel: { members: [codedSeat('placeholder-claude-a-20260601'), codedSeat('claude-opus-5-5@2026-09-21')] } })).toEqual({ role: 'primary', kind: 'scripted', seats: 2, marked: 1 });
+    expect(panelKind({ role: 'primary', panel: { members: [codedSeat('claude-opus-5-5@2026-09-21')] } }).kind).toBe('live');
     expect(panelKind(null).kind).toBe('none');
   });
 
