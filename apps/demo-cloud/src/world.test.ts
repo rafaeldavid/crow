@@ -7,7 +7,7 @@ import { generatePrivateKey } from 'viem/accounts';
 import { afterEach, describe, expect, it } from 'vitest';
 import { Agent } from '../../../examples/agent.ts';
 import { serveTwoOrigins } from '../../../examples/two-origins.ts';
-import { HOLD_MARGIN_SEC, LIVE_REGISTRY_2_URI, liveRegistry2, markerFake, placeholderRegistry } from '@holdback/adjudicator';
+import { HOLD_MARGIN_SEC, LIVE_REGISTRY_URI, liveRegistry, markerFake, placeholderRegistry } from '@holdback/adjudicator';
 import { APPEAL_WINDOW_PROBLEM, canonicalKeccak, DRAND_QUICKNET_CHAIN_HASH, holdbackDomain, verifyRegistration, type AdjudicatorRegistration, type RegisteredAdjudicator } from '@holdback/core';
 import { LiveChain, type DeploymentFile } from '@holdback/settlement/live';
 import { encodePublicKey, generateEncryptionKeyPair } from '@holdback/core/crypto';
@@ -561,7 +561,7 @@ describe('adjudicator registrations in the world store (T-221 slice 2, ADR-0030)
       const was = made.find((m) => m.record.address === r.record.address)!;
       expect(Date.parse(r.record.registration.issuedAt)).toBeGreaterThan(Date.parse(start));
       expect([r.registeredAt, r.seq]).toEqual([was.registeredAt, was.seq]);
-      expect(r.record.registry.hash).toBe(liveRegistry2().hash);
+      expect(r.record.registry.hash).toBe(liveRegistry().hash);
     }
     for (const x of (await page(third.urls[0])).items) expect(await verifyRegistration(holdbackDomain(31337), x)).toBe(true);
   });
@@ -672,11 +672,11 @@ describe('live judges (T-028), with a stand-in for the models', () => {
     const { provider } = standIn();
     const { urls } = await serve({ judgeProvider: provider, liveCallsPerDay: 7 });
     const index = ((await (await fetch(`${urls[0]}/`)).json()) as J).demo;
-    expect(index.judges).toMatchObject({ panel: 'live', registry: { uri: LIVE_REGISTRY_2_URI, hash: liveRegistry2().hash }, liveCallsPerDay: 7, liveCallsToday: 0 });
-    expect(index.judges.models).toEqual(liveRegistry2().active.map((e) => e.model));
+    expect(index.judges).toMatchObject({ panel: 'live', registry: { uri: LIVE_REGISTRY_URI, hash: liveRegistry().hash }, liveCallsPerDay: 7, liveCallsToday: 0 });
+    expect(index.judges.models).toEqual(liveRegistry().active.map((e) => e.model));
     for (const a of index.adjudicators) expect(a.name).toMatch(/live panel/);
     const regs = (await (await fetch(`${urls[0]}/v1/adjudicators`)).json()) as J;
-    for (const r of regs.items ?? regs) expect(r.registry.hash).toBe(liveRegistry2().hash);
+    for (const r of regs.items ?? regs) expect(r.registry.hash).toBe(liveRegistry().hash);
     const notes = ((await (await fetch(`${urls[0]}/.well-known/holdback.json`)).json()) as J).notes.join('\n');
     expect(notes).toMatch(/live judge panel/i);
     expect(notes).toMatch(/7 live judge calls a day/);
@@ -694,7 +694,7 @@ describe('live judges (T-028), with a stand-in for the models', () => {
     const live = (await first.buyer.call('GET', `/v1/commitments/${first.id}/judgment`)) as J;
     expect(live.panel.members).toHaveLength(3);
     for (const m of live.panel.members) {
-      expect(liveRegistry2().active.map((e) => e.model)).toContain(m.model);
+      expect(liveRegistry().active.map((e) => e.model)).toContain(m.model);
       expect(m.verdict.rationale).not.toMatch(/^\[fake judge, no model ran\]/);
     }
     expect(((await (await fetch(`${urls[0]}/`)).json()) as J).demo.judges.liveCallsToday).toBe(3);
@@ -801,7 +801,7 @@ describe('live judges (T-028), with a stand-in for the models', () => {
   // read says until when and what each party may do, the Durable Object wakes once at the hold's end, the held deal
   // reserves no judge call, and the buyer's accept in the hold counts as rescued.
   it('holds a rubric reject: Delivered with a notice, one wake at its end, nothing reserved; the buyer accepts it', async () => {
-    const failing = markerFake(Object.fromEntries(liveRegistry2().active.map((e) => [e.id, 'fail' as const])));
+    const failing = markerFake(Object.fromEntries(liveRegistry().active.map((e) => [e.id, 'fail' as const])));
     const { urls, world } = await serve({ judgeProvider: failing, liveCallsPerDay: 60 });
     const judgeWithinSec = 3_600;
     const { offer, buyer, seller } = await rubricOffer(urls, { timing: { judgeWithinSec } });
@@ -834,8 +834,7 @@ describe('live judges (T-028), with a stand-in for the models', () => {
   // GET /judgments serves both, oldest first, /judgment stays the latest, and a reopened world serves the same.
   it('serves every judgment record after an escalation: the primary\'s and the appeal\'s, and again after a reopen', async () => {
     // Only the claude family answers, so the primary escalates and the appeal panel cannot decide.
-    // T-631: a repeated seat is `<id>:2`, so the stand-in scripts both seats of each judge.
-    const split = markerFake(Object.fromEntries(liveRegistry2().active.filter((e) => e.family !== 'claude').flatMap((e) => [[e.id, 'timeout' as const], [`${e.id}:2`, 'timeout' as const]])));
+    const split = markerFake(Object.fromEntries(liveRegistry().active.filter((e) => e.family !== 'claude').map((e) => [e.id, 'timeout' as const])));
     const storage = new MemoryStorage();
     const first = await serve({ judgeProvider: split, liveCallsPerDay: 60 }, storage);
     const { offer, buyer, seller } = await rubricOffer(first.urls, { timing: { appealDecideSec: 3_600 } });
@@ -872,7 +871,7 @@ describe('live judges (T-028), with a stand-in for the models', () => {
     const { urls } = await serve({ env: { HOLDBACK_ANTHROPIC_API_KEY: 'k' } });
     const index = ((await (await fetch(`${urls[0]}/`)).json()) as J).demo;
     expect(index.judges).toMatchObject({ panel: 'scripted', registry: { hash: placeholderRegistry().hash } });
-    expect(index.judges.missing).toEqual(['HOLDBACK_OPENAI_COMPATIBLE_API_KEY', 'HOLDBACK_OPENAI_COMPATIBLE_BASE_URL', 'HOLDBACK_GOOGLE_API_KEY']);
+    expect(index.judges.missing).toEqual(['HOLDBACK_OPENAI_COMPATIBLE_API_KEY', 'HOLDBACK_OPENAI_COMPATIBLE_BASE_URL']);
     expect(JSON.stringify(index)).not.toContain('"k"');
   });
 });
@@ -1362,7 +1361,7 @@ describe('live judges fail closed on a chain world when a model variable is miss
   it('declines a judged offer with a clear reason, says so in discovery, and still accepts a checks-only offer', async () => {
     const { urls } = await serve({ env: incomplete, requireLiveJudges: true });
     const index = ((await (await fetch(`${urls[0]}/`)).json()) as J).demo;
-    expect(index.judges).toMatchObject({ panel: 'unavailable', registry: { uri: LIVE_REGISTRY_2_URI }, missing: ['HOLDBACK_OPENAI_COMPATIBLE_API_KEY', 'HOLDBACK_OPENAI_COMPATIBLE_BASE_URL', 'HOLDBACK_GOOGLE_API_KEY'], judgedDeals: { accepting: false, resumesAt: null } });
+    expect(index.judges).toMatchObject({ panel: 'unavailable', registry: { uri: LIVE_REGISTRY_URI }, missing: ['HOLDBACK_OPENAI_COMPATIBLE_API_KEY', 'HOLDBACK_OPENAI_COMPATIBLE_BASE_URL'], judgedDeals: { accepting: false, resumesAt: null } });
     expect(JSON.stringify(index)).not.toContain('"k"');
     const notes = ((await discovery(urls)) as J).notes.join('\n');
     expect(notes).toMatch(/judges_unconfigured/);
