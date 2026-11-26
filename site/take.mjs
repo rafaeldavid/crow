@@ -53481,16 +53481,20 @@ async function view(a, id, o, cache) {
 		if (apart.length) add("signing addresses receive nothing", postings.every((x) => !apart.includes(x.to)), `no payout goes to ${apart.join(" or ")}, which sign and differ from their money address`);
 	} else if (hold && out.length) {
 		add("postings conserve the hold", postings.every((x) => isMoney$1(x.amount) && x.amount.token === hold.token) && sum(postings.map((x) => x.amount)) === BigInt(hold.amount), `the postings out of escrow sum to the hold, ${hold.amount} ${hold.token}`);
-		const to = (who, amount) => postings.some((x) => x.to === lc$1(who) && BigInt(x.amount.amount) === amount);
+		const to = (who, amount) => amount === 0n || postings.some((x) => x.to === lc$1(who) && BigInt(x.amount.amount) === amount);
 		const adjudicators = t ? [
 			t.adjudication.adjudicator,
 			t.adjudication.fallbackAdjudicator,
 			t.adjudication.appealAdjudicator
 		].map(lc$1) : [];
 		const rest = (who) => postings.filter((x) => x.to !== lc$1(who)).every((x) => adjudicators.includes(x.to));
-		const type = out.at(-1).type;
+		const last = out.at(-1), type = last.type;
+		const early = type === "settlement.released" && last.payload?.via === "early_accept" && of("judgment.decided").length === 0;
+		const defaulted = type === "settlement.refunded" && last.payload?.via === "default_outcome" && of("default.triggered").length > 0;
 		const payout = t?.sellerPayoutAddress ?? t?.seller, payment = t?.buyerPaymentAddress ?? t?.buyer;
 		if (!t || !price) add("postings follow the outcome", null, "the terms were not read");
+		else if (early) add("postings follow the outcome", to(payout, BigInt(price.amount)) && postings.every((x) => x.to === lc$1(payout) || x.to === lc$1(payment)), "released by the buyer's early accept: the price to the seller's payout address, the adjudication fee back to the buyer's payment address, since no adjudicator decided");
+		else if (defaulted) add("postings follow the outcome", to(payment, BigInt(hold.amount)) && postings.length === 1, "refunded by the default outcome: the whole hold back to the buyer's payment address");
 		else if (type === "settlement.released") add("postings follow the outcome", to(payout, BigInt(price.amount)) && rest(payout), "released: the price to the seller's payout address, the rest to adjudicators the terms name");
 		else if (type === "settlement.refunded") add("postings follow the outcome", to(payment, BigInt(price.amount)) && rest(payment), "refunded: the price to the buyer's payment address, the rest to adjudicators the terms name");
 		else if (type === "settlement.reclaimed") add("postings follow the outcome", to(payment, BigInt(hold.amount)) && postings.length === 1, "reclaimed: the whole hold back to the buyer's payment address");
@@ -53584,15 +53588,16 @@ async function dealRecord(id, o) {
 	const t = agreed.terms ? merged.terms?.signed : null;
 	const st = agreed.settlement ? merged.settlement : null;
 	const settledAt = agreed.steps ? merged.steps.find((x) => SETTLED.includes(x.step))?.at ?? null : null;
-	const received = (who) => st && who ? st.postings.some((x) => x.to === lc$1(who) && BigInt(x.amount?.amount ?? 0) > 0n) : false;
+	const received = (who) => st && who ? st.postings.filter((x) => x.to === lc$1(who)).reduce((n, x) => n + BigInt(x.amount?.amount ?? 0), 0n) : 0n;
+	const priceDue = isMoney$1(t?.price) ? BigInt(t.price.amount) : 0n;
 	const row = {
 		commitmentId: cid,
 		buyer: t ? lc$1(t.buyer) : null,
 		seller: t ? lc$1(t.seller) : null,
 		buyerPaymentAddress: t ? lc$1(t.buyerPaymentAddress) : null,
 		sellerPayoutAddress: t ? lc$1(t.sellerPayoutAddress) : null,
-		paidTo: t && received(t.sellerPayoutAddress) ? lc$1(t.sellerPayoutAddress) : null,
-		refundedTo: t && received(t.buyerPaymentAddress) ? lc$1(t.buyerPaymentAddress) : null,
+		paidTo: t && received(t.sellerPayoutAddress) > 0n ? lc$1(t.sellerPayoutAddress) : null,
+		refundedTo: t && received(t.buyerPaymentAddress) > 0n && received(t.sellerPayoutAddress) < priceDue ? lc$1(t.buyerPaymentAddress) : null,
 		price: t?.price ?? null,
 		adjudicationFee: t?.adjudication?.fee ?? null,
 		operatorFee: st?.operatorFee ?? null,

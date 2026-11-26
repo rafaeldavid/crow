@@ -11864,16 +11864,20 @@ async function view(a, id, o, cache) {
 		if (apart.length) add("signing addresses receive nothing", postings.every((x) => !apart.includes(x.to)), `no payout goes to ${apart.join(" or ")}, which sign and differ from their money address`);
 	} else if (hold && out.length) {
 		add("postings conserve the hold", postings.every((x) => isMoney(x.amount) && x.amount.token === hold.token) && sum(postings.map((x) => x.amount)) === BigInt(hold.amount), `the postings out of escrow sum to the hold, ${hold.amount} ${hold.token}`);
-		const to = (who, amount) => postings.some((x) => x.to === lc$1(who) && BigInt(x.amount.amount) === amount);
+		const to = (who, amount) => amount === 0n || postings.some((x) => x.to === lc$1(who) && BigInt(x.amount.amount) === amount);
 		const adjudicators = t ? [
 			t.adjudication.adjudicator,
 			t.adjudication.fallbackAdjudicator,
 			t.adjudication.appealAdjudicator
 		].map(lc$1) : [];
 		const rest = (who) => postings.filter((x) => x.to !== lc$1(who)).every((x) => adjudicators.includes(x.to));
-		const type = out.at(-1).type;
+		const last = out.at(-1), type = last.type;
+		const early = type === "settlement.released" && last.payload?.via === "early_accept" && of("judgment.decided").length === 0;
+		const defaulted = type === "settlement.refunded" && last.payload?.via === "default_outcome" && of("default.triggered").length > 0;
 		const payout = t?.sellerPayoutAddress ?? t?.seller, payment = t?.buyerPaymentAddress ?? t?.buyer;
 		if (!t || !price) add("postings follow the outcome", null, "the terms were not read");
+		else if (early) add("postings follow the outcome", to(payout, BigInt(price.amount)) && postings.every((x) => x.to === lc$1(payout) || x.to === lc$1(payment)), "released by the buyer's early accept: the price to the seller's payout address, the adjudication fee back to the buyer's payment address, since no adjudicator decided");
+		else if (defaulted) add("postings follow the outcome", to(payment, BigInt(hold.amount)) && postings.length === 1, "refunded by the default outcome: the whole hold back to the buyer's payment address");
 		else if (type === "settlement.released") add("postings follow the outcome", to(payout, BigInt(price.amount)) && rest(payout), "released: the price to the seller's payout address, the rest to adjudicators the terms name");
 		else if (type === "settlement.refunded") add("postings follow the outcome", to(payment, BigInt(price.amount)) && rest(payment), "refunded: the price to the buyer's payment address, the rest to adjudicators the terms name");
 		else if (type === "settlement.reclaimed") add("postings follow the outcome", to(payment, BigInt(hold.amount)) && postings.length === 1, "reclaimed: the whole hold back to the buyer's payment address");
@@ -11967,15 +11971,16 @@ async function dealRecord(id, o) {
 	const t = agreed.terms ? merged.terms?.signed : null;
 	const st = agreed.settlement ? merged.settlement : null;
 	const settledAt = agreed.steps ? merged.steps.find((x) => SETTLED.includes(x.step))?.at ?? null : null;
-	const received = (who) => st && who ? st.postings.some((x) => x.to === lc$1(who) && BigInt(x.amount?.amount ?? 0) > 0n) : false;
+	const received = (who) => st && who ? st.postings.filter((x) => x.to === lc$1(who)).reduce((n, x) => n + BigInt(x.amount?.amount ?? 0), 0n) : 0n;
+	const priceDue = isMoney(t?.price) ? BigInt(t.price.amount) : 0n;
 	const row = {
 		commitmentId: cid,
 		buyer: t ? lc$1(t.buyer) : null,
 		seller: t ? lc$1(t.seller) : null,
 		buyerPaymentAddress: t ? lc$1(t.buyerPaymentAddress) : null,
 		sellerPayoutAddress: t ? lc$1(t.sellerPayoutAddress) : null,
-		paidTo: t && received(t.sellerPayoutAddress) ? lc$1(t.sellerPayoutAddress) : null,
-		refundedTo: t && received(t.buyerPaymentAddress) ? lc$1(t.buyerPaymentAddress) : null,
+		paidTo: t && received(t.sellerPayoutAddress) > 0n ? lc$1(t.sellerPayoutAddress) : null,
+		refundedTo: t && received(t.buyerPaymentAddress) > 0n && received(t.sellerPayoutAddress) < priceDue ? lc$1(t.buyerPaymentAddress) : null,
 		price: t?.price ?? null,
 		adjudicationFee: t?.adjudication?.fee ?? null,
 		operatorFee: st?.operatorFee ?? null,
@@ -75330,7 +75335,7 @@ async function run(c, state, offerId, given) {
 }
 
 // examples/seller-worker-pin.ts
-const SELLER_WORKER_SHA256 = "86d1b081d773fa78133cac242baaf7ea96d14b59c430df4682cc3b99acb9ba92";
+const SELLER_WORKER_SHA256 = "d657b868101c02e281999024215f4fc6d41c5713b8d06fb9d6459cdbc547bb3b";
 
 // examples/setup-cloudflare.ts
 const plain$2 = (s, max = 300) => plain$8(String(s ?? "")).slice(0, max);
@@ -75694,7 +75699,7 @@ async function workerBytes(c) {
 		if (bytes.length > MAX_WORKER_BYTES) throw new Error(`${SELLER_WORKER_URL} is over ${MAX_WORKER_BYTES} bytes`);
 	}
 	const sha = createHash("sha256").update(bytes).digest("hex");
-	if (sha !== "86d1b081d773fa78133cac242baaf7ea96d14b59c430df4682cc3b99acb9ba92") throw new Error(`the Worker file's SHA-256 is ${sha}, not ${SELLER_WORKER_SHA256}, the one this setup.mjs carries: it is not the Worker this version writes`);
+	if (sha !== "d657b868101c02e281999024215f4fc6d41c5713b8d06fb9d6459cdbc547bb3b") throw new Error(`the Worker file's SHA-256 is ${sha}, not ${SELLER_WORKER_SHA256}, the one this setup.mjs carries: it is not the Worker this version writes`);
 	return bytes;
 }
 /** The card's quote entry in the card's folder: other offers kept, the draft's marks dropped. */
@@ -76997,7 +77002,7 @@ function payeeOf(record, answer) {
 		paidTo: null,
 		asAnswered: true,
 		wait: false,
-		note: `The operators' events carry no postings on this settlement layer, so the record names no payee. The signed terms of this released deal pay ${answer}, the payout address this folder was given; the transactions show the transfer.`
+		note: `The operators' events for this deal carry no postings, so the record names no payee. The signed terms of this released deal pay ${answer}, the payout address this folder was given; the transactions show the transfer.`
 	};
 	return {
 		paidTo: null,
