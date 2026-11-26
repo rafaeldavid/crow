@@ -31,7 +31,7 @@ describe.skipIf(!anvilReady)(`deal-record.ts on anvil: a decided deal names who 
   });
 
   /** One funded and delivered deal between two fresh agents, followed to its end. The seller is paid at a second address. */
-  async function deal(work: string, state: 'Released' | 'Refunded') {
+  async function deal(work: string, state: 'Released' | 'Refunded', price = '5000000') {
     const pin = pinOf(a.deployment);
     const agent = () => new Agent([...a.urls], generatePrivateKey(), nacl.box.keyPair().secretKey, pin.domain, pin.chain);
     const seller = agent(), buyer = agent();
@@ -42,8 +42,8 @@ describe.skipIf(!anvilReady)(`deal-record.ts on anvil: a decided deal names who 
     const offer = await seller.offer({
       template: 'checks-only', clubId: found.demo.clubId, seller: seller.address, sellerPayoutAddress: payout,
       buyer: { address: buyer.address, encryptionPublicKey: buyer.encryptionPublicKey },
-      adjudicators: { primary, fallback, appeal }, price: { token: pin.token.id, amount: '5000000' },
-      deliverable: { kind: 'dataset', description: `customers, to be ${state}`, format: 'text/csv' }, checks: CHECKS,
+      adjudicators: { primary, fallback, appeal }, price: { token: pin.token.id, amount: price },
+      deliverable: { kind: 'dataset', description: `customers, to be ${state} at ${price}`, format: 'text/csv' }, checks: CHECKS,
       timing: { offerExpiresInSec: 600, fundWithinSec: 900, deliverWithinSec: 1800, judgeWithinSec: 120, fallbackWithinSec: 120 },
     });
     await buyer.waitFor(offer.id, ['AcceptedByAdjudicator'], 90_000);
@@ -71,6 +71,15 @@ describe.skipIf(!anvilReady)(`deal-record.ts on anvil: a decided deal names who 
     expect(record.checks.filter((c) => c.ok === false)).toEqual([]);
     expect((record.settlement as J).postings.map((p: J) => p.why)).toEqual(['price back to the buyer', 'fee to the primary adjudicator, whose decision settles']);
     expect(record.disagreements).toEqual([]);
+  }, 300_000);
+
+  // T-627: a price of 0 pays no one; the fee pays the deciding adjudicator, and both postings checks run and pass.
+  it('a decision on a price of 0: no payee, the fee to the primary, and the postings checks pass', async () => {
+    const { record, checks } = await deal(GOOD, 'Released', '0');
+    expect(record.row).toMatchObject({ outcome: 'Released', paidTo: null, refundedTo: null });
+    expect(checks).toMatchObject({ 'postings conserve the hold': true, 'postings follow the outcome': true });
+    expect(record.checks.filter((c) => c.ok === false)).toEqual([]);
+    expect((record.settlement as J).postings.map((p: J) => p.why)).toEqual(['fee to the primary adjudicator, whose decision settles']);
   }, 300_000);
 
   // T-627: the buyer accepts during a held reject (ADR-0051), as `held-reject --accept` does. The price goes to the
