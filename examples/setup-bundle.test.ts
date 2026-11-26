@@ -188,6 +188,16 @@ describe('who a released deal paid, as its record shows it (T-472, found by the 
     expect(payeeOf(record(null, other, null), answer)).toMatchObject({ paidTo: null, asAnswered: false, wait: false, note: expect.stringMatching(/pay 0x0+dead, not the payout address 0x0+c0ffe/) });
     expect(payeeOf(record(null, answer, null, 'Refunded'), answer)).toMatchObject({ asAnswered: false });
   });
+
+  // T-627 (red team M1): a release at a price of 0 pays the seller nothing, so its postings name no payee. The command
+  // does not wait for one; it holds the signed terms' payout address to the answer.
+  it('a price of 0: nothing was due, so the terms\' payout address is held to the answer and nothing waits', () => {
+    const free = (named: string, postings: boolean | null) => ({ ...record(null, named, postings), row: { ...record(null, named, postings).row, price: { token: 'tUSD', amount: '0' } } });
+    expect(payeeOf(free(answer, true), answer)).toMatchObject({ paidTo: null, asAnswered: true, wait: false, note: expect.stringMatching(/price of 0.*0x0+c0ffe, the payout address this folder was given/) });
+    expect(payeeOf(free(other, true), answer)).toMatchObject({ paidTo: null, asAnswered: false, wait: false, note: expect.stringMatching(/pay 0x0+dead, not the payout address 0x0+c0ffe/) });
+    // A failed postings check still waits for a record that agrees.
+    expect(payeeOf(free(answer, false), answer)).toMatchObject({ asAnswered: false, wait: true });
+  });
 });
 
 describe('site/setup.mjs seller, check and status (T-472)', () => {

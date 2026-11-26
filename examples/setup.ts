@@ -402,11 +402,18 @@ async function writeRecord(c: Call, state: State, id: Hex, started: number): Pro
  * payee and its postings checks say so, and what it does show is the payout address in the signed terms, which the
  * contract pays on a release. `wait`: the record should name a payee and does not yet.
  */
-export function payeeOf(record: { row: { paidTo: string | null; sellerPayoutAddress: string | null; outcome: string | null }; checks: Array<{ check: string; ok: boolean | null }> }, answer: string): { paidTo: string | null; asAnswered: boolean; wait: boolean; note?: string } {
+export function payeeOf(record: { row: { paidTo: string | null; sellerPayoutAddress: string | null; outcome: string | null; price?: { amount?: unknown } | null }; checks: Array<{ check: string; ok: boolean | null }> }, answer: string): { paidTo: string | null; asAnswered: boolean; wait: boolean; note?: string } {
   const paidTo = record.row.paidTo;
   if (paidTo !== null) return { paidTo, asAnswered: paidTo === answer, wait: false, ...(paidTo === answer ? {} : { note: `The deal paid ${plain(paidTo, 42)}, not the payout address ${answer} this folder was given.` }) };
   const noPostings = record.checks.some((x) => x.check === 'postings follow the outcome' && x.ok === null);
   const named = record.row.sellerPayoutAddress;
+  // T-627: a release at a price of 0 pays the seller nothing, so postings that pass name no payee; nothing to wait for.
+  const passed = record.checks.some((x) => x.check === 'postings follow the outcome' && x.ok === true);
+  if (record.row.outcome === 'Released' && record.row.price?.amount === '0' && passed) {
+    return named === answer
+      ? { paidTo: null, asAnswered: true, wait: false, note: `The deal released at a price of 0, so nothing was due to the seller. Its signed terms name ${answer}, the payout address this folder was given.` }
+      : { paidTo: null, asAnswered: false, wait: false, note: `The signed terms of this deal pay ${plain(named, 42)}, not the payout address ${answer} this folder was given.` };
+  }
   if (!noPostings) return { paidTo: null, asAnswered: false, wait: true, note: 'The deal is released, and the operators do not show its payment yet. Run the same command again to read the record anew.' };
   if (record.row.outcome === 'Released' && named === answer) return { paidTo: null, asAnswered: true, wait: false, note: `The operators' events for this deal carry no postings, so the record names no payee. The signed terms of this released deal pay ${answer}, the payout address this folder was given; the transactions show the transfer.` };
   return { paidTo: null, asAnswered: false, wait: false, note: `The signed terms of this deal pay ${plain(named, 42)}, not the payout address ${answer} this folder was given.` };
