@@ -265,8 +265,9 @@ export class StubSettlement {
    */
   private buildState: { versions: PolicyVersions; registryFile: string } | null = null;
   private get build(): { versions: PolicyVersions; registryFile: string } {
-    // A scenario's `build:` pins the versions it was written for, whatever kept-policies.json's default is.
-    this.buildState ??= { versions: { ...buildDefaultVersions(this.root), ...(this.scenario.build ?? {}) }, registryFile: REGISTRY_FILE };
+    // A scenario's `build:` pins the versions it was written for, whatever kept-policies.json's default is; explicit
+    // build versions passed to the constructor win over both.
+    this.buildState ??= { versions: this.buildVersions ?? { ...buildDefaultVersions(this.root), ...(this.scenario.build ?? {}) }, registryFile: REGISTRY_FILE };
     return this.buildState;
   }
   private set build(b: { versions: PolicyVersions; registryFile: string }) {
@@ -288,6 +289,8 @@ export class StubSettlement {
     private readonly judges: JudgeProvider,
     private readonly root: string,
     private readonly backend: DriverBackend = { kind: 'sim' },
+    /** The adjudicators' default versions in place of kept-policies.json's (a what-if run, such as T-616's attack replay). */
+    private readonly buildVersions?: PolicyVersions,
   ) {
     if (backend.kind === 'local') {
       this.domain = holdbackDomain(backend.world.chainId, backend.world.deployment.rules);

@@ -339,7 +339,7 @@ describe('beat 6a: base64 injection, escalation, the appeal panel rejects (T-018
     expect(appeal!.record.panel.seedSource).toBe('beacon');
     expect(appeal!.record.screen.flagged).toBe(true);
     expect(appeal!.record.aggregate.reasons).toContain('screen flagged; see screen.signals');
-    for (const m of appeal!.record.panel.members) expect(m.verdict?.rationale).toMatch(/^scripted verdict/);
+    for (const m of appeal!.record.panel.members) expect(m.verdict && 'rationale' in m.verdict ? m.verdict.rationale : undefined).toMatch(/^scripted verdict/);
     expect(parseJudgment(appeal!.record).ok).toBe(true);
     expect(await w.balance('atlas')).toBeGreaterThan(9_900n * TUSD);
     expect(await w.balance('tidewater')).toBe(0n);

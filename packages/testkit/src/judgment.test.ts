@@ -58,7 +58,7 @@ function scripted(script: Record<string, Partial<JudgeVerdict>> = {}): JudgeProv
     judge(req) {
       calls.push(req);
       const r = fake.judge(req);
-      return { ...r, verdict: { ...r.verdict, ...script[req.judgeId] } };
+      return { ...r, verdict: { ...(r.verdict as JudgeVerdict), ...script[req.judgeId] } };
     },
   };
 }

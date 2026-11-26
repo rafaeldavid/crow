@@ -6,7 +6,8 @@
 // asked, so the provider throws instead of replaying it (docs/testing.md, Recorded judges).
 import { existsSync, mkdirSync, readdirSync, readFileSync, statSync, unlinkSync, writeFileSync } from 'node:fs';
 import { dirname, join } from 'node:path';
-import { parseJudgeVerdict, type Hex32, type JudgeVerdict } from '@holdback/core';
+import { parseJudgeVerdict, type CodedJudgeVerdict, type Hex32, type JudgeVerdict } from '@holdback/core';
+import { TEMPLATE_PAIR_3 } from '@holdback/judgment';
 import { KEPT } from '@holdback/judgment';
 
 export const RECORDING_FORMAT = 'holdback.recording/v1';
@@ -47,7 +48,8 @@ export interface Recording extends JudgeRequest {
 
 export interface JudgeResult {
   status: 'ok' | 'recorded';
-  verdict: JudgeVerdict;
+  /** A prose verdict, or under template pair 3 a coded one (ADR-0050); recordings hold prose verdicts only. */
+  verdict: JudgeVerdict | CodedJudgeVerdict;
   capturedFrom?: CapturedFrom;
 }
 
@@ -262,6 +264,36 @@ export function migrateRecordings(dir: string): Migrated[] {
   return moved;
 }
 
+/**
+ * T-616 (ADR-0050): the recorded verdicts of a scenario, answered in codes, for a what-if run under template pair 3
+ * and agg-6. Each judge keeps its recorded score per criterion, its overall and its injection flag, and writes its
+ * recorded prose too, as unknown keys a judge used to prose might add: the coded filter drops and counts them. The
+ * bindings are not checked (the prompts differ by construction). A judge drawn into a panel it has no recording for
+ * answers as it did in the scenario's other role: judges read the work afresh in every role.
+ */
+export class CodedFromRecorded implements JudgeProvider {
+  readonly kind = 'recorded';
+  constructor(private readonly dir: string) {}
+
+  judge(request: JudgeRequest): JudgeResult {
+    const roles = [request.role, ...JUDGE_ROLES.filter((r) => r !== request.role)];
+    const role = roles.find((r) => existsSync(recordingPath(this.dir, request.scenario, r, request.judgeId)));
+    if (!role) throw new RecordingMissingError(recordingPath(this.dir, request.scenario, request.role, request.judgeId), request);
+    const rec = readRecording(recordingPath(this.dir, request.scenario, role, request.judgeId), { ...request, role });
+    const v = rec.verdict;
+    const coded = {
+      criteria: v.criteria.map((c) => ({ id: c.id, refs: [], reasons: [c.score >= 3 ? 'meets_terms' : 'incomplete'], score: c.score, evidence: c.evidence })),
+      overall: v.overall,
+      injectionSuspected: v.injectionSuspected,
+      injectionKinds: v.injectionSuspected ? ['other'] : [],
+      injectionRefs: [],
+      rationale: v.rationale,
+      ...(v.injectionEvidence !== undefined ? { injectionEvidence: v.injectionEvidence } : {}),
+    };
+    return { status: 'recorded', verdict: coded as unknown as CodedJudgeVerdict, capturedFrom: rec.capturedFrom };
+  }
+}
+
 /** Fake judges: a fixed passing verdict for every criterion. For stubs and for capturing stub recordings. */
 export class FakeJudges implements JudgeProvider {
   readonly kind = 'fake';
@@ -269,6 +301,11 @@ export class FakeJudges implements JudgeProvider {
 
   judge(request: JudgeRequest): JudgeResult {
     assertPinned(request.model);
+    // ADR-0050: template pair 3 asks for a coded verdict, so the fake answers in codes there.
+    if (request.promptTemplateHash === TEMPLATE_PAIR_3.firstHash || request.promptTemplateHash === TEMPLATE_PAIR_3.appealHash) {
+      const coded: CodedJudgeVerdict = { criteria: this.criteria.map((id) => ({ id, refs: [], reasons: ['meets_terms'], score: 4 })), overall: 'pass', injectionSuspected: false, injectionKinds: [], injectionRefs: [] };
+      return { status: 'ok', verdict: coded };
+    }
     return {
       status: 'ok',
       verdict: {
@@ -305,7 +342,9 @@ export class RecordingJudges implements JudgeProvider {
       }
     }
     const result = this.inner.judge(request);
-    writeRecording(this.dir, toRecording(request, result.verdict, 'fake'));
+    // The recording format holds prose verdicts (judge-verdict.schema.json $defs/ProseVerdict) only.
+    if ('reasons' in (result.verdict.criteria[0] ?? {}) || !('rationale' in result.verdict)) throw new RangeError(`recordings hold prose verdicts only; a coded panel (template pair 3, ADR-0050) runs with --judges fake and no --record`);
+    writeRecording(this.dir, toRecording(request, result.verdict as JudgeVerdict, 'fake'));
     return result;
   }
 }

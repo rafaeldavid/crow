@@ -43,7 +43,11 @@ export function validatorsSource(): string {
   // copy of the oneOf's function for that type, about 120 KB in all; compiling refs as functions (`inlineRefs: false`)
   // saves about 99 KB, so the file grows about 21 KB, against about 170 KB with refs inlined (measured).
   const types = messageTypes(schemas).map(({ type, def }) => [`messages#${type}`, `${def}`]);
-  const code = standalone.default(ajv, Object.fromEntries([...schemas.map(({ name, schema }) => [name, schema.$id]), ...types]));
+  // ADR-0050: one validator per verdict format as well, so a filter reads only the format its bound policy names. The
+  // prose filters of agg-3 to agg-5 check `judge-verdict#prose`, exactly the v0.14 verdict, and never accept a coded one.
+  const verdict = schemas.find((x) => x.name === 'judge-verdict')!.schema.$id;
+  const formats = [['judge-verdict#prose', `${verdict}#/$defs/ProseVerdict`], ['judge-verdict#coded', `${verdict}#/$defs/CodedVerdict`]];
+  const code = standalone.default(ajv, Object.fromEntries([...schemas.map(({ name, schema }) => [name, schema.$id]), ...types, ...formats]));
 
   // Standalone code is CommonJS: `exports.<name> = validateN;`, and `require("…").default` for Ajv's runtime
   // helpers. The exports become the wrapper's return value, and each helper an import. The helpers are CommonJS

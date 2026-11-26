@@ -6,7 +6,7 @@
 // The deliveries carry text each screen version reads differently, so a screen that drifts shows.
 import { canonicalKeccak, type Address, type CommitmentTerms, type Delivery, type Hex32, type JudgeVerdict, type Sha256 } from '@holdback/core';
 import { sha256 } from '@holdback/core/crypto';
-import { KEPT, loadRegistry, type KeptTable, type LoadedRegistry, type PolicyVersions } from '@holdback/judgment';
+import { KEPT, loadRegistry, TEMPLATE_PAIR_3, type KeptTable, type LoadedRegistry, type PolicyVersions } from '@holdback/judgment';
 import { runnerPolicy } from './judges-config.js';
 import { runJudgment, type JudgmentView, type Role } from './judgment.js';
 import type { JudgeProvider } from './recorded.js';
@@ -21,12 +21,16 @@ export type ReadPath = 'whole' | 'seeded' | 'stride' | 'appeal' | 'unicode' | 'c
  */
 export const READ_PATHS: readonly ReadPath[] = ['whole', 'seeded', 'stride', 'appeal', 'unicode', 'cells', 'typography', 'filtered'];
 
-/** The kept policies the replay holds, by a label for the recorded file. */
+/**
+ * The kept policies the replay holds, by a label for the recorded file. A template pair and an aggregation of
+ * different verdict formats make no policy (ADR-0050), so the replay holds only pairs and aggregations of one format.
+ */
 export function keptPolicies(kept: KeptTable = KEPT): Array<{ label: string; versions: PolicyVersions }> {
   const out: Array<{ label: string; versions: PolicyVersions }> = [];
   for (const screenVersion of kept.screens.keys())
     for (const pair of kept.templatePairs)
-      for (const aggregationVersion of kept.aggregations.keys())
+      for (const [aggregationVersion, aggregation] of kept.aggregations)
+        if ((pair.format ?? 'prose-1') === aggregation.format)
         out.push({
           label: `${screenVersion}/${pair.firstHash.slice(0, 10)}/${aggregationVersion}`,
           versions: { screenVersion, promptTemplateHash: pair.firstHash, appealPromptTemplateHash: pair.appealHash, aggregationVersion },
@@ -115,6 +119,7 @@ function deliveryFor(path: ReadPath): { text: string; mime: 'text/csv' | 'text/p
 const judgesFor = (path: ReadPath): JudgeProvider => ({
   kind: 'fake',
   judge(req) {
+    if (req.promptTemplateHash === TEMPLATE_PAIR_3.firstHash || req.promptTemplateHash === TEMPLATE_PAIR_3.appealHash) return codedFor(path, req.judgeId);
     if (path === 'filtered' && (req.judgeId.startsWith('claude') || req.judgeId === 'gpt-b' || req.judgeId.startsWith('qwen'))) {
       const overlong = req.judgeId.startsWith('claude');
       const verdict = {
@@ -135,6 +140,25 @@ const judgesFor = (path: ReadPath): JudgeProvider => ({
     return { status: 'ok', verdict };
   },
 });
+
+/**
+ * Template pair 3 (ADR-0050): the same split, in codes, with references into the delivery. On the filtered path a claude
+ * judge adds a habitual rationale and gpt-b and qwen a key holding a URL and a reference that does not resolve: each is
+ * dropped and counted, and the seat counts, so a change to what the coded filter keeps or drops shows.
+ */
+function codedFor(path: ReadPath, judgeId: string): ReturnType<JudgeProvider['judge']> {
+  const fail = judgeId.startsWith('gpt') && !(path === 'filtered' && judgeId === 'gpt-b');
+  const verdict = {
+    criteria: RUBRIC.criteria.map((c, i) => ({ id: c.id, refs: i === 0 ? ['L2', 'L1'] : [], reasons: fail ? ['incomplete', 'missing_element'] : ['meets_terms'], score: fail ? 1 : 4 })),
+    overall: fail ? 'fail' : 'pass',
+    injectionSuspected: false,
+    injectionKinds: [],
+    injectionRefs: [],
+    ...(path === 'filtered' && judgeId.startsWith('claude') ? { rationale: 'replay: a fixed pass, in prose by habit. '.repeat(30) } : {}),
+    ...(path === 'filtered' && (judgeId === 'gpt-b' || judgeId.startsWith('qwen')) ? { 'https://replay.example/x': 1, injectionRefs: ['/not/a/line'] } : {}),
+  };
+  return { status: 'ok', verdict: verdict as unknown as ReturnType<JudgeProvider['judge']>['verdict'] };
+}
 
 /** One replayed judgment and its hash: the record the kept policy gives on this read path. */
 export async function replay(versions: PolicyVersions, path: ReadPath, kept?: KeptTable): Promise<{ view: JudgmentView; hash: Hex32 }> {

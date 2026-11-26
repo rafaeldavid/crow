@@ -1,6 +1,7 @@
 # ADR-0049: Free text over its cap is cut and the verdict is kept
 
 - **Status:** Accepted, 2026-11-25 (Rafa: "Yes, adopt it"), including the one sentence added to the hard rule (section 5). Not built yet: the build lands with that sentence in `CLAUDE.md` and `docs/team.md`, after a red team.
+- **Superseded for new policies that bind `agg-6` by ADR-0050; `agg-5` stays kept.**
 - **Date:** 2026-11-25
 - **Raised by:** Rafa, 2026-11-25: "why is there a 300 character limit? Is there a protocol constraint there? That seems arbitrary and mostly will cause issues no?" A live deal that day was refunded although every deterministic check and every valid verdict passed the work.
 - **Research:** a research note in the maintainers' private repository (`docs/private-materials.md`).
