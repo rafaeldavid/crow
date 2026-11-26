@@ -24,9 +24,10 @@ export interface StubOptions {
   /**
    * `ok`: a report the sample deal's checks accept. `missing-file`: it leaves out the last file in scope.
    * `own-shape`: the `ok` report in a seller's own shape (fixtures/data/audit-report/seller-shape-a.report.json),
-   * which the adapter delivers only after a mapping converts it (T-323).
+   * which the adapter delivers only after a mapping converts it (T-323). `fail-me`: the `ok` report with FAIL-ME in its
+   * summary, which the sim world's judges fail (T-625: a panel's reject on a deal the checks pass).
    */
-  report?: 'ok' | 'missing-file' | 'own-shape';
+  report?: 'ok' | 'missing-file' | 'own-shape' | 'fail-me';
   /** How many times the result answers 202 before the job is complete. Default 1. */
   pollsUntilComplete?: number;
   /** The token the stub prices in: the settlement layer's token ID. Default `tUSD`, SimChain's; on a chain, the token's address. */
@@ -71,7 +72,7 @@ function ownShapeFor(scope: { commit: string; files: string[] }): Uint8Array {
 }
 
 /** The sample report rewritten for a job's scope: its commit, its files, and each finding's locations moved to files in scope. */
-function reportFor(scope: { commit: string; files: string[] }, kind: 'ok' | 'missing-file' | 'own-shape'): Uint8Array {
+function reportFor(scope: { commit: string; files: string[] }, kind: 'ok' | 'missing-file' | 'own-shape' | 'fail-me'): Uint8Array {
   if (kind === 'own-shape') return ownShapeFor(scope);
   const sample = JSON.parse(readFileSync(SAMPLE, 'utf8'));
   const from: string[] = sample.filesReviewed;
@@ -79,7 +80,7 @@ function reportFor(scope: { commit: string; files: string[] }, kind: 'ok' | 'mis
   const report = {
     commit: scope.commit,
     reportDate: sample.reportDate,
-    summary: `The review covered ${scope.files.length} files at the commit above and reports ${sample.findings.length} findings.`,
+    summary: `The review covered ${scope.files.length} files at the commit above and reports ${sample.findings.length} findings.${kind === 'fail-me' ? ' FAIL-ME' : ''}`,
     filesReviewed: kind === 'missing-file' ? scope.files.slice(0, -1) : scope.files,
     findings: sample.findings.map((f: J) => ({ ...f, locations: f.locations.map((l: J) => ({ ...l, file: to(l.file) })) })),
   };

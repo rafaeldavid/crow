@@ -913,6 +913,21 @@ export class PublicWorld {
 
     const store = new StorageCiphertextStore(storage);
     const records = new Map<Hex32, Judgment>(Array.from(await storage.list<Judgment>({ prefix: 'jr:' }), ([k, v]) => [k.slice(3) as Hex32, v]));
+    // T-625: every record, under `jrr:<commitmentId>:<role>:<attempt>`, so the primary's stays served after an appeal.
+    // A record published before T-625 is only in `jr:`, and served as the deal's one record.
+    const byRole = new Map<Hex32, Map<string, Judgment>>();
+    for (const v of (await storage.list<Judgment>({ prefix: 'jrr:' })).values()) {
+      const by = byRole.get(v.commitmentId) ?? new Map<string, Judgment>();
+      by.set(`${v.role}|${v.attempt}`, v);
+      byRole.set(v.commitmentId, by);
+    }
+    // In first-published order: decidedAt, then the role's order in a deal.
+    const ORDER = { primary: 0, fallback: 1, appeal: 2 } as const;
+    const recordsOf = (id: Hex32): Judgment[] => {
+      const by = byRole.get(id);
+      if (!by) return records.has(id) ? [records.get(id)!] : [];
+      return [...by.values()].sort((a, b) => Date.parse(a.decidedAt) - Date.parse(b.decidedAt) || ORDER[a.role] - ORDER[b.role] || a.attempt - b.attempt);
+    };
     // ADR-0030 (T-221): every adjudicator's registration, the demo's three included, in rows `ar:<address>`, and every
     // policy a later registration replaced, in rows `ph:<policyHash>`.
     const registrations = await StorageRegistrations.load(storage, (prefix, rows) => telemetry.rows(prefix, rows));
@@ -961,6 +976,7 @@ export class PublicWorld {
       defaultAdjudicators: Object.fromEntries(adjKeys.map((a) => [a.role, lc(a.keys.address)])) as Record<AdjudicatorRole, Address>,
       declines: declinesOf(() => Object.values(adjudicators)),
       judgment: (id) => records.get(id) ?? null,
+      judgments: recordsOf,
       // POST /v1/faucet: the amount the request names, up to the cap (the default grant when it names none), and a
       // mandate in the demo club.
       faucet: grantFrom({ storage, ledger, club, principal, domain, token, symbol, amount: faucetAmount, maxAmount: faucetMaxAmount, windowSec: faucetWindowSec, perClient: faucetPerClient, secret, now, ...(live ? { live } : {}) }),
@@ -1164,8 +1180,19 @@ export class PublicWorld {
             return store.get(id as Sha256);
           },
           publishRecord: async (record) => {
+            // T-625 (red team L4): a record published before T-625 is only in `jr:`; keep it under `jrr:` before the
+            // new one replaces it, so a deal in flight at the deploy still serves the primary's record.
+            const before = byRole.has(record.commitmentId) ? undefined : records.get(record.commitmentId);
+            const by = byRole.get(record.commitmentId) ?? new Map<string, Judgment>();
+            if (before) by.set(`${before.role}|${before.attempt}`, before);
+            by.set(`${record.role}|${record.attempt}`, record);
+            byRole.set(record.commitmentId, by);
             records.set(record.commitmentId, record);
-            await storage.put({ [`jr:${record.commitmentId}`]: record });
+            await storage.put({
+              ...(before ? { [`jrr:${before.commitmentId}:${before.role}:${before.attempt}`]: before } : {}),
+              [`jr:${record.commitmentId}`]: record,
+              [`jrr:${record.commitmentId}:${record.role}:${record.attempt}`]: record,
+            });
             return `${operators[0]!.baseUrl}/v1/commitments/${record.commitmentId}/judgment`;
           },
         },

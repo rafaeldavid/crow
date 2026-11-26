@@ -76998,7 +76998,8 @@ const FILE_KEYS = [
 	"quoteAuth",
 	"quoteRateLimit",
 	"alerts",
-	"redelivery"
+	"redelivery",
+	"shareDelivery"
 ];
 /** Options removed in T-331, each with what to do instead. A configuration that still sets one is refused. */
 const REMOVED = [
@@ -77084,6 +77085,11 @@ function configFrom(f, file, files) {
 	if (f.events !== void 0 && (typeof f.events !== "string" || f.events === "")) throw new Error(`${file}: events must be a file path`);
 	if (f.reportSalt !== void 0 && typeof f.reportSalt !== "boolean") throw new Error(`${file}: reportSalt must be true or false`);
 	if (f.signingKey !== void 0 && f.signingKey !== "standing" && f.signingKey !== "per-deal") throw new Error(`${file}: signingKey must be "standing" or "per-deal"`);
+	if (f.shareDelivery !== void 0 && ![
+		"held-reject",
+		"delivered",
+		"never"
+	].includes(f.shareDelivery)) throw new Error(`${file}: shareDelivery must be "held-reject", "delivered" or "never"`);
 	if (own && Array.isArray(f.termsRules) && f.termsRules.some((r) => r?.rubric === true)) {
 		let t;
 		try {
@@ -77109,6 +77115,7 @@ function configFrom(f, file, files) {
 		...f.reportMapping === void 0 ? {} : { reportMapping: beside(f.reportMapping, "reportMapping") },
 		...pass("reportSalt"),
 		...pass("signingKey"),
+		...pass("shareDelivery"),
 		scope: f.scope ?? DEFAULTS.scope,
 		...own ? {
 			...pass("options"),
@@ -77121,7 +77128,7 @@ function configFrom(f, file, files) {
 			...DEFAULTS.timing,
 			...f.timing ?? {}
 		},
-		rubricTiming: { ...f.rubricTiming ?? DEFAULTS.rubricTiming },
+		rubricTiming: f.rubricTiming !== void 0 ? { ...f.rubricTiming } : Object.fromEntries(Object.entries(DEFAULTS.rubricTiming ?? {}).filter(([k]) => !(isRecord$1(f.timing) && Object.hasOwn(f.timing, k)))),
 		journal: f.journal ?? DEFAULTS.journal,
 		...f.events === void 0 ? {} : { events: f.events },
 		pollMs: f.pollMs ?? DEFAULTS.pollMs,
@@ -78076,6 +78083,23 @@ async function createSellerAdapter(c, env, io) {
 		save();
 		return seller.call("POST", v.path, v.body);
 	}
+	/**
+	* T-625: a delivery this adapter's own key signs, prepared and signed as Agent.deliver does it, kept in the journal,
+	* then sent, as remoteDeliver keeps the signer's. The buyer's early accept needs this signed body (GET
+	* /deals/<id>/delivery); a deal whose delivery is already signed sends that same body again.
+	*/
+	async function localDeliver(deal, bytes) {
+		const agent = signerOf(deal);
+		if (deal.signedDelivery) return agent.call("POST", deal.signedDelivery.path, deal.signedDelivery.body);
+		const { prepared, intent } = await agent.prepareDelivery(deal.terms, bytes);
+		const { path, body } = await agent.sign(prepared, intent);
+		deal.signedDelivery = {
+			path,
+			body
+		};
+		save();
+		return agent.call("POST", path, body);
+	}
 	let mandateUntil = 0;
 	/** The end of the seller's latest mandate in the club that covers selling, as every operator lists it; 0 for none. */
 	async function mandateEnd(address = seller.address) {
@@ -78510,6 +78534,14 @@ async function createSellerAdapter(c, env, io) {
 					attempts: deal.refusals
 				}, said);
 			}
+			if (deal.signedDelivery && deal.stage === "delivering") {
+				const kept = deal.signedDelivery.body;
+				await (remote ? remoteDeliver(deal, /* @__PURE__ */ new Uint8Array()) : localDeliver(deal, /* @__PURE__ */ new Uint8Array()));
+				return record(deal, {
+					stage: "delivered",
+					note: `${String(kept.ciphertext?.bytes ?? "?")} ciphertext bytes, ${String(kept.plaintextSha256)}, the signed delivery kept from the first send`
+				});
+			}
 			if (deal.stage === "refused") {
 				if (!(deal.ready === true || refusal.refetchEverySec !== void 0 && (deal.nextFetchAt === void 0 || Date.parse(deal.nextFetchAt) <= now))) return;
 			}
@@ -78596,7 +78628,7 @@ async function createSellerAdapter(c, env, io) {
 				ready: false,
 				note: `delivering ${pre.bytes} bytes, ${pre.plaintextSha256}`
 			});
-			await (remote ? remoteDeliver(deal, bytes) : signerOf(deal).deliver(deal.terms, bytes));
+			await (remote ? remoteDeliver(deal, bytes) : localDeliver(deal, bytes));
 			record(deal, {
 				stage: "delivered",
 				note: `${pre.bytes} bytes, ${pre.plaintextSha256}`
@@ -79003,6 +79035,121 @@ async function createSellerAdapter(c, env, io) {
 			...why === void 0 ? {} : { refusal: why }
 		});
 	}
+	/** T-625: how old a buyer's signed request may be, in seconds; a request time in the future is refused. */
+	const DELIVERY_REQUEST_MAX_AGE_SEC = 300;
+	/**
+	* T-625 (red team M2): concurrent requests share the decision in flight, a "no" is reused for SHARE_REFUSAL_MS, and a
+	* "yes" is never reused once made, so a deal that closes is not shared on an old answer. Each deal takes at most
+	* SHARE_REQUESTS_PER_MIN decisions a minute; past that it answers 429, so one buyer's loop cannot spend the operators'
+	* read budget the deal loop needs.
+	*/
+	const SHARE_REFUSAL_MS = 1e4;
+	const SHARE_REQUESTS_PER_MIN = 10;
+	const shareDecisions = /* @__PURE__ */ new Map();
+	const shareRequests = /* @__PURE__ */ new Map();
+	/** T-625 (red team L1): signatures already answered, by signature, until they are too old to be accepted again. */
+	const usedRequests = /* @__PURE__ */ new Map();
+	/**
+	* T-625: may this adapter hand `deal`'s signed delivery to its buyer now? Read from every operator (one that lies or
+	* lags is caught, red team H1): the deal must be Delivered. For "held-reject", also the primary's published reject
+	* of this very delivery, signed by the primary the terms name, on a rubric deal whose hold by ADR-0051's rule has
+	* not ended (red team M1).
+	*/
+	async function mayShare(deal, mode) {
+		const id = deal.id;
+		const cached = shareDecisions.get(id);
+		if (cached && Date.now() < cached.until) return cached.ok;
+		const decide = async () => {
+			if (await seller.trusted(`/v1/commitments/${id}`, (x) => x?.escrowState) !== "Delivered") return false;
+			if (mode === "delivered") return true;
+			const record = await seller.trusted(`/v1/commitments/${id}/judgment`, (x) => x);
+			const terms = deal.terms;
+			const body = { ...record };
+			delete body.recordHash;
+			delete body.signature;
+			delete body.recordUri;
+			if (record?.role !== "primary" || record?.aggregate?.decision !== "reject") return false;
+			if (String(record.commitmentId).toLowerCase() !== id || String(record.deliveryHash).toLowerCase() !== deliveryHashOf(deal.signedDelivery.body)) return false;
+			if (jcsHash(body) !== String(record.recordHash).toLowerCase()) return false;
+			const by = await recoverMessageAddress({
+				message: { raw: record.recordHash },
+				signature: record.signature
+			}).catch(() => null);
+			if (!by || !isAddressEqual(by, terms.adjudication.adjudicator)) return false;
+			const until = holdUntil({
+				commitment: terms,
+				role: "primary",
+				deadline: terms.timing.judgeBy
+			}, "reject", record.decidedAt);
+			return until !== null && await seller.settlementNow() < Date.parse(until);
+		};
+		const ok = decide().catch(() => false);
+		const entry = {
+			until: Infinity,
+			ok
+		};
+		shareDecisions.set(id, entry);
+		ok.then((yes) => {
+			entry.until = yes ? 0 : Date.now() + SHARE_REFUSAL_MS;
+		});
+		return ok;
+	}
+	/**
+	* GET /deals/<commitmentId>/delivery?at=<unix seconds>&nonce=<16 to 64 hex digits>&signature=<0x...> (T-625): the signed
+	* delivery's hashes, never an envelope (D110), to the deal's buyer only, when `shareDelivery` allows it now (mayShare). The buyer signs
+	* `crow.delivery:<commitmentId>:<at>:<nonce>`
+	* (EIP-191) with the key the terms name as buyer, at most DELIVERY_REQUEST_MAX_AGE_SEC before this clock; each signed
+	* request is answered once. The signature is recovered before the journal is read, and anyone else, any deal this
+	* adapter does not share now and any malformed request gets the same 404, so the route links no deal to this seller.
+	* A buyer that is a contract (ERC-1271) cannot sign this request: ask the seller for its signed delivery instead.
+	*/
+	async function deliveryShared(req, commitmentId) {
+		if (req.method !== "GET") return send(405, {
+			type: "method_not_allowed",
+			detail: "this route takes GET"
+		});
+		const none = () => send(404, {
+			type: "not_found",
+			detail: "this adapter shares no such delivery with this signer now"
+		});
+		const id = commitmentId.toLowerCase();
+		const q = new URL(req.url).searchParams;
+		const at = Number(q.get("at"));
+		const nonce = (q.get("nonce") ?? "").toLowerCase();
+		const signature = (q.get("signature") ?? "").toLowerCase();
+		const nowSec = Math.floor(Date.now() / 1e3);
+		if (!Number.isSafeInteger(at) || at > nowSec + 5 || nowSec - at > DELIVERY_REQUEST_MAX_AGE_SEC || !/^[0-9a-f]{16,64}$/.test(nonce) || !/^0x[0-9a-f]{130}$/.test(signature)) return none();
+		const by = await recoverMessageAddress({
+			message: `crow.delivery:${id}:${at}:${nonce}`,
+			signature
+		}).catch(() => null);
+		for (const [sig, until] of usedRequests) if (until < nowSec) usedRequests.delete(sig);
+		if (!by || usedRequests.has(signature)) return none();
+		const deal = Object.hasOwn(journal.deals, id) ? journal.deals[id] : void 0;
+		const mode = c.shareDelivery ?? "held-reject";
+		if (!deal?.signedDelivery || mode === "never" || !isAddressEqual(by, deal.terms.buyer)) return none();
+		usedRequests.set(signature, at + DELIVERY_REQUEST_MAX_AGE_SEC);
+		const recent = (shareRequests.get(id) ?? []).filter((t) => Date.now() - t < 6e4);
+		if (recent.length >= SHARE_REQUESTS_PER_MIN && shareDecisions.get(id)?.until !== Infinity) return send(429, {
+			type: "rate_limited",
+			detail: "too many delivery requests for this deal; try again in a minute"
+		}, { "retry-after": "60" });
+		recent.push(Date.now());
+		shareRequests.set(id, recent);
+		if (!await mayShare(deal, mode)) return none();
+		const b = deal.signedDelivery.body;
+		log(`${id} told the buyer ${deal.terms.buyer} its delivery's hashes, no envelope (${mode}).`);
+		return send(200, {
+			commitmentId: id,
+			deliveryHash: deliveryHashOf(b),
+			attempt: b.attempt,
+			plaintextSha256: b.plaintextSha256,
+			...b.plaintextMime === void 0 ? {} : { plaintextMime: b.plaintextMime },
+			ciphertext: b.ciphertext,
+			envelopes: Array.isArray(b.encryptedKeys) ? b.encryptedKeys.length : 0,
+			note: "the seller signed a delivery with these hashes; its envelopes are withheld, and the buyer gets its key with its accept"
+		});
+	}
 	/** T-503: a stored refund is answered again while it has at least this long left, in ms of settlement-layer time. */
 	const REFUND_REUSE_MS = 6e5;
 	/** T-503: how long a signed refund stays valid, in ms: 23 hours, inside the 24 hours verify.ts allows a settlement. */
@@ -79217,6 +79364,8 @@ async function createSellerAdapter(c, env, io) {
 		}));
 		const refundFor = refusal.ready ? /^\/deals\/(0x[0-9a-fA-F]{64})\/refund$/.exec(path)?.[1] : void 0;
 		if (refundFor) return refundSigned(req, refundFor);
+		const deliveryFor = /^\/deals\/(0x[0-9a-fA-F]{64})\/delivery$/.exec(path)?.[1];
+		if (deliveryFor) return deliveryShared(req, deliveryFor);
 		const dealFor = /^\/deals\/(0x[0-9a-fA-F]{64})$/.exec(path)?.[1];
 		if (dealFor) return dealState(req, dealFor);
 		if (path !== "/quote") return send(404, {
