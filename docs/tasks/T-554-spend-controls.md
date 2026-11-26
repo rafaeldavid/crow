@@ -63,6 +63,25 @@ In my words: today an agent's caps are only as strong as the machine that holds 
   - The permission check refused their `cast send`, so they created nothing. On Rafa's word, this session then ran the page's six steps as written, from the fork's unlocked development account, with no key on any command line.
   - The vault and grant IDs equal the ones the fresh assistant computed from the page. The grant reads exactly that budget, the seller is listed, and the vault holds 100 tUSDC. A 26.5 tUSDC hold passes the dry run; one unit more is refused with `OverPerSpend`, and another payout address with `CounterpartyNotAllowed`.
 
+- 2026-11-25, readiness for an outside scan [measured; in the vault repository's `docs/audit/readiness.md`]:
+  - end-to-end journeys, invariant campaigns, simulations, arithmetic fuzz and mutation checks;
+  - two red teams and a second-family review by DeepSeek;
+  - the stable tag `vault-stable-1` (`7fbeed4`);
+  - two contract fixes on the next version, each reviewed and red-teamed: RT-2 (approvals keyed apart from the fee's transient flags) and SF-4 (no withdrawal, fill or return while a fee-path approval is unpulled);
+  - known limits K-1 to K-21.
+- 2026-11-26, the vault-as-buyer deploy on Sepolia, on Rafa's word ("Deploy it") [measured; record and provenance in the vault repository's `deployments/11155111.json` and `deployments/README.md`, vault pull request 22]:
+  - **Code:** vault `main` at `8decee3`, built from a fresh recursive clone, which gave the rehearsal's CREATE2 addresses. Rafa ran `forge script --broadcast` and `verify()`, because the permission check refused both from the session.
+  - **Addresses:**
+    - factory `0xF647937227BB866B8dC75C70497DB76EdfB081D1`;
+    - vault implementation `0xad58B7D323272387827835EdD94B638572d65940`;
+    - Holdback module `0xBF9E295d9B9A2991949d6e4775D9a244e5E4Fdd9` (`VAULT_IS_BUYER` true);
+    - default list `0xE505b6369E4E850F068Af40a4D446e180F3bd4Ad`.
+  - **Transactions:** blocks 12,214,881 to 12,214,883, each with status 1.
+  - **Gas:** 31,218,857, 15,897,722 and 1,403,960 gas used, against a live-RPC rehearsal (`cast estimate`, two RPCs) of 31,716,730, 16,152,403 and 1,428,581. Total 0.000512 ETH at 0.01055 gwei.
+  - **Checks:** fee rate 0 with no sweeper; the implementation cannot be initialized; the module's payee and escrow are the rules contract's own. `verify()` wrote the record at block 12,214,888, and all four are an exact match on Sourcify for runtime and creation code.
+  - **The earlier factory:** the 2026-11-19 factory from `36485df` stays for its vaults.
+  - **What the guide now says:** `site/vault.txt` says which deployment to use. It also says `client/vault-buy.ts` does not yet sign as the vault, so a purchase through the current factory waits for that client step; until then a purchase uses a vault on the 2026-11-19 factory.
+
 ## Decisions
 
 - **The split** is Rafa's (D84). The boundary record follows his approval of its outline ("ok continue, looks good").
