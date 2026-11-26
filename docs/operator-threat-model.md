@@ -37,7 +37,7 @@ Each row gives the cost of the abuse, the defence before T-422, and the defence 
 | **Steps for deals funded elsewhere** | A caller that funds on chain itself, paying its own gas, can relay the delivery and the decision through the operators: about 2 transactions of relayer gas for each 1 of its own | The write throttle | Nothing new: the caller pays real gas for each deal, and the loss is bounded per deal [recorded as a residual] |
 | **Filling the store with ciphertext** | Each upload of up to 1 MiB stays in the World's storage. At 120 uploads a minute, one client fills 10 GB in about 85 minutes [inferred], and the world stops | 120 writes a minute per client; 1 MiB per ciphertext | A daily cap on new ciphertext stored: 256 MiB a UTC day per client, per operator. Bytes the store already holds, and replays, are not counted |
 | **Replay storms on idempotency keys** | Each replay is one keyed lookup and one hash in the World object, after the body cap; it spends no gas and writes no row | Replays were counted as writes and could be refused by the throttle, so an agent over its count could not read back an answer it had already been given | Every request under a known key is counted at entry against a replay budget of its own, 120 per 60 s per client, before its body is read; a replay is then answered before the read and write budgets. Only the same key with the same body is a replay; the same key with another body is a `409` and counts as a write too. So the body work under known keys is bounded as a write's was before. The flood ceiling still bounds the rate |
-| **Paths the operator routes differently** | `//x/v1/…` routes at the operator as `/v1/…`, and a cap that read the raw path would miss it | none | The caps read the path as the operator routes it, and each Worker answers 404 for a path with an empty segment or a backslash |
+| **Paths the operator routes differently** | `//x/v1/…` routes at the operator as `/v1/…`, and a cap that read the raw path would miss it | none | The caps take the operation as the operator parsed it, so they read no path of their own (T-626), and each Worker answers 404 for a path with an empty segment or a backslash |
 | **Large bodies** | A body streams into the World object; the operator stops reading past 1 MiB | 413 `payload_too_large` at 1 MiB (JSON and ciphertext) and 192 KiB (adjudicator registrations), read in the World object | The Worker refuses a body whose Content-Length is above the route's cap before it reaches the World object |
 | **Slow requests** | A request whose body trickles in holds memory in the World object while it waits | Cloudflare's edge terminates connections and buffers requests; a Worker spends no CPU time while it waits [inferred from Cloudflare's model] | Nothing new [recorded as a residual] |
 | **Enumerating other parties' deals** | A deal at disclosure `public` is public on chain anyway (residual 9 in `docs/neutrality.md`). Sealed terms need the party's read token | The read limit bounds the pace: 1,200 reads a minute per client | The flood ceiling. Nothing more is needed: nothing an operator serves is secret |
@@ -61,6 +61,11 @@ The live flows' needs were measured on 2026-11-14 with one try deal (`site/try.m
 | Body size | each Worker, by Content-Length, then the operator while it reads | 1 MiB (1,048,576 bytes); 192 KiB (196,608 bytes) for adjudicator registrations | 1,010 bytes | fixed in code |
 
 Each refusal answers `429` `rate_limited` with `retryAfterSec` and `Retry-After` in whole seconds, and says what else the caller can do: wait, use the other operator, or submit to the settlement contract. The daily caps open again at 00:00 UTC.
+
+**An operator asks the daily caps last** (T-626). The caps are the operator's quota (`quota` in `apps/operator/src/server.ts`, `dailyCapQuota` in `apps/demo-cloud/src/limits.ts`). The operator asks it after its throttle and its own checks, just before it relays or stores:
+
+- A request that the throttle or another check refuses never reaches the caps.
+- A replay that the operator answers from its stored response never reaches the caps.
 
 ## What the limits do not stop
 

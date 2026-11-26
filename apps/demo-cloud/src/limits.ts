@@ -6,11 +6,12 @@
 //   Wrangler files) and answers 429 before the World object, so a flood never reaches the one object both nodes share.
 // - The body cap: each Worker refuses a body whose Content-Length is above the route's cap, before the World object.
 // - The daily caps (DailyCaps): the World object counts, per client and per operator, the deals the relayer funds and
-//   the new ciphertext bytes it stores each UTC day, in storage rows, so a restart keeps them.
+//   the new ciphertext bytes it stores each UTC day, in storage rows, so a restart keeps them. Each operator asks them
+//   as its quota (dailyCapQuota), after its throttle.
 // - The replay rule: a repeat of an accepted request (the same Idempotency-Key and body) is never refused by a daily
 //   cap, nor by the operator's read and write throttle (apps/operator/src/server.ts). The flood ceiling counts it.
-import { canonicalKeccak } from '@holdback/core';
-import { MAX_REGISTRATION_BYTES, PROBLEM_BASE, PROBLEMS, type ApiProblemType } from '@holdback/operator';
+import { canonicalKeccak, type Hex32, type Sha256 } from '@holdback/core';
+import { MAX_REGISTRATION_BYTES, PROBLEM_BASE, PROBLEMS, type ApiProblemType, type QuotaSubject, type QuotaTake } from '@holdback/operator';
 import type { WorldStorage } from './storage.js';
 
 /**
@@ -247,6 +248,53 @@ export class DailyCaps {
   }
 }
 
+/** The states before funding: a funding relayed for a deal in any other spends no funding gas (T-422). */
+const PRE_FUNDING_STATES: ReadonlySet<string> = new Set(['Offered', 'AcceptedByAdjudicator', 'Agreed']);
+
+/**
+ * T-422: the daily caps as one node's quota (OperatorOptions.quota), which the operator asks after its throttle and
+ * checks, just before it relays or stores. A funding (a funded agree, a fund, a one-shot hold) takes one of the client's
+ * funded deals at this node, and an upload takes its new bytes; a replay of a counted funding, and bytes the store
+ * already holds, take nothing. A count whose relay or upload fails is given back. Any other write takes nothing.
+ * `escrowState` reads a deal's state (null when there is none), and `stored` whether the store holds a ciphertext.
+ */
+export function dailyCapQuota(
+  caps: DailyCaps,
+  node: number,
+  escrowState: (commitmentId: Hex32) => Promise<string | null>,
+  stored: (id: Sha256) => Promise<boolean>,
+): (about: QuotaSubject) => Promise<QuotaTake> {
+  const refuse = (detail: string, retryAfterSec: number): QuotaTake => ({ refuse: { type: 'rate_limited', detail, retryAfterSec } });
+  return async (about) => {
+    const { client } = about;
+    if (about.kind === 'ciphertext') {
+      const { id, bytes } = about;
+      const t = await caps.takeBytes(node, client, bytes, () => stored(id));
+      if (!t.ok) return refuse(`this operator stores at most ${caps.limits.ciphertextBytes} bytes of new ciphertext a day (UTC) per client (an IPv4 address or an IPv6 /64), and this upload of ${bytes} bytes would pass it. Retry after 00:00 UTC, upload to another operator, or keep the ciphertext in a store of your own: the delivery names its URI`, t.retryAfterSec);
+      return t.counted ? { settle: (ok) => caps.settleBytes(node, client, bytes, ok) } : undefined;
+    }
+    const { op } = about;
+    // An agree funds only with `fund` beside it.
+    const deal = op.kind === 'hold' ? op.commitment.id : op.kind === 'fund' || (op.kind === 'agree' && op.fund) ? op.message.commitmentId : null;
+    if (deal === null) return undefined;
+    // A deal already past funding costs the relayer no funding gas: the settlement layer replays or refuses it. So a replay
+    // of an accepted funding is never counted, after 00:00 UTC or from another address too (T-422 review and red team, F4).
+    const state = await escrowState(deal).catch(() => null);
+    if (state && !PRE_FUNDING_STATES.has(state)) return undefined;
+    const fingerprint = canonicalKeccak({ idempotencyKey: about.idempotencyKey, path: about.path, body: about.body ?? null });
+    const t = await caps.takeFunding(node, client, fingerprint);
+    if (!t.ok && t.reason === 'global') {
+      const d = caps.limits.fundedDealsAll;
+      return refuse(`the relayer funds at most ${d} deal${d === 1 ? '' : 's'} a day (UTC) across all clients, and today's are used. Nothing about the deal changed: retry after 00:00 UTC, or submit it to the settlement layer (on Sepolia, the rules contract) yourself and pay your own gas`, t.retryAfterSec);
+    }
+    if (!t.ok) {
+      const d = caps.limits.fundedDeals;
+      return refuse(`this operator relays at most ${d} funded deal${d === 1 ? '' : 's'} a day (UTC) per client (an IPv4 address or an IPv6 /64), and this client has reached it. Nothing about the deal changed: retry after 00:00 UTC, send the same signed request to another operator, or submit it to the settlement layer (on Sepolia, the rules contract) yourself`, t.retryAfterSec);
+    }
+    return t.counted ? { settle: (ok) => caps.settleFunding(node, client, fingerprint, ok) } : undefined;
+  };
+}
+
 /**
  * T-581: the judged deals Crow's adjudicators take per seller and buyer pair and UTC day: as primary at acceptance, or as
  * fallback or appeal when an outside primary leaves Crow a panel to convene. Counted per pair, not per buyer, because
@@ -321,22 +369,4 @@ export class JudgedDealsPerPair {
       if (ids.includes(id)) await this.storage.put({ [key]: ids.filter((x) => x !== id) });
     });
   }
-}
-
-/**
- * The URL the operator routes: it parses the path and query alone against a placeholder origin (apps/operator/src/
- * fetch.ts and server.ts), so `//x/v1/…` routes as `/v1/…`. The caps read the same URL (T-422 red team, F1).
- */
-export const routedUrl = (url: URL): URL => new URL(`${url.pathname}${url.search}`, 'http://operator.invalid');
-
-/** Which daily cap a POST draws on, from its routed path and query: a funded agree is told apart by its body. */
-export function capOf(method: string, url: URL): 'funding' | 'agree' | 'ciphertext' | null {
-  if (method !== 'POST' || url.searchParams.get('validateOnly') === 'true') return null;
-  const s = url.pathname.split('/').filter(Boolean);
-  if (s[0] !== 'v1') return null;
-  if (s.length === 2 && s[1] === 'holds') return 'funding';
-  if (s.length === 2 && s[1] === 'ciphertext') return 'ciphertext';
-  if (s.length === 4 && s[1] === 'commitments' && s[3] === 'fund') return 'funding';
-  if (s.length === 4 && s[1] === 'commitments' && s[3] === 'agree') return 'agree';
-  return null;
 }
