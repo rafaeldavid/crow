@@ -17,7 +17,7 @@ type J = any; // eslint-disable-line @typescript-eslint/no-explicit-any
 const URLS = ['http://127.0.0.1:8787', 'http://localhost:8788'];
 const MINUTE = 60_000;
 /** Live-judge variables (no real key; no call is made): the adjudicators bind another registry and refuse older deals. */
-const LIVE = { HOLDBACK_ANTHROPIC_API_KEY: 'test', HOLDBACK_OPENAI_COMPATIBLE_API_KEY: 'test', HOLDBACK_OPENAI_COMPATIBLE_BASE_URL: 'https://judges.invalid/v1' };
+const LIVE = { HOLDBACK_ANTHROPIC_API_KEY: 'test', HOLDBACK_OPENAI_COMPATIBLE_API_KEY: 'test', HOLDBACK_OPENAI_COMPATIBLE_BASE_URL: 'https://judges.invalid/v1', HOLDBACK_GOOGLE_API_KEY: 'test' };
 
 /** One World behind holdback-op1 (127.0.0.1) and holdback-op2 (localhost); `restart` is an eviction, or a redeploy with `env`. */
 function deploy() {
