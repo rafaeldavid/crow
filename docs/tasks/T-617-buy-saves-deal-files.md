@@ -5,7 +5,7 @@
 - **Depends on:** T-611 (the buyer tools as they are live)
 - **Paths this task may touch:** `examples/buy-with-signer.ts`, `examples/deal-files.ts` and their tests, the late-work test in `examples/buyer-signer-settled.test.ts`, `site/buy.mjs` (generated), `site/buy.txt`, `site/ref/buyer-signer.txt`, this file
 - **Human gate:** yes. `site/buy.mjs` stays pinned. Rafa, 2026-11-25, as relayed to this session by the coordinator session: "Yes, after re-review". This change may alter `buy.mjs`, for this change only; the pin rule otherwise stands. The re-review is below. The site deploy is Rafa's.
-- **Status:** review
+- **Status:** done
 - **Agent/session:** p16-cold-buyers, 2026-11-25
 - **Roadmap row:** N38
 

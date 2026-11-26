@@ -5,7 +5,7 @@
 - **Depends on:** ADR-0049's `agg-5` build (session agg5-cut-rule) merged first; this task edits the same files (`packages/judgment/src/verdict.ts`, `pipeline.ts`, `kept.ts`)
 - **Paths this task may touch:** `spec/schemas/judge-verdict.schema.json`, `spec/schemas/judgment.schema.json`, every other `spec/schemas/*.json` for the `$id` bump, `spec/openapi.json`, `spec/examples/`, `spec/README.md`, `packages/core/src/{types,parse,validators.generated}.ts`, `packages/judgment/src/` (a coded filter, `refs.ts`, template pair 3 in `prompt.ts`, `kept.ts`, `pipeline.ts`, a frozen copy of the prose filter, tests), `apps/adjudicator/src/kept-policies.json`, `apps/adjudicator/src/test-adjudicator.ts`, the scripted-judge readers (`apps/test-agents/src/seller.ts`, `examples/demo-sepolia.ts`), `packages/testkit/src/`, `fixtures/replay/`, new `fixtures/scenarios/attack.*` files, `docs/judgment-and-defenses.md`, `CLAUDE.md` and `docs/team.md` (the hard rule's wording only), `site/llms.txt`, `site/ref/limits.txt`, the rebuilt `site/*.mjs` bundles, ADR-0049's status line, this file, ADR-0050, D106
 - **Human gate:** no for the pull request; yes for the deploys (carry pair 3 and `agg-6`, the calibration on Sepolia, then the default), which are Rafa's
-- **Status:** review
+- **Status:** done
 - **Agent/session:** partner-c-design-pack, 2026-11-25; branch `t-616-coded-verdicts`
 - **Roadmap row:** none (incident follow-up, 2026-11-25)
 
