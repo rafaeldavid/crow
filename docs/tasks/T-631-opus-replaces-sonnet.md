@@ -97,7 +97,12 @@ Rafa, 2026-11-26: "change from Sonnet to Opus 5.5"; "To start, let's only do 3 j
 - **L1, noted:** the guard does not check the deploy order of a registry default, so the order below is kept by hand.
 - **L4, noted:** an outside primary can still bind the old registry, and Crow's fallback will judge under it. Both parties sign the registry hash (D28, D32).
 
-**Checks.** See Handoff.
+**Checks [measured, 2026-11-26; `/verify`, judgment recipe].**
+- **At the flip commit:**
+  - `pnpm exec tsc -b`: pass. `pnpm lint`: exit 0. `pnpm validate:spec`: exit 0.
+  - `pnpm snap`: 73 of 73 pass, with no snapshot diff. `node site/build.mjs && node site/check.mjs`: PASS.
+  - `pnpm test`: 6,898 passed, 5 expected failures, 334 skipped, 1 failed. The expected failures are the frozen agg-4 KEPT GAP tests and the red team's two M1 known gaps. The one failure is `apps/own-seller/src/frozen.test.ts`, which refuses any change under `packages/` against a full local history; CI's test job checks out shallow and skips it, as it did for T-616's judgment changes [inferred].
+- **At the carry commit:** the judgment, testkit, adjudicator, demo-cloud, metrics and site-bundle suites pass 2,693, with 5 expected failures. Typecheck and lint pass.
 
 ## Decisions
 
