@@ -70,7 +70,7 @@ import type { TimeoutKind } from '@holdback/settlement';
 import { mandateFor, SIM_CHAIN_ID, SIM_RULEBOOK, simClub, SimChain, TOKEN, wideScope, type Genesis, type JournalEntry } from '@holdback/settlement/sim';
 import { panelConfig, unconfiguredReason, type JudgeProvider, type PanelConfig } from './judges.js';
 import { StorageLanes } from './lanes.js';
-import { JudgedDealsPerPair, capOf, DailyCaps, DEFAULT_JUDGED_DEALS_PER_PAIR, secondsToUtcMidnight, MAX_BODY_BYTES, routedUrl, DEFAULT_DAILY_CAPS, DEFAULT_RATE, FLOOD_CEILING, problemResponse, wholeNumberVar } from './limits.js';
+import { JudgedDealsPerPair, DailyCaps, dailyCapQuota, DEFAULT_JUDGED_DEALS_PER_PAIR, secondsToUtcMidnight, DEFAULT_DAILY_CAPS, DEFAULT_RATE, FLOOD_CEILING, wholeNumberVar } from './limits.js';
 import type { WorldStorage } from './storage.js';
 import { dealFacts, Telemetry, type DayFacts, type HeldRejectEvent, type TelemetryOptions } from './telemetry.js';
 
@@ -776,8 +776,6 @@ export class PublicWorld {
   private due = false;
   private wake: number | null = null;
   private readonly handlers: Array<(r: Request, client?: string) => Promise<Response>>;
-  /** T-422: the daily caps per client and node on deals the relayer funds and on new ciphertext stored. */
-  private caps: DailyCaps | undefined;
   /** Each node's deploy time for discovery, shared with the demo facts (T-413). */
   private deployedAt: Array<string | null> = [null, null];
 
@@ -1009,6 +1007,8 @@ export class PublicWorld {
     // holds however the deal reached the settlement layer; while live judges run, since only they spend the budget. One
     // count for all three of Crow's adjudicators (limits.ts, JudgedDealsPerPair).
     const judgedPerPair = new JudgedDealsPerPair(storage, now, secret, o.judgedDealsPerPairPerDay ?? wholeNumberVar(o.env, 'JUDGED_DEALS_PER_PAIR_PER_DAY', DEFAULT_JUDGED_DEALS_PER_PAIR));
+    // T-422: one count of the daily caps, which each operator asks as its quota, per node (limits.ts).
+    const caps = new DailyCaps(storage, now, secret, capLimits);
     let ourAddresses: ReadonlySet<string> = new Set();
     const { acceptLimit, turnLimit } = judgedDealLimits({ perPair: judgedPerPair, live: () => panel.live, ours: () => ourAddresses, now });
     // Each node's deploy time, as the Worker in front last said (T-413); null until it does.
@@ -1141,6 +1141,7 @@ export class PublicWorld {
           operatorId: `demo-op-${i + 1}`,
           env: o.env,
           rateLimit: rate,
+          quota: dailyCapQuota(caps, i, async (id) => (await chain.state(id))?.escrowState ?? null, async (id) => (await storage.get(`ct:${id}`)) !== undefined),
           notes: notesFor(club.id, m, { amount: faucetAmount, maxAmount: faucetMaxAmount, windowSec: faucetWindowSec }, panel, operatorFee, chainFacts),
           demo: () => demo(i === 1 ? 1 : 0),
           // T-609: the cause of each 500, in Workers Logs under the Request-Id the caller was answered with.
@@ -1231,7 +1232,6 @@ export class PublicWorld {
     ourAddresses = new Set(Object.values(adjudicators).map((x) => lc(x.address)));
     const world = new PublicWorld(o, telemetry, secret, chain, keys, operators, adjudicators, panel, declined, turnsDeclined, waiting, held, journalLength, publicUrls, live);
     reservedJudgeCalls = () => world.reservedJudgeCalls();
-    world.caps = new DailyCaps(storage, now, secret, capLimits);
     world.deployedAt = deployedAt;
     // A wake, from a plain read too, makes the world active only when its adjudicators have a step to take or a chain
     // world's setup is left: a deal left mid-way resumes, an idle world arms no alarm. A takeover later on is
@@ -1648,57 +1648,6 @@ export class PublicWorld {
     }
   }
 
-  /**
-   * T-422: the daily caps, before the operator relays (limits.ts). A funding (a funded agree, a fund, a one-shot hold)
-   * takes one of the client's funded deals at this node, and an upload takes its new bytes; a replay of a counted funding,
-   * and bytes the store already holds, take nothing. A count the relay refuses is given back. Anything else passes as is.
-   */
-  private async limited(request: Request, via: Via): Promise<Response | { request: Request; settle?: (accepted: boolean) => Promise<void> }> {
-    const caps = this.caps;
-    const url = routedUrl(new URL(request.url));
-    const cap = caps ? capOf(request.method, url) : null;
-    const key = request.headers.get('idempotency-key');
-    // Without a key the operator refuses the write before any relay, so it spends nothing.
-    if (!caps || !cap || key === null) return { request };
-    const max = cap === 'ciphertext' ? DEMO_MAX_CIPHERTEXT_BYTES : MAX_BODY_BYTES;
-    const bytes = await readCapped(request, max);
-    if (bytes === null) return problemResponse('payload_too_large', `request bodies to ${url.pathname} are limited to ${max} bytes at this operator`, { maxBytes: max });
-    const forward = new Request(request, { body: bytes });
-    const n = via.node;
-    if (cap === 'ciphertext') {
-      if (bytes.length === 0) return { request: forward };
-      const t = await caps.takeBytes(n, via.client, bytes.length, async () => (await this.telemetry.storage.get(`ct:${sha256(bytes)}`)) !== undefined);
-      if (!t.ok) return problemResponse('rate_limited', `this operator stores at most ${caps.limits.ciphertextBytes} bytes of new ciphertext a day (UTC) per client (an IPv4 address or an IPv6 /64), and this upload of ${bytes.length} bytes would pass it. Retry after 00:00 UTC, upload to another operator, or keep the ciphertext in a store of your own: the delivery names its URI`, { retryAfterSec: t.retryAfterSec });
-      return t.counted ? { request: forward, settle: (ok) => caps.settleBytes(n, via.client, bytes.length, ok) } : { request: forward };
-    }
-    let body: unknown;
-    let fingerprint: string;
-    try {
-      // Decoded as the operator decodes it (Buffer#toString keeps a byte-order mark), so both read the same JSON or neither does.
-      body = JSON.parse(new TextDecoder('utf-8', { ignoreBOM: true }).decode(bytes));
-      fingerprint = canonicalKeccak({ idempotencyKey: key, path: url.pathname, body: body ?? null });
-    } catch {
-      return { request: forward }; // not JSON the operator could relay: it refuses it before any relay
-    }
-    // An agree funds only with `fund` beside it.
-    if (cap === 'agree' && (typeof body !== 'object' || body === null || (body as Record<string, unknown>)['fund'] === undefined)) return { request: forward };
-    // A deal already past funding costs the relayer no funding gas: the settlement layer replays or refuses it. So a replay
-    // of an accepted funding is never counted, after 00:00 UTC or from another address too (T-422 review and red team, F4).
-    const id = cap === 'funding' && url.pathname.endsWith('/holds') ? ((body as { commitment?: { id?: unknown } }).commitment?.id ?? null) : url.pathname.split('/').filter(Boolean)[2];
-    const state = typeof id === 'string' && /^0x[0-9a-fA-F]{64}$/.test(id) ? await this.chain.state(id as Hex32).catch(() => null) : null;
-    if (state && !PRE_FUNDING_STATES.has(state.escrowState)) return { request: forward };
-    const t = await caps.takeFunding(n, via.client, fingerprint);
-    if (!t.ok && t.reason === 'global') {
-      const d = caps.limits.fundedDealsAll;
-      return problemResponse('rate_limited', `the relayer funds at most ${d} deal${d === 1 ? '' : 's'} a day (UTC) across all clients, and today's are used. Nothing about the deal changed: retry after 00:00 UTC, or submit it to the settlement layer (on Sepolia, the rules contract) yourself and pay your own gas`, { retryAfterSec: t.retryAfterSec });
-    }
-    if (!t.ok) {
-      const d = caps.limits.fundedDeals;
-      return problemResponse('rate_limited', `this operator relays at most ${d} funded deal${d === 1 ? '' : 's'} a day (UTC) per client (an IPv4 address or an IPv6 /64), and this client has reached it. Nothing about the deal changed: retry after 00:00 UTC, send the same signed request to another operator, or submit it to the settlement layer (on Sepolia, the rules contract) yourself`, { retryAfterSec: t.retryAfterSec });
-    }
-    return t.counted ? { request: forward, settle: (ok) => caps.settleFunding(n, via.client, fingerprint, ok) } : { request: forward };
-  }
-
   async fetch(request: Request, via: Via): Promise<Response> {
     // A broken world takes no new work: the stored write failure, before a handler runs or relays.
     if (this.failed) await this.persisting;
@@ -1709,10 +1658,7 @@ export class PublicWorld {
     // A URL origin has no path, so it never ends in a slash.
     op.baseUrl = this.publicUrls[via.node] ?? via.origin;
     if (via.deployedAt !== undefined) this.deployedAt[via.node] = via.deployedAt;
-    const gate = await this.limited(request, via);
-    if (gate instanceof Response) return gate;
-    const response = await this.handlers[via.node]!(gate.request, via.client);
-    await gate.settle?.(response.status < 300);
+    const response = await this.handlers[via.node]!(request, via.client);
     await this.persist();
     if (await this.look()) this.stir();
     await this.flushTelemetry(false);
@@ -2040,32 +1986,4 @@ export function notesFor(
         ]
       : ['State is journaled and replayed after a restart, but this is a demo: it may be reset at any time.']),
   ];
-}
-
-/** The states before funding: a funding relayed for a deal in any other spends no funding gas (T-422). */
-const PRE_FUNDING_STATES: ReadonlySet<string> = new Set(['Offered', 'AcceptedByAdjudicator', 'Agreed']);
-
-/** A request's body, or null when it is longer than `max` bytes: read no further than that (T-422). */
-async function readCapped(request: Request, max: number): Promise<Uint8Array | null> {
-  if (!request.body) return new Uint8Array(0);
-  const reader = request.body.getReader();
-  const chunks: Uint8Array[] = [];
-  let size = 0;
-  for (;;) {
-    const { done, value } = await reader.read();
-    if (done) break;
-    size += value.length;
-    if (size > max) {
-      void reader.cancel();
-      return null;
-    }
-    chunks.push(value);
-  }
-  const out = new Uint8Array(size);
-  let at = 0;
-  for (const c of chunks) {
-    out.set(c, at);
-    at += c.length;
-  }
-  return out;
 }

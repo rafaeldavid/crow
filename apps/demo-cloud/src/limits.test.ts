@@ -5,7 +5,7 @@
 // refuses completing its deal through the other.
 import { readFileSync } from 'node:fs';
 import nacl from 'tweetnacl';
-import { generatePrivateKey } from 'viem/accounts';
+import { generatePrivateKey, privateKeyToAccount } from 'viem/accounts';
 import { afterEach, describe, expect, it } from 'vitest';
 import { Agent } from '../../../examples/agent.ts';
 import { serveTwoOrigins } from '../../../examples/two-origins.ts';
@@ -250,6 +250,147 @@ describe('the replay path is bounded and opens no way around a limit (the coordi
     expect((await big.json()).maxBytes).toBe(MAX_BODY_BYTES);
     expect((await post(`${urls[0]}/v1/faucet`, { address: freshAgent(urls).address }, 'big-2')).status).toBe(429);
   });
+});
+
+/** The four routes the daily caps count (limits.ts), each with a body of its shape. */
+const DEAL = `0x${'ab'.repeat(32)}`;
+const CAPPED_ROUTES: Array<{ path: string; body: Uint8Array }> = [
+  { path: '/v1/holds', body: new TextEncoder().encode(JSON.stringify({ commitment: { id: DEAL }, acceptance: {}, agree: {}, funding: {} })) },
+  { path: `/v1/commitments/${DEAL}/fund`, body: new TextEncoder().encode(JSON.stringify({ commitmentId: DEAL })) },
+  { path: `/v1/commitments/${DEAL}/agree`, body: new TextEncoder().encode(JSON.stringify({ commitmentId: DEAL, fund: { commitmentId: DEAL } })) },
+  { path: '/v1/ciphertext', body: new Uint8Array(64).fill(5) },
+];
+
+/** One world called directly, with no HTTP between. `bodyReads()` and `capWrites()` say what its requests cost. */
+async function directWorld(writes: number) {
+  const storage = new MemoryStorage();
+  let capRows = 0;
+  const put = storage.put.bind(storage);
+  storage.put = (entries) => {
+    capRows += Object.keys(entries).filter((k) => k.startsWith('lc:')).length;
+    return put(entries);
+  };
+  // A window longer than any test here, so no count opens again however slowly a loaded machine runs (T-622).
+  const world = await PublicWorld.open({ storage, env: {}, minWindowSec: 2, rateLimit: { writes, reads: 1000, windowMs: 3_600_000 } });
+  let bodyReads = 0;
+  const send = async (path: string, bytes: Uint8Array, key: string) => {
+    const body = new ReadableStream<Uint8Array>(
+      {
+        pull(c) {
+          bodyReads++;
+          c.enqueue(bytes);
+          c.close();
+        },
+      },
+      { highWaterMark: 0 },
+    );
+    const request = new Request(`http://node0.test${path}`, { method: 'POST', headers: { 'idempotency-key': key }, body, duplex: 'half' } as RequestInit);
+    const response = await world.fetch(request, { node: 0, origin: 'http://node0.test', client: '198.51.100.7' });
+    return { status: response.status, text: await response.text() };
+  };
+  return { send, bodyReads: () => bodyReads, capWrites: () => capRows };
+}
+
+const faucetBody = (address: string) => new TextEncoder().encode(JSON.stringify({ address }));
+
+describe('each operator asks the daily caps as its quota (T-626)', () => {
+  it('the write budget answers first on the four capped routes', async () => {
+    const { send, bodyReads, capWrites } = await directWorld(2);
+    for (const key of ['spend-1', 'spend-2']) expect((await send('/v1/faucet', faucetBody(privateKeyToAccount(generatePrivateKey()).address), key)).status).toBe(200);
+    // The two grants show that the counter counts.
+    expect(bodyReads()).toBe(2);
+    for (const { path, body } of CAPPED_ROUTES) {
+      const before = { reads: bodyReads(), rows: capWrites() };
+      const statuses: number[] = [];
+      for (let i = 0; i < 5; i++) statuses.push((await send(path, body, `fresh-${i}-${path}`)).status);
+      expect({ path, statuses, bodyReads: bodyReads() - before.reads, capWrites: capWrites() - before.rows }).toEqual({ path, statuses: Array<number>(5).fill(429), bodyReads: 0, capWrites: 0 });
+    }
+  }, 60_000);
+
+  it('the replay budget answers first on the four capped routes', async () => {
+    const { send, bodyReads, capWrites } = await directWorld(2);
+    const known = faucetBody(privateKeyToAccount(generatePrivateKey()).address);
+    expect((await send('/v1/faucet', known, 'known')).status).toBe(200);
+    // Two replays spend the replay budget; the grant and one more write spend the write budget.
+    for (let i = 0; i < 2; i++) expect((await send('/v1/faucet', known, 'known')).status).toBe(200);
+    expect((await send('/v1/faucet', faucetBody(privateKeyToAccount(generatePrivateKey()).address), 'second')).status).toBe(200);
+    for (const { path, body } of CAPPED_ROUTES) {
+      const before = { reads: bodyReads(), rows: capWrites() };
+      const statuses: number[] = [];
+      for (let i = 0; i < 5; i++) statuses.push((await send(path, body, 'known')).status);
+      expect({ path, statuses, bodyReads: bodyReads() - before.reads, capWrites: capWrites() - before.rows }).toEqual({ path, statuses: Array<number>(5).fill(429), bodyReads: 0, capWrites: 0 });
+    }
+  }, 60_000);
+
+  it('writes no cap row for a funding the operator refuses for its content', async () => {
+    const { send, bodyReads, capWrites } = await directWorld(100);
+    const funding = CAPPED_ROUTES.filter((r) => r.path !== '/v1/ciphertext');
+    for (const { path, body } of funding) expect((await send(path, body, `bad-${path}`)).status, path).toBeLessThan(500);
+    expect({ bodyReads: bodyReads(), capWrites: capWrites() }).toEqual({ bodyReads: funding.length, capWrites: 0 });
+  }, 60_000);
+
+  it('answers replays of an accepted funding and upload once the write budget and both daily caps are spent', async () => {
+    const { urls } = await serveWorld({ fundedDealsPerClientPerDay: 1, ciphertextBytesPerClientPerDay: 100, rateLimit: { writes: 8, reads: 1000, windowMs: 3_600_000 } });
+    const capture = captureAgrees();
+    try {
+      const buyer = freshAgent(urls);
+      const deal = await acceptedOffer(urls, buyer);
+      await buyer.agreeAndFund(deal.offer.terms, 30_000_000n);
+      const accepted = capture.sent.at(-1)!;
+      expect(accepted.status).toBe(200);
+      const bytes = new Uint8Array(100).fill(9);
+      const upload = await postBytes(`${urls[0]}/v1/ciphertext`, bytes, 'last-bytes');
+      expect(upload.status).toBe(200);
+      const uploaded = await upload.json();
+      // Spend what is left of this client's write budget.
+      let status = 0;
+      for (let i = 0; i < 20 && status !== 429; i++) status = (await post(`${urls[0]}/v1/faucet`, {}, `drain-${i}`)).status;
+      expect(status).toBe(429);
+      const again = await post(accepted.url, JSON.parse(accepted.body), accepted.key);
+      expect(again.status).toBe(200);
+      expect(await again.json()).toEqual(accepted.answer);
+      const reupload = await postBytes(`${urls[0]}/v1/ciphertext`, bytes, 'last-bytes');
+      expect(reupload.status).toBe(200);
+      expect(await reupload.json()).toEqual(uploaded);
+    } finally {
+      capture.restore();
+    }
+  }, 60_000);
+
+  it('answers replays of an accepted funding and upload after a reopen, from another client, when the caps allow nothing', async () => {
+    const storage = new MemoryStorage();
+    const first = await serveWorld({ fundedDealsPerClientPerDay: 1, ciphertextBytesPerClientPerDay: 100 }, storage);
+    const bytes = new Uint8Array(100).fill(9);
+    const capture = captureAgrees();
+    try {
+      const buyer = freshAgent(first.urls);
+      const deal = await acceptedOffer(first.urls, buyer);
+      await buyer.agreeAndFund(deal.offer.terms, 30_000_000n);
+    } finally {
+      capture.restore();
+    }
+    const accepted = capture.sent.at(-1)!;
+    expect(accepted.status).toBe(200);
+    expect((await postBytes(`${first.urls[0]}/v1/ciphertext`, bytes, 'kept-bytes')).status).toBe(200);
+    for (const c of closers.splice(0)) await c();
+    // The reopened world holds no stored answer, so both replays take the operator's whole write path to the caps. The
+    // other client has no row there, so only the deal's state and the stored bytes keep them from being counted.
+    const second = await serveWorld({ fundedDealsPerClientPerDay: 0, ciphertextBytesPerClientPerDay: 0 }, storage);
+    const again = await post(accepted.url.replace(first.urls[0], second.other[0]), JSON.parse(accepted.body), accepted.key);
+    expect({ status: again.status, escrowState: ((await again.json()) as J).escrowState }).toEqual({ status: 200, escrowState: 'Held' });
+    expect((await postBytes(`${second.other[0]}/v1/ciphertext`, bytes, 'kept-bytes')).status).toBe(200);
+    // Anything new is refused there, so the caps do allow nothing.
+    expect((await postBytes(`${second.other[0]}/v1/ciphertext`, new Uint8Array(10).fill(8), 'new-bytes')).status).toBe(429);
+  }, 60_000);
+
+  it('counts uploads against the daily cap', async () => {
+    const { urls } = await serveWorld({ ciphertextBytesPerClientPerDay: 100 });
+    expect((await postBytes(`${urls[0]}/v1/ciphertext`, new Uint8Array(80).fill(1), 'q-a')).status).toBe(200);
+    for (const [i, query] of ['validateOnly=true', 'validateOnly=false', 'other=1'].entries()) {
+      const over = await postBytes(`${urls[0]}/v1/ciphertext?${query}`, new Uint8Array(80).fill(2 + i), `q-${i}`);
+      expect(over.status, query).toBe(429);
+    }
+  }, 60_000);
 });
 
 describe('the limits come from Worker variables and discovery states them', () => {

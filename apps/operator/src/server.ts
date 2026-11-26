@@ -147,6 +147,15 @@ export interface InternalFailure {
 /** What an `internal` that sent nothing asks the caller to wait: about the bound of one pinned read on Sepolia. */
 const RETRY_UNSENT_SEC = 5;
 
+/** A write this node is about to relay, or ciphertext it is about to store, as its quota sees it. */
+export type QuotaSubject = { client: string } & (
+  | { kind: 'relay'; idempotencyKey: string; path: string; body: unknown; op: Operation }
+  | { kind: 'ciphertext'; id: Sha256; bytes: number }
+);
+
+/** The quota's answer: a refusal, a count to settle once the outcome is known, or nothing taken. */
+export type QuotaTake = { refuse: ApiProblem } | { settle: (accepted: boolean) => Promise<void> } | undefined;
+
 export interface OperatorOptions {
   settlement: Settlement;
   registry: Registry;
@@ -156,6 +165,15 @@ export interface OperatorOptions {
   /** Checked by the startup guards (no real money). */
   env: Readonly<Record<string, string | undefined>>;
   rateLimit?: RateLimit;
+  /**
+   * This node's own quota on the writes it relays to the settlement layer and the ciphertext it stores (a public node's
+   * daily caps). Registrations, disclosures, reports and faucet grants never reach it. The node asks it last: after the
+   * throttle and its own checks, inside the idempotency handler. So a request refused earlier and a replay answered from
+   * the store never reach it, and its subject is the request as this node parsed it. A refusal is answered like any
+   * problem and is not stored; the throttle already counted the request. `settle` is told whether the relay or the upload
+   * succeeded. Dry runs relay and store nothing. Absent: no quota.
+   */
+  quota?: (about: QuotaSubject) => Promise<QuotaTake>;
   log?: (entry: LogEntry) => void;
   /** Each 500 `internal`, with its cause as one line safe to log (describe-cause.ts; T-609). The request log has no cause. */
   onInternal?: (failure: InternalFailure) => void;
@@ -828,7 +846,7 @@ export class Operator {
       await this.refuseUnpayableFallback(op);
       return this.send(ctx, await this.dryRun(op));
     }
-    return this.idempotent(ctx, raw, async () => {
+    return this.idempotent(ctx, raw, async (idempotencyKey) => {
       // Inside the handler, so a retry of a relayed write replays its answer even if a bond or the fee changed since
       // (ADR-0030 §5). The fallback refusal comes before the fee, so a buyer is never asked to pay for terms refused here.
       // T-372: inside the handler, so a delivery this key already relayed replays its answer even if the store lost the
@@ -837,7 +855,8 @@ export class Operator {
       await this.refuseUnpayableFallback(op);
       await this.chargeFee(op);
       const notices = await this.bondNoticesFor(op);
-      const r = await this.relay(ctx, op, notices);
+      const subject: QuotaSubject = { client: this.client(ctx), kind: 'relay', idempotencyKey, path: ctx.url.pathname, body: raw, op };
+      const r = await this.withinQuota(subject, () => this.relay(ctx, op, notices));
       if (r.status < 300 && signerBucket) this.transfer(client, signerBucket);
       return r;
     });
@@ -1157,6 +1176,24 @@ export class Operator {
     this.send(ctx, response);
   }
 
+  /**
+   * Runs a relay or an upload within this node's quota (OperatorOptions.quota). The quota sees a frozen copy of its
+   * subject, as the policy does: it can refuse, never alter what this node relays.
+   */
+  private async withinQuota(about: QuotaSubject, run: () => Promise<StoredResponse>): Promise<StoredResponse> {
+    if (!this.o.quota) return run();
+    const take = await this.o.quota(deepFreeze(structuredClone(about)));
+    if (take && 'refuse' in take) throw new HttpProblem(take.refuse);
+    let accepted = false;
+    try {
+      const response = await run();
+      accepted = response.status < 300;
+      return response;
+    } finally {
+      await take?.settle(accepted);
+    }
+  }
+
   /** The operation's submissions in order, under the keys the SDK's direct path would use. */
   private async relay(ctx: Ctx, op: Operation, before: readonly string[] = []): Promise<StoredResponse> {
     const key = ctx.req.headers['idempotency-key'] as string;
@@ -1384,20 +1421,23 @@ export class Operator {
       if (read.length === 0) fail('invalid_terms', 'POST the ciphertext bytes as the body (application/octet-stream)');
       return read;
     });
-    if (known && this.replayed(ctx, { sha256: sha256(bytes) })) return;
+    const hash = sha256(bytes);
+    if (known && this.replayed(ctx, { sha256: hash })) return;
     if (known) this.throttle(`w:${this.client(ctx)}`, this.o.rateLimit?.writes ?? 0);
     // Content-addressed, so the fingerprint is the hash: the same key with other bytes is a conflict.
-    return this.idempotent(ctx, { sha256: sha256(bytes) }, async () => {
-      let id: Sha256;
-      try {
-        id = await store!.put(bytes);
-      } catch (e) {
-        // A store smaller than this node states: still a 413, with no number this node cannot vouch for.
-        if (e instanceof StoreError && e.code === 'too_large') return fail('payload_too_large', `this node's store refused a ciphertext of ${bytes.length} bytes as too large`);
-        throw e;
-      }
-      return this.ok({ id, uri: `${this.baseUrl}/v1/ciphertext/${id}`, bytes: bytes.length });
-    });
+    return this.idempotent(ctx, { sha256: hash }, () =>
+      this.withinQuota({ client: this.client(ctx), kind: 'ciphertext', id: hash, bytes: bytes.length }, async () => {
+        let id: Sha256;
+        try {
+          id = await store!.put(bytes);
+        } catch (e) {
+          // A store smaller than this node states: still a 413, with no number this node cannot vouch for.
+          if (e instanceof StoreError && e.code === 'too_large') return fail('payload_too_large', `this node's store refused a ciphertext of ${bytes.length} bytes as too large`);
+          throw e;
+        }
+        return this.ok({ id, uri: `${this.baseUrl}/v1/ciphertext/${id}`, bytes: bytes.length });
+      }),
+    );
   }
 
   /**
